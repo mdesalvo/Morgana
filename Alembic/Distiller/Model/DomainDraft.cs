@@ -188,6 +188,17 @@ public sealed class ConsultationDraft
     public string AskingInstructions { get; set; } = string.Empty;
 
     /// <summary>
+    /// The asking agent's Target, rewritten where the boundary that fights the edge is stated there
+    /// rather than in its Instructions. <c>null</c> whenever it stands as it is.
+    /// </summary>
+    /// <remarks>
+    /// A Target is where a boundary belongs by doctrine — what this agent does and, existentially,
+    /// what it does not — so it is the first place a refusal of the colleague's subject is written
+    /// and, left alone, it goes on refusing what a function of this agent's own can now answer.
+    /// </remarks>
+    public string? AskingTarget { get; set; }
+
+    /// <summary>
     /// The colleague's Instructions, rewritten only where its own prose would have it refuse what it
     /// is now being asked for. <c>null</c> whenever they stand as they are, which is the ordinary
     /// case: answering a colleague is a turn the framework already governs and a refusal to say

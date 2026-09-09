@@ -165,10 +165,15 @@ public sealed class DoctrineTests
         Colleague.ConsultMeFor ?? string.Empty,
         "ConsultMeFor reads as an inventory of functions rather than a territory");
 
+    // Stating what falls to this desk is the section's whole job, so a proposition that also
+    // forbade saying when a question belongs here was forbidding the content along with the rule:
+    // it failed a correctly-scoped statement for naming its own subjects. What is genuinely
+    // framework-owned is the conduct of the consultation, and that is what this holds it to.
     [Fact]
     public Task ConsultMeFor_states_no_rule_about_consulting() => AssertDoesNotHoldAsync(
-        "This text states a rule about consultation itself — when to ask this desk, how briefly to "
-        + "ask, what will come back, or what the asker should do with the answer.",
+        "This text states a rule about how a consultation is to be conducted — how briefly to ask, "
+        + "in what form, what will come back, what the asker should do with the answer, or that the "
+        + "answer is to be given in the asker's own voice.",
         Colleague.ConsultMeFor ?? string.Empty,
         "ConsultMeFor restates a framework-owned rule about consulting");
 

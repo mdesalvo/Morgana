@@ -309,7 +309,7 @@ public sealed class InterviewState
         // The whole set as one string, for the same reason as the toolkit above: an edge declared,
         // dropped or re-declared with different prose moves it and nothing finer is worth a row.
         ["colleagues"] = string.Join("|", Colleagues.Select(c =>
-            $"{c.Asking}->{c.Asked}:{c.AskingInstructions}:{c.AskedInstructions}"))
+            $"{c.Asking}->{c.Asked}:{c.AskingInstructions}:{c.AskingTarget}:{c.AskedInstructions}"))
     };
 
     /// <summary>

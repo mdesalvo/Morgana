@@ -560,8 +560,8 @@ public class InterviewService : IInterviewService
             if (!asking.Code.Consults.Any(declared => PeerNaming.Same(declared, colleague)))
                 asking.Code.Consults.Add(colleague);
 
-            Reconcile(asking, edge.AskingInstructions);
-            Reconcile(asked, edge.AskedInstructions);
+            Reconcile(asking, edge.AskingInstructions, edge.AskingTarget);
+            Reconcile(asked, edge.AskedInstructions, null);
         }
 
         // The interview is over and an interview nobody is having is not something to resume into.
@@ -570,22 +570,35 @@ public class InterviewService : IInterviewService
     }
 
     /// <summary>
-    /// Replaces an agent's Instructions with the ones written for it here and says so in its
-    /// provenance.
+    /// Replaces the prose an edge rewrote and says so in the agent's provenance.
     /// </summary>
     /// <remarks>
+    /// Both sections, because a boundary is written in either: the Instructions carry how the agent
+    /// goes about the subject and the Target carries whether the subject is its at all, and an edge
+    /// contradicted by one is contradicted whichever of the two states it.
+    /// <para>
     /// An imported agent whose prose this step rewrote becomes Revised: the migration report's whole
     /// job is naming which of the agents the client brought were touched and an edge that changed a
     /// sentence of one of them touched it.
+    /// </para>
     /// </remarks>
-    private static void Reconcile(AgentDraft agent, string? instructions)
+    private static void Reconcile(AgentDraft agent, string? instructions, string? target)
     {
-        if (string.IsNullOrWhiteSpace(instructions) || string.Equals(agent.Instructions, instructions, StringComparison.Ordinal))
-            return;
+        bool moved = false;
 
-        agent.Instructions = instructions;
+        if (!string.IsNullOrWhiteSpace(instructions) && !string.Equals(agent.Instructions, instructions, StringComparison.Ordinal))
+        {
+            agent.Instructions = instructions;
+            moved = true;
+        }
 
-        if (agent.Origin == Provenance.Imported)
+        if (!string.IsNullOrWhiteSpace(target) && !string.Equals(agent.Target, target, StringComparison.Ordinal))
+        {
+            agent.Target = target;
+            moved = true;
+        }
+
+        if (moved && agent.Origin == Provenance.Imported)
             agent.Origin = Provenance.Revised;
     }
 

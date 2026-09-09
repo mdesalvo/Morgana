@@ -597,6 +597,7 @@ public class InterviewTools
         return "Declared so far, waiting on the client's word:\n"
                + string.Join("\n", interviewState.Colleagues.Select(c =>
                    $"- {c.Asking} may ask {c.Asked}"
+                   + (c.AskingTarget is null ? string.Empty : $" (and {c.Asking}'s Target was rewritten with it)")
                    + (c.AskedInstructions is null ? string.Empty : $" (and {c.Asked}'s own instructions were reconciled too)")));
     }
 
@@ -605,8 +606,8 @@ public class InterviewTools
     /// otherwise forbid it.
     /// </summary>
     /// <remarks>
-    /// The reconciled Instructions are a parameter and not an afterthought, because the edge without
-    /// them is the characteristic defect this step exists against: an agent offered a colleague as a
+    /// The reconciled prose is a parameter and not an afterthought, because the edge without it is
+    /// the characteristic defect this step exists against: an agent offered a colleague as a
     /// function while its own prose says the subject belongs to another bench and to say so plainly
     /// reads two contradictory orders and obeys the imperative one. What the prose must NOT do is
     /// restate the framework's own rules about consulting — when to ask, how briefly, that the answer
@@ -618,7 +619,12 @@ public class InterviewTools
     /// say it to the client instead of promising a reach the domain does not have.
     /// </para>
     /// </remarks>
-    public string DeclareConsultation(string asking, string asked, string askingInstructions, string? askedInstructions = null)
+    public string DeclareConsultation(
+        string asking,
+        string asked,
+        string askingInstructions,
+        string? askedInstructions = null,
+        string? askingTarget = null)
     {
         string from = (asking ?? string.Empty).Trim();
         string to = (asked ?? string.Empty).Trim();
@@ -653,6 +659,12 @@ public class InterviewTools
             ? null
             : Marked(InstructionsMarker, askedInstructions);
 
+        // The boundary is as often in the Target as in the Instructions — it is where a boundary
+        // belongs — and one left refusing the colleague's subject goes on being read every turn.
+        edge.AskingTarget = string.IsNullOrWhiteSpace(askingTarget)
+            ? null
+            : Marked(TargetMarker, askingTarget);
+
         if (existing is null)
             interviewState.Colleagues.Add(edge);
 
@@ -665,7 +677,12 @@ public class InterviewTools
                                             && a.Code.Consults.Count > 0);
 
         return (existing is null ? $"'{from}' may now ask '{to}'." : $"The edge from '{from}' to '{to}' was revised.")
-               + $" Its Instructions were rewritten with it{(edge.AskedInstructions is null ? string.Empty : $" and '{to}'s too")}."
+               + $" Its Instructions were rewritten with it{(edge.AskingTarget is null ? string.Empty : ", its Target too")}"
+               + $"{(edge.AskedInstructions is null ? string.Empty : $" and '{to}'s Instructions as well")}."
+               + (edge.AskingTarget is null
+                   ? " If the sentence that turns this subject away is in its Target instead, send that rewritten too: "
+                     + "the one left standing is read every turn."
+                   : string.Empty)
                + (secondHop
                    ? $" Note that '{to}' consults a colleague of its own: while it is answering '{from}' the framework "
                      + "withholds its peer functions, so whatever it would have asked for is not part of this answer. Say "
@@ -688,7 +705,7 @@ public class InterviewTools
             && string.Equals(c.Asked, asked?.Trim(), StringComparison.OrdinalIgnoreCase));
 
         return removed > 0
-            ? $"Dropped: '{asking}' will not ask '{asked}' and the Instructions declared with it are dropped too."
+            ? $"Dropped: '{asking}' will not ask '{asked}' and the prose declared with it is dropped too."
             : $"Nothing dropped: no edge from '{asking}' to '{asked}' was declared this step.";
     }
 
@@ -788,6 +805,15 @@ public class InterviewTools
     /// </remarks>
     public string SetPassCompleted()
     {
+        // Correcting, every section is written already, so each pass could settle the moment it
+        // opened and the client would be walked through an edit that asked them nothing at all —
+        // which is how a client who came to change a voice reached the end with the voice they
+        // came to change. A pass may still settle on their first word, and the doctrine's own fast
+        // path stands: what it may not do is settle before they have said one.
+        if (interviewState.Revision is not null && interviewState.Exchanges == interviewState.PassOpenedAt)
+            return "Not completed: this section is reopened and the client has not said a word about it yet. "
+                   + "State what it says today, attach the choice that agrees with it and settle it on their answer.";
+
         IReadOnlyList<string> missing = interviewState.Missing();
 
         if (missing.Count > 0)
