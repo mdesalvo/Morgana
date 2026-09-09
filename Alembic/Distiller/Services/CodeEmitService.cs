@@ -102,7 +102,7 @@ public class CodeEmitService : ICodeEmitService
 
         // One per colleague and each one becomes a consult_{intent} function in this agent's tool
         // list at assembly time. Startup refuses an intent no agent handles and refuses the agent's
-        // own, which is why the interview settles them against the finished domain. A colleague at a
+        // own, which is why the interview settles them against the finished domain. A colleague at an
         // instance is checked differently — startup verifies the instance is declared, addressable and
         // signable and leaves the intent to that instance's own card.
 

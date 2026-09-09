@@ -4,10 +4,21 @@ namespace PromptHarness.Infrastructure;
 
 /// <summary>
 /// What one agent's Draft promises the emitted assembly will contain: a <c>MorganaAgent</c>
-/// subclass handling its intent and — where it declares tools — a <c>MorganaTool</c> subclass
-/// providing them, one public method per declared tool.
+/// subclass handling its intent, — where it declares tools — a <c>MorganaTool</c> subclass
+/// providing them, one public method per declared tool, and one colleague declaration per peer it
+/// may consult.
 /// </summary>
-public sealed record AgentExpectation(string IntentName, IReadOnlyList<string> ToolNames);
+/// <param name="Colleagues">
+/// Each as the archive must name it: the colleague's intent, and the instance publishing it for a
+/// colleague at a partner installation. The distinction is not cosmetic — a local name is resolved
+/// against this deployment's own agents at startup and a partner's is resolved against the entry of
+/// that name under <c>Morgana:AgentToAgent:Partners</c>, so a colleague emitted as the wrong one of
+/// the two fails at a client's startup rather than here.
+/// </param>
+public sealed record AgentExpectation(
+    string IntentName,
+    IReadOnlyList<string> ToolNames,
+    IReadOnlyList<Morgana.AI.Records.PeerReference> Colleagues);
 
 /// <summary>
 /// Reflects over the assembly <see cref="ArchiveCompiler"/> just built and checks it actually
@@ -30,6 +41,7 @@ public static class EmittedAssemblyInspector
     private const string HandlesIntentAttribute = "Morgana.AI.Attributes.HandlesIntentAttribute";
     private const string ProvidesToolForIntentAttribute = "Morgana.AI.Attributes.ProvidesToolForIntentAttribute";
     private const string RequiresLLMTierAttribute = "Morgana.AI.Attributes.RequiresLLMTierAttribute";
+    private const string ConsultsAgentAttribute = "Morgana.AI.Attributes.ConsultsAgentAttribute";
 
     /// <summary>
     /// Everything <paramref name="expectations"/> promised that the assembly at
@@ -59,6 +71,18 @@ public static class EmittedAssemblyInspector
             if (!HasAttribute(agentType, RequiresLLMTierAttribute))
                 missing.Add($"'{expectation.IntentName}' agent class has no [RequiresLLMTier] attribute.");
 
+            // A colleague is the one thing an agent declares that agents.json cannot carry, so the
+            // C# is the only place it exists at all: an edge the interview settled and the emit
+            // dropped leaves the client a domain whose desks were told they may ask each other and
+            // a build in which they cannot. The pair is the name, since two installations
+            // publishing the same intent are two different colleagues.
+            IReadOnlySet<string> declaredColleagues = ColleaguesOf(agentType);
+
+            foreach (Morgana.AI.Records.PeerReference colleague in expectation.Colleagues)
+                if (!declaredColleagues.Contains(Name(colleague.Intent, colleague.Instance)))
+                    missing.Add($"'{expectation.IntentName}' agent class carries no [ConsultsAgent] for "
+                                + $"'{Name(colleague.Intent, colleague.Instance)}'.");
+
             if (expectation.ToolNames.Count == 0)
                 continue;
 
@@ -82,6 +106,26 @@ public static class EmittedAssemblyInspector
 
         return missing;
     }
+
+    /// <summary>
+    /// Every colleague the emitted class declares, each named by the pair that identifies it.
+    /// </summary>
+    /// <remarks>
+    /// The partner is an optional argument of the declaration, which metadata carries filled in
+    /// either way — so a colleague of this installation and one at a partner are told apart by
+    /// whether that argument holds a name, never by how many arguments were written.
+    /// </remarks>
+    private static IReadOnlySet<string> ColleaguesOf(Type type) =>
+        type.GetCustomAttributesData()
+            .Where(a => a.AttributeType.FullName == ConsultsAgentAttribute && a.ConstructorArguments.Count > 0)
+            .Select(a => Name(
+                a.ConstructorArguments[0].Value as string ?? string.Empty,
+                a.ConstructorArguments.Count > 1 ? a.ConstructorArguments[1].Value as string : null))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>How one colleague is named, here and in a failure message.</summary>
+    private static string Name(string intent, string? instance) =>
+        instance is null ? intent : $"{intent} at {instance}";
 
     /// <summary>
     /// Loads the assembly and its exported types, tolerating a dependency that fails to resolve

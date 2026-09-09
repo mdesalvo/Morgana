@@ -549,7 +549,7 @@ public class InterviewService : IInterviewService
 
             // Both ends have to be there. An agent the client removed from the walk between the
             // declaration and the word that commits it leaves an edge naming nothing and a
-            // [ConsultsAgent] onto an intent no agent handles is startup-fatal. A colleague at a
+            // [ConsultsAgent] onto an intent no agent handles is startup-fatal. A colleague at an
             // instance has no second end here at all, which is why it is declared where a developer
             // finalizes the domain rather than in a conversation with its author.
             if (asking is null || asked is null)
@@ -844,6 +844,7 @@ public class InterviewService : IInterviewService
             [nameof(InterviewTools.DropIntent)] = tools.DropIntent,
             [nameof(InterviewTools.GetDomainMap)] = tools.GetDomainMap,
             [nameof(InterviewTools.SetAgentTarget)] = tools.SetAgentTarget,
+            [nameof(InterviewTools.SetAgentConsultMeFor)] = tools.SetAgentConsultMeFor,
             [nameof(InterviewTools.SetAgentPersonality)] = tools.SetAgentPersonality,
             [nameof(InterviewTools.SetAgentInstructions)] = tools.SetAgentInstructions,
             [nameof(InterviewTools.SetAgentFormatting)] = tools.SetAgentFormatting,

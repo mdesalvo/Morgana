@@ -275,6 +275,9 @@
         justify-content: center;
         flex-wrap: wrap;
       }
+      .screenshots.wide img {
+        width: 66%;
+      }
       .screenshots img {
         width: 32%;
         min-width: 200px;
@@ -404,10 +407,11 @@
         <li><a href="#architecture-overview"><span class="toc-num">01</span><span class="toc-title">Architecture Overview</span><span class="toc-dots"></span><span class="toc-page">3</span></a></li>
         <li><a href="#getting-started"><span class="toc-num">02</span><span class="toc-title">Getting Started</span><span class="toc-dots"></span><span class="toc-page">4</span></a></li>
         <li><a href="#the-interview"><span class="toc-num">03</span><span class="toc-title">The Interview</span><span class="toc-dots"></span><span class="toc-page">5</span></a></li>
-        <li><a href="#morganization"><span class="toc-num">04</span><span class="toc-title">Morganization</span><span class="toc-dots"></span><span class="toc-page">6</span></a></li>
-        <li><a href="#non-regression-scenarios"><span class="toc-num">05</span><span class="toc-title">Prompt Harness: AI-driven Non-Regression Scenarios</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
-        <li><a href="#configuration-reference"><span class="toc-num">06</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
-        <li><a href="#quick-reference"><span class="toc-num">07</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
+        <li><a href="#interview-walkthrough"><span class="toc-num">04</span><span class="toc-title">The Interview, Step by Step</span><span class="toc-dots"></span><span class="toc-page">6</span></a></li>
+        <li><a href="#morganization"><span class="toc-num">05</span><span class="toc-title">Morganization</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
+        <li><a href="#non-regression-scenarios"><span class="toc-num">06</span><span class="toc-title">Prompt Harness: AI-driven Non-Regression Scenarios</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
+        <li><a href="#configuration-reference"><span class="toc-num">07</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
+        <li><a href="#quick-reference"><span class="toc-num">08</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
       </ul>
 
       <div class="page-footer">
@@ -526,7 +530,47 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 6 — MORGANIZATION                                                      -->
+    <!-- PAGE 6 — THE INTERVIEW, STEP BY STEP                                        -->
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <div class="page" id="interview-walkthrough">
+      <h2>The Interview, Step by Step</h2>
+      <p>One real sitting, one desk: a restaurant asking Morgana to take table bookings. Every screen below is the client's own view &mdash; the rail across the top says where they are, the question is always about their work in their words and the configuration is written for them as they answer. <strong>They never write a line of prose.</strong></p>
+
+      <h3>The Map</h3>
+      <p>The interview opens on the domain, not on an agent: which of their processes Morgana is being installed to run. Each entry becomes one intent and one agent. The greyed sentence in the answer box is a worked example written for <em>their</em> trade, never a form to fill in.</p>
+
+      <div class="screenshots wide">
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-DomainMapping.jpg" alt="Domain Mapping"/>
+      </div>
+
+      <h3>The Five Passes</h3>
+      <p><strong>Target</strong> settles everything the agent can take on and where that stops. <strong>Personality</strong> is offered rather than dictated &mdash; a voice is recognised, so Alembic proposes words and the box stays open. <strong>Toolkit</strong> asks what it must reach outside the conversation; the single button carries the answer that adds nothing, so agreeing costs one press and disagreeing is still a sentence.</p>
+
+      <div class="screenshots">
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Target.jpg" alt="Target"/>
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Personality.jpg" alt="Personality"/>
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Toolkit.jpg" alt="Toolkit"/>
+      </div>
+
+      <p><strong>Instructions</strong> and <strong>Formatting</strong> come after the toolkit because both speak about it: how the agent goes about the work, then how what it finds reaches the person reading it. A step whose ground is already settled asks nothing and closes on its own &mdash; on this run <strong>Formatting</strong> did exactly that, which is why the rail moves straight to the last screen. There the finished agent is read back whole: letting it into the domain is the one decision of the interview that is the client's.</p>
+
+      <div class="screenshots">
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Instructions.jpg" alt="Instructions"/>
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-AgentAccepted.jpg" alt="Agent Acceptance"/>
+      </div>
+
+      <div class="info-box">
+        <strong>One question, one step.</strong> An answer advances the step if anything at all can be written down; the rest is inferred, proposed and corrected rather than asked again. Asking twice tells a domain expert their answer was not good enough &mdash; and circling, not a wrong answer, is how an AI-conducted interview really fails.
+      </div>
+
+      <div class="page-footer">
+        <span>Alembic Handbook</span>
+        <span>6</span>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════ -->
+    <!-- PAGE 7 — MORGANIZATION                                                      -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="morganization">
       <h2>Morganization</h2>
@@ -554,12 +598,12 @@
 
       <div class="page-footer">
         <span>Alembic Handbook</span>
-        <span>6</span>
+        <span>7</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 7 — PROMPT HARNESS: AI-DRIVEN NON-REGRESSION SCENARIOS                 -->
+    <!-- PAGE 8 — PROMPT HARNESS: AI-DRIVEN NON-REGRESSION SCENARIOS                 -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="non-regression-scenarios">
       <h2>Prompt Harness: AI-driven Non-Regression Scenarios</h2>
@@ -585,12 +629,12 @@
 
       <div class="page-footer">
         <span>Alembic Handbook</span>
-        <span>7</span>
+        <span>8</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 8 — CONFIGURATION REFERENCE                                            -->
+    <!-- PAGE 9 — CONFIGURATION REFERENCE                                            -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="configuration-reference">
       <h2>Configuration Reference</h2>
@@ -621,12 +665,12 @@
 
       <div class="page-footer">
         <span>Alembic Handbook</span>
-        <span>8</span>
+        <span>9</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 9 — QUICK REFERENCE                                                    -->
+    <!-- PAGE 10 — QUICK REFERENCE                                                    -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="quick-reference">
       <h2>Quick Reference</h2>
@@ -644,7 +688,7 @@
 
       <div class="page-footer">
         <span>Alembic Handbook</span>
-        <span>9</span>
+        <span>10</span>
       </div>
     </div>
 

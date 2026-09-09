@@ -25,7 +25,15 @@ namespace PromptHarness.Tests;
 public sealed class DoctrineTests
 {
     private readonly BistroLunaInterviewFixture interviewed;
-    private AgentDraft Agent => interviewed.Draft.Agents[0];
+    /// <summary>
+    /// The front desk. Every proposition below about slots, bookings and window seats is about the
+    /// agent the client described in those words, which is not necessarily the first entry the
+    /// mapper wrote.
+    /// </summary>
+    private AgentDraft Agent => interviewed.Reservations;
+
+    /// <summary>The events desk: the colleague the front desk leaves the interview able to ask.</summary>
+    private AgentDraft Colleague => interviewed.Events;
 
     public DoctrineTests(BistroLunaInterviewFixture interviewed) => this.interviewed = interviewed;
 
@@ -135,6 +143,59 @@ public sealed class DoctrineTests
         + "reservation is actually placed — not an inferred or assumed confirmation.",
         (Agent.Instructions ?? string.Empty) + "\n\n" + (Agent.Formatting ?? string.Empty),
         "The required confirmation gate was not found");
+
+    // ---- ConsultMeFor ---------------------------------------------------------------------------
+
+    // The one section whose reader is another agent. It never enters this agent's own prompt: it is
+    // published on the A2A card and appended to the prompt of whoever declares this desk a
+    // colleague. Judged on the events desk because that is the one somebody actually consults, so a
+    // defect here is paid for every time the front desk asks.
+
+    [Fact]
+    public Task ConsultMeFor_states_the_territory_this_desk_answers_for() => AssertHoldsAsync(
+        "This text states what subjects or matters this desk is responsible for and can answer "
+        + "about — its territory — rather than being empty, vague, or about something else.",
+        Colleague.ConsultMeFor ?? string.Empty,
+        "ConsultMeFor states no territory");
+
+    [Fact]
+    public Task ConsultMeFor_is_not_an_inventory_of_what_the_agent_can_do() => AssertDoesNotHoldAsync(
+        "This text enumerates the specific operations, functions, tools or steps the agent can "
+        + "perform, as a list of capabilities.",
+        Colleague.ConsultMeFor ?? string.Empty,
+        "ConsultMeFor reads as an inventory of functions rather than a territory");
+
+    [Fact]
+    public Task ConsultMeFor_states_no_rule_about_consulting() => AssertDoesNotHoldAsync(
+        "This text states a rule about consultation itself — when to ask this desk, how briefly to "
+        + "ask, what will come back, or what the asker should do with the answer.",
+        Colleague.ConsultMeFor ?? string.Empty,
+        "ConsultMeFor restates a framework-owned rule about consulting");
+
+    // ---- The boundary that gained a colleague ----------------------------------------------------
+
+    // The client's closing answer was that the front desk looks the back room up itself rather than
+    // passing the call over, so the hand-off its own Instructions carried has to be gone. An edge
+    // whose prose still refuses the subject is the defect the closing step exists against: the agent
+    // is handed the colleague as a function and told in the same prompt not to touch the subject,
+    // and the flat imperative is the one it obeys.
+
+    [Fact]
+    public Task The_front_desk_no_longer_sends_the_customer_to_another_desk() => AssertDoesNotHoldAsync(
+        "This text tells the agent to send, refer, redirect or hand the customer over to another "
+        + "desk, office, department, number or team about private events or the back room.",
+        Agent.Instructions ?? string.Empty,
+        "The boundary still sends the customer away for a subject a colleague answers");
+
+    // The framework appends the colleague's own ConsultMeFor to this agent's prompt, so a copy of
+    // the colleague's territory here is the same contradiction from the other side — and stale the
+    // day the colleague restates its own scope.
+    [Fact]
+    public Task The_front_desk_does_not_restate_what_its_colleague_is_for() => AssertDoesNotHoldAsync(
+        "This text describes what another desk, office or agent is responsible for, names one as a "
+        + "colleague, or states that this agent can ask another agent or desk for help.",
+        Agent.Instructions ?? string.Empty,
+        "Instructions restate the colleague's territory or the machinery of consulting");
 
     // ---- Cross-section coherence -----------------------------------------------------------
 

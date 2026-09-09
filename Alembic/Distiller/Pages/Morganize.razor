@@ -252,9 +252,9 @@
                                     @* The other half of the same question: on WHICH Morgana that desk
                                        answers. Everything above answers "this one" — the domain in
                                        front of you — and everything here answers "another one", where
-                                       both names are the consultableInstance's word and neither can be checked
+                                       both names are the instance's own word and neither can be checked
                                        from here. It is a free field for exactly that reason. *@
-                                    <div class="consultableInstance-colleagues">
+                                    <div class="instance-colleagues">
                                         <p class="colleague-scope remote">On another Morgana</p>
 
                                         @for (int i = 0; i < agent.Code.Consults.Count; i++)
@@ -264,7 +264,7 @@
                                             if (agent.Code.Consults[index].Instance is null)
                                                 continue;
 
-                                            <div class="consultableInstance-colleague-row">
+                                            <div class="instance-colleague-row">
                                                 <input type="text" class="mono"
                                                        value="@agent.Code.Consults[index].Intent"
                                                        placeholder="intent"
@@ -295,11 +295,11 @@
                 </table>
 
                 <p class="muted">
-                    A colleague at another Morgana is named twice over &mdash; the intent and the consultableInstance
+                    A colleague at another Morgana is named twice over &mdash; the intent and the instance
                     publishing it &mdash; and neither name is checked here or at startup, because the only
-                    thing that knows is that consultableInstance's own agent card, read on the first consultation.
-                    The consultableInstance itself must be declared in the deployment's configuration under
-                    <code>Morgana:AgentToAgent:ConsultableInstances</code>, spelled exactly as it is here; the
+                    thing that knows is that instance's own agent card, read on the first consultation.
+                    The instance itself must be declared in the deployment's configuration under
+                    <code>Morgana:AgentToAgent:Partners</code>, spelled exactly as it is here; the
                     migration report in the archive says so again, with the address and key it
                     deliberately does not carry.
                 </p>

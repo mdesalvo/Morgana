@@ -87,7 +87,8 @@ public sealed class FinalizationTests
         [
             .. interviewed.Draft.Agents.Select(agent => new AgentExpectation(
                 agent.ID!,
-                [.. agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name)).Select(t => t.Name!)]))
+                [.. agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name)).Select(t => t.Name!)],
+                [.. agent.Code.Consults]))
         ];
 
         IReadOnlyList<string> missing = EmittedAssemblyInspector.FindMissing(result.AssemblyPath!, expectations);

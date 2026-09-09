@@ -21,6 +21,30 @@ public sealed record DrivenInterview(InterviewState FinalState, IReadOnlyList<Dr
 }
 
 /// <summary>
+/// What the scripted client says about one desk of their business, and how the driver recognises
+/// that desk when the interview reaches it.
+/// </summary>
+/// <param name="Recognisers">
+/// Words the client's own description of this desk would leave in the intent the mapper wrote for
+/// it. The interview names its own intents, so a script keyed by position would hand the events
+/// answers to the reservations agent the first time the mapper lists the two the other way round.
+/// </param>
+/// <param name="Answers">What the client says on this desk, queued per pass.</param>
+public sealed record DeskScript(IReadOnlyList<string> Recognisers, Dictionary<InterviewStep, Queue<string>> Answers);
+
+/// <summary>
+/// A whole domain's half of the conversation: the map, one script per desk it produces and the
+/// closing step where the desks are told which of them may ring which.
+/// </summary>
+/// <param name="Mapping">What the client says while the map is drawn.</param>
+/// <param name="Desks">One script per desk, matched to the entry in hand rather than to its place.</param>
+/// <param name="Colleagues">What the client says when the closing step reads the edges back.</param>
+public sealed record DomainScript(
+    Queue<string> Mapping,
+    IReadOnlyList<DeskScript> Desks,
+    Queue<string> Colleagues);
+
+/// <summary>
 /// Drives a real <see cref="IInterviewService"/> with a scripted "domain expert" — the same
 /// technique a client's own typing would produce, formalised so a test can replay it and assert on
 /// where Alembic's own process landed.
@@ -73,25 +97,57 @@ public static class InterviewDriver
     }
 
     /// <summary>
-    /// Drives the interview end to end: the map, then every entry it produced, following
-    /// <paramref name="script"/> per pass and accepting each finished agent as it comes, until the
-    /// map is exhausted or <paramref name="maxExchanges"/> is spent.
+    /// Drives the interview end to end: the map, then every entry it produced, accepting each
+    /// finished agent as it comes and on through the closing step where the colleagues are settled,
+    /// until the interview ends or <paramref name="maxExchanges"/> is spent.
     /// </summary>
     /// <param name="interview">A fresh <see cref="IInterviewService"/>, not yet started.</param>
-    /// <param name="script">What the domain expert says, queued per pass. A pass whose queue runs
+    /// <param name="script">What the domain expert says, per desk and per pass. A pass whose queue runs
     /// out falls back to a bare agreement — the interview doctrine already requires that "adequate
     /// is not complete" and a step never needs more than a couple of turns, so a script this short
     /// running dry is itself a signal worth seeing in the transcript, not a driver bug to paper over.</param>
     /// <param name="maxExchanges">A guard against a run that never terminates, not a budget.</param>
     public static async Task<DrivenInterview> RunFullAsync(
         IInterviewService interview,
-        IReadOnlyDictionary<InterviewStep, Queue<string>> script,
+        DomainScript script,
         int maxExchanges = 80,
         CancellationToken cancellationToken = default)
     {
         InterviewState state = await interview.StartAsync(cancellationToken);
-        return await RunScriptedAsync(interview, state, script, maxExchanges, cancellationToken);
+        return await RunScriptedAsync(interview, state, Speaking(script), maxExchanges, cancellationToken);
     }
+
+    /// <summary>
+    /// The queue the client would be answering out of, given where the interview stands.
+    /// </summary>
+    /// <remarks>
+    /// The map and the closing step are the domain's own two passes and each has one queue. Every
+    /// pass in between belongs to whichever desk the interview stands on, found by the words the
+    /// client used about it rather than by its place on the map: which entry the mapper wrote first
+    /// is the mapper's business and a script that assumed an order would silently answer for the
+    /// wrong desk on the run it changed its mind.
+    /// </remarks>
+    private static Func<InterviewState, Queue<string>> Speaking(DomainScript script) => state =>
+    {
+        if (state.Pass == InterviewStep.DomainMapper)
+            return script.Mapping;
+
+        if (state.Pass == InterviewStep.DomainColleagues)
+            return script.Colleagues;
+
+        if (script.Desks.Count == 0)
+            return new Queue<string>();
+
+        string entry = $"{state.Intent.Name} {state.Intent.Description} {state.Intent.Label}";
+
+        DeskScript desk = script.Desks
+            .Select(d => (Desk: d, Hits: d.Recognisers.Count(word => entry.Contains(word, StringComparison.OrdinalIgnoreCase))))
+            .OrderByDescending(match => match.Hits)
+            .First()
+            .Desk;
+
+        return desk.Answers.TryGetValue(state.Pass, out Queue<string>? queue) ? queue : new Queue<string>();
+    };
 
     /// <summary>
     /// Drives an edit already opened with <see cref="IInterviewService.ReviseAsync"/> the rest of
@@ -120,13 +176,18 @@ public static class InterviewDriver
             throw new InvalidOperationException(
                 $"{nameof(RunEditAsync)} expects {nameof(IInterviewService.ReviseAsync)} to have already opened the agent.");
 
-        return RunScriptedAsync(interview, state, script, maxExchanges, cancellationToken);
+        return RunScriptedAsync(
+            interview,
+            state,
+            asked => script.TryGetValue(asked.Pass, out Queue<string>? queue) ? queue : new Queue<string>(),
+            maxExchanges,
+            cancellationToken);
     }
 
     private static async Task<DrivenInterview> RunScriptedAsync(
         IInterviewService interview,
         InterviewState state,
-        IReadOnlyDictionary<InterviewStep, Queue<string>> script,
+        Func<InterviewState, Queue<string>> speaking,
         int maxExchanges,
         CancellationToken cancellationToken)
     {
@@ -146,13 +207,20 @@ public static class InterviewDriver
                 continue;
             }
 
-            Queue<string> queue = script.TryGetValue(state.Pass, out Queue<string>? q) ? q : new Queue<string>();
+            Queue<string> queue = speaking(state);
             string answer = queue.Count > 0 ? queue.Dequeue() : "That's right, go ahead.";
 
             exchanges.Add(new DrivenExchange(state.Pass, state.Question ?? string.Empty, answer));
             state = await interview.AnswerAsync(answer, cancellationToken);
 
             if (state.Error is not null)
+                break;
+
+            // The closing step ends the interview from inside a turn: the agents are all in the
+            // domain already, so there is no acceptance left to make and nothing to answer to.
+            // Speaking past it does not continue this interview, it starts a second one — which is
+            // a live conversation's worth of calls spent on a domain nobody asked for.
+            if (interview.Current is null)
                 break;
         }
 
