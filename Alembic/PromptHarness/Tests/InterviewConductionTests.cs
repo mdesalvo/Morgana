@@ -29,10 +29,18 @@ public sealed class InterviewConductionTests
     public void Bistro_Luna_completes_with_every_section_settled()
     {
         DrivenInterview driven = interviewed.Driven;
+        Assert.False(string.IsNullOrEmpty(interviewed.SavedTo), "The interview was not written down anywhere.");
         Assert.Null(driven.FinalState.Error);
 
         DomainDraft draft = interviewed.Draft;
         Assert.True(draft.Agents.Count == 2, $"Expected exactly two agents, found {draft.Agents.Count}.\n{driven}");
+
+        // The two desks are found by the client's own words about them, so a domain where both
+        // accessors land on the same agent would leave every later test judging the same prose twice
+        // and reporting it under two different names. Asserted here rather than left to be noticed:
+        // the last run's Doctrine failures all quoted the events desk, including the ones about the
+        // front desk, and nothing said so.
+        Assert.NotSame(interviewed.Reservations, interviewed.Events);
 
         foreach (AgentDraft agent in draft.Agents)
         {

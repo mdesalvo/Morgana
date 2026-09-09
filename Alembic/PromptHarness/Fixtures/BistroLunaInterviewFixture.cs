@@ -31,6 +31,17 @@ public sealed class BistroLunaInterviewFixture : IAsyncLifetime
     /// <summary>The scope the interview ran in, so a test can resolve the same DI graph it used.</summary>
     public IServiceProvider Services => scope.ServiceProvider;
 
+    /// <summary>Where the finished domain and its transcript were written.</summary>
+    /// <remarks>
+    /// A live interview is the one artifact of this suite nobody can look at twice: it costs a
+    /// conversation to produce and vanishes with the process. A failure asserting on what the
+    /// interview wrote is then read through the one line of an assertion message, which is enough to
+    /// know a test failed and never enough to know why — the last run left a domain whose colleagues
+    /// were empty while the model had told the client an edge was set, and nothing on disk could say
+    /// which of the two had lied.
+    /// </remarks>
+    public string SavedTo { get; private set; } = string.Empty;
+
     /// <summary>The front desk: the agent the map's table-booking entry produced.</summary>
     public AgentDraft Reservations => Desk(BistroLunaFixture.FrontDesk);
 
@@ -64,6 +75,27 @@ public sealed class BistroLunaInterviewFixture : IAsyncLifetime
 
         Driven = await InterviewDriver.RunFullAsync(interview, BistroLunaFixture.FullScript());
         Draft = draftState.Current ?? throw new InvalidOperationException($"No Draft was produced.\n{Driven}");
+
+        SavedTo = Keep(scope.ServiceProvider.GetRequiredService<IDraftSerializationService>());
+    }
+
+    /// <summary>
+    /// Writes the finished domain and the conversation that produced it beside the test assembly.
+    /// </summary>
+    /// <remarks>
+    /// The domain goes out as the save file Alembic itself writes rather than as a summary: what has
+    /// to be readable afterwards is every field a test asserts on, colleagues and C# facts included,
+    /// and a rendering written here would be a second opinion about what the domain holds.
+    /// </remarks>
+    private string Keep(IDraftSerializationService drafts)
+    {
+        string folder = Path.Combine(AppContext.BaseDirectory, "Interviews");
+        Directory.CreateDirectory(folder);
+
+        File.WriteAllBytes(Path.Combine(folder, "bistro-luna-draft.json"), drafts.Serialize(Draft));
+        File.WriteAllText(Path.Combine(folder, "bistro-luna-transcript.txt"), Driven.ToString());
+
+        return folder;
     }
 
     /// <inheritdoc />

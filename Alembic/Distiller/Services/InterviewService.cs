@@ -888,7 +888,13 @@ public class InterviewService : IInterviewService
             ChatOptions = new ChatOptions
             {
                 Instructions = await alembicPromptService.ComposeAsync(interviewerId, correcting),
-                Tools = [.. await toolAdapter.CreateAllFunctionsAsync()]
+
+                // Each one wrapped so the call and the sentence it is answered with are written
+                // down. A tool refusing what a pass asked of it says so to the model alone, which
+                // is the whole design — and left at that, a pass that told the client something was
+                // settled while its own tool had refused reads exactly like one that succeeded.
+                Tools = [.. (await toolAdapter.CreateAllFunctionsAsync())
+                                              .Select(function => new LoggedTool(function, logger, interviewerId))]
             }
         });
 
@@ -1014,4 +1020,59 @@ public class InterviewService : IInterviewService
         string.IsNullOrWhiteSpace(intentName)
             ? null
             : $"{char.ToUpperInvariant(intentName[0])}{intentName[1..]}{suffix}";
+
+    /// <summary>
+    /// One tool of the interview, with the call and the sentence it is answered with written down.
+    /// </summary>
+    /// <remarks>
+    /// Every tool here answers <b>to the model</b>: a Target arriving too short, an edge naming an
+    /// agent this domain does not hold, a section a pass owns no field for — each is refused with a
+    /// sentence the model is expected to act on in the same turn. Nothing outside that exchange
+    /// could see it, so a pass that told the client an edge was set while its own tool had refused
+    /// the call read exactly like one that succeeded, on the screen and in a harness run alike.
+    /// Arguments are kept short: what identifies a call is the names it carried, not the paragraph
+    /// of prose one of them holds.
+    /// </remarks>
+    private sealed class LoggedTool : DelegatingAIFunction
+    {
+        /// <summary>How much of one argument is worth keeping.</summary>
+        private const int Kept = 160;
+
+        private readonly ILogger logger;
+
+        /// <summary>Which pass made the call, under the name <c>alembic.json</c> declares it.</summary>
+        private readonly string pass;
+
+        public LoggedTool(AIFunction inner, ILogger logger, string pass) : base(inner)
+        {
+            this.logger = logger;
+            this.pass = pass;
+        }
+
+        /// <inheritdoc />
+        protected override async ValueTask<object?> InvokeCoreAsync(
+            AIFunctionArguments arguments,
+            CancellationToken cancellationToken)
+        {
+            object? answer = await base.InvokeCoreAsync(arguments, cancellationToken);
+
+            logger.LogInformation(
+                "{Pass} called {Tool}({Arguments}) and was told: {Answer}",
+                pass, Name, Written(arguments), Short(answer?.ToString()));
+
+            return answer;
+        }
+
+        /// <summary>The call's arguments as one line, each cut to what identifies it.</summary>
+        private static string Written(AIFunctionArguments arguments) =>
+            string.Join(", ", arguments.Select(argument => $"{argument.Key}: {Short(argument.Value?.ToString())}"));
+
+        /// <summary>One value, cut short and on a single line.</summary>
+        private static string Short(string? value)
+        {
+            string text = (value ?? string.Empty).ReplaceLineEndings(" ").Trim();
+
+            return text.Length <= Kept ? text : text[..Kept] + "…";
+        }
+    }
 }
