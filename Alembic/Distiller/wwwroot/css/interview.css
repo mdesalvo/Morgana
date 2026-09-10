@@ -117,7 +117,7 @@
    map, so a rail that put it outside would light its last step and then jump the light backwards,
    which is the one thing a left-to-right rail cannot do. */
 .stations > .lap {
-    flex: 5 1 0;
+    flex: 1 1 0;
     max-width: 66rem;
     position: relative;
     margin-top: 1rem;
@@ -125,6 +125,19 @@
     border: 1px solid var(--alembic-border);
     border-radius: 0.7rem;
     background: color-mix(in srgb, var(--alembic-bg) 35%, transparent);
+}
+
+/* A lap takes the width its own steps need, so the run an entry goes through and the one step that
+   settles the whole domain's colleagues are not drawn the same size. Given equal shares, one station
+   floated in half the rail while seven collided in the other half.
+
+   The closing lap is still given more than a bare station: its own head is what has to fit on its
+   edge and a frame narrower than its heading shows an ellipsis where the subject should be. */
+.stations > .lap.modeling { flex-grow: 7; }
+
+.stations > .lap.closing {
+    flex-grow: 2;
+    min-width: 17rem;
 }
 
 /* The sheets behind it and there is one only while there is another entry to come. Two offset
@@ -293,6 +306,12 @@
     .stations > .lap {
         padding-left: 0.5rem;
         padding-right: 0.5rem;
+    }
+
+    /* The floor under the closing frame is there so its heading fits at full size; where the words
+       have given way it would only be taking room from the run beside it. */
+    .stations > .lap.closing {
+        min-width: 0;
     }
 
     .stations > .station:first-child::after {

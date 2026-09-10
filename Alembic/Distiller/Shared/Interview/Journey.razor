@@ -35,7 +35,7 @@
     <ol class="stations">
         @Station(0)
 
-        <li class="lap @(Remaining > 0 ? "stacked" : null)">
+        <li class="lap modeling @(Remaining > 0 ? "stacked" : null)">
             <span class="lap-head">@LapHead</span>
 
             <ol class="lap-steps">
@@ -55,7 +55,7 @@
             line beside the two that bracket the lap would file it with them — and what it asks the
             client is nothing like either.
         *@
-        <li class="lap">
+        <li class="lap closing">
             <span class="lap-head">@Collaboration</span>
 
             <ol class="lap-steps">
@@ -167,7 +167,7 @@
     /// </summary>
     // Named for what it settles rather than for the framework's word for it: what the client agrees
     // to there is which of their desks may put a question to another instead of turning somebody away.
-    private const string Collaboration = "Agent-to-Agent Collaboration";
+    private const string Collaboration = "Agent Collaboration";
 
     /// <summary>
     /// One step of the rail, wherever it sits.
