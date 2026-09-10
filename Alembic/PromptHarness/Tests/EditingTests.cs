@@ -70,17 +70,38 @@ public sealed class EditingTests
     }
 
     [Fact]
-    public void The_correction_left_every_other_section_of_that_agent_alone()
+    public async Task The_correction_left_every_other_section_of_that_agent_alone()
     {
         // The edit walks Target, Toolkit, Instructions and Formatting on the way to Personality and
         // after it — that is the whole point, so each gets the chance to notice what the change
-        // moved — but none of them had anything to notice here and a pass with nothing to change
-        // does not call its own Set tool at all. So this is not merely "correcting does not widen
-        // beyond one section" any more: it is a live proof that walking four sections which needed no
-        // change actually left them untouched rather than quietly rewritten in passing.
-        Assert.Equal(corrected.Before.Target, corrected.After.Target);
-        Assert.Equal(corrected.Before.Instructions, corrected.After.Instructions);
-        Assert.Equal(corrected.Before.Formatting, corrected.After.Formatting);
+        // moved — but none of them had anything to notice here. So this is not merely "correcting
+        // does not widen beyond one section": it is a live proof that walking sections which needed
+        // no change left the agent instructed exactly as it was.
+        await Untouched("Target", corrected.Before.Target, corrected.After.Target);
+        await Untouched("Instructions", corrected.Before.Instructions, corrected.After.Instructions);
+        await Untouched("Formatting", corrected.Before.Formatting, corrected.After.Formatting);
+    }
+
+    /// <summary>Fails when a section the edit was not opened on now instructs the agent differently.</summary>
+    /// <remarks>
+    /// Identical prose settles it for nothing, which is the ordinary outcome and the one the fast
+    /// path is there to produce. Where the words moved, what decides is whether the agent would now
+    /// do, allow or refuse something else — an article dropped in passing is not a regression and a
+    /// suite that called it one would teach whoever reads it to discount the next red.
+    /// </remarks>
+    private async Task Untouched(string section, string? before, string? after)
+    {
+        if (string.Equals(before, after, StringComparison.Ordinal))
+            return;
+
+        JudgeVerdict verdict = await Judge.EvaluateRevisionAsync(
+            before ?? string.Empty,
+            after ?? string.Empty,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(verdict.Holds,
+            $"The {section} of an agent opened on its Personality came back saying something else: "
+            + $"{verdict.Reason}\n\nBEFORE:\n{before}\n\nAFTER:\n{after}");
     }
 
     [Fact]

@@ -36,6 +36,7 @@ public sealed class ToolDeclarationTests
     [InlineData(InterviewStep.AgentTarget)]
     [InlineData(InterviewStep.AgentPersonality)]
     [InlineData(InterviewStep.AgentToolkit)]
+    [InlineData(InterviewStep.AgentTerritory)]
     [InlineData(InterviewStep.AgentInstructions)]
     [InlineData(InterviewStep.AgentFormatting)]
     [InlineData(InterviewStep.DomainColleagues)]

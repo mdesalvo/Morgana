@@ -36,6 +36,13 @@ public enum InterviewStep
     AgentToolkit,
 
     /// <summary>
+    /// What this desk is characteristically the one to be asked about: its ConsultMeFor and nothing
+    /// else. After the toolkit, because a territory a desk's own tools do not cover is a promise
+    /// another desk would hold it to.
+    /// </summary>
+    AgentTerritory,
+
+    /// <summary>
     /// How the agent goes about the work: its Instructions, now that there is a toolkit for them to speak about.
     /// </summary>
     AgentInstructions,
@@ -328,6 +335,7 @@ public sealed class InterviewState
         InterviewStep.AgentTarget => MissingTarget(),
         InterviewStep.AgentPersonality => MissingVoice(),
         InterviewStep.AgentToolkit => MissingToolkit(),
+        InterviewStep.AgentTerritory => MissingTerritory(),
         InterviewStep.AgentInstructions => MissingInstructions(),
         InterviewStep.AgentFormatting => MissingFormatting(),
 
@@ -387,14 +395,19 @@ public sealed class InterviewState
         if (string.IsNullOrWhiteSpace(Agent.Target))
             missing.Add("agentTarget");
 
-        // Settled by the same pass and drawn from the same scope, so it closes with it: an agent
-        // whose Target stands and whose colleagues cannot read it is finished for itself and mute
-        // to everyone else.
-        if (string.IsNullOrWhiteSpace(Agent.ConsultMeFor))
-            missing.Add("agentConsultMeFor");
-
         return missing;
     }
+
+    /// <summary>
+    /// What the desk answers for, written for another desk to read.
+    /// </summary>
+    /// <remarks>
+    /// Every agent owes one, edges or none: it is published on the agent's card and read by whoever
+    /// holds a question this desk might settle, so an agent without one is finished for itself and
+    /// mute to everyone else — and nothing inside the domain can notice the silence.
+    /// </remarks>
+    private List<string> MissingTerritory() =>
+        string.IsNullOrWhiteSpace(Agent.ConsultMeFor) ? ["agentConsultMeFor"] : [];
 
     /// <summary>
     /// How the agent sounds.

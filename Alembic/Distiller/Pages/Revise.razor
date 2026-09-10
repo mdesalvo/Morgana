@@ -12,19 +12,19 @@
     question on the way past would charge a Performance call and a wait for a step nobody stopped at,
     which breaks the one gesture this page exists for.
 
-    So the agent is shown whole — its five sections as they stand — for reading and reading only:
-    none of the five is its own way in any more. A fix to one section can leave another wrong (a
+    So the agent is shown whole — its six sections as they stand — for reading and reading only:
+    none of the six is its own way in any more. A fix to one section can leave another wrong (a
     Target that now promises something no tool of it backs is the ordinary way a domain drifts) and
     a client who could open exactly the section they meant to fix would have no reason to ever look
     at the rest. So there is one way in per agent and it always opens at Target: the interview it
     hands over to walks every section from there, forcing the model to recheck what the change moved
-    rather than trusting the other four are still true. The two skips beside the header are for the
+    rather than trusting the other five are still true. The two skips beside the header are for the
     case where the point is on another agent. The model, the session and the agent leaving the
     configuration all wait until editing is actually asked for: an agent read on the way past is
     never taken out of the domain, so closing the tab in the middle of a walk loses nothing at all.
 
     This is the only place the walk exists. The interview it hands over to is the interview, unchanged
-    — an agent that already exists is walked by the same five steps, asked the same way, as one being
+    — an agent that already exists is walked by the same six steps, asked the same way, as one being
     written now; only the mode each reads in differs.
 *@
 
@@ -87,13 +87,13 @@
             }
 
             @*
-                Five rows, each the whole of what is written, for reading only. Not clipped: a screen
+                Six rows, each the whole of what is written, for reading only. Not clipped: a screen
                 opened to read what an agent says, that then shows four fifths of a sentence and an
                 ellipsis, has answered nothing — the part that got cut is the part they came for.
 
                 The labels are the rail's own, matching the interview's own vocabulary, but none of
                 them is pressable any more: editing is one gesture for the whole agent, below, not
-                five doors into five separate promises about what a fix will and will not touch.
+                six doors into six separate promises about what a fix will and will not touch.
             *@
             <div class="walk-sections">
                 @foreach (Section part in Sections(agent))
@@ -195,7 +195,7 @@
         char.ToLowerInvariant(description[0]) + description[1..];
 
     /// <summary>
-    /// The agent as five sections, in the order the interview writes them.
+    /// The agent as six sections, in the order the interview writes them.
     /// </summary>
     /// <remarks>
     /// The Toolkit is named by its tools rather than by prose, because that is what it is — a list of
@@ -209,6 +209,7 @@
         new Section("Target", AgentRows.Plain(agent.Target)),
         new Section("Personality", AgentRows.Plain(agent.Personality)),
         new Section("Toolkit", AgentRows.Toolkit(agent.Tools)),
+        new Section("Consult me for", AgentRows.Plain(agent.ConsultMeFor)),
         new Section("Instructions", AgentRows.Plain(agent.Instructions)),
         new Section("Formatting", AgentRows.Plain(agent.Formatting))
     ];

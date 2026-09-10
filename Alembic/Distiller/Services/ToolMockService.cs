@@ -85,6 +85,10 @@ public class ToolMockService : IToolMockService
             request.AppendLine($"It presents what these tools return like this, so return data that makes it possible: {agent.Formatting}");
         }
 
+        // The class the two halves share, named by the fact the emit already carries rather than
+        // guessed: what the generated half declares is what a second declaration would collide with.
+        string className = agent.Code.ToolClassName ?? intentName;
+
         IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);
 
         string authored = await StreamedCompletion.RunAsync(
@@ -102,12 +106,54 @@ public class ToolMockService : IToolMockService
         // outcome here that looks like success and is not.
         if (authored.Length == 0)
             throw new InvalidOperationException(
-                $"The model returned no source for {agent.Code.ToolClassName ?? intentName}: the whole response was "
+                $"The model returned no source for {className}: the whole response was "
                 + "reasoning and no text. That is what a MaxOutputTokens too small for a source file produces — Alembic's "
                 + "own tier declares a generous one for exactly this reason, so check what the deployment configures.");
 
+        // The constructor belongs to the generated half, which is where the tool's own dependencies
+        // are taken and handed to the base class. One written here wins over it and takes neither, so
+        // the class stops compiling twice over: the base constructor goes unsatisfied and the field
+        // the generated half would have set is left null. Told once and written anyway, the model is
+        // told what it did and asked again — the same backstop as the duplicate attribute below.
+        if (DeclaresConstructor(authored, className))
+        {
+            request.AppendLine();
+            request.AppendLine($"Your previous answer declared a constructor for {className}. That class already has "
+                               + "one, in the half generated beside yours, and it is the only place its dependencies are "
+                               + "taken. Write the same file again with no constructor of any kind.");
+
+            authored = await StreamedCompletion.RunAsync(
+                chatClient, system, request.ToString(),
+                length => logger.LogInformation(
+                    "The mock for {AgentId} was cut at the provider's limit after {Length} characters; resuming",
+                    agent.ID, length),
+                length => logger.LogWarning(
+                    "The mock for {AgentId} went silent after {Length} characters; retrying once",
+                    agent.ID, length),
+                cancellationToken);
+        }
+
+        // Thrown rather than returned, for the same reason as an empty answer: a file that says what
+        // went wrong is worth more to whoever opens the archive than one that cannot be built.
+        if (DeclaresConstructor(authored, className))
+            throw new InvalidOperationException(
+                $"The model wrote a constructor for {className} twice over. That class takes its dependencies in the "
+                + "generated half of the pair and a second constructor leaves the base class unsatisfied, so the "
+                + "archive would not build.");
+
         return StripDuplicateToolAttribute(authored);
     }
+
+    /// <summary>Whether authored source declares a constructor of the class it is one half of.</summary>
+    /// <remarks>
+    /// A declaration is recognised where a method never could be: a member named after its own class,
+    /// opening a line under an access modifier. Anything else naming the class is somebody building
+    /// one, which is what a mock does all day.
+    /// </remarks>
+    private static bool DeclaresConstructor(string source, string className) =>
+        Regex.IsMatch(source,
+            $@"^[ \t]*(?:public|internal|protected|private)[ \t]+(?:sealed[ \t]+)?{Regex.Escape(className)}[ \t]*\(",
+            RegexOptions.Multiline);
 
     /// <summary>
     /// Restates each tool's parameters to the mock author in the words the running model will read.

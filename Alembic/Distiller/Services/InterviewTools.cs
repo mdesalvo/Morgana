@@ -578,6 +578,7 @@ public class InterviewTools
 
         IEnumerable<string> rendered = agents.Select(a =>
             $"- {a.ID}\n    what it is for: {AgentRows.Plain(a.Target) ?? "(nothing said)"}"
+            + $"\n    what it answers for, in the words a colleague reads: {AgentRows.Plain(a.ConsultMeFor) ?? "(nothing said)"}"
             + $"\n    what it can reach: {(a.Tools.Count > 0 ? string.Join(", ", a.Tools.Select(t => t.Name ?? "(unnamed)")) : "no tool of its own")}"
             + $"\n    how it goes about it: {AgentRows.Plain(a.Instructions) ?? "(nothing said)"}"
             + $"\n    colleagues it may already ask: {PeerNaming.Describe(a.Code.Consults)}");
@@ -761,6 +762,44 @@ public class InterviewTools
     }
 
     /// <summary>
+    /// Returns the card this agent will present to whoever might consult it.
+    /// </summary>
+    /// <remarks>
+    /// The last reading of a territory before it is published: a Morgana carries this card on the
+    /// A2A endpoint of every agent it holds, and a colleague weighing a question reads its
+    /// description and nothing else. A sentence that reads as a list of functions, or one that never
+    /// left the routing phrase the classifier uses, is visible here and nowhere else in the
+    /// interview.
+    /// </remarks>
+    public string GetAgentCard()
+    {
+        return CardProjection.Render(interviewState.Intent, interviewState.Agent);
+    }
+
+    /// <summary>
+    /// Rewrites the routing description of the intent in hand, strengthened by what the territory
+    /// settled.
+    /// </summary>
+    /// <remarks>
+    /// The classifier reads this description against every other one, so it is the map's to write
+    /// and the map writes it before any agent exists. Once a desk has stated the competence it is
+    /// the one to answer for, the same subject is known in sharper words than the map could reach,
+    /// and the routing that lands a user here can be said with them. Only this entry's own
+    /// description: every other one is settled and reading them back is what keeps this one distinct.
+    /// </remarks>
+    public string SetIntentDescription(string description)
+    {
+        string written = (description ?? string.Empty).Trim();
+
+        if (written.Length == 0)
+            return "Nothing changed: an intent with no description is one the classifier cannot route to.";
+
+        interviewState.Intent.Description = written;
+
+        return $"'{interviewState.Intent.Name}' now routes on: {written}";
+    }
+
+    /// <summary>
     /// Returns everything wrong with this agent that is decidable without a model.
     /// </summary>
     /// <remarks>
@@ -828,7 +867,8 @@ public class InterviewTools
                    InterviewStep.DomainMapper => $"the first of the {interviewState.Map.Count} kinds of request you mapped, taken one at a time until every one has its agent.",
                    InterviewStep.AgentTarget => "how this agent should sound to the people who write in.",
                    InterviewStep.AgentPersonality => "the toolkit — what this agent has to reach for outside the conversation.",
-                   InterviewStep.AgentToolkit => "the agent's own instructions and the way it presents what its tools return.",
+                   InterviewStep.AgentToolkit => "what this desk is the one to be asked about, which is what another desk of theirs reads before it asks.",
+                   InterviewStep.AgentTerritory => "the agent's own instructions and the way it presents what its tools return.",
                    InterviewStep.DomainColleagues => "nothing — the domain is finished and they land on it whole, to read, weigh and take away.",
                    _ => "the agent joins the domain and they can review or export it."
                };

@@ -75,9 +75,45 @@ public sealed class Judge
         {"holds": true|false, "reason": "<one short sentence>"}
         """;
 
+    /// <summary>
+    /// The question asked of a section that an edit elsewhere was not supposed to touch.
+    /// </summary>
+    /// <remarks>
+    /// What the doctrine protects is the agent, not the bytes: a pass with nothing to change leaves
+    /// the section as it stands, and the failure worth a red is one where the agent would now do,
+    /// allow or refuse something else. A comparison of strings cannot tell that from an article
+    /// dropped in passing and calling both a regression teaches whoever reads the suite to discount it.
+    /// </remarks>
+    private const string RevisionSystemPrompt =
+        """
+        You are a strict evaluator in a non-regression suite for an AI system that authors
+        conversational agents. You are given ONE section of one agent as it stood before an edit made
+        elsewhere in that agent and as it stands after, and a proposition about the pair. Decide
+        whether the proposition is TRUE.
+
+        Rules:
+        - The test is what the two carry as orders and directives. An agent reading one and an agent
+          reading the other must be expected to act indistinguishably.
+        - Wording, sentence order, punctuation, articles, tense and phrasing may drift freely and
+          count for nothing on their own. Prose that flickers without carrying anything with it is
+          the same prose.
+        - Say the two differ only when something dispositive moved with the words: a commitment, a
+          limit, a condition, a named subject or an instruction added or dropped.
+        - The section may be in any language; judge its meaning, not its language.
+
+        Respond with JSON only, no prose, no code fences:
+        {"holds": true|false, "reason": "<one short sentence>"}
+        """;
+
     /// <summary>Judges a single proposition against a piece of authored prose.</summary>
     public Task<JudgeVerdict> EvaluateAsync(string proposition, string prose, CancellationToken cancellationToken = default) =>
         AskAsync(SystemPrompt, "AUTHORED PROSE", prose, proposition);
+
+    /// <summary>Judges whether a section left alone by an edit still says the same thing.</summary>
+    public Task<JudgeVerdict> EvaluateRevisionAsync(string before, string after, CancellationToken cancellationToken = default) =>
+        AskAsync(RevisionSystemPrompt, "ONE SECTION, BEFORE AND AFTER AN EDIT MADE ELSEWHERE",
+            $"BEFORE:\n{before}\n\nAFTER:\n{after}",
+            "the two versions carry the same orders and directives, whatever their wording");
 
     /// <summary>Judges a single proposition against a turn Alembic put to the client.</summary>
     public Task<JudgeVerdict> EvaluateTurnAsync(string proposition, string turn, CancellationToken cancellationToken = default) =>

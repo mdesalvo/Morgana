@@ -99,16 +99,21 @@ body {
 // .main-content: the theme's own anchor styling is more specific than a bare class and
 // would repaint and underline the tile on hover.
 .main-content {
+  // Laid out in a row that centres what it holds, so a page with two doors out shows two
+  // tiles under the middle of the text rather than two thirds of a row of three.
   .tiles {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 16px;
     margin: 18px 0 8px;
-
-    @media screen and (max-width: 64em) { grid-template-columns: 1fr; }
   }
 
   a.tile {
+    // Each door takes an equal share of the row down to the width where reading the blurb
+    // gets tight, and drops onto its own line below that.
+    flex: 1 1 320px;
+    max-width: 420px;
     display: block;
     position: relative;
     overflow: hidden;

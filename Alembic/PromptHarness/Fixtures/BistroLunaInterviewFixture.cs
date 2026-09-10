@@ -43,26 +43,60 @@ public sealed class BistroLunaInterviewFixture : IAsyncLifetime
     public string SavedTo { get; private set; } = string.Empty;
 
     /// <summary>The front desk: the agent the map's table-booking entry produced.</summary>
-    public AgentDraft Reservations => Desk(BistroLunaFixture.FrontDesk);
+    public AgentDraft Reservations => Desks.Front;
 
     /// <summary>The events desk: the agent the map's back-room entry produced.</summary>
-    public AgentDraft Events => Desk(BistroLunaFixture.EventsDesk);
+    public AgentDraft Events => Desks.Events;
 
     /// <summary>
-    /// The agent whose intent the client's own words about a desk point at.
+    /// Which agent of the finished domain is which desk the client described.
     /// </summary>
     /// <remarks>
     /// The interview names its own intents, so a test that wanted "the second agent" would be
     /// asserting about whichever desk the mapper happened to list second. What is stable is the
     /// subject the client described, which is what the intent name and target carry.
+    /// <para>
+    /// Both desks are read at once because neither is recognisable alone: a front desk that declares
+    /// it does not book the private room carries the other desk's words in its own boundary, which
+    /// is enough to score higher there than the desk that owns the subject. Taking the pairing that
+    /// fits the domain best rather than the best match per desk is what keeps two names off one
+    /// agent — and where the two pairings fit equally well the fixture says so instead of handing
+    /// every later test the same prose under two names.
+    /// </para>
     /// </remarks>
-    private AgentDraft Desk(IReadOnlyList<string> recognisers) =>
-        Draft.Agents
-            .Select(agent => (Agent: agent, Hits: recognisers.Count(word =>
-                $"{agent.ID} {agent.Target}".Contains(word, StringComparison.OrdinalIgnoreCase))))
-            .OrderByDescending(match => match.Hits)
-            .First()
-            .Agent;
+    private (AgentDraft Front, AgentDraft Events) Desks
+    {
+        get
+        {
+            if (Draft.Agents.Count != 2)
+                throw new InvalidOperationException($"Bistro Luna is two desks, the interview left {Draft.Agents.Count}.\n{Driven}");
+
+            AgentDraft first = Draft.Agents[0], second = Draft.Agents[1];
+            int asRead = Hits(first, BistroLunaFixture.FrontDesk) + Hits(second, BistroLunaFixture.EventsDesk);
+            int swapped = Hits(second, BistroLunaFixture.FrontDesk) + Hits(first, BistroLunaFixture.EventsDesk);
+
+            if (asRead == swapped)
+                throw new InvalidOperationException($"Neither desk of the finished domain is the front desk more than the other.\n{Driven}");
+
+            return asRead > swapped ? (first, second) : (second, first);
+        }
+    }
+
+    /// <summary>How much of what the client said about a desk the entry standing for it carries.</summary>
+    /// <remarks>
+    /// The map's own entry, never the agent's Target: a Target is where a boundary belongs, so the
+    /// front desk's says it does not book the private room and carries the other desk's subject in
+    /// its own words. The entry says only what this desk is for.
+    /// </remarks>
+    private int Hits(AgentDraft agent, IReadOnlyList<string> recognisers)
+    {
+        IntentDraft? entry = Draft.Intents.FirstOrDefault(i =>
+            string.Equals(i.Name, agent.ID, StringComparison.OrdinalIgnoreCase));
+
+        string words = $"{agent.ID} {entry?.Description} {entry?.Label}";
+
+        return recognisers.Count(word => words.Contains(word, StringComparison.OrdinalIgnoreCase));
+    }
 
     public BistroLunaInterviewFixture(AlembicHostFixture host) => this.host = host;
 

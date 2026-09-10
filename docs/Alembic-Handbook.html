@@ -432,7 +432,7 @@
         <div class="pillar">
           <div class="icon">&#x1F5FA;</div>
           <h4>The Interview</h4>
-          <p>C# owns the facts, the model owns the conducting. A domain-mapping pass turns the client's own words into intents, then five passes per agent build its prose incrementally, each reading back only what is already settled.</p>
+          <p>C# owns the facts, the model owns the conducting. A domain-mapping pass turns the client's own words into intents, then six passes per agent build its prose incrementally, each reading back only what is already settled.</p>
         </div>
         <div class="pillar">
           <div class="icon">&#x2705;</div>
@@ -505,7 +505,7 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="the-interview">
       <h2>The Interview</h2>
-      <p>A Morgana domain has two halves: the <code>Intents</code> a client's customers can ask for and one <code>Agent</code> per intent that answers it. The interview builds them in that order &mdash; intents first, since every agent maps to one &mdash; then walks the agent map five passes at a time, until each intent has its agent.</p>
+      <p>A Morgana domain has two halves: the <code>Intents</code> a client's customers can ask for and one <code>Agent</code> per intent that answers it. The interview builds them in that order &mdash; intents first, since every agent maps to one &mdash; then walks the agent map six passes at a time, until each intent has its agent.</p>
 
       <table>
         <thead><tr><th>Step</th><th>Runs</th><th>Settles</th></tr></thead>
@@ -514,6 +514,7 @@
           <tr><td><strong>Target</strong></td><td>per entry</td><td>What the agent does, what it must never do</td></tr>
           <tr><td><strong>Personality</strong></td><td>per entry</td><td>Which facet of Morgana this agent is</td></tr>
           <tr><td><strong>Toolkit</strong></td><td>per entry</td><td>The tools, their descriptions, parameters, scopes and sharing</td></tr>
+          <tr><td><strong>Territory</strong></td><td>per entry</td><td>What this desk is characteristically the one to be asked about &mdash; its <code>ConsultMeFor</code>, and the routing said in the sharper words that settles</td></tr>
           <tr><td><strong>Instructions</strong></td><td>per entry</td><td>Behavioural rules, written after the toolkit exists</td></tr>
           <tr><td><strong>Formatting</strong></td><td>per entry</td><td>How the agent presents its own tools' output</td></tr>
         </tbody>
@@ -543,13 +544,19 @@
         <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-DomainMapping.jpg" alt="Domain Mapping"/>
       </div>
 
-      <h3>The Five Passes</h3>
+      <h3>The Six Passes</h3>
       <p><strong>Target</strong> settles everything the agent can take on and where that stops. <strong>Personality</strong> is offered rather than dictated &mdash; a voice is recognised, so Alembic proposes words and the box stays open. <strong>Toolkit</strong> asks what it must reach outside the conversation; the single button carries the answer that adds nothing, so agreeing costs one press and disagreeing is still a sentence.</p>
 
       <div class="screenshots">
         <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Target.jpg" alt="Target"/>
         <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Personality.jpg" alt="Personality"/>
         <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Toolkit.jpg" alt="Toolkit"/>
+      </div>
+
+      <p><strong>Territory</strong> follows the toolkit, which is the earliest it can be truthful: it asks what this desk alone can say precisely when somebody elsewhere in the business needs to know &mdash; a competence, never a list of what the agent can do. It is the sentence every other desk of the domain reads before deciding whether a question is this one's, published on the agent's card, and it is asked whether or not this installation will ever speak to another. The same subject is now known in sharper words than the map could reach, so the routing that lands a user here is said with them.</p>
+
+      <div class="info-box">
+        <strong>Why it is asked and not derived.</strong> A <em>Target</em> is what a desk handles; a territory is what another desk would come to it for rather than answering "go to them" &mdash; which, put that way, is worth nothing to whoever asked. The two questions have different answers, so the client is asked both.
       </div>
 
       <p><strong>Instructions</strong> and <strong>Formatting</strong> come after the toolkit because both speak about it: how the agent goes about the work, then how what it finds reaches the person reading it. A step whose ground is already settled asks nothing and closes on its own &mdash; on this run <strong>Formatting</strong> did exactly that, which is why the rail moves straight to the last screen. There the finished agent is read back whole: letting it into the domain is the one decision of the interview that is the client's.</p>

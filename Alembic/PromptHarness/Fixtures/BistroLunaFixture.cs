@@ -74,6 +74,11 @@ public static class BistroLunaFixture
                     "not commit anything without a final confirmation from the customer.",
                     "Nothing about the customer sticks around between calls except their loyalty id, if they have one."
                 ]),
+                [InterviewStep.AgentTerritory] = new Queue<string>(
+                [
+                    "Whether we can seat somebody, and when. How the room is filling up on a given day, what is " +
+                    "still open and what has gone — the table diary is ours and nobody else here can say."
+                ]),
                 [InterviewStep.AgentInstructions] = new Queue<string>(
                 [
                     // The planted hand-off — see the remarks on this class.
@@ -116,6 +121,11 @@ public static class BistroLunaFixture
                     "number to ring back on. Same as the other one, we already know who it is if they are in the " +
                     "loyalty program, otherwise they tell us.",
                     "That is all it reaches, yes."
+                ]),
+                [InterviewStep.AgentTerritory] = new Queue<string>(
+                [
+                    "Whether the back room is spoken for on a date, and what a private do can be given here — the " +
+                    "three set menus are ours to know. What it ends up costing is the manager's, not ours."
                 ]),
                 [InterviewStep.AgentInstructions] = new Queue<string>(
                 [

@@ -65,8 +65,12 @@ public class DraftValidationService : IDraftValidationService
         ValidateIntentAgentPairing(draft, findings);
         ValidateConsultations(draft, findings);
 
+        // The agent is checked beside the entry that routes to it: what a colleague is published
+        // and what the classifier routes on are two sentences about one desk and only readable
+        // against each other.
         foreach (AgentDraft agent in draft.Agents)
-            ValidateAgent(agent, findings);
+            ValidateAgent(agent, draft.Intents.FirstOrDefault(i =>
+                string.Equals(i.Name, agent.ID, StringComparison.OrdinalIgnoreCase)), findings);
 
         // Errors first, then warnings, each group keeping the order the domain declares its
         // elements in: a client reading top-down meets what stops them before what merely
@@ -227,10 +231,14 @@ public class DraftValidationService : IDraftValidationService
         }
     }
 
+    /// <summary>One reading of a sentence, with its spacing and punctuation out of the way.</summary>
+    private static string Compact(string? text) =>
+        new string([.. (text ?? string.Empty).Where(char.IsLetterOrDigit)]).ToLowerInvariant();
+
     /// <summary>
     /// Checks one agent's prose, its class names and its whole toolkit.
     /// </summary>
-    private static void ValidateAgent(AgentDraft agent, List<ValidationFinding> findings)
+    private static void ValidateAgent(AgentDraft agent, IntentDraft? intent, List<ValidationFinding> findings)
     {
         string where = $"agent '{agent.ID ?? "(unnamed)"}'";
 
@@ -248,6 +256,31 @@ public class DraftValidationService : IDraftValidationService
             findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                 "The agent has nothing to say to a colleague consulting it.",
                 "ConsultMeFor is what a colleague reads to decide whether a question is this agent's; without it the card falls back to the intent description, which is a routing phrase written for the classifier."));
+
+        // The card carries one sentence about this desk and a colleague weighing a question reads
+        // that and nothing else. Two ways it comes out useless are decidable here: written as the
+        // operations the desk performs, which invites a caller to rule its question out, and left as
+        // the phrase the classifier routes on, which says which utterances land here rather than
+        // what this desk answers for.
+        string? territory = AgentRows.Plain(agent.ConsultMeFor);
+
+        if (!string.IsNullOrWhiteSpace(territory))
+        {
+            string? named = agent.Tools
+                .Select(tool => tool.Name)
+                .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)
+                                        && territory.Contains(name!, StringComparison.OrdinalIgnoreCase));
+
+            if (named is not null)
+                findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
+                    $"What this agent publishes to a colleague names its own tool '{named}'.",
+                    "ConsultMeFor states a territory: a colleague handed an inventory of functions rules its question out instead of asking it."));
+
+            if (intent is not null && string.Equals(Compact(territory), Compact(intent.Description), StringComparison.OrdinalIgnoreCase))
+                findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
+                    "What this agent publishes to a colleague is its own routing description.",
+                    "The intent description tells the classifier which user utterances land here, never what this desk answers for — a caller reading it back learns nothing it could ask about."));
+        }
 
         if (string.IsNullOrWhiteSpace(agent.Instructions))
             findings.Add(new ValidationFinding(FindingSeverity.Warning, where,

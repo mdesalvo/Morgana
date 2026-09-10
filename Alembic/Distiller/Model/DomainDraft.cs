@@ -325,10 +325,12 @@ public sealed class AgentDraft
     /// <remarks>
     /// The one section whose reader is another agent: it never enters this agent's own prompt, it is
     /// published on its A2A card and read by whoever holds a <c>consult_</c> function for it. Settled
-    /// by the <c>AgentTarget</c> pass, which writes it from the scope it has just fixed rather than
-    /// asking the client the same question twice — same content, a different reader. Every agent
-    /// carries one, whether or not anybody consults it: a domain where nothing does today is one
-    /// declaration away from a domain where something does and an unread one costs nothing.
+    /// by the <c>AgentTerritory</c> pass, once the toolkit stands: what this desk is characteristically
+    /// the one to be asked about is a competence of the client's own business, elicited like any
+    /// other, and a territory its tools do not cover is a promise another desk would hold it to.
+    /// Every agent carries one, whether or not anybody consults it and whether or not this
+    /// installation ever speaks to another: an unread one costs nothing and its absence leaves every
+    /// other desk answering "go to them" where a precise answer was there to be had.
     /// </remarks>
     public string? ConsultMeFor { get; set; }
 

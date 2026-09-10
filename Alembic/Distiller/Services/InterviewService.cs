@@ -39,6 +39,7 @@ public class InterviewService : IInterviewService
         [InterviewStep.AgentTarget] = "AgentTarget",
         [InterviewStep.AgentPersonality] = "AgentPersonality",
         [InterviewStep.AgentToolkit] = "AgentToolkit",
+        [InterviewStep.AgentTerritory] = "AgentTerritory",
         [InterviewStep.AgentInstructions] = "AgentInstructions",
         [InterviewStep.AgentFormatting] = "AgentFormatting",
         [InterviewStep.DomainColleagues] = "DomainColleagues"
@@ -57,6 +58,8 @@ public class InterviewService : IInterviewService
                                       + "people with.",
         [InterviewStep.AgentToolkit] = "This step settles its Toolkit, which gives it everything it can "
                                          + "reach outside the conversation.",
+        [InterviewStep.AgentTerritory] = "This step settles its ConsultMeFor, which gives it what this desk is "
+                                         + "the one to be asked about.",
         [InterviewStep.AgentInstructions] = "This step settles its Instructions, which give it how it goes "
                                           + "about the work.",
         [InterviewStep.AgentFormatting] = "This last step settles its Formatting, which gives it how what it "
@@ -858,6 +861,8 @@ public class InterviewService : IInterviewService
             [nameof(InterviewTools.GetDomainMap)] = tools.GetDomainMap,
             [nameof(InterviewTools.SetAgentTarget)] = tools.SetAgentTarget,
             [nameof(InterviewTools.SetAgentConsultMeFor)] = tools.SetAgentConsultMeFor,
+            [nameof(InterviewTools.SetIntentDescription)] = tools.SetIntentDescription,
+            [nameof(InterviewTools.GetAgentCard)] = tools.GetAgentCard,
             [nameof(InterviewTools.SetAgentPersonality)] = tools.SetAgentPersonality,
             [nameof(InterviewTools.SetAgentInstructions)] = tools.SetAgentInstructions,
             [nameof(InterviewTools.SetAgentFormatting)] = tools.SetAgentFormatting,
