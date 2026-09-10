@@ -406,12 +406,11 @@
         <li><a href="#building-your-agents"><span class="toc-num">03</span><span class="toc-title">Building Your Agents with Alembic</span><span class="toc-dots"></span><span class="toc-page">5</span></a></li>
         <li><a href="#extension-points"><span class="toc-num">04</span><span class="toc-title">Extension Points</span><span class="toc-dots"></span><span class="toc-page">6</span></a></li>
         <li><a href="#startup-validation"><span class="toc-num">05</span><span class="toc-title">Startup Validation</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
-        <li><a href="#security-model"><span class="toc-num">06</span><span class="toc-title">Security Model</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
-        <li><a href="#configuration-reference"><span class="toc-num">07</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
-        <li><a href="#a2a-configuration"><span class="toc-num">08</span><span class="toc-title">Agent-to-Agent Configuration</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
-        <li><a href="#docker-deployment"><span class="toc-num">09</span><span class="toc-title">Docker Deployment</span><span class="toc-dots"></span><span class="toc-page">11</span></a></li>
-        <li><a href="#observability"><span class="toc-num">10</span><span class="toc-title">Observability (OpenTelemetry)</span><span class="toc-dots"></span><span class="toc-page">12</span></a></li>
-        <li><a href="#quick-reference"><span class="toc-num">11</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">13</span></a></li>
+        <li><a href="#configuration-reference"><span class="toc-num">06</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
+        <li><a href="#a2a-configuration"><span class="toc-num">07</span><span class="toc-title">A2A Configuration</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
+        <li><a href="#docker-deployment"><span class="toc-num">08</span><span class="toc-title">Docker Deployment</span><span class="toc-dots"></span><span class="toc-page">11</span></a></li>
+        <li><a href="#observability"><span class="toc-num">09</span><span class="toc-title">Observability (OpenTelemetry)</span><span class="toc-dots"></span><span class="toc-page">12</span></a></li>
+        <li><a href="#quick-reference"><span class="toc-num">10</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">13</span></a></li>
       </ul>
 
       <div class="page-footer">
@@ -610,64 +609,7 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 8 — SECURITY MODEL                                                     -->
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page" id="security-model">
-      <h2>Security Model</h2>
-      <p>Morgana implements a <strong>defence-in-depth</strong> strategy with security at every layer. The architecture is designed so that infrastructure-level concerns (TLS, vault, WAF) remain the deployer's responsibility, while the product guarantees application-level protection.</p>
-    
-      <div class="badge-row">
-        <div class="badge"><span class="dot"></span> JWT Authentication (HMAC-SHA256)</div>
-        <div class="badge"><span class="dot"></span> Content Moderation (Guard)</div>
-        <div class="badge"><span class="dot"></span> Rate Limiting</div>
-        <div class="badge"><span class="dot"></span> Conversation Encryption (AES-256)</div>
-        <div class="badge"><span class="dot"></span> Secrets Externalized</div>
-        <div class="badge"><span class="dot"></span> Fail-Closed Auth</div>
-        <div class="badge"><span class="dot"></span> Authenticated A2A Endpoints</div>
-      </div>
-    
-      <h3>Authentication Flow</h3>
-      <div class="flow-box">
-        <span class="actor">Channel</span>
-        <span style="font-size:14.5px;">(Cauldron <code>iss=cauldron</code> &middot; Grimoire <code>iss=grimoire</code> &middot; Rune <code>iss=rune</code> &middot; Morgana herself <code>iss=morgana</code> when one agent consults another &mdash; each self-issues JWTs signed with its own shared key)</span>
-        <span class="arrow">&rarr;</span><br/>
-        <span style="font-size:14.5px;">Bearer token in HTTP &amp; SignalR / Webhook</span>
-        <span class="arrow">&rarr;</span><br/>
-        <span class="actor">Morgana</span>
-        <span style="font-size:14.5px;">(peeks <code>iss</code>, looks up the matching <code>Issuers[]</code> entry, validates signature + audience + lifetime; unknown issuers rejected outright)</span>
-      </div>
-
-      <h3>Who the caller is</h3>
-      <p>Trust is held <strong>per caller</strong>, across two lists, and the list a key was found in <em>is</em> what the caller is: there is no role field to declare, mistype or forget. One key per relationship, so a leak costs that relationship and no other.</p>
-
-      <table>
-        <thead><tr><th>Caller</th><th>Onboards with</th><th>Reaches</th></tr></thead>
-        <tbody>
-          <tr><td>Channel</td><td>Its own <code>{ Name, SymmetricKey }</code> in <code>Morgana:Authentication:Issuers[]</code></td><td>The ordinary turn, through guard, classifier, rate limit and dust budget</td></tr>
-          <tr><td>Partner</td><td>One <code>Morgana:AgentToAgent:Partners[]</code> entry: the key the two installations share, beside one policy per direction</td><td>An agent's actor directly, within that entry's <code>InboundPolicy</code></td></tr>
-          <tr><td>The ring &mdash; agents of one installation consulting each other</td><td><strong>Nothing at all</strong>: signed under the reserved name <code>morgana</code>, with a secret coined at every start</td><td>Its own desks, minted and proven inside the same process</td></tr>
-        </tbody>
-      </table>
-
-      <p class="muted" style="font-size:15px; margin-top:10px;"><strong>A caller is a channel or a colleague, never both</strong>, because behind the A2A door a request reaches an agent's actor with none of the protections a channel's path goes through.</p>
-
-      <h3>Publication is whole, admission is narrow</h3>
-      <p>An installation with peer consultation enabled publishes <strong>every agent it holds</strong>: what it offers is what it can answer, so an agent modelled here is reachable by anything that speaks A2A. <strong>The gate is the partner, never the topology.</strong> A partner reaches only what its <code>InboundPolicy</code> allows &mdash; <code>OnAgents</code> holds it to the desks it names, naming none admits it to all &mdash; which is how one company's several installations let each other reach only what concerns them. An agent that must not answer a given caller is kept from it by that caller's policy, never by declining to publish it. The same entry carries the ceilings: how many conversations may be opened in a sliding hour, under <code>InboundPolicy.RateLimiting</code>, while what one exchange may cost stays the ordinary per-conversation budget.</p>
-
-      <div class="info-box">
-        <strong>The card says how to authenticate, then stops.</strong> The A2A JSON-RPC endpoints are fail-closed like the REST API; only the well-known agent card stays open, because discovery is what tells a caller how to authenticate. It declares the bearer scheme it requires and no claim value: <code>iss</code> is the name this installation filed <em>one</em> caller under and <code>aud</code> was agreed in the same breath as the key. Both travel out of band, on that partner's own entry. What changes when somebody redeploys is on the card; what was agreed when the relationship was formed is not.
-      </div>
-
-      <p class="muted" style="font-size:15px; margin-top:10px;">The <code>IAuthenticationService</code> extension point lets a deployer replace JWT with any strategy &mdash; API keys, mTLS, OAuth with an external IdP &mdash; without modifying the application.</p>
-    
-      <div class="page-footer">
-        <span>Morgana Handbook</span>
-        <span>8</span>
-      </div>
-    </div>
-
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 9 — CONFIGURATION REFERENCE                                            -->
+    <!-- PAGE 8 — CONFIGURATION REFERENCE                                            -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="configuration-reference">
       <h2>Configuration Reference</h2>
@@ -737,15 +679,15 @@
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>9</span>
+        <span>8</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 10 — AGENT-TO-AGENT CONFIGURATION                                      -->
+    <!-- PAGE 9 — A2A CONFIGURATION                                      -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="a2a-configuration">
-      <h2>Agent-to-Agent Configuration</h2>
+      <h2>A2A Configuration</h2>
       <p>Peer consultation comes in three shapes, differing only in how much has to be configured. Which one a deployment is in depends on what its plugins declare with <code>[ConsultsAgent]</code> plus what <code>Morgana:AgentToAgent</code> says.</p>
 
       <h3>1 &mdash; Off</h3>
@@ -815,12 +757,12 @@
       
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>10</span>
+        <span>9</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 11 — DOCKER DEPLOYMENT                                                 -->
+    <!-- PAGE 10 — DOCKER DEPLOYMENT                                                 -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="docker-deployment">
       <h2>Docker Deployment</h2>
@@ -854,12 +796,12 @@
     
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>11</span>
+        <span>10</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 12 — OBSERVABILITY                                                     -->
+    <!-- PAGE 11 — OBSERVABILITY                                                     -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="observability">
       <h2>Observability (OpenTelemetry)</h2>
@@ -900,12 +842,12 @@
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>12</span>
+        <span>11</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 13 — QUICK REFERENCE                                                   -->
+    <!-- PAGE 12 — QUICK REFERENCE                                                   -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="quick-reference">
       <h2>Quick Reference</h2>
@@ -926,7 +868,7 @@
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
-        <span>13</span>
+        <span>12</span>
       </div>
     </div>
 
