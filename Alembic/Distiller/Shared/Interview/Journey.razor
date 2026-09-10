@@ -6,10 +6,11 @@
     whether they are two minutes from the end or twenty and the one thing every wizard owes them is
     the answer to that. So every step is visible and the ones not reached are dim rather than absent.
 
-    Its shape is the process's shape. Two steps happen once — the map is drawn and at the end the
-    finished domain is read and taken away — and everything between them happens again for every entry
-    of that map, so those six are drawn inside a lap: bordered, stacked like sheets while entries
-    remain and headed by the entry it is a lap of.
+    Its shape is the process's shape. The map is drawn once, the finished domain is read and taken
+    away once and everything an entry goes through happens again for every entry of that map, so those
+    steps are drawn inside a lap: bordered, stacked like sheets while entries remain and headed by the
+    entry it is a lap of. The step that settles which agent may ask which is enclosed the same way and
+    headed by what it settles — it belongs to no entry, since it is about the agents' relations.
 
     Under it, the entries of the map appear as they are named, in the client's own words.
 
@@ -26,10 +27,10 @@
 <div class="journey">
 
     @*
-        Two steps on the line and six inside the lap, because that is the shape of the process: the
-        map is drawn once and the finished domain is read once and everything between them happens
-        again for every entry of that map. A flat row of eight would say the opposite and would have
-        the light jump backwards from the last step to the second every time an agent was accepted.
+        The lap holds what an entry goes through, because that is the shape of the process: the map is
+        drawn once and the finished domain is read once and everything between them happens again for
+        every entry of that map. A flat row of stations would say the opposite and would have the
+        light jump backwards from the last step to the second every time an agent was accepted.
     *@
     <ol class="stations">
         @Station(0)
@@ -44,11 +45,25 @@
                 @Station(4)
                 @Station(5)
                 @Station(6)
+                @Station(7)
             </ol>
         </li>
 
-        @Station(7)
-        @Station(8)
+        @*
+            The closing step gets an enclosure of its own, headed by what it settles. It is the one
+            step about the agents' relations rather than about any one agent, so a bare mark on the
+            line beside the two that bracket the lap would file it with them — and what it asks the
+            client is nothing like either.
+        *@
+        <li class="lap">
+            <span class="lap-head">@Collaboration</span>
+
+            <ol class="lap-steps">
+                @Station(8)
+            </ol>
+        </li>
+
+        @Station(9)
     </ol>
 
     @*
@@ -131,6 +146,7 @@
         /*Agent Modeling*/ "Target",
         /*Agent Modeling*/ "Personality",
         /*Agent Modeling*/ "Toolkit",
+        /*Agent Modeling*/ "Territory",
         /*Agent Modeling*/ "Instructions",
         /*Agent Modeling*/ "Formatting",
         "Agent Acceptance",
@@ -147,10 +163,17 @@
     private const string Lap = "Agent Modeling";
 
     /// <summary>
+    /// What the closing step is about, on the edge of its own enclosure.
+    /// </summary>
+    // Named for what it settles rather than for the framework's word for it: what the client agrees
+    // to there is which of their desks may put a question to another instead of turning somebody away.
+    private const string Collaboration = "Agent-to-Agent Collaboration";
+
+    /// <summary>
     /// One step of the rail, wherever it sits.
     /// </summary>
-    // The marks carry no number: two of them are outside the lap and six are inside it, so a count
-    // running 1 to 8 would be claiming an order that only two of the steps actually have.
+    // The marks carry no number: most of them happen again for every entry of the map, so a count
+    // running end to end would be claiming an order that only the steps outside a lap actually have.
     private RenderFragment Station(int index) =>@<li class="station @Standing(index)">
         <span class="mark"></span>
         <span class="name">@Steps[index]</span>
@@ -219,7 +242,7 @@
     // never lit here: reaching it means leaving this page for the finished domain.
     private string Standing(int index)
     {
-        // The pass is the index for the first six and no further: acceptance is a step of the rail
+        // The pass is the index up to the last one a pass conducts: acceptance is a step of the rail
         // that no pass conducts, so everything outside the lap sits one place further along than its
         // enum value. Written as two exceptions rather than a table — the lap is the rule and the
         // two things that happen once are what the rule is stated against.
@@ -233,13 +256,13 @@
     /// <summary>
     /// Where acceptance sits on the rail: the last step of the lap.
     /// </summary>
-    private const int Accepting = 6;
+    private const int Accepting = 7;
 
     /// <summary>
     /// Where the closing step sits: outside the lap, after the last agent has been let in and before
     /// the finished domain.
     /// </summary>
-    private const int Colleagues = 7;
+    private const int Colleagues = 8;
 
     /// <summary>
     /// Whether the rows behind the entry's tag are open.

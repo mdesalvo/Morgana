@@ -5,7 +5,7 @@
    faint for ahead - so the interview is one file and the agreement is visible in it.
    ========================================================================== */
 
-/* Where the interview stands: the domain, the four steps each entry of it goes through and one
+/* Where the interview stands: the domain, the steps each entry of it goes through and one
    line saying what is being asked for here. One block, because it is one fact — the entries across
    the top are the first step, not a caption above it.
 
@@ -73,8 +73,8 @@
     box-shadow: 0 0 1.4rem color-mix(in srgb, var(--alembic-accent) 25%, transparent);
 }
 
-/* The rail: every step the interview goes through, the two that happen once on the line itself and
-   the four of an entry's lap inside it. Three states and the palette carries them so nobody has to
+/* The rail: every step the interview goes through, the ones that happen once on the line itself and
+   an entry's own steps inside their lap. Three states and the palette carries them so nobody has to
    read a legend and all three are the one violet the page is lit by: the deep accent, solid, for what
    is behind; the bright accent lit and ringed for where the work is now; the plain border colour,
    faint, for what has not been reached. The rail fills deep violet up to the step in hand, so the
@@ -179,7 +179,7 @@
     list-style: none;
 }
 
-/* The two steps outside the lap stand level with the four inside it, so the line through them all is
+/* The steps outside a lap stand level with the ones inside it, so the line through them all is
    one line: the lap's own top border and padding are what they are pushed down by. */
 .stations > .station {
     margin-top: calc(1rem + 1rem + 1px);
