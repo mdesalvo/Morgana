@@ -240,7 +240,18 @@ The same conversation, the same agents, the same policies: only the surface chan
     <td>&nbsp;</td>
   </tr>
 </table>
+</details>
 
+<details>
+<summary><i>Embedding Morgana: summoning a living Cauldron conversation into any hosting page</i></summary>
+
+Reaching Morgana from a browser does not require landing on Cauldron: it publishes a launcher any page can host, whatever built it.
+
+```html
+<script src="https://your-cauldron-host/widget/morgana-widget.js" defer></script>
+```
+
+No parameters: the loader reads its own `src` to learn which Cauldron to open, so a copied snippet points back at the deployment it came from. Closed, it is a floating pill carrying Morgana's animated face; opened, a sandboxed `<iframe>` running the **real** Cauldron chat — streaming, rich cards, quick replies, dust gauge. A closed shadow root keeps the two stylesheets from reaching each other while the iframe keeps the conversation on Cauldron's own origin, unreadable from the host page. Framing stays closed until a site is listed in `Cauldron:Widget:AllowedEmbedOrigins`.
 </details>
 
 These pillars are argued at length in the [**Morgana Handbook**](https://mdesalvo.github.io/Morgana/Morgana-Handbook.html).
@@ -252,7 +263,6 @@ These pillars are argued at length in the [**Morgana Handbook**](https://mdesalv
 <p align="center">
   <a href="#-quick-start">🚀 Quick Start</a> |
   <a href="#-authoring-a-domain-alembic">🧪 Alembic</a> |
-  <a href="#-morgana-where-your-users-already-are-the-widget">🔮 Widget</a>
 </p>
 
 ### 🚀 Quick Start
@@ -343,20 +353,5 @@ docker compose --env-file .env --env-file .env.versions --profile authoring up a
 ```
 
 </details>
-
-</details>
-
-### 🔮 Morgana Where Your Users Already Are: the Widget
-
-<details>
-<summary><i>An embeddable launcher that drops a live conversation into a page that already exists</i></summary>
-
-Reaching Morgana from a browser does not require landing on Cauldron: it publishes a launcher any page can host, whatever built it.
-
-```html
-<script src="https://your-cauldron-host/widget/morgana-widget.js" defer></script>
-```
-
-No parameters: the loader reads its own `src` to learn which Cauldron to open, so a copied snippet points back at the deployment it came from. Closed, it is a floating pill carrying Morgana's animated face; opened, a sandboxed `<iframe>` running the **real** Cauldron chat — streaming, rich cards, quick replies, dust gauge. A closed shadow root keeps the two stylesheets from reaching each other while the iframe keeps the conversation on Cauldron's own origin, unreadable from the host page. Framing stays closed until a site is listed in `Cauldron:Widget:AllowedEmbedOrigins`.
 
 </details>
