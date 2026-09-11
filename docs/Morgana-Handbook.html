@@ -631,7 +631,7 @@
           <tr><td>Morgana:ActorSystem:EnableGuardrail</td><td>Toggle content moderation guard</td></tr>
           <tr><td>Morgana:ActorSystem:IntentCollisionThreshold</td><td>How close two candidate intents must rank before the turn asks the user which one it is, instead of routing</td></tr>
           <tr><td>Morgana:AgentToAgent:*</td><td>
-            Peer consultation: <code>Enabled</code> (default <code>true</code>), <code>MaxRoundsPerTurn</code> (default 4) and <code>Partners[]</code> &mdash; one entry per federated installation.
+            Peer consultation: <code>Enabled</code> (default <code>true</code>), <code>MaxRoundsPerTurn</code> (default 4), <code>Partners[]</code> (one entry per federated installation).
             <ul style="margin:8px 0 4px; padding-left:18px;">
               <li style="font-size:14.5px; margin-bottom:5px;">Each partner carries <code>{ Name, Url, SymmetricKey, Enabled }</code> plus <code>OutboundPolicy</code> (agents here consult its own) and <code>InboundPolicy</code> (its agents consult those here), each independently toggled &mdash; a relationship can close globally or on one direction alone.</li>
               <li style="font-size:14.5px; margin-bottom:5px;"><code>Name</code> is what <code>[ConsultsAgent]</code> writes, never a hostname.</li>
