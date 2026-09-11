@@ -287,6 +287,21 @@
     padding: 0.8rem 0 0.4rem;
 }
 
+/* What this step adds to the agent in hand, over the question that asks for it. A different voice
+   entirely: smaller, quiet and narrower than the question, so the two are told apart before either
+   is read — at one size they are a wall of text and the client cannot see which sentence is the one
+   they have to answer. Not italic: on this page slanted text is the answer offered in the box and a
+   second meaning for it would cost the first. */
+.placing {
+    max-width: 42rem;
+    margin: 0 auto 1.3rem;
+    text-align: center;
+    color: var(--alembic-muted);
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+}
+
 .asked {
     font-size: 1.6rem;
     font-weight: 300;

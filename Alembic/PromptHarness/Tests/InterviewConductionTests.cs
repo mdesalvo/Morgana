@@ -97,4 +97,49 @@ public sealed class InterviewConductionTests
         Assert.True(events.Code.Consults.Count == 0,
             $"The events desk declares {events.Code.Consults.Count} colleague(s) the client never described.\n{driven}");
     }
+
+    // A step says what it adds to the agent before it asks anything, and it says it as its own
+    // paragraph: the placing sentence and the question are two different things to read and the
+    // screen shows them in two different voices. Run into one block they are a wall of text in
+    // which nothing says which sentence is the one the client has to answer.
+    [Fact]
+    public void Every_step_places_itself_above_the_question_it_asks()
+    {
+        DrivenInterview driven = interviewed.Driven;
+
+        List<DrivenExchange> openings = driven.Exchanges
+            .Where((exchange, index) => index == 0 || driven.Exchanges[index - 1].Pass != exchange.Pass)
+            .ToList();
+
+        List<DrivenExchange> run = openings
+            .Where(exchange => !exchange.Question.Replace("\r\n", "\n").Contains("\n\n"))
+            .ToList();
+
+        Assert.True(run.Count == 0,
+            $"{run.Count} step(s) opened with the placing sentence run into the question:\n"
+            + string.Join("\n", run.Select(exchange => $"[{exchange.Pass}] {exchange.Question}"))
+            + $"\n\n{driven}");
+    }
+
+    // A worked answer standing in the box is the only thing on the screen that says how much of an
+    // answer this question is worth: a client who cannot see its cut writes a word and a domain
+    // mapped out of single words is one whose holes first show at the emit. Two questions are
+    // exempt and both because nothing is missing from the screen — one carrying the button already
+    // shows the answer that adds nothing and the very first question of all is asked of somebody
+    // nothing is known about yet, where the page's own house example stands in.
+    [Fact]
+    public void Every_open_question_arrives_with_a_worked_example()
+    {
+        DrivenInterview driven = interviewed.Driven;
+
+        List<DrivenExchange> bare = driven.Exchanges
+            .Skip(1)
+            .Where(exchange => exchange.Choice is null && string.IsNullOrWhiteSpace(exchange.Example))
+            .ToList();
+
+        Assert.True(bare.Count == 0,
+            $"{bare.Count} open question(s) were asked over an empty box:\n"
+            + string.Join('\n', bare.Select(exchange => $"[{exchange.Pass}] {exchange.Question}"))
+            + $"\n\n{driven}");
+    }
 }

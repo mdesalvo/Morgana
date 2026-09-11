@@ -510,14 +510,13 @@ public class InterviewTools
     /// Puts a worked example in the answer box under the question about to be asked.
     /// </summary>
     /// <remarks>
-    /// Called in the turn that opens a step, which is the first moment it can be written well: by
-    /// then the map has been read, so the example is an answer somebody in the client's own trade
-    /// might have given about the agent being built — where a string fixed in the UI can only quote
-    /// a stranger's business at them while they are being asked about their own.
-    /// What it teaches is register, length and level of detail, which is the whole of what a
-    /// first-time client is missing and none of what a label naming the material would convey.
-    /// It stands in the box rather than being typed into it, so a client who wants it takes it and
-    /// cuts it about; nobody has to clear it to write their own.
+    /// Called before every question that asks for something new, cut to the size of that question:
+    /// what it teaches is register, length and level of detail, which is the whole of what a
+    /// first-time client is missing and none of what a label naming the material would convey. An
+    /// empty box under an open question teaches none of it and comes back as a word where a
+    /// sentence was wanted — which is how a domain arrives thin and only shows its holes at the
+    /// emit. Written by the pass rather than fixed in the UI, so it is an answer somebody in the
+    /// client's own trade might have given rather than a stranger's business quoted at them.
     /// </remarks>
     public string SetExample(string example)
     {

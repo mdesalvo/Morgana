@@ -4,10 +4,22 @@ using Distiller.Model;
 namespace PromptHarness.Infrastructure;
 
 /// <summary>
-/// One exchange of a driven interview, kept for a failing test's own diagnostics — not asserted on
-/// directly by most tests, but printed when one does fail.
+/// One exchange of a driven interview: what was asked, what the client saw offered with it and what
+/// they said back. Kept for a failing test's own diagnostics and asserted on where a rule is about
+/// how the interview conducts itself rather than about what it wrote.
 /// </summary>
-public sealed record DrivenExchange(InterviewStep Pass, string Question, string Answer);
+/// <param name="Example">
+/// The worked answer standing in the box when this question was asked, or nothing where the box was
+/// empty. It is half of what a client actually reads on the screen, so a transcript without it
+/// cannot show why an answer came back a word long.
+/// </param>
+/// <param name="Choice">The one button offered with this question, if it carried one.</param>
+public sealed record DrivenExchange(
+    InterviewStep Pass,
+    string Question,
+    string Answer,
+    string? Example = null,
+    string? Choice = null);
 
 /// <summary>
 /// What a driven run leaves behind: the transcript and the state the interview stood at when the
@@ -17,7 +29,11 @@ public sealed record DrivenInterview(InterviewState FinalState, IReadOnlyList<Dr
 {
     /// <summary>Renders the transcript as a scrollback, for a failing assertion's message.</summary>
     public override string ToString() =>
-        string.Join('\n', Exchanges.Select(e => $"[{e.Pass}] Q: {e.Question}\nA: {e.Answer}"));
+        string.Join('\n', Exchanges.Select(e =>
+            $"[{e.Pass}] Q: {e.Question}"
+            + (e.Choice is null ? string.Empty : $"\n[button] {e.Choice}")
+            + (e.Example is null ? string.Empty : $"\n[in the box] {e.Example}")
+            + $"\nA: {e.Answer}"));
 }
 
 /// <summary>
@@ -80,7 +96,8 @@ public static class InterviewDriver
                 ? mappingScript[scriptIndex++]
                 : "That's everything, thank you.";
 
-            exchanges.Add(new DrivenExchange(state.Pass, state.Question ?? string.Empty, answer));
+            exchanges.Add(new DrivenExchange(
+                state.Pass, state.Question ?? string.Empty, answer, state.Example, state.Choice?.Label));
             state = await interview.AnswerAsync(answer, cancellationToken);
 
             if (state.Error is not null)
@@ -210,7 +227,8 @@ public static class InterviewDriver
             Queue<string> queue = speaking(state);
             string answer = queue.Count > 0 ? queue.Dequeue() : "That's right, go ahead.";
 
-            exchanges.Add(new DrivenExchange(state.Pass, state.Question ?? string.Empty, answer));
+            exchanges.Add(new DrivenExchange(
+                state.Pass, state.Question ?? string.Empty, answer, state.Example, state.Choice?.Label));
             state = await interview.AnswerAsync(answer, cancellationToken);
 
             if (state.Error is not null)
