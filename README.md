@@ -15,67 +15,19 @@ Morgana is a modern and flexible **conversational AI framework** designed to han
 
 The system is powered by **Microsoft.Agents.AI**, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
 
-> [!IMPORTANT]
-> *Morgana looks like an enchanted LLM seamlessly bound to your application domain: her grimoire holds every spell and tool required to serve your specific world of intents, as you (as developer) are the sole master who whispers the teachings that shape her personality and magical capabilities 🔮*
-
-<table style="border:none;">
-  <tr>
-    <th colspan=6>Cauldron / Widget</th>
-  </tr>
-  <tr>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-SparkleLoader.jpg" alt="Morgana - Sparkle Loader (Cauldron)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Presentation.jpg" alt="Morgana - Presentation (Cauldron)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Chatting.jpg" alt="Morgana - Chatting (Cauldron)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Agent.jpg" alt="Morgana - Agent (Cauldron)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Agent2.jpg" alt="Morgana - Agent2 (Cauldron)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Widget.jpg" alt="Morgana - Widget (Cauldron)"/>
-    </td>
-  </tr>
-  <tr>
-    <th colspan=6>Grimoire</th>
-  </tr>
-  <tr>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-SparkleLoaderGRM.jpg" alt="Morgana - Sparkle Loader (Grimoire)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-PresentationGRM.jpg" alt="Morgana - Presentation (Grimoire)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-ChattingGRM.jpg" alt="Morgana - Chatting (Grimoire)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-AgentGRM.jpg" alt="Morgana - Agent (Grimoire)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-Agent2GRM.jpg" alt="Morgana - Agent2 (Grimoire)"/>
-    </td>
-    <td>&nbsp;</td>
-  </tr>
-</table>
 
 ## Core Philosophy
 
 Traditional chatbot systems struggle with complexity. They either become monolithic and unmaintainable, or lack the contextual awareness needed for sophisticated interactions.
 
-Morgana **reimagines conversational AI** through 4 foundational pillars that **work in harmony** to deliver an **orchestration framework** that is powerful yet **remarkably simple to configure**.
+Morgana **reimagines conversational AI** through 5 foundational pillars that **work in harmony** to deliver an **orchestration framework** that is powerful yet **remarkably simple to configure**.
 
 <p align="center">
   <a href="#-morgana-actor-system">🎭 Actor System</a> |
   <a href="#-morgana-agent-system">🤖 Agent System</a> |
   <a href="#-morgana-prompt-system">📝 Prompt System</a> |
-  <a href="#-morgana-context-system">💾 Context System</a>
+  <a href="#-morgana-context-system">💾 Context System</a> |
+  <a href="#-morgana-channel-system">📡 Channel System</a>
 </p>
 
 ### 🎭 Morgana Actor System
@@ -230,6 +182,64 @@ Every agent in Morgana keeps its own **secure, isolated context**: memories, var
 Some information, though, is meant to travel. A customer code given to BillingAgent shouldn't have to be asked again the moment ContractAgent takes over. Morgana handles this with **self-synchronizing shared variables**: information explicitly marked as shared is transparently picked up by any agent that needs it, the instant it needs it (no re-asking the user, no manual wiring between agents).
 
 Conversations survive restarts and agent handoffs without losing this context. Users always see one coherent conversation, even when several specialized agents quietly took turns behind the scenes.
+
+</details>
+
+### 📡 Morgana Channel System
+
+<details>
+<summary><i>One brain, every surface: rich where it can be, plain where it must be</i></summary>
+
+Morgana never asks a channel to keep up: it **adapts to whatever capabilities a channel actually declares**. A rich card, a quick reply, a streamed chunk—each is offered only where the channel says it can render it, gracefully degraded to plain text everywhere else, with nothing lost in translation and nothing crashing in the attempt.
+
+The same conversation, the same agents, the same policies: only the surface changes. A browser gets Cauldron's full HTML experience—sparkle loaders, rich cards, a floating widget. A terminal gets Grimoire's rendered TTY equivalent of the very same turns. Neither channel carries a line of agent logic: they are pure presentation, and Morgana is the one that knows, turn by turn, what each of them can take.
+
+<table style="border:none;">
+  <tr>
+    <th colspan=6>Cauldron / Widget</th>
+  </tr>
+  <tr>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-SparkleLoader.jpg" alt="Morgana - Sparkle Loader (Cauldron)"/>
+    </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Presentation.jpg" alt="Morgana - Presentation (Cauldron)"/>
+    </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Chatting.jpg" alt="Morgana - Chatting (Cauldron)"/>
+    </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Agent.jpg" alt="Morgana - Agent (Cauldron)"/>
+    </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Agent2.jpg" alt="Morgana - Agent2 (Cauldron)"/>
+    </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Widget.jpg" alt="Morgana - Widget (Cauldron)"/>
+    </td>
+  </tr>
+  <tr>
+    <th colspan=6>Grimoire</th>
+  </tr>
+  <tr>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-SparkleLoaderGRM.jpg" alt="Morgana - Sparkle Loader (Grimoire)"/>
+    </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-PresentationGRM.jpg" alt="Morgana - Presentation (Grimoire)"/>
+    </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-ChattingGRM.jpg" alt="Morgana - Chatting (Grimoire)"/>
+    </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-AgentGRM.jpg" alt="Morgana - Agent (Grimoire)"/>
+    </td>
+    <td>
+      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-Agent2GRM.jpg" alt="Morgana - Agent2 (Grimoire)"/>
+    </td>
+    <td>&nbsp;</td>
+  </tr>
+</table>
 
 </details>
 
