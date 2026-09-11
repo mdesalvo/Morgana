@@ -155,7 +155,7 @@ A colleague living in the same installation needs nothing configured: that traff
 <details>
 <summary><i>First-class artifacts with layered personality architecture and structured behavioral policies</i></summary>
 
-Prompts are not hardcoded strings in Morgana—they are **versioned, maintainable project artifacts** managed through the `IPromptResolverService`. This separation of concerns enables prompt engineering teams to iterate independently from application logic, supporting A/B testing, localization and behavioral evolution without redeployment.
+Prompts are not hardcoded strings in Morgana: they are **versioned, maintainable project artifacts** managed through the `IPromptResolverService`. This separation of concerns enables prompt engineering teams to iterate independently from application logic, supporting A/B testing, localization and behavioral evolution without redeployment.
 
 The system distinguishes between two prompt categories:
 - **System prompts** (`morgana.json`): Define actor behaviors, global policies and orchestration rules
@@ -166,7 +166,7 @@ A unique characteristic of Morgana is its **Layered Personality System**. Every 
 - **Global Layer**: Defines Morgana's fundamental character, tone and values
 - **Agent Layer**: Adds contextual traits that complement (never contradict) the global personality
 
-For example, BillingAgent might be "a pragmatic and concrete witch" while ContractAgent is "a patient and empathetic witch"—both remain recognizably "Morgana" while adapting to domain-specific user needs. This creates vertical consistency across conversations with horizontal variation per expertise area, delivering a **unified brand experience that feels naturally specialized**.
+For example, BillingAgent might be "a pragmatic and concrete witch" while ContractAgent is "a patient and empathetic witch": both remain recognizably "Morgana" while adapting to domain-specific user needs. This creates vertical consistency across conversations with horizontal variation per expertise area, delivering a **unified brand experience that feels naturally specialized**.
 
 Prompts also define **Global Policies** that are automatically composed into agent instructions, ensuring **system-wide behavioral consistency** without repetition.
 
@@ -190,9 +190,9 @@ Conversations survive restarts and agent handoffs without losing this context. U
 <details>
 <summary><i>One brain, every surface: rich where it can be, plain where it must be</i></summary>
 
-Morgana never asks a channel to keep up: it **adapts to whatever capabilities a channel actually declares**. A rich card, a quick reply, a streamed chunk—each is offered only where the channel says it can render it, gracefully degraded to plain text everywhere else, with nothing lost in translation and nothing crashing in the attempt.
+Morgana never asks a channel to keep up: it **adapts to whatever capabilities a channel actually declares**. A rich card, a quick reply, a streamed chunk: each is offered only where the channel says it can render it, gracefully degraded to plain text everywhere else, with nothing lost in translation and nothing crashing in the attempt.
 
-The same conversation, the same agents, the same policies: only the surface changes. A browser gets Cauldron's full HTML experience—sparkle loaders, rich cards, a floating widget. A terminal gets Grimoire's rendered TTY equivalent of the very same turns. Neither channel carries a line of agent logic: they are pure presentation, and Morgana is the one that knows, turn by turn, what each of them can take.
+The same conversation, the same agents, the same policies: only the surface changes. A browser gets Cauldron's full HTML experience (sparkle loaders, rich cards, a floating widget). A terminal gets Grimoire's rendered TTY equivalent of the very same turns. Neither channel carries a line of agent logic: they are pure presentation; Morgana is the one that knows, turn by turn, what each of them can take.
 
 <table style="border:none;">
   <tr>
@@ -251,7 +251,7 @@ Reaching Morgana from a browser does not require landing on Cauldron: it publish
 <script src="https://your-cauldron-host/widget/morgana-widget.js" defer></script>
 ```
 
-No parameters: the loader reads its own `src` to learn which Cauldron to open, so a copied snippet points back at the deployment it came from. Closed, it is a floating pill carrying Morgana's animated face; opened, a sandboxed `<iframe>` running the **real** Cauldron chat — streaming, rich cards, quick replies, dust gauge. A closed shadow root keeps the two stylesheets from reaching each other while the iframe keeps the conversation on Cauldron's own origin, unreadable from the host page. Framing stays closed until a site is listed in `Cauldron:Widget:AllowedEmbedOrigins`.
+No parameters: the loader reads its own `src` to learn which Cauldron to open, so a copied snippet points back at the deployment it came from. Closed, it is a floating pill carrying Morgana's animated face; opened, a sandboxed `<iframe>` running the **real** Cauldron chat: streaming, rich cards, quick replies, dust gauge. A closed shadow root keeps the two stylesheets from reaching each other while the iframe keeps the conversation on Cauldron's own origin, unreadable from the host page. Framing stays closed until a site is listed in `Cauldron:Widget:AllowedEmbedOrigins`.
 </details>
 
 These pillars are argued at length in the [**Morgana Handbook**](https://mdesalvo.github.io/Morgana/Morgana-Handbook.html).
@@ -271,7 +271,7 @@ These pillars are argued at length in the [**Morgana Handbook**](https://mdesalv
 <summary><i>From a cloned repository to a running Morgana, one channel at a time</i></summary>
 
 <details open>
-<summary><b>⚙️ Setup</b> — <i>once, before any channel</i></summary>
+<summary><b>⚙️ Setup</b>: <i>once, before any channel</i></summary>
 
 ```bash
 # 📋 Copy the development template
@@ -293,7 +293,7 @@ docker compose --env-file .env --env-file .env.versions build
 </details>
 
 <details>
-<summary><b>🌐 Morgana on Cauldron</b> — <i>the browser channel and the stack everything else talks to</i></summary>
+<summary><b>🌐 Morgana on Cauldron</b>: <i>the browser channel and the stack everything else talks to</i></summary>
 
 ```bash
 # 🚀 Start the containers (Morgana + Cauldron)
@@ -308,7 +308,7 @@ docker compose --env-file .env --env-file .env.versions down
 </details>
 
 <details>
-<summary><b>📟 Morgana on Grimoire</b> — <i>the rich TTY, on the stack started above</i></summary>
+<summary><b>📟 Morgana on Grimoire</b>: <i>the rich TTY, on the stack started above</i></summary>
 
 ```bash
 # --use-aliases is mandatory: without it the webhook callback fails DNS resolution
@@ -318,7 +318,7 @@ docker compose --env-file .env --env-file .env.versions run --rm --service-ports
 </details>
 
 <details>
-<summary><b>📜 Morgana on Rune</b> — <i>the deliberately poor TTY, same stack</i></summary>
+<summary><b>📜 Morgana on Rune</b>: <i>the deliberately poor TTY, same stack</i></summary>
 
 ```bash
 docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases rune
@@ -333,14 +333,14 @@ docker compose --env-file .env --env-file .env.versions run --rm --service-ports
 <details>
 <summary><i>An AI-conducted interview that distils a whole domain into a buildable plugin</i></summary>
 
-Agents can be authored entirely by hand — `agents.json` plus a thin C# class against the **Morgana.AI** NuGet package. The shorter path is **Alembic**, Morgana's authoring workbench: an AI-conducted interview that distils a new domain from scratch, or extends an existing one, into intents, agent prose, tool contracts and working C#, packaged as one downloadable archive ready to be built into a plugin. It talks to no Morgana instance — only to an LLM — so it runs on its own, whenever somebody sits down to model a business.
+Agents can be authored entirely by hand: `agents.json` plus a thin C# class against the **Morgana.AI** NuGet package. The shorter path is **Alembic**, Morgana's authoring workbench: an AI-conducted interview that distils a new domain from scratch, or extends an existing one, into intents, agent prose, tool contracts and working C#, packaged as one downloadable archive ready to be built into a plugin. It talks to no Morgana instance (only to an LLM), so it runs on its own, whenever somebody sits down to model a business.
 
 What the interview produces is kept honest over time by **PromptHarness**, the live non-regression suite in the repository root: scenarios run against the configured provider and score the prose the agents actually read.
 
 The interview, what it distils and how the archive is built are walked through in the [**Alembic Handbook**](https://mdesalvo.github.io/Morgana/Alembic-Handbook.html).
 
 <details>
-<summary><b>▶️ Running it</b> — <i>a build plus a profile-gated compose service</i></summary>
+<summary><b>▶️ Running it</b>: <i>a build plus a profile-gated compose service</i></summary>
 
 It joins no network, so compose keeps it behind a profile: `up` never starts it.
 

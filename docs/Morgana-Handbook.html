@@ -424,7 +424,7 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="architecture-overview">
       <h2>Architecture Overview</h2>
-      <p>Morgana is a <strong>conversational AI framework</strong> built on a multi-agent, intent-driven architecture. It is <strong>multi-channel by design</strong>: the backend intelligence (<strong>Morgana</strong>) is decoupled from the channels users actually reach it through and ships with <strong>three reference channels out-of-the-box</strong> &mdash; <strong>Cauldron</strong> (HTML / Blazor Server, rich UI over SignalR), <strong>Grimoire</strong> (TTY / Spectre.Console, rich CLI over webhook) and <strong>Rune</strong> (TTY / Spectre.Console, poor-but-honest CLI over webhook). Every channel advertises its <strong>capability budget</strong> at conversation start, Morgana adapts its outbound expressivity accordingly and each channel authenticates with its own JWT issuer.</p>
+      <p>Morgana is a <strong>conversational AI framework</strong> built on a multi-agent, intent-driven architecture. It is <strong>multi-channel by design</strong>: the backend intelligence (<strong>Morgana</strong>) is decoupled from the channels users actually reach it through and ships with <strong>three reference channels out-of-the-box</strong>: <strong>Cauldron</strong> (HTML / Blazor Server, rich UI over SignalR), <strong>Grimoire</strong> (TTY / Spectre.Console, rich CLI over webhook) and <strong>Rune</strong> (TTY / Spectre.Console, poor-but-honest CLI over webhook). Every channel advertises its <strong>capability budget</strong> at conversation start, Morgana adapts its outbound expressivity accordingly and each channel authenticates with its own JWT issuer.</p>
       <p>Morgana <strong>reimagines conversational AI</strong> through 4 foundational pillars that <strong>work in harmony</strong> to deliver an <strong>orchestration framework</strong> that is powerful yet remarkably simple to configure.</p>
       
       <div class="pillars">
@@ -436,12 +436,12 @@
         <div class="pillar">
           <div class="icon">&#x1F916;</div>
           <h4>Agent System</h4>
-          <p>Domain specialists that self-register through declarative attributes. Supports native tools (MorganaTool), MCP server integration for runtime capability discovery and peer consultation between agents over the A2A protocol &mdash; with colleagues of this installation or of another Morgana it declares as consultable, indistinguishable to the agent that consults them.</p>
+          <p>Domain specialists that self-register through declarative attributes. Supports native tools (MorganaTool), MCP server integration for runtime capability discovery and peer consultation between agents over the A2A protocol, with colleagues of this installation or of another Morgana it declares as consultable, indistinguishable to the agent that consults them.</p>
         </div>
         <div class="pillar">
           <div class="icon">&#x1F4DD;</div>
           <h4>Prompt System</h4>
-          <p>Prompts as versioned project artifacts with layered personality: a global Morgana character plus per-agent specializations. No hardcoded strings&mdash;iterate without redeployment.</p>
+          <p>Prompts as versioned project artifacts with layered personality: a global Morgana character plus per-agent specializations. No hardcoded strings: iterate without redeployment.</p>
         </div>
         <div class="pillar">
           <div class="icon">&#x1F4BE;</div>
@@ -454,12 +454,12 @@
       <table>
         <thead><tr><th>Component</th><th>Role</th><th>Technology</th><th>Default Port</th></tr></thead>
         <tbody>
-          <tr><td><strong>Morgana</strong></td><td>Backend &mdash; SignalR Hub, Actors, Agents</td><td>ASP.NET 10, Akka.NET, Microsoft.Agents.AI</td><td>5001</td></tr>
-          <tr><td><strong>Cauldron</strong></td><td>Channel &mdash; HTML rich UI (SignalR delivery, full capability budget)</td><td>Blazor Server</td><td>5002</td></tr>
-          <tr><td><strong>Grimoire</strong></td><td>Channel &mdash; TTY rich CLI (webhook delivery, full capability budget)</td><td>Spectre.Console on Kestrel</td><td>5004</td></tr>
-          <tr><td><strong>Rune</strong></td><td>Channel &mdash; TTY CLI (webhook delivery, poor-but-honest capability budget)</td><td>Spectre.Console on Kestrel</td><td>5003</td></tr>
-          <tr><td><strong>LLM</strong></td><td>Language model provider</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>&mdash;</td></tr>
-          <tr><td><strong>MCP Server</strong></td><td>External tool provider (optional)</td><td>ModelContextProtocol.Core (Http/Stdio)</td><td>&mdash;</td></tr>
+          <tr><td><strong>Morgana</strong></td><td>Backend: SignalR Hub, Actors, Agents</td><td>ASP.NET 10, Akka.NET, Microsoft.Agents.AI</td><td>5001</td></tr>
+          <tr><td><strong>Cauldron</strong></td><td>Channel: HTML rich UI (SignalR delivery, full capability budget)</td><td>Blazor Server</td><td>5002</td></tr>
+          <tr><td><strong>Grimoire</strong></td><td>Channel: TTY rich CLI (webhook delivery, full capability budget)</td><td>Spectre.Console on Kestrel</td><td>5004</td></tr>
+          <tr><td><strong>Rune</strong></td><td>Channel: TTY CLI (webhook delivery, poor-but-honest capability budget)</td><td>Spectre.Console on Kestrel</td><td>5003</td></tr>
+          <tr><td><strong>LLM</strong></td><td>Language model provider</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>n/a</td></tr>
+          <tr><td><strong>MCP Server</strong></td><td>External tool provider (optional)</td><td>ModelContextProtocol.Core (Http/Stdio)</td><td>n/a</td></tr>
           <tr><td><strong>A2A Endpoint</strong></td><td>Every agent published for peer consultation at <code>/a2a/{intent}</code>, with its well-known agent card (optional)</td><td>Microsoft.Agents.AI.Hosting.A2A (JSON-RPC)</td><td>5001</td></tr>
         </tbody>
       </table>
@@ -481,11 +481,11 @@
         <thead><tr><th>&nbsp;</th><th>HTML</th><th>TTY</th></tr></thead>
         <tbody>
           <tr><td><strong>Full</strong></td><td>Cauldron</td><td><strong>Grimoire</strong></td></tr>
-          <tr><td><strong>Poor</strong></td><td>&mdash;</td><td>Rune</td></tr>
+          <tr><td><strong>Poor</strong></td><td>n/a</td><td>Rune</td></tr>
         </tbody>
       </table>
 
-      <h3 style="margin-top:14px;">Cauldron &mdash; HTML / Blazor Server (rich)</h3>
+      <h3 style="margin-top:14px;">Cauldron: HTML / Blazor Server (rich)</h3>
       <p>Cauldron is a Blazor Server application providing a rich, real-time chat interface with streaming responses, quick replies, rich cards and animated feedback. It communicates with Morgana over authenticated SignalR and REST (<code>deliveryMode=signalr</code>), with all capability flags on. It can be depicted as the <b>official Morgana's home</b>.</p>
 
       <div class="screenshots">
@@ -494,10 +494,10 @@
         <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Channels/Cauldron/Assets/Morgana-Agent.jpg" alt="Cauldron Agent"/>
       </div>
 
-      <p style="margin-top:10px;"><strong>Widget &mdash; Cauldron inside a site that already exists.</strong> Reaching Morgana from a browser does not require landing on the Blazor app: Cauldron publishes an embeddable launcher under <code>/widget/</code>, added to any page &mdash; whatever built it &mdash; with one parameterless tag, <code>&lt;script src="https://your-cauldron-host/widget/morgana-widget.js" defer&gt;&lt;/script&gt;</code>. The loader reads its own <code>src</code> to learn which Cauldron to open, so a snippet copied from a deployment points back at that deployment by construction. Closed it is a floating pill; opened it reveals a sandboxed <code>&lt;iframe&gt;</code> running the <em>real</em> Cauldron chat &mdash; streaming, rich cards, quick replies and dust gauge included &mdash; on Cauldron's own origin, unreadable from the embedding document. Framing is closed by default: a site may host the widget only once its origin is listed in <code>Cauldron:Widget:AllowedEmbedOrigins</code>, emitted as a CSP <code>frame-ancestors</code> directive.</p>
+      <p style="margin-top:10px;"><strong>Widget: Cauldron inside a site that already exists.</strong> Reaching Morgana from a browser does not require landing on the Blazor app: Cauldron publishes an embeddable launcher under <code>/widget/</code>, added to any page (whatever built it) with one parameterless tag, <code>&lt;script src="https://your-cauldron-host/widget/morgana-widget.js" defer&gt;&lt;/script&gt;</code>. The loader reads its own <code>src</code> to learn which Cauldron to open, so a snippet copied from a deployment points back at that deployment by construction. Closed it is a floating pill; opened it reveals a sandboxed <code>&lt;iframe&gt;</code> running the <em>real</em> Cauldron chat (streaming, rich cards, quick replies and dust gauge included) on Cauldron's own origin, unreadable from the embedding document. Framing is closed by default: a site may host the widget only once its origin is listed in <code>Cauldron:Widget:AllowedEmbedOrigins</code>, emitted as a CSP <code>frame-ancestors</code> directive.</p>
 
-      <h3 style="margin-top:18px;">Grimoire &mdash; TTY / Spectre.Console (rich)</h3>
-      <p>Grimoire is the <strong>textual Cauldron</strong>: a Kestrel-hosted console app with a Spectre.Console Live UI that renders Morgana's <strong>full</strong> expressive surface inside the terminal &mdash; streaming responses, markdown, rich cards and quick replies, all capability flags on (<code>MaxMessageLength=null</code>). It uses the same <strong>webhook delivery mode</strong> (<code>deliveryMode=webhook</code>) as Rune, proving the framework adapts on the <em>capability profile</em>, not the transport. Content arrives intact and is &ldquo;Spectrized&rdquo; locally: markdown via a Markdig&rarr;Spectre renderer, rich cards mapped to bordered boxes, quick replies into an inline arrow-key selector.</p>
+      <h3 style="margin-top:18px;">Grimoire: TTY / Spectre.Console (rich)</h3>
+      <p>Grimoire is the <strong>textual Cauldron</strong>: a Kestrel-hosted console app with a Spectre.Console Live UI that renders Morgana's <strong>full</strong> expressive surface inside the terminal: streaming responses, markdown, rich cards and quick replies, all capability flags on (<code>MaxMessageLength=null</code>). It uses the same <strong>webhook delivery mode</strong> (<code>deliveryMode=webhook</code>) as Rune, proving the framework adapts on the <em>capability profile</em>, not the transport. Content arrives intact and is &ldquo;Spectrized&rdquo; locally: markdown via a Markdig&rarr;Spectre renderer, rich cards mapped to bordered boxes, quick replies into an inline arrow-key selector.</p>
 
       <div class="screenshots">
         <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Channels/Grimoire/Assets/Morgana-PresentationGRM.jpg" alt="Grimoire Presentation"/>
@@ -505,8 +505,8 @@
         <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Channels/Grimoire/Assets/Morgana-AgentGRM.jpg" alt="Grimoire Agent"/>
       </div>
 
-      <h3 style="margin-top:18px;">Rune &mdash; TTY / Spectre.Console (poor)</h3>
-      <p>Rune is a minimal command-line channel: a Kestrel-hosted console app with a Spectre.Console Live UI (sticky header, streaming-free rendering), exercising the <strong>webhook delivery mode</strong> (<code>deliveryMode=webhook</code>) with lowest capability profile</strong> (all rich features off, <code>MaxMessageLength=500</code>). It is the contract surface <code>MorganaChannelAdapter</code> is supposed to degrade toward &mdash; a working proof that the channel abstraction holds, not just a demo.</p>
+      <h3 style="margin-top:18px;">Rune: TTY / Spectre.Console (poor)</h3>
+      <p>Rune is a minimal command-line channel: a Kestrel-hosted console app with a Spectre.Console Live UI (sticky header, streaming-free rendering), exercising the <strong>webhook delivery mode</strong> (<code>deliveryMode=webhook</code>) with lowest capability profile</strong> (all rich features off, <code>MaxMessageLength=500</code>). It is the contract surface <code>MorganaChannelAdapter</code> is supposed to degrade toward: a working proof that the channel abstraction holds, not just a demo.</p>
 
       <div class="page-footer">
         <span>Morgana Handbook</span>
@@ -536,12 +536,12 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="extension-points">
       <h2>Extension Points</h2>
-      <p>Every behavioural concern in Morgana is independently overridable via Dependency Injection. The default implementations ship as sensible baselines&mdash;replace any of them without touching a single line of framework code.</p>
+      <p>Every behavioural concern in Morgana is independently overridable via Dependency Injection. The default implementations ship as sensible baselines: replace any of them without touching a single line of framework code.</p>
     
       <table>
         <thead><tr><th>Interface</th><th>Default Implementation</th><th>Purpose</th></tr></thead>
         <tbody>
-          <tr><td>IAgentConfigurationService</td><td>EmbeddedAgentConfigurationService</td><td>Agent discovery &mdash; every plugin's <code>agents.json</code>, merged</td></tr>
+          <tr><td>IAgentConfigurationService</td><td>EmbeddedAgentConfigurationService</td><td>Agent discovery: every plugin's <code>agents.json</code>, merged</td></tr>
           <tr><td>IAgentDirectoryService</td><td>ConfigurationAgentDirectoryService</td><td>A2A agent cards &amp; colleague resolution</td></tr>
           <tr><td>IAgentRegistryService</td><td>HandlesIntentAgentRegistryService</td><td>Agent-to-intent binding &amp; bidirectional validation</td></tr>
           <tr><td>IAuthenticationService</td><td>JWTAuthenticationService</td><td>Request authentication (JWT HMAC-SHA256)</td></tr>
@@ -567,7 +567,7 @@
       </table>
     
       <div class="info-box">
-        <strong>Plugin Architecture:</strong> Build your agents as standalone .NET libraries referencing the <strong>Morgana.AI</strong> NuGet package. Drop the compiled DLL into the <code>plugins/</code> folder and Morgana discovers it at startup&mdash;zero configuration needed.
+        <strong>Plugin Architecture:</strong> Build your agents as standalone .NET libraries referencing the <strong>Morgana.AI</strong> NuGet package. Drop the compiled DLL into the <code>plugins/</code> folder and Morgana discovers it at startup: zero configuration needed.
       </div>
 
       <div class="page-footer">
@@ -581,18 +581,18 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="startup-validation">
       <h2>Startup Validation</h2>
-      <p>A plugin declares its world across three places at once &mdash; attributes in C#, intents and prose in <code>agents.json</code>, credentials and policies in configuration &mdash; and nothing in the type system holds the three together. Morgana closes that gap at boot with <strong>nine checks, each of them fatal</strong>, all guarding one failure shape: <strong>a topology that validates cleanly and then fails, or opens, silently.</strong></p>
+      <p>A plugin declares its world across three places at once (attributes in C#, intents and prose in <code>agents.json</code>, credentials and policies in configuration) and nothing in the type system holds the three together. Morgana closes that gap at boot with <strong>nine checks, each of them fatal</strong>, all guarding one failure shape: <strong>a topology that validates cleanly and then fails, or opens, silently.</strong></p>
 
       <table>
         <thead><tr><th>#</th><th>Check</th><th>What it prevents</th></tr></thead>
         <tbody>
           <tr><td>1</td><td>Every configured intent has an agent and every agent an intent</td><td>A classified intent routed nowhere, or a desk nobody can reach</td></tr>
-          <tr><td>2</td><td>Every agent declares <code>[RequiresLLMTier]</code> and that tier is configured</td><td>An agent needing deep reasoning silently served by the cheap die &mdash; there is no cross-tier fallback</td></tr>
+          <tr><td>2</td><td>Every agent declares <code>[RequiresLLMTier]</code> and that tier is configured</td><td>An agent needing deep reasoning silently served by the cheap die: there is no cross-tier fallback</td></tr>
           <tr><td>3</td><td>Every <code>[ConsultsAgent]</code> names a reachable colleague and no two fold to one function name</td><td>A consultation that fails at the first question, or two colleagues answering under one name</td></tr>
           <tr><td>4</td><td>Tools: orphans warn, duplicates for one intent are refused</td><td>Two implementations claiming the same tool, with the winner decided by scan order</td></tr>
           <tr><td>5</td><td>Every plugin's <code>agents.json</code> merges with no duplicated intent or prompt id, none declaring the reserved <code>other</code></td><td>One deployment's plugins silently overwriting each other's domain</td></tr>
           <tr><td>6</td><td>No <code>Tiers</code> entry left on its override placeholder, no empty <code>Tiers</code> map</td><td>A deployment shipped with the template's secrets still in place</td></tr>
-          <tr><td>7</td><td>Every admitted issuer &mdash; channel, partner and the ring alike &mdash; carries a name and a key of at least 256 bits, with no name admitted twice</td><td>A door held shut by a key too short to hold it, or one name answering for two callers</td></tr>
+          <tr><td>7</td><td>Every admitted issuer (channel, partner and the ring alike) carries a name and a key of at least 256 bits, with no name admitted twice</td><td>A door held shut by a key too short to hold it, or one name answering for two callers</td></tr>
           <tr><td>8</td><td><code>ValidateTrustConfiguration</code>: each <code>Partners[]</code> entry names somebody once, does something, is coherent per open direction and carries a key that can sign</td><td>A relationship that looks configured and admits nobody, or admits without a ceiling</td></tr>
           <tr><td>9</td><td><code>ValidatePublishedAddress</code>: <code>PublicUrl</code>, where declared, is absolute, on a bearer-carrying scheme and names one interface</td><td>A card sending peers to an address this installation is not reachable at, or one that would carry tokens in clear</td></tr>
         </tbody>
@@ -633,10 +633,10 @@
           <tr><td>Morgana:AgentToAgent:*</td><td>
             Peer consultation: <code>Enabled</code> (default <code>true</code>), <code>MaxRoundsPerTurn</code> (default 4), <code>Partners[]</code> (one entry per federated installation).
             <ul style="margin:8px 0 4px; padding-left:18px;">
-              <li style="font-size:14.5px; margin-bottom:5px;">Each partner carries <code>{ Name, Url, SymmetricKey, Enabled }</code> plus <code>OutboundPolicy</code> (agents here consult its own) and <code>InboundPolicy</code> (its agents consult those here), each independently toggled &mdash; a relationship can close globally or on one direction alone.</li>
+              <li style="font-size:14.5px; margin-bottom:5px;">Each partner carries <code>{ Name, Url, SymmetricKey, Enabled }</code> plus <code>OutboundPolicy</code> (agents here consult its own) and <code>InboundPolicy</code> (its agents consult those here), each independently toggled: a relationship can close globally or on one direction alone.</li>
               <li style="font-size:14.5px; margin-bottom:5px;"><code>Name</code> is what <code>[ConsultsAgent]</code> writes, never a hostname.</li>
-              <li style="font-size:14.5px; margin-bottom:5px;"><code>InboundPolicy.OnAgents</code> lists the published agents that partner reaches; omitting it admits it to all. Its <code>RateLimiting</code> block is required &mdash; startup refuses an admitted partner with none, since an absence is never read as licence to spend without limit. A deployment wanting no bound writes <code>"Enabled": false</code>.</li>
-              <li style="font-size:14.5px; margin-bottom:0;">Almost nothing here describes this instance: no key (agents consult each other under a secret coined at startup) and no address (the card names whatever Kestrel bound). The one exception is <code>PublicUrl</code>, declared only where a deployment sits behind an ingress, a reverse proxy or a published container port &mdash; a binding that is not where a peer knocks.</li>
+              <li style="font-size:14.5px; margin-bottom:5px;"><code>InboundPolicy.OnAgents</code> lists the published agents that partner reaches; omitting it admits it to all. Its <code>RateLimiting</code> block is required: startup refuses an admitted partner with none, since an absence is never read as licence to spend without limit. A deployment wanting no bound writes <code>"Enabled": false</code>.</li>
+              <li style="font-size:14.5px; margin-bottom:0;">Almost nothing here describes this instance: no key (agents consult each other under a secret coined at startup) and no address (the card names whatever Kestrel bound). The one exception is <code>PublicUrl</code>, declared only where a deployment sits behind an ingress, a reverse proxy or a published container port: a binding that is not where a peer knocks.</li>
             </ul>
             See <a href="#a2a-configuration">Agent-to-Agent Configuration</a> for the three shapes in full.
           </td></tr>
@@ -699,13 +699,13 @@
       <h2>A2A Configuration</h2>
       <p>Peer consultation comes in three shapes, differing only in how much has to be configured. Which one a deployment is in depends on what its plugins declare with <code>[ConsultsAgent]</code> plus what <code>Morgana:AgentToAgent</code> says.</p>
 
-      <h3>1 &mdash; Off</h3>
+      <h3>1. Off</h3>
       <p>A2A is off entirely: no agent is published, no route exists, no card is served. This is a "classic Morgana" scenario (before v0.29)</p>
       <div class="code-block"><span class="string">"AgentToAgent"</span>: {
   <span class="string">"Enabled"</span>: <span class="keyword">false</span>
 }</div>
 
-      <h3>2 &mdash; On, without partners</h3>
+      <h3>2. On, without partners</h3>
       <p>A2A is on for this installation alone. Agents here consult one another over the protocol, each colleague named by a <code>[ConsultsAgent]</code> attribute in the plugin's code. No system outside is involved, so three lines are the whole declaration:</p>
       <div class="code-block"><span class="string">"AgentToAgent"</span>: {
   <span class="string">"Enabled"</span>: <span class="keyword">true</span>,
@@ -713,11 +713,11 @@
   <span class="string">"Partners"</span>: []
 }</div>
 
-      <h3>3 &mdash; On, with partners</h3>
+      <h3>3. On, with partners</h3>
       <p>A2A is on for this installation and for the partners it trusts. Agents here keep consulting one another exactly as above; on top of that, each partner is declared once and opens up to two directions:</p>
       <ul>
-        <li><strong>Outbound</strong> (<code>OutboundPolicy</code>) &mdash; agents here consult the partner's. This is what <code>[ConsultsAgent("shipping", "acme")]</code> needs to work.</li>
-        <li><strong>Inbound</strong> (<code>InboundPolicy</code>) &mdash; the partner's agents consult those here. This is where the entry says which desks they reach, plus how often they may come back.</li>
+        <li><strong>Outbound</strong> (<code>OutboundPolicy</code>): agents here consult the partner's. This is what <code>[ConsultsAgent("shipping", "acme")]</code> needs to work.</li>
+        <li><strong>Inbound</strong> (<code>InboundPolicy</code>): the partner's agents consult those here. This is where the entry says which desks they reach, plus how often they may come back.</li>
       </ul>
       <p>The two are independent: a partner may be outbound only, inbound only, or both. <code>Enabled</code> on the partner itself parks the whole relationship without deleting what describes it. An entry with neither direction open is refused at startup.</p>
       <div class="code-block"><span class="string">"AgentToAgent"</span>: {
@@ -869,7 +869,7 @@
           <tr><td>Docker Hub (Cauldron)</td><td>hub.docker.com/r/mdesalvo/cauldron</td></tr>
           <tr><td>Docker Hub (Grimoire)</td><td>hub.docker.com/r/mdesalvo/grimoire</td></tr>
           <tr><td>Docker Hub (Rune)</td><td>hub.docker.com/r/mdesalvo/rune</td></tr>
-          <tr><td>Alembic (authoring workbench)</td><td><code>Alembic/</code> in repository root &mdash; see the <a href="Alembic-Handbook.html" style="color: var(--purple-light);">Alembic Handbook</a></td></tr>
+          <tr><td>Alembic (authoring workbench)</td><td><code>Alembic/</code> in repository root: see the <a href="Alembic-Handbook.html" style="color: var(--purple-light);">Alembic Handbook</a></td></tr>
           <tr><td>Automated prompt tests</td><td>PromptHarness/ in repository root</td></tr>
           <tr><td>Changelog</td><td>CHANGELOG.md in repository root</td></tr>
         </tbody>

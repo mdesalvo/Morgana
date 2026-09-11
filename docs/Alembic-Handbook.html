@@ -388,7 +388,7 @@
     <div class="page cover">
       <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/wwwroot/images/Alembic-Banner.jpg" class="cover-avatar" alt="Alembic"/>
       <h1>Alembic</h1>
-      <p class="tagline">Here Morgana takes life. Yours the shape, hers the spells &mdash; a functional interview with a domain expert, distilled into a complete, running Morgana domain</p>
+      <p class="tagline">Here Morgana takes life. Yours the shape, hers the spells: a functional interview with a domain expert, distilled into a complete, running Morgana domain</p>
       <div class="version-badge">HANDBOOK</div>
       <div class="stack">
         <span>.NET 10</span>
@@ -425,8 +425,8 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="architecture-overview">
       <h2>Architecture Overview</h2>
-      <p>Alembic is Morgana's <strong>authoring workbench</strong>: an AI-conducted functional interview that distils a domain expert's own words into a complete Morgana domain &mdash; <strong>intents, agent prose, tool contracts, C# assets and non-regression scenarios</strong> &mdash; with no prompt ever written by hand. It is <strong>not a channel</strong>: it never calls a running Morgana, holds no JWT, joins no conversation pipeline &mdash; its only external dependency is an LLM. And it is <strong>not a filesystem tool</strong>: configuration arrives as an <strong>upload</strong> and leaves as a <strong>download</strong>, since at runtime Alembic can live anywhere &mdash; a cloud, an on-prem box beside Morgana, a laptop.</p>
-      <p>Alembic is itself <strong>an agent of Morgana</strong>: its own prompt is layered from an <code>alembic.json</code> of identical shape to a domain agent's (Target / Instructions / Personality / Formatting), composed with Morgana's own Personality resolved live from <code>morgana.json</code> &mdash; the same framework the domains it authors will run under.</p>
+      <p>Alembic is Morgana's <strong>authoring workbench</strong>: an AI-conducted functional interview that distils a domain expert's own words into a complete Morgana domain (<strong>intents, agent prose, tool contracts, C# assets and non-regression scenarios</strong>) with no prompt ever written by hand. It is <strong>not a channel</strong>: it never calls a running Morgana, holds no JWT, joins no conversation pipeline: its only external dependency is an LLM. And it is <strong>not a filesystem tool</strong>: configuration arrives as an <strong>upload</strong> and leaves as a <strong>download</strong>, since at runtime Alembic can live anywhere: a cloud, an on-prem box beside Morgana, a laptop.</p>
+      <p>Alembic is itself <strong>an agent of Morgana</strong>: its own prompt is layered from an <code>alembic.json</code> of identical shape to a domain agent's (Target / Instructions / Personality / Formatting), composed with Morgana's own Personality resolved live from <code>morgana.json</code>: the same framework the domains it authors will run under.</p>
 
       <div class="pillars">
         <div class="pillar">
@@ -437,7 +437,7 @@
         <div class="pillar">
           <div class="icon">&#x2705;</div>
           <h4>Deterministic Validation &amp; Recap</h4>
-          <p>Every rule the framework enforces later and more expensively is checked here first, for free. The recap is the real composed prompt &mdash; framework layer and domain layer &mdash; not a summary of what was said.</p>
+          <p>Every rule the framework enforces later and more expensively is checked here first, for free. The recap is the real composed prompt (framework layer and domain layer), not a summary of what was said.</p>
         </div>
         <div class="pillar">
           <div class="icon">&#x1F4E6;</div>
@@ -455,14 +455,14 @@
       <table>
         <thead><tr><th>Component</th><th>Role</th><th>Technology</th><th>Default Port</th></tr></thead>
         <tbody>
-          <tr><td><strong>Distiller</strong></td><td>The workbench itself &mdash; the interview, validation, emit</td><td>ASP.NET 10, Blazor Server</td><td>5005</td></tr>
-          <tr><td><strong>LLM</strong></td><td>Language model provider, <code>Performance</code> tier only</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>&mdash;</td></tr>
-          <tr><td><strong>PromptHarness</strong></td><td>Alembic's own non-regression suite &mdash; drives a scripted interview and asserts on what the interview conduct and finalization emit produce</td><td>xUnit v3, in-process</td><td>&mdash;</td></tr>
+          <tr><td><strong>Distiller</strong></td><td>The workbench itself: the interview, validation, emit</td><td>ASP.NET 10, Blazor Server</td><td>5005</td></tr>
+          <tr><td><strong>LLM</strong></td><td>Language model provider, <code>Performance</code> tier only</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>n/a</td></tr>
+          <tr><td><strong>PromptHarness</strong></td><td>Alembic's own non-regression suite: drives a scripted interview and asserts on what the interview conduct and finalization emit produce</td><td>xUnit v3, in-process</td><td>n/a</td></tr>
         </tbody>
       </table>
 
       <div class="info-box">
-        <strong>Performance tier, non-negotiable:</strong> Alembic's whole job is writing dispositive prose that does not contradict itself &mdash; exactly the task where a cheaper die amplifies contradiction-following failures. It runs once, at onboarding, not per conversational turn: this is the wrong place to save.
+        <strong>Performance tier, non-negotiable:</strong> Alembic's whole job is writing dispositive prose that does not contradict itself: exactly the task where a cheaper die amplifies contradiction-following failures. It runs once, at onboarding, not per conversational turn: this is the wrong place to save.
       </div>
 
       <div class="page-footer">
@@ -480,18 +480,18 @@
 
       <h3>A Fresh Domain</h3>
       <ul>
-        <li><strong>1. Begin.</strong> One question at a time, on an otherwise empty screen &mdash; the process itself is Alembic's alone to know.</li>
-        <li><strong>2. Map it.</strong> Domain Mapping turns what the client is installing Morgana to handle into a set of intents &mdash; a choice, never an exhaustive inventory.</li>
-        <li><strong>3. Build each agent.</strong> Target, Personality, Toolkit, Instructions, Formatting &mdash; one lap per entry on the map, until the last one is accepted.</li>
-        <li><strong>4. Review.</strong> Deterministic findings first, then the real composed prompt &mdash; exactly what the running agent's own model will read.</li>
+        <li><strong>1. Begin.</strong> One question at a time, on an otherwise empty screen: the process itself is Alembic's alone to know.</li>
+        <li><strong>2. Map it.</strong> Domain Mapping turns what the client is installing Morgana to handle into a set of intents: a choice, never an exhaustive inventory.</li>
+        <li><strong>3. Build each agent.</strong> Target, Personality, Toolkit, Instructions, Formatting: one lap per entry on the map, until the last one is accepted.</li>
+        <li><strong>4. Review.</strong> Deterministic findings first, then the real composed prompt: exactly what the running agent's own model will read.</li>
         <li><strong>5. Morganize.</strong> Validate, then download: one archive, ready to <code>dotnet build</code> and drop into a Morgana <code>plugins/</code> folder.</li>
       </ul>
 
       <h3>Continuing One</h3>
-      <p>Nothing about an interview is lost to a closed tab past the last autosave interval: <strong>Save my work</strong> hands over a file at any point and the import page reads it back &mdash; by content, never by filename &mdash; to resume exactly where the client left off, mid-agent included.</p>
+      <p>Nothing about an interview is lost to a closed tab past the last autosave interval: <strong>Save my work</strong> hands over a file at any point and the import page reads it back (by content, never by filename) to resume exactly where the client left off, mid-agent included.</p>
 
       <div class="info-box">
-        <strong>The interviewee is not the agent's audience.</strong> The domain expert answering Alembic's questions will never talk to the agent themselves &mdash; their own customers will. So every piece of prose Alembic writes describes those customers to the agent; it is never addressed to the domain expert who supplied the answers.
+        <strong>The interviewee is not the agent's audience.</strong> The domain expert answering Alembic's questions will never talk to the agent themselves: their own customers will. So every piece of prose Alembic writes describes those customers to the agent; it is never addressed to the domain expert who supplied the answers.
       </div>
 
       <div class="page-footer">
@@ -505,7 +505,7 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="the-interview">
       <h2>The Interview</h2>
-      <p>A Morgana domain has two halves: the <code>Intents</code> a client's customers can ask for and one <code>Agent</code> per intent that answers it. The interview builds them in that order &mdash; intents first, since every agent maps to one &mdash; then walks the agent map six passes at a time, until each intent has its agent.</p>
+      <p>A Morgana domain has two halves: the <code>Intents</code> a client's customers can ask for and one <code>Agent</code> per intent that answers it. The interview builds them in that order (intents first, since every agent maps to one), then walks the agent map six passes at a time, until each intent has its agent.</p>
 
       <table>
         <thead><tr><th>Step</th><th>Runs</th><th>Settles</th></tr></thead>
@@ -514,14 +514,14 @@
           <tr><td><strong>Target</strong></td><td>per entry</td><td>What the agent does, what it must never do</td></tr>
           <tr><td><strong>Personality</strong></td><td>per entry</td><td>Which facet of Morgana this agent is</td></tr>
           <tr><td><strong>Toolkit</strong></td><td>per entry</td><td>The tools, their descriptions, parameters, scopes and sharing</td></tr>
-          <tr><td><strong>Territory</strong></td><td>per entry</td><td>What this desk is characteristically the one to be asked about &mdash; its <code>ConsultMeFor</code>, and the routing said in the sharper words that settles</td></tr>
+          <tr><td><strong>Territory</strong></td><td>per entry</td><td>What this desk is characteristically the one to be asked about: its <code>ConsultMeFor</code> and the routing said in the sharper words that settles</td></tr>
           <tr><td><strong>Instructions</strong></td><td>per entry</td><td>Behavioural rules, written after the toolkit exists</td></tr>
           <tr><td><strong>Formatting</strong></td><td>per entry</td><td>How the agent presents its own tools' output</td></tr>
         </tbody>
       </table>
 
       <div class="info-box">
-        <strong>The map is a choice, not an inventory.</strong> The intents that make it into the domain are the ones that surface during the conversation with the domain expert &mdash; not necessarily every intent that characterizes their real-world business. What never comes up never makes the map.
+        <strong>The map is a choice, not an inventory.</strong> The intents that make it into the domain are the ones that surface during the conversation with the domain expert: not necessarily every intent that characterizes their real-world business. What never comes up never makes the map.
       </div>
 
       <div class="page-footer">
@@ -535,7 +535,7 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="interview-walkthrough">
       <h2>The Interview, Step by Step</h2>
-      <p>One real sitting, one desk: a restaurant asking Morgana to take table bookings. Every screen below is the client's own view &mdash; the rail across the top says where they are, the question is always about their work in their words and the configuration is written for them as they answer. <strong>They never write a line of prose.</strong></p>
+      <p>One real sitting, one desk: a restaurant asking Morgana to take table bookings. Every screen below is the client's own view: the rail across the top says where they are, the question is always about their work in their words and the configuration is written for them as they answer. <strong>They never write a line of prose.</strong></p>
 
       <h3>The Map</h3>
       <p>The interview opens on the domain, not on an agent: which of their processes Morgana is being installed to run. Each entry becomes one intent and one agent. The greyed sentence in the answer box is a worked example written for <em>their</em> trade, never a form to fill in.</p>
@@ -545,7 +545,7 @@
       </div>
 
       <h3>The Six Passes</h3>
-      <p><strong>Target</strong> settles everything the agent can take on and where that stops. <strong>Personality</strong> is offered rather than dictated &mdash; a voice is recognised, so Alembic proposes words and the box stays open. <strong>Toolkit</strong> asks what it must reach outside the conversation; the single button carries the answer that adds nothing, so agreeing costs one press and disagreeing is still a sentence.</p>
+      <p><strong>Target</strong> settles everything the agent can take on and where that stops. <strong>Personality</strong> is offered rather than dictated: a voice is recognised, so Alembic proposes words and the box stays open. <strong>Toolkit</strong> asks what it must reach outside the conversation; the single button carries the answer that adds nothing, so agreeing costs one press and disagreeing is still a sentence.</p>
 
       <div class="screenshots">
         <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Target.jpg" alt="Target"/>
@@ -553,13 +553,13 @@
         <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Toolkit.jpg" alt="Toolkit"/>
       </div>
 
-      <p><strong>Territory</strong> follows the toolkit, which is the earliest it can be truthful: it asks what this desk alone can say precisely when somebody elsewhere in the business needs to know &mdash; a competence, never a list of what the agent can do. It is the sentence every other desk of the domain reads before deciding whether a question is this one's, published on the agent's card, and it is asked whether or not this installation will ever speak to another. The same subject is now known in sharper words than the map could reach, so the routing that lands a user here is said with them.</p>
+      <p><strong>Territory</strong> follows the toolkit, which is the earliest it can be truthful: it asks what this desk alone can say precisely when somebody elsewhere in the business needs to know: a competence, never a list of what the agent can do. It is the sentence every other desk of the domain reads before deciding whether a question is this one's, published on the agent's card; it is asked whether or not this installation will ever speak to another. The same subject is now known in sharper words than the map could reach, so the routing that lands a user here is said with them.</p>
 
       <div class="info-box">
-        <strong>Why it is asked and not derived.</strong> A <em>Target</em> is what a desk handles; a territory is what another desk would come to it for rather than answering "go to them" &mdash; which, put that way, is worth nothing to whoever asked. The two questions have different answers, so the client is asked both.
+        <strong>Why it is asked and not derived.</strong> A <em>Target</em> is what a desk handles; a territory is what another desk would come to it for rather than answering "go to them", which, put that way, is worth nothing to whoever asked. The two questions have different answers, so the client is asked both.
       </div>
 
-      <p><strong>Instructions</strong> and <strong>Formatting</strong> come after the toolkit because both speak about it: how the agent goes about the work, then how what it finds reaches the person reading it. A step whose ground is already settled asks nothing and closes on its own &mdash; on this run <strong>Formatting</strong> did exactly that, which is why the rail moves straight to the last screen. There the finished agent is read back whole: letting it into the domain is the one decision of the interview that is the client's.</p>
+      <p><strong>Instructions</strong> and <strong>Formatting</strong> come after the toolkit because both speak about it: how the agent goes about the work, then how what it finds reaches the person reading it. A step whose ground is already settled asks nothing and closes on its own: on this run <strong>Formatting</strong> did exactly that, which is why the rail moves straight to the last screen. There the finished agent is read back whole: letting it into the domain is the one decision of the interview that is the client's.</p>
 
       <div class="screenshots">
         <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Instructions.jpg" alt="Instructions"/>
@@ -567,7 +567,7 @@
       </div>
 
       <div class="info-box">
-        <strong>One question, one step.</strong> An answer advances the step if anything at all can be written down; the rest is inferred, proposed and corrected rather than asked again. Asking twice tells a domain expert their answer was not good enough &mdash; and circling, not a wrong answer, is how an AI-conducted interview really fails.
+        <strong>One question, one step.</strong> An answer advances the step if anything at all can be written down; the rest is inferred, proposed and corrected rather than asked again. Asking twice tells a domain expert their answer was not good enough: circling, not a wrong answer, is how an AI-conducted interview really fails.
       </div>
 
       <div class="page-footer">
@@ -581,14 +581,14 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="morganization">
       <h2>Morganization</h2>
-      <p>&ldquo;Morganizing&rdquo; a domain is Alembic's last step: once every intent has its agent, the reviewed domain downloads as <strong>one archive</strong>, because the pieces are only correct together &mdash; an <code>agents.json</code> whose toolkit has moved on from the C# beside it is a startup failure waiting to happen.</p>
+      <p>&ldquo;Morganizing&rdquo; a domain is Alembic's last step: once every intent has its agent, the reviewed domain downloads as <strong>one archive</strong>, because the pieces are only correct together: an <code>agents.json</code> whose toolkit has moved on from the C# beside it is a startup failure waiting to happen.</p>
 
       <ul>
         <li>A ready <code>.csproj</code> / <code>.slnx</code>, referencing <code>Morgana.AI</code> and <code>Morgana.Contracts</code> by <code>PackageReference</code>, pinned to the exact build Alembic itself runs against</li>
         <li>The domain configuration, <code>agents.json</code>, embedded as a resource</li>
-        <li>Generated sources, one pair per agent and per toolkit &mdash; see the file split below</li>
-        <li>A working, LLM-authored <strong>mock</strong> per toolkit &mdash; not a stub &mdash; so the client can talk to their agent on the first run and hear whether the interview's prose is right</li>
-        <li>An unconditional <strong>migration report</strong>, diffing the domain against its own baseline &mdash; greenfield included, because a report that only appears when something is wrong is a report nobody has learned to read on the day it matters</li>
+        <li>Generated sources, one pair per agent and per toolkit: see the file split below</li>
+        <li>A working, LLM-authored <strong>mock</strong> per toolkit (not a stub) so the client can talk to their agent on the first run and hear whether the interview's prose is right</li>
+        <li>An unconditional <strong>migration report</strong>, diffing the domain against its own baseline: greenfield included, because a report that only appears when something is wrong is a report nobody has learned to read on the day it matters</li>
         <li><code>README.md</code> (carrying the two-halves convention), <code>MIGRATION.md</code> and the interview's own save file</li>
       </ul>
 
@@ -598,8 +598,8 @@
       <table>
         <thead><tr><th>File</th><th>Owner</th><th>Rule</th></tr></thead>
         <tbody>
-          <tr><td><code>AgentX.g.cs</code></td><td>Alembic</td><td>Attributes, constructor, <code>partial</code> signatures &mdash; <strong>always overwritten</strong></td></tr>
-          <tr><td><code>AgentX.cs</code></td><td>The client</td><td>The working mock body, then the client's real integration &mdash; <strong>written once, never touched again</strong></td></tr>
+          <tr><td><code>AgentX.g.cs</code></td><td>Alembic</td><td>Attributes, constructor, <code>partial</code> signatures: <strong>always overwritten</strong></td></tr>
+          <tr><td><code>AgentX.cs</code></td><td>The client</td><td>The working mock body, then the client's real integration: <strong>written once, never touched again</strong></td></tr>
         </tbody>
       </table>
 
@@ -614,7 +614,7 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="non-regression-scenarios">
       <h2>Prompt Harness: AI-driven Non-Regression Scenarios</h2>
-      <p>A domain agent <em>is</em> its prose and prose gets edited &mdash; a client who leaves without scenarios has a domain nobody can revise safely. Alembic derives a starting <strong>PromptHarness</strong> suite from a library of behavioural templates, replacing every domain-word placeholder with this domain's own language.</p>
+      <p>A domain agent <em>is</em> its prose and prose gets edited: a client who leaves without scenarios has a domain nobody can revise safely. Alembic derives a starting <strong>PromptHarness</strong> suite from a library of behavioural templates, replacing every domain-word placeholder with this domain's own language.</p>
 
       <table>
         <thead><tr><th>Template</th><th>Protects</th></tr></thead>
@@ -631,7 +631,7 @@
       </table>
 
       <div class="info-box">
-        <strong>Alembic tests itself, too:</strong> a dedicated <code>Alembic/PromptHarness</code> &mdash; distinct from the one shipped for Morgana &mdash; drives a scripted domain expert through a real interview and asserts on the mapping, the conduct across passes and the finalization emit, so the workbench stays honest as it evolves.
+        <strong>Alembic tests itself, too:</strong> a dedicated <code>Alembic/PromptHarness</code> (distinct from the one shipped for Morgana) drives a scripted domain expert through a real interview and asserts on the mapping, the conduct across passes and the finalization emit, so the workbench stays honest as it evolves.
       </div>
 
       <div class="page-footer">
@@ -645,23 +645,23 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="configuration-reference">
       <h2>Configuration Reference</h2>
-      <p>Alembic follows the same ASP.NET configuration hierarchy every unit in the repository does: <code>appsettings.json</code> &rarr; environment variables &rarr; User Secrets. It shares its <code>UserSecretsId</code> with Morgana.Web, so in-repo it runs against whatever LLM provider and tiers the working copy is already wired to &mdash; nothing to configure twice.</p>
+      <p>Alembic follows the same ASP.NET configuration hierarchy every unit in the repository does: <code>appsettings.json</code> &rarr; environment variables &rarr; User Secrets. It shares its <code>UserSecretsId</code> with Morgana.Web, so in-repo it runs against whatever LLM provider and tiers the working copy is already wired to: nothing to configure twice.</p>
 
       <table>
         <thead><tr><th>Setting</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td>Morgana:LLM:Provider</td><td>LLM backend: <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>Ollama</code>, <code>OpenAI</code></td></tr>
-          <tr><td>Morgana:LLM:{Provider}:Tiers:Performance</td><td>The <strong>only</strong> tier Alembic declares &mdash; it never uses the Efficiency die. <code>MagicDust</code> carries both axes at zero: pricing is never read, since Alembic calls <code>GetChatClient(Performance)</code> directly rather than going through the metered agent adapter</td></tr>
-          <tr><td>Alembic:Work:AutosaveSeconds</td><td>How often the Draft in the circuit is snapshotted as a fallback for &ldquo;Save my work&rdquo; &mdash; never a resumption path on its own, only a floor under that one button (default: 30)</td></tr>
+          <tr><td>Morgana:LLM:{Provider}:Tiers:Performance</td><td>The <strong>only</strong> tier Alembic declares: it never uses the Efficiency die. <code>MagicDust</code> carries both axes at zero: pricing is never read, since Alembic calls <code>GetChatClient(Performance)</code> directly rather than going through the metered agent adapter</td></tr>
+          <tr><td>Alembic:Work:AutosaveSeconds</td><td>How often the Draft in the circuit is snapshotted as a fallback for &ldquo;Save my work&rdquo;: never a resumption path on its own, only a floor under that one button (default: 30)</td></tr>
         </tbody>
       </table>
 
       <div class="info-box">
-        <strong>No single-tier deployment:</strong> because Alembic declares only <code>Performance</code>, it does not run against a single-tier deployment (Ollama being the canonical case) until a <code>Performance</code> entry is configured &mdash; the same &ldquo;no cross-tier fallback&rdquo; rule the framework itself enforces.
+        <strong>No single-tier deployment:</strong> because Alembic declares only <code>Performance</code>, it does not run against a single-tier deployment (Ollama being the canonical case) until a <code>Performance</code> entry is configured: the same &ldquo;no cross-tier fallback&rdquo; rule the framework itself enforces.
       </div>
 
       <h3>Running Alembic</h3>
-      <p>Alembic's Docker service is <strong>profile-gated</strong>, so an ordinary <code>compose up</code> skips it &mdash; it is an authoring-time tool, not part of the always-on runtime footprint.</p>
+      <p>Alembic's Docker service is <strong>profile-gated</strong>, so an ordinary <code>compose up</code> skips it: it is an authoring-time tool, not part of the always-on runtime footprint.</p>
 
       <div class="code-block"><span class="comment"># Run Alembic standalone</span>
     docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
@@ -684,10 +684,10 @@
       <table>
         <thead><tr><th>Resource</th><th>Location</th></tr></thead>
         <tbody>
-          <tr><td>Source code</td><td>github.com/mdesalvo/Morgana &mdash; <code>Alembic/</code></td></tr>
+          <tr><td>Source code</td><td>github.com/mdesalvo/Morgana (<code>Alembic/</code>)</td></tr>
           <tr><td>The workbench</td><td><code>Alembic/Distiller/</code>, own <code>Distiller.slnx</code></td></tr>
           <tr><td>Alembic's own tests</td><td><code>Alembic/PromptHarness/</code>, own <code>PromptHarness.slnx</code></td></tr>
-          <tr><td>Local run</td><td>https://localhost:5005 &mdash; no running Morgana required</td></tr>
+          <tr><td>Local run</td><td>https://localhost:5005 (no running Morgana required)</td></tr>
           <tr><td>Design doctrine</td><td><code>Alembic/CLAUDE.md</code></td></tr>
           <tr><td>Changelog</td><td>CHANGELOG.md in repository root</td></tr>
         </tbody>
