@@ -124,6 +124,7 @@ public class BillingTool : MorganaTool
 The **MCP integration** permits agents to extend their capabilities by consuming **Model Context Protocol servers**, making external tools indistinguishable from native implementations. This enables rapid prototyping, microservice integration and ecosystem-driven feature development, all without writing a single line of tool implementation code.
 
 The **A2A integration** allows agents to collaborate behind the scenes, consulting their peers on-demand to deliver cross-cutting answers that horizontally cover the entire application domain. This enables seamless agent collaboration, autonomous knowledge sharing and cross-domain reasoning, all without user-facing friction or explicit inter-agent configuration.
+
 ```mermaid
 graph LR
   U@{shape: circle, label: "👤 User"}
