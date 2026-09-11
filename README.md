@@ -15,6 +15,7 @@ Morgana is a modern and flexible **conversational AI framework** designed to han
 
 The system is powered by **Microsoft.Agents.AI**, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
 
+---
 
 ## Core Philosophy
 
