@@ -196,7 +196,7 @@ The same conversation, the same agents, the same policies: only the surface chan
 
 <table style="border:none;">
   <tr>
-    <th colspan=6>Cauldron / Widget</th>
+    <th colspan=6>Cauldron</th>
   </tr>
   <tr>
     <td>
