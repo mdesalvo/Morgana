@@ -243,7 +243,7 @@ The same conversation, the same agents, the same policies: only the surface chan
 </details>
 
 <details>
-<summary><i>Summoning a living Cauldron conversation into any hosting page</i></summary>
+<summary><i>Summoning a living chat widget into any hosting page</i></summary>
 
 Reaching Morgana from a browser does not require landing on Cauldron: it publishes a launcher any page can host, whatever built it.
 
