@@ -98,10 +98,10 @@ public sealed class InterviewConductionTests
             $"The events desk declares {events.Code.Consults.Count} colleague(s) the client never described.\n{driven}");
     }
 
-    // A step says what it adds to the agent before it asks anything, and it says it as its own
-    // paragraph: the placing sentence and the question are two different things to read and the
-    // screen shows them in two different voices. Run into one block they are a wall of text in
-    // which nothing says which sentence is the one the client has to answer.
+    // A step says what it adds to the agent before it asks anything: the placing sentence and the
+    // question are two different things to read and the screen draws them in two different voices.
+    // A step that lands with nothing but its question leaves the client to work out what this
+    // screen is for from the question alone, which is the one thing it cannot say.
     [Fact]
     public void Every_step_places_itself_above_the_question_it_asks()
     {
@@ -112,7 +112,7 @@ public sealed class InterviewConductionTests
             .ToList();
 
         List<DrivenExchange> run = openings
-            .Where(exchange => !exchange.Question.Replace("\r\n", "\n").Contains("\n\n"))
+            .Where(exchange => AskedTurn.Parted(exchange.Question).Placing is null)
             .ToList();
 
         Assert.True(run.Count == 0,
