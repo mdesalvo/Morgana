@@ -262,7 +262,7 @@ These pillars are argued at length in the [**Morgana Handbook**](https://mdesalv
 
 <p align="center">
   <a href="#-quick-start">🚀 Quick Start</a> |
-  <a href="#-authoring-a-domain-alembic">🧪 Alembic</a> |
+  <a href="#-authoring-a-domain-alembic">🧪 Alembic</a>
 </p>
 
 ### 🚀 Quick Start
