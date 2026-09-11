@@ -73,12 +73,13 @@
     box-shadow: 0 0 1.4rem color-mix(in srgb, var(--alembic-accent) 25%, transparent);
 }
 
-/* The rail: every step the interview goes through, the ones that happen once on the line itself and
+/* The rail: every step the interview goes through, the ones that happen once on the row itself and
    an entry's own steps inside their lap. Three states and the palette carries them so nobody has to
    read a legend and all three are the one violet the page is lit by: the deep accent, solid, for what
    is behind; the bright accent lit and ringed for where the work is now; the plain border colour,
-   faint, for what has not been reached. The rail fills deep violet up to the step in hand, so the
-   journey reads left to right at a glance.
+   faint, for what has not been reached. Colour alone says how far along the work is: a row of marks
+   reads left to right without being joined up and the connecting segments were a second statement of
+   the same fact, one that had to cross two frames to make it and broke against their borders.
 
    Not gold. Gold is the warm note this room keeps for a thing that is finished and closed and a step
    of six behind you is neither — on the rail it read as a second hue arguing with the violet rather
@@ -86,10 +87,17 @@
    it, where what is already written has been deep violet all along. It reports and controls nothing —
    none of these steps is the client's to advance. */
 .stations {
+    /* The rail is drawn from three measures, so nothing on it can drift out of step with anything
+       else: the air between two things on the rail, a lap's own side padding and how far a lap
+       hangs below its own heading. */
+    --rail-gap: 1.5rem;
+    --lap-pad: 0.9rem;
+    --lap-top: 1.7rem;
+
     display: flex;
     align-items: flex-start;
     justify-content: center;
-    gap: 0;
+    gap: var(--rail-gap);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -110,8 +118,7 @@
 
 /* The lap: the steps every entry of the map goes through, drawn as one thing because they are one
    thing that happens again. What says so is not a caption but the shape — a bordered run with the
-   entry's own name on its edge, stacked like sheets while entries remain and the line of the
-   journey passing in one side and out the other.
+   entry's own name over its edge, stacked like sheets while entries remain.
 
    Acceptance is inside it. It closes an entry's turn and the next turn opens on the step after the
    map, so a rail that put it outside would light its last step and then jump the light backwards,
@@ -120,8 +127,11 @@
     flex: 1 1 0;
     max-width: 66rem;
     position: relative;
-    margin-top: 1rem;
-    padding: 1rem 0.9rem 0.5rem;
+    /* Two frames on one rail close at the same height or they read as two unrelated objects: the
+       closing one holds a single step and would otherwise stop short of the run beside it. */
+    align-self: stretch;
+    margin-top: var(--lap-top);
+    padding: 1rem var(--lap-pad) 0.8rem;
     border: 1px solid var(--alembic-border);
     border-radius: 0.7rem;
     background: color-mix(in srgb, var(--alembic-bg) 35%, transparent);
@@ -164,16 +174,19 @@
     opacity: 0.35;
 }
 
-/* The entry being written, on the edge of its own lap the way a legend sits on a fieldset: it names
-   what this run is a run of and it is the same phrase the strip below lights and the panel at the
-   foot is tabbed with. */
+/* The entry being written, over the edge of its own lap: it names what this run is a run of and it
+   is the same phrase the strip below lights and the panel at the foot is tabbed with.
+
+   Clear of the border rather than astride it. Sitting on the line, the heading had to hide the
+   border behind a patch of its own background — and the page behind it is a gradient, so the patch
+   was a paler rectangle wherever the two disagreed, which is everywhere but one row of pixels. */
 .stations > .lap .lap-head {
     position: absolute;
-    top: -0.72rem;
+    bottom: 100%;
+    margin-bottom: 0.34rem;
     left: 50%;
     translate: -50% 0;
-    padding: 0 0.7rem;
-    background: color-mix(in srgb, var(--alembic-bg) 25%, transparent);
+    padding: 0 0.2rem;
     color: var(--alembic-accent);
     font-size: 0.84rem;
     letter-spacing: 0.04em;
@@ -192,62 +205,16 @@
     list-style: none;
 }
 
-/* The steps outside a lap stand level with the ones inside it, so the line through them all is
-   one line: the lap's own top border and padding are what they are pushed down by. */
+/* The steps outside a lap stand level with the ones inside it, so every mark of the rail sits on
+   one row: the lap's own top border and padding are what they are pushed down by. */
 .stations > .station {
-    margin-top: calc(1rem + 1rem + 1px);
+    margin-top: calc(var(--lap-top) + 1rem + 1px);
 }
 
 /* The finalization rail has no lap to stand level with — two stations and nothing between them —
    so the offset above belongs only to a rail that draws one. */
 .stations.flat > .station {
     margin-top: 0;
-}
-
-/* And the line does not stop at the border it crosses. Each of the outer stations reaches its half
-   segment into the lap's padding, which is what makes the journey pass through the run rather than
-   arrive at a box and start again inside it.
-
-   Only the far end moves. The end at the mark stays where every other segment's does — 0.85rem short
-   of the centre — because a width measured from the middle of the station is a line drawn through the
-   disc standing there. */
-.stations > .station:first-child::after {
-    width: calc(50% - 0.85rem + 0.9rem);
-    right: -0.9rem;
-}
-
-.stations > .station:last-child::before {
-    width: calc(50% - 0.85rem + 0.9rem);
-    left: -0.9rem;
-}
-
-/* The rail, drawn as two half-segments per station so the first and last ends stop at their own
-   mark instead of hanging off the row.
-
-   Each segment stops short of the mark rather than running under it. Hiding a line behind an opaque
-   disc only works while the disc and what is behind it are the same colour and behind this one there
-   is a gradient — so the line reappeared inside the circle as soon as the page was lit. A line that is
-   not drawn there cannot show through. Its centre is the circle's centre, one pixel up for the
-   segment's own thickness. */
-.station::before,
-.station::after {
-    content: "";
-    position: absolute;
-    top: calc(0.75rem - 1px);
-    height: 2px;
-    border-radius: 2px;
-    background: var(--alembic-border);
-    transition: background 0.3s;
-}
-
-.station::before { left: 0; width: calc(50% - 0.85rem); }
-.station::after { right: 0; width: calc(50% - 0.85rem); }
-
-/* Only the two ends of the whole journey stop. Inside the lap every station keeps both halves, or
-   the line would break at the very place it is meant to be shown passing through. */
-.stations > .station:first-child::before,
-.stations > .station:last-child::after {
-    background: transparent !important;
 }
 
 /* A disc and no number. Four of the six steps happen once per entry of the map, so a count running
@@ -268,19 +235,12 @@
     transition: background 0.3s, box-shadow 0.3s;
 }
 
-/* Behind. The rail behind it is filled too, which is the progress bar this stepper would otherwise
-   need drawing separately. */
+/* Behind. */
 .station.done {
     opacity: 1;
 }
 
 .station.done .mark {
-    background: var(--alembic-accent-deep);
-}
-
-.station.done::before,
-.station.done::after,
-.station.here::before {
     background: var(--alembic-accent-deep);
 }
 
@@ -303,25 +263,17 @@
         font-size: 0.7rem;
     }
 
-    .stations > .lap {
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
+    /* Only the measures are restated: the whole rail is spaced from them, so it tightens without
+       any rule of it having to be written a second time. */
+    .stations {
+        --rail-gap: 0.8rem;
+        --lap-pad: 0.5rem;
     }
 
     /* The floor under the closing frame is there so its heading fits at full size; where the words
        have given way it would only be taking room from the run beside it. */
     .stations > .lap.closing {
         min-width: 0;
-    }
-
-    .stations > .station:first-child::after {
-        width: calc(50% - 0.85rem + 0.5rem);
-        right: -0.5rem;
-    }
-
-    .stations > .station:last-child::before {
-        width: calc(50% - 0.85rem + 0.5rem);
-        left: -0.5rem;
     }
 }
 
