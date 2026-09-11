@@ -247,7 +247,7 @@ These pillars are argued at length in the [**Morgana Handbook**](https://mdesalv
 
 ---
 
-## Hands On
+## Hands On!
 
 <p align="center">
   <a href="#-quick-start">🚀 Quick Start</a> |
