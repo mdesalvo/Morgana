@@ -56,7 +56,15 @@ public class DraftSerializationService : IDraftSerializationService
     {
         try
         {
-            return await JsonSerializer.DeserializeAsync<DomainDraft>(draftJson, DraftOptions, cancellationToken);
+            DomainDraft? saved = await JsonSerializer.DeserializeAsync<DomainDraft>(draftJson, DraftOptions, cancellationToken);
+
+            // A sitting saved before the fallback stopped being the domain's business comes back
+            // carrying it. Dropped on the way in rather than left for a later pass to trip over: it
+            // is the classifier's own word and no interview here can write, edit or emit it.
+            if (saved?.DropFallbackIntent() == true)
+                logger.LogInformation("The resumed sitting declared the '{Fallback}' intent; it has been dropped", DomainDraft.FallbackIntent);
+
+            return saved;
         }
         catch (JsonException ex)
         {

@@ -77,6 +77,16 @@ public sealed class DoctrineTests
         Agent.Target ?? string.Empty,
         "Target states no explicit boundary");
 
+    // A boundary is a fact about this desk's own books — the subject it does not keep — and never a
+    // direction to another one. Judged on the events desk, which gained no colleague in the closing
+    // step, so its Target is the one the interview wrote and nothing has been back to repair it.
+    [Fact]
+    public Task Target_states_its_boundary_without_pointing_anywhere() => AssertDoesNotHoldAsync(
+        "This text says where a subject it does not handle should go instead, naming another desk, "
+        + "office, department, team, colleague, number or agent.",
+        Colleague.Target ?? string.Empty,
+        "The Target points the customer somewhere else instead of saying what it does not keep");
+
     // ---- Composed prompt ---------------------------------------------------------------------
 
     // Self-awareness of being Morgana is real doctrine — "An authored agent is one agent of
@@ -201,6 +211,119 @@ public sealed class DoctrineTests
         + "colleague, or states that this agent can ask another agent or desk for help.",
         Agent.Instructions ?? string.Empty,
         "Instructions restate the colleague's territory or the machinery of consulting");
+
+    // ---- What the client was actually asked ---------------------------------------------------
+
+    /// <summary>Everything one pass put to the client, as one body of text for a single verdict.</summary>
+    private string Asked(InterviewStep pass) => string.Join(
+        "\n\n",
+        interviewed.Driven.Exchanges.Where(exchange => exchange.Pass == pass).Select(exchange => exchange.Question));
+
+    // The toolkit is written out of what their own people already do — which screen they open, what
+    // they type in, who they send it on to. A client asked instead what an agent ought to be able to
+    // check is being asked to design software and answers with what they imagine software does, so
+    // the toolkit ends up describing a system nobody has rather than the counter they work at.
+    [Fact]
+    public Task The_toolkit_pass_asks_about_their_own_counter() => AssertDoesNotHoldAsync(
+        "Any question in this text asks the reader what a system, an agent, an assistant or a bot "
+        + "should be able to do, look up, check or handle, rather than asking what the reader and "
+        + "their own staff do, open or look at.",
+        Asked(InterviewStep.AgentToolkit),
+        "The toolkit pass asked the client to design software instead of describing their work");
+
+    // By the time the interview reaches an agent's Instructions it has been told what the place
+    // sells, who writes in and what they open to answer. A question that could have been put to any
+    // business on earth is one asked by a step that read none of it, which is what makes a client
+    // feel they are filling in a form rather than being interviewed by somebody who is listening.
+    [Fact]
+    public Task The_later_passes_ask_about_this_business_and_not_any_business() => AssertDoesNotHoldAsync(
+        "Every question in this text is generic: none of them mentions anything particular to the "
+        + "business being interviewed — no detail of what it sells, who contacts it or how it works.",
+        Asked(InterviewStep.AgentInstructions),
+        "The instructions pass asked questions that fit any business at all");
+
+    /// <summary>Everything the interview wrote down about the client's work, as one body of text.</summary>
+    private string Learned => string.Join(
+        "\n",
+        interviewed.Draft.Learned
+            .Concat(interviewed.Draft.Agents.SelectMany(agent => agent.Known))
+            .Select(fact => $"- {fact.Subject}: {fact.Fact}"));
+
+    // What is written down has to be the business, not the configuration in other words. A record
+    // that says what an agent handles is a second copy of a section: two statements of one thing,
+    // free to drift apart, and worth nothing to a step that already opens holding the section
+    // itself. What earns its place is what no section has a reader for — how the work actually goes.
+    [Fact]
+    public Task What_was_written_down_is_their_work_and_not_the_configuration() => AssertDoesNotHoldAsync(
+        "This text is mostly a description of the software: it says what agents or tools do, or "
+        + "what each desk handles, rather than how the business itself works.",
+        Learned,
+        "The interview wrote the configuration back into its own notes");
+
+    /// <summary>Everything the client was shown across the whole interview, question and placing alike.</summary>
+    private string Shown => string.Join(
+        "\n",
+        interviewed.Driven.Exchanges.SelectMany(exchange =>
+            new[] { exchange.Placing, exchange.Question }.Where(said => !string.IsNullOrWhiteSpace(said))));
+
+    // Whether a word belongs to the client's world is a question about meaning, so it is put to a
+    // judge rather than to a list: a list catches 'channel' and lets through 'another area', 'a
+    // different flow', 'the other side', which lose the client in exactly the same way. What is
+    // being protected is that the person reading understood the sentence they were asked to confirm.
+    [Fact]
+    public Task Nothing_shown_to_the_client_names_something_only_the_software_has() => AssertDoesNotHoldAsync(
+        "Somewhere in this text the reader — the owner of the business being interviewed, who has "
+        + "never been shown how any of this is built — is told about a thing that exists only in "
+        + "software: a place requests go to, a part of a system, something handling a subject, named "
+        + "in words that are not how a shopkeeper would describe their own staff, counters or "
+        + "suppliers.",
+        Shown,
+        "The client was shown something that exists only in the machinery");
+
+    // An example is an answer to the question, never the question again with 'you' turned into 'we'.
+    // One that says what the question already said costs the client the turn: they read the same
+    // sentence twice, press past it and the pass ends holding its own words. Judged rather than
+    // measured — a restatement dressed in synonyms is the same defect and no counting finds it.
+    [Fact]
+    public Task No_example_merely_gives_its_own_question_back() => AssertDoesNotHoldAsync(
+        "In this text, one or more of the worked answers says essentially what its own question said, "
+        + "only rephrased as a statement, adding no detail of the business that the question did not "
+        + "already contain.",
+        string.Join("\n\n", interviewed.Driven.Exchanges
+            .Where(exchange => exchange.Example is not null)
+            .Select(exchange => $"Question: {exchange.Question}\nIn the box: {exchange.Example}")),
+        "A worked example gave its own question back");
+
+    // The voice is the one thing the client cannot dictate: nobody has a sentence ready about how
+    // their own people come across, and asked to produce one they invent a character for a machine.
+    // What they can do is recognise their own counter in words put in front of them. Asked instead
+    // what voice they would like to hear, they are being asked about something that does not exist —
+    // an agent of Morgana writes and is never heard — and the answer describes an imagined robot.
+    [Fact]
+    public Task The_voice_pass_asks_them_to_recognise_their_counter() => AssertDoesNotHoldAsync(
+        "A question in this text asks the reader what voice, sound or tone they would like to hear, "
+        + "or asks them to decide what an assistant, agent or system should be like, rather than "
+        + "asking what the people who already work at their counter are like with a customer.",
+        Asked(InterviewStep.AgentPersonality),
+        "The voice pass asked them to commission a character instead of recognising their own people");
+
+    /// <summary>Every sentence that placed a step, across the whole interview.</summary>
+    private string Placings => string.Join(
+        "\n",
+        interviewed.Driven.Exchanges.Select(exchange => exchange.Placing).Where(said => said is not null));
+
+    // A step places itself by saying what the client will be able to hand over once it is settled,
+    // in what their own work is made of. The prose explaining to the pass why the stage exists is
+    // written for the pass, and recycling it at the client produces the sentence that could open any
+    // step of any interview for any business — which places nothing and reads as filler.
+    [Fact]
+    public Task Each_step_places_itself_in_the_client_own_work() => AssertDoesNotHoldAsync(
+        "One or more of these sentences is generic or promotional: it describes what software or a "
+        + "system becomes able to do, explains why this stage of the process exists, or suggests that "
+        + "what came before it was preliminary and things only now become real — rather than naming "
+        + "something particular to this business that the reader will be able to hand over.",
+        Placings,
+        "A step placed itself with a sentence that would fit any business at all");
 
     // ---- Cross-section coherence -----------------------------------------------------------
 

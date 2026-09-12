@@ -120,12 +120,18 @@ builder.Services.AddSingleton<IMigrationReportService, MigrationReportService>()
 //   defect it looks for is a relation between agents — overlapping intent descriptions, contested
 //   capabilities, a shared value published under two names — and the interview settles one agent at
 //   a time by construction, so no per-agent pass can see any of it. Advisory, never blocking.
+// - IDomainReadingService: what a bare agents.json cannot carry. A save file holds the interview's
+//   own memory of the trade; an upload holds finished prose and nothing of the conversation behind
+//   it, so a step reopened over one knows what was decided and nothing about the shop it was decided
+//   for. It reads that back once, at the upload, and everything it writes is marked read rather than
+//   said — the client told Alembic none of it.
 // - ICoherenceApplyService: the one place a coherence finding stops being advisory. Reached only
 //   when the client presses Apply, having already read the finding and decided to act on it — this
 //   is the hand that carries out an instruction already given, not a second opinion.
 
 builder.Services.AddSingleton<IScenarioAuthorService, ScenarioAuthorService>();
 builder.Services.AddSingleton<ICoherenceService, CoherenceService>();
+builder.Services.AddSingleton<IDomainReadingService, DomainReadingService>();
 builder.Services.AddSingleton<ICoherenceApplyService, CoherenceApplyService>();
 builder.Services.AddSingleton<IAssetPackageService, AssetPackageService>();
 

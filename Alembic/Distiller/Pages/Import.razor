@@ -3,6 +3,7 @@
 @using System.Text.Json
 @using System.IO.Compression
 @inject IDraftImportService DraftImportService
+@inject IDomainReadingService DomainReadingService
 @inject IDraftSerializationService DraftSerializationService
 @inject IDraftStateService DraftStateService
 @inject IInterviewService InterviewService
@@ -45,7 +46,7 @@
         </p>
         @if (isReading)
         {
-            <p class="muted">Reading&hellip;</p>
+            <p class="muted">@(isLearning ? "Working out what your business does, so I do not have to ask you twice…" : "Reading…")</p>
         }
     </div>
 
@@ -421,6 +422,7 @@
                 notices = zipResult.Notices;
                 error = zipResult.Error;
                 SetDraft(zipResult.Draft);
+                await LearnTheTradeAsync(zipResult.Draft);
                 return;
             }
 
@@ -438,6 +440,7 @@
             notices = result.Notices;
             error = result.Error;
             SetDraft(result.Draft);
+            await LearnTheTradeAsync(result.Draft);
         }
         catch (IOException ex)
         {
@@ -447,6 +450,47 @@
         finally
         {
             isReading = false;
+        }
+    }
+
+    /// <summary>
+    /// Whether the upload is being read for what it says about the client's business.
+    /// </summary>
+    private bool isLearning;
+
+    /// <summary>
+    /// Works out what the business does from the configuration just uploaded.
+    /// </summary>
+    /// <remarks>
+    /// A configuration carries finished prose and no memory of the conversation that produced it, so
+    /// without this an interview reopened over an upload knows what was decided and nothing about
+    /// the shop it was decided for — and spends the client's first three answers finding out what
+    /// the file could have told it. Skipped where the domain already remembers: a save file brought
+    /// in as a zip carries what the client themselves said and a reading must never land on top of
+    /// it. Failure costs the head start and nothing else, so it is reported in a line beside the
+    /// other notices and the domain stands either way.
+    /// </remarks>
+    private async Task LearnTheTradeAsync(DomainDraft? draft)
+    {
+        if (draft is null || draft.Agents.Count == 0 || draft.Agents.All(agent => agent.Known.Count > 0))
+            return;
+
+        isLearning = true;
+        StateHasChanged();
+
+        try
+        {
+            DomainReading reading = await DomainReadingService.ReadAsync(draft);
+
+            notices = reading.Error is { } failure
+                ? [.. notices, $"I could not work out what your business does from this file, so I will ask instead: {failure}"]
+                : [.. notices, $"I read {reading.Written} thing(s) about how your business works off this file, so I will not ask you for them. Correct me where I have it wrong — none of it came from you."];
+
+            DraftStateService.Set(draft);
+        }
+        finally
+        {
+            isLearning = false;
         }
     }
 

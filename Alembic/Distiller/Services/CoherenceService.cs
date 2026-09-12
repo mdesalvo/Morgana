@@ -111,8 +111,12 @@ public class CoherenceService : ICoherenceService
         string formatting = (coherence.Formatting ?? string.Empty)
             .Replace(KindsPlaceholder, string.Join(", ", asked.Select(a => $"`{a.Id}`")), StringComparison.Ordinal);
 
+        // The framework first, this pass's own prose under it. Every class this pass reports turns
+        // on a rule settled above the agent — prose restating one, a boundary the framework already
+        // draws, a colleague relation the framework already governs — and a reader who has not been
+        // told what those rules are is left judging by resemblance.
         string system = string.Join("\n\n",
-            new[] { coherence.Target, instructions, formatting }
+            new[] { await alembicPromptService.ComposeFrameworkPrimerAsync(), coherence.Target, instructions, formatting }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
 
         IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);

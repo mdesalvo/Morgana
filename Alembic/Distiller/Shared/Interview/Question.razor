@@ -27,7 +27,17 @@
             <p class="placing">@placing</p>
         }
 
-        <p class="asked">@Asking</p>
+        @*
+            The prose under approval, word for word and on its own. The client is being asked about
+            these exact words, so the sentence that introduces them must not contain them: run
+            together, nothing shows where Alembic stops speaking and the agent's own text starts.
+        *@
+        @if (!string.IsNullOrWhiteSpace(Quoted))
+        {
+            <blockquote class="written">@Quoted</blockquote>
+        }
+
+        <p class="asked">@Asked</p>
 
         @*
             One button and it is a short circuit: it carries the answer that adds nothing — that is
@@ -133,29 +143,22 @@
     public RenderFragment? Keep { get; set; }
 
     /// <summary>
-    /// The question on the table, with the sentence placing it above it where the turn opened a step.
+    /// The question on the table.
     /// </summary>
     [Parameter, EditorRequired]
     public string Asked { get; set; } = string.Empty;
 
     /// <summary>
-    /// Where the placing sentence ends and the question begins.
+    /// What this step adds to the agent in hand, on the turn it landed on and on no other.
     /// </summary>
-    // Told apart by reading what the pass wrote rather than carried in a field of its own: the
-    // placing sentence is part of the turn's own prose and a second field for it would be a second
-    // thing the model has to remember to fill on exactly the turns it already knows to write one.
-    private (string? Placing, string Asking) Parted => AskedTurn.Parted(Asked);
+    [Parameter]
+    public string? Placing { get; set; }
 
     /// <summary>
-    /// What this step adds to the agent in hand, or nothing on a turn that only asks.
+    /// The prose just written for the agent, on the turn that asks whether it is right.
     /// </summary>
-    private string? Placing => Parted.Placing;
-
-    /// <summary>
-    /// The question itself, which is the last thing the pass wrote and the only part with a
-    /// question mark on it.
-    /// </summary>
-    private string Asking => Parted.Asking;
+    [Parameter]
+    public string? Quoted { get; set; }
 
     /// <summary>
     /// The worked example for this question, if there is one. Loaded into the box as real text

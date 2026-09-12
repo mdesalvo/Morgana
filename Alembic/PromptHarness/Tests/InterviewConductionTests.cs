@@ -98,6 +98,20 @@ public sealed class InterviewConductionTests
             $"The events desk declares {events.Code.Consults.Count} colleague(s) the client never described.\n{driven}");
     }
 
+    // What the client says about their trade is spent the moment the turn ends unless it is written
+    // down: every pass is a fresh session reading the configuration, which holds what was decided
+    // and nothing about the shop it was decided for. An interview that recorded nothing has three
+    // passes ahead of it asking a baker what a system ought to be able to check.
+    [Fact]
+    public void The_interview_writes_down_what_it_is_told_about_the_business()
+    {
+        DrivenInterview driven = interviewed.Driven;
+        DomainDraft draft = interviewed.Draft;
+
+        Assert.All(draft.Agents, agent => Assert.True(agent.Known.Count > 0,
+            $"Agent '{agent.ID}' came out of the interview with nothing written down about the work it does.\n{driven}"));
+    }
+
     // A step says what it adds to the agent before it asks anything: the placing sentence and the
     // question are two different things to read and the screen draws them in two different voices.
     // A step that lands with nothing but its question leaves the client to work out what this
@@ -112,12 +126,77 @@ public sealed class InterviewConductionTests
             .ToList();
 
         List<DrivenExchange> run = openings
-            .Where(exchange => AskedTurn.Parted(exchange.Question).Placing is null)
+            .Where(exchange => string.IsNullOrWhiteSpace(exchange.Placing))
             .ToList();
 
         Assert.True(run.Count == 0,
             $"{run.Count} step(s) opened with the placing sentence run into the question:\n"
             + string.Join("\n", run.Select(exchange => $"[{exchange.Pass}] {exchange.Question}"))
+            + $"\n\n{driven}");
+    }
+
+    // Every pass states back what it wrote and asks whether that is right, and that turn carries the
+    // button: its whole question is whether the client agrees, so somebody with nothing to object to
+    // should not have to type a word meaning yes. A pass that never offers one has made the client
+    // pay a typed sentence for every step of the interview. What is checked is the button's own
+    // presence, which is a fact about the turn rather than a reading of its words.
+    [Fact]
+    public void Every_pass_offers_the_button_on_the_turn_it_states_its_work_back()
+    {
+        DrivenInterview driven = interviewed.Driven;
+
+        List<InterviewStep> silent = driven.Exchanges
+            .GroupBy(exchange => exchange.Pass)
+            .Where(pass => pass.All(exchange => exchange.Choice is null))
+            .Select(pass => pass.Key)
+            .ToList();
+
+        Assert.True(silent.Count == 0,
+            $"{silent.Count} pass(es) ran to the end without once offering the button: "
+            + string.Join(", ", silent)
+            + $"\n\n{driven}");
+    }
+
+    // The prose a client approves is shown to them whole, apart from the sentence introducing it:
+    // they are agreeing to exact words, and words folded into somebody else's sentence are words
+    // nobody can see the edges of. Every pass writes something and asks whether it is right, so
+    // every pass has a turn that shows it.
+    [Fact]
+    public void Every_pass_shows_the_client_the_words_it_wrote()
+    {
+        DrivenInterview driven = interviewed.Driven;
+
+        List<InterviewStep> unshown = driven.Exchanges
+            .GroupBy(exchange => exchange.Pass)
+            .Where(pass => pass.All(exchange => string.IsNullOrWhiteSpace(exchange.Quoted)))
+            .Select(pass => pass.Key)
+            .ToList();
+
+        Assert.True(unshown.Count == 0,
+            $"{unshown.Count} pass(es) asked the client to approve prose they were never shown: "
+            + string.Join(", ", unshown)
+            + $"\n\n{driven}");
+    }
+
+    // The page draws what the pass writes exactly as it arrives, so a word it meant to stress reaches
+    // the client wearing two asterisks. This is the one place characters themselves are the defect —
+    // nothing here is a judgement about language, an asterisk is simply the wrong thing to have on
+    // the screen — so it is caught by looking, and everything the client reads is looked at.
+    [Fact]
+    public void Nothing_the_client_reads_arrives_wearing_markup()
+    {
+        DrivenInterview driven = interviewed.Driven;
+        string[] marks = ["**", "__", "`", "##"];
+
+        List<string> marked = driven.Exchanges
+            .SelectMany(exchange => new[] { exchange.Question, exchange.Placing, exchange.Example }
+                .Where(written => written is not null && marks.Any(mark => written.Contains(mark, StringComparison.Ordinal)))
+                .Select(written => $"[{exchange.Pass}] {written}"))
+            .ToList();
+
+        Assert.True(marked.Count == 0,
+            $"{marked.Count} thing(s) reached the client with markup in them:\n"
+            + string.Join("\n", marked)
             + $"\n\n{driven}");
     }
 

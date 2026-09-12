@@ -254,11 +254,17 @@ public class InterviewTools
     /// <see cref="InstructionsMarker"/>. Declared only from the <c>AgentInstructions</c> pass on, once
     /// the toolkit exists — Instructions speaks about the agent's tools, so nothing earlier may
     /// write it.
+    /// <para>
+    /// The tightest shape of the five, and the one the client feels: what a tool does, needs and
+    /// refuses belongs to that tool's own description, so a section running long is one holding a
+    /// line per tool — a second authority on each subject and, stated back on screen, a wall of
+    /// text where a sentence was owed.
+    /// </para>
     /// </remarks>
     public string SetAgentInstructions(string instructions)
     {
         interviewState.Agent.Instructions = Marked(InstructionsMarker, instructions);
-        return Shaped("Instructions", instructions, 4, 12);
+        return Shaped("Instructions", instructions, 2, 5);
     }
 
     /// <summary>
@@ -507,6 +513,202 @@ public class InterviewTools
     }
 
     /// <summary>
+    /// How much one desk, or the business itself, may hold on record before it has to be tidied.
+    /// </summary>
+    /// <remarks>
+    /// Not a storage limit: every step opens holding what is known about the desk in hand, so a
+    /// record that grows without end is a step reading forty sentences to ask one question. Reaching
+    /// it is a sign two facts have become one fact said twice, which is the pass's own to settle.
+    /// </remarks>
+    private const int MemoryCeiling = 14;
+
+    /// <summary>
+    /// Where what is found out is kept: with the desk in hand, or with the business.
+    /// </summary>
+    /// <remarks>
+    /// The map and the closing step both stand on the whole domain, and the closing step stands past
+    /// the end of the map holding an agent nobody will write to — so what is learned there is about
+    /// the business or it is lost with that empty agent.
+    /// </remarks>
+    private List<KnownFact> Memory => interviewState.OnAnEntry
+        ? interviewState.Agent.Known
+        : (draftStateService.Current ?? new DomainDraft()).Learned;
+
+    /// <summary>
+    /// Writes down one thing the client has just said about how their work actually goes.
+    /// </summary>
+    /// <remarks>
+    /// Every pass is a fresh session that reads what is written and nothing else, so what the client
+    /// says about their trade is spent the moment the turn ends unless it is written down here. That
+    /// is how a step three passes later comes to ask a shopkeeper what a system ought to be able to
+    /// check: it never knew there was a shop. A fact about the desk in hand is kept with that agent
+    /// and travels with it; a fact about the business itself is kept for the whole domain. Neither
+    /// ever enters the domain — this is what the questions are made of, not what the agents say.
+    /// </remarks>
+    /// <param name="subject">What it is about, in one or two of the client's own words.</param>
+    /// <param name="fact">The fact itself, one sentence, in their vocabulary.</param>
+    /// <param name="corrects">
+    /// What this puts right, where the client has just contradicted something on record: any part of
+    /// the wrong sentence is enough to find it. A reading taken off their upload is exactly the kind
+    /// of thing that gets corrected here and it must go, rather than sit under the truth.
+    /// </param>
+    public string NoteDomainFact(string subject, string fact, string? corrects = null)
+    {
+        string written = fact.Trim();
+        string about = subject.Trim();
+
+        if (written.Length == 0 || about.Length == 0)
+            return "Nothing written down: a fact needs both a subject and a sentence.";
+
+        List<KnownFact> kept = Memory;
+        int dropped = corrects is { Length: > 0 } wrong ? Forget(kept, wrong) : 0;
+
+        // What the client says stands over what Alembic read off their upload about the same
+        // subject: a reading of somebody else's prose loses to the person whose shop it is.
+        dropped += kept.RemoveAll(known =>
+            known.Inferred && string.Equals(known.Subject, about, StringComparison.OrdinalIgnoreCase));
+
+        if (kept.Any(known => string.Equals(known.Fact, written, StringComparison.OrdinalIgnoreCase)))
+            return "That was already written down; nothing added.";
+
+        if (kept.Count >= MemoryCeiling)
+            return $"Nothing written down: {kept.Count} facts already stand here, which is as many as "
+                   + "are worth carrying into a question. Two of them have become the same fact in "
+                   + "different words — drop one with DropDomainFact, or say what this one corrects.";
+
+        kept.Add(new KnownFact(about, written, Inferred: false));
+
+        return $"Written down under '{about}'"
+               + (dropped > 0 ? $", and {dropped} thing(s) that said otherwise are gone" : string.Empty)
+               + $". {kept.Count} thing(s) now stand on record here.";
+    }
+
+    /// <summary>
+    /// Takes something off the record that turned out not to be true of their work.
+    /// </summary>
+    /// <remarks>
+    /// The one thing a memory owes whoever it is about. Alembic reads an uploaded configuration for
+    /// what it says about the business and it can read it wrong; a client says something that was
+    /// true last year. Left standing, either is worse than never having known: every step after this
+    /// one opens holding it and none of them has any way to doubt it.
+    /// </remarks>
+    /// <param name="fact">Any part of the sentence to remove, enough to tell it from the others.</param>
+    public string DropDomainFact(string fact)
+    {
+        string wrong = fact.Trim();
+
+        if (wrong.Length == 0)
+            return "Nothing dropped: the payload was empty.";
+
+        int dropped = Forget(Memory, wrong);
+
+        return dropped == 0
+            ? "Nothing here says that; nothing dropped."
+            : $"{dropped} thing(s) gone from the record. No step after this one will hold them.";
+    }
+
+    /// <summary>
+    /// Hands back what is on record about one of the other desks of this domain.
+    /// </summary>
+    /// <remarks>
+    /// A step opens holding what is known about its own desk and the business, and only the subjects
+    /// the other desks keep — a domain of nine desks read whole would be forty sentences carried into
+    /// every question, most of them about counters this step will never touch. This is how the rest
+    /// is reached, when a subject listed there turns out to bear on the question in hand: whether the
+    /// counter next door already takes deposits decides whether this one should.
+    /// </remarks>
+    /// <param name="intent">The desk's own intent name, as the opening message lists it.</param>
+    public string RecallDesk(string intent)
+    {
+        string named = intent.Trim();
+        DomainDraft draft = draftStateService.Current ?? new DomainDraft();
+
+        // A desk of this domain is an entry of the map, written or still ahead — the same universe
+        // the opening message lists its neighbours from. Resolved against the written agents alone,
+        // this denied the existence of every desk the interview had not reached yet, which is most
+        // of them on the first agent and all of them the client had just dictated.
+        IntentDraft? entry = draft.Intents.Concat(interviewState.Map).FirstOrDefault(candidate =>
+            string.Equals(candidate.Name, named, StringComparison.OrdinalIgnoreCase));
+
+        AgentDraft? desk = draft.Agents.FirstOrDefault(agent =>
+            string.Equals(agent.ID, named, StringComparison.OrdinalIgnoreCase));
+
+        if (entry is null && desk is null)
+            return $"There is no desk called '{named}' in this domain. The opening message lists them by name.";
+
+        // What the map says about a desk nobody has opened yet is the whole of what is known about
+        // it, and it is worth more than a refusal: the routing sentence the client dictated is the
+        // only account of that counter anybody has.
+        if (desk is null || desk.Known.Count == 0)
+            return string.IsNullOrWhiteSpace(entry?.Description)
+                ? $"Nothing is on record about how they work at '{named}'."
+                : $"Nothing is on record yet about how they work at '{named}'. The map describes it as: {entry.Description}";
+
+        return $"What is known about '{named}':\n"
+               + string.Join("\n", desk.Known.Select(known =>
+                   $"- {known.Subject}: {known.Fact}" + (known.Inferred ? " (read off their configuration, not said)" : string.Empty)));
+    }
+
+    /// <summary>
+    /// Removes whatever on record carries the wrong sentence, by subject or by wording.
+    /// </summary>
+    private static int Forget(List<KnownFact> kept, string wrong) =>
+        kept.RemoveAll(known =>
+            known.Fact.Contains(wrong, StringComparison.OrdinalIgnoreCase)
+            || wrong.Contains(known.Fact, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(known.Subject, wrong, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Says what the step about to be asked adds to the agent in hand, over its question.
+    /// </summary>
+    /// <remarks>
+    /// A step that lands saying nothing but its question leaves the client to work out what this
+    /// screen is for from the question alone, which is the one thing it cannot tell them. Held apart
+    /// from the question rather than written above it in the same breath, because the screen draws
+    /// the two in two different voices: what they are told and what they are asked are read at
+    /// different moments and one block at one size is read as neither. It belongs to the turn a step
+    /// lands on and to no confirmation or follow-up after it.
+    /// </remarks>
+    public string SetStepPlacing(string placing)
+    {
+        string written = placing.Trim();
+
+        if (written.Length == 0)
+            return "Nothing placed: the payload was empty.";
+
+        interviewState.PendingPlacing = written;
+
+        return "That will stand above the question, quieter than it and apart from it. It is the only "
+               + "thing on the screen telling them what this step is for, so the question itself "
+               + "need not say it again.";
+    }
+
+    /// <summary>
+    /// Shows the client, word for word, the prose just written for their agent.
+    /// </summary>
+    /// <remarks>
+    /// The turn that asks whether a section is right is the one turn where the client is approving
+    /// exact words, so those words stand apart from the sentence introducing them. Run into one
+    /// paragraph the two become a single stretch of prose in which nothing marks where Alembic stops
+    /// speaking and the agent's own text begins — and an approval given to that approves nothing in
+    /// particular, which is the whole of what this interview is for.
+    /// </remarks>
+    /// <param name="written">The section's prose exactly as it now stands, with nothing added around it.</param>
+    public string ShowWhatIsWritten(string written)
+    {
+        string prose = written.Trim();
+
+        if (prose.Length == 0)
+            return "Nothing shown: the payload was empty.";
+
+        interviewState.PendingQuoted = prose;
+
+        return "That will stand on its own above your question, exactly as you wrote it. Your own "
+               + "sentence should introduce it and never contain it: they are approving these words, "
+               + "so what they read has to be only these words.";
+    }
+
+    /// <summary>
     /// Puts a worked example in the answer box under the question about to be asked.
     /// </summary>
     /// <remarks>
@@ -520,7 +722,9 @@ public class InterviewTools
     /// </remarks>
     public string SetExample(string example)
     {
-        string written = example.Trim();
+        // The box holds it as the client's own text, so a pair of quotation marks around it is text
+        // they would be sending. One at a single end is what a half-escaped payload leaves behind.
+        string written = example.Trim().Trim('"').Trim();
 
         if (written.Length == 0)
             return "No example put in the box: the payload was empty.";

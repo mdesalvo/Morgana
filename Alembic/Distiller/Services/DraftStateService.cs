@@ -30,6 +30,7 @@ namespace Distiller.Services;
 public sealed class DraftStateService : IDraftStateService, IDisposable
 {
     private readonly IDraftSerializationService drafts;
+    private readonly ILogger logger;
     private readonly Timer timer;
 
     /// <summary>
@@ -42,9 +43,11 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
     /// </summary>
     /// <param name="drafts">Turns the Draft into the bytes the client takes away.</param>
     /// <param name="configuration">How often to take a snapshot.</param>
-    public DraftStateService(IDraftSerializationService drafts, IConfiguration configuration)
+    /// <param name="logger">Records a snapshot that could not be taken.</param>
+    public DraftStateService(IDraftSerializationService drafts, IConfiguration configuration, ILogger logger)
     {
         this.drafts = drafts;
+        this.logger = logger;
 
         TimeSpan autosave = TimeSpan.FromSeconds(configuration.GetValue("Alembic:Work:AutosaveSeconds", 20));
 
@@ -87,10 +90,13 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
         {
             return latest = drafts.Serialize(draft);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // A Draft caught mid-edit is a snapshot not taken and the one before it still stands.
-            // Letting this out of a timer callback would take the process down.
+            // Letting this out of a timer callback would take the process down. Recorded because the
+            // floor under Save my work failing is otherwise silent: a client whose snapshots have
+            // all failed learns it the day the button hands them the one before them all.
+            logger.LogWarning(ex, "A snapshot of the Draft could not be taken");
             return null;
         }
     }

@@ -16,8 +16,9 @@ namespace Distiller.Interfaces;
 /// rather than copied: her <c>Personality</c>, because her identity is Alembic's identity; her
 /// <c>Target</c>, because it is the only place that says what an agent <em>of</em> Morgana is and
 /// the lower of the two layers it describes is exactly what Alembic writes; and her
-/// <c>GlobalPolicies</c> by name, as the list of subjects already settled above every agent. A copy
-/// of any of it would drift the day the framework is tuned.
+/// <c>GlobalPolicies</c> by name, as the list of subjects already settled above every agent — each
+/// under the one author-facing line <see cref="ComposeFrameworkPrimerAsync"/> gives it. A copy of any
+/// of it would drift the day the framework is tuned.
 /// </para>
 /// <para>
 /// Left out: the policies' bodies and her <c>Formatting</c>. Those govern how a <em>channel turn</em>
@@ -62,4 +63,24 @@ public interface IAlembicPromptService
     /// <param name="correcting">Whether this step is reopening an agent that already exists, rather than writing one.</param>
     /// <returns>The system prompt.</returns>
     Task<string> ComposeAsync(string interviewerId, bool correcting = false);
+
+    /// <summary>
+    /// Renders what the framework already does around anything Alembic writes.
+    /// </summary>
+    /// <remarks>
+    /// Every pass that judges or writes an agent's prose needs this and only the interview used to
+    /// have it. A pass asked whether a sentence restates a framework rule, holding no account of
+    /// what the framework rules are, is deciding by resemblance. So the block stands on its own,
+    /// separately from Morgana's voice: the coherence pass answers JSON and the pass applying its
+    /// findings writes for an agent; neither speaks to anybody as her.
+    /// <para>
+    /// Authored in the <c>MorganaPrimer</c> prompt rather than read out of <c>morgana.json</c>,
+    /// because the framework states its rules in the imperative to an agent taking a turn. Handed
+    /// over as they stand they are orders no pass here has a turn to carry out; restated as fact
+    /// they are knowledge of the world the authored agents will live in. The policy names remain
+    /// <c>morgana.json</c>'s: a policy with no line throws, as does a line naming no policy.
+    /// </para>
+    /// </remarks>
+    /// <returns>The primer, self-delimited and ready to stand above a pass's own prose.</returns>
+    Task<string> ComposeFrameworkPrimerAsync();
 }

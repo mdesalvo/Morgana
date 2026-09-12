@@ -60,6 +60,9 @@ public sealed class ExamplesDomainFixture : IAsyncLifetime
     /// <inheritdoc cref="AgentAt" />
     public int IntentAt { get; private set; }
 
+    /// <summary>What reading the uploaded configuration for the trade behind it yielded.</summary>
+    public DomainReading Reading { get; private set; } = new(0);
+
     /// <summary>The whole domain as exported before the correction, byte for byte.</summary>
     public byte[] ExportedBefore { get; private set; } = [];
 
@@ -103,6 +106,15 @@ public sealed class ExamplesDomainFixture : IAsyncLifetime
                 ?? throw new InvalidOperationException($"{DomainFile} did not import: {imported.Error}");
 
         draftState.Set(Draft);
+
+        // Read the way Import reads it, before anything is corrected: a bare configuration carries
+        // finished prose and nothing of the conversation behind it, so this is where Alembic finds
+        // out what the business does. The correction that follows runs holding what it found, which
+        // is exactly how a client's own edit will run.
+        Reading = await scope.ServiceProvider
+            .GetRequiredService<IDomainReadingService>()
+            .ReadAsync(Draft);
+
         ExportedBefore = export.Export(Draft);
 
         AgentDraft agent = Draft.Agents.Single(a =>

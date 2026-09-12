@@ -14,12 +14,19 @@ namespace PromptHarness.Infrastructure;
 /// cannot show why an answer came back a word long.
 /// </param>
 /// <param name="Choice">The one button offered with this question, if it carried one.</param>
+/// <param name="Placing">
+/// What the step said it adds to the agent, drawn above the question. Only a turn a step lands on
+/// carries one.
+/// </param>
+/// <param name="Quoted">The prose shown word for word on a turn that asks whether it is right.</param>
 public sealed record DrivenExchange(
     InterviewStep Pass,
     string Question,
     string Answer,
     string? Example = null,
-    string? Choice = null);
+    string? Choice = null,
+    string? Placing = null,
+    string? Quoted = null);
 
 /// <summary>
 /// What a driven run leaves behind: the transcript and the state the interview stood at when the
@@ -30,7 +37,10 @@ public sealed record DrivenInterview(InterviewState FinalState, IReadOnlyList<Dr
     /// <summary>Renders the transcript as a scrollback, for a failing assertion's message.</summary>
     public override string ToString() =>
         string.Join('\n', Exchanges.Select(e =>
-            $"[{e.Pass}] Q: {e.Question}"
+            $"[{e.Pass}]"
+            + (e.Placing is null ? string.Empty : $" {e.Placing}")
+            + (e.Quoted is null ? string.Empty : $"\n[written] {e.Quoted}")
+            + $"\nQ: {e.Question}"
             + (e.Choice is null ? string.Empty : $"\n[button] {e.Choice}")
             + (e.Example is null ? string.Empty : $"\n[in the box] {e.Example}")
             + $"\nA: {e.Answer}"));
@@ -97,7 +107,7 @@ public static class InterviewDriver
                 : "That's everything, thank you.";
 
             exchanges.Add(new DrivenExchange(
-                state.Pass, state.Question ?? string.Empty, answer, state.Example, state.Choice?.Label));
+                state.Pass, state.Question ?? string.Empty, answer, state.Example, state.Choice?.Label, state.Placing, state.Quoted));
             state = await interview.AnswerAsync(answer, cancellationToken);
 
             if (state.Error is not null)
@@ -228,7 +238,7 @@ public static class InterviewDriver
             string answer = queue.Count > 0 ? queue.Dequeue() : "That's right, go ahead.";
 
             exchanges.Add(new DrivenExchange(
-                state.Pass, state.Question ?? string.Empty, answer, state.Example, state.Choice?.Label));
+                state.Pass, state.Question ?? string.Empty, answer, state.Example, state.Choice?.Label, state.Placing, state.Quoted));
             state = await interview.AnswerAsync(answer, cancellationToken);
 
             if (state.Error is not null)

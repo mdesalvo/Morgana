@@ -34,12 +34,6 @@ public class DraftValidationService : IDraftValidationService
     private static readonly string[] KnownScopes = [Constants.Scopes.Context, Constants.Scopes.Request];
 
     /// <summary>
-    /// The intent the framework reserves for "none of the above". It is the one intent exempt from
-    /// needing an agent — <c>HandlesIntentAgentRegistryService</c> excludes it by name.
-    /// </summary>
-    private const string OtherIntent = Constants.Intents.Other;
-
-    /// <summary>
     /// C# keywords that cannot be used bare as an identifier. Not the full list: only the ones a
     /// domain author plausibly reaches for when naming a tool parameter.
     /// </summary>
@@ -113,20 +107,11 @@ public class DraftValidationService : IDraftValidationService
                     "The intent has no description.",
                     "The description is the only thing the classifier reads about this intent; without one it can only match on the name."));
 
-            // 'other' is exempt: it is the catch-all, it gets no presenter button and the shipped
-            // Examples domain declares its Label as an explicit null for exactly that reason.
-            // Warning about it would train the client to ignore this whole pass.
-            if (string.IsNullOrWhiteSpace(intent.Label)
-                && !string.Equals(intent.Name, OtherIntent, StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(intent.Label))
                 findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                     "The intent has no label.",
                     "The presenter derives its quick-reply buttons from the labels; a missing one costs this intent its button."));
         }
-
-        if (!seen.Contains(OtherIntent))
-            findings.Add(new ValidationFinding(FindingSeverity.Warning, "domain",
-                $"There is no '{OtherIntent}' intent.",
-                "The classifier falls back to 'other' whenever it cannot place a message and that fallback is where a domain decides what happens to everything it does not cover."));
     }
 
     /// <summary>
@@ -148,13 +133,11 @@ public class DraftValidationService : IDraftValidationService
             StringComparer.OrdinalIgnoreCase);
 
         foreach (IntentDraft intent in draft.Intents.Where(i =>
-                     !string.IsNullOrWhiteSpace(i.Name)
-                     && !string.Equals(i.Name, OtherIntent, StringComparison.OrdinalIgnoreCase)
-                     && !agentIds.Contains(i.Name!)))
+                     !string.IsNullOrWhiteSpace(i.Name) && !agentIds.Contains(i.Name!)))
         {
             findings.Add(new ValidationFinding(FindingSeverity.Error, $"intent '{intent.Name}'",
                 "No agent handles this intent.",
-                "HandlesIntentAgentRegistryService checks this in both directions at startup and throws on a mismatch; 'other' is the single exemption."));
+                "HandlesIntentAgentRegistryService checks this in both directions at startup and throws on a mismatch."));
         }
 
         foreach (AgentDraft agent in draft.Agents.Where(a =>

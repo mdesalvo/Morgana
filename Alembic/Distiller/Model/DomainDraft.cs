@@ -26,6 +26,19 @@ namespace Distiller.Model;
 public sealed class DomainDraft
 {
     /// <summary>
+    /// What is known about the client's business as a whole: what they sell or do, how the place
+    /// works, what is true of every counter in it.
+    /// </summary>
+    /// <remarks>
+    /// Kept with the domain rather than with the sitting, because it outlives any one of them and an
+    /// upload has no sitting at all: a bare <c>agents.json</c> is read once for what it says about
+    /// the trade and every step of every later interview opens holding it. Each fact says whether
+    /// the client said it or Alembic read it. None of it is ever written into an agent — it is what
+    /// the questions are made of, not what the agents say.
+    /// </remarks>
+    public List<KnownFact> Learned { get; set; } = [];
+
+    /// <summary>
     /// Intent definitions, one per agent plus the framework's own <c>other</c>.
     /// </summary>
     public List<IntentDraft> Intents { get; set; } = [];
@@ -98,7 +111,21 @@ public sealed class DomainDraft
     /// </remarks>
     /// <returns>Whether a declaration was actually there to remove.</returns>
     public bool DropFallbackIntent()
-        => Intents.RemoveAll(i => string.Equals(i.Name, FallbackIntent, StringComparison.OrdinalIgnoreCase)) > 0;
+    {
+        bool dropped = Intents.RemoveAll(IsFallback) > 0;
+
+        // The map of an interrupted sitting is a second place a domain declares its desks, and a
+        // sitting begun before this rule held can be resumed today carrying the fallback as an entry
+        // the walk would open an agent on.
+        if (Sitting is not null)
+            dropped |= Sitting.Map.RemoveAll(IsFallback) > 0;
+
+        return dropped;
+    }
+
+    /// <summary>Whether this entry is the classifier's fallback rather than a desk of the domain.</summary>
+    private static bool IsFallback(IntentDraft intent) =>
+        string.Equals(intent.Name, FallbackIntent, StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>
@@ -311,6 +338,20 @@ public sealed class AgentDraft
     /// Prompt subtype. <c>"AGENT"</c> for a domain agent.
     /// </summary>
     public string SubType { get; set; } = "AGENT";
+
+    /// <summary>
+    /// What the client has said about the work this desk does, in their own words: the picture of
+    /// their counter as the interview has painted it so far, step by step.
+    /// </summary>
+    /// <remarks>
+    /// It travels with the agent exactly as its card does and for the same reason — every pass is a
+    /// fresh session that reads what is written and nothing else — but the two carry opposite things.
+    /// The card is what a caller is handed: it holds only what a running Morgana publishes. This
+    /// holds what no section can, because no section is addressed to a reader who wants it: which
+    /// screen they open at that counter, who rings, what goes wrong on a Saturday. It is what the
+    /// next step's questions are made of and it never enters the domain.
+    /// </remarks>
+    public List<KnownFact> Known { get; set; } = [];
 
     /// <summary>
     /// What the agent is for: its scope and its boundaries.

@@ -640,6 +640,14 @@ public class InterviewService : IInterviewService
         interviewState.ReadyForReview = false;
         interviewState.PassOpenedAt = interviewState.Exchanges;
 
+        // An agent is about its intent from its first pass, not from the moment it is let in. Every
+        // mid-interview check reading the pair — the findings, the recap, the colleague rules — was
+        // otherwise looking at an agent no intent could reach and reporting the very desk being
+        // written as unhandled. Only while it is blank: one out of the client's own configuration
+        // arrives with an ID that already reaches it and Morgana matches the two case-insensitively.
+        if (interviewState.OnAnEntry && string.IsNullOrWhiteSpace(interviewState.Agent.ID))
+            interviewState.Agent.ID = interviewState.Intent.Name;
+
         // Correcting is a fact of the agent, not of how this call was reached. An edit chained into
         // from a settled earlier pass (AnswerAsync moving AgentTarget -> AgentPersonality and on) is
         // standing on an agent that already exists exactly as much as one reopened directly, so both
@@ -658,6 +666,8 @@ public class InterviewService : IInterviewService
             interviewState.Question = OpeningQuestion;
             interviewState.Choice = null;
             interviewState.Example = null;
+            interviewState.Placing = null;
+            interviewState.Quoted = null;
             interviewState.Traits = [];
             interviewState.Chosen = false;
             interviewState.Exchanges++;
@@ -691,17 +701,18 @@ public class InterviewService : IInterviewService
     /// first sentence that names their agent and says what this stage is for, which is not something
     /// to be reconstructed from context.
     /// </remarks>
-    private static string Bootstrap(InterviewState interviewState, InterviewStep interviewPass, bool correcting)
+    private string Bootstrap(InterviewState interviewState, InterviewStep interviewPass, bool correcting)
     {
         if (interviewPass == InterviewStep.DomainMapper)
-            return BootstrapMessages[interviewPass];
+            return BootstrapMessages[interviewPass] + Known(interviewState);
 
         // The closing step stands on the domain rather than on an entry of the map, so the sentence
         // that places every other step — entry n of m, this intent, what is written on it — has
         // nothing to say here. What it is standing on is the whole list and it reads that for
         // itself: the agents are in the configuration, whole and GetDomainAgents hands them back.
         if (interviewPass == InterviewStep.DomainColleagues)
-            return "Every entry of the map has its agent and the domain is complete. " + BootstrapMessages[interviewPass];
+            return "Every entry of the map has its agent and the domain is complete. "
+                   + BootstrapMessages[interviewPass] + Known(interviewState);
 
         // Which of the two jobs this is and it is stated as a FACT rather than as an instruction:
         // what to do about each is one rule in the shared layer, read by every pass and repeating it
@@ -720,7 +731,102 @@ public class InterviewService : IInterviewService
                + $"of {interviewState.Map.Count}: the intent '{interviewState.Intent.Name}', which the map "
                + $"describes as: {interviewState.Intent.Description}. "
                + standing + " "
-               + BootstrapMessages[interviewPass];
+               + BootstrapMessages[interviewPass]
+               + Known(interviewState);
+    }
+
+    /// <summary>
+    /// What the client has already said about their work, handed to a step before it asks anything.
+    /// </summary>
+    /// <remarks>
+    /// The whole of what one pass knows about the trade it is asking about: every pass is a fresh
+    /// session and a step that opens knowing only the configuration asks a shopkeeper what a system
+    /// ought to be able to check, because nothing on its side of the boundary says there is a shop.
+    /// The desk in hand comes last and nearest the question, since that is what this step is about.
+    /// It is given as fact to build questions on, never as prose to copy into a section.
+    /// </remarks>
+    private string Known(InterviewState interviewState)
+    {
+        List<KnownFact> trade = [.. (draftStateService.Current?.Learned ?? [])];
+        List<KnownFact> desk = interviewState.OnAnEntry ? [.. interviewState.Agent.Known] : [];
+        List<string> neighbours = Neighbours(interviewState);
+
+        if (trade.Count == 0 && desk.Count == 0 && neighbours.Count == 0)
+            return string.Empty;
+
+        string told = " What is known about their work — build your questions on it, never ask any of "
+                      + "it again and never copy any of it into a section:";
+
+        if (trade.Count > 0)
+            told += "\nAbout their business: " + Facts(trade);
+
+        if (desk.Count > 0)
+            told += "\nAbout this desk: " + Facts(desk);
+
+        // The other desks arrive as subjects rather than as sentences: nine of them read whole would
+        // be forty sentences carried into every question, nearly all about counters this step will
+        // never touch. What is listed is enough to know whether one of them bears on the question in
+        // hand, which is the only moment the sentences themselves are worth fetching.
+        if (neighbours.Count > 0)
+            told += "\nThe other desks of this domain and what is on record about each — call RecallDesk "
+                    + "with a name to read one, where what it keeps bears on the question you are about "
+                    + "to ask: " + string.Join(" ", neighbours);
+
+        // Said and read are not worth the same and the difference is stated once, at the foot of the
+        // list: an agent that arrived in an upload carries finished prose and no memory of the
+        // conversation behind it, so everything known about it is Alembic's own reading.
+        if (trade.Concat(desk).Any(fact => fact.Inferred))
+            told += "\nWhat is marked (read, not said) was taken off the configuration they uploaded and "
+                    + "nobody has confirmed it. Treat it as a reading that may be wrong: let it be "
+                    + "corrected inside a question you were going to ask anyway and never put it to them "
+                    + "as something they told you.";
+
+        return told;
+    }
+
+    /// <summary>
+    /// A run of facts as a step reads them, each saying whether anybody actually said it.
+    /// </summary>
+    private static string Facts(IEnumerable<KnownFact> facts) =>
+        string.Join(" ", facts.Select(fact =>
+            $"- {fact.Subject}: {fact.Fact}" + (fact.Inferred ? " (read, not said)" : string.Empty)));
+
+    /// <summary>
+    /// What is known about every other desk of the domain, named one by one.
+    /// </summary>
+    /// <remarks>
+    /// A desk is only itself next to the ones beside it: what the accounts counter does with a
+    /// delivery query is a fact about the accounts counter and about this one at the same time. A
+    /// step that saw only the desk in hand would ask about it as though the shop had one counter,
+    /// which is how the same ground ends up claimed twice and how a boundary gets drawn against
+    /// nothing. Both the written agents and the entries still ahead, since a desk nobody has opened
+    /// yet is still on the map the client dictated.
+    /// </remarks>
+    private List<string> Neighbours(InterviewState interviewState)
+    {
+        DomainDraft draft = draftStateService.Current ?? new DomainDraft();
+
+        Dictionary<string, List<KnownFact>> written = draft.Agents
+            .Where(agent => agent.ID is not null)
+            .ToDictionary(agent => agent.ID!, agent => agent.Known, StringComparer.OrdinalIgnoreCase);
+
+        List<string> others = [];
+
+        foreach (IntentDraft intent in draft.Intents.Concat(interviewState.Map))
+        {
+            if (intent.Name is not { Length: > 0 } name
+                || string.Equals(name, interviewState.Intent.Name, StringComparison.OrdinalIgnoreCase)
+                || others.Any(line => line.StartsWith($"- {name}:", StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            string about = written.TryGetValue(name, out List<KnownFact>? facts) && facts.Count > 0
+                ? string.Join(", ", facts.Select(fact => fact.Subject).Distinct(StringComparer.OrdinalIgnoreCase))
+                : intent.Description ?? "nothing known about it yet";
+
+            others.Add($"- {name}: {about}");
+        }
+
+        return others;
     }
 
     /// <summary>
@@ -874,6 +980,11 @@ public class InterviewService : IInterviewService
             [nameof(InterviewTools.GetAgentSoFar)] = tools.GetAgentSoFar,
             [nameof(InterviewTools.SetChoice)] = tools.SetChoice,
             [nameof(InterviewTools.SetExample)] = tools.SetExample,
+            [nameof(InterviewTools.SetStepPlacing)] = tools.SetStepPlacing,
+            [nameof(InterviewTools.ShowWhatIsWritten)] = tools.ShowWhatIsWritten,
+            [nameof(InterviewTools.NoteDomainFact)] = tools.NoteDomainFact,
+            [nameof(InterviewTools.DropDomainFact)] = tools.DropDomainFact,
+            [nameof(InterviewTools.RecallDesk)] = tools.RecallDesk,
             [nameof(InterviewTools.SetTraits)] = tools.SetTraits,
             [nameof(InterviewTools.GetExistingIntents)] = tools.GetExistingIntents,
             [nameof(InterviewTools.GetDomainAgents)] = tools.GetDomainAgents,
@@ -931,6 +1042,8 @@ public class InterviewService : IInterviewService
         interviewState.Error = null;
         interviewState.PendingChoice = null;
         interviewState.PendingExample = null;
+        interviewState.PendingPlacing = null;
+        interviewState.PendingQuoted = null;
         interviewState.PendingTraits.Clear();
         interviewState.Changed.Clear();
 
@@ -967,6 +1080,8 @@ public class InterviewService : IInterviewService
 
             interviewState.Choice = interviewState.PendingChoice;
             interviewState.Example = interviewState.PendingExample;
+            interviewState.Placing = interviewState.PendingPlacing;
+            interviewState.Quoted = interviewState.PendingQuoted;
             interviewState.Traits = [.. interviewState.PendingTraits];
             interviewState.Chosen = false;
         }

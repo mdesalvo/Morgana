@@ -106,6 +106,31 @@ public sealed class InterviewState
     public string? Example { get; set; }
 
     /// <summary>
+    /// The prose just written for the agent, shown to the client word for word on the turn that asks
+    /// whether it is right.
+    /// </summary>
+    /// <remarks>
+    /// What is being approved is these exact words, so they are drawn apart from the sentence
+    /// introducing them: run together — 'I have written a fond and careful voice that follows…' —
+    /// the client cannot see where Alembic stops speaking and the agent's own prose starts, and an
+    /// approval given to that is an approval of nothing in particular. Cleared every exchange, like
+    /// everything else that belongs to one question.
+    /// </remarks>
+    public string? Quoted { get; set; }
+
+    /// <summary>
+    /// What this step adds to the agent in hand, over the question that asks for it.
+    /// </summary>
+    /// <remarks>
+    /// Written by the pass on the turn a step lands on and drawn apart from the question, in its own
+    /// quieter voice: what the client is told and what they are asked are two different things to
+    /// read and one block of text at one size is read as neither. Cleared every exchange, so a
+    /// confirmation or a follow-up carries none and the screen never says the interview has moved on
+    /// when it has not.
+    /// </remarks>
+    public string? Placing { get; set; }
+
+    /// <summary>
     /// The button attached to the question on the table and whether it was pressed.
     /// </summary>
     /// <remarks>
@@ -132,9 +157,9 @@ public sealed class InterviewState
     /// <summary>
     /// Whether the question on the table is the first one this pass has asked.
     /// </summary>
-    // Read by the house example alone: it belongs to the opening question of the mapping pass and to
-    // nothing after it. Every other example is the model's and clears itself with the turn it was
-    // written for.
+    // Read by the sentence that places the step, which belongs to the question a step lands on and to
+    // no confirmation or follow-up after it, and by the house example, which belongs to the opening
+    // question of the mapping pass alone.
     public bool PassJustOpened => Exchanges <= PassOpenedAt + 1;
 
     /// <summary>
@@ -165,6 +190,17 @@ public sealed class InterviewState
     {
         get => At >= 0 && At < Map.Count ? Map[At] : field;
     } = new();
+
+    /// <summary>
+    /// Whether the interview is standing on one entry of the map, rather than on the whole domain.
+    /// </summary>
+    /// <remarks>
+    /// The map and the closing step both stand on the domain and the closing step stands past the
+    /// end of the map, holding an agent nobody will ever write to. What is found out about the work
+    /// there is a fact about the business, so it is kept for the business: written onto that empty
+    /// agent it would be thrown away with it.
+    /// </remarks>
+    public bool OnAnEntry => At >= 0 && At < Map.Count;
 
     /// <summary>
     /// The agent being built for that intent. A fresh one each time the interview moves down the map.
@@ -202,6 +238,12 @@ public sealed class InterviewState
 
     /// <inheritdoc cref="Example" />
     public string? PendingExample { get; set; }
+
+    /// <inheritdoc cref="Placing" />
+    public string? PendingPlacing { get; set; }
+
+    /// <inheritdoc cref="Quoted" />
+    public string? PendingQuoted { get; set; }
 
     /// <summary>
     /// Words offered for the agent's voice and the ones Alembic is about to offer.

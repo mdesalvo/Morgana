@@ -51,10 +51,30 @@ subordinate to her — from an `alembic.json` of **identical shape** to an agent
 Alembic does the job Alembic teaches.
 
 Two layers, not three: **Morgana in her own words**, resolved live from `morgana.json` rather than
-copied (her `Personality`, her `Target`, her `GlobalPolicies` **by name only**), then **Alembic's own
-prose**. Her `Injections` are deliberately not read: splice templates, not subjects a domain author
-could write a rule about. An earlier shared `Doctrine` layer had nothing to bind — Morgana's binds
-global policies to turn machinery Alembic does not have.
+copied (her `Personality`, her `Target`, her `GlobalPolicies` **by name**), then **Alembic's own
+prose**. An earlier shared `Doctrine` layer had nothing to bind — Morgana's binds global policies to
+turn machinery Alembic does not have.
+
+**Beside the names, the primer: the framework described rather than obeyed.** A policy name alone
+forbade subjects the model could not name — a prohibition on `ToolGrounding` is unenforceable by a
+reader never told what `ToolGrounding` settles. So the `MorganaPrimer` prompt carries one
+author-facing line per policy, keyed by the policy's own name, plus what no policy states: how a
+message finds its agent, in what order a turn is formed, what the runtime splices into the prose
+written here and what every agent can already do with no tool declared for it. The names are
+`morgana.json`'s and a mismatch between the two sides throws rather than reaching an author.
+
+**Every pass that judges or writes an agent's prose reads it**, the interview inside her fence and —
+without her voice, since one answers JSON and the other writes for an agent — the coherence pass and
+the one that applies its findings. A pass asked whether a sentence restates a framework rule, holding
+no account of what the framework rules are, decides by resemblance.
+
+**It is authored, not copied: the mood is the whole of why.** The framework's rules are written
+in the imperative to an agent taking a turn; handed over as they stand they are orders Alembic has no
+turn to carry out, which is how the non-local contradictions get manufactured. Restated in the
+descriptive third person the same facts stop being orders and become knowledge of the world the
+authored agents will live in. That is also why `Injections` reach the primer as *facts* — a
+context-scoped parameter gains a line, a colleague's territory is read by another agent — and never
+as the splice templates they are.
 
 **The second layer is stored deduplicated, read as one.** The passes differ only in which tools they
 hold, so the identical half lives once and a pass carries only what is its own; the two are merged
@@ -64,9 +84,10 @@ hold, so the identical half lives once and a pass carries only what is its own; 
 clauses inside shared prose, both jobs sat in every pass — which is how the model twice opened a
 fully written agent as though blank.
 
-What stays out of the top layer: the policies' bodies and her `Formatting`. Both govern a **channel
-turn** Alembic does not have and handing a model rules about things that do not exist in its world is
-the most direct way to manufacture the non-local contradictions this project exists to avoid.
+What stays out of the top layer: the policies' bodies, the injection templates and her `Formatting`.
+All govern a **channel turn** Alembic does not have and handing a model rules about things that do
+not exist in its world is the most direct way to manufacture the non-local contradictions this
+project exists to avoid.
 
 ### The sections and staying inside the universe
 
@@ -234,7 +255,14 @@ fact — *nothing of this agent is written yet* or *this agent already exists an
 
 Each pass is a **fresh agent and a fresh session** by design: a pass carrying the whole interview in
 its context spends it re-litigating decisions already taken. What crosses a boundary is the
-*configuration*, read as settled fact.
+*configuration*, read as settled fact — and, beside it, **what has been found out about the client's
+work**: `DomainDraft.Learned` for the business, `AgentDraft.Known` for each desk, every fact filed
+under a subject and marked whether the client said it or Alembic read it off their upload. The
+transcript still never crosses. The distinction is the whole of it: a decision re-read is a decision
+re-argued, where the trade is what the next question has to be made of — a pass that does not know
+there is a pastry counter asks a baker what a system ought to be able to check. A step opens holding
+its own desk and the business whole, the other desks by subject alone and `RecallDesk` for when one
+of those subjects bears on the question in hand.
 
 ### The map first, then the agents
 

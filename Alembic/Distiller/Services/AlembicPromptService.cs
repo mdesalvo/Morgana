@@ -44,6 +44,21 @@ public class AlembicPromptService : IAlembicPromptService
     /// <inheritdoc cref="ComposingPromptId" />
     private const string CorrectingPromptId = "Correcting";
 
+    /// <summary>
+    /// The prompt holding what Alembic knows about the framework its agents will run under: how a
+    /// message reaches one, how a turn is formed around it, what the runtime splices into the prose
+    /// written here and what every agent can already do without a tool being declared for it.
+    /// </summary>
+    /// <remarks>
+    /// Authored here rather than read out of <c>morgana.json</c> and that is the whole point of it.
+    /// The framework's own rules are written in the imperative to an agent taking a turn; handed
+    /// over as they stand they are orders Alembic has no turn to carry out, which is the way to
+    /// manufacture exactly the non-local contradictions this project exists to avoid. Restated in
+    /// the descriptive third person the same facts stop being orders and become knowledge of the
+    /// world the authored agents will live in, which is what an author needs and never had.
+    /// </remarks>
+    private const string MorganaPrimerPromptId = "MorganaPrimer";
+
     // Fences, in the framework's own idiom and for the framework's own reason: two layers carry
     // overlapping section labels and without a boundary the composed prompt shows [PERSONALITY]
     // twice with nothing saying which is which.
@@ -62,6 +77,19 @@ public class AlembicPromptService : IAlembicPromptService
         "======== FENCE: MORGANA — WHOSE VESSEL YOU ARE ========\n" +
         "You are an instrument of Morgana. This is her voice and it is yours: it is not a description of someone else and it is not overridable.";
     private const string MorganaLayerFooter = "======== END OF FENCE ========";
+
+    // The one place in the fence that is not her voice. Everything above it is Morgana speaking and
+    // binding; what follows is the framework described so an author can write against it. An author
+    // reading it as one more thing to obey would start writing turn machinery into an agent's own
+    // prose — the exact defect the primer exists to prevent.
+    private const string MorganaPrimerHeader =
+        "-------- HOW SHE RUNS WHAT YOU WRITE --------\n" +
+        "Fact about the world your agents will live in, not instruction to you.";
+
+    // The primer closes on its own mark because two of its readers stand outside the fence: the
+    // coherence pass and the one that applies its findings get the framework without Morgana's
+    // voice, and an unterminated block of world facts would run straight into their own prose.
+    private const string MorganaPrimerFooter = "-------- END OF WHAT SHE ALREADY DOES --------";
     private const string AlembicLayerHeader =
         "======== ALEMBIC ========\n" +
         "What follows specialises Morgana's voice for the step of the interview you are conducting right now. It adds that and NOTHING ELSE. It never contradicts the layer above.";
@@ -112,7 +140,7 @@ public class AlembicPromptService : IAlembicPromptService
         sb.AppendLine();
         sb.AppendLine(morgana.Personality);
         sb.AppendLine();
-        sb.AppendLine(BindingPolicies(morgana));
+        sb.AppendLine(await ComposeFrameworkPrimerAsync());
         sb.AppendLine();
         sb.AppendLine(MorganaLayerFooter);
         sb.AppendLine();
@@ -134,6 +162,25 @@ public class AlembicPromptService : IAlembicPromptService
         return sb.ToString();
     }
 
+    /// <inheritdoc />
+    /// <returns>The framework as fact: how a message finds its agent, how a turn is formed around
+    /// it, what the runtime splices into the prose written here, what every agent can already do and
+    /// what each of Morgana's policies settles above every agent.</returns>
+    public async Task<string> ComposeFrameworkPrimerAsync()
+    {
+        Records.Prompt morgana = await morganaPrompt.Value;
+
+        StringBuilder sb = new StringBuilder();
+        sb.AppendLine(MorganaPrimerHeader);
+        sb.AppendLine();
+        sb.AppendLine(Resolve(MorganaPrimerPromptId).Target);
+        sb.AppendLine();
+        sb.AppendLine(BindingPolicies(morgana));
+        sb.AppendLine(MorganaPrimerFooter);
+
+        return sb.ToString().TrimEnd();
+    }
+
     /// <summary>
     /// The two policies where the exception below applies: their MECHANIC is fixed above the agent,
     /// but which of a domain's own moments deserve one is not something the framework can know —
@@ -143,16 +190,18 @@ public class AlembicPromptService : IAlembicPromptService
     private static readonly string[] ExpressivenessPolicies = ["QuickReplyDoctrine", "RichCardUsage"];
 
     /// <summary>
-    /// Names the policies already binding on every agent Alembic writes.
+    /// States the policies already binding on every agent Alembic writes, each under the one line
+    /// the primer gives it.
     /// </summary>
     /// <remarks>
-    /// Names only, for every policy except the two named in <see cref="ExpressivenessPolicies"/>.
-    /// What Alembic has to know for the rest is which subjects are settled above the agent, so that
-    /// it writes none of them again; how they are settled is the agent's business at runtime and
-    /// not the author's and the bodies run to some 14 000 characters of turn mechanics Alembic has
-    /// no turn to apply them to.
+    /// The names are <c>morgana.json</c>'s, which is what makes them authoritative; the line beside
+    /// each is Alembic's own reading of that policy, addressed to whoever is writing an agent. A
+    /// bare list of names was the whole of this block once and it forbade subjects the model could
+    /// not name: a prohibition on <c>ToolGrounding</c> is unenforceable by a reader who has never
+    /// been told what <c>ToolGrounding</c> settles. The bodies still stay out — 14 000 characters
+    /// of turn mechanics for a process that takes no turn.
     /// </remarks>
-    private static string BindingPolicies(Records.Prompt morgana)
+    private string BindingPolicies(Records.Prompt morgana)
     {
         List<Records.GlobalPolicy> policies =
             morgana.GetAdditionalPropertyOrDefault<List<Records.GlobalPolicy>>(Constants.PromptProperties.GlobalPolicies, []);
@@ -160,33 +209,59 @@ public class AlembicPromptService : IAlembicPromptService
         if (policies.Count == 0)
             return string.Empty;
 
-        string[] silent = [.. policies.Select(p => p.Name).Where(n => !ExpressivenessPolicies.Contains(n))];
-        string[] expressive = [.. policies.Select(p => p.Name).Where(n => ExpressivenessPolicies.Contains(n))];
+        Dictionary<string, string> glosses = Glosses();
+
+        // A policy added to the framework and not to the primer would reach the author as a name
+        // with nothing behind it, which is the state this block was rebuilt to leave; one glossed
+        // here and since removed from the framework teaches a rule that no longer binds. Both are
+        // authoring defects nothing downstream can notice, so both stop the interview here.
+        string[] unglossed = [.. policies.Select(policy => policy.Name).Where(name => !glosses.ContainsKey(name))];
+        string[] stale = [.. glosses.Keys.Where(name => !policies.Any(policy => policy.Name == name))];
+
+        if (unglossed.Length > 0 || stale.Length > 0)
+            throw new InvalidOperationException(
+                $"The {MorganaPrimerPromptId} prompt no longer matches morgana.json's policies — "
+                + $"missing a line for: {string.Join(", ", unglossed)}; carrying a line for policies that no longer exist: {string.Join(", ", stale)}.");
+
+        string[] silent = [.. policies.Select(policy => policy.Name).Where(name => !ExpressivenessPolicies.Contains(name))];
+        string[] expressive = [.. policies.Select(policy => policy.Name).Where(name => ExpressivenessPolicies.Contains(name))];
 
         StringBuilder sb = new StringBuilder();
 
         if (silent.Length > 0)
         {
-            sb.Append("ALREADY BINDING on every agent written here, stated above it and with more authority: ")
-              .Append(string.Join(", ", silent))
-              .Append(". Never write a rule about any of these subjects into an agent's own prose.");
+            sb.AppendLine("ALREADY BINDING on every agent written here, stated above it and with more authority. Never write a rule about any of these subjects into an agent's own prose — what each of them already settles:");
+            AppendGlossed(sb, silent, glosses);
         }
 
         if (expressive.Length > 0)
         {
-            if (sb.Length > 0)
-                sb.Append(' ');
-
-            sb.Append("ALSO ALREADY BINDING, but not silently: ")
-              .Append(string.Join(", ", expressive))
-              .Append(". Their MECHANIC is fixed above the agent and never yours to restate — but which of ")
-              .Append("this domain's own moments earns a closed set of buttons, or a card, is exactly what an ")
-              .Append("agent's own author is expected to say. Where the agent being written has one, name it, ")
-              .Append("in its own Formatting, the way a hand-authored agent already does.");
+            sb.AppendLine("ALSO ALREADY BINDING, but not silently. Their MECHANIC is fixed above the agent and never yours to restate, while what does belong to an agent's own author is named in each:");
+            AppendGlossed(sb, expressive, glosses);
         }
 
-        return sb.ToString();
+        return sb.ToString().TrimEnd();
     }
+
+    /// <summary>
+    /// Lists policies one per line, each carrying what it settles.
+    /// </summary>
+    private static void AppendGlossed(StringBuilder sb, string[] names, Dictionary<string, string> glosses)
+    {
+        foreach (string name in names)
+            sb.Append("- ").Append(name).Append(" — ").AppendLine(glosses[name]);
+
+        sb.AppendLine();
+    }
+
+    /// <summary>
+    /// What each framework policy settles, said once for an author rather than for an agent taking
+    /// a turn, keyed by the policy's own name in <c>morgana.json</c>.
+    /// </summary>
+    private Dictionary<string, string> Glosses() =>
+        Resolve(MorganaPrimerPromptId)
+            .GetAdditionalPropertyOrDefault<List<Records.GlobalPolicy>>(Constants.PromptProperties.GlobalPolicies, [])
+            .ToDictionary(policy => policy.Name, policy => policy.Description);
 
     /// <summary>
     /// Appends one section of the composed prompt: what Alembic always says under this label, then
