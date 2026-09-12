@@ -216,7 +216,7 @@ public class AlembicPromptService : IAlembicPromptService
         // here and since removed from the framework teaches a rule that no longer binds. Both are
         // authoring defects nothing downstream can notice, so both stop the interview here.
         string[] unglossed = [.. policies.Select(policy => policy.Name).Where(name => !glosses.ContainsKey(name))];
-        string[] stale = [.. glosses.Keys.Where(name => !policies.Any(policy => policy.Name == name))];
+        string[] stale = [.. glosses.Keys.Where(name => policies.All(policy => policy.Name != name))];
 
         if (unglossed.Length > 0 || stale.Length > 0)
             throw new InvalidOperationException(

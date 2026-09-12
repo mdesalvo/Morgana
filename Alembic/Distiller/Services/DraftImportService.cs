@@ -151,9 +151,9 @@ public class DraftImportService : IDraftImportService
                                             .ToDictionary(pair => pair.Key, pair => pair.Value))
                       .Where(entry => entry.Count > 0)];
 
-        foreach (string key in unmodelled.SelectMany(entry => entry.Keys))
-            notices.Add($"Agent '{prompt.ID}' declares '{key}', which Alembic does not model. "
-                        + "It will be written back exactly as it was read.");
+        notices.AddRange(
+            unmodelled.SelectMany(entry => entry.Keys)
+                      .Select(key => $"Agent '{prompt.ID}' declares '{key}', which Alembic does not model. It will be written back exactly as it was read."));
 
         return new AgentDraft
         {

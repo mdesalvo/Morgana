@@ -132,21 +132,15 @@ public class DraftValidationService : IDraftValidationService
             draft.Intents.Where(i => !string.IsNullOrWhiteSpace(i.Name)).Select(i => i.Name!),
             StringComparer.OrdinalIgnoreCase);
 
-        foreach (IntentDraft intent in draft.Intents.Where(i =>
-                     !string.IsNullOrWhiteSpace(i.Name) && !agentIds.Contains(i.Name!)))
-        {
-            findings.Add(new ValidationFinding(FindingSeverity.Error, $"intent '{intent.Name}'",
-                "No agent handles this intent.",
-                "HandlesIntentAgentRegistryService checks this in both directions at startup and throws on a mismatch."));
-        }
+        findings.AddRange(
+            draft.Intents.Where(i => !string.IsNullOrWhiteSpace(i.Name)
+                                       && !agentIds.Contains(i.Name!))
+                         .Select(intent => new ValidationFinding(FindingSeverity.Error, $"intent '{intent.Name}'", "No agent handles this intent.", "HandlesIntentAgentRegistryService checks this in both directions at startup and throws on a mismatch.")));
 
-        foreach (AgentDraft agent in draft.Agents.Where(a =>
-                     !string.IsNullOrWhiteSpace(a.ID) && !intentNames.Contains(a.ID!)))
-        {
-            findings.Add(new ValidationFinding(FindingSeverity.Error, $"agent '{agent.ID}'",
-                "No intent declares this agent.",
-                "An agent nothing routes to is unreachable and the startup registry treats it as a configuration error rather than dead weight."));
-        }
+        findings.AddRange(
+            draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)
+                                      && !intentNames.Contains(a.ID!))
+                        .Select(agent => new ValidationFinding(FindingSeverity.Error, $"agent '{agent.ID}'", "No intent declares this agent.", "An agent nothing routes to is unreachable and the startup registry treats it as a configuration error rather than dead weight.")));
     }
 
     /// <summary>

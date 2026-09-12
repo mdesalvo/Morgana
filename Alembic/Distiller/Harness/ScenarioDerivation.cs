@@ -223,6 +223,10 @@ public static class ScenarioDerivation
     {
         HashSet<string> keys = new(StringComparer.Ordinal);
 
+        Walk(node);
+
+        return keys;
+
         void Walk(YamlNode? current)
         {
             switch (current)
@@ -248,9 +252,5 @@ public static class ScenarioDerivation
                 // switch simply falls through and the walk on this branch ends here.
             }
         }
-
-        Walk(node);
-
-        return keys;
     }
 }

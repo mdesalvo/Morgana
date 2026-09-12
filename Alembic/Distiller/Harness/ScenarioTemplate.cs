@@ -129,14 +129,6 @@ public sealed record ScenarioTemplate(
             current?.AppendLine().Append(content);
         }
 
-        // Local rather than a private method: it closes over `directives` and `name`, both of which
-        // only exist for the duration of this one parse, so lifting it out would mean threading both
-        // through as parameters for no reader's benefit.
-        string Directive(string key) =>
-            directives.TryGetValue(key, out StringBuilder? value) && value.Length > 0
-                ? value.ToString().Trim()
-                : throw new InvalidOperationException($"Scenario template '{name}' declares no {key}.");
-
         string requires = Directive("requires");
 
         return new ScenarioTemplate(
@@ -152,5 +144,12 @@ public sealed record ScenarioTemplate(
             // is expected to — Trim() only exists to drop the leading/trailing blank lines the header
             // parsing loop can leave behind, not to change the shape of the scenario itself.
             body.ToString().Trim() + "\n");
+
+        #region Locals
+        string Directive(string key) =>
+            directives.TryGetValue(key, out StringBuilder? value) && value.Length > 0
+                ? value.ToString().Trim()
+                : throw new InvalidOperationException($"Scenario template '{name}' declares no {key}.");
+        #endregion
     }
 }

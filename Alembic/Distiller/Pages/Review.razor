@@ -98,7 +98,7 @@
             <div class="aspects">
                 @foreach ((string id, string label, string summary, bool real) in AspectRows())
                 {
-                    List<(CoherenceFinding Finding, int Index)> group = FindingsFor(id).ToList();
+                    List<(CoherenceFinding Finding, int Index)> group = [.. FindingsFor(id)];
                     bool ranThis = coherence is { Error: null } && (ran.Contains(id) || group.Count > 0);
                     bool open = expanded.Contains(id);
 

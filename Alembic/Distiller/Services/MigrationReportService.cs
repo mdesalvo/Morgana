@@ -69,14 +69,11 @@ public class MigrationReportService : IMigrationReportService
                     "The classifier's description changed. Nothing to compile; routing behaviour changes from the next conversation."));
         }
 
-        foreach (IntentDraft gone in baseline.Intents.Where(i =>
-                     !string.IsNullOrWhiteSpace(i.Name)
-                     && !string.Equals(i.Name, DomainDraft.FallbackIntent, StringComparison.OrdinalIgnoreCase)
-                     && Find(draft.Intents, i.Name) is null))
-        {
-            entries.Add(new MigrationEntry(MigrationKind.Intent, gone.Name!, MigrationChange.Removed,
-                "Removed. Any [HandlesIntent] agent still declaring it fails startup: HandlesIntentAgentRegistryService checks the pairing in both directions."));
-        }
+        entries.AddRange(
+            baseline.Intents.Where(i => !string.IsNullOrWhiteSpace(i.Name)
+                                         && !string.Equals(i.Name, DomainDraft.FallbackIntent, StringComparison.OrdinalIgnoreCase)
+                                         && Find(draft.Intents, i.Name) is null)
+                            .Select(gone => new MigrationEntry(MigrationKind.Intent, gone.Name!, MigrationChange.Removed, "Removed. Any [HandlesIntent] agent still declaring it fails startup: HandlesIntentAgentRegistryService checks the pairing in both directions.")));
     }
 
     /// <summary>
@@ -118,24 +115,17 @@ public class MigrationReportService : IMigrationReportService
             // downloaded. Said on every report because a system entry that was never added is a
             // startup failure and one added under a differently spelled name is the same failure
             // wearing a plausible configuration.
-            foreach (Morgana.AI.Records.PeerReference colleague in agent.Code.Consults.Where(c => c.Instance is not null))
-                entries.Add(new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised,
-                    $"Consults '{colleague.Intent}' at system '{colleague.Instance}'. Declare that system under "
-                    + $"Morgana:AgentToAgent:Partners with its Url, the key you share with it and \"OutboundPolicy\": {{ \"Enabled\": true }}, under exactly the name "
-                    + $"'{colleague.Instance}' — spelling and spacing included, or startup refuses the agent. Neither the "
-                    + "address nor the key is in this archive. That the system really publishes an agent for "
-                    + $"'{colleague.Intent}' is its own card's word, read on the first consultation: a mistake there is a "
-                    + "warning at run time and the colleague quietly missing, not a startup error."));
+            entries.AddRange(
+                agent.Code.Consults.Where(c => c.Instance is not null)
+                                   .Select(colleague => new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised, $"Consults '{colleague.Intent}' at system '{colleague.Instance}'. Declare that system under " + $"Morgana:AgentToAgent:Partners with its Url, the key you share with it and \"OutboundPolicy\": {{ \"Enabled\": true }}, under exactly the name " + $"'{colleague.Instance}' — spelling and spacing included, or startup refuses the agent. Neither the " + "address nor the key is in this archive. That the system really publishes an agent for " + $"'{colleague.Intent}' is its own card's word, read on the first consultation: a mistake there is a " + "warning at run time and the colleague quietly missing, not a startup error.")));
 
             CompareTools(agent, was, entries);
         }
 
-        foreach (AgentDraft gone in baseline.Agents.Where(a =>
-                     !string.IsNullOrWhiteSpace(a.ID) && Find(draft.Agents, a.ID) is null))
-        {
-            entries.Add(new MigrationEntry(MigrationKind.Agent, gone.ID!, MigrationChange.Removed,
-                "Removed from the configuration. Delete its agent and tool classes: an agent class with no intent behind it fails startup."));
-        }
+        entries.AddRange(
+            baseline.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)
+                                         && Find(draft.Agents, a.ID) is null)
+                           .Select(gone => new MigrationEntry(MigrationKind.Agent, gone.ID!, MigrationChange.Removed, "Removed from the configuration. Delete its agent and tool classes: an agent class with no intent behind it fails startup.")));
     }
 
     /// <summary>
@@ -189,13 +179,10 @@ public class MigrationReportService : IMigrationReportService
                     "Description changed. It reaches the model through agents.json and the schema, so nothing needs rebuilding."));
         }
 
-        foreach (ToolDraft gone in before.Where(t =>
-                     !string.IsNullOrWhiteSpace(t.Name)
-                     && !agent.Tools.Any(x => string.Equals(x.Name, t.Name, StringComparison.Ordinal))))
-        {
-            entries.Add(new MigrationEntry(MigrationKind.Signature, $"{agent.ID}.{gone.Name}", MigrationChange.Removed,
-                $"Gone from the configuration. Its generated declaration disappears, so `{gone.Name}` in the half you own becomes an orphan method — delete it or the partial no longer matches."));
-        }
+        entries.AddRange(
+            before.Where(t => !string.IsNullOrWhiteSpace(t.Name)
+                                && !agent.Tools.Any(x => string.Equals(x.Name, t.Name, StringComparison.Ordinal)))
+                  .Select(gone => new MigrationEntry(MigrationKind.Signature, $"{agent.ID}.{gone.Name}", MigrationChange.Removed, $"Gone from the configuration. Its generated declaration disappears, so `{gone.Name}` in the half you own becomes an orphan method — delete it or the partial no longer matches.")));
     }
 
     /// <summary>
