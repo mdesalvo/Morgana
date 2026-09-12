@@ -109,6 +109,34 @@ public sealed class ScenarioVocabularyTests
     }
 
     [Fact]
+    public void Several_scenarios_in_one_file_are_reported_rather_than_shipped_as_one()
+    {
+        // The harness loads the first document of a file and never sees the rest, so a derivation
+        // that answered a template with three instances of its use-case ships as one scenario and
+        // two silences. Taken off a real emit, where exactly that reached a client.
+        DerivedScenario derivation = ScenarioDerivation.Check(
+            ScenarioTemplateLibrary.Vocabulary,
+            "ordini-boundary-refusal",
+            Derived + "\n\n---\n\n" + Derived.Replace("boundary-refusal", "boundary-refusal-2", StringComparison.Ordinal));
+
+        Assert.Contains("only the first", derivation.Problem ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_markdown_fence_that_travelled_with_the_answer_is_reported()
+    {
+        // Stripping one that wraps the whole reply happens upstream; this is the shape that gets
+        // past it — bare at the top, fenced from the second scenario on — and three backticks in a
+        // YAML file mean it never loads at all.
+        DerivedScenario derivation = ScenarioDerivation.Check(
+            ScenarioTemplateLibrary.Vocabulary,
+            "eventi-confirmation-before-commit",
+            Derived + "\n\n```\n");
+
+        Assert.Contains("fence", derivation.Problem ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_vocabulary_is_exactly_what_the_templates_themselves_use()
     {
         // The union is the whole line between an assertion and the appearance of one, and it is read

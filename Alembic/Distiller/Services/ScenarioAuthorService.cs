@@ -84,6 +84,10 @@ public class ScenarioAuthorService : IScenarioAuthorService
         // leaves the client anything is what decides how it ends, below.
         int failures = 0;
 
+        // The file names already written, so a scenario the model wrote beyond what was asked never
+        // lands on one of them.
+        HashSet<string> taken = [];
+
         foreach (ScenarioTemplate template in ScenarioTemplateLibrary.For(agent))
         {
             string id = $"{intentName}-{template.Name}";
@@ -121,7 +125,14 @@ public class ScenarioAuthorService : IScenarioAuthorService
                 break;
             }
 
-            DerivedScenario derivation = ScenarioDerivation.Check(template.Keys, id, answer);
+            // A template asks for one scenario and a model that reads two instances of the use-case
+            // in the domain answers with two. Split before checking: packed into one file the harness
+            // loads the first and everything after it asserts nothing, which is the silent loss this
+            // whole class exists to prevent one level down.
+            string[] derived = [.. Documents(answer)];
+
+            DerivedScenario derivation = ScenarioDerivation.Check(
+                template.Keys, id, derived.Length > 0 ? derived[0] : answer);
 
             if (derivation.NotApplicable is { } reason)
             {
@@ -148,6 +159,13 @@ public class ScenarioAuthorService : IScenarioAuthorService
                     template.Name, agent.ID, problem);
 
             files.Add(new EmittedFile($"Scenarios/{id}.yaml", Flag(derivation, template.Name), FileOwnership.Client));
+            taken.Add($"Scenarios/{id}.yaml");
+
+            // Whatever the model wrote past the first instance is a scenario of this domain that no
+            // template anticipated, which is exactly what the discretionary pass produces — so it is
+            // filed the same way and held to the same whole vocabulary.
+            foreach (string extra in derived.Skip(1))
+                Beyond(files, taken, extra, intentName, agent);
         }
 
         files.AddRange(await DiscretionaryAsync(chatClient, system, domain, intentName, agent, files, cancellationToken));
@@ -207,35 +225,43 @@ public class ScenarioAuthorService : IScenarioAuthorService
         HashSet<string> taken = [.. baseline.Select(f => f.Path)];
 
         foreach (string document in Documents(answer))
-        {
-            // The model's own id says what it thought it was writing, which is the only name a
-            // reader would look for the file under. The shape of it is Alembic's, always: the
-            // harness loads by file name and a name out of a model's output is one nothing agrees on.
-            string id = Identify(document, intentName, taken);
-
-            DerivedScenario derivation = ScenarioDerivation.Check(
-                ScenarioTemplateLibrary.Vocabulary, id, document);
-
-            if (derivation.NotApplicable is not null || derivation.Content is null)
-            {
-                if (derivation.Content is null && derivation.NotApplicable is null)
-                    logger.LogWarning(
-                        "A discretionary scenario for {AgentId} produced nothing usable: {Problem}",
-                        agent.ID, derivation.Problem);
-
-                continue;
-            }
-
-            if (derivation.Problem is { } problem)
-                logger.LogWarning(
-                    "The discretionary scenario {Id} for {AgentId} ships flagged: {Problem}",
-                    id, agent.ID, problem);
-
-            taken.Add($"Scenarios/{id}.yaml");
-            files.Add(new EmittedFile($"Scenarios/{id}.yaml", Flag(derivation, "domain"), FileOwnership.Client));
-        }
+            Beyond(files, taken, document, intentName, agent);
 
         return files;
+    }
+
+    /// <summary>
+    /// Files one scenario no template asked for, under a name of Alembic's making.
+    /// </summary>
+    /// <remarks>
+    /// The model's own id says what it thought it was writing, which is the only name a reader would
+    /// look for the file under; the shape of it is Alembic's, always, since the harness loads by file
+    /// name and a name out of a model's output is one nothing agrees on. Held to the whole library
+    /// vocabulary rather than to one template's keys: a scenario nobody anticipated may need any key
+    /// Alembic can vouch for and none it cannot.
+    /// </remarks>
+    private void Beyond(List<EmittedFile> files, HashSet<string> taken, string document, string intentName, AgentDraft agent)
+    {
+        string id = Identify(document, intentName, taken);
+
+        DerivedScenario derivation = ScenarioDerivation.Check(ScenarioTemplateLibrary.Vocabulary, id, document);
+
+        if (derivation.NotApplicable is not null || derivation.Content is null)
+        {
+            if (derivation.Content is null && derivation.NotApplicable is null)
+                logger.LogWarning(
+                    "A scenario for {AgentId} beyond the templates produced nothing usable: {Problem}",
+                    agent.ID, derivation.Problem);
+
+            return;
+        }
+
+        if (derivation.Problem is { } problem)
+            logger.LogWarning(
+                "The scenario {Id} for {AgentId} ships flagged: {Problem}", id, agent.ID, problem);
+
+        taken.Add($"Scenarios/{id}.yaml");
+        files.Add(new EmittedFile($"Scenarios/{id}.yaml", Flag(derivation, "domain"), FileOwnership.Client));
     }
 
     /// <summary>
@@ -275,6 +301,10 @@ public class ScenarioAuthorService : IScenarioAuthorService
     private static IEnumerable<string> Documents(string answer) =>
         answer.Split("\n---", StringSplitOptions.RemoveEmptyEntries)
             .Select(document => document.TrimStart('-', '\n', '\r', ' ').TrimEnd())
+            // Each one, not the answer as a whole: a model that starts bare and fences the scenarios
+            // after the first gets past a strip that only looks at the first three characters of the
+            // reply, and every fenced one after that is a file of backticks that never loads.
+            .Select(StreamedCompletion.Unfenced)
             .Where(document => document.Length > 0);
 
     /// <summary>

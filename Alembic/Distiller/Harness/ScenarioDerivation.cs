@@ -67,6 +67,7 @@ public static class ScenarioDerivation
         // would want them: what makes the file useless first, what makes it weaker after.
         string? problem =
             Unresolved(text)
+            ?? Fenced(text)
             ?? Structure(allowed, text, out YamlMappingNode? root)
             ?? Substance(root);
 
@@ -86,15 +87,29 @@ public static class ScenarioDerivation
             : null;
 
     /// <summary>
+    /// Catches a markdown fence that travelled with the answer.
+    /// </summary>
+    /// <remarks>
+    /// Three backticks are not YAML, so a document carrying them does not load at all. Stripping one
+    /// wrapping the whole answer happens upstream; this catches the shape that gets past it — an
+    /// answer that starts bare and fences the scenarios after the first.
+    /// </remarks>
+    private static string? Fenced(string text) =>
+        text.Contains("```", StringComparison.Ordinal)
+            ? "it carries a markdown fence, which is not YAML: the scenario will not load until the backticks are taken out"
+            : null;
+
+    /// <summary>
     /// Parses the derivation and holds it to the vocabulary it was allowed.
     /// </summary>
     private static string? Structure(IReadOnlySet<string> allowed, string text, out YamlMappingNode? root)
     {
         root = null;
+        int documents = 0;
 
         try
         {
-            root = Read(text);
+            root = Read(text, out documents);
         }
         catch (Exception ex)
         {
@@ -105,6 +120,13 @@ public static class ScenarioDerivation
 
         if (root is null)
             return "it is not a scenario document";
+
+        // One file is one scenario to the harness: its loader reads the first document and the rest
+        // of the file is never seen again. Several in one file is therefore not a formatting
+        // preference, it is coverage that loads, runs, passes and asserts nothing of what follows.
+        if (documents > 1)
+            return $"it holds {documents} scenarios in one file and the harness loads only the first, "
+                   + "so everything after the first '---' asserts nothing";
 
         List<string> invented = [.. Keys(root).Except(allowed, StringComparer.Ordinal).Order(StringComparer.Ordinal)];
 
@@ -168,12 +190,14 @@ public static class ScenarioDerivation
     /// <summary>
     /// Reads a document's root mapping, or null when there is none.
     /// </summary>
-    private static YamlMappingNode? Read(string yaml)
+    private static YamlMappingNode? Read(string yaml, out int documents)
     {
         YamlStream stream = [];
         stream.Load(new StringReader(yaml));
 
-        return stream.Documents.Count > 0 ? stream.Documents[0].RootNode as YamlMappingNode : null;
+        documents = stream.Documents.Count;
+
+        return documents > 0 ? stream.Documents[0].RootNode as YamlMappingNode : null;
     }
 
     /// <summary>
@@ -185,7 +209,7 @@ public static class ScenarioDerivation
     /// because a template Alembic ships put it there, having been written knowing the harness binds
     /// it.
     /// </remarks>
-    public static IReadOnlySet<string> KeysOf(string yaml) => Keys(Read(yaml));
+    public static IReadOnlySet<string> KeysOf(string yaml) => Keys(Read(yaml, out _));
 
     /// <summary>
     /// Every mapping key anywhere in a document.
