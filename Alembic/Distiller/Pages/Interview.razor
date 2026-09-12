@@ -62,6 +62,7 @@
                       Placing="@interviewState.Placing"
                       Quoted="@interviewState.Quoted"
                       Busy="isBusy"
+                      Failed="@(interviewState.Error is not null)"
                       Turn="interviewState.Exchanges"
                       OnAnswer="SendAsync"
                       OnChoose="ChooseAsync">

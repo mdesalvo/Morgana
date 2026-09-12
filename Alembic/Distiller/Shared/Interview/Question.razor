@@ -203,6 +203,13 @@
     public bool Busy { get; set; }
 
     /// <summary>
+    /// Whether the turn this box last sent came back as a failure, so what was typed is offered
+    /// again rather than asked for again.
+    /// </summary>
+    [Parameter]
+    public bool Failed { get; set; }
+
+    /// <summary>
     /// How many exchanges have happened. The caret follows it and nothing else.
     /// </summary>
     [Parameter]
@@ -275,12 +282,26 @@
     private int primedOn = -1;
 
     /// <summary>
+    /// What was last sent from this box, kept only until the turn it opened comes back.
+    /// </summary>
+    /// <remarks>
+    /// A turn given up on leaves the question exactly where it was and the box empty, so the client
+    /// is asked to type their answer a second time to find out whether it goes through — which, on
+    /// the turn after a wait long enough to be abandoned, is the moment they stop.
+    /// </remarks>
+    private string sent = string.Empty;
+
+    /// <summary>
     /// Loads the worked example into the box, once per question. Answered the same way the caret
     /// is: keyed on the turn, so a client mid-edit never has their own words replaced back under
     /// them by a render that changed nothing about the question.
     /// </summary>
     protected override void OnParametersSet()
     {
+        // Before the early return, which is keyed on a question that a failed turn never changed.
+        if (Failed && answer.Length == 0 && sent.Length > 0)
+            answer = sent;
+
         if (Turn == primedOn)
             return;
 
@@ -332,6 +353,7 @@
     {
         string said = Said;
 
+        sent = said;
         answer = string.Empty;
         touched = false;
         picked.Clear();

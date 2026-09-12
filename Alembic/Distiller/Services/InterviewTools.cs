@@ -65,6 +65,15 @@ public class InterviewTools
     /// <summary>The interview these tools write into — see the constructor.</summary>
     private readonly InterviewState interviewState;
 
+    /// <summary>
+    /// Whether this pass has already been handed Morgana's own layer of the composed prompt.
+    /// </summary>
+    /// <remarks>
+    /// One instance of these tools serves one pass, so this is exactly "has this pass seen it": a
+    /// step that reads the composed prompt twice pays for her half once.
+    /// </remarks>
+    private bool framework;
+
     /// <summary>The domain being built or evolved — see the constructor.</summary>
     private readonly IDraftStateService draftStateService;
 
@@ -961,7 +970,19 @@ public class InterviewTools
             interviewState.Agent,
             IsConsultedByOthers(interviewState.Agent));
 
-        return "This is the whole of what this agent's model will read:\n\n" + recap.SystemPrompt;
+        // Morgana's half is the same eleven thousand words for every agent of every domain and it is
+        // already in this pass's own context once it has been read once. Sending it again on the
+        // second reading — which the passes that hunt a sentence repeating hers are told to take —
+        // doubles the request for nothing: what changed between the two is the agent's own prose and
+        // only that. Whole the first time, because the comparison needs her words in front of it.
+        int domain = framework ? recap.SystemPrompt.LastIndexOf(TargetMarker, StringComparison.Ordinal) : -1;
+
+        framework = true;
+
+        return domain < 0
+            ? "This is the whole of what this agent's model will read:\n\n" + recap.SystemPrompt
+            : "Morgana's own layer above this one has not changed since you read it. This is the part "
+              + "that is yours, as her composer lays it out:\n\n" + recap.SystemPrompt[domain..];
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Distiller.Interfaces;
 using Distiller.Model;
 using Microsoft.Agents.AI;
@@ -122,6 +123,43 @@ public class InterviewService : IInterviewService
     public InterviewState? Current { get; private set; }
 
     /// <summary>
+    /// How long one turn of the interview may take before it is given up on.
+    /// </summary>
+    /// <remarks>
+    /// A provider that stalls answers nothing and reports nothing, so without this the client sits
+    /// in front of three breathing dots with no way to tell a slow turn from a dead one and no way
+    /// back: the page is waiting on a task that will never complete. Generous rather than tight —
+    /// a Performance-tier turn that reads a whole composed prompt is legitimately slow — because
+    /// what this exists to end is the wait with no end, not the wait that is long.
+    /// </remarks>
+    private readonly TimeSpan turnCeiling;
+
+    /// <summary>
+    /// Whether a turn of this interview is already running.
+    /// </summary>
+    /// <remarks>
+    /// The page disables its buttons while it waits, but a disabled button arrives one render late
+    /// and a press inside that window opened a second turn over the same state and the same session:
+    /// two passes advancing one agent, each overwriting what the other had just written. A second
+    /// gesture is refused here rather than queued — pressing twice for one action is the same
+    /// instruction arriving again, never a second instruction.
+    /// </remarks>
+    private int running;
+
+    /// <summary>Claims the interview for one turn, or reports that somebody else holds it.</summary>
+    private bool EnterTurn()
+    {
+        if (Interlocked.CompareExchange(ref running, 1, 0) == 0)
+            return true;
+
+        logger.LogWarning("A second gesture arrived while a turn was still running and was ignored");
+        return false;
+    }
+
+    /// <summary>Gives the interview back, whatever the turn did.</summary>
+    private void LeaveTurn() => Interlocked.Exchange(ref running, 0);
+    
+    /// <summary>
     /// Initializes the interview service.
     /// </summary>
     public InterviewService(
@@ -131,6 +169,7 @@ public class InterviewService : IInterviewService
         IRecapService recapService,
         ILLMService llmService,
         IDraftStateService draftStateService,
+        IConfiguration configuration,
         ILogger logger)
     {
         this.alembicPromptService = alembicPromptService;
@@ -140,10 +179,33 @@ public class InterviewService : IInterviewService
         this.llmService = llmService;
         this.draftStateService = draftStateService;
         this.logger = logger;
+        turnCeiling = TimeSpan.FromSeconds(configuration.GetValue("Alembic:Work:TurnSeconds", 180));
     }
 
     /// <inheritdoc />
     public async Task<InterviewState> StartAsync(CancellationToken cancellationToken = default)
+    {
+        if (!EnterTurn())
+            return Current ?? new InterviewState();
+
+        try
+        {
+            return await StartCoreAsync(cancellationToken);
+        }
+        finally
+        {
+            LeaveTurn();
+        }
+    }
+
+    /// <summary>
+    /// Opens the interview, with the turn already claimed by whoever called.
+    /// </summary>
+    /// <remarks>
+    /// Answering when nothing is open starts it, and that is one gesture rather than two, so the
+    /// claim cannot be taken twice on the way through.
+    /// </remarks>
+    private async Task<InterviewState> StartCoreAsync(CancellationToken cancellationToken)
     {
         Current = new InterviewState();
 
@@ -183,6 +245,24 @@ public class InterviewService : IInterviewService
     public async Task<bool> ReviseAsync(
         string agentID,
         CancellationToken cancellationToken = default)
+    {
+        if (!EnterTurn())
+            return true;
+
+        try
+        {
+            return await RevisedAsync(agentID, cancellationToken);
+        }
+        finally
+        {
+            LeaveTurn();
+        }
+    }
+
+    /// <summary>
+    /// Opens one agent of the domain for correction, with the turn already claimed.
+    /// </summary>
+    private async Task<bool> RevisedAsync(string agentID, CancellationToken cancellationToken)
     {
         if (draftStateService.Current is not { } draft)
             return false;
@@ -237,7 +317,25 @@ public class InterviewService : IInterviewService
     /// <inheritdoc />
     public async Task<InterviewState> AnswerAsync(string answer, CancellationToken cancellationToken = default)
     {
-        InterviewState interviewState = Current ?? await StartAsync(cancellationToken);
+        if (!EnterTurn())
+            return Current ?? new InterviewState();
+
+        try
+        {
+            return await AnsweredAsync(answer, cancellationToken);
+        }
+        finally
+        {
+            LeaveTurn();
+        }
+    }
+
+    /// <summary>
+    /// One answer, carried through every pass it settles.
+    /// </summary>
+    private async Task<InterviewState> AnsweredAsync(string answer, CancellationToken cancellationToken)
+    {
+        InterviewState interviewState = Current ?? await StartCoreAsync(cancellationToken);
 
         if (string.IsNullOrWhiteSpace(answer))
             return interviewState;
@@ -289,6 +387,24 @@ public class InterviewService : IInterviewService
 
     /// <inheritdoc />
     public async Task<bool> AcceptAsync(CancellationToken cancellationToken = default)
+    {
+        if (!EnterTurn())
+            return true;
+
+        try
+        {
+            return await AcceptedAsync(cancellationToken);
+        }
+        finally
+        {
+            LeaveTurn();
+        }
+    }
+
+    /// <summary>
+    /// Lets the agent in hand into the domain, with the turn already claimed.
+    /// </summary>
+    private async Task<bool> AcceptedAsync(CancellationToken cancellationToken)
     {
         if (Current is not { } interviewState)
             return false;
@@ -390,6 +506,24 @@ public class InterviewService : IInterviewService
 
     /// <inheritdoc />
     public async Task<bool> BackAsync(CancellationToken cancellationToken = default)
+    {
+        if (!EnterTurn())
+            return true;
+
+        try
+        {
+            return await SteppedBackAsync(cancellationToken);
+        }
+        finally
+        {
+            LeaveTurn();
+        }
+    }
+
+    /// <summary>
+    /// Steps back into the previous part of the interview, with the turn already claimed.
+    /// </summary>
+    private async Task<bool> SteppedBackAsync(CancellationToken cancellationToken)
     {
         if (Current is not { } interviewState)
             return false;
@@ -1052,10 +1186,22 @@ public class InterviewService : IInterviewService
         // the UI, so this is the one place that knows which panel rows actually changed this turn.
         Dictionary<string, string?> before = interviewState.Snapshot();
 
+        long startedAt = Stopwatch.GetTimestamp();
+        logger.LogInformation(
+            "{Pass} is answering {Length} characters from the client",
+            PassPromptIds[interviewState.Pass], message.Length);
+
         try
         {
+            using CancellationTokenSource bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            bounded.CancelAfter(turnCeiling);
+
             AgentResponse response = await agent.RunAsync(
-                new ChatMessage(ChatRole.User, message), session, cancellationToken: cancellationToken);
+                new ChatMessage(ChatRole.User, message), session, cancellationToken: bounded.Token);
+
+            logger.LogInformation(
+                "{Pass} answered in {Elapsed:0.0}s",
+                PassPromptIds[interviewState.Pass], Stopwatch.GetElapsedTime(startedAt).TotalSeconds);
 
             foreach ((string field, string? value) in interviewState.Snapshot())
                 if (!string.Equals(value, before[field], StringComparison.Ordinal))
@@ -1085,9 +1231,17 @@ public class InterviewService : IInterviewService
             interviewState.Traits = [.. interviewState.PendingTraits];
             interviewState.Chosen = false;
         }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogError(
+                "{Pass} was still waiting after {Elapsed:0.0}s and was given up on",
+                PassPromptIds[interviewState.Pass], Stopwatch.GetElapsedTime(startedAt).TotalSeconds);
+
+            interviewState.Error = "That turn took too long and was given up on. Your work is safe — send the answer again.";
+        }
         catch (Exception ex)
         {
-            logger.LogError(ex, "The interview turn failed");
+            logger.LogError(ex, "The interview turn failed after {Elapsed:0.0}s", Stopwatch.GetElapsedTime(startedAt).TotalSeconds);
             interviewState.Error = $"The turn could not be completed: {ex.Message}";
         }
 
@@ -1187,11 +1341,15 @@ public class InterviewService : IInterviewService
             AIFunctionArguments arguments,
             CancellationToken cancellationToken)
         {
+            long startedAt = Stopwatch.GetTimestamp();
+
+            logger.LogInformation("{Pass} is calling {Tool}({Arguments})", pass, Name, Written(arguments));
+
             object? answer = await base.InvokeCoreAsync(arguments, cancellationToken);
 
             logger.LogInformation(
-                "{Pass} called {Tool}({Arguments}) and was told: {Answer}",
-                pass, Name, Written(arguments), Short(answer?.ToString()));
+                "{Pass} called {Tool}({Arguments}) and was told, {Elapsed}ms later: {Answer}",
+                pass, Name, Written(arguments), Stopwatch.GetElapsedTime(startedAt).Milliseconds, Short(answer?.ToString()));
 
             return answer;
         }
