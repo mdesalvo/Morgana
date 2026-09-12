@@ -1,0 +1,22 @@
+@inherits LayoutComponentBase
+@inject IThemeService ThemeService
+
+@Body
+
+<FluentProviders />
+
+@code {
+    /// <summary>
+    /// The theme's seed: palette.css's --alembic-accent-deep, the violet the vessel is lit with.
+    /// </summary>
+    private const string Seed = "#8b5cf6";
+
+    /// <summary>
+    /// Grows Fluent's own colour ramp from the palette, so its controls stand in the same room.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await ThemeService.SetThemeAsync(new ThemeSettings(Seed, 0, 0, ThemeMode.Dark, true));
+    }
+}

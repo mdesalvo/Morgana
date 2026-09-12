@@ -1,0 +1,349 @@
+@inject IDraftValidationService DraftValidationService
+@inject ICoherenceService CoherenceService
+@inject ICoherenceApplyService CoherenceApplyService
+
+@*
+    Validation: the checks are chosen, run on demand and each keeps its own outcomes. Nothing is ticked
+    on arrival. A finding carries one action: Apply when a written fix exists, Go to section when the
+    rewrite is the client's. A fixed finding disappears.
+*@
+
+@{
+    IReadOnlyList<ValidationFinding> deterministic = DraftValidationService.Validate(Draft);
+    int chosen = rows.Count(row => row.Chosen);
+}
+
+<section class="open">
+    <div class="open-body">
+        <div class="vchecks">
+            @foreach (CheckRow row in rows)
+            {
+                List<ValidationFinding> own = row.Check is { } check ? [.. deterministic.Where(finding => finding.Check == check)] : [];
+                List<CoherenceFinding> judged = row.Check is null ? [.. coherence.Where(finding => finding.Kind == row.Id)] : [];
+                int count = own.Count + judged.Count;
+                bool ranThis = ran.Contains(row.Id);
+                bool errors = own.Any(finding => finding.Severity == FindingSeverity.Error);
+                bool isOpen = ranThis && count > 0 && open.Contains(row.Id);
+
+                <div class="vcheck">
+                    <div class="vhead">
+                        <FluentCheckbox @bind-Value="row.Chosen" Class="vbox" />
+
+                        <FluentButton Appearance="ButtonAppearance.Transparent" Class="name-btn"
+                                      Disabled="@(!ranThis || count == 0)" OnClick="() => Toggle(row)">
+                            <span class="vname">@row.Label</span>
+                            <FluentBadge Appearance="BadgeAppearance.Outline" Shape="BadgeShape.Circular"
+                                         Color="@(row.Check is null ? BadgeColor.Brand : BadgeColor.Subtle)">
+                                @(row.Check is null ? "judged by a model" : "decided by reading")
+                            </FluentBadge>
+
+                            @if (ranThis)
+                            {
+                                @if (count == 0)
+                                {
+                                    <span class="vres" data-kind="ok" title="Nothing found">✓</span>
+                                }
+                                else
+                                {
+                                    <span class="vres" data-kind="@(errors ? "err" : "warn")">@Outcome(count, errors)</span>
+                                }
+                            }
+
+                            <span class="chev">@(ranThis && count > 0 ? isOpen ? "▾" : "▸" : "")</span>
+                        </FluentButton>
+                    </div>
+
+                    @if (isOpen)
+                    {
+                        <div class="vbody">
+                            @foreach (ValidationFinding finding in own)
+                            {
+                                bool error = finding.Severity == FindingSeverity.Error;
+
+                                <div class="finding" data-kind="@(error ? "err" : "warn")">
+                                    <p class="finding-text">
+                                        <FluentBadge Appearance="BadgeAppearance.Tint" Color="@(error ? BadgeColor.Danger : BadgeColor.Warning)">
+                                            @(error ? "Error" : "Warning")
+                                        </FluentBadge>
+                                        @finding.Message <code class="finding-where">@finding.Where</code>
+                                    </p>
+                                    <FluentText As="TextTag.Paragraph" Italic="true" Color="Color.Lightweight" Class="because">
+                                        @(error ? "It must be fixed because" : "You may leave it as it is, but it is worth fixing because") @LowerFirst(finding.Because)
+                                    </FluentText>
+                                    <div class="fix">
+                                        <FluentText Italic="true" Color="Color.Lightweight" Class="fix-text">The rewrite is yours: the section opens and you come back here.</FluentText>
+                                        <FluentButton Appearance="ButtonAppearance.Outline" OnClick="() => OnGoTo.InvokeAsync(finding)">Go to section &rarr;</FluentButton>
+                                    </div>
+                                </div>
+                            }
+
+                            @foreach (CoherenceFinding finding in judged)
+                            {
+                                <div class="finding" data-kind="warn">
+                                    <p class="finding-text">
+                                        <FluentBadge Appearance="BadgeAppearance.Tint" Color="BadgeColor.Warning">Warning</FluentBadge>
+                                        @finding.What <code class="finding-where">@finding.Where</code>
+                                    </p>
+                                    <FluentText As="TextTag.Paragraph" Italic="true" Color="Color.Lightweight" Class="because">
+                                        You may leave it as it is, but it is worth fixing because @LowerFirst(finding.Why)
+                                    </FluentText>
+                                    <div class="fix">
+                                        <FluentText Italic="true" Color="Color.Lightweight" Class="fix-text">@finding.Fix</FluentText>
+                                        <FluentButton Appearance="ButtonAppearance.Outline" Loading="@(applying == finding)"
+                                                      Disabled="@(applying is not null)" OnClick="() => ApplyAsync(finding)">
+                                            Apply the correction
+                                        </FluentButton>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px" Class="run">
+            <FluentButton Appearance="ButtonAppearance.Primary" Disabled="@(chosen == 0 || running)" Loading="running" OnClick="RunAsync">
+                Run validation
+            </FluentButton>
+            <FluentText Color="Color.Lightweight">@(chosen == 0 ? "choose at least one check" : $"{chosen} of {rows.Count}")</FluentText>
+        </FluentStack>
+    </div>
+
+    <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Class="actions">
+        <FluentButton Appearance="ButtonAppearance.Primary" OnClick="() => OnNext.InvokeAsync()">Next &rarr;</FluentButton>
+        @Keep
+    </FluentStack>
+</section>
+
+@code {
+    /// <summary>
+    /// The domain being checked.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public DomainDraft Draft { get; set; } = default!;
+
+    /// <summary>
+    /// Taking the work away.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Keep { get; set; }
+
+    /// <summary>
+    /// Raised when the client moves on to the Archive.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnNext { get; set; }
+
+    /// <summary>
+    /// Raised with a finding whose rewrite is the client's, to open where it is written.
+    /// </summary>
+    [Parameter]
+    public EventCallback<ValidationFinding> OnGoTo { get; set; }
+
+    /// <summary>
+    /// Raised after a correction landed on the domain.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    /// <summary>
+    /// Raised with what happened, informative or refused.
+    /// </summary>
+    [Parameter]
+    public EventCallback<(string Message, bool Failed)> OnNotify { get; set; }
+
+    /// <summary>
+    /// One check the client can choose: a family decided by reading or a class judged by a model.
+    /// </summary>
+    private sealed class CheckRow
+    {
+        /// <summary>The key its outcomes are held under; for a judged class, the kind the model answers with.</summary>
+        public required string Id { get; init; }
+
+        /// <summary>What the row reads.</summary>
+        public required string Label { get; init; }
+
+        /// <summary>The family of deterministic findings; <c>null</c> for a class judged by a model.</summary>
+        public ValidationCheck? Check { get; init; }
+
+        /// <summary>Whether the client asked for it.</summary>
+        public bool Chosen { get; set; }
+    }
+
+    /// <summary>
+    /// The families decided by reading, named as the client reads them.
+    /// </summary>
+    private static readonly (ValidationCheck Check, string Label)[] Families =
+    [
+        (ValidationCheck.Intents, "Intents are named and described"),
+        (ValidationCheck.Routing, "Every intent has its agent"),
+        (ValidationCheck.Colleagues, "Every colleague can be reached"),
+        (ValidationCheck.Agents, "Agents' sections are written"),
+        (ValidationCheck.Tools, "Tools and parameters fit the code"),
+        (ValidationCheck.Code, "Class names can be C# identifiers")
+    ];
+
+    /// <summary>
+    /// Every check, in the order the client reads them.
+    /// </summary>
+    private readonly List<CheckRow> rows = [];
+
+    /// <summary>
+    /// The checks the last run carried: only those show outcomes.
+    /// </summary>
+    private readonly HashSet<string> ran = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The checks open on their findings.
+    /// </summary>
+    private readonly HashSet<string> open = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// What the model found and the client has not yet corrected.
+    /// </summary>
+    private List<CoherenceFinding> coherence = [];
+
+    /// <summary>
+    /// Corrections applied this sitting, so a later run tells a fixed finding from one still present.
+    /// </summary>
+    private readonly List<ResolvedCoherenceFinding> resolved = [];
+
+    /// <summary>
+    /// Whether a judged run is on the wire.
+    /// </summary>
+    private bool running;
+
+    /// <summary>
+    /// The correction being applied, so only one runs at a time.
+    /// </summary>
+    private CoherenceFinding? applying;
+
+    /// <summary>
+    /// Lays out the families decided by reading, then the classes the model's own prompt declares.
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        foreach ((ValidationCheck check, string label) in Families)
+            rows.Add(new CheckRow { Id = check.ToString(), Label = label, Check = check });
+
+        foreach (CoherenceAspect aspect in CoherenceService.Aspects)
+            rows.Add(new CheckRow { Id = aspect.Id, Label = aspect.Label });
+    }
+
+    /// <summary>
+    /// Runs the chosen checks: the ones decided by reading at once, the judged ones in one model pass.
+    /// </summary>
+    private async Task RunAsync()
+    {
+        List<CheckRow> chosen = [.. rows.Where(row => row.Chosen)];
+
+        if (chosen.Count == 0)
+            return;
+
+        ran.Clear();
+        ran.UnionWith(chosen.Where(row => row.Check is not null).Select(row => row.Id));
+
+        List<string> aspects = [.. chosen.Where(row => row.Check is null).Select(row => row.Id)];
+
+        if (aspects.Count > 0 && Draft.Agents.Count < 2)
+        {
+            await OnNotify.InvokeAsync(("One agent, so there is nothing to relate: the judged checks need two.", true));
+        }
+        else if (aspects.Count > 0)
+        {
+            running = true;
+            StateHasChanged();
+
+            CoherenceReport report;
+
+            try
+            {
+                report = await CoherenceService.ReviewAsync(Draft, aspects, resolved);
+            }
+            finally
+            {
+                running = false;
+            }
+
+            if (report.Error is { } failure)
+            {
+                await OnNotify.InvokeAsync((failure, true));
+            }
+            else
+            {
+                coherence = [.. report.Findings];
+                ran.UnionWith(aspects);
+
+                // A kind outside the classes asked for is kept under its own row rather than dropped.
+                foreach (string kind in coherence.Select(finding => finding.Kind).Distinct(StringComparer.OrdinalIgnoreCase)
+                             .Where(kind => rows.All(row => !string.Equals(row.Id, kind, StringComparison.OrdinalIgnoreCase))))
+                {
+                    rows.Add(new CheckRow { Id = kind, Label = kind, Chosen = true });
+                    ran.Add(kind);
+                }
+            }
+        }
+
+        // What came back with something opens on its own: it is what was asked.
+        IReadOnlyList<ValidationFinding> deterministic = DraftValidationService.Validate(Draft);
+        open.Clear();
+        open.UnionWith(rows.Where(row => ran.Contains(row.Id)
+                                         && (row.Check is { } check
+                                             ? deterministic.Any(finding => finding.Check == check)
+                                             : coherence.Any(finding => string.Equals(finding.Kind, row.Id, StringComparison.OrdinalIgnoreCase))))
+                           .Select(row => row.Id));
+
+        await OnNotify.InvokeAsync(("Validation run on the domain, with its exact words.", false));
+    }
+
+    /// <summary>
+    /// Applies one finding's own fix; an applied finding disappears.
+    /// </summary>
+    private async Task ApplyAsync(CoherenceFinding finding)
+    {
+        applying = finding;
+        CoherenceApplyResult result;
+
+        try
+        {
+            result = await CoherenceApplyService.ApplyAsync(Draft, finding);
+        }
+        finally
+        {
+            applying = null;
+        }
+
+        // Refreshed even after a declared failure: the applier may have written before it stopped.
+        await OnChanged.InvokeAsync();
+
+        if (result.Applied)
+        {
+            coherence.Remove(finding);
+            resolved.Add(new ResolvedCoherenceFinding(finding, result.Summary));
+        }
+
+        await OnNotify.InvokeAsync((result.Summary, !result.Applied));
+    }
+
+    /// <summary>
+    /// Opens or closes a check on its findings.
+    /// </summary>
+    private void Toggle(CheckRow row)
+    {
+        if (!open.Remove(row.Id))
+            open.Add(row.Id);
+    }
+
+    /// <summary>
+    /// A check's outcome in words, worst severity first.
+    /// </summary>
+    private static string Outcome(int count, bool errors) =>
+        count == 1 ? errors ? "1 error" : "1 warning" : $"{count} {(errors ? "errors" : "warnings")}";
+
+    /// <summary>
+    /// A reason lowered so it reads on from "because".
+    /// </summary>
+    private static string LowerFirst(string text) =>
+        string.IsNullOrEmpty(text) ? text : char.ToLowerInvariant(text[0]) + text[1..];
+}

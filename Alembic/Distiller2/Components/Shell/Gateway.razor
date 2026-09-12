@@ -1,0 +1,42 @@
+@*
+    A door: a drawn sigil, the name of the thing and the word for going through. Anything more and
+    the client is reading instead of choosing.
+*@
+
+<FluentCard Class="@(Primary ? "gateway primary-gateway" : "gateway")" OnClick="() => OnGo.InvokeAsync()" Role="link">
+    @Sigil
+    <FluentText As="TextTag.H2" Weight="TextWeight.Regular">@Title</FluentText>
+    <span class="go">@Go &rarr;</span>
+</FluentCard>
+
+@code {
+    /// <summary>
+    /// The drawn icon: typed alchemical glyphs have no font on most Linux desktops.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Sigil { get; set; }
+
+    /// <summary>
+    /// What going through this door does, in the client's words.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The word for going through.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public string Go { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether this is the door most people want, lit above the others.
+    /// </summary>
+    [Parameter]
+    public bool Primary { get; set; }
+
+    /// <summary>
+    /// Raised when the client goes through.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnGo { get; set; }
+}

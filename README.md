@@ -346,7 +346,7 @@ It joins no network, so compose keeps it behind a profile: `up` never starts it.
 
 ```bash
 # 🔨 Build it (optional)
-dotnet build ./Alembic/Distiller
+dotnet build ./Alembic/Distiller2
 
 # 🧪 Model a domain, at http://localhost:5005
 docker compose --env-file .env --env-file .env.versions --profile authoring up alembic

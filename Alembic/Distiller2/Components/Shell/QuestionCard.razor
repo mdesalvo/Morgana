@@ -1,0 +1,276 @@
+@*
+    The open question: the largest thing on screen, the box that answers it and the commands fixed at
+    the foot. A question looks the same at every step, a correction included.
+*@
+
+<section class="open">
+    <div class="open-body">
+        @if (Busy)
+        {
+            <FluentSpinner Size="SpinnerSize.Large" Class="thinking" />
+        }
+        else
+        {
+            @* The prose under approval stands apart from the question, so the client sees whose words are whose. *@
+            @if (!string.IsNullOrWhiteSpace(Quoted))
+            {
+                <FluentText As="TextTag.Paragraph" Block="true" Italic="true" Class="quote">@Quoted</FluentText>
+            }
+
+            <FluentText As="TextTag.H1" Size="TextSize.Size800" Weight="TextWeight.Regular" Block="true" Class="asked">
+                @Asked
+            </FluentText>
+
+            @* One button, carrying the answer that adds nothing; the box below never closes. *@
+            @if (Choice is { } choice)
+            {
+                <FluentButton Appearance="ButtonAppearance.Outline" Shape="ButtonShape.Circular" Class="choice"
+                              OnClick="() => OnChoose.InvokeAsync(choice)">@choice.Label</FluentButton>
+            }
+
+            @* A voice is recognised rather than dictated, so its words are picked several at a time. *@
+            @if (Traits is { Count: > 0 })
+            {
+                <FluentStack Orientation="Orientation.Horizontal" Wrap="true" HorizontalGap="7px" VerticalGap="7px" Class="traits">
+                    @foreach (string trait in Traits)
+                    {
+                        <FluentToggleButton Shape="ButtonShape.Circular" Size="ButtonSize.Small"
+                                            Pressed="@picked.Contains(trait)" OnClick="() => Toggle(trait)">@trait</FluentToggleButton>
+                    }
+                </FluentStack>
+            }
+
+            @* Keyed on the turn: every question gets a fresh box with the caret already in it. *@
+            <FluentTextArea @key="Turn" @bind-Value="answer" Immediate="true" Autofocus="true"
+                            Resize="TextAreaResize.Vertical" Size="TextAreaSize.Large" Width="100%"
+                            ControlStyle="@(Pristine ? PristineStyle : AnswerStyle)" AriaLabel="Your answer"
+                            Class="answer" @onfocusout="RestoreIfEmptied" />
+
+            @if (Error is { } error)
+            {
+                <FluentText As="TextTag.Paragraph" Color="Color.Error" Block="true" Class="failure">@error</FluentText>
+            }
+        }
+    </div>
+
+    <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Class="actions">
+        @if (Correcting)
+        {
+            <FluentButton Appearance="ButtonAppearance.Outline" Disabled="Busy" OnClick="() => OnLeave.InvokeAsync()">
+                Leave as is
+            </FluentButton>
+        }
+        <FluentButton Appearance="ButtonAppearance.Primary" Disabled="@(Busy || Empty)" OnClick="SendAsync">
+            @(Correcting ? "Update" : Pristine ? "Accept proposal" : "Answer") &rarr;
+        </FluentButton>
+        @Keep
+    </FluentStack>
+</section>
+
+@code {
+    /// <summary>
+    /// The box's own type: large enough to read an answer back at a glance.
+    /// </summary>
+    private const string AnswerStyle = "min-height: clamp(130px, 20vh, 280px); font-size: 19px; line-height: 1.5;";
+
+    /// <summary>
+    /// The untouched example leans, so it reads as offered rather than as the client's words.
+    /// </summary>
+    private const string PristineStyle = AnswerStyle + " font-style: italic;";
+
+    /// <summary>
+    /// The question on the table.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public string Asked { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The prose just written for the agent, on the turn that asks whether it is right.
+    /// </summary>
+    [Parameter]
+    public string? Quoted { get; set; }
+
+    /// <summary>
+    /// The worked example loaded into the box, a whole answer the client can send as it stands.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public string Prompting { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The agreeing button attached to this question, if it has one.
+    /// </summary>
+    [Parameter]
+    public QuickReply? Choice { get; set; }
+
+    /// <summary>
+    /// Words offered for the agent's voice, on the question that asks for it.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<string>? Traits { get; set; }
+
+    /// <summary>
+    /// The offered words the agent's voice already carries, lit from the start.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<string>? Taken { get; set; }
+
+    /// <summary>
+    /// Whether this question corrects an agent behind the frontier.
+    /// </summary>
+    [Parameter]
+    public bool Correcting { get; set; }
+
+    /// <summary>
+    /// Whether Alembic is composing, in which case there is nothing to answer yet.
+    /// </summary>
+    [Parameter]
+    public bool Busy { get; set; }
+
+    /// <summary>
+    /// Why the last turn failed, when it did.
+    /// </summary>
+    [Parameter]
+    public string? Error { get; set; }
+
+    /// <summary>
+    /// How many exchanges have happened: the box is primed once per value.
+    /// </summary>
+    [Parameter]
+    public int Turn { get; set; }
+
+    /// <summary>
+    /// Taking the work away, beside the answer.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Keep { get; set; }
+
+    /// <summary>
+    /// Raised with what the client said.
+    /// </summary>
+    [Parameter]
+    public EventCallback<string> OnAnswer { get; set; }
+
+    /// <summary>
+    /// Raised with the button they pressed instead.
+    /// </summary>
+    [Parameter]
+    public EventCallback<QuickReply> OnChoose { get; set; }
+
+    /// <summary>
+    /// Raised when a correction is left as it stands and the interview goes back to its frontier.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnLeave { get; set; }
+
+    /// <summary>
+    /// What is in the box: the untouched example or the client's own words.
+    /// </summary>
+    private string answer = string.Empty;
+
+    /// <summary>
+    /// The last answer sent, offered back when its turn fails instead of asked for again.
+    /// </summary>
+    private string sent = string.Empty;
+
+    /// <summary>
+    /// The voice words the client holds lit.
+    /// </summary>
+    private readonly HashSet<string> picked = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether the client touched the cloud this question.
+    /// </summary>
+    // Words lit only because the voice carries them must not travel beside a sentence like "less formal".
+    private bool touched;
+
+    /// <summary>
+    /// The turn the box was last primed for.
+    /// </summary>
+    private int primedOn = -1;
+
+    /// <summary>
+    /// Whether the box still reads exactly as the example was written.
+    /// </summary>
+    private bool Pristine => !string.IsNullOrEmpty(Prompting) && answer == Prompting;
+
+    /// <summary>
+    /// Whether nothing would travel if the client pressed send.
+    /// </summary>
+    private bool Empty => Said.Length == 0;
+
+    /// <summary>
+    /// The answer as it reaches Alembic: what was typed and what was done with the cloud.
+    /// </summary>
+    private string Said => string.Join(" ", new[] { answer.Trim(), Voice(answer.Trim()) }
+        .Where(part => part.Length > 0));
+
+    /// <summary>
+    /// What the cloud adds to the answer. Nothing when it is not the client speaking.
+    /// </summary>
+    private string Voice(string typed)
+    {
+        // A sentence typed beside an untouched cloud is the client's whole answer.
+        if (!touched && typed.Length > 0)
+            return string.Empty;
+
+        if (picked.Count > 0)
+            return $"The voice I would want here: {string.Join(", ", picked)}.";
+
+        return touched ? "None of those words is the voice I want." : string.Empty;
+    }
+
+    /// <summary>
+    /// Primes the box and the cloud once per question; a failed turn gets its answer back.
+    /// </summary>
+    protected override void OnParametersSet()
+    {
+        if (Error is not null && answer.Length == 0 && sent.Length > 0)
+            answer = sent;
+
+        if (Turn == primedOn)
+            return;
+
+        primedOn = Turn;
+        answer = Prompting;
+        touched = false;
+        picked.Clear();
+
+        foreach (string trait in Taken ?? [])
+            picked.Add(trait);
+    }
+
+    /// <summary>
+    /// Puts the example back when the client emptied the box and looked away.
+    /// </summary>
+    private void RestoreIfEmptied()
+    {
+        if (string.IsNullOrEmpty(answer) && !string.IsNullOrEmpty(Prompting))
+            answer = Prompting;
+    }
+
+    /// <summary>
+    /// Takes a word for the voice or gives it back.
+    /// </summary>
+    private void Toggle(string trait)
+    {
+        touched = true;
+
+        if (!picked.Remove(trait))
+            picked.Add(trait);
+    }
+
+    /// <summary>
+    /// Sends the answer and empties the box, so the next question is not met by the last answer.
+    /// </summary>
+    private async Task SendAsync()
+    {
+        string said = Said;
+
+        sent = said;
+        answer = string.Empty;
+        touched = false;
+        picked.Clear();
+
+        await OnAnswer.InvokeAsync(said);
+    }
+}

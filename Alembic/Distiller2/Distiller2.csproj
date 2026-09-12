@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+       <Title>Distiller2</Title>
+       <PackageId>Distiller2</PackageId>
+       <RootNamespace>Distiller2</RootNamespace>
+       <!-- The project is Distiller2; the binary, the Docker image and its labels stay "Alembic". -->
+       <AssemblyName>Alembic</AssemblyName>
+       <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+       <!-- Same UserSecretsId as Morgana.Web and PromptHarness: it reads the same Morgana:LLM section. -->
+       <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
+    </PropertyGroup>
+
+    <ItemGroup>
+       <!-- Alembic's own conducting prose, embedded the way morgana.json is embedded in Morgana.AI. -->
+       <EmbeddedResource Include="alembic.json" />
+
+       <!-- One template per behavioural use-case worth protecting: adding one is a file in this folder. -->
+       <EmbeddedResource Include="Harness\Templates\*.yaml" />
+    </ItemGroup>
+
+    <ItemGroup>
+       <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" Version="5.*-*" />
+       <PackageReference Include="YamlDotNet" Version="18.*" />
+    </ItemGroup>
+
+    <ItemGroup>
+       <ProjectReference Include="..\..\Morgana\Morgana.AI\Morgana.AI.csproj" />
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,89 @@
+@*
+    A resolved moment, read behind the frontier. Reading calls no model and writes nothing; Update is
+    the one gesture here that opens a correction.
+*@
+
+<section class="open">
+    <div class="open-body">
+        @if (Point.IsMap)
+        {
+            <div class="arows">
+                @foreach (IntentDraft intent in Entries)
+                {
+                    <div class="arow">
+                        <FluentText Font="TextFont.Monospace" Size="TextSize.Size200" Class="arow-name">@(intent.Label ?? intent.Name)</FluentText>
+                        <FluentText Size="TextSize.Size400" Class="arow-body">@intent.Description</FluentText>
+                    </div>
+                }
+            </div>
+        }
+        else if (Point.OnAgent && Agent is { } agent)
+        {
+            <SectionRows Agent="agent"
+                         Rails="@(Point.Rail == ShellPoint.AcceptanceRail ? AgentSections.All : new[] { Point.Rail })" />
+        }
+    </div>
+
+    <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Class="actions">
+        <FluentButton Appearance="ButtonAppearance.Outline" Disabled="Busy" OnClick="() => OnLeave.InvokeAsync()">
+            Leave as is
+        </FluentButton>
+        @if (CanUpdate)
+        {
+            <FluentButton Appearance="ButtonAppearance.Primary" Disabled="Busy" OnClick="() => OnUpdate.InvokeAsync()">
+                Update &rarr;
+            </FluentButton>
+        }
+        @Keep
+    </FluentStack>
+</section>
+
+@code {
+    /// <summary>
+    /// The resolved moment being read.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public ShellPoint Point { get; set; }
+
+    /// <summary>
+    /// The map's entries, read when the moment is the map.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<IntentDraft> Entries { get; set; } = [];
+
+    /// <summary>
+    /// The agent the moment belongs to, when it belongs to one.
+    /// </summary>
+    [Parameter]
+    public AgentDraft? Agent { get; set; }
+
+    /// <summary>
+    /// Whether the agent read here can be reopened for correction.
+    /// </summary>
+    [Parameter]
+    public bool CanUpdate { get; set; }
+
+    /// <summary>
+    /// Whether a turn is on the wire.
+    /// </summary>
+    [Parameter]
+    public bool Busy { get; set; }
+
+    /// <summary>
+    /// Taking the work away.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Keep { get; set; }
+
+    /// <summary>
+    /// Raised when the client goes back to where the interview stands.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnLeave { get; set; }
+
+    /// <summary>
+    /// Raised when the client opens a correction of the agent read here.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnUpdate { get; set; }
+}

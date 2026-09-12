@@ -16,9 +16,9 @@ C# assets and starter non-regression scenarios.
 The name follows the repo's habit of naming the instrument (Cauldron the vessel, Grimoire the book,
 Rune the mark): an *alembic* is the apparatus that distils.
 
-`Alembic/` holds two projects, each with its own solution: `Distiller/` (the workbench) and
-`PromptHarness/` (its own non-regression harness, nested for tidiness and deliberately not a client
-of Distiller's code).
+`Alembic/` holds two projects, each with its own solution: `Distiller2/` (the workbench, on Fluent UI
+Blazor 5) and `PromptHarness/` (its own non-regression harness, nested for tidiness and deliberately
+not a client of Distiller2's code).
 
 ## What Alembic is not
 
@@ -170,12 +170,7 @@ say what is in the file.
 A save file and a configuration arrive through the **same upload control**, told apart **by reading
 the file, never by its name**.
 
-### The recap is the real prompt
-
-The recap is **the composed prompt the model will actually read**, not a summary of the client's
-answers — a summary would be Alembic grading its own homework. Shown as **two separate blocks, never
-concatenated**, since each is read at a different moment of the turn: the two-layer system prompt,
-then each tool description as the model weighs it.
+### The framework layer is the embedded one
 
 The framework layer comes from the `morgana.json` embedded in the Morgana.AI this Alembic was built
 against. Alembic deliberately does **not** accept an uploaded `morgana.json`: that would model a
@@ -299,8 +294,12 @@ domain rather than a part of one; Morgana's classifier carries it.
 ### The colleagues, last
 
 `[ConsultsAgent]` **cannot be settled while the agent is being written**: it is a relation and half its
-ends do not exist yet. So it is asked once, at the end, over the whole domain — earlier sittings and
-uploads included — which makes the closing pass the mirror of the map.
+ends do not exist yet. So it is settled once, at the end, over the whole domain — earlier sittings and
+uploads included — on the **Collaboration form**: a grid of asking agent × colleague plus the agents
+another Morgana publishes, each named by intent and partner. It is a form rather than a pass because an
+edge is a fact about the domain, not something the client narrates; the interview ends at the last
+agent and the `DomainColleagues` pass is no longer entered. What the form cannot do is rewrite the
+prose an edge contradicts, which is why the paragraphs below belong to the coherence pass and its Apply.
 
 **An edge and the prose it contradicts land together or the edge is a defect.** The model reads a
 function offering the colleague and a flat imperative refusing the subject; Morgana's `PeerConsultation`
@@ -332,8 +331,9 @@ the only one that reads the declaration against the prose and says they disagree
 **Correcting is a fourth intention, so it is a fourth door.** Whoever comes through it usually cannot say
 where the problem is — they recognise it when they read it — so it opens on the first agent and leafs.
 
-**Leafing costs nothing, because leafing is reading.** `Pages/Revise.razor` calls no model and writes
-nothing: an agent read on the way past is never taken out of the configuration. The agent is shown whole
+**Leafing costs nothing, because leafing is reading.** The shell's pointer moves over everything behind
+the frontier, calls no model and writes nothing: an agent read on the way past is never taken out of the
+configuration. The agent is shown whole
 for reading, but no row is its own way in: **one door per agent, always opening at the Target.** The map
 is not one of them and cannot be — it settles every intent *against every other*, so reopening it over a
 single agent would be the one pass with nothing to compare its work to.
@@ -358,10 +358,7 @@ asked per parameter.** The client is asked once, about their setup — what the 
 user on arrival — and everything on that answer is `context`, everything else `request`. `Shared` is
 inferred from what the value *is*.
 
-### Validation runs before the recap
-
-The order is the design: composing a beautiful prompt for a domain that would not start is a way of lying
-to the client with something that looks like evidence.
+### Validation is decidable by reading
 
 Every check in `DraftValidationService` is decidable by reading the Draft, no model asked. Most restate a
 rule the framework enforces at startup and **the duplication is the entire value**: the framework's
@@ -375,7 +372,7 @@ what a first scenario is made of and nothing about what will actually go wrong, 
 after it. Running them needs a **source checkout** of Morgana, since PromptHarness boots it in-process.
 
 The split: **which behaviours are worth protecting** is knowledge about agents, true before any client
-arrives, settled once as `Distiller/Harness/Templates/*.yaml`. **Which words say them here** is knowledge
+arrives, settled once as `Distiller2/Harness/Templates/*.yaml`. **Which words say them here** is knowledge
 about the client's business, so the model derives: replace every `{{…}}`, change nothing else. Asking a
 model for "two or three scenarios" was the earlier, wrong shape — it made the model choose which behaviours
 matter, the decision it is worst placed to take. Applicability is decided in C# only for what a template
@@ -416,7 +413,7 @@ disagrees with it about their own business is usually right.
 
 ## The Draft
 
-The single artifact the interview fills, the validator checks, the recap composes and the emit reads.
+The single artifact the interview fills, the validator checks and the emit reads.
 
 **Why not the `Records` types directly.** They are the *serialization* model: immutable, complete,
 positional. The Draft is the *editing* model and an interview in progress is incomplete by definition — a
@@ -474,7 +471,7 @@ is therefore free: there is no parallel representation to maintain.
 
 ## Build and Run
 
-.NET 10, Blazor Server. `dotnet run` from `Distiller/` serves https://localhost:5005 and needs **no**
+.NET 10, Blazor Server. `dotnet run` from `Distiller2/` serves https://localhost:5005 and needs **no**
 Morgana instance running. Docker is profile-gated, so `compose up` skips it.
 
 ## Conventions

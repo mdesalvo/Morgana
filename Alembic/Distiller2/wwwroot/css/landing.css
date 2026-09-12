@@ -1,0 +1,100 @@
+/* ==========================================================================
+   Alembic — the landing and the import: the two pages before the shell.
+
+   The alembic at full size, the ways in and, after a file arrives, what came in and what can be done
+   with it. Every colour is a palette token.
+   ========================================================================== */
+
+.alembic-landing,
+.alembic-page {
+    min-height: 100dvh;
+    margin: 0 auto;
+    padding: 1.4rem 1.5rem 2.5rem;
+    background:
+        radial-gradient(ellipse 75rem 48rem at 50% -12%, color-mix(in srgb, var(--alembic-accent) 20%, transparent), transparent 72%),
+        radial-gradient(ellipse 40rem 30rem at 85% 100%, color-mix(in srgb, var(--alembic-cyan) 8%, transparent), transparent 70%),
+        var(--alembic-bg);
+}
+
+.alembic-landing { max-width: 46rem; padding-bottom: 1.5rem; background: none; }
+.alembic-page { max-width: 60rem; background: none; }
+
+.alembic-landing h1,
+.alembic-page h1 {
+    margin: 0;
+    font-size: 3rem;
+    font-weight: 200;
+    letter-spacing: 0.14em;
+    background: linear-gradient(100deg, var(--alembic-accent), var(--alembic-cyan) 85%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.landing-head { text-align: center; margin-bottom: 1.75rem; }
+.alembic-landing .landing-head h1 { font-size: 3.6rem; }
+.tagline { margin: 0.25rem 0 0; color: var(--alembic-muted); font-size: 1.05rem; }
+
+/* The banner fills the column the doors fill, capped against the viewport so the picture gives first. */
+.banner { position: relative; width: 100%; max-height: 34vh; margin: 0 auto 1.5rem; aspect-ratio: 1376 / 768; }
+.banner::before {
+    content: ""; position: absolute; inset: -8%; border-radius: 1.4rem; transform: translateZ(0);
+    background: radial-gradient(ellipse, color-mix(in srgb, var(--alembic-accent) 30%, transparent), transparent 68%);
+    filter: blur(1.4rem);
+}
+.banner img {
+    position: relative; width: 100%; height: 100%; object-fit: cover;
+    background: var(--alembic-bg-deep); border-radius: 0.9rem; border: 1px solid var(--alembic-border-lit);
+    box-shadow: 0 0 3rem color-mix(in srgb, var(--alembic-accent-deep) 35%, transparent);
+}
+
+/* --- the doors ------------------------------------------------------------ */
+.gateways { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
+.gateways-four { grid-template-columns: repeat(2, 1fr); }
+.gateways-one { grid-template-columns: 1fr; max-width: 22rem; margin-inline: auto; }
+@media (max-width: 44rem) { .gateways, .gateways-four { grid-template-columns: 1fr; } }
+
+.gateway {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.9rem;
+    padding: 2.2rem 1.5rem 1.8rem; text-align: center; cursor: pointer;
+    border: 1px solid var(--alembic-border); border-radius: 0.9rem;
+    background: linear-gradient(160deg, var(--alembic-panel-lit), var(--alembic-panel));
+    color: var(--alembic-text);
+    transition: border-color .18s, transform .18s, box-shadow .18s;
+}
+.gateway:hover { border-color: var(--alembic-border-lit); transform: translateY(-2px); box-shadow: var(--alembic-glow); }
+.gateway .sigil { width: 3rem; height: 3rem; color: var(--alembic-accent); flex: none; }
+.gateway .go {
+    font-size: 0.85rem; font-weight: 600; letter-spacing: 0.04em; color: var(--alembic-accent);
+    padding: 0.5rem 1.3rem; border: 1px solid var(--alembic-border-lit); border-radius: 1.4rem;
+}
+.gateway:hover .go { background: color-mix(in srgb, var(--alembic-accent) 16%, transparent); border-color: var(--alembic-accent); }
+.gateway.primary-gateway {
+    border-color: var(--alembic-border-lit);
+    background:
+        radial-gradient(ellipse 22rem 12rem at 50% 0%, color-mix(in srgb, var(--alembic-accent) 24%, transparent), transparent 72%),
+        linear-gradient(160deg, var(--alembic-panel-lit), var(--alembic-panel));
+}
+.gateway.primary-gateway .go {
+    background: linear-gradient(135deg, var(--alembic-accent), var(--alembic-accent-deep));
+    border-color: transparent; color: var(--alembic-bg-deep);
+}
+
+/* --- what came in ----------------------------------------------------------- */
+.import-file { margin-top: 1.5rem; }
+.import-file .muted, .notices, .muted { color: var(--alembic-muted); }
+.resuming {
+    margin: 1.4rem 0 0; padding: 0.7rem 1.1rem; border-radius: 0.5rem;
+    border: 1px solid var(--alembic-border-lit); box-shadow: var(--alembic-glow);
+    background: color-mix(in srgb, var(--alembic-accent) 12%, transparent);
+}
+.notices { margin: 1rem 0; padding-left: 1.1rem; font-size: 0.9rem; }
+.what-now {
+    margin: 2.5rem 0 1rem; font-size: 0.74rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.18em; color: var(--alembic-muted);
+}
+.found-agent { border-left: 2px solid var(--alembic-border); padding: 0.1rem 0 0.1rem 1rem; margin-bottom: 1.4rem; }
+.found-agent-name { color: var(--alembic-accent); }
+.found-agent-when { margin: 0.2rem 0 0.5rem; color: var(--alembic-muted); }
+.found-agent-can { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: baseline; color: var(--alembic-muted); }
+.back { margin-top: 1rem; }

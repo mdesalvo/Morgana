@@ -1,0 +1,188 @@
+@*
+    The track: the map once, the agent in hand between its neighbours, the domain once. Fixed height,
+    so twelve agents take the room of two.
+*@
+
+<div class="track" data-phase="@Phase">
+    <FluentButton Appearance="ButtonAppearance.Subtle" Class="seg edge fixed" data-state="@(Pointer.IsMap ? "here" : "done")"
+                  OnClick="() => OnLook.InvokeAsync(ShellPoint.Map)">
+        <span class="seg-name">Map</span>
+        <span class="mini"><i style="width:@(Mapped ? 100 : 0)%"></i></span>
+    </FluentButton>
+
+    <span class="sep"></span>
+
+    @if (!Mapped)
+    {
+        <div class="seg" data-state="ahead">
+            <span class="seg-name">Agents</span>
+            <span class="mini"><i style="width:0"></i></span>
+        </div>
+    }
+    else if (ShowsCarousel)
+    {
+        <div class="carousel">
+            @Arrow(Centred - 1, "‹", "The previous agent")
+
+            @* Keyed on the agent, so the slide plays when the agent changes and never on a step. *@
+            <div class="seg middle slide" data-state="here" @key="Centred">
+                <span class="seg-name">
+                    Agent: @Named(Centred)
+                    <span class="pos-now">@(Centred + 1)/@Entries.Count</span>
+                </span>
+
+                <div class="ticks">
+                    @for (int rail = 1; rail <= ShellPoint.AcceptanceRail; rail++)
+                    {
+                        ShellPoint moment = new ShellPoint(Centred, rail);
+
+                        <FluentButton Appearance="ButtonAppearance.Transparent"
+                                      Class="@(IsFrontierMark(moment) ? "tick frontier" : "tick")"
+                                      data-state="@TickState(moment)"
+                                      Disabled="@(moment > Frontier)"
+                                      Title="@(IsFrontierMark(moment) ? "Where the interview stands" : moment.Name)"
+                                      OnClick="() => OnLook.InvokeAsync(moment)">
+                            <span class="bar"></span><span class="lab">@moment.Name</span>
+                        </FluentButton>
+                    }
+                </div>
+            </div>
+
+            @Arrow(Centred + 1, "›", "The next agent")
+        </div>
+    }
+    else
+    {
+        <FluentButton Appearance="ButtonAppearance.Subtle" Class="seg" data-state="done" Title="Back to the first agent"
+                      OnClick="() => OnLook.InvokeAsync(new ShellPoint(0, 1))">
+            <span class="seg-name">
+                Agents
+                <span class="pos-now">@Accepted/@Entries.Count</span>
+            </span>
+            <span class="mini"><i style="width:@(Entries.Count == 0 ? 0 : Accepted * 100 / Entries.Count)%"></i></span>
+        </FluentButton>
+    }
+
+    <span class="sep"></span>
+
+    @if (Frontier.OnDomain)
+    {
+        @* Every domain moment is open once the interview is behind: the marks are the way between them. *@
+        <div class="seg edge" data-state="@(Pointer.OnDomain ? "here" : "done")">
+            <span class="seg-name">Domain</span>
+            <span class="ticks">
+                @for (int rail = ShellPoint.CollaborationRail; rail < ShellPoint.CollaborationRail + ShellPoint.DomainMoments.Count; rail++)
+                {
+                    ShellPoint moment = new ShellPoint(-1, rail);
+
+                    <FluentButton Appearance="ButtonAppearance.Transparent" Class="tick" data-state="@(moment == Pointer ? "here" : "done")"
+                                  Title="@moment.Name" OnClick="() => OnLook.InvokeAsync(moment)">
+                        <span class="bar"></span><span class="lab">@moment.Name</span>
+                    </FluentButton>
+                }
+            </span>
+        </div>
+    }
+    else
+    {
+        <div class="seg edge" data-state="ahead">
+            <span class="seg-name">Domain</span>
+            <span class="mini"><i style="width:0"></i></span>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// The agents on the track, one per map entry.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public IReadOnlyList<IntentDraft> Entries { get; set; } = [];
+
+    /// <summary>
+    /// Where the work stands: the pointer may never pass it.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public ShellPoint Frontier { get; set; }
+
+    /// <summary>
+    /// Where the client is looking.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public ShellPoint Pointer { get; set; }
+
+    /// <summary>
+    /// Raised with the moment the client wants to look at.
+    /// </summary>
+    [Parameter]
+    public EventCallback<ShellPoint> OnLook { get; set; }
+
+    /// <summary>
+    /// Whether the map is behind the work, so there are agents to show.
+    /// </summary>
+    private bool Mapped => Frontier > ShellPoint.Map;
+
+    /// <summary>
+    /// Whether the agents are open in the carousel rather than folded into one box.
+    /// </summary>
+    // Out of the agents they fold away: two open blocks would compete for the scene.
+    private bool ShowsCarousel => Entries.Count > 0 && (Pointer.OnAgent || (Pointer.IsMap && Frontier.OnAgent));
+
+    /// <summary>
+    /// The agent at the centre of the carousel: the one looked at, else the one in hand.
+    /// </summary>
+    private int Centred => Pointer.OnAgent ? Pointer.Entry : Frontier.OnAgent ? Frontier.Entry : 0;
+
+    /// <summary>
+    /// How many agents are already in the domain.
+    /// </summary>
+    private int Accepted => Frontier.OnDomain ? Entries.Count : Frontier.OnAgent ? Frontier.Entry : 0;
+
+    /// <summary>
+    /// What the track is about right now, which decides who takes the width.
+    /// </summary>
+    private string Phase => Pointer.OnAgent ? "agent" : Pointer.IsMap ? "map" : "edge";
+
+    /// <summary>
+    /// A moment's colour: accent where the client looks, cyan where it is resolved.
+    /// </summary>
+    private string TickState(ShellPoint moment) =>
+        moment == Pointer ? "here" : moment < Frontier ? "done" : string.Empty;
+
+    /// <summary>
+    /// Whether this is where the interview stands while the client looks elsewhere.
+    /// </summary>
+    // In the domain nothing is still being settled, so no mark is owed.
+    private bool IsFrontierMark(ShellPoint moment) => moment == Frontier && Pointer != Frontier && !Frontier.OnDomain;
+
+    /// <summary>
+    /// The client's own word for an entry.
+    /// </summary>
+    private string Named(int entry) =>
+        entry >= 0 && entry < Entries.Count ? Entries[entry].Label ?? Entries[entry].Name ?? "…" : "…";
+
+    /// <summary>
+    /// An arrow to a neighbouring agent, absent at either end of the row.
+    /// </summary>
+    // It lands on the work in hand for the agent at the frontier and on the Target for one behind it.
+    private RenderFragment Arrow(int entry, string glyph, string label)
+    {
+        if (entry < 0 || entry >= Entries.Count)
+            return _ => { };
+
+        ShellPoint landing = Frontier.OnAgent && entry == Frontier.Entry ? Frontier : new ShellPoint(entry, 1);
+        string position = $"{entry + 1}/{Entries.Count}";
+
+        return @<FluentButton Appearance="ButtonAppearance.Outline" Class="arrow" Disabled="@(landing > Frontier)"
+                              Title="@label" OnClick="() => OnLook.InvokeAsync(landing)">
+                    @if (glyph == "‹")
+                    {
+                        @glyph<span class="pos">@position</span>
+                    }
+                    else
+                    {
+                        <span class="pos">@position</span>@glyph
+                    }
+                </FluentButton>;
+    }
+}

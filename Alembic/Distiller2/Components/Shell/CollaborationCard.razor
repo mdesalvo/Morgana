@@ -1,0 +1,308 @@
+@*
+    Collaboration is a form, not a conversation: which agent may consult which, over the whole domain,
+    and the agents another Morgana publishes. The prose an edge contradicts is Validation's to report.
+*@
+
+<section class="open">
+    <div class="open-body">
+        <FluentText As="TextTag.H1" Size="TextSize.Size800" Weight="TextWeight.Regular" Block="true" Class="asked">
+            For each agent, which other agents could it consult to serve its users better? (optional)
+        </FluentText>
+
+        <div class="panel-block">
+            <FluentText As="TextTag.H3" Class="panel-title">Collaboration between agents</FluentText>
+
+            <div class="a2a-grid">
+                @foreach (AgentDraft asking in Agents)
+                {
+                    <div class="a2a-row">
+                        <FluentText Size="TextSize.Size400" Class="a2a-who">@Named(asking)</FluentText>
+
+                        @* The direction lives in the row, so no box has to repeat it. *@
+                        <FluentStack Orientation="Orientation.Horizontal" Wrap="true" HorizontalGap="18px" VerticalGap="8px">
+                            @foreach (ConsultCell cell in cells.Where(cell => cell.Asking == asking))
+                            {
+                                <FluentCheckbox @bind-Value="cell.On" @bind-Value:after="() => ApplyAsync(cell)" Label="@cell.Label" />
+                            }
+                        </FluentStack>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="panel-block">
+            <FluentText As="TextTag.H3" Class="panel-title">Agents available on another Morgana</FluentText>
+
+            @foreach (RemoteRow row in remotes)
+            {
+                <div class="a2a-remote">
+                    <FluentTextInput @bind-Value="row.Intent" @bind-Value:after="() => RenameAsync(row)" Placeholder="agent name"
+                                     MessageState="@Required(row.Intent)" Message="@RequiredMessage(row.Intent)" />
+                    <FluentTextInput @bind-Value="row.Instance" @bind-Value:after="() => RenameAsync(row)" Placeholder="partner"
+                                     MessageState="@Required(row.Instance)" Message="@RequiredMessage(row.Instance)" />
+                    <FluentButton Appearance="ButtonAppearance.Subtle" Title="Remove this colleague" OnClick="() => RemoveAsync(row)">✕</FluentButton>
+                </div>
+            }
+
+            <FluentButton Appearance="ButtonAppearance.Outline" OnClick="Add">Add</FluentButton>
+        </div>
+    </div>
+
+    <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Class="actions">
+        <FluentButton Appearance="ButtonAppearance.Primary" OnClick="NextAsync">Next &rarr;</FluentButton>
+        @Keep
+    </FluentStack>
+</section>
+
+@code {
+    /// <summary>
+    /// The domain whose agents are related here; edges land on it as they are ticked.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public DomainDraft Draft { get; set; } = default!;
+
+    /// <summary>
+    /// Taking the work away.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Keep { get; set; }
+
+    /// <summary>
+    /// Raised when the client moves on to Validation.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnNext { get; set; }
+
+    /// <summary>
+    /// Raised whenever an edge lands on the domain or leaves it.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    /// <summary>
+    /// Raised with the reason moving on is refused.
+    /// </summary>
+    [Parameter]
+    public EventCallback<string> OnRefuse { get; set; }
+
+    /// <summary>
+    /// One possible edge: an asking agent and a colleague it may consult.
+    /// </summary>
+    private sealed class ConsultCell
+    {
+        /// <summary>The agent that would ask.</summary>
+        public required AgentDraft Asking { get; init; }
+
+        /// <summary>The intent the colleague answers for.</summary>
+        public required string Intent { get; init; }
+
+        /// <summary>The Morgana publishing the colleague; <c>null</c> for this one.</summary>
+        public string? Instance { get; init; }
+
+        /// <summary>What the box reads.</summary>
+        public required string Label { get; init; }
+
+        /// <summary>Whether the edge is declared.</summary>
+        public bool On { get; set; }
+    }
+
+    /// <summary>
+    /// A colleague published by another Morgana, as typed and as it last landed on the domain.
+    /// </summary>
+    private sealed class RemoteRow
+    {
+        /// <summary>The intent it answers for, as typed.</summary>
+        public string Intent { get; set; } = string.Empty;
+
+        /// <summary>The partner publishing it, as typed.</summary>
+        public string Instance { get; set; } = string.Empty;
+
+        /// <summary>The name its edges currently carry on the domain.</summary>
+        public string AppliedIntent { get; set; } = string.Empty;
+
+        /// <summary>The partner its edges currently carry on the domain.</summary>
+        public string AppliedInstance { get; set; } = string.Empty;
+
+        /// <summary>Whether both halves are named, the only state in which it can be reached.</summary>
+        public bool Complete => !string.IsNullOrWhiteSpace(Intent) && !string.IsNullOrWhiteSpace(Instance);
+    }
+
+    /// <summary>
+    /// Every possible edge on screen.
+    /// </summary>
+    private List<ConsultCell> cells = [];
+
+    /// <summary>
+    /// The colleagues of other Morganas named so far.
+    /// </summary>
+    private readonly List<RemoteRow> remotes = [];
+
+    /// <summary>
+    /// Whether moving on was refused, so blank halves show as errors.
+    /// </summary>
+    private bool touched;
+
+    /// <summary>
+    /// The agents that can ask or be asked: the ones with an ID an intent can reach.
+    /// </summary>
+    private IReadOnlyList<AgentDraft> Agents => [.. Draft.Agents.Where(agent => !string.IsNullOrWhiteSpace(agent.ID))];
+
+    /// <summary>
+    /// Reads the remote colleagues already declared back into rows.
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        foreach (Morgana.AI.Records.PeerReference remote in Draft.Agents
+                     .SelectMany(agent => agent.Code.Consults)
+                     .Where(colleague => colleague.Instance is not null)
+                     .DistinctBy(colleague => (colleague.Intent.ToLowerInvariant(), colleague.Instance!.ToLowerInvariant())))
+        {
+            remotes.Add(new RemoteRow
+            {
+                Intent = remote.Intent,
+                Instance = remote.Instance!,
+                AppliedIntent = remote.Intent,
+                AppliedInstance = remote.Instance!
+            });
+        }
+
+        Rebuild();
+    }
+
+    /// <summary>
+    /// Lays out every possible edge: the other agents of this domain, then every fully named remote colleague.
+    /// </summary>
+    private void Rebuild()
+    {
+        cells = [];
+
+        foreach (AgentDraft asking in Agents)
+        {
+            foreach (AgentDraft other in Agents.Where(other => other != asking))
+                cells.Add(new ConsultCell
+                {
+                    Asking = asking,
+                    Intent = other.ID!,
+                    Label = Named(other),
+                    On = Consults(asking, other.ID!, null)
+                });
+
+            foreach (RemoteRow row in remotes.Where(row => row.Complete))
+                cells.Add(new ConsultCell
+                {
+                    Asking = asking,
+                    Intent = row.AppliedIntent,
+                    Instance = row.AppliedInstance,
+                    Label = $"{row.AppliedIntent} · {row.AppliedInstance}",
+                    On = Consults(asking, row.AppliedIntent, row.AppliedInstance)
+                });
+        }
+    }
+
+    /// <summary>
+    /// Whether an agent declares a colleague, matched the way Morgana matches names.
+    /// </summary>
+    private static bool Consults(AgentDraft agent, string intent, string? instance) =>
+        agent.Code.Consults.Any(colleague => Same(colleague, intent, instance));
+
+    /// <summary>
+    /// Whether a declared colleague is this intent at this Morgana.
+    /// </summary>
+    private static bool Same(Morgana.AI.Records.PeerReference colleague, string intent, string? instance) =>
+        string.Equals(colleague.Intent, intent, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(colleague.Instance, instance, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Declares or withdraws one edge on the domain.
+    /// </summary>
+    private async Task ApplyAsync(ConsultCell cell)
+    {
+        if (cell.On && !Consults(cell.Asking, cell.Intent, cell.Instance))
+            cell.Asking.Code.Consults.Add(new Morgana.AI.Records.PeerReference(cell.Intent, cell.Instance));
+        else if (!cell.On)
+            cell.Asking.Code.Consults.RemoveAll(colleague => Same(colleague, cell.Intent, cell.Instance));
+
+        await OnChanged.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Carries a renamed remote colleague onto every edge that names it.
+    /// </summary>
+    // A colleague left half-named names nothing, so its edges leave the domain until both halves are back.
+    private async Task RenameAsync(RemoteRow row)
+    {
+        bool wasApplied = !string.IsNullOrWhiteSpace(row.AppliedIntent);
+
+        foreach (AgentDraft agent in Draft.Agents)
+        {
+            for (int index = 0; index < agent.Code.Consults.Count; index++)
+            {
+                if (!wasApplied || !Same(agent.Code.Consults[index], row.AppliedIntent, row.AppliedInstance))
+                    continue;
+
+                if (row.Complete)
+                    agent.Code.Consults[index] = agent.Code.Consults[index] with { Intent = row.Intent.Trim(), Instance = row.Instance.Trim() };
+                else
+                    agent.Code.Consults.RemoveAt(index--);
+            }
+        }
+
+        row.AppliedIntent = row.Complete ? row.Intent.Trim() : string.Empty;
+        row.AppliedInstance = row.Complete ? row.Instance.Trim() : string.Empty;
+
+        Rebuild();
+        await OnChanged.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Takes a remote colleague back, with every edge that named it.
+    /// </summary>
+    private async Task RemoveAsync(RemoteRow row)
+    {
+        foreach (AgentDraft agent in Draft.Agents)
+            agent.Code.Consults.RemoveAll(colleague => Same(colleague, row.AppliedIntent, row.AppliedInstance));
+
+        remotes.Remove(row);
+        Rebuild();
+        await OnChanged.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Opens a row for a colleague of another Morgana, blank on both halves: only its card knows either name.
+    /// </summary>
+    private void Add() => remotes.Add(new RemoteRow());
+
+    /// <summary>
+    /// Moves on, refusing while a remote colleague is half-named.
+    /// </summary>
+    private async Task NextAsync()
+    {
+        if (remotes.Any(row => !row.Complete))
+        {
+            touched = true;
+            await OnRefuse.InvokeAsync("Name and partner are both needed: without them the colleague cannot be reached.");
+            return;
+        }
+
+        await OnNext.InvokeAsync();
+    }
+
+    /// <summary>
+    /// The error state of a required half, shown once moving on was refused.
+    /// </summary>
+    private MessageState? Required(string value) =>
+        touched && string.IsNullOrWhiteSpace(value) ? MessageState.Error : null;
+
+    /// <summary>
+    /// The message under a required half left blank.
+    /// </summary>
+    private string? RequiredMessage(string value) =>
+        touched && string.IsNullOrWhiteSpace(value) ? "Required" : null;
+
+    /// <summary>
+    /// The client's own word for an agent: the button of the intent that reaches it.
+    /// </summary>
+    private string Named(AgentDraft agent) =>
+        Draft.Intents.FirstOrDefault(intent => string.Equals(intent.Name, agent.ID, StringComparison.OrdinalIgnoreCase))?.Label
+        ?? agent.ID ?? "…";
+}

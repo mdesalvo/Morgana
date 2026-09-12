@@ -18,17 +18,17 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy project files and dependencies (for optimal layer caching). The repo layout is
-# mirrored under /src so Distiller's ProjectReference to ../../Morgana/Morgana.AI resolves,
+# mirrored under /src so Distiller2's ProjectReference to ../../Morgana/Morgana.AI resolves,
 # and each project picks up its own Directory.Build.props (Alembic's, found by walking up
-# from Alembic/Distiller/, vs the Morgana one that Morgana.AI and Morgana.Contracts inherit).
-COPY ["Alembic/Distiller/Distiller.csproj", "Alembic/Distiller/"]
+# from Alembic/Distiller2/, vs the Morgana one that Morgana.AI and Morgana.Contracts inherit).
+COPY ["Alembic/Distiller2/Distiller2.csproj", "Alembic/Distiller2/"]
 COPY ["Alembic/Directory.Build.props", "Alembic/"]
 COPY ["Morgana/Morgana.AI/Morgana.AI.csproj", "Morgana/Morgana.AI/"]
 COPY ["Morgana/Morgana.Contracts/Morgana.Contracts.csproj", "Morgana/Morgana.Contracts/"]
 COPY ["Morgana/Directory.Build.props", "Morgana/"]
 
 # Restore NuGet dependencies (cached layer if .csproj files don't change)
-RUN dotnet restore "Alembic/Distiller/Distiller.csproj"
+RUN dotnet restore "Alembic/Distiller2/Distiller2.csproj"
 
 # Copy all source code (the workbench + the referenced framework projects)
 COPY Alembic/ Alembic/
@@ -36,7 +36,7 @@ COPY Morgana/Morgana.AI/ Morgana/Morgana.AI/
 COPY Morgana/Morgana.Contracts/ Morgana/Morgana.Contracts/
 
 # Nothing of the repo-root PromptHarness is copied and nothing needs to be. Alembic's own harness
-# component is its own — the behavioural templates under Alembic/Distiller/Harness/Templates,
+# component is its own — the behavioural templates under Alembic/Distiller2/Harness/Templates,
 # embedded — so the repo layout stopped being load-bearing for this build when they replaced the
 # linked scenario schema. Alembic/PromptHarness/ (the non-regression suite for Alembic itself) is
 # copied along with the rest of Alembic/ above but never referenced by the build below — inert in
@@ -45,14 +45,14 @@ COPY Morgana/Morgana.Contracts/ Morgana/Morgana.Contracts/
 # Build application in Release mode — InsideDockerBuild skips
 # Directory.Build.targets' host-side .env.versions generation, which can't see
 # sibling projects here.
-WORKDIR "/src/Alembic/Distiller"
-RUN dotnet build "Distiller.csproj" -c Release -o /app/build /p:InsideDockerBuild=true
+WORKDIR "/src/Alembic/Distiller2"
+RUN dotnet build "Distiller2.csproj" -c Release -o /app/build /p:InsideDockerBuild=true
 
 # ==============================================================================
 # STAGE 2: PUBLISH
 # ==============================================================================
 FROM build AS publish
-RUN dotnet publish "Distiller.csproj" -c Release -o /app/publish /p:UseAppHost=false /p:InsideDockerBuild=true
+RUN dotnet publish "Distiller2.csproj" -c Release -o /app/publish /p:UseAppHost=false /p:InsideDockerBuild=true
 
 # ==============================================================================
 # STAGE 3: RUNTIME (FINAL IMAGE)

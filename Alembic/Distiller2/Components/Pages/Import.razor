@@ -1,0 +1,472 @@
+@page "/import"
+@using System.Text
+@using System.Text.Json
+@using System.IO.Compression
+@using Microsoft.AspNetCore.Components.Forms
+@inject IDraftImportService DraftImportService
+@inject IDomainReadingService DomainReadingService
+@inject IDraftSerializationService DraftSerializationService
+@inject IDraftStateService DraftStateService
+@inject IInterviewService InterviewService
+@inject NavigationManager NavigationManager
+
+@*
+    The only way an existing domain enters Alembic. A save file, a configuration and an archive arrive
+    through the same control and are told apart by reading them, never by their name. What comes back
+    is the domain as the client's business, then the doors onto what can be done with it.
+*@
+
+<div class="alembic-page">
+
+    @if (Draft is null)
+    {
+        <div class="landing-head">
+            <h1>Bring it here</h1>
+            <p class="tagline">A sitting left unfinished or a domain already at work.</p>
+        </div>
+    }
+
+    <div class="import-file">
+        <FluentText As="TextTag.H2" Size="TextSize.Size500">@(Draft is null ? "The file" : "Bring another")</FluentText>
+
+        <FluentButton Id="alembic-upload" Appearance="ButtonAppearance.Primary" Loading="isReading" Disabled="isReading">
+            Choose a file
+        </FluentButton>
+        <FluentInputFile AnchorId="alembic-upload" DragDropZoneVisible="false" Accept=".json,.zip"
+                         MaximumFileSize="MaxUploadBytes" OnInputFileChange="OnFileSelectedAsync" />
+
+        <FluentText As="TextTag.Paragraph" Color="Color.Lightweight">
+            An <code>agents.json</code> Morgana already runs. An <code>alembic-draft.json</code> I saved for you
+            last time. A <code>zip archive</code> I already packaged.
+        </FluentText>
+
+        @if (isReading)
+        {
+            <FluentText As="TextTag.Paragraph" Color="Color.Lightweight">
+                @(isLearning ? "Working out what your business does, so I do not have to ask you twice…" : "Reading…")
+            </FluentText>
+        }
+    </div>
+
+    @if (error is not null)
+    {
+        <FluentText As="TextTag.Paragraph" Color="Color.Error" Block="true">I could not read it: @error</FluentText>
+    }
+
+    @if (Draft is { } draft)
+    {
+        @if (Resuming(draft) is { } resuming)
+        {
+            <p class="resuming">@resuming</p>
+        }
+
+        @if (notices.Count > 0)
+        {
+            <ul class="notices">
+                @foreach (string notice in notices)
+                {
+                    <li>@notice</li>
+                }
+            </ul>
+        }
+
+        @if (HasAgents)
+        {
+            <p class="what-now">Agents found in this domain</p>
+
+            @foreach (AgentDraft agent in draft.Agents)
+            {
+                IntentDraft? intent = draft.Intents.FirstOrDefault(i => i.Name == agent.ID);
+
+                <div class="found-agent">
+                    <FluentText Size="TextSize.Size400" Block="true" Class="found-agent-name">@(intent?.Label ?? agent.ID)</FluentText>
+
+                    @if (intent?.Description is { Length: > 0 } description)
+                    {
+                        <FluentText As="TextTag.Paragraph" Class="found-agent-when">Comes when someone asks about @Lower(description)</FluentText>
+                    }
+
+                    @if (agent.Tools.Count == 0)
+                    {
+                        <FluentText As="TextTag.Paragraph" Color="Color.Lightweight">
+                            It carries nothing of its own &mdash; whatever it reaches for arrives from elsewhere at the moment it is needed.
+                        </FluentText>
+                    }
+                    else
+                    {
+                        <div class="found-agent-can">
+                            It can
+                            @foreach (ToolDraft tool in agent.Tools)
+                            {
+                                <FluentBadge Appearance="BadgeAppearance.Outline" Shape="BadgeShape.Circular">@Humanise(tool.Name)</FluentBadge>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            <FluentText As="TextTag.Paragraph" Color="Color.Lightweight">
+                Nothing has been added to this domain yet &mdash; the interview is open, but no agent has been accepted into it.
+            </FluentText>
+        }
+
+        <p class="what-now">What you can do</p>
+
+        <div class="gateways @(HasAgents ? "gateways-four" : "gateways-one")">
+            @if (HasAgents)
+            {
+                <Gateway Title="Go over the agents" Go="Leaf" OnGo='() => Go("shell?door=walk")'>
+                    <Sigil>
+                        <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M4 19.5 8.4 18 19 7.4a2 2 0 0 0-2.8-2.8L5.6 15.2 4 19.5z" />
+                            <path d="M14.6 6.6 17 9" />
+                            <path d="M4 21.6h16" />
+                        </svg>
+                    </Sigil>
+                </Gateway>
+            }
+
+            <Gateway Title="@(draft.Sitting is not null ? "Carry on where you left off" : "Distil a new agent")"
+                     Go="@(draft.Sitting is not null ? "Continue" : "Begin")"
+                     Primary="@(HasAgents && !arrivedAsArchive)" OnGo='() => Go("shell")'>
+                <Sigil>
+                    <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M9.3 3h5.4M10.6 3.4v5.2M13.4 3.4v5.2" />
+                        <circle cx="12" cy="14.6" r="5.9" />
+                        <path d="M6.6 15.4c1.8 1.4 9 1.4 10.8 0" />
+                        <path d="M17.6 12.4H20a1 1 0 0 1 1 1v4" />
+                    </svg>
+                </Sigil>
+            </Gateway>
+
+            @if (HasAgents)
+            {
+                <Gateway Title="Validate this domain" Go="Look" Primary="arrivedAsArchive" OnGo='() => Go("shell?door=validate")'>
+                    <Sigil>
+                        <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="10.5" cy="10.5" r="6.6" />
+                            <path d="M15.4 15.4 21 21" />
+                            <path d="M7.6 9h5.8M7.6 12h3.8" />
+                        </svg>
+                    </Sigil>
+                </Gateway>
+
+                <Gateway Title="Morganize it" Go="Package" OnGo='() => Go("shell?door=archive")'>
+                    <Sigil>
+                        <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M3 6.4h18v3.4H3z" />
+                            <path d="M4.6 9.8v8.4A1.8 1.8 0 0 0 6.4 20h11.2a1.8 1.8 0 0 0 1.8-1.8V9.8" />
+                            <path d="M12 12v4.4M9.8 14.4 12 16.6l2.2-2.2" />
+                        </svg>
+                    </Sigil>
+                </Gateway>
+            }
+        </div>
+    }
+
+</div>
+
+@code {
+    /// <summary>
+    /// The largest upload accepted: two orders of magnitude above any real configuration.
+    /// </summary>
+    private const long MaxUploadBytes = 4 * 1024 * 1024;
+
+    /// <summary>
+    /// The root property only a saved interview carries, so the two JSON shapes are told apart by a fact.
+    /// </summary>
+    private const string SaveFileMarker = "CreatedAt";
+
+    /// <summary>
+    /// What the import wants the client to know about what it read.
+    /// </summary>
+    private IReadOnlyList<string> notices = [];
+
+    /// <summary>
+    /// Why the file could not be read, when it could not.
+    /// </summary>
+    private string? error;
+
+    /// <summary>
+    /// Whether a file is being read.
+    /// </summary>
+    private bool isReading;
+
+    /// <summary>
+    /// Whether the upload is being read for what it says about the client's business.
+    /// </summary>
+    private bool isLearning;
+
+    /// <summary>
+    /// Whether the upload was an archive Alembic built, whose next natural question is whether it still stands.
+    /// </summary>
+    private bool arrivedAsArchive;
+
+    /// <summary>
+    /// The domain in hand.
+    /// </summary>
+    private DomainDraft? Draft => DraftStateService.Current;
+
+    /// <summary>
+    /// Whether the Draft is a domain rather than an interview kept the moment it opened.
+    /// </summary>
+    private bool HasAgents => Draft?.Agents.Count > 0;
+
+    /// <summary>
+    /// Goes through a door into the shell.
+    /// </summary>
+    private void Go(string where) => NavigationManager.NavigateTo(where);
+
+    /// <summary>
+    /// The interrupted interview, if the file carried one: why the client came back.
+    /// </summary>
+    private static string? Resuming(DomainDraft draft) =>
+        draft.Sitting is { } sitting && Named(sitting) is { } named
+            ? $"{named} — still here, right where you left it."
+            : null;
+
+    /// <summary>
+    /// What the interrupted interview was about, read strictly off what the sitting holds.
+    /// </summary>
+    private static string? Named(InterviewSitting sitting)
+    {
+        if (sitting.At >= 0 && sitting.At < sitting.Map.Count)
+        {
+            IntentDraft entry = sitting.Map[sitting.At];
+            return $"You were in the middle of {entry.Label ?? entry.Name ?? "an entry of the map"}";
+        }
+
+        return sitting.Map.Count switch
+        {
+            0 => null,
+            1 => "You were drawing the map, one entry declared so far",
+            var count => $"You were drawing the map, {count} entries declared so far"
+        };
+    }
+
+    /// <summary>
+    /// A tool's method name as a domain expert reads it: spaced out and lowered.
+    /// </summary>
+    private static string Humanise(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "—";
+
+        StringBuilder spaced = new StringBuilder();
+
+        foreach (char letter in name)
+        {
+            if (char.IsUpper(letter) && spaced.Length > 0)
+                spaced.Append(' ');
+
+            spaced.Append(char.ToLowerInvariant(letter));
+        }
+
+        return spaced.ToString();
+    }
+
+    /// <summary>
+    /// Lowers a description's first letter so it reads on from "asks about".
+    /// </summary>
+    private static string Lower(string description) =>
+        char.ToLowerInvariant(description[0]) + description[1..];
+
+    /// <summary>
+    /// Reads the upload, works out which of the three shapes it is and hands it to the matching path.
+    /// </summary>
+    private async Task OnFileSelectedAsync(InputFileChangeEventArgs selection)
+    {
+        isReading = true;
+        error = null;
+        notices = [];
+        arrivedAsArchive = false;
+
+        try
+        {
+            IBrowserFile file = selection.File;
+
+            // Read twice, once to tell the shape and once to parse it.
+            using MemoryStream buffer = new MemoryStream();
+            await using (Stream stream = file.OpenReadStream(MaxUploadBytes))
+                await stream.CopyToAsync(buffer);
+
+            buffer.Position = 0;
+
+            if (IsZip(buffer))
+            {
+                arrivedAsArchive = HasMarker(buffer);
+
+                await using MemoryStream? inner = await ExtractFromZipAsync(buffer);
+
+                if (inner is null)
+                {
+                    error = $"{file.Name} is a zip archive, but I could not find an alembic-draft.json or an agents.json inside it.";
+                    return;
+                }
+
+                if (IsSaveFile(inner))
+                {
+                    inner.Position = 0;
+                    await ResumeAsync(inner, file.Name);
+                    return;
+                }
+
+                inner.Position = 0;
+                await ImportAsync(inner, file.Name);
+                return;
+            }
+
+            if (IsSaveFile(buffer))
+            {
+                buffer.Position = 0;
+                await ResumeAsync(buffer, file.Name);
+                return;
+            }
+
+            buffer.Position = 0;
+            await ImportAsync(buffer, file.Name);
+        }
+        catch (IOException tooLarge)
+        {
+            error = tooLarge.Message;
+        }
+        finally
+        {
+            isReading = false;
+        }
+    }
+
+    /// <summary>
+    /// Imports a configuration and reads what it says about the client's work.
+    /// </summary>
+    private async Task ImportAsync(Stream configuration, string fileName)
+    {
+        DraftImportResult result = await DraftImportService.ImportAsync(configuration, fileName);
+
+        notices = result.Notices;
+        error = result.Error;
+        SetDraft(result.Draft);
+        await LearnTheTradeAsync(result.Draft);
+    }
+
+    /// <summary>
+    /// Works out what the business does from the configuration just uploaded.
+    /// </summary>
+    /// <remarks>
+    /// A configuration carries finished prose and no memory of the conversation behind it. Skipped where
+    /// the domain already remembers; a failure costs the head start and nothing else.
+    /// </remarks>
+    private async Task LearnTheTradeAsync(DomainDraft? draft)
+    {
+        if (draft is null || draft.Agents.Count == 0 || draft.Agents.All(agent => agent.Known.Count > 0))
+            return;
+
+        isLearning = true;
+        StateHasChanged();
+
+        try
+        {
+            DomainReading reading = await DomainReadingService.ReadAsync(draft);
+
+            notices = reading.Error is { } failure
+                ? [.. notices, $"I could not work out what your business does from this file, so I will ask instead: {failure}"]
+                : [.. notices, $"I read {reading.Written} thing(s) about how your business works off this file, so I will not ask you for them. Correct me where I have it wrong — none of it came from you."];
+
+            DraftStateService.Set(draft);
+        }
+        finally
+        {
+            isLearning = false;
+        }
+    }
+
+    /// <summary>
+    /// Restores a Draft saved in an earlier sitting.
+    /// </summary>
+    private async Task ResumeAsync(Stream saveFile, string fileName)
+    {
+        if (await DraftSerializationService.DeserializeAsync(saveFile) is not { } draft)
+        {
+            error = $"{fileName} looks like a sitting of ours, but I could not read it.";
+            return;
+        }
+
+        SetDraft(draft);
+    }
+
+    /// <summary>
+    /// Puts a freshly read Draft in the circuit and drops any interview running against the one it replaces.
+    /// </summary>
+    private void SetDraft(DomainDraft? draft)
+    {
+        InterviewService.Abandon();
+        DraftStateService.Set(draft);
+    }
+
+    /// <summary>
+    /// Whether the upload is a zip, by its magic bytes.
+    /// </summary>
+    private static bool IsZip(MemoryStream buffer) =>
+        buffer.Length >= 2 && buffer.GetBuffer()[0] == 0x50 && buffer.GetBuffer()[1] == 0x4B;
+
+    /// <summary>
+    /// Whether the archive carries the marker only Alembic's own emit writes.
+    /// </summary>
+    private static bool HasMarker(MemoryStream buffer)
+    {
+        buffer.Position = 0;
+        using ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true);
+
+        return archive.Entries.Any(entry => string.Equals(
+            entry.Name, Distiller2.Services.AssetPackageService.MarkerFileName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Pulls the file inside the archive that carries the domain, preferring the richer save file.
+    /// </summary>
+    private static async Task<MemoryStream?> ExtractFromZipAsync(MemoryStream buffer)
+    {
+        buffer.Position = 0;
+        await using ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true);
+
+        ZipArchiveEntry? entry =
+            archive.Entries.FirstOrDefault(e => string.Equals(e.Name, "alembic-draft.json", StringComparison.OrdinalIgnoreCase))
+            ?? archive.Entries.FirstOrDefault(e => string.Equals(e.Name, "agents.json", StringComparison.OrdinalIgnoreCase));
+
+        if (entry is null)
+            return null;
+
+        MemoryStream copy = new MemoryStream();
+        await using (Stream entryStream = await entry.OpenAsync())
+            await entryStream.CopyToAsync(copy);
+
+        copy.Position = 0;
+        return copy;
+    }
+
+    /// <summary>
+    /// Whether the JSON is a save file rather than a configuration, by reading it.
+    /// </summary>
+    private static bool IsSaveFile(Stream json)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(json);
+
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                   && document.RootElement.EnumerateObject().Any(property =>
+                       string.Equals(property.Name, SaveFileMarker, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (JsonException)
+        {
+            // Not JSON at all: the importer's message about an unreadable configuration is the right one.
+            return false;
+        }
+    }
+}

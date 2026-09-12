@@ -1,0 +1,47 @@
+@*
+    An agent's sections, one full-width row each: a long section lengthens its row instead of fraying a grid.
+*@
+
+<div class="arows">
+    @foreach (int rail in Rails)
+    {
+        <div class="arow">
+            <FluentText Font="TextFont.Monospace" Size="TextSize.Size200" Class="arow-name">@ShellPoint.AgentMoments[rail - 1]</FluentText>
+            <div class="arow-body">
+                @if (rail == AgentSections.ToolkitRail)
+                {
+                    @if (Agent.Tools.Count == 0)
+                    {
+                        <FluentText Size="TextSize.Size400">—</FluentText>
+                    }
+
+                    @foreach (ToolDraft tool in Agent.Tools)
+                    {
+                        <FluentText Block="true" Class="tool">
+                            <FluentText Font="TextFont.Monospace" Size="TextSize.Size300" Class="tool-signature">@AgentRows.Signature(tool)</FluentText>
+                            — @tool.Description
+                        </FluentText>
+                    }
+                }
+                else
+                {
+                    <FluentText Size="TextSize.Size400">@(AgentSections.Prose(Agent, rail) ?? "—")</FluentText>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// The agent whose sections are shown.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public AgentDraft Agent { get; set; } = default!;
+
+    /// <summary>
+    /// Which section rails to show, all six by default.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<int> Rails { get; set; } = AgentSections.All;
+}

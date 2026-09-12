@@ -1,0 +1,69 @@
+@inject IDraftStateService DraftStateService
+@inject IDraftSerializationService DraftSerializationService
+@inject IJSRuntime JS
+
+@*
+    Taking the work away in one file. The receipt is read back out of the downloaded bytes: only the
+    file can say what is in the file.
+*@
+
+<FluentButton Appearance="ButtonAppearance.Outline" Disabled="Busy" OnClick="HandOverAsync">Save my work</FluentButton>
+
+@code {
+    /// <summary>
+    /// The name the file is saved under and the one the landing expects back.
+    /// </summary>
+    private const string FileName = "alembic-draft.json";
+
+    /// <summary>
+    /// Whether a turn is on the wire, in which case this waits like everything else.
+    /// </summary>
+    [Parameter]
+    public bool Busy { get; set; }
+
+    /// <summary>
+    /// Raised with the receipt and whether it reports a failure.
+    /// </summary>
+    [Parameter]
+    public EventCallback<(string Message, bool Failed)> OnReceipt { get; set; }
+
+    /// <summary>
+    /// Hands the work over, falling back to the newest autosave when this moment cannot be serialized.
+    /// </summary>
+    private async Task HandOverAsync()
+    {
+        if ((DraftStateService.Snapshot() ?? DraftStateService.Latest()) is not { } work)
+        {
+            await OnReceipt.InvokeAsync(("Nothing to save: there is no work in hand yet.", true));
+            return;
+        }
+
+        await JS.InvokeVoidAsync("alembicSave", FileName, Convert.ToBase64String(work));
+        await OnReceipt.InvokeAsync(await ReadBackAsync(work));
+    }
+
+    /// <summary>
+    /// Parses the downloaded bytes back into a Draft and counts them in the client's own nouns.
+    /// </summary>
+    private async Task<(string Message, bool Failed)> ReadBackAsync(byte[] work)
+    {
+        using MemoryStream stream = new MemoryStream(work);
+
+        if (await DraftSerializationService.DeserializeAsync(stream) is not { } saved)
+            return ($"{FileName} could not be read back.", true);
+
+        InterviewSitting? sitting = saved.Sitting;
+        int mapped = sitting?.Map.Count ?? 0;
+
+        string where = sitting is { At: >= 0 } && sitting.At < sitting.Map.Count
+            ? $"in hand: {sitting.Map[sitting.At].Label ?? sitting.Map[sitting.At].Name}"
+            : "in hand: the map";
+
+        return ($"{FileName} · read back: {mapped} on the map · {saved.Agents.Count} agents in the domain · {where} · {Sized(work.Length)}", false);
+    }
+
+    /// <summary>
+    /// The file's size, in the unit somebody reads a file size in.
+    /// </summary>
+    private static string Sized(int bytes) => bytes >= 1024 ? $"{bytes / 1024.0:0.#} KB" : $"{bytes} bytes";
+}

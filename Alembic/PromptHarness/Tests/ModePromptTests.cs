@@ -1,5 +1,5 @@
-using Distiller.Interfaces;
-using Distiller.Model;
+using Distiller2.Interfaces;
+using Distiller2.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Morgana.AI;
 using PromptHarness.Infrastructure;

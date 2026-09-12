@@ -1,0 +1,128 @@
+/* ==========================================================================
+   Alembic — the shell.
+
+   Controls, text and messages are Fluent's and take their look from the theme. What lives here is
+   only what Fluent does not offer: the track, the section rows and the full-height layout. Cyan is
+   written, gold marks the frontier and the accent is here-and-now. Every colour is a palette token.
+   ========================================================================== */
+
+:root {
+    --display: "Cormorant Garamond", Georgia, serif;
+    --track-h: 94px;
+    --r: 7px;
+}
+
+body {
+    margin: 0;
+    background: var(--alembic-bg);
+    color: var(--alembic-text);
+}
+
+.wordmark {
+    font-family: var(--display); font-size: 21px; letter-spacing: .2em;
+    text-transform: uppercase; color: var(--alembic-accent); text-shadow: var(--alembic-glow);
+}
+
+/* --- the provisional door ------------------------------------------------ */
+.landing { min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 22px; }
+.landing .wordmark { font-size: 44px; }
+
+/* --- the track: two edges and the stretch that repeats ------------------- */
+.track-wrap { background: var(--alembic-bg-deep); border-bottom: 1px solid var(--alembic-border); padding: 11px 26px 13px; }
+.track-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 9px; }
+.track { display: flex; align-items: stretch; gap: 7px; height: var(--track-h); }
+
+.seg {
+    flex: 1 1 0; min-width: 0; height: var(--track-h); overflow: hidden;
+    display: flex; flex-direction: column; justify-content: space-between; align-items: stretch; gap: 6px;
+    text-align: left; padding: 11px 13px 12px; color: var(--alembic-muted);
+    background: color-mix(in srgb, var(--alembic-panel) 50%, transparent);
+    border: 1px solid var(--alembic-border); border-radius: var(--r);
+    transition: flex-grow .3s ease;
+}
+.seg .seg-name { font-size: 15px; line-height: 1.25; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg[data-state="done"] {
+    color: var(--alembic-text);
+    background: color-mix(in srgb, var(--alembic-cyan) 9%, transparent);
+    border-color: color-mix(in srgb, var(--alembic-cyan) 34%, transparent);
+}
+.seg[data-state="here"] {
+    flex-grow: 3.6; color: var(--alembic-text);
+    background: color-mix(in srgb, var(--alembic-accent-deep) 26%, transparent);
+    border-color: var(--alembic-accent); box-shadow: var(--alembic-glow);
+}
+.seg[data-state="ahead"] { background: transparent; }
+.seg.edge { flex-grow: .62; }
+.seg.edge[data-state="here"]:not(.fixed) { flex-grow: 4.4; }
+.track[data-phase="edge"] .seg:not(.edge), .track[data-phase="map"] .seg:not(.edge) { flex-grow: .5; }
+.track .sep { width: 1px; background: var(--alembic-border); margin: 6px 4px; flex: none; }
+
+/* The carousel: the agent in hand at the centre, its neighbours behind the arrows. */
+.carousel { flex: 1 1 auto; min-width: 0; height: var(--track-h); display: flex; align-items: stretch; gap: 7px; }
+.carousel .seg.middle { flex: 1 1 0; }
+.seg.middle .seg-name { width: 100%; }
+.pos-now { margin-left: auto; font-size: 13px; color: var(--alembic-accent); font-variant-numeric: tabular-nums; }
+.seg[data-state="done"] .pos-now { color: var(--alembic-cyan); }
+.arrow { height: var(--track-h); font-size: 20px; }
+.arrow .pos { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; margin: 0 6px; }
+
+@keyframes slide-in { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+.seg.middle.slide { animation: slide-in .28s ease both; }
+
+/* The seven marks: the same seven on every agent, which is how the repetition shows. */
+.ticks { display: flex; gap: 4px; width: 100%; }
+.tick {
+    flex: 1 1 0; min-width: 0; height: auto; padding: 0; border: 0; background: none;
+    display: flex; flex-direction: column; align-items: stretch; gap: 4px; text-align: left;
+}
+.tick .bar { height: 3px; border-radius: 2px; background: var(--alembic-border); }
+.tick .lab { font-size: 12.5px; color: color-mix(in srgb, var(--alembic-muted) 80%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tick[data-state="done"] .bar { background: var(--alembic-cyan); }
+.tick[data-state="done"] .lab { color: var(--alembic-muted); }
+.tick[data-state="here"] .bar { background: var(--alembic-accent); box-shadow: 0 0 8px var(--alembic-accent); }
+.tick[data-state="here"] .lab { color: var(--alembic-text); }
+.tick.frontier .lab { color: var(--alembic-gold); }
+.tick.frontier .bar { background: color-mix(in srgb, var(--alembic-gold) 55%, transparent); }
+
+.mini { display: block; width: 100%; height: 3px; border-radius: 2px; background: var(--alembic-border); overflow: hidden; }
+.mini i { display: block; height: 100%; background: var(--alembic-cyan); }
+
+/* --- the stream: one open card, full height, scrolling inside itself ---- */
+.stream { display: flex; flex-direction: column; min-height: 0; padding: 18px 26px 20px; }
+.who-now { display: flex; align-items: baseline; gap: 10px; margin: 0 0 15px; }
+
+.open {
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+    border: 1px solid var(--alembic-border-lit); border-radius: var(--r);
+    background: color-mix(in srgb, var(--alembic-panel) 88%, transparent);
+    box-shadow: var(--alembic-glow); padding: 20px 22px 16px;
+}
+.open-body { flex: 1; min-height: 0; overflow-y: auto; padding-right: 10px; display: flex; flex-direction: column; gap: 14px; }
+
+.asked { margin: 0; text-wrap: pretty; }
+.quote { margin: 0; padding: 12px 16px; max-width: 150ch; border-left: 2px solid var(--alembic-accent); }
+.choice, .traits { align-self: flex-start; }
+.answer { flex: 1 1 auto; }
+.thinking { margin: auto; }
+.actions { margin-top: 14px; }
+
+/* --- an agent's sections, one row each ---------------------------------- */
+.arows { display: flex; flex-direction: column; }
+.arow {
+    display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 22px; align-items: start;
+    border-bottom: 1px solid var(--alembic-border); padding: 13px 8px 14px;
+}
+.arow:last-child { border-bottom: 0; }
+.arow-name { letter-spacing: .12em; text-transform: uppercase; color: var(--alembic-cyan); padding-top: 3px; }
+.arow-body { max-width: 165ch; }
+.tool + .tool { margin-top: 6px; }
+.tool-signature { color: var(--alembic-cyan); }
+
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* A desk workbench: under 1000px the track wraps and nothing more. */
+@media (max-width: 1000px) {
+    .track { flex-wrap: wrap; height: auto; }
+    .seg { flex: 1 1 180px; }
+    .seg[data-state="here"] { flex-basis: 100%; }
+}

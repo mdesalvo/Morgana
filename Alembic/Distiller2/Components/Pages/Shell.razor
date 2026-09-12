@@ -1,0 +1,436 @@
+@page "/shell"
+@inject IInterviewService InterviewService
+@inject IDraftStateService DraftStateService
+@inject INotificationService NotificationService
+
+@*
+    The shell: the track on top, one open card below. While the interview runs the frontier is where it
+    stands; once it ends the domain is the frontier and every moment behind it is free to read. A
+    correction reopens one agent and hands the shell back where it was.
+*@
+
+<FluentLayout Height="100dvh">
+    <FluentLayoutItem Area="LayoutArea.Header" Class="track-wrap">
+        <div class="track-head">
+            <span class="wordmark">Alembic</span>
+        </div>
+
+        <Track Entries="entries" Frontier="Frontier" Pointer="Pointer" OnLook="LookAt" />
+    </FluentLayoutItem>
+
+    <FluentLayoutItem Area="LayoutArea.Content" Class="stream">
+        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Bottom" HorizontalGap="10px" Class="who-now">
+            <FluentText As="TextTag.H2" Size="TextSize.Size500" Weight="TextWeight.Semibold">@Heading</FluentText>
+            @if (!Pointer.IsMap)
+            {
+                <FluentText Size="TextSize.Size300" Color="Color.Lightweight">@Pointer.Name</FluentText>
+            }
+        </FluentStack>
+
+        @* The domain's cards stay mounted, so a distillation or a validation survives looking elsewhere. *@
+        @if (inDomain && DraftStateService.Current is { } domain)
+        {
+            <div class="domain-slot" hidden="@(Pointer != Collaboration)">
+                <CollaborationCard Draft="domain" OnNext="() => LookAt(Validation)" OnChanged="Changed" OnRefuse="RefuseAsync">
+                    <Keep><SaveWork Busy="busy" OnReceipt="NotifyAsync" /></Keep>
+                </CollaborationCard>
+            </div>
+
+            <div class="domain-slot" hidden="@(Pointer != Validation)">
+                <ValidationCard Draft="domain" OnNext="() => LookAt(Archive)" OnGoTo="GoTo" OnChanged="Changed" OnNotify="NotifyAsync">
+                    <Keep><SaveWork Busy="busy" OnReceipt="NotifyAsync" /></Keep>
+                </ValidationCard>
+            </div>
+
+            <div class="domain-slot" hidden="@(Pointer != Archive)">
+                <ArchiveCard Draft="domain" OnChanged="Changed" OnNotify="NotifyAsync">
+                    <Keep><SaveWork Busy="busy" OnReceipt="NotifyAsync" /></Keep>
+                </ArchiveCard>
+            </div>
+        }
+
+        @if (!(inDomain && Pointer.OnDomain))
+        {
+            @if (Pointer != Working)
+            {
+                <ReadingCard Point="Pointer" Entries="entries" Agent="AgentAt(Pointer.Entry)" Busy="busy"
+                             CanUpdate="CanUpdate" OnLeave="() => LookAt(Working)" OnUpdate="ReopenAsync">
+                    <Keep><SaveWork Busy="busy" OnReceipt="NotifyAsync" /></Keep>
+                </ReadingCard>
+            }
+            else if (InterviewService.Current is not { } interview)
+            {
+                <section class="open">
+                    <div class="open-body"><FluentSpinner Size="SpinnerSize.Large" Class="thinking" /></div>
+                </section>
+            }
+            else if (Working.Rail == ShellPoint.AcceptanceRail)
+            {
+                <AcceptanceCard Agent="interview.Agent" Busy="busy" OnAccept="AcceptAsync">
+                    <Keep><SaveWork Busy="busy" OnReceipt="NotifyAsync" /></Keep>
+                </AcceptanceCard>
+            }
+            else
+            {
+                <QuestionCard Asked="@(interview.Question ?? "…")"
+                              Quoted="@interview.Quoted"
+                              Prompting="@Prompting(interview)"
+                              Choice="@(interview.Chosen ? null : interview.Choice)"
+                              Traits="interview.Traits"
+                              Taken="interview.TraitsTaken"
+                              Correcting="Correcting"
+                              Busy="busy"
+                              Error="@interview.Error"
+                              Turn="interview.Exchanges"
+                              OnAnswer="SendAsync"
+                              OnChoose="ChooseAsync"
+                              OnLeave="AcceptAsync">
+                    <Keep><SaveWork Busy="busy" OnReceipt="NotifyAsync" /></Keep>
+                </QuestionCard>
+            }
+        }
+    </FluentLayoutItem>
+</FluentLayout>
+
+@code {
+    /// <summary>
+    /// The worked example under the very first question, while nothing about the client is known.
+    /// </summary>
+    private const string HouseExample =
+        "We run a small bike repair shop. Customers bring in the bike, we give them a quote, "
+        + "then we repair it and let them know when it's ready.";
+
+    /// <summary>
+    /// The domain's three moments.
+    /// </summary>
+    private static readonly ShellPoint Collaboration = new(-1, ShellPoint.CollaborationRail);
+
+    /// <inheritdoc cref="Collaboration" />
+    private static readonly ShellPoint Validation = new(-1, ShellPoint.CollaborationRail + 1);
+
+    /// <inheritdoc cref="Collaboration" />
+    private static readonly ShellPoint Archive = new(-1, ShellPoint.CollaborationRail + 2);
+
+    /// <summary>
+    /// Where the client came in from the import: walk, validate or archive. Absent, the interview.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "door")]
+    public string? Door { get; set; }
+
+    /// <summary>
+    /// Whether a turn is on the wire.
+    /// </summary>
+    private bool busy;
+
+    /// <summary>
+    /// Whether the interview is behind the client and the domain is what they are working on.
+    /// </summary>
+    private bool inDomain;
+
+    /// <summary>
+    /// The domain moment the client last stood on.
+    /// </summary>
+    private ShellPoint domainAt = Collaboration;
+
+    /// <summary>
+    /// Where the client is looking when it is not the work in hand; <c>null</c> means the work in hand.
+    /// </summary>
+    private ShellPoint? looking;
+
+    /// <summary>
+    /// The agents on the track, in map order.
+    /// </summary>
+    private IReadOnlyList<IntentDraft> entries = [];
+
+    /// <summary>
+    /// The interview that owns the frontier: the one a correction set aside, else the running one.
+    /// </summary>
+    private InterviewState? Standing => InterviewService.Current?.Resume ?? InterviewService.Current;
+
+    /// <summary>
+    /// Where the interview stands; in the domain, the Archive, so everything is open.
+    /// </summary>
+    private ShellPoint Frontier =>
+        inDomain ? Archive
+        : Standing is { } standing ? ShellPoint.FrontierOf(standing)
+        : ShellPoint.Map;
+
+    /// <summary>
+    /// Where the open work is: the frontier, the reopened agent's step or the domain moment last stood on.
+    /// </summary>
+    // A correction's own map is the one agent it reopened, so its step is placed on the track by name.
+    private ShellPoint Working =>
+        InterviewService.Current is { } interview && (inDomain || interview.Resume is not null)
+            ? new ShellPoint(EntryOf(interview.Intent), ShellPoint.FrontierOf(interview).Rail)
+            : inDomain ? domainAt : Frontier;
+
+    /// <summary>
+    /// Where the client is looking.
+    /// </summary>
+    private ShellPoint Pointer => looking ?? Working;
+
+    /// <summary>
+    /// Whether the open question corrects an agent that already exists.
+    /// </summary>
+    private bool Correcting => inDomain || InterviewService.Current?.Resume is not null;
+
+    /// <summary>
+    /// Whether the agent read under the pointer can be reopened: one correction at a time.
+    /// </summary>
+    private bool CanUpdate =>
+        Pointer.OnAgent && (inDomain
+            ? InterviewService.Current is null
+            : InterviewService.Current is { Resume: null, Revision: null });
+
+    /// <summary>
+    /// What the card is about, said once above it.
+    /// </summary>
+    private string Heading =>
+        Pointer.IsMap ? "Domain map"
+        : Pointer.OnAgent && Pointer.Entry >= 0 && Pointer.Entry < entries.Count ? $"Agent: {Named(entries[Pointer.Entry])}"
+        : "Domain";
+
+    /// <summary>
+    /// Moves the pointer. In the domain a domain moment becomes the place the client stands.
+    /// </summary>
+    private void LookAt(ShellPoint point)
+    {
+        if (inDomain && point.OnDomain && InterviewService.Current is null)
+        {
+            domainAt = point;
+            looking = null;
+            return;
+        }
+
+        looking = point == Working || point > Frontier ? null : point;
+    }
+
+    /// <summary>
+    /// Opens where a finding's rewrite belongs: an agent's section, the map, the colleagues or the code.
+    /// </summary>
+    private void GoTo(ValidationFinding finding)
+    {
+        int entry = finding.Agent is { } agent ? EntryOf(agent) : -1;
+
+        ShellPoint target = finding.Check switch
+        {
+            ValidationCheck.Colleagues => Collaboration,
+            ValidationCheck.Code => Archive,
+            _ when entry >= 0 && finding.Check is ValidationCheck.Agents or ValidationCheck.Tools
+                => new ShellPoint(entry, finding.Step is { } step ? (int)step : 1),
+            _ => ShellPoint.Map
+        };
+
+        LookAt(target);
+    }
+
+    /// <summary>
+    /// Where an intent sits on the track.
+    /// </summary>
+    private int EntryOf(IntentDraft intent) => EntryOf(intent.Name ?? string.Empty);
+
+    /// <inheritdoc cref="EntryOf(IntentDraft)" />
+    private int EntryOf(string name)
+    {
+        for (int entry = 0; entry < entries.Count; entry++)
+            if (string.Equals(entries[entry].Name, name, StringComparison.OrdinalIgnoreCase))
+                return entry;
+
+        return -1;
+    }
+
+    /// <summary>
+    /// The agent behind a track entry: the one being written or corrected, otherwise the one in the domain.
+    /// </summary>
+    private AgentDraft? AgentAt(int entry)
+    {
+        if (InterviewService.Current is { } interview && (inDomain || interview.Resume is not null) && entry == EntryOf(interview.Intent))
+            return interview.Agent;
+
+        if (!inDomain && Standing is { } standing && standing.OnAnEntry && entry == standing.At)
+            return standing.Agent;
+
+        if (entry < 0 || entry >= entries.Count)
+            return null;
+
+        string? name = entries[entry].Name;
+
+        return DraftStateService.Current?.Agents.FirstOrDefault(agent =>
+            string.Equals(agent.ID, name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// The worked example in the answer box: the model's, the house one on the opening question.
+    /// </summary>
+    private static string Prompting(InterviewState interview) =>
+        interview.Example
+        ?? (interview is { Pass: InterviewStep.DomainMapper, PassJustOpened: true } ? HouseExample : string.Empty);
+
+    /// <summary>
+    /// The client's own word for an entry: its button once it has one, its name until then.
+    /// </summary>
+    private static string Named(IntentDraft intent) => intent.Label ?? intent.Name ?? "…";
+
+    /// <summary>
+    /// Enters through the door the client chose, picks up an interview in hand or lights the burner.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        if (Door is "walk" or "validate" or "archive" && DraftStateService.Current is { Agents.Count: > 0 })
+        {
+            EnterDomain();
+            domainAt = Door switch { "validate" => Validation, "archive" => Archive, _ => Collaboration };
+
+            // Correcting starts on the first agent: whoever comes to correct recognises the problem by reading.
+            if (Door == "walk")
+                looking = new ShellPoint(0, 1);
+
+            StateHasChanged();
+            return;
+        }
+
+        if (InterviewService.Current is null)
+            await TurnAsync(() => InterviewService.StartAsync());
+
+        if (InterviewService.Current is null)
+            EnterDomain();
+
+        Refresh();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Sends a typed answer; the answer that settles the last step hands the shell to the domain.
+    /// </summary>
+    private async Task SendAsync(string said)
+    {
+        await TurnAsync(() => InterviewService.AnswerAsync(said));
+        AfterTurn();
+    }
+
+    /// <summary>
+    /// Sends the offered button's answer, lit before the round trip so the gesture shows at once.
+    /// </summary>
+    private Task ChooseAsync(QuickReply choice)
+    {
+        if (InterviewService.Current is { } interview)
+            interview.Chosen = true;
+
+        return SendAsync(choice.Value);
+    }
+
+    /// <summary>
+    /// Lets the agent into the domain; a correction hands the shell back where it was.
+    /// </summary>
+    private async Task AcceptAsync()
+    {
+        await TurnAsync(() => InterviewService.AcceptAsync());
+        AfterTurn();
+    }
+
+    /// <summary>
+    /// Opens a correction of the agent under the pointer, starting at its Target.
+    /// </summary>
+    private async Task ReopenAsync()
+    {
+        int entry = Pointer.Entry;
+        bool opened = false;
+
+        if (inDomain && entry >= 0 && entry < entries.Count && entries[entry].Name is { } name)
+            await TurnAsync(async () => opened = await InterviewService.ReviseAsync(name));
+        else if (!inDomain)
+            await TurnAsync(async () => opened = await InterviewService.ReopenAsync(entry));
+
+        if (!opened)
+            await NotifyAsync(("This agent cannot be reopened right now.", true));
+    }
+
+    /// <summary>
+    /// Runs one engine call with the shell marked busy, then brings the pointer back to the work in hand.
+    /// </summary>
+    private async Task TurnAsync(Func<Task> call)
+    {
+        busy = true;
+        StateHasChanged();
+
+        try
+        {
+            await call();
+        }
+        finally
+        {
+            busy = false;
+            looking = null;
+            Refresh();
+        }
+    }
+
+    /// <summary>
+    /// Hands the shell to the domain once no interview is left running.
+    /// </summary>
+    private void AfterTurn()
+    {
+        if (!inDomain && InterviewService.Current is null)
+            EnterDomain();
+        else
+            Refresh();
+    }
+
+    /// <summary>
+    /// Puts the client on the domain, on its first moment.
+    /// </summary>
+    private void EnterDomain()
+    {
+        inDomain = true;
+        domainAt = Collaboration;
+        looking = null;
+        Refresh();
+    }
+
+    /// <summary>
+    /// Reads the track's entries: today's map while interviewing, the domain's agents once in it.
+    /// </summary>
+    // A correction takes its agent out of the domain while it runs, so the track keeps the list it had.
+    private void Refresh()
+    {
+        if (!inDomain && Standing is { } standing)
+        {
+            entries = [.. standing.Map];
+            return;
+        }
+
+        if (inDomain && InterviewService.Current is not null)
+            return;
+
+        DomainDraft? draft = DraftStateService.Current;
+
+        entries = draft is null
+            ? []
+            : [.. draft.Intents.Where(intent => draft.Agents.Any(agent =>
+                  string.Equals(agent.ID, intent.Name, StringComparison.OrdinalIgnoreCase)))];
+    }
+
+    /// <summary>
+    /// Records that the domain changed under a form, so the save file and the autosave are never behind.
+    /// </summary>
+    private void Changed() => DraftStateService.Set(DraftStateService.Current);
+
+    /// <summary>
+    /// Shows a refusal.
+    /// </summary>
+    private Task RefuseAsync(string reason) => NotifyAsync((reason, true));
+
+    /// <summary>
+    /// Shows an ephemeral message: informative when it reports, an error when it refuses.
+    /// </summary>
+    private async Task NotifyAsync((string Message, bool Failed) receipt)
+    {
+        if (receipt.Failed)
+            await NotificationService.ShowErrorToastAsync(receipt.Message);
+        else
+            await NotificationService.ShowInfoToastAsync(receipt.Message);
+    }
+}

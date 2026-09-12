@@ -1,0 +1,43 @@
+@*
+    Acceptance is no turn: no question and no answer box. The agent whole and the client's word.
+*@
+
+<section class="open">
+    <div class="open-body">
+        <SectionRows Agent="Agent" />
+    </div>
+
+    <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Class="actions">
+        <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" Disabled="Busy"
+                      OnClick="() => OnAccept.InvokeAsync()">
+            Accept the agent &rarr;
+        </FluentButton>
+        @Keep
+    </FluentStack>
+</section>
+
+@code {
+    /// <summary>
+    /// The agent waiting to be let into the domain.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public AgentDraft Agent { get; set; } = default!;
+
+    /// <summary>
+    /// Whether the commit is already under way.
+    /// </summary>
+    [Parameter]
+    public bool Busy { get; set; }
+
+    /// <summary>
+    /// Taking the work away, beside the button that lets the agent in.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Keep { get; set; }
+
+    /// <summary>
+    /// Raised when the client lets the agent into the domain.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnAccept { get; set; }
+}

@@ -1,4 +1,4 @@
-using Distiller.Model;
+using Distiller2.Model;
 using PromptHarness.Infrastructure;
 
 namespace PromptHarness.Fixtures;
