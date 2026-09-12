@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Net;
 using Anthropic;
 using Anthropic.Core;
 using Microsoft.Extensions.AI;
@@ -41,10 +43,19 @@ public class Anthropic : MorganaLLM
         // A single low-level AnthropicClient (API key only, no model) is enough — the SDK binds
         // the model at the IChatClient adapter layer below, not here, so this one client is
         // shared across every tier.
+        // Left to its defaults the SDK retries a rate-limited or overloaded call on its own, with a
+        // backoff nobody sees and no ceiling anybody chose: a turn that is being throttled is
+        // indistinguishable from a turn that is thinking, for minutes, and the caller waits it out
+        // with nothing on the screen and nothing in the log. The timeout bounds ONE attempt, so the
+        // worst case of a call is it times the retries — which is what any ceiling above has to be
+        // read against, since a caller's own budget covers a whole agentic loop of such calls.
         AnthropicClient anthropicClient = new AnthropicClient(
             new ClientOptions
             {
-                ApiKey = this.configuration["Morgana:LLM:Anthropic:ApiKey"]!
+                ApiKey = this.configuration["Morgana:LLM:Anthropic:ApiKey"]!,
+                MaxRetries = this.configuration.GetValue("Morgana:LLM:Anthropic:MaxRetries", 2),
+                Timeout = TimeSpan.FromSeconds(this.configuration.GetValue("Morgana:LLM:Anthropic:TimeoutSeconds", 60)),
+                Handlers = [new AttemptLogger(loggerFactory?.CreateLogger<Anthropic>())]
             });
 
         // Binds the tiers declared in configuration so they're available at runtime for
@@ -72,5 +83,39 @@ public class Anthropic : MorganaLLM
         // Wraps up tier registration and picks which client the framework's own actors
         // (Guard, Classifier, Presenter, ChannelAdapter) will use.
         FinalizeModelRegistration();
+    }
+
+    /// <summary>
+    /// Writes down every call actually put on the wire, including the ones the SDK retries by itself.
+    /// </summary>
+    /// <remarks>
+    /// The telemetry wrapper above measures a completion end to end, so a call throttled three times
+    /// and answered on the fourth reads there as one slow call. This is the only place that can say
+    /// it was throttled: a refusal carrying a retry-after is recorded as a refusal, so a wait nobody
+    /// asked for stops looking like a model taking its time.
+    /// </remarks>
+    private sealed class AttemptLogger(ILogger? logger) : DelegatingHandler
+    {
+        /// <inheritdoc />
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            long startedAt = Stopwatch.GetTimestamp();
+
+            HttpResponseMessage response = await base.SendAsync(request, cancellationToken);
+
+            double elapsed = Stopwatch.GetElapsedTime(startedAt).TotalSeconds;
+
+            if (response.StatusCode is HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError)
+                logger?.LogWarning(
+                    "Anthropic refused a call with {Status} after {Elapsed:0.0}s and asks to wait {RetryAfter}s; the SDK will retry it",
+                    (int)response.StatusCode, elapsed,
+                    response.Headers.RetryAfter?.Delta?.TotalSeconds.ToString("0") ?? "an unstated number of");
+            else
+                logger?.LogInformation("Anthropic answered {Status} in {Elapsed:0.0}s", (int)response.StatusCode, elapsed);
+
+            return response;
+        }
     }
 }
