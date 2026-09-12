@@ -1,4 +1,4 @@
-using Distiller2.Harness;
+using Distiller.Harness;
 using Xunit;
 
 namespace PromptHarness.Tests;

@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
-using Distiller2.Interfaces;
-using Distiller2.Model;
+using Distiller.Interfaces;
+using Distiller.Model;
 using Microsoft.Extensions.DependencyInjection;
 using PromptHarness.Fixtures;
 using PromptHarness.Infrastructure;

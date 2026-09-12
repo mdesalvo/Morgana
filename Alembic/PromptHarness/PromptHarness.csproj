@@ -2,19 +2,19 @@
 
   <!--
     Nested at Alembic/PromptHarness/, with its own PromptHarness.slnx rather than joining
-    Distiller2's and not a client of Distiller2's own code — the same positioning the repo-root
+    Distiller's and not a client of Distiller's own code — the same positioning the repo-root
     PromptHarness/ takes relative to Morgana (its own PromptHarness.slnx beside Morgana.slnx),
-    which is why this project carries the same name: an instrument pointed AT Distiller2, not a
-    part of it. Before Alembic/ became a container for Distiller2/ and this project, it sat beside
+    which is why this project carries the same name: an instrument pointed AT Distiller, not a
+    part of it. Before Alembic/ became a container for Distiller/ and this project, it sat beside
     Alembic/ as a physical sibling named AlembicHarness; the relationship is unchanged, only where
     it lives on disk is.
 
     What it tests is deliberately narrow and never what the repo-root PromptHarness tests. That one
     boots a real Morgana host and asks "does the domain Alembic produced behave correctly at
     runtime" — Alembic itself can never answer that, has no channel and no way to. Neither does
-    this project. This harness stays entirely on Distiller2's own side of that boundary: it drives
+    this project. This harness stays entirely on Distiller's own side of that boundary: it drives
     IInterviewService with a scripted "domain expert" the same way a client's own typing would and
-    asks "did Distiller2's mapping, its interview conduct across passes and its finalization emit —
+    asks "did Distiller's mapping, its interview conduct across passes and its finalization emit —
     Draft validation, the archive, the migration report — do what they are supposed to do." A
     domain it interviews is a fixture chosen to exercise Alembic's own doctrine, never a product in
     its own right.
@@ -65,14 +65,14 @@
     <Description>
     This is the non-regression harness for Alembic itself — the repo-root PromptHarness is for
     Morgana. It drives IInterviewService with a scripted domain expert against fixture domains
-    chosen to exercise Alembic's own doctrine and asserts on what Distiller2's mapping, interview
+    chosen to exercise Alembic's own doctrine and asserts on what Distiller's mapping, interview
     conduct and finalization emit actually produce. It never tests the runtime behaviour of a
     domain Alembic produced — that question belongs to the repo-root PromptHarness and Alembic has
     no channel to answer it with in the first place.
     </Description>
 
     <!--
-      Same UserSecretsId as Distiller2 itself: the harness owns no secrets of its own and reads
+      Same UserSecretsId as Distiller itself: the harness owns no secrets of its own and reads
       provider, tiers and API keys from the very store that configures the Alembic under test, so
       the suite always runs against whatever LLM Alembic is currently wired to.
     -->
@@ -86,12 +86,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The one dependency that matters: Distiller2's own services, driven in-process. -->
-    <ProjectReference Include="..\Distiller2\Distiller2.csproj" />
+    <!-- The one dependency that matters: Distiller's own services, driven in-process. -->
+    <ProjectReference Include="..\Distiller\Distiller.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\Distiller2\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\Distiller\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
 
     <!--
       The shipped Examples domain, as the fixture for everything that starts from a configuration a

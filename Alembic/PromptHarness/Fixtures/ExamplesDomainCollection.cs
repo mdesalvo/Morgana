@@ -10,7 +10,7 @@ namespace PromptHarness.Fixtures;
 /// Separate from <see cref="BistroLunaCollection"/> because it starts from the other end. That one
 /// interviews a domain into existence and asks what Alembic wrote; this one takes a configuration
 /// somebody already runs and asks what Alembic does to it — which is the only way to have an agent
-/// marked <see cref="Distiller2.Model.Provenance.Imported"/> to correct in the first place.
+/// marked <see cref="Distiller.Model.Provenance.Imported"/> to correct in the first place.
 /// </remarks>
 [CollectionDefinition(Name)]
 public sealed class ExamplesDomainCollection : ICollectionFixture<ExamplesDomainFixture>

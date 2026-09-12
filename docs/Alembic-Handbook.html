@@ -386,7 +386,7 @@
     <!-- PAGE 1 — COVER                                                         -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page cover">
-      <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller2/wwwroot/images/Alembic-Banner.jpg" class="cover-avatar" alt="Alembic"/>
+      <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/wwwroot/images/Alembic-Banner.jpg" class="cover-avatar" alt="Alembic"/>
       <h1>Alembic</h1>
       <p class="tagline">Here Morgana takes life. Yours the shape, hers the spells: a functional interview with a domain expert, distilled into a complete, running Morgana domain</p>
       <div class="version-badge">HANDBOOK</div>
@@ -455,7 +455,7 @@
       <table>
         <thead><tr><th>Component</th><th>Role</th><th>Technology</th><th>Default Port</th></tr></thead>
         <tbody>
-          <tr><td><strong>Distiller2</strong></td><td>The workbench itself: the interview, validation, emit</td><td>ASP.NET 10, Blazor Server</td><td>5005</td></tr>
+          <tr><td><strong>Distiller</strong></td><td>The workbench itself: the interview, validation, emit</td><td>ASP.NET 10, Blazor Server</td><td>5005</td></tr>
           <tr><td><strong>LLM</strong></td><td>Language model provider, <code>Performance</code> tier only</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>n/a</td></tr>
           <tr><td><strong>PromptHarness</strong></td><td>Alembic's own non-regression suite: drives a scripted interview and asserts on what the interview conduct and finalization emit produce</td><td>xUnit v3, in-process</td><td>n/a</td></tr>
         </tbody>
@@ -541,16 +541,16 @@
       <p>The interview opens on the domain, not on an agent: which of their processes Morgana is being installed to run. Each entry becomes one intent and one agent. The greyed sentence in the answer box is a worked example written for <em>their</em> trade, never a form to fill in.</p>
 
       <div class="screenshots wide">
-        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller2/Assets/Alembic-DomainMapping.jpg" alt="Domain Mapping"/>
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-DomainMapping.jpg" alt="Domain Mapping"/>
       </div>
 
       <h3>The Six Passes</h3>
       <p><strong>Target</strong> settles everything the agent can take on and where that stops. <strong>Personality</strong> is offered rather than dictated: a voice is recognised, so Alembic proposes words and the box stays open. <strong>Toolkit</strong> asks what it must reach outside the conversation; the single button carries the answer that adds nothing, so agreeing costs one press and disagreeing is still a sentence.</p>
 
       <div class="screenshots">
-        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller2/Assets/Alembic-Target.jpg" alt="Target"/>
-        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller2/Assets/Alembic-Personality.jpg" alt="Personality"/>
-        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller2/Assets/Alembic-Toolkit.jpg" alt="Toolkit"/>
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Target.jpg" alt="Target"/>
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Personality.jpg" alt="Personality"/>
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Toolkit.jpg" alt="Toolkit"/>
       </div>
 
       <p><strong>Territory</strong> follows the toolkit, which is the earliest it can be truthful: it asks what this desk alone can say precisely when somebody elsewhere in the business needs to know: a competence, never a list of what the agent can do. It is the sentence every other desk of the domain reads before deciding whether a question is this one's, published on the agent's card; it is asked whether or not this installation will ever speak to another. The same subject is now known in sharper words than the map could reach, so the routing that lands a user here is said with them.</p>
@@ -562,8 +562,8 @@
       <p><strong>Instructions</strong> and <strong>Formatting</strong> come after the toolkit because both speak about it: how the agent goes about the work, then how what it finds reaches the person reading it. A step whose ground is already settled asks nothing and closes on its own: on this run <strong>Formatting</strong> did exactly that, which is why the rail moves straight to the last screen. There the finished agent is read back whole: letting it into the domain is the one decision of the interview that is the client's.</p>
 
       <div class="screenshots">
-        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller2/Assets/Alembic-Instructions.jpg" alt="Instructions"/>
-        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller2/Assets/Alembic-AgentAccepted.jpg" alt="Agent Acceptance"/>
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Instructions.jpg" alt="Instructions"/>
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-AgentAccepted.jpg" alt="Agent Acceptance"/>
       </div>
 
       <div class="info-box">
@@ -667,7 +667,7 @@
     docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
 
     <span class="comment"># Or from source</span>
-    cd Alembic/Distiller2
+    cd Alembic/Distiller
     dotnet run   <span class="comment"># https://localhost:5005, no running Morgana required</span></div>
 
       <div class="page-footer">
@@ -685,7 +685,7 @@
         <thead><tr><th>Resource</th><th>Location</th></tr></thead>
         <tbody>
           <tr><td>Source code</td><td>github.com/mdesalvo/Morgana (<code>Alembic/</code>)</td></tr>
-          <tr><td>The workbench</td><td><code>Alembic/Distiller2/</code>, own <code>Distiller2.slnx</code></td></tr>
+          <tr><td>The workbench</td><td><code>Alembic/Distiller/</code>, own <code>Distiller.slnx</code></td></tr>
           <tr><td>Alembic's own tests</td><td><code>Alembic/PromptHarness/</code>, own <code>PromptHarness.slnx</code></td></tr>
           <tr><td>Local run</td><td>https://localhost:5005 (no running Morgana required)</td></tr>
           <tr><td>Design doctrine</td><td><code>Alembic/CLAUDE.md</code></td></tr>

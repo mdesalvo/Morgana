@@ -1,5 +1,5 @@
-using Distiller2.Interfaces;
-using Distiller2.Model;
+using Distiller.Interfaces;
+using Distiller.Model;
 
 namespace PromptHarness.Infrastructure;
 

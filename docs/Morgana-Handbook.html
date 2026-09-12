@@ -788,7 +788,7 @@
     <span class="comment"># Development (build from source)</span>
     cp development.env.template .env
     nano .env
-    dotnet build ./Morgana && dotnet build ./Channels/Cauldron && dotnet build ./Channels/Grimoire && dotnet build ./Channels/Rune && dotnet build ./Alembic/Distiller2
+    dotnet build ./Morgana && dotnet build ./Channels/Cauldron && dotnet build ./Channels/Grimoire && dotnet build ./Channels/Rune && dotnet build ./Alembic/Distiller
     docker compose --env-file .env --env-file .env.versions build
     docker compose --env-file .env --env-file .env.versions up</div>
 

@@ -1,7 +1,7 @@
 using System.Reflection;
-using Distiller2.Interfaces;
-using Distiller2.Model;
-using Distiller2.Services;
+using Distiller.Interfaces;
+using Distiller.Model;
+using Distiller.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Morgana.AI;
 using Morgana.AI.Extensions;

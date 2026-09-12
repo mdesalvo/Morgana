@@ -16,9 +16,9 @@ C# assets and starter non-regression scenarios.
 The name follows the repo's habit of naming the instrument (Cauldron the vessel, Grimoire the book,
 Rune the mark): an *alembic* is the apparatus that distils.
 
-`Alembic/` holds two projects, each with its own solution: `Distiller2/` (the workbench, on Fluent UI
+`Alembic/` holds two projects, each with its own solution: `Distiller/` (the workbench, on Fluent UI
 Blazor 5) and `PromptHarness/` (its own non-regression harness, nested for tidiness and deliberately
-not a client of Distiller2's code).
+not a client of Distiller's code).
 
 ## What Alembic is not
 
@@ -372,7 +372,7 @@ what a first scenario is made of and nothing about what will actually go wrong, 
 after it. Running them needs a **source checkout** of Morgana, since PromptHarness boots it in-process.
 
 The split: **which behaviours are worth protecting** is knowledge about agents, true before any client
-arrives, settled once as `Distiller2/Harness/Templates/*.yaml`. **Which words say them here** is knowledge
+arrives, settled once as `Distiller/Harness/Templates/*.yaml`. **Which words say them here** is knowledge
 about the client's business, so the model derives: replace every `{{…}}`, change nothing else. Asking a
 model for "two or three scenarios" was the earlier, wrong shape — it made the model choose which behaviours
 matter, the decision it is worst placed to take. Applicability is decided in C# only for what a template
@@ -471,7 +471,7 @@ is therefore free: there is no parallel representation to maintain.
 
 ## Build and Run
 
-.NET 10, Blazor Server. `dotnet run` from `Distiller2/` serves https://localhost:5005 and needs **no**
+.NET 10, Blazor Server. `dotnet run` from `Distiller/` serves https://localhost:5005 and needs **no**
 Morgana instance running. Docker is profile-gated, so `compose up` skips it.
 
 ## Conventions
