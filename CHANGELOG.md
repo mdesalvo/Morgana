@@ -14,12 +14,15 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
 
 ### 🔄 Changed
 - **`other` intent belongs to the Classifier** — the complement of a domain is no longer declared by every `agents.json`, but described once in the Classifier prompt. The name is reserved: a plugin declaring it is refused
+- Updated `Microsoft.Agents.AI` to 1.21.0
+- Updated `Microsoft.Extensions.AI` to 10.10.0
 
 ### 🐛 Fixed
 - **A deployment may bring several plugins** — every `agents.json` found is merged into the domain, instead of the first one discovered silently winning. Two plugins claiming the same intent, or the same prompt id, are refused at startup naming both
 
 ### 🚀 Future Enablement
 - **A federation of Morgana** — every installation already describes itself completely on an open card, so nothing stands between today and a **directory of peers**: point a Morgana at a list of addresses and its agents discover, in one pass, every competence the federation can answer for. The pieces are all published; what is left is the collecting
+
 
 ## [0.29.0] - 2026-09-01
 ### 🎯 Major Feature: Cross-Agent collaboration over A2A
@@ -40,6 +43,7 @@ Colleagues live in this instance — a remote peer is not declarable yet (see Fu
 ### 🚀 Future Enablement
 - **Agents beyond this process** — the asking side already holds a standard `A2AAgent` resolved from a card, so a remote colleague needs a way to declare one (an address, an issuer of its own) rather than new machinery
 - **Morgana inside someone else's system** — the cards are published and the endpoints are open to whoever holds credentials, so a domain modelled here can be reached by orchestrators Morgana knows nothing about
+
 
 ## [0.28.0] - 2026-08-23
 ### 🎯 Major Feature: Alembic — Turnkey Domain Onboarding
@@ -76,6 +80,7 @@ Framing itself is **closed by default** — a site may host the widget only once
 - **Morgana reaching users where they already are** — the widget turns adoption from "migrate a site onto Cauldron" into "paste one tag", making every existing web property a candidate surface without touching its stack or its release cycle. The per-origin allowlist makes each of those surfaces explicitly granted and individually revocable, which is the natural hook for per-site conversation policy, attribution and analytics.
 - **Embedding on sites outside the operator's control** — because the conversation runs in a sandboxed frame on Cauldron's own origin rather than inside the host document, a site can carry Morgana without being able to read what visitors say to her and she cannot be reached by the host page's scripts. That boundary is the precondition for handing the widget to partners and to customers' own portals, rather than only to properties the Morgana operator already owns.
 
+
 ## [0.27.0] - 2026-08-06
 ### ✨ Added
 - **Intent collision detection with automatic disambiguation** — The classifier now returns its candidate intents *ranked* by confidence instead of a single pick and any candidate falling within `Morgana:ActorSystem:IntentCollisionThreshold` (default `0.10`) of the top score is treated as a genuine collision rather than a clean match.
@@ -101,6 +106,7 @@ Framing itself is **closed by default** — a site may host the widget only once
 - **Grimoire/Rune (2)**
   - Raw terminal control bytes (ESC, BEL, ...) in message text or an agent name passed straight through to the TTY unfiltered, letting untrusted text ring the terminal bell or inject ANSI/OSC sequences (rename the terminal title, move the cursor, ...)
   - The terminal's own cursor was never hidden, so it showed up as a stray blinking block wherever Spectre's repaints last left it
+
 
 ## [0.26.0] - 2026-08-01
 ### 🎯 Major Feature: PromptHarness — Behavioral & Contextual Test Suite for Morgana Prompt System
@@ -134,6 +140,7 @@ In practice, the harness **has already surfaced multiple behavioral and authorit
 - **Safe automated prompt optimization** — The presence of an automated regression gateway makes it possible to safely run LLM-powered prompt-refinement loops, letting an external model refactor or compress prompt prose while `PromptHarness` mathematically guarantees no loss in behavior or context.
 - **Advanced multi-turn agent routing** — Moving turn continuation out-of-band via `SetTurnContinuation` removes natural-language parsing fragility. This allows the implementation of complex, stateful orchestration where agents can delegate control to other sub-agents deterministically without corrupting the chat context.
 - **Proactive prompt-injection screening** — The contextual axis architecture paves the way for a real-time firewall layer that can intercept and analyze context reads/writes *before* they reach the model, leveraging the same non-revelation rules enforced by the harness.
+
 
 ## [0.25.0] - 2026-07-19
 ### 🎯 Major Feature: Two-Tier LLM — Efficiency/Performance for Agents

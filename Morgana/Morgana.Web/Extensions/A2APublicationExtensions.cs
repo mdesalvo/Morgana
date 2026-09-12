@@ -86,7 +86,7 @@ public static class A2APublicationExtensions
 
                 // Runs the agent inline and answers with a Message rather than a Task: a consultation is a
                 // single question answered in full, which is what the published card advertises.
-                .AddA2AServer(options => options.AgentRunMode = AgentRunMode.DisallowBackground);
+                .AddA2AServer(options => options.AgentRunMode = AgentRunMode.ReturnMessage);
         }
 
         // Handed back so this call can sit in a chain of registrations like every other Add* in the
