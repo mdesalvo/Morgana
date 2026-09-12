@@ -80,7 +80,7 @@
                    letting four unfamiliar words be the first thing on the screen. *@
                 <p class="panel-intro">
                     Everything so far came out of the interview. These four did not: they describe the
-                    <b>C# code</b> Alembic is about to write for you, not the work your agents do.
+                    <b>C# code</b> Alembic is about to emit for you, not the work your agents do.
                     Nobody asked you during the interview because they belong to whoever installs
                     Morgana rather than to the person who knows the business. Every one already has a
                     sensible answer &mdash; change them only if your team has its own conventions.
@@ -293,26 +293,6 @@
                         }
                     </tbody>
                 </table>
-
-                <p class="muted">
-                    A colleague at another Morgana is named twice over &mdash; the intent and the instance
-                    publishing it &mdash; and neither name is checked here or at startup, because the only
-                    thing that knows is that instance's own agent card, read on the first consultation.
-                    The instance itself must be declared in the deployment's configuration under
-                    <code>Morgana:AgentToAgent:Partners</code>, spelled exactly as it is here; the
-                    migration report in the archive says so again, with the address and key it
-                    deliberately does not carry.
-                </p>
-
-                <p class="muted">
-                    A colleague ticked here changes what an agent <em>can</em> do and not a word of what
-                    its own prose <em>says</em> — so an agent whose instructions still send the customer
-                    to another desk for that very subject will keep doing exactly that and the
-                    consultation is paid for in prompt tokens and never happens. Run
-                    <b>colleagues out of step</b> on Review, which is the pass that reads the two
-                    against each other. The interview's own closing step does both at once and is
-                    where this belongs when a domain is being written rather than uploaded.
-                </p>
             </div>
 
             <div class="panel">
@@ -385,10 +365,13 @@
                             <path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
                         </svg>
                         <div>
-                            <strong>PromptHarness requires a local source checkout of Morgana.</strong>
-                            It cannot connect to deployed instances, containers, or managed environments.
+                            <strong>Running these conversations later needs a local source checkout of Morgana.</strong>
+                            Nothing you are doing now does: this page needs no Morgana at all and the rest of
+                            the archive runs against the one you deploy. It is PromptHarness, the rig that
+                            replays them, that boots Morgana inside its own process — so it cannot reach a
+                            deployed instance, a container or a managed environment.
                             <ul>
-                                <li><strong>Check this box</strong> ONLY if your team hosts or customizes the Morgana source code directly within your own DevOps.</li>
+                                <li><strong>Check this box</strong> ONLY if your team hosts or customizes the Morgana source code directly within your own DevOps — that is where these conversations can actually be replayed.</li>
                                 <li><strong>Leave it unchecked</strong> if you do not have the source code — no scenario files will be written this time. Come back and check it once your setup changes; nothing about the rest of this archive depends on it.</li>
                             </ul>
                         </div>

@@ -316,7 +316,6 @@ input[type="checkbox"] {
 /* Prose that frames a panel before it starts asking. Held to a reading measure of its own, since
    the table beside it wants the full width and a paragraph does not. */
 .panel-intro {
-    max-width: 46rem;
     margin: 0 0 1.5rem;
     color: var(--alembic-muted);
     font-size: 0.9rem;
