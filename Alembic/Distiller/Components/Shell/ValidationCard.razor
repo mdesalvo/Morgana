@@ -89,11 +89,19 @@
                                     </FluentText>
                                     <div class="fix">
                                         <FluentText Italic="true" Class="fix-text muted">@finding.Fix</FluentText>
-                                        <FluentButton Appearance="ButtonAppearance.Outline" Loading="@(applying == finding)"
+                                        <FluentButton Appearance="ButtonAppearance.Outline"
                                                       Disabled="@(applying is not null)" OnClick="() => ApplyAsync(finding)">
                                             Apply the correction
                                         </FluentButton>
                                     </div>
+
+                                    @if (applying == finding)
+                                    {
+                                        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px" Class="working">
+                                            <FluentSpinner Size="SpinnerSize.Small" />
+                                            <FluentText Size="TextSize.Size400">Rewriting the agents this finding names…</FluentText>
+                                        </FluentStack>
+                                    }
                                 </div>
                             }
                         </div>
@@ -101,18 +109,28 @@
                 </div>
             }
         </div>
+    </div>
 
-        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px" Class="run">
-            <FluentButton Appearance="ButtonAppearance.Primary" Disabled="@(chosen == 0 || running)" Loading="running" OnClick="RunAsync">
+    @if (running)
+    {
+        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px" Class="working">
+            <FluentSpinner Size="SpinnerSize.Small" />
+            <FluentText Size="TextSize.Size400">Reading your agents side by side, for what only shows between them…</FluentText>
+        </FluentStack>
+    }
+
+    <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.SpaceBetween" VerticalAlignment="VerticalAlignment.Center" Class="actions">
+        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px" Width="auto">
+            <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Large" Disabled="@(chosen == 0 || running)" OnClick="RunAsync">
                 Run validation
             </FluentButton>
             <FluentText Class="muted">@(chosen == 0 ? "choose at least one check" : $"{chosen} of {rows.Count}")</FluentText>
         </FluentStack>
-    </div>
 
-    <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Class="actions">
-        <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="() => OnNext.InvokeAsync()">Next &rarr;</FluentButton>
-        @Keep
+        <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Width="auto">
+            <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="() => OnNext.InvokeAsync()">Next &rarr;</FluentButton>
+            @Keep
+        </FluentStack>
     </FluentStack>
 </section>
 
@@ -148,10 +166,10 @@
     public EventCallback OnChanged { get; set; }
 
     /// <summary>
-    /// Raised with what happened, informative or refused.
+    /// Raised with what happened and what kind of news it is.
     /// </summary>
     [Parameter]
-    public EventCallback<(string Message, bool Failed)> OnNotify { get; set; }
+    public EventCallback<Notice> OnNotify { get; set; }
 
     /// <summary>
     /// One check the client can choose: a family decided by reading or a class judged by a model.
@@ -246,9 +264,12 @@
 
         List<string> aspects = [.. chosen.Where(row => row.Check is null).Select(row => row.Id)];
 
+        bool refused = false;
+
         if (aspects.Count > 0 && Draft.Agents.Count < 2)
         {
-            await OnNotify.InvokeAsync(("One agent, so there is nothing to relate: the judged checks need two.", true));
+            refused = true;
+            await OnNotify.InvokeAsync(new Notice("One agent, so there is nothing to relate: the judged checks need two.", NoticeKind.Warning));
         }
         else if (aspects.Count > 0)
         {
@@ -268,7 +289,8 @@
 
             if (report.Error is { } failure)
             {
-                await OnNotify.InvokeAsync((failure, true));
+                refused = true;
+                await OnNotify.InvokeAsync(new Notice(failure, NoticeKind.Failure));
             }
             else
             {
@@ -294,7 +316,16 @@
                                              : coherence.Any(finding => string.Equals(finding.Kind, row.Id, StringComparison.OrdinalIgnoreCase))))
                            .Select(row => row.Id));
 
-        await OnNotify.InvokeAsync(("Validation run on the domain, with its exact words.", false));
+        int found = deterministic.Count(finding => rows.Any(row => row.Check == finding.Check && ran.Contains(row.Id)))
+                    + coherence.Count(finding => ran.Contains(finding.Kind));
+        int checks = rows.Count(row => ran.Contains(row.Id));
+        bool blocking = deterministic.Any(finding => finding.Severity == FindingSeverity.Error
+                                                     && rows.Any(row => row.Check == finding.Check && ran.Contains(row.Id)));
+
+        if (!refused && checks > 0)
+            await OnNotify.InvokeAsync(found == 0
+                ? new Notice($"Nothing to fix in the {checks} check(s) run.", NoticeKind.Success)
+                : new Notice($"{found} thing(s) worth a look in the {checks} check(s) run.", blocking ? NoticeKind.Failure : NoticeKind.Warning));
     }
 
     /// <summary>
@@ -323,7 +354,7 @@
             resolved.Add(new ResolvedCoherenceFinding(finding, result.Summary));
         }
 
-        await OnNotify.InvokeAsync((result.Summary, !result.Applied));
+        await OnNotify.InvokeAsync(new Notice(result.Summary, result.Applied ? NoticeKind.Success : NoticeKind.Failure));
     }
 
     /// <summary>

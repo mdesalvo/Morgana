@@ -21,7 +21,7 @@
     @* What came in reads in its own scroll, however many agents it holds; the doors stay in view below it. *@
     <div class="import-reading">
 
-    @if (Draft is null)
+    @if (Revealed is null)
     {
         <div class="landing-head">
             <h1>Bring it here</h1>
@@ -30,39 +30,35 @@
     }
 
     <div class="import-file">
-        @* The heading and the control it names read as one line. *@
         <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px">
-            <FluentText Size="TextSize.Size500">@(Draft is null ? "The file" : "Bring another")</FluentText>
+            <FluentText Size="TextSize.Size500">@(Revealed is null ? "The file" : "Bring another")</FluentText>
 
-            <FluentButton Id="alembic-upload" Appearance="ButtonAppearance.Primary" Loading="isReading" Disabled="isReading">
+            <FluentButton Id="alembic-upload" Appearance="ButtonAppearance.Primary" Disabled="isReading">
                 Choose a file
             </FluentButton>
         </FluentStack>
         <FluentInputFile AnchorId="alembic-upload" DragDropZoneVisible="false" Accept=".json,.zip"
                          MaximumFileSize="MaxUploadBytes" OnInputFileChange="OnFileSelectedAsync" />
 
-        @* The three shapes the control accepts, each named by what the client would do with it. *@
-        <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Class="muted">I can read any of these:</FluentText>
-        <ul class="import-kinds muted">
-            <li><code>agents.json</code> &mdash; the configuration of a Morgana already running: its agents come back to be read, corrected or added to.</li>
-            <li><code>alembic-draft.json</code> &mdash; the work you saved here last time: the interview reopens exactly where you left it.</li>
-            <li>a <code>.zip</code> archive packaged here &mdash; the domain inside it comes back whole, ready to be checked before you ship it again.</li>
-        </ul>
+        <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Class="muted">I can read any of these: <code>agents.json</code> (Morgana), <code>alembic-draft.json</code> (Alembic Draft), <code>alembic.zip</code> (Alembic Domain)</FluentText>
+    </div>
 
-        @if (isReading)
-        {
-            <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Class="muted">
+    @if (isReading)
+    {
+        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px" Class="working">
+            <FluentSpinner Size="SpinnerSize.Small" />
+            <FluentText Size="TextSize.Size400">
                 @(isLearning ? "Working out what your business does, so I do not have to ask you twice…" : "Reading…")
             </FluentText>
-        }
-    </div>
+        </FluentStack>
+    }
 
     @if (error is not null)
     {
         <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Color="Color.Error" Block="true">I could not read it: @error</FluentText>
     }
 
-    @if (Draft is { } draft)
+    @if (Revealed is { } draft)
     {
         @if (Resuming(draft) is { } resuming)
         {
@@ -124,7 +120,7 @@
 
     </div>
 
-    @if (Draft is { } domain)
+    @if (Revealed is { } domain)
     {
         <div class="import-doors">
         <p class="what-now">What you can do</p>
@@ -228,6 +224,11 @@
     /// The domain in hand.
     /// </summary>
     private DomainDraft? Draft => DraftStateService.Current;
+
+    /// <summary>
+    /// The domain as the page shows it: nothing while a file is still being read, so it arrives whole.
+    /// </summary>
+    private DomainDraft? Revealed => isReading ? null : Draft;
 
     /// <summary>
     /// Whether the Draft is a domain rather than an interview kept the moment it opened.

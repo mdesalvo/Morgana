@@ -26,7 +26,8 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 // On Blazor Server the library wants a default HttpClient registered before it.
 
 builder.Services.AddHttpClient();
-builder.Services.AddFluentUIComponents();
+builder.Services.AddFluentUIComponents(configuration =>
+    configuration.Toast.Position = ToastPosition.BottomCenter);
 
 // ==============================================================================
 // 3. ENGINE

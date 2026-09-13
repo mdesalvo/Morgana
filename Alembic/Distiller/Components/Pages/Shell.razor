@@ -346,7 +346,7 @@
             await TurnAsync(async () => opened = await InterviewService.ReopenAsync(entry));
 
         if (!opened)
-            await NotifyAsync(("This agent cannot be reopened right now.", true));
+            await NotifyAsync(new Notice("This agent cannot be reopened right now.", NoticeKind.Failure));
     }
 
     /// <summary>
@@ -422,16 +422,47 @@
     /// <summary>
     /// Shows a refusal.
     /// </summary>
-    private Task RefuseAsync(string reason) => NotifyAsync((reason, true));
+    private Task RefuseAsync(string reason) => NotifyAsync(new Notice(reason, NoticeKind.Warning));
 
     /// <summary>
-    /// Shows an ephemeral message: informative when it reports, an error when it refuses.
+    /// Shows a passing notice, drawn in the colour of the kind of news it is.
     /// </summary>
-    private async Task NotifyAsync((string Message, bool Failed) receipt)
+    private async Task NotifyAsync(Notice notice)
     {
-        if (receipt.Failed)
-            await NotificationService.ShowErrorToastAsync(receipt.Message);
-        else
-            await NotificationService.ShowInfoToastAsync(receipt.Message);
+        await NotificationService.ShowToastAsync(options =>
+        {
+            options.Intent = notice.Kind switch
+            {
+                NoticeKind.Success => ToastIntent.Success,
+                NoticeKind.Warning => ToastIntent.Warning,
+                NoticeKind.Failure => ToastIntent.Error,
+                _ => ToastIntent.Info
+            };
+            options.Title = notice.Message;
+            options.Lifetime = NoticeLifetime;
+            options.Style = LookOf(notice.Kind);
+        });
+    }
+
+    /// <summary>
+    /// How long a notice stays before it goes by itself.
+    /// </summary>
+    private static readonly TimeSpan NoticeLifetime = TimeSpan.FromSeconds(7);
+
+    /// <summary>
+    /// A notice as a lit panel of the room, edged and marked in the colour the checks use for the same news.
+    /// </summary>
+    private static string LookOf(NoticeKind kind)
+    {
+        (string colour, string markToken) = kind switch
+        {
+            NoticeKind.Success => ("var(--alembic-success)", "--colorStatusSuccessForeground1"),
+            NoticeKind.Warning => ("var(--alembic-gold)", "--colorStatusWarningForeground1"),
+            NoticeKind.Failure => ("var(--alembic-error)", "--colorStatusDangerForeground1"),
+            _ => ("var(--alembic-accent)", "--colorBrandForeground1")
+        };
+
+        return "--colorNeutralBackground1: var(--alembic-panel-lit); --shadow8: var(--alembic-glow); "
+               + $"--colorTransparentStroke: {colour}; {markToken}: {colour};";
     }
 }

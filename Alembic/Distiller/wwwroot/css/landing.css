@@ -22,9 +22,8 @@
     display: flex; flex-direction: column; justify-content: center;
 }
 /* Exactly the window's height: what came in scrolls inside itself, so the doors are whole at any height. */
-/* Centred like the landing: a short domain sits with its doors beneath it, never an empty gulf between. */
 .alembic-page {
-    max-width: 60rem; height: 100dvh; min-height: 0; padding-bottom: 1.5rem; background: none;
+    max-width: 76rem; height: 100dvh; min-height: 0; padding-bottom: 1.5rem; background: none;
     display: flex; flex-direction: column; justify-content: center;
 }
 /* Shrinks to scroll when the domain is long, never grows to push the doors away. */
@@ -95,14 +94,12 @@
 }
 
 /* --- what came in ----------------------------------------------------------- */
-/* Framed like the doors, so the upload reads as a place rather than a line floating on the ground. */
 .import-file {
     margin-top: 1.5rem; padding: 1.1rem 1.4rem; border-radius: 0.9rem;
     border: 1px solid var(--alembic-border-lit); box-shadow: var(--alembic-glow);
     background: linear-gradient(160deg, var(--alembic-panel-lit), var(--alembic-panel));
 }
 .import-file .muted, .notices, .muted { color: var(--alembic-muted); }
-.import-kinds { margin: 0.3rem 0 0; padding-left: 1.2rem; font-size: 1rem; line-height: 1.6; }
 .resuming {
     margin: 1.4rem 0 0.8rem; padding: 0.7rem 1.1rem; border-radius: 0.5rem;
     border: 1px solid var(--alembic-border-lit); box-shadow: var(--alembic-glow);

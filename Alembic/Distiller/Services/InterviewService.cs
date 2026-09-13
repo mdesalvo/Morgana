@@ -587,12 +587,12 @@ public class InterviewService : IInterviewService
         if (revision is null)
         {
             interviewState.Agent.Code.Inferred = true;
-            interviewState.Agent.Code.AgentClassName = ProposeClassName(interviewState.Intent.Name, "Agent");
+            interviewState.Agent.Code.AgentClassName = AgentCodeFacts.ProposeClassName(interviewState.Intent.Name, "Agent");
 
             // An agent with no native tools gets no tool class and that is a legal shape rather than
             // a gap: an MCP-only agent's tools arrive at runtime and never appear in agents.json.
             interviewState.Agent.Code.ToolClassName = interviewState.Agent.Tools.Count > 0
-                ? ProposeClassName(interviewState.Intent.Name, "Tool")
+                ? AgentCodeFacts.ProposeClassName(interviewState.Intent.Name, "Tool")
                 : null;
         }
         else if (interviewState.Agent.Tools.Count > 0 && interviewState.Agent.Code.ToolClassName is null)
@@ -600,7 +600,7 @@ public class InterviewService : IInterviewService
             // The one C# fact an edit can genuinely create: an agent that had no native tools and now
             // has some has nowhere for them to be emitted. Proposed by the same convention as a fresh
             // one and nothing else about the record is touched.
-            interviewState.Agent.Code.ToolClassName = ProposeClassName(interviewState.Intent.Name, "Tool");
+            interviewState.Agent.Code.ToolClassName = AgentCodeFacts.ProposeClassName(interviewState.Intent.Name, "Tool");
         }
 
         Restore(draft.Intents, revision?.IntentAt ?? -1, interviewState.Intent);
@@ -1470,14 +1470,6 @@ public class InterviewService : IInterviewService
         else
             list.Add(element);
     }
-
-    /// <summary>
-    /// Proposes a class name from an intent name, by the framework's own naming convention.
-    /// </summary>
-    private static string? ProposeClassName(string? intentName, string suffix) =>
-        string.IsNullOrWhiteSpace(intentName)
-            ? null
-            : $"{char.ToUpperInvariant(intentName[0])}{intentName[1..]}{suffix}";
 
     /// <summary>
     /// One tool of the interview, with the call and the sentence it is answered with written down.

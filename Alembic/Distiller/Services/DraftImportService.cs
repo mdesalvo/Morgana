@@ -209,12 +209,10 @@ public class DraftImportService : IDraftImportService
     /// when there would be one to hold.</param>
     private static AgentCodeFacts InferCodeFacts(string agentId, bool hasTools)
     {
-        string bareName = agentId.Trim();
-
         return new AgentCodeFacts
         {
-            AgentClassName = bareName.Length > 0 ? $"{char.ToUpperInvariant(bareName[0])}{bareName[1..]}Agent" : null,
-            ToolClassName = hasTools && bareName.Length > 0 ? $"{char.ToUpperInvariant(bareName[0])}{bareName[1..]}Tool" : null,
+            AgentClassName = AgentCodeFacts.ProposeClassName(agentId, "Agent"),
+            ToolClassName = hasTools ? AgentCodeFacts.ProposeClassName(agentId, "Tool") : null,
             Inferred = true
         };
     }

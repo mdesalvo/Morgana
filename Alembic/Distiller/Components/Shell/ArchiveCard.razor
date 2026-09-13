@@ -7,14 +7,14 @@
 @inject IJSRuntime JS
 
 @*
-    The Archive: the facts about the code, every one required and none proposed, then the distillation
+    The Archive: the facts about the code, every one required and only the class names proposed, then the distillation
     that writes the one archive the pieces are only correct inside.
 *@
 
 <section class="open">
     <div class="open-body">
         <FluentText Size="TextSize.Size800" Weight="TextWeight.Regular" Block="true" Class="asked">
-            Set the final technical aspects of the code
+            Set the technical aspects of the code
         </FluentText>
 
         <div class="panel-block">
@@ -27,36 +27,51 @@
         <div class="panel-block">
             <FluentText Class="panel-title">Classes, tier and MCP servers</FluentText>
 
-            <div class="a2a-grid">
+            <FluentGrid Spacing="3">
                 @foreach (AgentDraft agent in Agents)
                 {
-                    <div class="a2a-row code-row">
-                        <FluentText Size="TextSize.Size400" Class="a2a-who">@Named(agent)</FluentText>
+                    <FluentGridItem Xs="12" Md="2">
+                        <FluentText Size="TextSize.Size400">@Named(agent)</FluentText>
+                    </FluentGridItem>
 
-                        <div class="code-facts">
-                            <FluentStack Orientation="Orientation.Horizontal" Wrap="true" HorizontalGap="10px" VerticalGap="8px"
-                                         VerticalAlignment="VerticalAlignment.Center">
-                                <FluentTextInput @bind-Value="agent.Code.AgentClassName" @bind-Value:after="InvalidateAsync"
-                                                 Placeholder="agent class name" Disabled="running"
-                                                 MessageState="@IdentifierState(agent.Code.AgentClassName)" />
+                    <FluentGridItem Xs="12" Md="2">
+                        <FluentTextInput @bind-Value="agent.Code.AgentClassName" @bind-Value:after="InvalidateAsync"
+                                         Placeholder="agent class name" Disabled="running" Width="100%"
+                                         MessageState="@IdentifierState(agent.Code.AgentClassName)" />
+                    </FluentGridItem>
 
-                                @if (agent.Tools.Count > 0)
-                                {
-                                    <FluentTextInput @bind-Value="agent.Code.ToolClassName" @bind-Value:after="InvalidateAsync"
-                                                     Placeholder="tool class name" Disabled="running"
-                                                     MessageState="@IdentifierState(agent.Code.ToolClassName)" />
-                                }
+                    @if (agent.Tools.Count > 0)
+                    {
+                        <FluentGridItem Xs="12" Md="2">
+                            <FluentTextInput @bind-Value="agent.Code.ToolClassName" @bind-Value:after="InvalidateAsync"
+                                             Placeholder="tool class name" Disabled="running" Width="100%"
+                                             MessageState="@IdentifierState(agent.Code.ToolClassName)" />
+                        </FluentGridItem>
+                    }
+                    else
+                    {
+                        <FluentGridItem Xs="12" Md="2" HiddenWhen="GridItemHidden.Xs | GridItemHidden.Sm" />
+                    }
 
-                                <FluentText Font="TextFont.Monospace" Size="TextSize.Size200" Class="muted">@Files(agent)</FluentText>
+                    <FluentGridItem Xs="12" Md="3">
+                        <FluentText Font="TextFont.Monospace" Size="TextSize.Size200" Class="muted" Truncate="true">@Files(agent)</FluentText>
+                    </FluentGridItem>
 
-                                @foreach (Morgana.AI.Records.LLMTier tier in Tiers)
-                                {
-                                    <FluentToggleButton Size="ButtonSize.Small" Pressed="@(agent.Code.Tier == tier)" Disabled="running"
-                                                        Class="@(touched && agent.Code.Tier is null ? "invalid" : null)"
-                                                        OnClick="() => SetTierAsync(agent, tier)">@tier</FluentToggleButton>
-                                }
-                            </FluentStack>
+                    <FluentGridItem Xs="12" Md="3">
+                        <FluentRadioGroup TValue="Morgana.AI.Records.LLMTier?" Orientation="Orientation.Horizontal" Disabled="running"
+                                          @bind-Value="agent.Code.Tier" @bind-Value:after="InvalidateAsync"
+                                          MessageState="@(touched && agent.Code.Tier is null ? MessageState.Error : null)"
+                                          Message="@(touched && agent.Code.Tier is null ? "Pick a tier" : null)">
+                            @foreach (Morgana.AI.Records.LLMTier tier in Tiers)
+                            {
+                                <FluentRadio TValue="Morgana.AI.Records.LLMTier?" Value="tier" Label="@tier.ToString()" />
+                            }
+                        </FluentRadioGroup>
+                    </FluentGridItem>
 
+                    <FluentGridItem Md="2" HiddenWhen="GridItemHidden.Xs | GridItemHidden.Sm" />
+                    <FluentGridItem Xs="12" Md="10">
+                        <FluentStack Orientation="Orientation.Vertical" VerticalGap="8px">
                             @foreach (McpRow row in McpRows(agent))
                             {
                                 <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8px" VerticalAlignment="VerticalAlignment.Center">
@@ -69,21 +84,20 @@
                                 </FluentStack>
                             }
 
-                            <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Small" Disabled="running"
-                                          OnClick="() => AddMcp(agent)">Add an MCP server</FluentButton>
-                        </div>
-                    </div>
+                            <FluentStack Orientation="Orientation.Horizontal">
+                                <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Small" Disabled="running"
+                                              OnClick="() => AddMcp(agent)">Add an MCP server</FluentButton>
+                            </FluentStack>
+                        </FluentStack>
+                    </FluentGridItem>
                 }
-            </div>
+            </FluentGrid>
         </div>
 
         <div class="panel-block">
             @* Opt-in: a further model call per agent, spent on files only a source checkout of Morgana can replay. *@
             <FluentCheckbox @bind-Value="includeScenarios" @bind-Value:after="InvalidateAsync" Disabled="running"
-                            Label="Include the starter harness scenarios" />
-            <FluentText Class="muted">
-                One more model call per agent. PromptHarness replays them only against a source checkout of Morgana.
-            </FluentText>
+                            Label="Also generate the starter harness scenarios (one more model call per agent)" />
 
             @if (running)
             {
@@ -168,12 +182,12 @@
                         </span>
                     </FluentButton>
 
-                    <FluentButton Appearance="ButtonAppearance.Outline" OnClick="AgainAsync">Distil again</FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Outline" OnClick="AgainAsync">Run again</FluentButton>
                 </div>
             }
             else
             {
-                <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="FinalizeAsync">Finalize distillation</FluentButton>
+                <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="FinalizeAsync">Finalize domain</FluentButton>
             }
         </div>
     </div>
@@ -203,10 +217,10 @@
     public EventCallback OnChanged { get; set; }
 
     /// <summary>
-    /// Raised with what happened, informative or refused.
+    /// Raised with what happened and what kind of news it is.
     /// </summary>
     [Parameter]
-    public EventCallback<(string Message, bool Failed)> OnNotify { get; set; }
+    public EventCallback<Notice> OnNotify { get; set; }
 
     /// <summary>
     /// The two tiers an agent can think on.
@@ -312,19 +326,20 @@
     private IReadOnlyList<AgentDraft> Agents => [.. Draft.Agents.Where(agent => !string.IsNullOrWhiteSpace(agent.ID))];
 
     /// <summary>
-    /// Clears every proposed code fact and reads back the stated ones.
+    /// Fills every missing class name from the agent's name and reads back the stated code facts.
     /// </summary>
-    // Nothing is proposed here: a guessed class name nobody rereads lands in the client's code as a choice.
+    // Proposed in the box itself, where the client reads it before it can land in their code.
     protected override void OnInitialized()
     {
         foreach (AgentDraft agent in Draft.Agents)
         {
-            if (agent.Code.Inferred)
-            {
-                agent.Code.AgentClassName = null;
-                agent.Code.ToolClassName = null;
-                agent.Code.Inferred = false;
-            }
+            if (string.IsNullOrWhiteSpace(agent.Code.AgentClassName))
+                agent.Code.AgentClassName = AgentCodeFacts.ProposeClassName(agent.ID, "Agent");
+
+            if (agent.Tools.Count > 0 && string.IsNullOrWhiteSpace(agent.Code.ToolClassName))
+                agent.Code.ToolClassName = AgentCodeFacts.ProposeClassName(agent.ID, "Tool");
+
+            agent.Code.Inferred = false;
 
             mcp[agent] = [.. agent.Code.MCPServers.Select(url => new McpRow { Url = url })];
         }
@@ -403,15 +418,6 @@
     }
 
     /// <summary>
-    /// Chooses the tier an agent thinks on.
-    /// </summary>
-    private async Task SetTierAsync(AgentDraft agent, Morgana.AI.Records.LLMTier tier)
-    {
-        agent.Code.Tier = tier;
-        await InvalidateAsync();
-    }
-
-    /// <summary>
     /// Opens a blank MCP row: an address is never guessed.
     /// </summary>
     private void AddMcp(AgentDraft agent) => McpRows(agent).Add(new McpRow());
@@ -443,7 +449,7 @@
 
         if (HasHoles)
         {
-            await OnNotify.InvokeAsync(("Namespace, tier, class names and MCP servers must be completed before distilling.", true));
+            await OnNotify.InvokeAsync(new Notice("Namespace, tier, class names and MCP servers must be completed before distilling.", NoticeKind.Warning));
             return;
         }
 
@@ -451,7 +457,7 @@
 
         if (errors > 0)
         {
-            await OnNotify.InvokeAsync(($"{errors} {(errors == 1 ? "error stops" : "errors stop")} this domain from starting: see Validation.", true));
+            await OnNotify.InvokeAsync(new Notice($"{errors} {(errors == 1 ? "error stops" : "errors stop")} this domain from starting: see Validation.", NoticeKind.Failure));
             return;
         }
 
@@ -516,12 +522,12 @@
             package = null;
             written.Clear();
             plan.Clear();
-            await OnNotify.InvokeAsync(("Distillation stopped: nothing partial was kept.", true));
+            await OnNotify.InvokeAsync(new Notice("Distillation stopped: nothing partial was kept.", NoticeKind.Info));
         }
         catch (Exception failure)
         {
             Logger.LogError(failure, "The archive could not be built");
-            await OnNotify.InvokeAsync(($"The archive could not be built: {failure.Message}", true));
+            await OnNotify.InvokeAsync(new Notice($"The archive could not be built: {failure.Message}", NoticeKind.Failure));
         }
         finally
         {
@@ -563,9 +569,9 @@
     }
 
     /// <summary>
-    /// The archive's name, read off the namespace.
+    /// The archive's name, the same for every domain by convention: whoever receives it knows what it is.
     /// </summary>
-    private string ArchiveName => $"{rootNamespace.Trim().ToLowerInvariant().Replace('.', '-')}-morganized.zip";
+    private const string ArchiveName = "alembic.zip";
 
     /// <summary>
     /// The steps in the order the package service writes them: the configuration, every agent's class

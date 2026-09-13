@@ -36,6 +36,12 @@ code { font-family: var(--fontFamilyMonospace); }
 .landing { min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 22px; }
 .landing .wordmark { font-size: 44px; }
 
+.working {
+    margin-top: 1rem; padding: 0.8rem 1.1rem; border-radius: 0.5rem;
+    border: 1px solid var(--alembic-border-lit); box-shadow: var(--alembic-glow);
+    background: color-mix(in srgb, var(--alembic-accent) 12%, transparent);
+}
+
 /* --- the track: two edges and the stretch that repeats ------------------- */
 .track-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 9px; }
 .track { display: flex; align-items: stretch; gap: 7px; height: var(--track-h); }
@@ -60,9 +66,9 @@ code { font-family: var(--fontFamilyMonospace); }
     border-color: var(--alembic-accent); box-shadow: var(--alembic-glow);
 }
 .seg[data-state="ahead"] { background: transparent; }
-.seg.edge { flex-grow: .62; }
-.seg.edge[data-state="here"]:not(.fixed) { flex-grow: 4.4; }
-.track[data-phase="edge"] .seg:not(.edge), .track[data-phase="map"] .seg:not(.edge) { flex-grow: .5; }
+.seg.edge { flex-grow: .5; }
+.seg.edge[data-state="here"]:not(.fixed) { flex-grow: 1.4; }
+.track[data-phase="edge"] .seg:not(.edge), .track[data-phase="map"] .seg:not(.edge) { flex-grow: 1; }
 .track .sep { width: 1px; background: var(--alembic-border); margin: 6px 4px; flex: none; }
 
 /* The carousel: the agent in hand at the centre, its neighbours behind the arrows. */

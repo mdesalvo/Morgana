@@ -19,7 +19,6 @@
     padding: 11px 8px; border-bottom: 1px solid var(--alembic-border);
 }
 .a2a-row:last-child { border-bottom: 0; }
-.a2a-row.code-row { grid-template-columns: 200px minmax(0, 1fr); align-items: start; }
 .a2a-remote { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(260px, 2fr) auto; gap: 10px; align-items: start; }
 
 /* --- Validation: each check keeps its own outcomes ------------------------ */
@@ -28,14 +27,13 @@
 .vcheck:last-child { border-bottom: 0; }
 .vhead { display: flex; align-items: center; gap: 10px; }
 .name-btn { flex: 1; justify-content: flex-start; gap: 14px; padding: 11px 6px 11px 0; min-height: 44px; text-align: left; }
-.vname { flex: 0 1 auto; min-width: 0; font-size: 15.5px; color: var(--alembic-text); }
+.vname { flex: 0 1 auto; min-width: 0; margin-inline-end: 12px; font-size: 15.5px; color: var(--alembic-text); }
 .vres { margin-left: auto; font-size: 13px; white-space: nowrap; }
 .vres[data-kind="ok"] { color: var(--alembic-success); font-size: 16px; }
 .vres[data-kind="warn"] { color: var(--alembic-gold); }
 .vres[data-kind="err"] { color: var(--alembic-error); }
 .chev { color: var(--alembic-muted); font-size: 13px; width: 12px; }
 .vbody { padding: 2px 0 14px 38px; }
-.run { margin-top: 14px; }
 
 .finding {
     border: 1px solid var(--alembic-border); border-left: 2px solid var(--alembic-gold);
@@ -50,8 +48,6 @@
 .fix-text { flex: 1 1 40ch; }
 
 /* --- Archive: the facts about the code and the distillation --------------- */
-.code-facts { display: flex; flex-direction: column; gap: 8px; min-width: 0; align-items: flex-start; }
-.invalid { outline: 1px solid var(--alembic-error); outline-offset: 1px; }
 
 .distillation { display: flex; align-items: center; gap: 24px; padding: 8px 0; }
 .distillation-vessel { width: 64px; height: 88px; flex-shrink: 0; }

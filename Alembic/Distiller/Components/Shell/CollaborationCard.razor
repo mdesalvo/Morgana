@@ -10,7 +10,7 @@
         </FluentText>
 
         <div class="panel-block">
-            <FluentText Class="panel-title">Collaboration between agents</FluentText>
+            <FluentText Class="panel-title">Agents on your Morgana</FluentText>
 
             <div class="a2a-grid">
                 @foreach (AgentDraft asking in Agents)
@@ -31,20 +31,22 @@
         </div>
 
         <div class="panel-block">
-            <FluentText Class="panel-title">Agents available on another Morgana</FluentText>
+            <FluentText Class="panel-title">Agents on partner Morgana</FluentText>
 
             @foreach (RemoteRow row in remotes)
             {
                 <div class="a2a-remote">
                     <FluentTextInput @bind-Value="row.Intent" @bind-Value:after="() => RenameAsync(row)" Placeholder="agent name"
                                      MessageState="@Required(row.Intent)" Message="@RequiredMessage(row.Intent)" />
-                    <FluentTextInput @bind-Value="row.Instance" @bind-Value:after="() => RenameAsync(row)" Placeholder="partner"
+                    <FluentTextInput @bind-Value="row.Instance" @bind-Value:after="() => RenameAsync(row)" Placeholder="partner name"
                                      MessageState="@Required(row.Instance)" Message="@RequiredMessage(row.Instance)" />
                     <FluentButton Appearance="ButtonAppearance.Subtle" Title="Remove this colleague" OnClick="() => RemoveAsync(row)">✕</FluentButton>
                 </div>
             }
 
-            <FluentButton Appearance="ButtonAppearance.Outline" OnClick="Add">Add</FluentButton>
+            <FluentStack Orientation="Orientation.Horizontal">
+                <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Small" OnClick="Add">Add</FluentButton>
+            </FluentStack>
         </div>
     </div>
 

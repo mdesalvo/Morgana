@@ -532,6 +532,17 @@ public sealed class AgentCodeFacts
     public string? Namespace { get; set; }
 
     /// <summary>
+    /// Proposes a class name from an intent name by the framework's convention: <c>billing</c> and
+    /// <c>Agent</c> give <c>BillingAgent</c>. <c>null</c> when there is no name to go on.
+    /// </summary>
+    public static string? ProposeClassName(string? intentName, string suffix)
+    {
+        string bareName = intentName?.Trim() ?? string.Empty;
+
+        return bareName.Length > 0 ? $"{char.ToUpperInvariant(bareName[0])}{bareName[1..]}{suffix}" : null;
+    }
+
+    /// <summary>
     /// Name of the <c>MorganaAgent</c> subclass, e.g. <c>BillingAgent</c>.
     /// </summary>
     public string? AgentClassName { get; set; }
