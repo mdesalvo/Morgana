@@ -7,13 +7,17 @@
         <SectionRows Agent="Agent" />
     </div>
 
-    <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Class="actions">
-        <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" Disabled="Busy"
-                      OnClick="() => OnAccept.InvokeAsync()">
-            Accept the agent &rarr;
-        </FluentButton>
-        @Keep
-    </FluentStack>
+    @* While the agent is being let in, the next step is being composed: its commands arrive with it. *@
+    @if (!Busy)
+    {
+        <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Class="actions">
+            <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large"
+                          OnClick="() => OnAccept.InvokeAsync()">
+                Accept the agent &rarr;
+            </FluentButton>
+            @Keep
+        </FluentStack>
+    }
 </section>
 
 @code {

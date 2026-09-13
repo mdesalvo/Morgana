@@ -10,7 +10,8 @@
 *@
 
 <FluentLayout Height="100dvh">
-    <FluentLayoutItem Area="LayoutArea.Header" Class="track-wrap">
+    <FluentLayoutItem Area="LayoutArea.Header" Height="auto"
+                      Style="display: block; padding: 11px 26px 13px; color: inherit; background: var(--alembic-bg-deep); border-bottom: 1px solid var(--alembic-border);">
         <div class="track-head">
             <span class="wordmark">Alembic</span>
         </div>
@@ -20,10 +21,10 @@
 
     <FluentLayoutItem Area="LayoutArea.Content" Class="stream">
         <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Bottom" HorizontalGap="10px" Class="who-now">
-            <FluentText As="TextTag.H2" Size="TextSize.Size500" Weight="TextWeight.Semibold">@Heading</FluentText>
+            <FluentText Size="TextSize.Size500" Weight="TextWeight.Semibold">@Heading</FluentText>
             @if (!Pointer.IsMap)
             {
-                <FluentText Size="TextSize.Size300" Color="Color.Lightweight">@Pointer.Name</FluentText>
+                <FluentText Size="TextSize.Size300" Class="muted">@Pointer.Name</FluentText>
             }
         </FluentStack>
 
@@ -97,8 +98,8 @@
     /// The worked example under the very first question, while nothing about the client is known.
     /// </summary>
     private const string HouseExample =
-        "We run a small bike repair shop. Customers bring in the bike, we give them a quote, "
-        + "then we repair it and let them know when it's ready.";
+        "We run Bistrot Luna, a small neighbourhood bistro. Guests book a table, ask what's on tonight's menu "
+        + "and whether a dish suits their allergies, then order takeaway on the evenings they stay home.";
 
     /// <summary>
     /// The domain's three moments.
@@ -269,7 +270,7 @@
     /// <summary>
     /// The client's own word for an entry: its button once it has one, its name until then.
     /// </summary>
-    private static string Named(IntentDraft intent) => intent.Label ?? intent.Name ?? "…";
+    private static string Named(IntentDraft intent) => intent.Shown;
 
     /// <summary>
     /// Enters through the door the client chose, picks up an interview in hand or lights the burner.

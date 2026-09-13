@@ -13,19 +13,19 @@
 
 <section class="open">
     <div class="open-body">
-        <FluentText As="TextTag.H1" Size="TextSize.Size800" Weight="TextWeight.Regular" Block="true" Class="asked">
+        <FluentText Size="TextSize.Size800" Weight="TextWeight.Regular" Block="true" Class="asked">
             Set the final technical aspects of the code
         </FluentText>
 
         <div class="panel-block">
-            <FluentText As="TextTag.H3" Class="panel-title">Namespace</FluentText>
+            <FluentText Class="panel-title">Namespace</FluentText>
             <FluentTextInput @bind-Value="rootNamespace" @bind-Value:after="InvalidateAsync" Placeholder="namespace" Width="420px"
                              Disabled="running" MessageState="@(NamespaceMessage is null ? null : MessageState.Error)"
                              Message="@NamespaceMessage" />
         </div>
 
         <div class="panel-block">
-            <FluentText As="TextTag.H3" Class="panel-title">Classes, tier and MCP servers</FluentText>
+            <FluentText Class="panel-title">Classes, tier and MCP servers</FluentText>
 
             <div class="a2a-grid">
                 @foreach (AgentDraft agent in Agents)
@@ -47,7 +47,7 @@
                                                      MessageState="@IdentifierState(agent.Code.ToolClassName)" />
                                 }
 
-                                <FluentText Font="TextFont.Monospace" Size="TextSize.Size200" Color="Color.Lightweight">@Files(agent)</FluentText>
+                                <FluentText Font="TextFont.Monospace" Size="TextSize.Size200" Class="muted">@Files(agent)</FluentText>
 
                                 @foreach (Morgana.AI.Records.LLMTier tier in Tiers)
                                 {
@@ -81,7 +81,7 @@
             @* Opt-in: a further model call per agent, spent on files only a source checkout of Morgana can replay. *@
             <FluentCheckbox @bind-Value="includeScenarios" @bind-Value:after="InvalidateAsync" Disabled="running"
                             Label="Include the starter harness scenarios" />
-            <FluentText Color="Color.Lightweight">
+            <FluentText Class="muted">
                 One more model call per agent. PromptHarness replays them only against a source checkout of Morgana.
             </FluentText>
 
@@ -102,7 +102,7 @@
                     <div class="distillation-status">
                         <FluentText As="TextTag.Paragraph" Class="distillation-phase">@PhaseLabel</FluentText>
                         <FluentProgressBar Value="Percent" Max="100" Width="100%" />
-                        <FluentText Size="TextSize.Size200" Color="Color.Lightweight">
+                        <FluentText Size="TextSize.Size200" Class="muted">
                             @Percent% · @plan.Count(step => step.Done) of @plan.Count@(StepElapsed is { } elapsed ? $" · {elapsed} on this step" : "")
                         </FluentText>
                     </div>
@@ -133,7 +133,7 @@
                                 }
                             </ul>
                             <FluentProgressBar Value="cardPercent" Max="100" Width="100%" />
-                            <FluentText Size="TextSize.Size200" Color="Color.Lightweight" Class="step-card-percent">@cardPercent%</FluentText>
+                            <FluentText Size="TextSize.Size200" Class="step-card-percent muted">@cardPercent%</FluentText>
                         </div>
                     }
                 </div>
@@ -148,7 +148,7 @@
 
                 <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="14px" Class="distillation-stop">
                     <FluentButton Appearance="ButtonAppearance.Outline" Disabled="isStopping" OnClick="Stop">@(isStopping ? "Stopping…" : "Stop")</FluentButton>
-                    <FluentText Color="Color.Lightweight">Throws away everything written so far: nothing partial is kept.</FluentText>
+                    <FluentText Class="muted">Throws away everything written so far: nothing partial is kept.</FluentText>
                 </FluentStack>
             }
             else if (package is { } archive)
@@ -783,6 +783,6 @@
     /// The client's own word for an agent: the button of the intent that reaches it.
     /// </summary>
     private string Named(AgentDraft agent) =>
-        Draft.Intents.FirstOrDefault(intent => string.Equals(intent.Name, agent.ID, StringComparison.OrdinalIgnoreCase))?.Label
+        Draft.Intents.FirstOrDefault(intent => string.Equals(intent.Name, agent.ID, StringComparison.OrdinalIgnoreCase))?.Shown
         ?? agent.ID ?? "…";
 }

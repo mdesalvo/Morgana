@@ -67,11 +67,11 @@
                                         </FluentBadge>
                                         @finding.Message <code class="finding-where">@finding.Where</code>
                                     </p>
-                                    <FluentText As="TextTag.Paragraph" Italic="true" Color="Color.Lightweight" Class="because">
+                                    <FluentText As="TextTag.Paragraph" Italic="true" Class="because muted">
                                         @(error ? "It must be fixed because" : "You may leave it as it is, but it is worth fixing because") @LowerFirst(finding.Because)
                                     </FluentText>
                                     <div class="fix">
-                                        <FluentText Italic="true" Color="Color.Lightweight" Class="fix-text">The rewrite is yours: the section opens and you come back here.</FluentText>
+                                        <FluentText Italic="true" Class="fix-text muted">The rewrite is yours: the section opens and you come back here.</FluentText>
                                         <FluentButton Appearance="ButtonAppearance.Outline" OnClick="() => OnGoTo.InvokeAsync(finding)">Go to section &rarr;</FluentButton>
                                     </div>
                                 </div>
@@ -84,11 +84,11 @@
                                         <FluentBadge Appearance="BadgeAppearance.Tint" Color="BadgeColor.Warning">Warning</FluentBadge>
                                         @finding.What <code class="finding-where">@finding.Where</code>
                                     </p>
-                                    <FluentText As="TextTag.Paragraph" Italic="true" Color="Color.Lightweight" Class="because">
+                                    <FluentText As="TextTag.Paragraph" Italic="true" Class="because muted">
                                         You may leave it as it is, but it is worth fixing because @LowerFirst(finding.Why)
                                     </FluentText>
                                     <div class="fix">
-                                        <FluentText Italic="true" Color="Color.Lightweight" Class="fix-text">@finding.Fix</FluentText>
+                                        <FluentText Italic="true" Class="fix-text muted">@finding.Fix</FluentText>
                                         <FluentButton Appearance="ButtonAppearance.Outline" Loading="@(applying == finding)"
                                                       Disabled="@(applying is not null)" OnClick="() => ApplyAsync(finding)">
                                             Apply the correction
@@ -106,12 +106,12 @@
             <FluentButton Appearance="ButtonAppearance.Primary" Disabled="@(chosen == 0 || running)" Loading="running" OnClick="RunAsync">
                 Run validation
             </FluentButton>
-            <FluentText Color="Color.Lightweight">@(chosen == 0 ? "choose at least one check" : $"{chosen} of {rows.Count}")</FluentText>
+            <FluentText Class="muted">@(chosen == 0 ? "choose at least one check" : $"{chosen} of {rows.Count}")</FluentText>
         </FluentStack>
     </div>
 
     <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Class="actions">
-        <FluentButton Appearance="ButtonAppearance.Primary" OnClick="() => OnNext.InvokeAsync()">Next &rarr;</FluentButton>
+        <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="() => OnNext.InvokeAsync()">Next &rarr;</FluentButton>
         @Keep
     </FluentStack>
 </section>

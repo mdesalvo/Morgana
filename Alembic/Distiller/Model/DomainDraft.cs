@@ -311,6 +311,38 @@ public sealed class IntentDraft
     public string? Label { get; set; }
 
     /// <summary>
+    /// The entry as the workbench names it: the label's words without the glyphs that dress the button,
+    /// else the intent name.
+    /// </summary>
+    public string Shown
+    {
+        get
+        {
+            System.Text.StringBuilder words = new System.Text.StringBuilder();
+
+            foreach (System.Text.Rune rune in (Label ?? string.Empty).EnumerateRunes())
+            {
+                System.Globalization.UnicodeCategory category = System.Text.Rune.GetUnicodeCategory(rune);
+
+                // Emoji, their variation selectors and the joiners between them decorate; letters and punctuation name.
+                if (category is System.Globalization.UnicodeCategory.OtherSymbol
+                        or System.Globalization.UnicodeCategory.ModifierSymbol
+                        or System.Globalization.UnicodeCategory.Format
+                        or System.Globalization.UnicodeCategory.NonSpacingMark
+                        or System.Globalization.UnicodeCategory.EnclosingMark
+                    || rune.Value is >= 0x1F000 and <= 0x1FAFF)
+                    continue;
+
+                words.Append(rune.ToString());
+            }
+
+            string shown = string.Join(' ', words.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+            return shown.Length > 0 ? shown : Name ?? "…";
+        }
+    }
+
+    /// <summary>
     /// Text sent on the user's behalf when the presenter's button for this intent is pressed.
     /// </summary>
     /// <remarks><c>null</c> until written alongside <see cref="Label"/>, for the same reason.</remarks>

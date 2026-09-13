@@ -3,9 +3,10 @@
     the client is reading instead of choosing.
 *@
 
-<FluentCard Class="@(Primary ? "gateway primary-gateway" : "gateway")" OnClick="() => OnGo.InvokeAsync()" Role="link">
+@* Full height, so doors side by side stand equal even when one name wraps. *@
+<FluentCard Class="@(Primary ? "gateway primary-gateway" : "gateway")" Height="100%" OnClick="() => OnGo.InvokeAsync()" Role="link">
     @Sigil
-    <FluentText As="TextTag.H2" Weight="TextWeight.Regular">@Title</FluentText>
+    <FluentText Size="TextSize.Size800" Weight="TextWeight.Regular" Align="TextAlign.Center">@Title</FluentText>
     <span class="go">@Go &rarr;</span>
 </FluentCard>
 

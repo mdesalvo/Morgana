@@ -11,7 +11,7 @@
                 @foreach (IntentDraft intent in Entries)
                 {
                     <div class="arow">
-                        <FluentText Font="TextFont.Monospace" Size="TextSize.Size200" Class="arow-name">@(intent.Label ?? intent.Name)</FluentText>
+                        <FluentText Font="TextFont.Monospace" Size="TextSize.Size200" Class="arow-name">@intent.Shown</FluentText>
                         <FluentText Size="TextSize.Size400" Class="arow-body">@intent.Description</FluentText>
                     </div>
                 }
@@ -24,18 +24,22 @@
         }
     </div>
 
-    <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Class="actions">
-        <FluentButton Appearance="ButtonAppearance.Outline" Disabled="Busy" OnClick="() => OnLeave.InvokeAsync()">
-            Leave as is
-        </FluentButton>
-        @if (CanUpdate)
-        {
-            <FluentButton Appearance="ButtonAppearance.Primary" Disabled="Busy" OnClick="() => OnUpdate.InvokeAsync()">
-                Update &rarr;
+    @* While a correction is being opened, its first step is being composed: its commands arrive with it. *@
+    @if (!Busy)
+    {
+        <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Class="actions">
+            <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Large" OnClick="() => OnLeave.InvokeAsync()">
+                Leave as is
             </FluentButton>
-        }
-        @Keep
-    </FluentStack>
+            @if (CanUpdate)
+            {
+                <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="() => OnUpdate.InvokeAsync()">
+                    Update &rarr;
+                </FluentButton>
+            }
+            @Keep
+        </FluentStack>
+    }
 </section>
 
 @code {

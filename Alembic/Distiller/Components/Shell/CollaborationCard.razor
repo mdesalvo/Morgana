@@ -5,12 +5,12 @@
 
 <section class="open">
     <div class="open-body">
-        <FluentText As="TextTag.H1" Size="TextSize.Size800" Weight="TextWeight.Regular" Block="true" Class="asked">
+        <FluentText Size="TextSize.Size800" Weight="TextWeight.Regular" Block="true" Class="asked">
             For each agent, which other agents could it consult to serve its users better? (optional)
         </FluentText>
 
         <div class="panel-block">
-            <FluentText As="TextTag.H3" Class="panel-title">Collaboration between agents</FluentText>
+            <FluentText Class="panel-title">Collaboration between agents</FluentText>
 
             <div class="a2a-grid">
                 @foreach (AgentDraft asking in Agents)
@@ -31,7 +31,7 @@
         </div>
 
         <div class="panel-block">
-            <FluentText As="TextTag.H3" Class="panel-title">Agents available on another Morgana</FluentText>
+            <FluentText Class="panel-title">Agents available on another Morgana</FluentText>
 
             @foreach (RemoteRow row in remotes)
             {
@@ -49,7 +49,7 @@
     </div>
 
     <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Class="actions">
-        <FluentButton Appearance="ButtonAppearance.Primary" OnClick="NextAsync">Next &rarr;</FluentButton>
+        <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="NextAsync">Next &rarr;</FluentButton>
         @Keep
     </FluentStack>
 </section>
@@ -303,6 +303,6 @@
     /// The client's own word for an agent: the button of the intent that reaches it.
     /// </summary>
     private string Named(AgentDraft agent) =>
-        Draft.Intents.FirstOrDefault(intent => string.Equals(intent.Name, agent.ID, StringComparison.OrdinalIgnoreCase))?.Label
+        Draft.Intents.FirstOrDefault(intent => string.Equals(intent.Name, agent.ID, StringComparison.OrdinalIgnoreCase))?.Shown
         ?? agent.ID ?? "…";
 }

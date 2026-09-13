@@ -7,14 +7,19 @@
     <title>Alembic - Morgana's Authoring Workbench</title>
     <link href="favicon.svg" rel="icon" type="image/svg+xml" />
 
+    @* Fluent's own component styles, under ours so the shell can overrule them. *@
+    <link rel="stylesheet" href="@Assets["Alembic.styles.css"]" />
+
     @* The palette first: every file after it spends its tokens and none defines them. *@
     <link rel="stylesheet" href="@Assets["css/palette.css"]" />
+    <link rel="stylesheet" href="@Assets["css/fonts.css"]" />
     <link rel="stylesheet" href="@Assets["css/shell.css"]" />
     <link rel="stylesheet" href="@Assets["css/landing.css"]" />
     <link rel="stylesheet" href="@Assets["css/domain.css"]" />
     <HeadOutlet @rendermode="Interactive" />
 </head>
-<body>
+@* The page keeps the palette's ground from the first paint: Fluent's default body style would paint its own until the theme lands. *@
+<body no-fuib-style>
     <Routes @rendermode="Interactive" />
 
     <script src="_framework/blazor.web.js"></script>

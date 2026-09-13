@@ -1,7 +1,11 @@
 @inherits LayoutComponentBase
 @inject IThemeService ThemeService
 
-@Body
+@* The page waits for the palette's theme, so no control is ever seen in Fluent's default colours. *@
+@if (themed)
+{
+    @Body
+}
 
 <FluentProviders />
 
@@ -12,11 +16,54 @@
     private const string Seed = "#8b5cf6";
 
     /// <summary>
-    /// Grows Fluent's own colour ramp from the palette, so its controls stand in the same room.
+    /// Alembic's reading face, with the system faces behind it while the file loads.
     /// </summary>
+    private const string BaseFace = "'Source Sans 3', 'Segoe UI', system-ui, sans-serif";
+
+    /// <summary>
+    /// The face tool signatures and file names are set in.
+    /// </summary>
+    private const string MonospaceFace = "'IBM Plex Mono', ui-monospace, monospace";
+
+    /// <summary>
+    /// Whether the palette's theme is in place, so the page may be shown.
+    /// </summary>
+    private bool themed;
+
+    /// <summary>
+    /// Grows Fluent's colour ramp from the seed, then stands its grounds, text and lines in the palette's room.
+    /// </summary>
+    // Every value is a palette token rather than a hex, so palette.css stays the one place a colour is written.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
-            await ThemeService.SetThemeAsync(new ThemeSettings(Seed, 0, 0, ThemeMode.Dark, true));
+        if (!firstRender)
+            return;
+
+        Theme theme = await ThemeService.CreateCustomThemeAsync(new ThemeSettings(Seed, 0, 0, ThemeMode.Dark, true));
+
+        theme.Fonts.Family.Base = BaseFace;
+        theme.Fonts.Family.Numeric = BaseFace;
+        theme.Fonts.Family.Monospace = MonospaceFace;
+
+        // Fluent's grounds darken as their number grows, the palette's in the order they stack.
+        theme.Colors.Neutral.Background1 = "var(--alembic-panel)";
+        theme.Colors.Neutral.Background2 = "var(--alembic-bg)";
+        theme.Colors.Neutral.Background3 = "var(--alembic-bg-deep)";
+        theme.Colors.Neutral.Background4 = "var(--alembic-bg-deep)";
+        theme.Colors.Neutral.CardBackground = "var(--alembic-panel)";
+
+        theme.Colors.Neutral.Foreground1 = "var(--alembic-text)";
+        theme.Colors.Neutral.Foreground2 = "var(--alembic-text)";
+        theme.Colors.Neutral.Foreground3 = "var(--alembic-muted)";
+        theme.Colors.Neutral.Foreground4 = "var(--alembic-muted)";
+
+        theme.Colors.Neutral.Stroke1 = "var(--alembic-border-lit)";
+        theme.Colors.Neutral.Stroke2 = "var(--alembic-border)";
+        theme.Colors.Neutral.StrokeSubtle = "var(--alembic-border)";
+
+        await ThemeService.SetThemeAsync(theme);
+
+        themed = true;
+        StateHasChanged();
     }
 }

@@ -14,10 +14,10 @@
             @* The prose under approval stands apart from the question, so the client sees whose words are whose. *@
             @if (!string.IsNullOrWhiteSpace(Quoted))
             {
-                <FluentText As="TextTag.Paragraph" Block="true" Italic="true" Class="quote">@Quoted</FluentText>
+                <FluentText As="TextTag.Paragraph" Size="TextSize.Size500" Block="true" Italic="true" Class="quote">@Quoted</FluentText>
             }
 
-            <FluentText As="TextTag.H1" Size="TextSize.Size800" Weight="TextWeight.Regular" Block="true" Class="asked">
+            <FluentText Size="TextSize.Size800" Weight="TextWeight.Regular" Block="true" Class="asked">
                 @Asked
             </FluentText>
 
@@ -40,11 +40,12 @@
                 </FluentStack>
             }
 
-            @* Keyed on the turn: every question gets a fresh box with the caret already in it. *@
+            @* Keyed on the turn: every question gets a fresh box with the caret already in it.
+               Tall and on the recessed ground, so an answer is read back whole. *@
             <FluentTextArea @key="Turn" @bind-Value="answer" Immediate="true" Autofocus="true"
-                            Resize="TextAreaResize.Vertical" Size="TextAreaSize.Large" Width="100%"
-                            ControlStyle="@(Pristine ? PristineStyle : AnswerStyle)" AriaLabel="Your answer"
-                            Class="answer" @onfocusout="RestoreIfEmptied" />
+                            Appearance="TextAreaAppearance.FilledDarker"
+                            Resize="TextAreaResize.Vertical" Size="TextAreaSize.Large" Width="100%" Height="45vh"
+                            AriaLabel="Your answer" @onfocusout="RestoreIfEmptied" />
 
             @if (Error is { } error)
             {
@@ -53,31 +54,25 @@
         }
     </div>
 
-    <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Class="actions">
-        @if (Correcting)
-        {
-            <FluentButton Appearance="ButtonAppearance.Outline" Disabled="Busy" OnClick="() => OnLeave.InvokeAsync()">
-                Leave as is
+    @* The commands arrive with the question they act on, never under a step still being composed. *@
+    @if (!Busy)
+    {
+        <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Class="actions">
+            @if (Correcting)
+            {
+                <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Large" OnClick="() => OnLeave.InvokeAsync()">
+                    Leave as is
+                </FluentButton>
+            }
+            <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" Disabled="@Empty" OnClick="SendAsync">
+                @(Correcting ? "Update" : Pristine ? "Accept proposal" : "Answer") &rarr;
             </FluentButton>
-        }
-        <FluentButton Appearance="ButtonAppearance.Primary" Disabled="@(Busy || Empty)" OnClick="SendAsync">
-            @(Correcting ? "Update" : Pristine ? "Accept proposal" : "Answer") &rarr;
-        </FluentButton>
-        @Keep
-    </FluentStack>
+            @Keep
+        </FluentStack>
+    }
 </section>
 
 @code {
-    /// <summary>
-    /// The box's own type: large enough to read an answer back at a glance.
-    /// </summary>
-    private const string AnswerStyle = "min-height: clamp(130px, 20vh, 280px); font-size: 19px; line-height: 1.5;";
-
-    /// <summary>
-    /// The untouched example leans, so it reads as offered rather than as the client's words.
-    /// </summary>
-    private const string PristineStyle = AnswerStyle + " font-style: italic;";
-
     /// <summary>
     /// The question on the table.
     /// </summary>
@@ -220,6 +215,11 @@
     }
 
     /// <summary>
+    /// The example the box was last primed with.
+    /// </summary>
+    private string primedWith = string.Empty;
+
+    /// <summary>
     /// Primes the box and the cloud once per question; a failed turn gets its answer back.
     /// </summary>
     protected override void OnParametersSet()
@@ -228,9 +228,17 @@
             answer = sent;
 
         if (Turn == primedOn)
+        {
+            // A turn can bring an example and leave the question standing: the box takes it unless the client wrote there.
+            if (Prompting != primedWith && (answer.Length == 0 || answer == primedWith))
+                answer = Prompting;
+
+            primedWith = Prompting;
             return;
+        }
 
         primedOn = Turn;
+        primedWith = Prompting;
         answer = Prompting;
         touched = false;
         picked.Clear();

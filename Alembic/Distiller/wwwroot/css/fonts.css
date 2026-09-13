@@ -1,0 +1,46 @@
+/* ==========================================================================
+   Alembic — the three faces, served from wwwroot/fonts.
+
+   Alembic runs wherever the client deployed it, so no face is fetched from a CDN the client's network
+   may not reach. Latin subset, variable where the family has one. Licences beside the files (OFL).
+   ========================================================================== */
+
+@font-face {
+    font-family: "Source Sans 3";
+    font-style: normal;
+    font-weight: 200 900;
+    font-display: swap;
+    src: url("../fonts/source-sans-3.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Source Sans 3";
+    font-style: italic;
+    font-weight: 200 900;
+    font-display: swap;
+    src: url("../fonts/source-sans-3-italic.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Cormorant Garamond";
+    font-style: normal;
+    font-weight: 300 700;
+    font-display: swap;
+    src: url("../fonts/cormorant-garamond.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "IBM Plex Mono";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("../fonts/ibm-plex-mono-400.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "IBM Plex Mono";
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url("../fonts/ibm-plex-mono-500.woff2") format("woff2");
+}

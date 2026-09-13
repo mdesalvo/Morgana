@@ -16,8 +16,18 @@
         var(--alembic-bg);
 }
 
-.alembic-landing { max-width: 46rem; padding-bottom: 1.5rem; background: none; }
-.alembic-page { max-width: 60rem; background: none; }
+/* Exactly the window's height: the banner gives up room first, so the doors are whole at any height. */
+.alembic-landing {
+    max-width: 46rem; height: 100dvh; min-height: 0; padding-bottom: 1.5rem; background: none;
+    display: flex; flex-direction: column; justify-content: center;
+}
+/* Exactly the window's height: what came in scrolls inside itself, so the doors are whole at any height. */
+.alembic-page {
+    max-width: 60rem; height: 100dvh; min-height: 0; padding-bottom: 1.5rem; background: none;
+    display: flex; flex-direction: column;
+}
+.import-reading { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.import-doors { flex: none; }
 
 .alembic-landing h1,
 .alembic-page h1 {
@@ -31,17 +41,19 @@
     color: transparent;
 }
 
-.landing-head { text-align: center; margin-bottom: 1.75rem; }
+.landing-head { text-align: center; margin-bottom: 1.75rem; flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .alembic-landing .landing-head h1 { font-size: 3.6rem; }
 .tagline { margin: 0.25rem 0 0; color: var(--alembic-muted); font-size: 1.05rem; }
 
-/* The banner fills the column the doors fill, capped against the viewport so the picture gives first. */
-.banner { position: relative; width: 100%; max-height: 34vh; margin: 0 auto 1.5rem; aspect-ratio: 1376 / 768; }
+/* The banner keeps its proportion while there is room and shrinks when there is not. */
+.banner { position: relative; width: 100%; margin: 0 auto 1.5rem; aspect-ratio: 1376 / 768; flex: 0 1 auto; min-height: 0; }
 .banner::before {
     content: ""; position: absolute; inset: -8%; border-radius: 1.4rem; transform: translateZ(0);
     background: radial-gradient(ellipse, color-mix(in srgb, var(--alembic-accent) 30%, transparent), transparent 68%);
     filter: blur(1.4rem);
 }
+/* A window too short for the picture shows the name and the doors alone rather than a sliver of it. */
+@media (max-height: 34rem) { .banner { display: none; } }
 .banner img {
     position: relative; width: 100%; height: 100%; object-fit: cover;
     background: var(--alembic-bg-deep); border-radius: 0.9rem; border: 1px solid var(--alembic-border-lit);
@@ -49,10 +61,10 @@
 }
 
 /* --- the doors ------------------------------------------------------------ */
-.gateways { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
-.gateways-four { grid-template-columns: repeat(2, 1fr); }
+.gateways { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; flex: none; }
+.gateways-four { grid-template-columns: repeat(4, 1fr); }
 .gateways-one { grid-template-columns: 1fr; max-width: 22rem; margin-inline: auto; }
-@media (max-width: 44rem) { .gateways, .gateways-four { grid-template-columns: 1fr; } }
+@media (max-width: 44rem) { .gateways-four { grid-template-columns: repeat(2, 1fr); } }
 
 .gateway {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.9rem;

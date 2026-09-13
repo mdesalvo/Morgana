@@ -18,6 +18,9 @@
 
 <div class="alembic-page">
 
+    @* What came in reads in its own scroll, however many agents it holds; the doors stay in view below it. *@
+    <div class="import-reading">
+
     @if (Draft is null)
     {
         <div class="landing-head">
@@ -27,7 +30,7 @@
     }
 
     <div class="import-file">
-        <FluentText As="TextTag.H2" Size="TextSize.Size500">@(Draft is null ? "The file" : "Bring another")</FluentText>
+        <FluentText Size="TextSize.Size500">@(Draft is null ? "The file" : "Bring another")</FluentText>
 
         <FluentButton Id="alembic-upload" Appearance="ButtonAppearance.Primary" Loading="isReading" Disabled="isReading">
             Choose a file
@@ -35,14 +38,14 @@
         <FluentInputFile AnchorId="alembic-upload" DragDropZoneVisible="false" Accept=".json,.zip"
                          MaximumFileSize="MaxUploadBytes" OnInputFileChange="OnFileSelectedAsync" />
 
-        <FluentText As="TextTag.Paragraph" Color="Color.Lightweight">
+        <FluentText As="TextTag.Paragraph" Class="muted">
             An <code>agents.json</code> Morgana already runs. An <code>alembic-draft.json</code> I saved for you
             last time. A <code>zip archive</code> I already packaged.
         </FluentText>
 
         @if (isReading)
         {
-            <FluentText As="TextTag.Paragraph" Color="Color.Lightweight">
+            <FluentText As="TextTag.Paragraph" Class="muted">
                 @(isLearning ? "Working out what your business does, so I do not have to ask you twice…" : "Reading…")
             </FluentText>
         }
@@ -79,7 +82,7 @@
                 IntentDraft? intent = draft.Intents.FirstOrDefault(i => i.Name == agent.ID);
 
                 <div class="found-agent">
-                    <FluentText Size="TextSize.Size400" Block="true" Class="found-agent-name">@(intent?.Label ?? agent.ID)</FluentText>
+                    <FluentText Size="TextSize.Size400" Block="true" Class="found-agent-name">@(intent?.Shown ?? agent.ID)</FluentText>
 
                     @if (intent?.Description is { Length: > 0 } description)
                     {
@@ -88,7 +91,7 @@
 
                     @if (agent.Tools.Count == 0)
                     {
-                        <FluentText As="TextTag.Paragraph" Color="Color.Lightweight">
+                        <FluentText As="TextTag.Paragraph" Class="muted">
                             It carries nothing of its own &mdash; whatever it reaches for arrives from elsewhere at the moment it is needed.
                         </FluentText>
                     }
@@ -107,11 +110,17 @@
         }
         else
         {
-            <FluentText As="TextTag.Paragraph" Color="Color.Lightweight">
+            <FluentText As="TextTag.Paragraph" Class="muted">
                 Nothing has been added to this domain yet &mdash; the interview is open, but no agent has been accepted into it.
             </FluentText>
         }
+    }
 
+    </div>
+
+    @if (Draft is { } domain)
+    {
+        <div class="import-doors">
         <p class="what-now">What you can do</p>
 
         <div class="gateways @(HasAgents ? "gateways-four" : "gateways-one")">
@@ -129,8 +138,8 @@
                 </Gateway>
             }
 
-            <Gateway Title="@(draft.Sitting is not null ? "Carry on where you left off" : "Distil a new agent")"
-                     Go="@(draft.Sitting is not null ? "Continue" : "Begin")"
+            <Gateway Title="@(domain.Sitting is not null ? "Carry on where you left off" : "Distil a new agent")"
+                     Go="@(domain.Sitting is not null ? "Continue" : "Begin")"
                      Primary="@(HasAgents && !arrivedAsArchive)" OnGo='() => Go("shell")'>
                 <Sigil>
                     <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
@@ -167,6 +176,7 @@
                     </Sigil>
                 </Gateway>
             }
+        </div>
         </div>
     }
 
@@ -239,7 +249,7 @@
         if (sitting.At >= 0 && sitting.At < sitting.Map.Count)
         {
             IntentDraft entry = sitting.Map[sitting.At];
-            return $"You were in the middle of {entry.Label ?? entry.Name ?? "an entry of the map"}";
+            return $"You were in the middle of {entry.Shown}";
         }
 
         return sitting.Map.Count switch

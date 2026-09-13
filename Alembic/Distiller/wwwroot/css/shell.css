@@ -12,11 +12,20 @@
     --r: 7px;
 }
 
+*, *::before, *::after { box-sizing: border-box; }
+
+/* The page never scrolls: whatever is longer than the window scrolls inside its own card. */
 body {
     margin: 0;
+    height: 100dvh;
+    overflow: hidden;
     background: var(--alembic-bg);
     color: var(--alembic-text);
+    font-family: var(--fontFamilyBase);
+    scrollbar-color: var(--alembic-border-lit) transparent;
 }
+
+code { font-family: var(--fontFamilyMonospace); }
 
 .wordmark {
     font-family: var(--display); font-size: 21px; letter-spacing: .2em;
@@ -28,7 +37,6 @@ body {
 .landing .wordmark { font-size: 44px; }
 
 /* --- the track: two edges and the stretch that repeats ------------------- */
-.track-wrap { background: var(--alembic-bg-deep); border-bottom: 1px solid var(--alembic-border); padding: 11px 26px 13px; }
 .track-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 9px; }
 .track { display: flex; align-items: stretch; gap: 7px; height: var(--track-h); }
 
@@ -71,21 +79,11 @@ body {
 
 /* The seven marks: the same seven on every agent, which is how the repetition shows. */
 .ticks { display: flex; gap: 4px; width: 100%; }
-.tick {
-    flex: 1 1 0; min-width: 0; height: auto; padding: 0; border: 0; background: none;
-    display: flex; flex-direction: column; align-items: stretch; gap: 4px; text-align: left;
-}
-.tick .bar { height: 3px; border-radius: 2px; background: var(--alembic-border); }
-.tick .lab { font-size: 12.5px; color: color-mix(in srgb, var(--alembic-muted) 80%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tick[data-state="done"] .bar { background: var(--alembic-cyan); }
-.tick[data-state="done"] .lab { color: var(--alembic-muted); }
-.tick[data-state="here"] .bar { background: var(--alembic-accent); box-shadow: 0 0 8px var(--alembic-accent); }
-.tick[data-state="here"] .lab { color: var(--alembic-text); }
-.tick.frontier .lab { color: var(--alembic-gold); }
-.tick.frontier .bar { background: color-mix(in srgb, var(--alembic-gold) 55%, transparent); }
-
-.mini { display: block; width: 100%; height: 3px; border-radius: 2px; background: var(--alembic-border); overflow: hidden; }
-.mini i { display: block; height: 100%; background: var(--alembic-cyan); }
+.tick { flex: 1 1 0; min-width: 0; padding: 0; text-align: left; }
+.tick[role="button"] { cursor: pointer; }
+/* The step in hand glows the way the vessel does. */
+.glow { box-shadow: 0 0 8px var(--alembic-accent); border-radius: 2px; }
+.frontier-mark { color: var(--alembic-gold); }
 
 /* --- the stream: one open card, full height, scrolling inside itself ---- */
 .stream { display: flex; flex-direction: column; min-height: 0; padding: 18px 26px 20px; }
@@ -100,9 +98,8 @@ body {
 .open-body { flex: 1; min-height: 0; overflow-y: auto; padding-right: 10px; display: flex; flex-direction: column; gap: 14px; }
 
 .asked { margin: 0; text-wrap: pretty; }
-.quote { margin: 0; padding: 12px 16px; max-width: 150ch; border-left: 2px solid var(--alembic-accent); }
+.quote { margin: 0; padding: 8px 16px; border-left: 2px solid var(--alembic-accent); }
 .choice, .traits { align-self: flex-start; }
-.answer { flex: 1 1 auto; }
 .thinking { margin: auto; }
 .actions { margin-top: 14px; }
 
