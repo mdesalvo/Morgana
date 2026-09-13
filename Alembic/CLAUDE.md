@@ -216,7 +216,9 @@ agent will present.
 `SetChoice` attaches a button carried by `Morgana.Contracts.QuickReply`, so the shape the client sees
 is literally the shape their own agents will emit. The doctrine is nearly the inverse of Morgana's:
 
-- **Never on a question about the client's domain** — a menu would replace their words with Alembic's.
+- **Never carrying an answer about the client's domain** — a menu would replace their words with Alembic's.
+  A question about their work whose plain answer is *nothing to add* (anything missing, anything to keep
+  the agent off) still gets its button.
 - Only where the answer set is closed and known, which in practice is **the answer that adds nothing**.
 - **The text box never closes.** A choice is an offer, never a gate.
 

@@ -780,9 +780,7 @@
     }
 
     /// <summary>
-    /// The client's own word for an agent: the button of the intent that reaches it.
+    /// The name an agent goes by: its ID, which is the name of the intent that reaches it.
     /// </summary>
-    private string Named(AgentDraft agent) =>
-        Draft.Intents.FirstOrDefault(intent => string.Equals(intent.Name, agent.ID, StringComparison.OrdinalIgnoreCase))?.Shown
-        ?? agent.ID ?? "…";
+    private static string Named(AgentDraft agent) => agent.ID ?? "…";
 }

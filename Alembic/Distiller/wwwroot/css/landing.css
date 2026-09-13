@@ -22,11 +22,13 @@
     display: flex; flex-direction: column; justify-content: center;
 }
 /* Exactly the window's height: what came in scrolls inside itself, so the doors are whole at any height. */
+/* Centred like the landing: a short domain sits with its doors beneath it, never an empty gulf between. */
 .alembic-page {
     max-width: 60rem; height: 100dvh; min-height: 0; padding-bottom: 1.5rem; background: none;
-    display: flex; flex-direction: column;
+    display: flex; flex-direction: column; justify-content: center;
 }
-.import-reading { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* Shrinks to scroll when the domain is long, never grows to push the doors away. */
+.import-reading { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
 .import-doors { flex: none; }
 
 .alembic-landing h1,
@@ -93,19 +95,25 @@
 }
 
 /* --- what came in ----------------------------------------------------------- */
-.import-file { margin-top: 1.5rem; }
+/* Framed like the doors, so the upload reads as a place rather than a line floating on the ground. */
+.import-file {
+    margin-top: 1.5rem; padding: 1.1rem 1.4rem; border-radius: 0.9rem;
+    border: 1px solid var(--alembic-border-lit); box-shadow: var(--alembic-glow);
+    background: linear-gradient(160deg, var(--alembic-panel-lit), var(--alembic-panel));
+}
 .import-file .muted, .notices, .muted { color: var(--alembic-muted); }
+.import-kinds { margin: 0.3rem 0 0; padding-left: 1.2rem; font-size: 1rem; line-height: 1.6; }
 .resuming {
-    margin: 1.4rem 0 0; padding: 0.7rem 1.1rem; border-radius: 0.5rem;
+    margin: 1.4rem 0 0.8rem; padding: 0.7rem 1.1rem; border-radius: 0.5rem;
     border: 1px solid var(--alembic-border-lit); box-shadow: var(--alembic-glow);
     background: color-mix(in srgb, var(--alembic-accent) 12%, transparent);
 }
-.notices { margin: 1rem 0; padding-left: 1.1rem; font-size: 0.9rem; }
+.notices { margin: 1rem 0; padding-left: 1.1rem; font-size: 1rem; }
 .what-now {
-    margin: 2.5rem 0 1rem; font-size: 0.74rem; font-weight: 600; text-transform: uppercase;
+    margin: 2.5rem 0 1rem; font-size: 0.85rem; font-weight: 600; text-transform: uppercase;
     letter-spacing: 0.18em; color: var(--alembic-muted);
 }
-.found-agent { border-left: 2px solid var(--alembic-border); padding: 0.1rem 0 0.1rem 1rem; margin-bottom: 1.4rem; }
+.found-agent { border-left: 2px solid var(--alembic-border); font-size: 1rem; padding: 0.1rem 0 0.1rem 1rem; margin-bottom: 1.4rem; }
 .found-agent-name { color: var(--alembic-accent); }
 .found-agent-when { margin: 0.2rem 0 0.5rem; color: var(--alembic-muted); }
 .found-agent-can { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: baseline; color: var(--alembic-muted); }

@@ -56,7 +56,7 @@
         int mapped = sitting?.Map.Count ?? 0;
 
         string where = sitting is { At: >= 0 } && sitting.At < sitting.Map.Count
-            ? $"in hand: {sitting.Map[sitting.At].Shown}"
+            ? $"in hand: {sitting.Map[sitting.At].Name}"
             : "in hand: the map";
 
         return ($"{FileName} · read back: {mapped} on the map · {saved.Agents.Count} agents in the domain · {where} · {Sized(work.Length)}", false);

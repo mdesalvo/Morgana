@@ -232,7 +232,7 @@
             },
             {
               "Name": "SetChoice",
-              "Description": "Attaches to the question you are about to ask the one button that answers it without adding anything — agreement, or that there is nothing to add — so a client in that position settles the turn with one press instead of a typed sentence. Call it BEFORE writing the question — the button renders below it. EVERY turn that states back what you have just written carries it, without exception: that turn's whole question is whether they agree, and a client with nothing to object to should not have to type a sentence to say so. There and nowhere else — never on a question about their work, where a button would put your words in place of theirs. The text box stays open either way.",
+              "Description": "Attaches to the question you are about to ask the one button that answers it without adding anything — agreement, or that there is nothing to add — so a client in that position settles the turn with one press instead of a typed sentence. Call it BEFORE writing the question — the button renders below it. EVERY turn that states back what you have just written carries it, without exception: that turn's whole question is whether they agree, and a client with nothing to object to should not have to type a sentence to say so. So does every question whose plain answer is that there is nothing to add: whether anything is missing, whether there is something the agent should be kept off. Never a button carrying an answer about their work, where it would put your words in place of theirs. The text box stays open either way.",
               "Parameters": [
                 {
                   "Name": "label",
@@ -362,7 +362,7 @@
             },
             {
               "Name": "SetChoice",
-              "Description": "Attaches to the question you are about to ask the one button that answers it without adding anything — agreement, or that there is nothing to add — so a client in that position settles the turn with one press instead of a typed sentence. Call it BEFORE writing the question — the button renders below it. EVERY turn that states back what you have just written carries it, without exception: that turn's whole question is whether they agree, and a client with nothing to object to should not have to type a sentence to say so. There and nowhere else — never on a question about their work, where a button would put your words in place of theirs. The text box stays open either way.",
+              "Description": "Attaches to the question you are about to ask the one button that answers it without adding anything — agreement, or that there is nothing to add — so a client in that position settles the turn with one press instead of a typed sentence. Call it BEFORE writing the question — the button renders below it. EVERY turn that states back what you have just written carries it, without exception: that turn's whole question is whether they agree, and a client with nothing to object to should not have to type a sentence to say so. So does every question whose plain answer is that there is nothing to add: whether anything is missing, whether there is something the agent should be kept off. Never a button carrying an answer about their work, where it would put your words in place of theirs. The text box stays open either way.",
               "Parameters": [
                 {
                   "Name": "label",
@@ -432,7 +432,7 @@
             },
             {
               "Name": "SetChoice",
-              "Description": "Attaches to the question you are about to ask the one button that answers it without adding anything — agreement, or that there is nothing to add — so a client in that position settles the turn with one press instead of a typed sentence. Call it BEFORE writing the question — the button renders below it. EVERY turn that states back what you have just written carries it, without exception: that turn's whole question is whether they agree, and a client with nothing to object to should not have to type a sentence to say so. There and nowhere else — never on a question about their work, where a button would put your words in place of theirs. The text box stays open either way.",
+              "Description": "Attaches to the question you are about to ask the one button that answers it without adding anything — agreement, or that there is nothing to add — so a client in that position settles the turn with one press instead of a typed sentence. Call it BEFORE writing the question — the button renders below it. EVERY turn that states back what you have just written carries it, without exception: that turn's whole question is whether they agree, and a client with nothing to object to should not have to type a sentence to say so. So does every question whose plain answer is that there is nothing to add: whether anything is missing, whether there is something the agent should be kept off. Never a button carrying an answer about their work, where it would put your words in place of theirs. The text box stays open either way.",
               "Parameters": [
                 {
                   "Name": "label",
@@ -882,7 +882,7 @@
             },
             {
               "Name": "SetChoice",
-              "Description": "Attaches to the question you are about to ask the one button that answers it without adding anything — agreement, or that there is nothing to add — so a client in that position settles the turn with one press instead of a typed sentence. Call it BEFORE writing the question — the button renders below it. EVERY turn that states back what you have just written carries it, without exception: that turn's whole question is whether they agree, and a client with nothing to object to should not have to type a sentence to say so. There and nowhere else — never on a question about their work, where a button would put your words in place of theirs. The text box stays open either way.",
+              "Description": "Attaches to the question you are about to ask the one button that answers it without adding anything — agreement, or that there is nothing to add — so a client in that position settles the turn with one press instead of a typed sentence. Call it BEFORE writing the question — the button renders below it. EVERY turn that states back what you have just written carries it, without exception: that turn's whole question is whether they agree, and a client with nothing to object to should not have to type a sentence to say so. So does every question whose plain answer is that there is nothing to add: whether anything is missing, whether there is something the agent should be kept off. Never a button carrying an answer about their work, where it would put your words in place of theirs. The text box stays open either way.",
               "Parameters": [
                 {
                   "Name": "label",

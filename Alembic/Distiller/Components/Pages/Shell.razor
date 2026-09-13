@@ -268,9 +268,9 @@
         ?? (interview is { Pass: InterviewStep.DomainMapper, PassJustOpened: true } ? HouseExample : string.Empty);
 
     /// <summary>
-    /// The client's own word for an entry: its button once it has one, its name until then.
+    /// The name an entry goes by: the intent name, which the agent answering it carries as its ID.
     /// </summary>
-    private static string Named(IntentDraft intent) => intent.Shown;
+    private static string Named(IntentDraft intent) => intent.Name ?? "…";
 
     /// <summary>
     /// Enters through the door the client chose, picks up an interview in hand or lights the burner.

@@ -210,10 +210,10 @@
         locked ? Task.CompletedTask : OnLook.InvokeAsync(moment);
 
     /// <summary>
-    /// The client's own word for an entry.
+    /// The name an entry goes by: its intent name.
     /// </summary>
     private string Named(int entry) =>
-        entry >= 0 && entry < Entries.Count ? Entries[entry].Shown : "…";
+        entry >= 0 && entry < Entries.Count ? Entries[entry].Name ?? "…" : "…";
 
     /// <summary>
     /// An arrow to a neighbouring agent, absent at either end of the row.
