@@ -45,12 +45,7 @@
 
     @if (isReading)
     {
-        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px" Class="working">
-            <FluentSpinner Size="SpinnerSize.Small" />
-            <FluentText Size="TextSize.Size400">
-                @(isLearning ? "Working out what your business does, so I do not have to ask you twice…" : "Reading…")
-            </FluentText>
-        </FluentStack>
+        <Waiting Text="@(isLearning ? "Working out what your business does, so I do not have to ask you twice…" : "Reading…")" />
     }
 
     @if (error is not null)
@@ -99,13 +94,14 @@
                     }
                     else
                     {
-                        <div class="found-agent-can">
+                        <FluentStack Orientation="Orientation.Horizontal" Wrap="true" HorizontalGap="6px" VerticalGap="6px"
+                                     VerticalAlignment="VerticalAlignment.Center" Class="found-agent-can">
                             It can
                             @foreach (ToolDraft tool in agent.Tools)
                             {
                                 <FluentBadge Appearance="BadgeAppearance.Outline" Shape="BadgeShape.Circular">@Humanise(tool.Name)</FluentBadge>
                             }
-                        </div>
+                        </FluentStack>
                     }
                 </div>
             }
@@ -125,60 +121,68 @@
         <div class="import-doors">
         <p class="what-now">What you can do</p>
 
-        <div class="gateways @(HasAgents ? "gateways-four" : "gateways-one")">
+        <FluentGrid Spacing="4" Justify="JustifyContent.Center">
             @if (HasAgents)
             {
-                <Gateway Title="Go over the agents" Go="Leaf" OnGo='() => Go("shell?door=walk")'>
+                <FluentGridItem Xs="@DoorColumns">
+                    <Gateway Title="Go over the agents" Go="Leaf" OnGo='() => Go("shell?door=walk")'>
+                        <Sigil>
+                            <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M4 19.5 8.4 18 19 7.4a2 2 0 0 0-2.8-2.8L5.6 15.2 4 19.5z" />
+                                <path d="M14.6 6.6 17 9" />
+                                <path d="M4 21.6h16" />
+                            </svg>
+                        </Sigil>
+                    </Gateway>
+                </FluentGridItem>
+            }
+
+            <FluentGridItem Xs="@DoorColumns">
+                <Gateway Title="@(domain.Sitting is not null ? "Carry on where you left off" : "Distil a new agent")"
+                         Go="@(domain.Sitting is not null ? "Continue" : "Begin")"
+                         Primary="@(HasAgents && !arrivedAsArchive)" OnGo='() => Go("shell")'>
                     <Sigil>
                         <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
                              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M4 19.5 8.4 18 19 7.4a2 2 0 0 0-2.8-2.8L5.6 15.2 4 19.5z" />
-                            <path d="M14.6 6.6 17 9" />
-                            <path d="M4 21.6h16" />
+                            <path d="M9.3 3h5.4M10.6 3.4v5.2M13.4 3.4v5.2" />
+                            <circle cx="12" cy="14.6" r="5.9" />
+                            <path d="M6.6 15.4c1.8 1.4 9 1.4 10.8 0" />
+                            <path d="M17.6 12.4H20a1 1 0 0 1 1 1v4" />
                         </svg>
                     </Sigil>
                 </Gateway>
-            }
-
-            <Gateway Title="@(domain.Sitting is not null ? "Carry on where you left off" : "Distil a new agent")"
-                     Go="@(domain.Sitting is not null ? "Continue" : "Begin")"
-                     Primary="@(HasAgents && !arrivedAsArchive)" OnGo='() => Go("shell")'>
-                <Sigil>
-                    <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M9.3 3h5.4M10.6 3.4v5.2M13.4 3.4v5.2" />
-                        <circle cx="12" cy="14.6" r="5.9" />
-                        <path d="M6.6 15.4c1.8 1.4 9 1.4 10.8 0" />
-                        <path d="M17.6 12.4H20a1 1 0 0 1 1 1v4" />
-                    </svg>
-                </Sigil>
-            </Gateway>
+            </FluentGridItem>
 
             @if (HasAgents)
             {
-                <Gateway Title="Validate this domain" Go="Look" Primary="arrivedAsArchive" OnGo='() => Go("shell?door=validate")'>
-                    <Sigil>
-                        <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <circle cx="10.5" cy="10.5" r="6.6" />
-                            <path d="M15.4 15.4 21 21" />
-                            <path d="M7.6 9h5.8M7.6 12h3.8" />
-                        </svg>
-                    </Sigil>
-                </Gateway>
+                <FluentGridItem Xs="@DoorColumns">
+                    <Gateway Title="Validate this domain" Go="Look" Primary="arrivedAsArchive" OnGo='() => Go("shell?door=validate")'>
+                        <Sigil>
+                            <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="10.5" cy="10.5" r="6.6" />
+                                <path d="M15.4 15.4 21 21" />
+                                <path d="M7.6 9h5.8M7.6 12h3.8" />
+                            </svg>
+                        </Sigil>
+                    </Gateway>
+                </FluentGridItem>
 
-                <Gateway Title="Morganize it" Go="Package" OnGo='() => Go("shell?door=archive")'>
-                    <Sigil>
-                        <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
-                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M3 6.4h18v3.4H3z" />
-                            <path d="M4.6 9.8v8.4A1.8 1.8 0 0 0 6.4 20h11.2a1.8 1.8 0 0 0 1.8-1.8V9.8" />
-                            <path d="M12 12v4.4M9.8 14.4 12 16.6l2.2-2.2" />
-                        </svg>
-                    </Sigil>
-                </Gateway>
+                <FluentGridItem Xs="@DoorColumns">
+                    <Gateway Title="Morganize it" Go="Package" OnGo='() => Go("shell?door=archive")'>
+                        <Sigil>
+                            <svg class="sigil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M3 6.4h18v3.4H3z" />
+                                <path d="M4.6 9.8v8.4A1.8 1.8 0 0 0 6.4 20h11.2a1.8 1.8 0 0 0 1.8-1.8V9.8" />
+                                <path d="M12 12v4.4M9.8 14.4 12 16.6l2.2-2.2" />
+                            </svg>
+                        </Sigil>
+                    </Gateway>
+                </FluentGridItem>
             }
-        </div>
+        </FluentGrid>
         </div>
     }
 
@@ -234,6 +238,11 @@
     /// Whether the Draft is a domain rather than an interview kept the moment it opened.
     /// </summary>
     private bool HasAgents => Draft?.Agents.Count > 0;
+
+    /// <summary>
+    /// How many of the twelve columns a door spans: four doors share a row, a lone one stands centred.
+    /// </summary>
+    private int DoorColumns => HasAgents ? 3 : 4;
 
     /// <summary>
     /// Goes through a door into the shell.

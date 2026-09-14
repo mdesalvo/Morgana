@@ -15,109 +15,110 @@
 
 <section class="open">
     <div class="open-body">
-        <div class="vchecks">
-            @foreach (CheckRow row in rows)
-            {
-                List<ValidationFinding> own = row.Check is { } check ? [.. deterministic.Where(finding => finding.Check == check)] : [];
-                List<CoherenceFinding> judged = row.Check is null ? [.. coherence.Where(finding => finding.Kind == row.Id)] : [];
-                int count = own.Count + judged.Count;
-                bool ranThis = ran.Contains(row.Id);
-                bool errors = own.Any(finding => finding.Severity == FindingSeverity.Error);
-                bool isOpen = ranThis && count > 0 && open.Contains(row.Id);
+        @* The judged run rewrites every outcome below, so it is waited on where they stand. *@
+        @if (running)
+        {
+            <Waiting Text="Reading your agents side by side, for what only shows between them…" />
+        }
+        else
+        {
+            <div>
+                @foreach (CheckRow row in rows)
+                {
+                    List<ValidationFinding> own = row.Check is { } check ? [.. deterministic.Where(finding => finding.Check == check)] : [];
+                    List<CoherenceFinding> judged = row.Check is null ? [.. coherence.Where(finding => finding.Kind == row.Id)] : [];
+                    int count = own.Count + judged.Count;
+                    bool ranThis = ran.Contains(row.Id);
+                    bool errors = own.Any(finding => finding.Severity == FindingSeverity.Error);
+                    bool isOpen = ranThis && count > 0 && open.Contains(row.Id);
 
-                <div class="vcheck">
-                    <div class="vhead">
-                        <FluentCheckbox @bind-Value="row.Chosen" Class="vbox" />
+                    <div class="vcheck">
+                        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="10px">
+                            <FluentCheckbox @bind-Value="row.Chosen" Class="vbox" />
 
-                        <FluentButton Appearance="ButtonAppearance.Transparent" Class="name-btn"
-                                      Disabled="@(!ranThis || count == 0)" OnClick="() => Toggle(row)">
-                            <span class="vname">@row.Label</span>
-                            <FluentBadge Appearance="BadgeAppearance.Outline" Shape="BadgeShape.Circular"
-                                         Color="@(row.Check is null ? BadgeColor.Brand : BadgeColor.Subtle)">
-                                @(row.Check is null ? "judged by a model" : "decided by reading")
-                            </FluentBadge>
+                            <FluentButton Appearance="ButtonAppearance.Transparent" Class="name-btn"
+                                          Disabled="@(!ranThis || count == 0)" OnClick="() => Toggle(row)">
+                                <span class="vname">@row.Label</span>
+                                <FluentBadge Appearance="BadgeAppearance.Outline" Shape="BadgeShape.Circular"
+                                             Color="@(row.Check is null ? BadgeColor.Brand : BadgeColor.Subtle)">
+                                    @(row.Check is null ? "judged by a model" : "decided by reading")
+                                </FluentBadge>
 
-                            @if (ranThis)
-                            {
-                                @if (count == 0)
+                                @if (ranThis)
                                 {
-                                    <span class="vres" data-kind="ok" title="Nothing found">✓</span>
-                                }
-                                else
-                                {
-                                    <span class="vres" data-kind="@(errors ? "err" : "warn")">@Outcome(count, errors)</span>
-                                }
-                            }
-
-                            <span class="chev">@(ranThis && count > 0 ? isOpen ? "▾" : "▸" : "")</span>
-                        </FluentButton>
-                    </div>
-
-                    @if (isOpen)
-                    {
-                        <div class="vbody">
-                            @foreach (ValidationFinding finding in own)
-                            {
-                                bool error = finding.Severity == FindingSeverity.Error;
-
-                                <div class="finding" data-kind="@(error ? "err" : "warn")">
-                                    <p class="finding-text">
-                                        <FluentBadge Appearance="BadgeAppearance.Tint" Color="@(error ? BadgeColor.Danger : BadgeColor.Warning)">
-                                            @(error ? "Error" : "Warning")
-                                        </FluentBadge>
-                                        @finding.Message <code class="finding-where">@finding.Where</code>
-                                    </p>
-                                    <FluentText As="TextTag.Paragraph" Italic="true" Class="because muted">
-                                        @(error ? "It must be fixed because" : "You may leave it as it is, but it is worth fixing because") @LowerFirst(finding.Because)
-                                    </FluentText>
-                                    <div class="fix">
-                                        <FluentText Italic="true" Class="fix-text muted">The rewrite is yours: the section opens and you come back here.</FluentText>
-                                        <FluentButton Appearance="ButtonAppearance.Outline" OnClick="() => OnGoTo.InvokeAsync(finding)">Go to section &rarr;</FluentButton>
-                                    </div>
-                                </div>
-                            }
-
-                            @foreach (CoherenceFinding finding in judged)
-                            {
-                                <div class="finding" data-kind="warn">
-                                    <p class="finding-text">
-                                        <FluentBadge Appearance="BadgeAppearance.Tint" Color="BadgeColor.Warning">Warning</FluentBadge>
-                                        @finding.What <code class="finding-where">@finding.Where</code>
-                                    </p>
-                                    <FluentText As="TextTag.Paragraph" Italic="true" Class="because muted">
-                                        You may leave it as it is, but it is worth fixing because @LowerFirst(finding.Why)
-                                    </FluentText>
-                                    <div class="fix">
-                                        <FluentText Italic="true" Class="fix-text muted">@finding.Fix</FluentText>
-                                        <FluentButton Appearance="ButtonAppearance.Outline"
-                                                      Disabled="@(applying is not null)" OnClick="() => ApplyAsync(finding)">
-                                            Apply the correction
-                                        </FluentButton>
-                                    </div>
-
-                                    @if (applying == finding)
+                                    @if (count == 0)
                                     {
-                                        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px" Class="working">
-                                            <FluentSpinner Size="SpinnerSize.Small" />
-                                            <FluentText Size="TextSize.Size400">Rewriting the agents this finding names…</FluentText>
-                                        </FluentStack>
+                                        <span class="vres" data-kind="ok" title="Nothing found">✓</span>
                                     }
-                                </div>
-                            }
-                        </div>
-                    }
-                </div>
-            }
-        </div>
-    </div>
+                                    else
+                                    {
+                                        <span class="vres" data-kind="@(errors ? "err" : "warn")">@Outcome(count, errors)</span>
+                                    }
+                                }
 
-    @if (running)
-    {
-        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px" Class="working">
-            <FluentSpinner Size="SpinnerSize.Small" />
-            <FluentText Size="TextSize.Size400">Reading your agents side by side, for what only shows between them…</FluentText>
-        </FluentStack>
-    }
+                                <span class="chev">@(ranThis && count > 0 ? isOpen ? "▾" : "▸" : "")</span>
+                            </FluentButton>
+                        </FluentStack>
+
+                        @if (isOpen)
+                        {
+                            <div class="vbody">
+                                @foreach (ValidationFinding finding in own)
+                                {
+                                    bool error = finding.Severity == FindingSeverity.Error;
+
+                                    <div class="finding" data-kind="@(error ? "err" : "warn")">
+                                        <FluentStack Orientation="Orientation.Horizontal" Wrap="true" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="8px" VerticalGap="4px" Class="finding-text">
+                                            <FluentBadge Appearance="BadgeAppearance.Tint" Color="@(error ? BadgeColor.Danger : BadgeColor.Warning)">
+                                                @(error ? "Error" : "Warning")
+                                            </FluentBadge>
+                                            @finding.Message <code class="finding-where">@finding.Where</code>
+                                        </FluentStack>
+                                        <FluentText As="TextTag.Paragraph" Italic="true" Class="because muted">
+                                            @(error ? "It must be fixed because" : "You may leave it as it is, but it is worth fixing because") @LowerFirst(finding.Because)
+                                        </FluentText>
+                                        <FluentStack Orientation="Orientation.Horizontal" Wrap="true" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="16px" VerticalGap="8px" Class="fix">
+                                            <FluentText Italic="true" Class="fix-text muted">The rewrite is yours: the section opens and you come back here.</FluentText>
+                                            <FluentButton Appearance="ButtonAppearance.Outline" OnClick="() => OnGoTo.InvokeAsync(finding)">Go to section &rarr;</FluentButton>
+                                        </FluentStack>
+                                    </div>
+                                }
+
+                                @foreach (CoherenceFinding finding in judged)
+                                {
+                                    <div class="finding" data-kind="warn">
+                                        <FluentStack Orientation="Orientation.Horizontal" Wrap="true" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="8px" VerticalGap="4px" Class="finding-text">
+                                            <FluentBadge Appearance="BadgeAppearance.Tint" Color="BadgeColor.Warning">Warning</FluentBadge>
+                                            @finding.What <code class="finding-where">@finding.Where</code>
+                                        </FluentStack>
+                                        <FluentText As="TextTag.Paragraph" Italic="true" Class="because muted">
+                                            You may leave it as it is, but it is worth fixing because @LowerFirst(finding.Why)
+                                        </FluentText>
+                                        @if (applying == finding)
+                                        {
+                                            <div class="fix">
+                                                <Waiting Text="Rewriting the agents this finding names…" />
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <FluentStack Orientation="Orientation.Horizontal" Wrap="true" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="16px" VerticalGap="8px" Class="fix">
+                                                <FluentText Italic="true" Class="fix-text muted">@finding.Fix</FluentText>
+                                                <FluentButton Appearance="ButtonAppearance.Outline"
+                                                              Disabled="@(applying is not null)" OnClick="() => ApplyAsync(finding)">
+                                                    Apply the correction
+                                                </FluentButton>
+                                            </FluentStack>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
 
     <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.SpaceBetween" VerticalAlignment="VerticalAlignment.Center" Class="actions">
         <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px" Width="auto">

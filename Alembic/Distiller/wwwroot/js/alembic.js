@@ -8,9 +8,3 @@ window.alembicSave = (name, base64, type) => {
     link.click();
     URL.revokeObjectURL(url);
 };
-
-// The distillation log reads oldest to newest, so its newest line is kept in view at the bottom.
-window.alembicScrollLogBottom = () => {
-    const log = document.querySelector('.distillation-log');
-    if (log) log.scrollTop = log.scrollHeight;
-};

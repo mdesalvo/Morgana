@@ -12,36 +12,66 @@
         <div class="panel-block">
             <FluentText Class="panel-title">Agents on your Morgana</FluentText>
 
-            <div class="a2a-grid">
+            <FluentStack Orientation="Orientation.Vertical" VerticalGap="8px">
                 @foreach (AgentDraft asking in Agents)
                 {
-                    <div class="a2a-row">
-                        <FluentText Size="TextSize.Size400" Class="a2a-who">@Named(asking)</FluentText>
+                    List<ConsultCell> row = [.. cells.Where(cell => cell.Asking == asking)];
 
-                        @* The direction lives in the row, so no box has to repeat it. *@
-                        <FluentStack Orientation="Orientation.Horizontal" Wrap="true" HorizontalGap="18px" VerticalGap="8px">
-                            @foreach (ConsultCell cell in cells.Where(cell => cell.Asking == asking))
+                    @if (asking != Agents[0])
+                    {
+                        <FluentDivider />
+                    }
+
+                    @* The direction lives in the row, so no box has to repeat it; one grid holds the name and the boxes so the
+                       name sits on the line of the first boxes, and fixed columns keep a colleague's box in the same place
+                       from one asking agent to the next. *@
+                    <FluentGrid Spacing="1" Class="a2a-row">
+                        <FluentGridItem Xs="3">
+                            <FluentText Size="TextSize.Size400">@Named(asking)</FluentText>
+                        </FluentGridItem>
+
+                        @for (int index = 0; index < row.Count; index++)
+                        {
+                            ConsultCell cell = row[index];
+
+                            @if (index > 0 && index % ColleaguesPerLine == 0)
                             {
-                                <FluentCheckbox @bind-Value="cell.On" @bind-Value:after="() => ApplyAsync(cell)" Label="@cell.Label" />
+                                <FluentGridItem Xs="3" />
                             }
-                        </FluentStack>
-                    </div>
+
+                            <FluentGridItem Xs="3">
+                                <FluentCheckbox @bind-Value="cell.On" @bind-Value:after="() => ApplyAsync(cell)" Label="@cell.Label" />
+                            </FluentGridItem>
+                        }
+                    </FluentGrid>
                 }
-            </div>
+            </FluentStack>
         </div>
 
         <div class="panel-block">
             <FluentText Class="panel-title">Agents on partner Morgana</FluentText>
 
-            @foreach (RemoteRow row in remotes)
+            @if (remotes.Count > 0)
             {
-                <div class="a2a-remote">
-                    <FluentTextInput @bind-Value="row.Intent" @bind-Value:after="() => RenameAsync(row)" Placeholder="agent name"
-                                     MessageState="@Required(row.Intent)" Message="@RequiredMessage(row.Intent)" />
-                    <FluentTextInput @bind-Value="row.Instance" @bind-Value:after="() => RenameAsync(row)" Placeholder="partner name"
-                                     MessageState="@Required(row.Instance)" Message="@RequiredMessage(row.Instance)" />
-                    <FluentButton Appearance="ButtonAppearance.Subtle" Title="Remove this colleague" OnClick="() => RemoveAsync(row)">✕</FluentButton>
-                </div>
+                <FluentGrid Spacing="2">
+                    @foreach (RemoteRow row in remotes)
+                    {
+                        <FluentGridItem Xs="3">
+                            <FluentTextInput Width="100%" @bind-Value="row.Intent" @bind-Value:after="() => RenameAsync(row)" Placeholder="agent name"
+                                             MessageState="@Required(row.Intent)" Message="@RequiredMessage(row.Intent)" />
+                        </FluentGridItem>
+
+                        <FluentGridItem Xs="3">
+                            <FluentTextInput Width="100%" @bind-Value="row.Instance" @bind-Value:after="() => RenameAsync(row)" Placeholder="partner name"
+                                             MessageState="@Required(row.Instance)" Message="@RequiredMessage(row.Instance)" />
+                        </FluentGridItem>
+
+                        <FluentGridItem Xs="6">
+                            <FluentButton Appearance="ButtonAppearance.Transparent" IconOnly="true" Color="var(--alembic-error)"
+                                          Title="Remove this colleague" OnClick="() => RemoveAsync(row)">✕</FluentButton>
+                        </FluentGridItem>
+                    }
+                </FluentGrid>
             }
 
             <FluentStack Orientation="Orientation.Horizontal">
@@ -128,6 +158,11 @@
         /// <summary>Whether both halves are named, the only state in which it can be reached.</summary>
         public bool Complete => !string.IsNullOrWhiteSpace(Intent) && !string.IsNullOrWhiteSpace(Instance);
     }
+
+    /// <summary>
+    /// The colleague boxes on one line beside the asking agent's name: three columns of three.
+    /// </summary>
+    private const int ColleaguesPerLine = 3;
 
     /// <summary>
     /// Every possible edge on screen.

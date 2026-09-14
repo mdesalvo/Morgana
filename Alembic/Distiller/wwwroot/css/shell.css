@@ -32,18 +32,11 @@ code { font-family: var(--fontFamilyMonospace); }
     text-transform: uppercase; color: var(--alembic-accent); text-shadow: var(--alembic-glow);
 }
 
-/* --- the provisional door ------------------------------------------------ */
-.landing { min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 22px; }
-.landing .wordmark { font-size: 44px; }
-
-.working {
-    margin-top: 1rem; padding: 0.8rem 1.1rem; border-radius: 0.5rem;
-    border: 1px solid var(--alembic-border-lit); box-shadow: var(--alembic-glow);
-    background: color-mix(in srgb, var(--alembic-accent) 12%, transparent);
-}
+/* Waiting on work: centred in whatever space the result is about to fill. */
+.waiting { margin: auto; padding: 24px 16px; }
 
 /* --- the track: two edges and the stretch that repeats ------------------- */
-.track-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 9px; }
+.track-head { margin-bottom: 9px; }
 .track { display: flex; align-items: stretch; gap: 7px; height: var(--track-h); }
 
 .seg {
@@ -93,7 +86,7 @@ code { font-family: var(--fontFamilyMonospace); }
 
 /* --- the stream: one open card, full height, scrolling inside itself ---- */
 .stream { display: flex; flex-direction: column; min-height: 0; padding: 18px 26px 20px; }
-.who-now { display: flex; align-items: baseline; gap: 10px; margin: 0 0 15px; }
+.who-now { margin: 0 0 15px; }
 
 .open {
     flex: 1; min-height: 0; display: flex; flex-direction: column;
@@ -106,16 +99,9 @@ code { font-family: var(--fontFamilyMonospace); }
 .asked { margin: 0; text-wrap: pretty; }
 .quote { margin: 0; padding: 8px 16px; border-left: 2px solid var(--alembic-accent); }
 .choice, .traits { align-self: flex-start; }
-.thinking { margin: auto; }
 .actions { margin-top: 14px; }
 
 /* --- an agent's sections, one row each ---------------------------------- */
-.arows { display: flex; flex-direction: column; }
-.arow {
-    display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 22px; align-items: start;
-    border-bottom: 1px solid var(--alembic-border); padding: 13px 8px 14px;
-}
-.arow:last-child { border-bottom: 0; }
 .arow-name { letter-spacing: .12em; text-transform: uppercase; color: var(--alembic-cyan); padding-top: 3px; }
 .arow-body { max-width: 165ch; }
 .tool + .tool { margin-top: 6px; }

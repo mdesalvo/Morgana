@@ -1,0 +1,17 @@
+<FluentStack Orientation="Orientation.Vertical" HorizontalAlignment="HorizontalAlignment.Center" VerticalAlignment="VerticalAlignment.Center"
+             VerticalGap="16px" Class="waiting" aria-live="polite">
+    <FluentSpinner Size="SpinnerSize.Huge" />
+
+    @if (!string.IsNullOrWhiteSpace(Text))
+    {
+        <FluentText Size="TextSize.Size500" Align="TextAlign.Center">@Text</FluentText>
+    }
+</FluentStack>
+
+@code {
+    /// <summary>
+    /// What is being done, in the client's words; absent while the next question is simply being thought.
+    /// </summary>
+    [Parameter]
+    public string? Text { get; set; }
+}

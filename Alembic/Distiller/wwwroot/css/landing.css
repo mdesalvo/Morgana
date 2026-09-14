@@ -62,10 +62,7 @@
 }
 
 /* --- the doors ------------------------------------------------------------ */
-.gateways { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; flex: none; }
-.gateways-four { grid-template-columns: repeat(4, 1fr); }
-.gateways-one { grid-template-columns: 1fr; max-width: 22rem; margin-inline: auto; }
-@media (max-width: 44rem) { .gateways-four { grid-template-columns: repeat(2, 1fr); } }
+.gateways { flex: none; }
 
 .gateway {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.9rem;
@@ -113,5 +110,5 @@
 .found-agent { border-left: 2px solid var(--alembic-border); font-size: 1rem; padding: 0.1rem 0 0.1rem 1rem; margin-bottom: 1.4rem; }
 .found-agent-name { color: var(--alembic-accent); }
 .found-agent-when { margin: 0.2rem 0 0.5rem; color: var(--alembic-muted); }
-.found-agent-can { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: baseline; color: var(--alembic-muted); }
+.found-agent-can { color: var(--alembic-muted); }
 .back { margin-top: 1rem; }

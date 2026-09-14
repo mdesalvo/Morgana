@@ -7,15 +7,22 @@
     <div class="open-body">
         @if (Point.IsMap)
         {
-            <div class="arows">
+            <FluentGrid Spacing="3">
                 @foreach (IntentDraft intent in Entries)
                 {
-                    <div class="arow">
+                    @if (intent != Entries[0])
+                    {
+                        <FluentGridItem Xs="12"><FluentDivider /></FluentGridItem>
+                    }
+
+                    <FluentGridItem Xs="2">
                         <FluentText Font="TextFont.Monospace" Size="TextSize.Size200" Class="arow-name">@intent.Name</FluentText>
+                    </FluentGridItem>
+                    <FluentGridItem Xs="10">
                         <FluentText Size="TextSize.Size400" Class="arow-body">@intent.Description</FluentText>
-                    </div>
+                    </FluentGridItem>
                 }
-            </div>
+            </FluentGrid>
         }
         else if (Point.OnAgent && Agent is { } agent)
         {

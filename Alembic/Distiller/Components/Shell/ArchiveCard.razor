@@ -19,9 +19,13 @@
 
         <div class="panel-block">
             <FluentText Class="panel-title">Namespace</FluentText>
-            <FluentTextInput @bind-Value="rootNamespace" @bind-Value:after="InvalidateAsync" Placeholder="namespace" Width="420px"
-                             Disabled="running" MessageState="@(NamespaceMessage is null ? null : MessageState.Error)"
-                             Message="@NamespaceMessage" />
+            <FluentGrid Spacing="3">
+                <FluentGridItem Xs="4">
+                    <FluentTextInput @bind-Value="rootNamespace" @bind-Value:after="InvalidateAsync" Placeholder="namespace" Width="100%"
+                                     Disabled="running" MessageState="@(NamespaceMessage is null ? null : MessageState.Error)"
+                                     Message="@NamespaceMessage" />
+                </FluentGridItem>
+            </FluentGrid>
         </div>
 
         <div class="panel-block">
@@ -30,11 +34,16 @@
             <FluentGrid Spacing="3">
                 @foreach (AgentDraft agent in Agents)
                 {
-                    <FluentGridItem Xs="12" Md="2">
+                    @if (agent != Agents[0])
+                    {
+                        <FluentGridItem Xs="12"><FluentDivider /></FluentGridItem>
+                    }
+
+                    <FluentGridItem Xs="2">
                         <FluentText Size="TextSize.Size400">@Named(agent)</FluentText>
                     </FluentGridItem>
 
-                    <FluentGridItem Xs="12" Md="2">
+                    <FluentGridItem Xs="2">
                         <FluentTextInput @bind-Value="agent.Code.AgentClassName" @bind-Value:after="InvalidateAsync"
                                          Placeholder="agent class name" Disabled="running" Width="100%"
                                          MessageState="@IdentifierState(agent.Code.AgentClassName)" />
@@ -42,7 +51,7 @@
 
                     @if (agent.Tools.Count > 0)
                     {
-                        <FluentGridItem Xs="12" Md="2">
+                        <FluentGridItem Xs="2">
                             <FluentTextInput @bind-Value="agent.Code.ToolClassName" @bind-Value:after="InvalidateAsync"
                                              Placeholder="tool class name" Disabled="running" Width="100%"
                                              MessageState="@IdentifierState(agent.Code.ToolClassName)" />
@@ -50,14 +59,14 @@
                     }
                     else
                     {
-                        <FluentGridItem Xs="12" Md="2" HiddenWhen="GridItemHidden.Xs | GridItemHidden.Sm" />
+                        <FluentGridItem Xs="2" />
                     }
 
-                    <FluentGridItem Xs="12" Md="3">
-                        <FluentText Font="TextFont.Monospace" Size="TextSize.Size200" Class="muted" Truncate="true">@Files(agent)</FluentText>
+                    <FluentGridItem Xs="3">
+                        <FluentText Font="TextFont.Monospace" Size="TextSize.Size300" Class="muted" Truncate="true">@Files(agent)</FluentText>
                     </FluentGridItem>
 
-                    <FluentGridItem Xs="12" Md="3">
+                    <FluentGridItem Xs="3">
                         <FluentRadioGroup TValue="Morgana.AI.Records.LLMTier?" Orientation="Orientation.Horizontal" Disabled="running"
                                           @bind-Value="agent.Code.Tier" @bind-Value:after="InvalidateAsync"
                                           MessageState="@(touched && agent.Code.Tier is null ? MessageState.Error : null)"
@@ -69,26 +78,25 @@
                         </FluentRadioGroup>
                     </FluentGridItem>
 
-                    <FluentGridItem Md="2" HiddenWhen="GridItemHidden.Xs | GridItemHidden.Sm" />
-                    <FluentGridItem Xs="12" Md="10">
-                        <FluentStack Orientation="Orientation.Vertical" VerticalGap="8px">
-                            @foreach (McpRow row in McpRows(agent))
-                            {
-                                <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="8px" VerticalAlignment="VerticalAlignment.Center">
-                                    <FluentTextInput @bind-Value="row.Url" @bind-Value:after="() => SyncMcpAsync(agent)"
-                                                     Placeholder="MCP server address" Width="420px" Disabled="running"
-                                                     MessageState="@(touched && !IsAbsoluteHttpUri(row.Url) ? MessageState.Error : null)"
-                                                     Message="@(touched && !IsAbsoluteHttpUri(row.Url) ? "An absolute http(s) address" : null)" />
-                                    <FluentButton Appearance="ButtonAppearance.Subtle" Title="Remove this server" Disabled="running"
-                                                  OnClick="() => RemoveMcpAsync(agent, row)">✕</FluentButton>
-                                </FluentStack>
-                            }
+                    @foreach (McpRow row in McpRows(agent))
+                    {
+                        <FluentGridItem Xs="2" />
+                        <FluentGridItem Xs="2">
+                            <FluentTextInput @bind-Value="row.Url" @bind-Value:after="() => SyncMcpAsync(agent)"
+                                             Placeholder="MCP server address" Width="100%" Disabled="running"
+                                             MessageState="@(touched && !IsAbsoluteHttpUri(row.Url) ? MessageState.Error : null)"
+                                             Message="@(touched && !IsAbsoluteHttpUri(row.Url) ? "An absolute http(s) address" : null)" />
+                        </FluentGridItem>
+                        <FluentGridItem Xs="8">
+                            <FluentButton Appearance="ButtonAppearance.Transparent" IconOnly="true" Color="var(--alembic-error)"
+                                          Title="Remove this server" Disabled="running" OnClick="() => RemoveMcpAsync(agent, row)">✕</FluentButton>
+                        </FluentGridItem>
+                    }
 
-                            <FluentStack Orientation="Orientation.Horizontal">
-                                <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Small" Disabled="running"
-                                              OnClick="() => AddMcp(agent)">Add an MCP server</FluentButton>
-                            </FluentStack>
-                        </FluentStack>
+                    <FluentGridItem Xs="2" />
+                    <FluentGridItem Xs="10">
+                        <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Small" Disabled="running"
+                                      OnClick="() => AddMcp(agent)">Add an MCP server</FluentButton>
                     </FluentGridItem>
                 }
             </FluentGrid>
@@ -101,73 +109,88 @@
 
             @if (running)
             {
-                <div class="distillation">
-                    <svg class="distillation-vessel" viewBox="0 0 64 88" role="img" aria-label="Distilling">
-                        <defs><clipPath id="belly-clip"><circle cx="29" cy="55" r="15.2" /></clipPath></defs>
-                        <path d="M25.2 40.3 V13 M32.8 40.3 V13" fill="none" stroke="var(--alembic-border-lit)" stroke-width="3.4" stroke-linecap="round" />
-                        <rect x="21.8" y="10" width="14.4" height="4.8" rx="2.4" fill="var(--alembic-border-lit)" />
-                        <path d="M40 20.5 H49 A3.2 3.2 0 0 1 52 23.7 V33" fill="none" stroke="var(--alembic-border-lit)" stroke-width="3.4" stroke-linecap="round" />
-                        <g clip-path="url(#belly-clip)">
-                            <rect x="10" width="38" y="@Invariant(70.2 - FillHeight)" height="@Invariant(FillHeight)" class="distillation-fill" />
-                        </g>
-                        <circle cx="29" cy="55" r="15.2" fill="none" stroke="var(--alembic-border-lit)" stroke-width="1.8" />
-                    </svg>
+                <FluentGrid Spacing="3" Class="distillation">
+                    <FluentGridItem Xs="4">
+                        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="18px">
+                            <svg class="distillation-vessel" viewBox="0 0 64 88" role="img" aria-label="Distilling">
+                                <defs><clipPath id="belly-clip"><circle cx="29" cy="55" r="15.2" /></clipPath></defs>
+                                <path d="M25.2 40.3 V13 M32.8 40.3 V13" fill="none" stroke="var(--alembic-border-lit)" stroke-width="3.4" stroke-linecap="round" />
+                                <rect x="21.8" y="10" width="14.4" height="4.8" rx="2.4" fill="var(--alembic-border-lit)" />
+                                <path d="M40 20.5 H49 A3.2 3.2 0 0 1 52 23.7 V33" fill="none" stroke="var(--alembic-border-lit)" stroke-width="3.4" stroke-linecap="round" />
+                                <g clip-path="url(#belly-clip)">
+                                    <rect x="10" width="38" y="@Invariant(70.2 - FillHeight)" height="@Invariant(FillHeight)" class="distillation-fill" />
+                                </g>
+                                <circle cx="29" cy="55" r="15.2" fill="none" stroke="var(--alembic-border-lit)" stroke-width="1.8" />
+                            </svg>
 
-                    <div class="distillation-status">
-                        <FluentText As="TextTag.Paragraph" Class="distillation-phase">@PhaseLabel</FluentText>
-                        <FluentProgressBar Value="Percent" Max="100" Width="100%" />
-                        <FluentText Size="TextSize.Size200" Class="muted">
-                            @Percent% · @plan.Count(step => step.Done) of @plan.Count@(StepElapsed is { } elapsed ? $" · {elapsed} on this step" : "")
-                        </FluentText>
-                    </div>
-                </div>
+                            <FluentStack Orientation="Orientation.Vertical" VerticalGap="8px" Class="distillation-status">
+                                <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Class="distillation-phase">@PhaseLabel</FluentText>
+                                <FluentProgressBar Value="Percent" Max="100" Width="100%" />
+                                <FluentText Size="TextSize.Size300" Class="muted">
+                                    @Percent% · @plan.Count(step => step.Done) of @plan.Count@(StepElapsed is { } elapsed ? $" · {elapsed} on this step" : "")
+                                </FluentText>
 
-                @* Several agents in flight together: execution is two passes over all of them, never one agent at a time. *@
-                <div class="distillation-agents">
-                    @foreach (IGrouping<string, Step> card in AgentCards)
-                    {
-                        int cardPercent = card.Count(step => step.Done) * 100 / card.Count();
-
-                        <div class="step-card">
-                            <FluentText Weight="TextWeight.Semibold">@card.First().Label</FluentText>
-                            <ul class="step-card-steps">
-                                @foreach (Step step in card)
+                                @if (NextAgent is { } next)
                                 {
-                                    <li class="@(step.Done ? "stage-done" : step == InProgress ? "stage-current" : "stage-todo")">
-                                        @if (step == InProgress)
-                                        {
-                                            <FluentSpinner Size="SpinnerSize.Tiny" />
-                                        }
-                                        else
-                                        {
-                                            <span class="stage-mark">@(step.Done ? "✓" : "○")</span>
-                                        }
-                                        @StepKindLabel(step.Kind)
-                                    </li>
+                                    <FluentText Size="TextSize.Size300" Class="muted distillation-others">Next agent: @next</FluentText>
                                 }
-                            </ul>
-                            <FluentProgressBar Value="cardPercent" Max="100" Width="100%" />
-                            <FluentText Size="TextSize.Size200" Class="step-card-percent muted">@cardPercent%</FluentText>
-                        </div>
-                    }
-                </div>
+                            </FluentStack>
+                        </FluentStack>
+                    </FluentGridItem>
 
-                <ol class="distillation-log" aria-live="polite">
-                    @foreach (string path in written)
-                    {
-                        <li class="log-done"><span class="log-mark">✓</span><code>@path</code></li>
-                    }
-                    <li class="log-current"><FluentSpinner Size="SpinnerSize.Tiny" />Writing @CurrentLogLabel…</li>
-                </ol>
+                    <FluentGridItem Xs="3">
+                        @if (CurrentCard is { } card)
+                        {
+                            int cardPercent = card.Count(step => step.Done) * 100 / card.Count();
+
+                            <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" VerticalGap="6px" Class="step-card">
+                                <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
+                                    <FluentText Size="TextSize.Size400" Weight="TextWeight.Semibold">@card.First().Label</FluentText>
+                                    <ul class="step-card-steps">
+                                        @foreach (Step step in card)
+                                        {
+                                            <li class="@(step.Done ? "stage-done" : step == InProgress ? "stage-current" : "stage-todo")">
+                                                @if (step == InProgress)
+                                                {
+                                                    <FluentSpinner Size="SpinnerSize.Tiny" />
+                                                }
+                                                else
+                                                {
+                                                    <span class="stage-mark">@(step.Done ? "✓" : "○")</span>
+                                                }
+                                                @StepKindLabel(step.Kind)
+                                            </li>
+                                        }
+                                    </ul>
+                                </FluentStack>
+
+                                <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
+                                    <FluentProgressBar Value="cardPercent" Max="100" Width="100%" />
+                                    <FluentText Size="TextSize.Size300" Class="step-card-percent muted">@cardPercent%</FluentText>
+                                </FluentStack>
+                            </FluentStack>
+                        }
+                    </FluentGridItem>
+
+                    <FluentGridItem Xs="5">
+                        @* Newest first in the markup: the log is drawn bottom up, so it stays on its newest line by itself. *@
+                        <ol class="distillation-log" aria-live="polite">
+                            <li class="log-current"><FluentSpinner Size="SpinnerSize.Tiny" />Writing @CurrentLogLabel…</li>
+                            @for (int line = written.Count - 1; line >= 0; line--)
+                            {
+                                <li class="log-done"><span class="log-mark">✓</span><code>@written[line]</code></li>
+                            }
+                        </ol>
+                    </FluentGridItem>
+                </FluentGrid>
 
                 <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="14px" Class="distillation-stop">
                     <FluentButton Appearance="ButtonAppearance.Outline" Disabled="isStopping" OnClick="Stop">@(isStopping ? "Stopping…" : "Stop")</FluentButton>
-                    <FluentText Class="muted">Throws away everything written so far: nothing partial is kept.</FluentText>
                 </FluentStack>
             }
             else if (package is { } archive)
             {
-                <div class="distillation-done">
+                <FluentStack Orientation="Orientation.Vertical" HorizontalAlignment="HorizontalAlignment.Start" VerticalGap="12px" Class="distillation-done">
                     <FluentText As="TextTag.Paragraph" Size="TextSize.Size500" Weight="TextWeight.Semibold" Class="distillation-done-headline">
                         Your domain has been distilled.
                     </FluentText>
@@ -183,11 +206,13 @@
                     </FluentButton>
 
                     <FluentButton Appearance="ButtonAppearance.Outline" OnClick="AgainAsync">Run again</FluentButton>
-                </div>
+                </FluentStack>
             }
             else
             {
-                <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="FinalizeAsync">Finalize domain</FluentButton>
+                <FluentStack Orientation="Orientation.Horizontal">
+                    <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="FinalizeAsync">Finalize domain</FluentButton>
+                </FluentStack>
             }
         </div>
     </div>
@@ -314,11 +339,6 @@
     /// When the step in hand began, so a slow step can say how long it has been slow.
     /// </summary>
     private DateTime stepEnteredAt = DateTime.UtcNow;
-
-    /// <summary>
-    /// How many log lines were in view when the log was last scrolled.
-    /// </summary>
-    private int scrolledThrough = -1;
 
     /// <summary>
     /// The agents the archive writes code for.
@@ -647,12 +667,34 @@
         plan.Where(step => step.Kind != "structure").GroupBy(step => step.AgentId);
 
     /// <summary>
+    /// The agent the step in hand belongs to; none while the files every agent shares are written.
+    /// </summary>
+    private IGrouping<string, Step>? CurrentCard => AgentCards.FirstOrDefault(card => card.Contains(InProgress));
+
+    /// <summary>
+    /// The agent the model turns to after the one it is writing for, while there is one.
+    /// </summary>
+    // Only the steps that wait on the model count: a class is templated in no time, so an agent without
+    // tools would be announced and passed in the same instant and the line would jump past it.
+    private string? NextAgent
+    {
+        get
+        {
+            List<Step> awaitingModel = [.. plan.Where(step => !step.Done && step.Kind is "mock" or "scenarios")];
+
+            return awaitingModel.Count == 0
+                ? null
+                : awaitingModel.FirstOrDefault(step => step.AgentId != awaitingModel[0].AgentId)?.Label;
+        }
+    }
+
+    /// <summary>
     /// A step named for what the client gets.
     /// </summary>
     private static string StepKindLabel(string kind) => kind switch
     {
         "code" => "class",
-        "mock" => "mock",
+        "mock" => "tools",
         "scenarios" => "scenarios",
         _ => kind
     };
@@ -676,7 +718,7 @@
         {
             "structure" => "Writing the domain's configuration and reports…",
             "code" => $"Distilling {step.Label}: writing its agent class…",
-            "mock" => $"Distilling {step.Label}: mocking its tools…",
+            "mock" => $"Distilling {step.Label}: writing its tools…",
             "scenarios" => $"Distilling {step.Label}: writing its starter scenarios…",
             _ => "Distilling…"
         };
@@ -713,7 +755,6 @@
     private void StartHeartbeat()
     {
         StopHeartbeat();
-        scrolledThrough = -1;
         heartbeat = new System.Threading.Timer(_ => _ = BeatAsync(), null, TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
     }
 
@@ -743,26 +784,6 @@
     {
         heartbeat?.Dispose();
         heartbeat = null;
-    }
-
-    /// <summary>
-    /// Keeps the newest log line in view as lines land.
-    /// </summary>
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (!running || written.Count == scrolledThrough)
-            return;
-
-        scrolledThrough = written.Count;
-
-        try
-        {
-            await JS.InvokeVoidAsync("alembicScrollLogBottom");
-        }
-        catch (Exception courtesy)
-        {
-            Logger.LogDebug(courtesy, "Could not scroll the distillation log");
-        }
     }
 
     /// <summary>
