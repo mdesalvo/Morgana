@@ -26,7 +26,7 @@
                 @foreach (CheckRow row in rows)
                 {
                     List<ValidationFinding> own = row.Check is { } check ? [.. deterministic.Where(finding => finding.Check == check)] : [];
-                    List<CoherenceFinding> judged = row.Check is null ? [.. coherence.Where(finding => finding.Kind == row.Id)] : [];
+                    List<CoherenceFinding> judged = row.Check is null ? [.. coherence.Where(finding => string.Equals(finding.Kind, row.Id, StringComparison.OrdinalIgnoreCase))] : [];
                     int count = own.Count + judged.Count;
                     bool ranThis = ran.Contains(row.Id);
                     bool errors = own.Any(finding => finding.Severity == FindingSeverity.Error);
@@ -91,9 +91,8 @@
                                                     </FluentStack>
                                                     <FluentText Size="TextSize.Size400" Block="true" Color="Color.Custom" CustomColor="var(--alembic-text)">@finding.Message</FluentText>
                                                     <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Italic="true" Class="because muted">
-                                                        @(error ? "It must be fixed because" : "You may leave it as it is, but it is worth fixing because") @LowerFirst(finding.Because)
+                                                        @(error ? "It must be fixed:" : "You may leave it as it is, but it is worth fixing:") @finding.Because
                                                     </FluentText>
-                                                    <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Italic="true" Class="because muted">The rewrite is yours: the section opens and you come back here.</FluentText>
                                                 </ChildContent>
                                                 <ActionsTemplate>
                                                     <FluentButton Appearance="ButtonAppearance.Outline" OnClick="() => OnGoTo.InvokeAsync(finding)">Go to section &rarr;</FluentButton>
@@ -113,7 +112,7 @@
                                                     </FluentStack>
                                                     <FluentText Size="TextSize.Size400" Block="true" Color="Color.Custom" CustomColor="var(--alembic-text)">@WithNames(finding.What)</FluentText>
                                                     <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Italic="true" Class="because muted">
-                                                        You may leave it as it is, but it is worth fixing because @WithNames(LowerFirst(finding.Why))
+                                                        You may leave it as it is, but it is worth fixing: @WithNames(finding.Why)
                                                     </FluentText>
 
                                                     @if (applying == finding)
@@ -441,12 +440,7 @@
     /// </summary>
     private static IEnumerable<string> Places(string where) =>
         where.Split([',', '.'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-             .Select(place => place.Trim('\'', '"'))
+             .Select(place => place.Replace("'", string.Empty).Replace("\"", string.Empty).Trim())
              .Where(place => place.Length > 0);
 
-    /// <summary>
-    /// A reason lowered so it reads on from "because".
-    /// </summary>
-    private static string LowerFirst(string text) =>
-        string.IsNullOrEmpty(text) ? text : char.ToLowerInvariant(text[0]) + text[1..];
 }

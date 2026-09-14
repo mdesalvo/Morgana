@@ -44,7 +44,7 @@
 
 .landing-head { text-align: center; margin-bottom: 1.75rem; flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .alembic-landing .landing-head h1 { font-size: 3.6rem; }
-.tagline { margin: 0.25rem 0 0; color: var(--alembic-muted); font-size: 1.05rem; }
+.tagline { margin: 0.25rem 0 0; color: var(--alembic-muted); font-size: var(--fontSizeBase400); }
 
 /* The banner keeps its proportion while there is room and shrinks when there is not. */
 .banner { position: relative; width: 100%; margin: 0 auto 1.5rem; aspect-ratio: 1376 / 768; flex: 0 1 auto; min-height: 0; }
@@ -75,7 +75,7 @@
 .gateway:hover { border-color: var(--alembic-border-lit); transform: translateY(-2px); box-shadow: var(--alembic-glow); }
 .gateway .sigil { width: 3rem; height: 3rem; color: var(--alembic-accent); flex: none; }
 .gateway .go {
-    font-size: 0.85rem; font-weight: 600; letter-spacing: 0.04em; color: var(--alembic-accent);
+    font-size: var(--fontSizeBase300); font-weight: 600; letter-spacing: 0.04em; color: var(--alembic-accent);
     padding: 0.5rem 1.3rem; border: 1px solid var(--alembic-border-lit); border-radius: 1.4rem;
 }
 .gateway:hover .go { background: color-mix(in srgb, var(--alembic-accent) 16%, transparent); border-color: var(--alembic-accent); }
@@ -99,11 +99,10 @@
 .import-file .muted, .muted { color: var(--alembic-muted); }
 .import-news { margin-top: 1rem; }
 .what-now {
-    margin: 2.5rem 0 1rem; font-size: 0.85rem; font-weight: 600; text-transform: uppercase;
+    margin: 2.5rem 0 1rem; font-size: var(--fontSizeBase200); font-weight: 600; text-transform: uppercase;
     letter-spacing: 0.18em; color: var(--alembic-muted);
 }
-.found-agent { border-left: 2px solid var(--alembic-border); font-size: 1rem; padding: 0.1rem 0 0.1rem 1rem; margin-bottom: 1.4rem; }
+.found-agent { border-left: 2px solid var(--alembic-border); font-size: var(--fontSizeBase400); padding: 0.1rem 0 0.1rem 1rem; margin-bottom: 1.4rem; }
 .found-agent-name { color: var(--alembic-accent); }
 .found-agent-when { margin: 0.2rem 0 0.5rem; color: var(--alembic-muted); }
 .found-agent-can { color: var(--alembic-muted); }
-.back { margin-top: 1rem; }

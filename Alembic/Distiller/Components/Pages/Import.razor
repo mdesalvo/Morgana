@@ -362,9 +362,10 @@
             buffer.Position = 0;
             await ImportAsync(buffer, file.Name);
         }
-        catch (IOException tooLarge)
+        // Too large, a broken zip or JSON that is not what it claims: each is told to the client, never a dropped circuit.
+        catch (Exception unreadable) when (unreadable is not OperationCanceledException)
         {
-            error = tooLarge.Message;
+            error = unreadable.Message;
         }
         finally
         {

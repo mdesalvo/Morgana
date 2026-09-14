@@ -48,7 +48,7 @@
                     @* Each name sits over the files it becomes, so the badge says what the box is for. *@
                     <FluentGridItem Xs="2">
                         <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
-                            <FluentTextInput @bind-Value="agent.Code.AgentClassName" @bind-Value:after="InvalidateAsync" Immediate="true"
+                            <FluentTextInput @bind-Value="agent.Code.AgentClassName" Immediate="true" @onfocusout="InvalidateAsync"
                                              Placeholder="agent class name" Disabled="running" Width="100%"
                                              MessageState="@IdentifierState(agent.Code.AgentClassName)" />
                             <FluentBadge Appearance="BadgeAppearance.Outline" Color="BadgeColor.Informative"
@@ -60,7 +60,7 @@
                     {
                         <FluentGridItem Xs="2">
                             <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
-                                <FluentTextInput @bind-Value="agent.Code.ToolClassName" @bind-Value:after="InvalidateAsync" Immediate="true"
+                                <FluentTextInput @bind-Value="agent.Code.ToolClassName" Immediate="true" @onfocusout="InvalidateAsync"
                                                  Placeholder="tool class name" Disabled="running" Width="100%"
                                                  MessageState="@IdentifierState(agent.Code.ToolClassName)" />
                                 <FluentStack Orientation="Orientation.Horizontal" Wrap="true" HorizontalGap="6px" VerticalGap="6px">

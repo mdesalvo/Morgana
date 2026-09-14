@@ -55,7 +55,7 @@ code { font-family: var(--fontFamilyMonospace); }
     background: color-mix(in srgb, var(--alembic-panel) 50%, transparent);
     border: 1px solid var(--alembic-border); border-radius: var(--r);
 }
-.seg .seg-name { font-size: 15px; line-height: 1.25; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg .seg-name { font-size: var(--fontSizeBase400); line-height: 1.25; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .seg[data-state="done"] {
     color: var(--alembic-text);
     background: color-mix(in srgb, var(--alembic-cyan) 9%, transparent);

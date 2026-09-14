@@ -9,7 +9,7 @@
 
 .panel-block { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
 .panel-title {
-    font-size: 12.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--alembic-accent); font-weight: 500;
+    font-size: var(--fontSizeBase200); letter-spacing: .12em; text-transform: uppercase; color: var(--alembic-accent); font-weight: 500;
 }
 
 /* --- Collaboration: an asking agent's name on the line of its colleague boxes --- */
@@ -29,7 +29,7 @@
 .distillation-status { flex: 1; min-width: 0; }
 .distillation-phase { margin: 0; }
 
-.step-card-steps { display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 0; list-style: none; font-size: 15px; }
+.step-card-steps { display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 0; list-style: none; font-size: var(--fontSizeBase400); }
 .step-card-steps li { display: flex; align-items: center; gap: 6px; }
 .stage-mark { width: 14px; text-align: center; flex-shrink: 0; }
 .stage-done { color: var(--alembic-success); }
@@ -40,7 +40,7 @@
 .distillation-log {
     display: flex; flex-direction: column-reverse; height: 132px; overflow-y: auto;
     margin: 0; padding: 9px 12px; border-radius: 7px; background: var(--alembic-panel-lit);
-    list-style: none; font-size: 15px;
+    list-style: none; font-size: var(--fontSizeBase400);
 }
 .distillation-log li { display: flex; align-items: center; gap: 9px; padding: 2px 0; }
 .log-mark { flex-shrink: 0; width: 16px; text-align: center; }

@@ -88,9 +88,9 @@
         }
         else if (Frontier.OnDomain)
         {
-            @* Folded once every agent is in: the way onto the domain, opening on its first moment. *@
+            @* Folded once every agent is in: the way back onto the domain, where the client last stood in it. *@
             <FluentCard Class="seg" data-state="done" Shadow="CardShadow.None" Role="button" title="Open the domain"
-                        OnClick="() => OnLook.InvokeAsync(new ShellPoint(-1, ShellPoint.CollaborationRail))">
+                        OnClick="() => OnLook.InvokeAsync(DomainAt)">
                 <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" Height="100%">
                     <span class="seg-name">Domain</span>
                     <FluentProgressBar Value="100" Max="100" Width="100%" Color="@BarWritten" BackgroundColor="@BarAhead" Thickness="ProgressThickness.Large" />
@@ -157,6 +157,12 @@
     /// </summary>
     [Parameter, EditorRequired]
     public ShellPoint Pointer { get; set; }
+
+    /// <summary>
+    /// The domain moment the client last stood on, where the folded domain opens.
+    /// </summary>
+    [Parameter]
+    public ShellPoint DomainAt { get; set; } = new(-1, ShellPoint.CollaborationRail);
 
     /// <summary>
     /// Raised with the moment the client wants to look at.

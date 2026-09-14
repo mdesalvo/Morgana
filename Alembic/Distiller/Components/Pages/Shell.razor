@@ -16,7 +16,7 @@
             <span class="wordmark">Alembic</span>
         </div>
 
-        <Track Entries="entries" Frontier="Frontier" Pointer="Pointer" OnLook="LookAt" />
+        <Track Entries="entries" Frontier="Frontier" Pointer="Pointer" DomainAt="domainAt" OnLook="LookAt" />
     </FluentLayoutItem>
 
     <FluentLayoutItem Area="LayoutArea.Content" Class="stream">
@@ -450,19 +450,22 @@
     private static readonly TimeSpan NoticeLifetime = TimeSpan.FromSeconds(7);
 
     /// <summary>
-    /// A notice as a lit panel of the room, edged and marked in the colour the checks use for the same news.
+    /// A notice as a lit panel of the room, edged in the colour the checks use for the same news.
     /// </summary>
+    // The kinds' own marks already come from the theme; only plain news needs its mark set, in the accent.
     private static string LookOf(NoticeKind kind)
     {
-        (string colour, string markToken) = kind switch
+        string colour = kind switch
         {
-            NoticeKind.Success => ("var(--alembic-success)", "--colorStatusSuccessForeground1"),
-            NoticeKind.Warning => ("var(--alembic-gold)", "--colorStatusWarningForeground1"),
-            NoticeKind.Failure => ("var(--alembic-error)", "--colorStatusDangerForeground1"),
-            _ => ("var(--alembic-accent)", "--colorBrandForeground1")
+            NoticeKind.Success => "var(--alembic-success)",
+            NoticeKind.Warning => "var(--alembic-gold)",
+            NoticeKind.Failure => "var(--alembic-error)",
+            _ => "var(--alembic-accent)"
         };
 
+        string mark = kind is NoticeKind.Success or NoticeKind.Warning or NoticeKind.Failure ? string.Empty : $" --colorBrandForeground1: {colour};";
+
         return "--colorNeutralBackground1: var(--alembic-panel-lit); --shadow8: var(--alembic-glow); "
-               + $"--colorTransparentStroke: {colour}; {markToken}: {colour};";
+               + $"--colorTransparentStroke: {colour};{mark}";
     }
 }
