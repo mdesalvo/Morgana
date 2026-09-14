@@ -34,7 +34,7 @@
                 <FluentStack Orientation="Orientation.Horizontal" Wrap="true" HorizontalGap="7px" VerticalGap="7px" Class="traits">
                     @foreach (string trait in Traits)
                     {
-                        <FluentToggleButton Shape="ButtonShape.Circular" Size="ButtonSize.Small"
+                        <FluentToggleButton Shape="ButtonShape.Circular"
                                             Pressed="@picked.Contains(trait)" OnClick="() => Toggle(trait)">@trait</FluentToggleButton>
                     }
                 </FluentStack>

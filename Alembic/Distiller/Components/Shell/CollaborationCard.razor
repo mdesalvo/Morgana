@@ -10,6 +10,7 @@
         </FluentText>
 
         <div class="panel-block">
+            <FluentDivider />
             <FluentText Class="panel-title">Agents on your Morgana</FluentText>
 
             <FluentStack Orientation="Orientation.Vertical" VerticalGap="8px">
@@ -40,7 +41,18 @@
                             }
 
                             <FluentGridItem Xs="3">
-                                <FluentCheckbox @bind-Value="cell.On" @bind-Value:after="() => ApplyAsync(cell)" Label="@cell.Label" />
+                                <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="6px">
+                                    <FluentCheckbox @bind-Value="cell.On" @bind-Value:after="() => ApplyAsync(cell)" Size="CheckboxSize.Large">
+                                        <LabelTemplate>
+                                            <FluentText Size="TextSize.Size400">@cell.Label</FluentText>
+                                        </LabelTemplate>
+                                    </FluentCheckbox>
+
+                                    @if (cell.Instance is { } partner)
+                                    {
+                                        <FluentBadge Appearance="BadgeAppearance.Tint" Color="BadgeColor.Informative" title="Published by this partner">@partner</FluentBadge>
+                                    }
+                                </FluentStack>
                             </FluentGridItem>
                         }
                     </FluentGrid>
@@ -49,6 +61,7 @@
         </div>
 
         <div class="panel-block">
+            <FluentDivider />
             <FluentText Class="panel-title">Agents on partner Morgana</FluentText>
 
             @if (remotes.Count > 0)
@@ -230,7 +243,7 @@
                     Asking = asking,
                     Intent = row.AppliedIntent,
                     Instance = row.AppliedInstance,
-                    Label = $"{row.AppliedIntent} · {row.AppliedInstance}",
+                    Label = row.AppliedIntent,
                     On = Consults(asking, row.AppliedIntent, row.AppliedInstance)
                 });
         }

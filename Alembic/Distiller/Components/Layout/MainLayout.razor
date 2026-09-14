@@ -45,6 +45,11 @@
         theme.Fonts.Family.Numeric = BaseFace;
         theme.Fonts.Family.Monospace = MonospaceFace;
 
+        // The two smallest steps are where badges and a message bar's body are set, with no size of their own
+        // to raise; lifted here, every label and hint stays readable at the workbench's desk distance.
+        theme.Fonts.Size.Base100 = "12px";
+        theme.Fonts.Size.Base200 = "14px";
+
         // Fluent's grounds darken as their number grows, the palette's in the order they stack.
         theme.Colors.Neutral.Background1 = "var(--alembic-panel)";
         theme.Colors.Neutral.Background2 = "var(--alembic-bg)";
@@ -60,6 +65,60 @@
         theme.Colors.Neutral.Stroke1 = "var(--alembic-border-lit)";
         theme.Colors.Neutral.Stroke2 = "var(--alembic-border)";
         theme.Colors.Neutral.StrokeSubtle = "var(--alembic-border)";
+
+        // News wears the palette's kinds: gold warns, red refuses, green is verified. A tint for the ground keeps a
+        // warning from reading as a failure the way Fluent's dark defaults drew it.
+        theme.Colors.Status.WarningBackground1 = "color-mix(in srgb, var(--alembic-gold) 12%, transparent)";
+        theme.Colors.Status.WarningBackground2 = "color-mix(in srgb, var(--alembic-gold) 20%, transparent)";
+        theme.Colors.Status.WarningBackground3 = "var(--alembic-gold)";
+        theme.Colors.Status.WarningBorder1 = "var(--alembic-gold)";
+        theme.Colors.Status.WarningBorder2 = "var(--alembic-gold)";
+        theme.Colors.Status.WarningBorderActive = "var(--alembic-gold)";
+        theme.Colors.Status.WarningForeground1 = "var(--alembic-gold)";
+        theme.Colors.Status.WarningForeground2 = "var(--alembic-gold)";
+        theme.Colors.Status.WarningForeground3 = "var(--alembic-gold)";
+        theme.Colors.Status.WarningForegroundInverted = "var(--alembic-bg-deep)";
+
+        theme.Colors.Status.DangerBackground1 = "color-mix(in srgb, var(--alembic-error) 12%, transparent)";
+        theme.Colors.Status.DangerBackground2 = "color-mix(in srgb, var(--alembic-error) 20%, transparent)";
+        theme.Colors.Status.DangerBackground3 = "var(--alembic-error)";
+        theme.Colors.Status.DangerBackground3Hover = "var(--alembic-error)";
+        theme.Colors.Status.DangerBackground3Pressed = "var(--alembic-error)";
+        theme.Colors.Status.DangerBorder1 = "var(--alembic-error)";
+        theme.Colors.Status.DangerBorder2 = "var(--alembic-error)";
+        theme.Colors.Status.DangerBorderActive = "var(--alembic-error)";
+        theme.Colors.Status.DangerForeground1 = "var(--alembic-error)";
+        theme.Colors.Status.DangerForeground2 = "var(--alembic-error)";
+        theme.Colors.Status.DangerForeground3 = "var(--alembic-error)";
+        theme.Colors.Status.DangerForegroundInverted = "var(--alembic-bg-deep)";
+
+        theme.Colors.Status.SuccessBackground1 = "color-mix(in srgb, var(--alembic-success) 12%, transparent)";
+        theme.Colors.Status.SuccessBackground2 = "color-mix(in srgb, var(--alembic-success) 20%, transparent)";
+        theme.Colors.Status.SuccessBackground3 = "var(--alembic-success)";
+        theme.Colors.Status.SuccessBorder1 = "var(--alembic-success)";
+        theme.Colors.Status.SuccessBorder2 = "var(--alembic-success)";
+        theme.Colors.Status.SuccessBorderActive = "var(--alembic-success)";
+        theme.Colors.Status.SuccessForeground1 = "var(--alembic-success)";
+        theme.Colors.Status.SuccessForeground2 = "var(--alembic-success)";
+        theme.Colors.Status.SuccessForeground3 = "var(--alembic-success)";
+        theme.Colors.Status.SuccessForegroundInverted = "var(--alembic-bg-deep)";
+
+        // A message bar reads its kinds off the palette hues rather than the status ones: dark orange warns, red
+        // refuses, green is verified, so those hues take the same three palette tokens.
+        theme.Colors.Palette.DarkOrangeBackground1 = "color-mix(in srgb, var(--alembic-gold) 12%, transparent)";
+        theme.Colors.Palette.DarkOrangeBorder1 = "var(--alembic-gold)";
+        theme.Colors.Palette.DarkOrangeForeground1 = "var(--alembic-gold)";
+        theme.Colors.Palette.DarkOrangeForeground3 = "var(--alembic-gold)";
+
+        theme.Colors.Palette.RedBackground1 = "color-mix(in srgb, var(--alembic-error) 12%, transparent)";
+        theme.Colors.Palette.RedBorder1 = "var(--alembic-error)";
+        theme.Colors.Palette.RedForeground1 = "var(--alembic-error)";
+        theme.Colors.Palette.RedForeground3 = "var(--alembic-error)";
+
+        theme.Colors.Palette.GreenBackground1 = "color-mix(in srgb, var(--alembic-success) 12%, transparent)";
+        theme.Colors.Palette.GreenBorder1 = "var(--alembic-success)";
+        theme.Colors.Palette.GreenForeground1 = "var(--alembic-success)";
+        theme.Colors.Palette.GreenForeground3 = "var(--alembic-success)";
 
         await ThemeService.SetThemeAsync(theme);
 

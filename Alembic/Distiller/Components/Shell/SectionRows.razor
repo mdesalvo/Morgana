@@ -23,10 +23,32 @@
 
                 @foreach (ToolDraft tool in Agent.Tools)
                 {
-                    <FluentText Block="true" Class="tool">
-                        <FluentText Font="TextFont.Monospace" Size="TextSize.Size300" Class="tool-signature">@AgentRows.Signature(tool)</FluentText>
-                        — @tool.Description
-                    </FluentText>
+                    <FluentStack Orientation="Orientation.Vertical" VerticalGap="4px" Class="tool">
+                        @* Filled when the tool cannot run without it, outlined when it can; beside it, where its value comes from. *@
+                        <FluentStack Orientation="Orientation.Horizontal" Wrap="true" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="10px" VerticalGap="6px">
+                            <FluentText Font="TextFont.Monospace" Size="TextSize.Size300" Class="tool-signature">@(tool.Name ?? "(unnamed)")</FluentText>
+
+                            @foreach (ToolParameterDraft parameter in tool.Parameters)
+                            {
+                                <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="3px" Width="auto">
+                                    <FluentBadge Appearance="@(parameter.Required ? BadgeAppearance.Filled : BadgeAppearance.Outline)" Color="BadgeColor.Brand"
+                                                 Shape="BadgeShape.Circular" title="@(parameter.Required ? "Required" : "Optional")">@(parameter.Name ?? "…")</FluentBadge>
+
+                                    @if (!string.IsNullOrWhiteSpace(parameter.Scope))
+                                    {
+                                        <FluentBadge Appearance="BadgeAppearance.Ghost" Color="BadgeColor.Informative">@parameter.Scope</FluentBadge>
+                                    }
+
+                                    @if (parameter.Shared)
+                                    {
+                                        <FluentBadge Appearance="BadgeAppearance.Ghost" Color="BadgeColor.Informative">shared</FluentBadge>
+                                    }
+                                </FluentStack>
+                            }
+                        </FluentStack>
+
+                        <FluentText Size="TextSize.Size400">@tool.Description</FluentText>
+                    </FluentStack>
                 }
             }
             else

@@ -32,20 +32,28 @@ code { font-family: var(--fontFamilyMonospace); }
     text-transform: uppercase; color: var(--alembic-accent); text-shadow: var(--alembic-glow);
 }
 
+/* A message bar's text never runs wider than Fluent lets its body run, so the bar closes around the text. */
+.message-fits { width: fit-content; }
+
 /* Waiting on work: centred in whatever space the result is about to fill. */
 .waiting { margin: auto; padding: 24px 16px; }
 
-/* --- the track: two edges and the stretch that repeats ------------------- */
+/* --- the track: the map at a fixed quarter, the agents and the domain sharing the rest --- */
 .track-head { margin-bottom: 9px; }
-.track { display: flex; align-items: stretch; gap: 7px; height: var(--track-h); }
+/* The map's column is a quarter of the track and nothing else decides it, so it never moves. */
+.track { display: grid; grid-template-columns: 25% auto minmax(0, 1fr); gap: 7px; height: var(--track-h); }
+
+/* The agents and the domain split the rest evenly; the one looked at takes three parts of four. */
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 7px; min-width: 0; transition: grid-template-columns .3s ease; }
+.stage[data-open="agents"] { grid-template-columns: minmax(0, 3fr) auto minmax(0, 1fr); }
+.stage[data-open="domain"] { grid-template-columns: minmax(0, 1fr) auto minmax(0, 3fr); }
 
 .seg {
-    flex: 1 1 0; min-width: 0; height: var(--track-h); overflow: hidden;
+    min-width: 0; height: var(--track-h); overflow: hidden;
     display: flex; flex-direction: column; justify-content: space-between; align-items: stretch; gap: 6px;
     text-align: left; padding: 11px 13px 12px; color: var(--alembic-muted);
     background: color-mix(in srgb, var(--alembic-panel) 50%, transparent);
     border: 1px solid var(--alembic-border); border-radius: var(--r);
-    transition: flex-grow .3s ease;
 }
 .seg .seg-name { font-size: 15px; line-height: 1.25; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .seg[data-state="done"] {
@@ -54,30 +62,25 @@ code { font-family: var(--fontFamilyMonospace); }
     border-color: color-mix(in srgb, var(--alembic-cyan) 34%, transparent);
 }
 .seg[data-state="here"] {
-    flex-grow: 3.6; color: var(--alembic-text);
+    color: var(--alembic-text);
     background: color-mix(in srgb, var(--alembic-accent-deep) 26%, transparent);
     border-color: var(--alembic-accent); box-shadow: var(--alembic-glow);
 }
 .seg[data-state="ahead"] { background: transparent; }
-.seg.edge { flex-grow: .5; }
-.seg.edge[data-state="here"]:not(.fixed) { flex-grow: 1.4; }
-.track[data-phase="edge"] .seg:not(.edge), .track[data-phase="map"] .seg:not(.edge) { flex-grow: 1; }
-.track .sep { width: 1px; background: var(--alembic-border); margin: 6px 4px; flex: none; }
+.track .sep { margin: 6px 4px; }
 
-/* The carousel: the agent in hand at the centre, its neighbours behind the arrows. */
-.carousel { flex: 1 1 auto; min-width: 0; height: var(--track-h); display: flex; align-items: stretch; gap: 7px; }
+/* The carousel is the agents opened: the agent in hand between its neighbours. */
+.carousel { min-width: 0; height: var(--track-h); display: flex; align-items: stretch; gap: 7px; }
 .carousel .seg.middle { flex: 1 1 0; }
 .seg.middle .seg-name { width: 100%; }
-.pos-now { margin-left: auto; font-size: 13px; color: var(--alembic-accent); font-variant-numeric: tabular-nums; }
-.seg[data-state="done"] .pos-now { color: var(--alembic-cyan); }
+.pos-now { margin-left: auto; }
 .arrow { height: var(--track-h); font-size: 20px; }
-.arrow .pos { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; margin: 0 6px; }
+.arrow .pos { margin: 0 6px; }
 
 @keyframes slide-in { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
 .seg.middle.slide { animation: slide-in .28s ease both; }
 
 /* The seven marks: the same seven on every agent, which is how the repetition shows. */
-.ticks { display: flex; gap: 4px; width: 100%; }
 .tick { flex: 1 1 0; min-width: 0; padding: 0; text-align: left; }
 .tick[role="button"] { cursor: pointer; }
 /* The step in hand glows the way the vessel does. */
@@ -109,9 +112,8 @@ code { font-family: var(--fontFamilyMonospace); }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
-/* A desk workbench: under 1000px the track wraps and nothing more. */
+/* A desk workbench: under 1000px the map stacks above the agents and the domain and nothing more. */
 @media (max-width: 1000px) {
-    .track { flex-wrap: wrap; height: auto; }
-    .seg { flex: 1 1 180px; }
-    .seg[data-state="here"] { flex-basis: 100%; }
+    .track { grid-template-columns: minmax(0, 1fr); height: auto; }
+    .track > .sep { display: none; }
 }

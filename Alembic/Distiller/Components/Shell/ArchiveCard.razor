@@ -18,6 +18,7 @@
         </FluentText>
 
         <div class="panel-block">
+            <FluentDivider />
             <FluentText Class="panel-title">Namespace</FluentText>
             <FluentGrid Spacing="3">
                 <FluentGridItem Xs="4">
@@ -29,6 +30,7 @@
         </div>
 
         <div class="panel-block">
+            <FluentDivider />
             <FluentText Class="panel-title">Classes, tier and MCP servers</FluentText>
 
             <FluentGrid Spacing="3">
@@ -43,18 +45,31 @@
                         <FluentText Size="TextSize.Size400">@Named(agent)</FluentText>
                     </FluentGridItem>
 
+                    @* Each name sits over the files it becomes, so the badge says what the box is for. *@
                     <FluentGridItem Xs="2">
-                        <FluentTextInput @bind-Value="agent.Code.AgentClassName" @bind-Value:after="InvalidateAsync"
-                                         Placeholder="agent class name" Disabled="running" Width="100%"
-                                         MessageState="@IdentifierState(agent.Code.AgentClassName)" />
+                        <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
+                            <FluentTextInput @bind-Value="agent.Code.AgentClassName" @bind-Value:after="InvalidateAsync" Immediate="true"
+                                             Placeholder="agent class name" Disabled="running" Width="100%"
+                                             MessageState="@IdentifierState(agent.Code.AgentClassName)" />
+                            <FluentBadge Appearance="BadgeAppearance.Outline" Color="BadgeColor.Informative"
+                                         title="Rewritten by Alembic on every distillation">@(agent.Code.AgentClassName ?? "…").g.cs</FluentBadge>
+                        </FluentStack>
                     </FluentGridItem>
 
                     @if (agent.Tools.Count > 0)
                     {
                         <FluentGridItem Xs="2">
-                            <FluentTextInput @bind-Value="agent.Code.ToolClassName" @bind-Value:after="InvalidateAsync"
-                                             Placeholder="tool class name" Disabled="running" Width="100%"
-                                             MessageState="@IdentifierState(agent.Code.ToolClassName)" />
+                            <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
+                                <FluentTextInput @bind-Value="agent.Code.ToolClassName" @bind-Value:after="InvalidateAsync" Immediate="true"
+                                                 Placeholder="tool class name" Disabled="running" Width="100%"
+                                                 MessageState="@IdentifierState(agent.Code.ToolClassName)" />
+                                <FluentStack Orientation="Orientation.Horizontal" Wrap="true" HorizontalGap="6px" VerticalGap="6px">
+                                    <FluentBadge Appearance="BadgeAppearance.Outline" Color="BadgeColor.Informative"
+                                                 title="Rewritten by Alembic on every distillation">@(agent.Code.ToolClassName ?? "…").g.cs</FluentBadge>
+                                    <FluentBadge Appearance="BadgeAppearance.Tint" Color="BadgeColor.Brand"
+                                                 title="Written once as a working mock, then yours">@(agent.Code.ToolClassName ?? "…").cs</FluentBadge>
+                                </FluentStack>
+                            </FluentStack>
                         </FluentGridItem>
                     }
                     else
@@ -62,18 +77,18 @@
                         <FluentGridItem Xs="2" />
                     }
 
-                    <FluentGridItem Xs="3">
-                        <FluentText Font="TextFont.Monospace" Size="TextSize.Size300" Class="muted" Truncate="true">@Files(agent)</FluentText>
-                    </FluentGridItem>
-
-                    <FluentGridItem Xs="3">
+                    <FluentGridItem Xs="6">
                         <FluentRadioGroup TValue="Morgana.AI.Records.LLMTier?" Orientation="Orientation.Horizontal" Disabled="running"
                                           @bind-Value="agent.Code.Tier" @bind-Value:after="InvalidateAsync"
                                           MessageState="@(touched && agent.Code.Tier is null ? MessageState.Error : null)"
                                           Message="@(touched && agent.Code.Tier is null ? "Pick a tier" : null)">
                             @foreach (Morgana.AI.Records.LLMTier tier in Tiers)
                             {
-                                <FluentRadio TValue="Morgana.AI.Records.LLMTier?" Value="tier" Label="@tier.ToString()" />
+                                <FluentRadio TValue="Morgana.AI.Records.LLMTier?" Value="tier">
+                                    <LabelTemplate>
+                                        <FluentText Size="TextSize.Size400">@tier</FluentText>
+                                    </LabelTemplate>
+                                </FluentRadio>
                             }
                         </FluentRadioGroup>
                     </FluentGridItem>
@@ -103,9 +118,13 @@
         </div>
 
         <div class="panel-block">
+            <FluentDivider />
             @* Opt-in: a further model call per agent, spent on files only a source checkout of Morgana can replay. *@
-            <FluentCheckbox @bind-Value="includeScenarios" @bind-Value:after="InvalidateAsync" Disabled="running"
-                            Label="Also generate the starter harness scenarios (one more model call per agent)" />
+            <FluentCheckbox @bind-Value="includeScenarios" @bind-Value:after="InvalidateAsync" Disabled="running" Size="CheckboxSize.Large">
+                <LabelTemplate>
+                    <FluentText Size="TextSize.Size400">Also generate the starter harness scenarios (one more model call per agent)</FluentText>
+                </LabelTemplate>
+            </FluentCheckbox>
 
             @if (running)
             {
@@ -143,7 +162,8 @@
                         {
                             int cardPercent = card.Count(step => step.Done) * 100 / card.Count();
 
-                            <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" VerticalGap="6px" Class="step-card">
+                            <FluentCard Shadow="CardShadow.None" Height="100%">
+                            <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" VerticalGap="6px" Height="100%">
                                 <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
                                     <FluentText Size="TextSize.Size400" Weight="TextWeight.Semibold">@card.First().Label</FluentText>
                                     <ul class="step-card-steps">
@@ -166,9 +186,10 @@
 
                                 <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
                                     <FluentProgressBar Value="cardPercent" Max="100" Width="100%" />
-                                    <FluentText Size="TextSize.Size300" Class="step-card-percent muted">@cardPercent%</FluentText>
+                                    <FluentText Size="TextSize.Size300" Align="TextAlign.End" Class="muted">@cardPercent%</FluentText>
                                 </FluentStack>
                             </FluentStack>
+                            </FluentCard>
                         }
                     </FluentGridItem>
 
@@ -195,15 +216,11 @@
                         Your domain has been distilled.
                     </FluentText>
 
-                    <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" Class="download-archive" OnClick="DownloadAsync">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
-                        </svg>
-                        <span class="download-archive-text">
-                            <strong>@ArchiveName</strong>
-                            <span>@written.Count files, @(archive.Length / 1024) KB</span>
-                        </span>
-                    </FluentButton>
+                    @* Green, the colour of what is verified: the one archive the domain is correct inside. *@
+                    <FluentCompoundButton Size="ButtonSize.Large" BackgroundColor="var(--alembic-success)" Color="var(--alembic-bg-deep)"
+                                          Label="@ArchiveName" OnClick="DownloadAsync">
+                        <Description>@written.Count files, @(archive.Length / 1024) KB</Description>
+                    </FluentCompoundButton>
 
                     <FluentButton Appearance="ButtonAppearance.Outline" OnClick="AgainAsync">Run again</FluentButton>
                 </FluentStack>
@@ -372,12 +389,6 @@
     /// </summary>
     private List<McpRow> McpRows(AgentDraft agent) =>
         mcp.TryGetValue(agent, out List<McpRow>? rows) ? rows : mcp[agent] = [];
-
-    /// <summary>
-    /// The files an agent's class names become.
-    /// </summary>
-    private static string Files(AgentDraft agent) =>
-        $"{agent.Code.AgentClassName ?? "…"}.g.cs · {agent.Code.AgentClassName ?? "…"}.cs";
 
     /// <summary>
     /// Why the namespace would not do; <c>null</c> while it would.

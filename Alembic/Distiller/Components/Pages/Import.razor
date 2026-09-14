@@ -29,7 +29,7 @@
         </div>
     }
 
-    <div class="import-file">
+    <FluentCard Shadow="CardShadow.None" Class="import-file">
         <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px">
             <FluentText Size="TextSize.Size500">@(Revealed is null ? "The file" : "Bring another")</FluentText>
 
@@ -41,7 +41,7 @@
                          MaximumFileSize="MaxUploadBytes" OnInputFileChange="OnFileSelectedAsync" />
 
         <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Class="muted">I can read any of these: <code>agents.json</code> (Morgana), <code>alembic-draft.json</code> (Alembic Draft), <code>alembic.zip</code> (Alembic Domain)</FluentText>
-    </div>
+    </FluentCard>
 
     @if (isReading)
     {
@@ -57,17 +57,21 @@
     {
         @if (Resuming(draft) is { } resuming)
         {
-            <p class="resuming">@resuming</p>
+            <FluentMessageBar Intent="MessageBarIntent.Info" Layout="MessageBarLayout.MultiLine" AllowDismiss="false" Class="import-news message-fits">
+                <FluentText Size="TextSize.Size400">@resuming</FluentText>
+            </FluentMessageBar>
         }
 
         @if (notices.Count > 0)
         {
-            <ul class="notices">
+            <FluentStack Orientation="Orientation.Vertical" VerticalGap="8px" Class="import-news">
                 @foreach (string notice in notices)
                 {
-                    <li>@notice</li>
+                    <FluentMessageBar Intent="MessageBarIntent.Info" Layout="MessageBarLayout.MultiLine" AllowDismiss="false" Class="message-fits">
+                        <FluentText Size="TextSize.Size400">@notice</FluentText>
+                    </FluentMessageBar>
                 }
-            </ul>
+            </FluentStack>
         }
 
         @if (HasAgents)

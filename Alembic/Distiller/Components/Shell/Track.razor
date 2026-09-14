@@ -1,10 +1,11 @@
 @*
-    The track: the map once, the agent in hand between its neighbours, the domain once. Fixed height,
-    so twelve agents take the room of two.
+    The track: the map, the agents and the domain. The map has no steps of its own, so it keeps one width. The agents
+    and the domain share the rest: the one looked at opens on its steps and takes most of it, the other folds to its
+    name and bar and is the way back onto it.
 *@
 
-<div class="track" data-phase="@Phase">
-    <FluentCard Class="seg edge fixed" data-state="@(Pointer.IsMap ? "here" : "done")" Shadow="CardShadow.None" Role="button"
+<div class="track">
+    <FluentCard Class="seg map" data-state="@(Pointer.IsMap ? "here" : "done")" Shadow="CardShadow.None" Role="button"
                 OnClick="() => OnLook.InvokeAsync(ShellPoint.Map)">
         <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" Height="100%">
             <span class="seg-name">Map</span>
@@ -12,89 +13,113 @@
         </FluentStack>
     </FluentCard>
 
-    <span class="sep"></span>
+    <FluentDivider Vertical="true" Class="sep" />
 
-    @if (!Mapped)
-    {
-        <FluentCard Class="seg" data-state="ahead" Shadow="CardShadow.None">
-            <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" Height="100%">
-                <span class="seg-name">Agents</span>
-                <FluentProgressBar Value="0" Max="100" Width="100%" Color="@BarWritten" BackgroundColor="@BarAhead" Thickness="ProgressThickness.Large" />
-            </FluentStack>
-        </FluentCard>
-    }
-    else if (ShowsCarousel)
-    {
-        <div class="carousel">
-            @Arrow(Centred - 1, "‹", "The previous agent")
-
-            @* Keyed on the agent, so the slide plays when the agent changes and never on a step. *@
-            <FluentCard Class="seg middle slide" data-state="here" Shadow="CardShadow.None" @key="Centred">
+    @* The agents and the domain share what the map leaves: evenly, until the one looked at opens. *@
+    <div class="stage" data-open="@Open">
+        @if (!Mapped)
+        {
+            <FluentCard Class="seg" data-state="ahead" Shadow="CardShadow.None">
                 <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" Height="100%">
-                    <span class="seg-name">
-                        Agent: @Named(Centred)
-                        <span class="pos-now">@(Centred + 1)/@Entries.Count</span>
-                    </span>
-
-                    <div class="ticks">
-                        @for (int rail = 1; rail <= ShellPoint.AcceptanceRail; rail++)
-                        {
-                            ShellPoint moment = new ShellPoint(Centred, rail);
-
-                            @Tick(moment, moment > Frontier, IsFrontierMark(moment) ? "Where the interview stands" : moment.Name)
-                        }
-                    </div>
+                    <span class="seg-name">Agents</span>
+                    <FluentProgressBar Value="0" Max="100" Width="100%" Color="@BarWritten" BackgroundColor="@BarAhead" Thickness="ProgressThickness.Large" />
                 </FluentStack>
             </FluentCard>
+        }
+        else if (Pointer.OnAgent && Entries.Count > 0)
+        {
+            <div class="carousel">
+                @Arrow(Centred - 1, "‹", "The previous agent")
 
-            @Arrow(Centred + 1, "›", "The next agent")
-        </div>
-    }
-    else
-    {
-        <FluentCard Class="seg" data-state="done" Shadow="CardShadow.None" Role="button" title="Back to the first agent"
-                    OnClick="() => OnLook.InvokeAsync(new ShellPoint(0, 1))">
-            <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" Height="100%">
-                <span class="seg-name">
-                    Agents
-                    <span class="pos-now">@Accepted/@Entries.Count</span>
-                </span>
-                <FluentProgressBar Value="@Accepted" Max="@Math.Max(Entries.Count, 1)" Width="100%" Color="@BarWritten" BackgroundColor="@BarAhead" Thickness="ProgressThickness.Large" />
-            </FluentStack>
-        </FluentCard>
-    }
+                @* Keyed on the agent, so the slide plays when the agent changes and never on a step. *@
+                <FluentCard Class="seg middle slide" data-state="here" Shadow="CardShadow.None" @key="Centred">
+                    <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" Height="100%">
+                        <span class="seg-name">
+                            Agent: @Named(Centred)
+                            <FluentBadge Appearance="BadgeAppearance.Filled" Shape="BadgeShape.Circular" Color="null" BackgroundColor="@HereCount" Class="pos-now">@(Centred + 1)/@Entries.Count</FluentBadge>
+                        </span>
 
-    <span class="sep"></span>
+                        <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="4px" Width="100%">
+                            @for (int rail = 1; rail <= ShellPoint.AcceptanceRail; rail++)
+                            {
+                                ShellPoint moment = new ShellPoint(Centred, rail);
 
-    @if (Frontier.OnDomain)
-    {
-        @* Every domain moment is open once the interview is behind: the marks are the way between them. *@
-        <FluentCard Class="seg edge" data-state="@(Pointer.OnDomain ? "here" : "done")" Shadow="CardShadow.None">
-            <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" Height="100%">
-                <span class="seg-name">Domain</span>
-                <div class="ticks">
-                    @for (int rail = ShellPoint.CollaborationRail; rail < ShellPoint.CollaborationRail + ShellPoint.DomainMoments.Count; rail++)
-                    {
-                        ShellPoint moment = new ShellPoint(-1, rail);
+                                @Tick(moment, moment > Frontier, IsFrontierMark(moment) ? "Where the interview stands" : moment.Name)
+                            }
+                        </FluentStack>
+                    </FluentStack>
+                </FluentCard>
 
-                        @Tick(moment, false, moment.Name)
-                    }
-                </div>
-            </FluentStack>
-        </FluentCard>
-    }
-    else
-    {
-        <FluentCard Class="seg edge" data-state="ahead" Shadow="CardShadow.None">
-            <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" Height="100%">
-                <span class="seg-name">Domain</span>
-                <FluentProgressBar Value="0" Max="100" Width="100%" Color="@BarWritten" BackgroundColor="@BarAhead" Thickness="ProgressThickness.Large" />
-            </FluentStack>
-        </FluentCard>
-    }
+                @Arrow(Centred + 1, "›", "The next agent")
+            </div>
+        }
+        else
+        {
+            @* Folded: the way onto the agent in hand, or onto the first once every agent is in the domain. *@
+            <FluentCard Class="seg" data-state="done" Shadow="CardShadow.None" Role="button" title="Open the agents"
+                        OnClick="() => OnLook.InvokeAsync(Frontier.OnAgent ? Frontier : new ShellPoint(0, 1))">
+                <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" Height="100%">
+                    <span class="seg-name">
+                        Agents
+                        <FluentBadge Appearance="BadgeAppearance.Filled" Shape="BadgeShape.Circular" Color="null" BackgroundColor="@DoneCount" Class="pos-now">@Accepted/@Entries.Count</FluentBadge>
+                    </span>
+                    <FluentProgressBar Value="@Accepted" Max="@Math.Max(Entries.Count, 1)" Width="100%" Color="@BarWritten" BackgroundColor="@BarAhead" Thickness="ProgressThickness.Large" />
+                </FluentStack>
+            </FluentCard>
+        }
+
+        <FluentDivider Vertical="true" Class="sep" />
+
+        @if (Pointer.OnDomain)
+        {
+            <FluentCard Class="seg" data-state="here" Shadow="CardShadow.None">
+                <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" Height="100%">
+                    <span class="seg-name">Domain</span>
+                    <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="4px" Width="100%">
+                        @for (int rail = ShellPoint.CollaborationRail; rail < ShellPoint.CollaborationRail + ShellPoint.DomainMoments.Count; rail++)
+                        {
+                            ShellPoint moment = new ShellPoint(-1, rail);
+
+                            @Tick(moment, false, moment.Name)
+                        }
+                    </FluentStack>
+                </FluentStack>
+            </FluentCard>
+        }
+        else if (Frontier.OnDomain)
+        {
+            @* Folded once every agent is in: the way onto the domain, opening on its first moment. *@
+            <FluentCard Class="seg" data-state="done" Shadow="CardShadow.None" Role="button" title="Open the domain"
+                        OnClick="() => OnLook.InvokeAsync(new ShellPoint(-1, ShellPoint.CollaborationRail))">
+                <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" Height="100%">
+                    <span class="seg-name">Domain</span>
+                    <FluentProgressBar Value="100" Max="100" Width="100%" Color="@BarWritten" BackgroundColor="@BarAhead" Thickness="ProgressThickness.Large" />
+                </FluentStack>
+            </FluentCard>
+        }
+        else
+        {
+            <FluentCard Class="seg" data-state="ahead" Shadow="CardShadow.None">
+                <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" Height="100%">
+                    <span class="seg-name">Domain</span>
+                    <FluentProgressBar Value="0" Max="100" Width="100%" Color="@BarWritten" BackgroundColor="@BarAhead" Thickness="ProgressThickness.Large" />
+                </FluentStack>
+            </FluentCard>
+        }
+    </div>
 </div>
 
 @code {
+    /// <summary>
+    /// The count on the segment in hand, in the accent that marks where the client is.
+    /// </summary>
+    private const string HereCount = "color-mix(in srgb, var(--alembic-accent) 30%, transparent)";
+
+    /// <summary>
+    /// The count on a finished segment, in the cyan that marks what is written.
+    /// </summary>
+    private const string DoneCount = "color-mix(in srgb, var(--alembic-cyan) 25%, transparent)";
+
     /// <summary>
     /// What a segment's bar has written: cyan, the colour of resolved work.
     /// </summary>
@@ -145,10 +170,9 @@
     private bool Mapped => Frontier > ShellPoint.Map;
 
     /// <summary>
-    /// Whether the agents are open in the carousel rather than folded into one box.
+    /// Which of the agents and the domain is open, the one the client is looking at; none while they look at the map.
     /// </summary>
-    // Out of the agents they fold away: two open blocks would compete for the scene.
-    private bool ShowsCarousel => Entries.Count > 0 && (Pointer.OnAgent || (Pointer.IsMap && Frontier.OnAgent));
+    private string Open => Pointer.OnAgent && Mapped && Entries.Count > 0 ? "agents" : Pointer.OnDomain ? "domain" : "none";
 
     /// <summary>
     /// The agent at the centre of the carousel: the one looked at, else the one in hand.
@@ -159,11 +183,6 @@
     /// How many agents are already in the domain.
     /// </summary>
     private int Accepted => Frontier.OnDomain ? Entries.Count : Frontier.OnAgent ? Frontier.Entry : 0;
-
-    /// <summary>
-    /// What the track is about right now, which decides who takes the width.
-    /// </summary>
-    private string Phase => Pointer.OnAgent ? "agent" : Pointer.IsMap ? "map" : "edge";
 
     /// <summary>
     /// Whether this is where the interview stands while the client looks elsewhere.
@@ -231,11 +250,11 @@
                               Title="@label" OnClick="() => OnLook.InvokeAsync(landing)">
                     @if (glyph == "‹")
                     {
-                        @glyph<span class="pos">@position</span>
+                        @glyph<FluentBadge Appearance="BadgeAppearance.Outline" Color="BadgeColor.Informative" Shape="BadgeShape.Circular" Class="pos">@position</FluentBadge>
                     }
                     else
                     {
-                        <span class="pos">@position</span>@glyph
+                        <FluentBadge Appearance="BadgeAppearance.Outline" Color="BadgeColor.Informative" Shape="BadgeShape.Circular" Class="pos">@position</FluentBadge>@glyph
                     }
                 </FluentButton>;
     }
