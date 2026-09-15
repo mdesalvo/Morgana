@@ -386,7 +386,7 @@
     <!-- PAGE 1 — COVER                                                         -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page cover">
-      <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/wwwroot/images/Alembic-Banner.jpg" class="cover-avatar" alt="Alembic"/>
+      <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/wwwroot/images/Alembic-Banner.jpg" class="cover-avatar" alt="Alembic"/>
       <h1>Alembic</h1>
       <p class="tagline">Here Morgana takes life. Yours the shape, hers the spells: a functional interview with a domain expert, distilled into a complete, running Morgana domain</p>
       <div class="version-badge">HANDBOOK</div>
@@ -455,7 +455,7 @@
       <table>
         <thead><tr><th>Component</th><th>Role</th><th>Technology</th><th>Default Port</th></tr></thead>
         <tbody>
-          <tr><td><strong>Distiller</strong></td><td>The workbench itself: the interview, the colleagues, validation, emit</td><td>ASP.NET 10, Blazor Server, Microsoft Fluent UI Blazor 5</td><td>5005</td></tr>
+          <tr><td><strong>Alembic</strong></td><td>The workbench itself: the interview, the colleagues, validation, emit</td><td>ASP.NET 10, Blazor Server, Microsoft Fluent UI Blazor 5</td><td>5005</td></tr>
           <tr><td><strong>LLM</strong></td><td>Language model provider, <code>Performance</code> tier only</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>n/a</td></tr>        </tbody>
       </table>
 
@@ -544,14 +544,14 @@
       <p>The interview opens on the domain, not on an agent: which of their processes Morgana is being installed to run. Each entry becomes one intent and one agent. The greyed sentence in the answer box is a worked example written for <em>their</em> trade, never a form to fill in.</p>
 
       <div class="screenshots wide">
-        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Map.jpg" alt="Map"/>
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Assets/Alembic-Map.jpg" alt="Map"/>
       </div>
 
       <h3>The Six Passes</h3>
       <p><strong>Target</strong> settles everything the agent can take on and where that stops. <strong>Personality</strong> is offered rather than dictated: a voice is recognised, so Alembic proposes words and the box stays open. <strong>Toolkit</strong> asks what it must reach outside the conversation; the single button carries the answer that adds nothing, so agreeing costs one press and disagreeing is still a sentence.</p>
 
       <div class="screenshots wide">
-        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Agents.jpg" alt="Agents"/>
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Assets/Alembic-Agents.jpg" alt="Agents"/>
       </div>
 
       <p><strong>Territory</strong> follows the toolkit, which is the earliest it can be truthful: it asks what this desk alone can say precisely when somebody elsewhere in the business needs to know: a competence, never a list of what the agent can do. It is the sentence every other desk of the domain reads before deciding whether a question is this one's, published on the agent's card; it is asked whether or not this installation will ever speak to another. The same subject is now known in sharper words than the map could reach, so the routing that lands a user here is said with them.</p>
@@ -583,7 +583,7 @@
       <p>Which agent may consult which cannot be settled while an agent is being written, since half the ends of the relation do not exist yet. So it is settled once, at the end, on a form: for each agent of this Morgana a box per colleague it may ask, plus <strong>agents on partner Morgana</strong>, each named by its intent and by the partner publishing it. A remote colleague becomes <code>[ConsultsAgent("intent", "partner")]</code> in the generated code and carries a partner badge wherever it appears.</p>
 
       <div class="screenshots wide">
-        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Domain.jpg" alt="Domain"/>
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Assets/Alembic-Domain.jpg" alt="Domain"/>
       </div>
 
       <div class="info-box">
@@ -594,7 +594,7 @@
       <p>The checks are chosen, never imposed: nothing is ticked on arrival and each check keeps its own outcome. Deterministic checks restate the rules Morgana enforces at startup, so their sentence arrives while a fix still costs nothing; the checks badged <strong>AI</strong> read the agents side by side for what only shows between them (overlapping territories, a colleague out of step with the prose that should offer it). A deterministic finding leads back to its section with <strong>Go to section</strong>; a judged one carries a written fix and <strong>Apply the correction</strong>. Validation advises and never blocks: a domain expert who disagrees with it about their own business is usually right.</p>
 
       <div class="screenshots wide">
-        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Validation.jpg" alt="Validation"/>
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Assets/Alembic-Validation.jpg" alt="Validation"/>
       </div>
 
       <div class="page-footer">
@@ -611,7 +611,7 @@
       <p>&ldquo;Morganizing&rdquo; a domain is Alembic's last step, on the <strong>Archive</strong> card: the technical facts of the code first (namespace, class names, the LLM tier of each agent and the MCP servers it reaches), every one required and only the class names proposed. Then the domain distils into <strong>one archive</strong>, because the pieces are only correct together: an <code>agents.json</code> whose toolkit has moved on from the C# beside it is a startup failure waiting to happen.</p>
 
       <div class="screenshots wide">
-        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Distiller/Assets/Alembic-Archive.jpg" alt="Archive"/>
+        <img src="https://raw.githubusercontent.com/mdesalvo/Morgana/main/Alembic/Assets/Alembic-Archive.jpg" alt="Archive"/>
       </div>
 
       <ul>
@@ -667,7 +667,7 @@
     docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
 
     <span class="comment"># Or from source</span>
-    cd Alembic/Distiller
+    cd Alembic
     dotnet run   <span class="comment"># https://localhost:5005, no running Morgana required</span></div>
 
       <div class="page-footer">
@@ -685,7 +685,8 @@
         <thead><tr><th>Resource</th><th>Location</th></tr></thead>
         <tbody>
           <tr><td>Source code</td><td>github.com/mdesalvo/Morgana (<code>Alembic/</code>)</td></tr>
-          <tr><td>The workbench</td><td><code>Alembic/Distiller/</code>, own <code>Distiller.slnx</code></td></tr>          <tr><td>Local run</td><td>https://localhost:5005 (no running Morgana required)</td></tr>
+          <tr><td>The workbench</td><td><code>Alembic/</code>, own <code>Alembic.slnx</code></td></tr>
+          <tr><td>Local run</td><td>https://localhost:5005 (no running Morgana required)</td></tr>
           <tr><td>Design doctrine</td><td><code>Alembic/CLAUDE.md</code></td></tr>
           <tr><td>Changelog</td><td>CHANGELOG.md in repository root</td></tr>
         </tbody>

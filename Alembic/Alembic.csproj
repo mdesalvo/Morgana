@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+       <Title>Alembic</Title>
+       <RootNamespace>Alembic</RootNamespace>
+       <AssemblyName>Alembic</AssemblyName>
+       <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+       <!-- Same UserSecretsId as Morgana.Web and PromptHarness: it reads the same Morgana:LLM section. -->
+       <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
+    </PropertyGroup>
+
+    <ItemGroup>
+       <!-- Alembic's own conducting prose, embedded the way morgana.json is embedded in Morgana.AI. -->
+       <EmbeddedResource Include="alembic.json" />
+    </ItemGroup>
+
+    <ItemGroup>
+       <!-- Pinned: the workbench is built against this release's public surface and moves only when a
+            new one has been chosen and the UI checked again. -->
+       <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" Version="5.0.0-rc.5-26219.1" />
+    </ItemGroup>
+
+    <ItemGroup>
+       <ProjectReference Include="..\Morgana\Morgana.AI\Morgana.AI.csproj" />
+    </ItemGroup>
+
+</Project>

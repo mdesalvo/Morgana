@@ -16,7 +16,7 @@ and C# assets.
 The name follows the repo's habit of naming the instrument (Cauldron the vessel, Grimoire the book,
 Rune the mark): an *alembic* is the apparatus that distils.
 
-`Alembic/` holds one project with its own solution: `Distiller/`, the workbench, on Fluent UI Blazor 5.
+`Alembic/` is one project with its own solution: the workbench, on Fluent UI Blazor 5.
 
 ## What Alembic is not
 
@@ -448,7 +448,7 @@ is therefore free: there is no parallel representation to maintain.
 
 ## Build and Run
 
-.NET 10, Blazor Server. `dotnet run` from `Distiller/` serves https://localhost:5005 and needs **no**
+.NET 10, Blazor Server. `dotnet run` from `Alembic/` serves https://localhost:5005 and needs **no**
 Morgana instance running. Docker is profile-gated, so `compose up` skips it.
 
 ## Conventions

@@ -1,0 +1,802 @@
+@using Alembic.Services
+@implements IDisposable
+@inject IDraftValidationService DraftValidationService
+@inject IAssetPackageService AssetPackageService
+@inject ICodeEmitService CodeEmitService
+@inject ILogger Logger
+@inject IJSRuntime JS
+
+@*
+    The Archive: the facts about the code, every one required and only the class names proposed, then the distillation
+    that writes the one archive the pieces are only correct inside.
+*@
+
+<section class="open">
+    <div class="open-body">
+        <FluentText Size="TextSize.Size800" Weight="TextWeight.Regular" Block="true" Class="asked">
+            Set the technical aspects of the code
+        </FluentText>
+
+        <div class="panel-block">
+            <FluentDivider />
+            <FluentText Class="panel-title">Namespace</FluentText>
+            <FluentGrid Spacing="3">
+                <FluentGridItem Xs="4">
+                    <FluentTextInput @bind-Value="rootNamespace" @bind-Value:after="InvalidateAsync" Placeholder="namespace" Width="100%"
+                                     Disabled="running" MessageState="@(NamespaceMessage is null ? null : MessageState.Error)"
+                                     Message="@NamespaceMessage" />
+                </FluentGridItem>
+            </FluentGrid>
+        </div>
+
+        <div class="panel-block">
+            <FluentDivider />
+            <FluentText Class="panel-title">Classes, tier and MCP servers</FluentText>
+
+            <FluentGrid Spacing="3">
+                @foreach (AgentDraft agent in Agents)
+                {
+                    @if (agent != Agents[0])
+                    {
+                        <FluentGridItem Xs="12"><FluentDivider /></FluentGridItem>
+                    }
+
+                    <FluentGridItem Xs="2">
+                        <FluentText Size="TextSize.Size400">@Named(agent)</FluentText>
+                    </FluentGridItem>
+
+                    @* Each name sits over the files it becomes, so the badge says what the box is for. *@
+                    <FluentGridItem Xs="2">
+                        <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
+                            <FluentTextInput @bind-Value="agent.Code.AgentClassName" Immediate="true" @onfocusout="InvalidateAsync"
+                                             Placeholder="agent class name" Disabled="running" Width="100%"
+                                             MessageState="@IdentifierState(agent.Code.AgentClassName)" />
+                            <FluentBadge Appearance="BadgeAppearance.Outline" Color="BadgeColor.Informative"
+                                         title="Rewritten by Alembic on every distillation">@(agent.Code.AgentClassName ?? "…").g.cs</FluentBadge>
+                        </FluentStack>
+                    </FluentGridItem>
+
+                    @if (agent.Tools.Count > 0)
+                    {
+                        <FluentGridItem Xs="2">
+                            <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
+                                <FluentTextInput @bind-Value="agent.Code.ToolClassName" Immediate="true" @onfocusout="InvalidateAsync"
+                                                 Placeholder="tool class name" Disabled="running" Width="100%"
+                                                 MessageState="@IdentifierState(agent.Code.ToolClassName)" />
+                                <FluentStack Orientation="Orientation.Horizontal" Wrap="true" HorizontalGap="6px" VerticalGap="6px">
+                                    <FluentBadge Appearance="BadgeAppearance.Outline" Color="BadgeColor.Informative"
+                                                 title="Rewritten by Alembic on every distillation">@(agent.Code.ToolClassName ?? "…").g.cs</FluentBadge>
+                                    <FluentBadge Appearance="BadgeAppearance.Tint" Color="BadgeColor.Brand"
+                                                 title="Written once as a working mock, then yours">@(agent.Code.ToolClassName ?? "…").cs</FluentBadge>
+                                </FluentStack>
+                            </FluentStack>
+                        </FluentGridItem>
+                    }
+                    else
+                    {
+                        <FluentGridItem Xs="2" />
+                    }
+
+                    <FluentGridItem Xs="6">
+                        <FluentRadioGroup TValue="Morgana.AI.Records.LLMTier?" Orientation="Orientation.Horizontal" Disabled="running"
+                                          @bind-Value="agent.Code.Tier" @bind-Value:after="InvalidateAsync"
+                                          MessageState="@(touched && agent.Code.Tier is null ? MessageState.Error : null)"
+                                          Message="@(touched && agent.Code.Tier is null ? "Pick a tier" : null)">
+                            @foreach (Morgana.AI.Records.LLMTier tier in Tiers)
+                            {
+                                <FluentRadio TValue="Morgana.AI.Records.LLMTier?" Value="tier">
+                                    <LabelTemplate>
+                                        <FluentText Size="TextSize.Size400">@tier</FluentText>
+                                    </LabelTemplate>
+                                </FluentRadio>
+                            }
+                        </FluentRadioGroup>
+                    </FluentGridItem>
+
+                    @foreach (McpRow row in McpRows(agent))
+                    {
+                        <FluentGridItem Xs="2" />
+                        <FluentGridItem Xs="2">
+                            <FluentTextInput @bind-Value="row.Url" @bind-Value:after="() => SyncMcpAsync(agent)"
+                                             Placeholder="MCP server address" Width="100%" Disabled="running"
+                                             MessageState="@(touched && !IsAbsoluteHttpUri(row.Url) ? MessageState.Error : null)"
+                                             Message="@(touched && !IsAbsoluteHttpUri(row.Url) ? "An absolute http(s) address" : null)" />
+                        </FluentGridItem>
+                        <FluentGridItem Xs="8">
+                            <FluentButton Appearance="ButtonAppearance.Transparent" IconOnly="true" Color="var(--alembic-error)"
+                                          Title="Remove this server" Disabled="running" OnClick="() => RemoveMcpAsync(agent, row)">✕</FluentButton>
+                        </FluentGridItem>
+                    }
+
+                    <FluentGridItem Xs="2" />
+                    <FluentGridItem Xs="10">
+                        <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Small" Disabled="running"
+                                      OnClick="() => AddMcp(agent)">Add an MCP server</FluentButton>
+                    </FluentGridItem>
+                }
+            </FluentGrid>
+        </div>
+
+        <div class="panel-block">
+            <FluentDivider />
+
+            @if (running)
+            {
+                <FluentGrid Spacing="3" Class="distillation">
+                    <FluentGridItem Xs="4">
+                        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="18px">
+                            <svg class="distillation-vessel" viewBox="0 0 64 88" role="img" aria-label="Distilling">
+                                <defs><clipPath id="belly-clip"><circle cx="29" cy="55" r="15.2" /></clipPath></defs>
+                                <path d="M25.2 40.3 V13 M32.8 40.3 V13" fill="none" stroke="var(--alembic-border-lit)" stroke-width="3.4" stroke-linecap="round" />
+                                <rect x="21.8" y="10" width="14.4" height="4.8" rx="2.4" fill="var(--alembic-border-lit)" />
+                                <path d="M40 20.5 H49 A3.2 3.2 0 0 1 52 23.7 V33" fill="none" stroke="var(--alembic-border-lit)" stroke-width="3.4" stroke-linecap="round" />
+                                <g clip-path="url(#belly-clip)">
+                                    <rect x="10" width="38" y="@Invariant(70.2 - FillHeight)" height="@Invariant(FillHeight)" class="distillation-fill" />
+                                </g>
+                                <circle cx="29" cy="55" r="15.2" fill="none" stroke="var(--alembic-border-lit)" stroke-width="1.8" />
+                            </svg>
+
+                            <FluentStack Orientation="Orientation.Vertical" VerticalGap="8px" Class="distillation-status">
+                                <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Class="distillation-phase">@PhaseLabel</FluentText>
+                                <FluentProgressBar Value="Percent" Max="100" Width="100%" />
+                                <FluentText Size="TextSize.Size300" Class="muted">
+                                    @Percent% · @plan.Count(step => step.Done) of @plan.Count@(StepElapsed is { } elapsed ? $" · {elapsed} on this step" : "")
+                                </FluentText>
+
+                                @if (NextAgent is { } next)
+                                {
+                                    <FluentText Size="TextSize.Size300" Class="muted distillation-others">Next agent: @next</FluentText>
+                                }
+                            </FluentStack>
+                        </FluentStack>
+                    </FluentGridItem>
+
+                    <FluentGridItem Xs="3">
+                        @if (CurrentCard is { } card)
+                        {
+                            int cardPercent = card.Count(step => step.Done) * 100 / card.Count();
+
+                            <FluentCard Shadow="CardShadow.None" Height="100%">
+                            <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" VerticalGap="6px" Height="100%">
+                                <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
+                                    <FluentText Size="TextSize.Size400" Weight="TextWeight.Semibold">@card.First().Label</FluentText>
+                                    <ul class="step-card-steps">
+                                        @foreach (Step step in card)
+                                        {
+                                            <li class="@(step.Done ? "stage-done" : step == InProgress ? "stage-current" : "stage-todo")">
+                                                @if (step == InProgress)
+                                                {
+                                                    <FluentSpinner Size="SpinnerSize.Tiny" />
+                                                }
+                                                else
+                                                {
+                                                    <span class="stage-mark">@(step.Done ? "✓" : "○")</span>
+                                                }
+                                                @StepKindLabel(step.Kind)
+                                            </li>
+                                        }
+                                    </ul>
+                                </FluentStack>
+
+                                <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
+                                    <FluentProgressBar Value="cardPercent" Max="100" Width="100%" />
+                                    <FluentText Size="TextSize.Size300" Align="TextAlign.End" Class="muted">@cardPercent%</FluentText>
+                                </FluentStack>
+                            </FluentStack>
+                            </FluentCard>
+                        }
+                    </FluentGridItem>
+
+                    <FluentGridItem Xs="5">
+                        @* Newest first in the markup: the log is drawn bottom up, so it stays on its newest line by itself. *@
+                        <ol class="distillation-log" aria-live="polite">
+                            <li class="log-current"><FluentSpinner Size="SpinnerSize.Tiny" />Writing @CurrentLogLabel…</li>
+                            @for (int line = written.Count - 1; line >= 0; line--)
+                            {
+                                <li class="log-done"><span class="log-mark">✓</span><code>@written[line]</code></li>
+                            }
+                        </ol>
+                    </FluentGridItem>
+                </FluentGrid>
+
+                <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="14px" Class="distillation-stop">
+                    <FluentButton Appearance="ButtonAppearance.Outline" Disabled="isStopping" OnClick="Stop">@(isStopping ? "Stopping…" : "Stop")</FluentButton>
+                </FluentStack>
+            }
+            else if (package is { } archive)
+            {
+                <FluentStack Orientation="Orientation.Vertical" HorizontalAlignment="HorizontalAlignment.Start" VerticalGap="12px" Class="distillation-done">
+                    <FluentText As="TextTag.Paragraph" Size="TextSize.Size500" Weight="TextWeight.Semibold" Class="distillation-done-headline">
+                        Your domain has been distilled.
+                    </FluentText>
+
+                    @* Green, the colour of what is verified: the one archive the domain is correct inside. *@
+                    <FluentCompoundButton Size="ButtonSize.Large" BackgroundColor="var(--alembic-success)" Color="var(--alembic-bg-deep)"
+                                          Label="@ArchiveName" OnClick="DownloadAsync">
+                        <Description>@written.Count files, @(archive.Length / 1024) KB</Description>
+                    </FluentCompoundButton>
+
+                    <FluentButton Appearance="ButtonAppearance.Outline" OnClick="AgainAsync">Run again</FluentButton>
+                </FluentStack>
+            }
+            else
+            {
+                <FluentStack Orientation="Orientation.Horizontal">
+                    <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="FinalizeAsync">Finalize domain</FluentButton>
+                </FluentStack>
+            }
+        </div>
+    </div>
+
+    <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Class="actions">
+        @Keep
+    </FluentStack>
+</section>
+
+@code {
+    /// <summary>
+    /// The domain being packaged; the code facts land on it as they are typed.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public DomainDraft Draft { get; set; } = default!;
+
+    /// <summary>
+    /// Taking the work away.
+    /// </summary>
+    [Parameter]
+    public RenderFragment? Keep { get; set; }
+
+    /// <summary>
+    /// Raised whenever a code fact lands on the domain.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    /// <summary>
+    /// Raised with what happened and what kind of news it is.
+    /// </summary>
+    [Parameter]
+    public EventCallback<Notice> OnNotify { get; set; }
+
+    /// <summary>
+    /// The two tiers an agent can think on.
+    /// </summary>
+    private static readonly Morgana.AI.Records.LLMTier[] Tiers =
+        [Morgana.AI.Records.LLMTier.Performance, Morgana.AI.Records.LLMTier.Efficiency];
+
+    /// <summary>
+    /// One MCP server address as typed.
+    /// </summary>
+    private sealed class McpRow
+    {
+        /// <summary>The address.</summary>
+        public string Url { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// One thing the archive is built toward: the configuration or one agent's class or mock.
+    /// </summary>
+    private sealed class Step
+    {
+        /// <summary>The agent it belongs to; empty for the configuration.</summary>
+        public required string AgentId { get; init; }
+
+        /// <summary>structure, code or mock.</summary>
+        public required string Kind { get; init; }
+
+        /// <summary>The agent as its card names it.</summary>
+        public required string Label { get; init; }
+
+        /// <summary>Whether its first file has landed.</summary>
+        public bool Done { get; set; }
+    }
+
+    /// <summary>
+    /// The namespace as typed.
+    /// </summary>
+    private string rootNamespace = string.Empty;
+
+    /// <summary>
+    /// Every agent's MCP rows.
+    /// </summary>
+    private readonly Dictionary<AgentDraft, List<McpRow>> mcp = [];
+
+    /// <summary>
+    /// Whether distilling was refused, so every missing fact shows as an error.
+    /// </summary>
+    private bool touched;
+
+    /// <summary>
+    /// The finished archive, until a code fact changes under it.
+    /// </summary>
+    private byte[]? package;
+
+    /// <summary>
+    /// Whether the distillation is running.
+    /// </summary>
+    private bool running;
+
+    /// <summary>
+    /// Whether Stop was pressed and the build is still unwinding.
+    /// </summary>
+    private bool isStopping;
+
+    /// <summary>
+    /// Every path the build reported, oldest first.
+    /// </summary>
+    private readonly List<string> written = [];
+
+    /// <summary>
+    /// The steps the build walks, in the order it writes them.
+    /// </summary>
+    private readonly List<Step> plan = [];
+
+    /// <summary>
+    /// Cancels the running build.
+    /// </summary>
+    private CancellationTokenSource? buildCancellation;
+
+    /// <summary>
+    /// Redraws the distillation while it runs, through the long silences of model calls.
+    /// </summary>
+    private System.Threading.Timer? heartbeat;
+
+    /// <summary>
+    /// When the step in hand began, so a slow step can say how long it has been slow.
+    /// </summary>
+    private DateTime stepEnteredAt = DateTime.UtcNow;
+
+    /// <summary>
+    /// The agents the archive writes code for.
+    /// </summary>
+    private IReadOnlyList<AgentDraft> Agents => [.. Draft.Agents.Where(agent => !string.IsNullOrWhiteSpace(agent.ID))];
+
+    /// <summary>
+    /// Fills every missing class name from the agent's name and reads back the stated code facts.
+    /// </summary>
+    // Proposed in the box itself, where the client reads it before it can land in their code.
+    protected override void OnInitialized()
+    {
+        foreach (AgentDraft agent in Draft.Agents)
+        {
+            if (string.IsNullOrWhiteSpace(agent.Code.AgentClassName))
+                agent.Code.AgentClassName = AgentCodeFacts.ProposeClassName(agent.ID, "Agent");
+
+            if (agent.Tools.Count > 0 && string.IsNullOrWhiteSpace(agent.Code.ToolClassName))
+                agent.Code.ToolClassName = AgentCodeFacts.ProposeClassName(agent.ID, "Tool");
+
+            agent.Code.Inferred = false;
+
+            mcp[agent] = [.. agent.Code.MCPServers.Select(url => new McpRow { Url = url })];
+        }
+
+        rootNamespace = Draft.Agents.Select(agent => agent.Code.Namespace).FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? string.Empty;
+    }
+
+    /// <summary>
+    /// An agent's MCP rows.
+    /// </summary>
+    private List<McpRow> McpRows(AgentDraft agent) =>
+        mcp.TryGetValue(agent, out List<McpRow>? rows) ? rows : mcp[agent] = [];
+
+    /// <summary>
+    /// Why the namespace would not do; <c>null</c> while it would.
+    /// </summary>
+    private string? NamespaceMessage
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(rootNamespace))
+                return touched ? "Required" : null;
+
+            foreach (string part in rootNamespace.Trim().Split('.'))
+                if (!IsIdentifier(part))
+                    return $"\"{part}\" cannot be a segment of a C# namespace.";
+
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The error state of a class name left blank once distilling was refused or not a C# identifier.
+    /// </summary>
+    private MessageState? IdentifierState(string? name) =>
+        (touched && string.IsNullOrWhiteSpace(name)) || (!string.IsNullOrWhiteSpace(name) && !IsIdentifier(name))
+            ? MessageState.Error
+            : null;
+
+    /// <summary>
+    /// Whether a name can be a C# identifier.
+    /// </summary>
+    private static bool IsIdentifier(string? name) =>
+        !string.IsNullOrEmpty(name) && (char.IsLetter(name[0]) || name[0] == '_') && name.All(c => char.IsLetterOrDigit(c) || c == '_');
+
+    /// <summary>
+    /// Whether an address is an absolute http or https URI, the shape an MCP attribute expects.
+    /// </summary>
+    private static bool IsAbsoluteHttpUri(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out Uri? uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+    /// <summary>
+    /// Whether any fact the code needs is missing or malformed.
+    /// </summary>
+    private bool HasHoles =>
+        string.IsNullOrWhiteSpace(rootNamespace)
+        || rootNamespace.Trim().Split('.').Any(part => !IsIdentifier(part))
+        || Agents.Any(agent => !IsIdentifier(agent.Code.AgentClassName)
+                               || (agent.Tools.Count > 0 && !IsIdentifier(agent.Code.ToolClassName))
+                               || agent.Code.Tier is null
+                               || McpRows(agent).Any(row => !IsAbsoluteHttpUri(row.Url)));
+
+    /// <summary>
+    /// Discards an archive built against facts that have just changed.
+    /// </summary>
+    private async Task InvalidateAsync()
+    {
+        package = null;
+        await OnChanged.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Opens a blank MCP row: an address is never guessed.
+    /// </summary>
+    private void AddMcp(AgentDraft agent) => McpRows(agent).Add(new McpRow());
+
+    /// <summary>
+    /// Takes an MCP server away from an agent.
+    /// </summary>
+    private async Task RemoveMcpAsync(AgentDraft agent, McpRow row)
+    {
+        McpRows(agent).Remove(row);
+        await SyncMcpAsync(agent);
+    }
+
+    /// <summary>
+    /// Writes an agent's MCP rows back onto its code facts.
+    /// </summary>
+    private async Task SyncMcpAsync(AgentDraft agent)
+    {
+        agent.Code.MCPServers = [.. McpRows(agent).Select(row => row.Url.Trim())];
+        await InvalidateAsync();
+    }
+
+    /// <summary>
+    /// Distils, refusing while a code fact is missing or the domain would not start.
+    /// </summary>
+    private async Task FinalizeAsync()
+    {
+        touched = true;
+
+        if (HasHoles)
+        {
+            await OnNotify.InvokeAsync(new Notice("Namespace, tier, class names and MCP servers must be completed before distilling.", NoticeKind.Warning));
+            return;
+        }
+
+        int errors = DraftValidationService.Validate(Draft).Count(finding => finding.Severity == FindingSeverity.Error);
+
+        if (errors > 0)
+        {
+            await OnNotify.InvokeAsync(new Notice($"{errors} {(errors == 1 ? "error stops" : "errors stop")} this domain from starting: see Validation.", NoticeKind.Failure));
+            return;
+        }
+
+        await BuildAsync();
+    }
+
+    /// <summary>
+    /// Builds again from scratch.
+    /// </summary>
+    private async Task AgainAsync()
+    {
+        package = null;
+        await BuildAsync();
+    }
+
+    /// <summary>
+    /// Runs the build and drives the distillation off its progress, file by file.
+    /// </summary>
+    private async Task BuildAsync()
+    {
+        running = true;
+        written.Clear();
+        plan.Clear();
+        plan.AddRange(BuildPlan());
+        stepEnteredAt = DateTime.UtcNow;
+        buildCancellation = new CancellationTokenSource();
+        StartHeartbeat();
+
+        try
+        {
+            foreach (AgentDraft agent in Draft.Agents)
+                agent.Code.Namespace = rootNamespace.Trim();
+
+            await OnChanged.InvokeAsync();
+
+            // State only: drawing is the heartbeat's, so no interop outlives the circuit from here.
+            Progress<string> progress = new Progress<string>(path =>
+            {
+                written.Add(path);
+
+                if (MatchStep(path) is not { } step)
+                    return;
+
+                Step? before = InProgress;
+                step.Done = true;
+
+                if (!ReferenceEquals(InProgress, before))
+                    stepEnteredAt = DateTime.UtcNow;
+            });
+
+            // Off the renderer's context, so every progress report gets through while the build writes.
+            DomainDraft draft = Draft;
+            CancellationToken token = buildCancellation.Token;
+            package = await Task.Run(() => AssetPackageService.BuildAsync(draft, progress, token));
+
+            foreach (Step step in plan)
+                step.Done = true;
+        }
+        catch (OperationCanceledException)
+        {
+            package = null;
+            written.Clear();
+            plan.Clear();
+            await OnNotify.InvokeAsync(new Notice("Distillation stopped: nothing partial was kept.", NoticeKind.Info));
+        }
+        catch (Exception failure)
+        {
+            Logger.LogError(failure, "The archive could not be built");
+            await OnNotify.InvokeAsync(new Notice($"The archive could not be built: {failure.Message}", NoticeKind.Failure));
+        }
+        finally
+        {
+            StopHeartbeat();
+            running = false;
+            isStopping = false;
+            buildCancellation?.Dispose();
+            buildCancellation = null;
+        }
+    }
+
+    /// <summary>
+    /// Asks the running build to stop; the build's own handler discards what it wrote.
+    /// </summary>
+    private void Stop()
+    {
+        if (buildCancellation is null || isStopping)
+            return;
+
+        isStopping = true;
+
+        try
+        {
+            buildCancellation.Cancel();
+        }
+        catch (Exception unwinding)
+        {
+            Logger.LogDebug(unwinding, "Cancelling the build threw while stopping");
+        }
+    }
+
+    /// <summary>
+    /// Hands the archive to the browser.
+    /// </summary>
+    private async Task DownloadAsync()
+    {
+        if (package is { } archive)
+            await JS.InvokeVoidAsync("alembicSave", ArchiveName, Convert.ToBase64String(archive), "application/zip");
+    }
+
+    /// <summary>
+    /// The archive's name, the same for every domain by convention: whoever receives it knows what it is.
+    /// </summary>
+    private const string ArchiveName = "alembic.zip";
+
+    /// <summary>
+    /// The steps in the order the package service writes them: the configuration, then every agent's
+    /// class and mock.
+    /// </summary>
+    private List<Step> BuildPlan()
+    {
+        List<Step> steps = [new Step { AgentId = string.Empty, Kind = "structure", Label = "the configuration" }];
+
+        foreach (AgentDraft agent in Agents)
+        {
+            steps.Add(new Step { AgentId = agent.ID!, Kind = "code", Label = Named(agent) });
+
+            if (agent.Tools.Count > 0)
+                steps.Add(new Step { AgentId = agent.ID!, Kind = "mock", Label = Named(agent) });
+        }
+
+        return steps;
+    }
+
+    /// <summary>
+    /// Which step a written path belongs to, asked of the code emitter itself so the paths cannot drift.
+    /// </summary>
+    private Step? MatchStep(string path)
+    {
+        if (path is "agents.json" or "alembic-draft.json" or "MIGRATION.md" or "README.md" or Alembic.Services.AssetPackageService.MarkerFileName)
+            return plan.FirstOrDefault(step => step.Kind == "structure");
+
+        foreach (AgentDraft agent in Agents)
+        {
+            string id = agent.ID!;
+
+            foreach (EmittedFile file in CodeEmitService.Emit(agent, id))
+            {
+                if (path == file.Path)
+                    return plan.FirstOrDefault(step => step.AgentId == id && step.Kind == "code");
+
+                // The mock is the generated tool file's client half: same path with ".g" dropped.
+                if (file.Path.StartsWith("Tools/", StringComparison.Ordinal) && file.Path.EndsWith(".g.cs", StringComparison.Ordinal))
+                {
+                    string mockPath = file.Path[..^".g.cs".Length] + ".cs";
+
+                    if (path == mockPath || path == mockPath + ".FAILED.txt")
+                        return plan.FirstOrDefault(step => step.AgentId == id && step.Kind == "mock");
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The step being worked on: the first not yet done, since a step is only reported when it lands.
+    /// </summary>
+    private Step? InProgress => plan.FirstOrDefault(step => !step.Done);
+
+    /// <summary>
+    /// How far the whole distillation is.
+    /// </summary>
+    private int Percent => plan.Count == 0 ? 0 : plan.Count(step => step.Done) * 100 / plan.Count;
+
+    /// <summary>
+    /// The plan regrouped by agent, one card each.
+    /// </summary>
+    private IEnumerable<IGrouping<string, Step>> AgentCards =>
+        plan.Where(step => step.Kind != "structure").GroupBy(step => step.AgentId);
+
+    /// <summary>
+    /// The agent the step in hand belongs to; none while the files every agent shares are written.
+    /// </summary>
+    private IGrouping<string, Step>? CurrentCard => AgentCards.FirstOrDefault(card => card.Contains(InProgress));
+
+    /// <summary>
+    /// The agent the model turns to after the one it is writing for, while there is one.
+    /// </summary>
+    // Only the steps that wait on the model count: a class is templated in no time, so an agent without
+    // tools would be announced and passed in the same instant and the line would jump past it.
+    private string? NextAgent
+    {
+        get
+        {
+            List<Step> awaitingModel = [.. plan.Where(step => !step.Done && step.Kind == "mock")];
+
+            return awaitingModel.Count == 0
+                ? null
+                : awaitingModel.FirstOrDefault(step => step.AgentId != awaitingModel[0].AgentId)?.Label;
+        }
+    }
+
+    /// <summary>
+    /// A step named for what the client gets.
+    /// </summary>
+    private static string StepKindLabel(string kind) => kind switch
+    {
+        "code" => "class",
+        "mock" => "tools",
+        _ => kind
+    };
+
+    /// <summary>
+    /// How full the vessel's belly is: its diameter is 30.4.
+    /// </summary>
+    private double FillHeight => Math.Round(30.4 * Percent / 100.0, 1);
+
+    /// <summary>
+    /// A number as an SVG attribute reads it, whatever the server's culture.
+    /// </summary>
+    private static string Invariant(double value) => value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// What the vessel is doing right now.
+    /// </summary>
+    private string PhaseLabel => InProgress is not { } step
+        ? "Sealing the archive…"
+        : step.Kind switch
+        {
+            "structure" => "Writing the domain's configuration and reports…",
+            "code" => $"Distilling {step.Label}: writing its agent class…",
+            "mock" => $"Distilling {step.Label}: writing its tools…",
+            _ => "Distilling…"
+        };
+
+    /// <summary>
+    /// The log's pinned line, after the word "Writing".
+    /// </summary>
+    private string CurrentLogLabel => InProgress is not { } step
+        ? "the last of it"
+        : step.Kind switch
+        {
+            "structure" => "the configuration",
+            "code" => $"{step.Label}'s agent class",
+            "mock" => $"{step.Label}'s tool class",
+            _ => step.Label
+        };
+
+    /// <summary>
+    /// How long the step in hand has been running, once it is long enough to wonder about.
+    /// </summary>
+    private string? StepElapsed
+    {
+        get
+        {
+            int seconds = (int)(DateTime.UtcNow - stepEnteredAt).TotalSeconds;
+            return !running || seconds < 3 ? null : seconds < 60 ? $"{seconds}s" : $"{seconds / 60}m {seconds % 60:00}s";
+        }
+    }
+
+    /// <summary>
+    /// Starts the redraws that carry the distillation on screen.
+    /// </summary>
+    private void StartHeartbeat()
+    {
+        StopHeartbeat();
+        heartbeat = new System.Threading.Timer(_ => _ = BeatAsync(), null, TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
+    }
+
+    /// <summary>
+    /// One redraw that can never fault the circuit.
+    /// </summary>
+    private async Task BeatAsync()
+    {
+        try
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException)
+        {
+            // The dispatcher is going away: there is nothing left to draw on.
+        }
+        catch (Exception gone) when (gone is ObjectDisposedException or InvalidOperationException)
+        {
+            StopHeartbeat();
+        }
+    }
+
+    /// <summary>
+    /// Stops the redraws.
+    /// </summary>
+    private void StopHeartbeat()
+    {
+        heartbeat?.Dispose();
+        heartbeat = null;
+    }
+
+    /// <summary>
+    /// Stops the redraws and a build nobody is left to collect.
+    /// </summary>
+    public void Dispose()
+    {
+        StopHeartbeat();
+
+        try
+        {
+            buildCancellation?.Cancel();
+        }
+        catch (Exception unwinding)
+        {
+            Logger.LogDebug(unwinding, "Cancelling the build on dispose threw");
+        }
+
+        buildCancellation?.Dispose();
+        buildCancellation = null;
+    }
+
+    /// <summary>
+    /// The name an agent goes by: its ID, which is the name of the intent that reaches it.
+    /// </summary>
+    private static string Named(AgentDraft agent) => agent.ID ?? "…";
+}
