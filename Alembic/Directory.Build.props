@@ -30,8 +30,8 @@
     Alembic is the authoring workbench of the Morgana conversational AI framework.
     Built on cutting-edge .NET 10 and Blazor Server, it distils a functional interview
     with a domain expert into a complete Morgana domain: intents, agent prose, tool
-    contracts and C# assets. Alembic is not a channel and
-    never talks to a running Morgana instance — it needs only an LLM.
+    contracts and C# assets. Alembic is not a channel and never talks to a running 
+    Morgana instance: it needs only an LLM.
     </Description>
 
   </PropertyGroup>
