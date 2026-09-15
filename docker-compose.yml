@@ -39,6 +39,19 @@ services:
       - Morgana__Authentication__Issuers__2__Name=rune
       - Morgana__Authentication__Issuers__2__SymmetricKey=${JWT_SYMMETRIC_KEY}
 
+      # Agent-to-Agent with remote installations - off until uncommented (see the .env template).
+      # PublicUrl is where a partner reaches this container: http://+:5001 is a binding, not an address.
+      # One partner per index, each with its own key; an admitted partner must declare a rate limit.
+      #- Morgana__AgentToAgent__PublicUrl=${MORGANA_PUBLIC_URL}
+      #- Morgana__AgentToAgent__Partners__0__Name=${PARTNER_0_NAME}
+      #- Morgana__AgentToAgent__Partners__0__Url=${PARTNER_0_URL}
+      #- Morgana__AgentToAgent__Partners__0__SymmetricKey=${PARTNER_0_SYMMETRIC_KEY}
+      #- Morgana__AgentToAgent__Partners__0__OutboundPolicy__Enabled=true
+      #- Morgana__AgentToAgent__Partners__0__OutboundPolicy__Issuer=${PARTNER_0_OUTBOUND_ISSUER}
+      #- Morgana__AgentToAgent__Partners__0__InboundPolicy__Enabled=true
+      #- Morgana__AgentToAgent__Partners__0__InboundPolicy__RateLimiting__Enabled=true
+      #- Morgana__AgentToAgent__Partners__0__InboundPolicy__RateLimiting__MaxConversationsPerHour=${PARTNER_0_MAX_CONVERSATIONS_PER_HOUR}
+
       # Conversation persistence (SQLite)
       - Morgana__ConversationPersistence__EncryptionKey=${ENCRYPTIONKEY}
       - Morgana__ConversationPersistence__StoragePath=/app/data
