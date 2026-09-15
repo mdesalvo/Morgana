@@ -24,12 +24,34 @@
 /* --- Archive: the facts about the code and the distillation --------------- */
 
 .distillation { padding: 8px 0; }
-.distillation-vessel { width: 64px; height: 88px; flex-shrink: 0; }
-.distillation-fill { fill: var(--alembic-accent); transition: y .5s ease, height .5s ease; }
+.distillation-vessel { width: 120px; height: 160px; flex-shrink: 0; overflow: visible; }
+.distillation-fill { transition: y .5s ease, height .5s ease; }
 .distillation-status { flex: 1; min-width: 0; }
 .distillation-phase { margin: 0; }
 
-.step-card-steps { display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 0; list-style: none; font-size: var(--fontSizeBase400); }
+/* The vessel wears the favicon's colours, spelled in palette tokens: violet brew, cyan drip, gold spark and flame. */
+.brew-light { stop-color: color-mix(in srgb, var(--alembic-accent) 55%, var(--alembic-text)); }
+.brew-mid { stop-color: var(--alembic-accent); }
+.brew-deep { stop-color: var(--alembic-accent-deep); }
+.vessel-glow { fill: var(--alembic-accent-deep); opacity: .16; }
+.vessel-glass { fill: none; stroke: color-mix(in srgb, var(--alembic-accent) 45%, var(--alembic-text)); stroke-linecap: round; }
+.vessel-spout, .vessel-neck { stroke-width: 5; }
+.vessel-belly { stroke-width: 3; }
+.vessel-stand { stroke-width: 3; stroke: var(--alembic-border-lit); }
+.vessel-stopper { fill: color-mix(in srgb, var(--alembic-accent) 45%, var(--alembic-text)); }
+.vessel-shine { fill: var(--alembic-text); opacity: .3; }
+.vessel-spark { fill: var(--alembic-gold); transform-box: fill-box; transform-origin: center; animation: vessel-twinkle 2.4s ease-in-out infinite; }
+.vessel-flame { fill: var(--alembic-gold); transform-box: fill-box; transform-origin: bottom; animation: vessel-flicker .9s ease-in-out infinite alternate; }
+.vessel-drip { fill: var(--alembic-cyan); animation: vessel-drip 1.6s ease-in infinite; }
+.vessel-bubble { fill: var(--alembic-text); opacity: 0; animation: vessel-bubble 2.2s ease-out infinite; }
+.vessel-bubble-late { animation-delay: .7s; }
+.vessel-bubble-later { animation-delay: 1.4s; }
+@keyframes vessel-twinkle { 0%, 100% { opacity: .35; transform: scale(.75); } 50% { opacity: 1; transform: scale(1.1); } }
+@keyframes vessel-flicker { from { transform: scaleY(.85); opacity: .8; } to { transform: scaleY(1.1); opacity: 1; } }
+@keyframes vessel-drip { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(26px); opacity: 0; } }
+@keyframes vessel-bubble { 0% { transform: translateY(0); opacity: 0; } 25% { opacity: .55; } 100% { transform: translateY(-26px); opacity: 0; } }
+
+.step-card-steps { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; font-size: var(--fontSizeBase500); }
 .step-card-steps li { display: flex; align-items: center; gap: 6px; }
 .stage-mark { width: 14px; text-align: center; flex-shrink: 0; }
 .stage-done { color: var(--alembic-success); }
@@ -38,9 +60,9 @@
 .distillation-others { margin-top: 10px; }
 
 .distillation-log {
-    display: flex; flex-direction: column-reverse; height: 132px; overflow-y: auto;
-    margin: 0; padding: 9px 12px; border-radius: 7px; background: var(--alembic-panel-lit);
-    list-style: none; font-size: var(--fontSizeBase400);
+    display: flex; flex-direction: column-reverse; height: 172px; overflow-y: auto;
+    margin: 0; padding: 10px 14px; border-radius: 7px; background: var(--alembic-panel-lit);
+    list-style: none; font-size: var(--fontSizeBase500);
 }
 .distillation-log li { display: flex; align-items: center; gap: 9px; padding: 2px 0; }
 .log-mark { flex-shrink: 0; width: 16px; text-align: center; }

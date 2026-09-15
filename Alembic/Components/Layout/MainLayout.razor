@@ -1,13 +1,16 @@
 @inherits LayoutComponentBase
 @inject IThemeService ThemeService
 
-@* The page waits for the palette's theme, so no control is ever seen in Fluent's default colours. *@
+@*
+    The page waits for the palette's theme, so no control is ever seen in Fluent's default colours. The providers
+    wait with it: drawn earlier, the dialog overlay's spinner shows bare at the top before Fluent's components are defined.
+*@
 @if (themed)
 {
     @Body
-}
 
-<FluentProviders />
+    <FluentProviders />
+}
 
 @code {
     /// <summary>

@@ -38,10 +38,10 @@ code { font-family: var(--fontFamilyMonospace); }
 /* Waiting on work: centred in whatever space the result is about to fill. */
 .waiting { margin: auto; padding: 24px 16px; }
 
-/* --- the track: the map at a fixed quarter, the agents and the domain sharing the rest --- */
+/* --- the track: the map at a fixed narrow width, the agents and the domain sharing the rest --- */
 .track-head { margin-bottom: 9px; }
-/* The map's column is a quarter of the track and nothing else decides it, so it never moves. */
-.track { display: grid; grid-template-columns: 25% auto minmax(0, 1fr); gap: 7px; height: var(--track-h); }
+/* The map's column never moves and stays under a folded segment's quarter of the rest: no steps, the least room. */
+.track { display: grid; grid-template-columns: 12% auto minmax(0, 1fr); gap: 7px; height: var(--track-h); }
 
 /* The agents and the domain split the rest evenly; the one looked at takes three parts of four. */
 .stage { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 7px; min-width: 0; transition: grid-template-columns .3s ease; }

@@ -14,7 +14,7 @@
 <section class="open">
     <div class="open-body">
         <FluentText Size="TextSize.Size800" Weight="TextWeight.Regular" Block="true" Class="asked">
-            Set the technical aspects of the code
+            Set the technical aspects of the domain
         </FluentText>
 
         <div class="panel-block">
@@ -124,28 +124,53 @@
             {
                 <FluentGrid Spacing="3" Class="distillation">
                     <FluentGridItem Xs="4">
-                        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="18px">
-                            <svg class="distillation-vessel" viewBox="0 0 64 88" role="img" aria-label="Distilling">
-                                <defs><clipPath id="belly-clip"><circle cx="29" cy="55" r="15.2" /></clipPath></defs>
-                                <path d="M25.2 40.3 V13 M32.8 40.3 V13" fill="none" stroke="var(--alembic-border-lit)" stroke-width="3.4" stroke-linecap="round" />
-                                <rect x="21.8" y="10" width="14.4" height="4.8" rx="2.4" fill="var(--alembic-border-lit)" />
-                                <path d="M40 20.5 H49 A3.2 3.2 0 0 1 52 23.7 V33" fill="none" stroke="var(--alembic-border-lit)" stroke-width="3.4" stroke-linecap="round" />
+                        <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="22px">
+                            @* The favicon's vessel at working size: the brew rises with the build, the flame and the drip say it is running. *@
+                            <svg class="distillation-vessel" viewBox="0 0 120 160" role="img" aria-label="Distilling">
+                                <defs>
+                                    <clipPath id="belly-clip"><circle cx="52" cy="100" r="29.5" /></clipPath>
+                                    <radialGradient id="brew" gradientUnits="userSpaceOnUse" cx="52" cy="118" r="42">
+                                        <stop offset="0" class="brew-light" />
+                                        <stop offset=".55" class="brew-mid" />
+                                        <stop offset="1" class="brew-deep" />
+                                    </radialGradient>
+                                </defs>
+
+                                <circle cx="52" cy="100" r="44" class="vessel-glow" />
+
+                                <path d="M60 38 C80 38 94 42 102 60 L108 78" class="vessel-glass vessel-spout" />
+                                <circle cx="108.5" cy="84" r="2.8" class="vessel-drip" />
+
+                                <path d="M44 70 V30 M60 70 V30" class="vessel-glass vessel-neck" />
+                                <rect x="39" y="23" width="26" height="9" rx="4.5" class="vessel-stopper" />
+                                <path d="M52 6 L53.6 10.4 L58 12 L53.6 13.6 L52 18 L50.4 13.6 L46 12 L50.4 10.4 Z" class="vessel-spark" />
+
                                 <g clip-path="url(#belly-clip)">
-                                    <rect x="10" width="38" y="@Invariant(70.2 - FillHeight)" height="@Invariant(FillHeight)" class="distillation-fill" />
+                                    <rect x="20" width="64" y="@Invariant(129.5 - FillHeight)" height="@Invariant(FillHeight)" fill="url(#brew)" class="distillation-fill" />
+                                    @if (Percent > 0)
+                                    {
+                                        <circle cx="42" cy="124" r="2.2" class="vessel-bubble" />
+                                        <circle cx="56" cy="126" r="1.6" class="vessel-bubble vessel-bubble-late" />
+                                        <circle cx="64" cy="122" r="1.9" class="vessel-bubble vessel-bubble-later" />
+                                    }
                                 </g>
-                                <circle cx="29" cy="55" r="15.2" fill="none" stroke="var(--alembic-border-lit)" stroke-width="1.8" />
+                                <circle cx="52" cy="100" r="31" class="vessel-glass vessel-belly" />
+                                <ellipse cx="40" cy="86" rx="5" ry="9" transform="rotate(35 40 86)" class="vessel-shine" />
+
+                                <path d="M52 138 C46 146 47 154 52 154 C57 154 58 146 52 138 Z" class="vessel-flame" />
+                                <path d="M30 157 H74" class="vessel-glass vessel-stand" />
                             </svg>
 
-                            <FluentStack Orientation="Orientation.Vertical" VerticalGap="8px" Class="distillation-status">
-                                <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Class="distillation-phase">@PhaseLabel</FluentText>
+                            <FluentStack Orientation="Orientation.Vertical" VerticalGap="10px" Class="distillation-status">
+                                <FluentText As="TextTag.Paragraph" Size="TextSize.Size500" Weight="TextWeight.Semibold" Class="distillation-phase">@PhaseLabel</FluentText>
                                 <FluentProgressBar Value="Percent" Max="100" Width="100%" />
-                                <FluentText Size="TextSize.Size300" Class="muted">
-                                    @Percent% · @plan.Count(step => step.Done) of @plan.Count@(StepElapsed is { } elapsed ? $" · {elapsed} on this step" : "")
+                                <FluentText Size="TextSize.Size500">
+                                    <strong>@Percent%</strong><span class="muted"> · @plan.Count(step => step.Done) of @plan.Count@(StepElapsed is { } elapsed ? $" · {elapsed} on this step" : "")</span>
                                 </FluentText>
 
                                 @if (NextAgent is { } next)
                                 {
-                                    <FluentText Size="TextSize.Size300" Class="muted distillation-others">Next agent: @next</FluentText>
+                                    <FluentText Size="TextSize.Size400" Class="muted distillation-others">Next agent: @next</FluentText>
                                 }
                             </FluentStack>
                         </FluentStack>
@@ -159,7 +184,7 @@
                             <FluentCard Shadow="CardShadow.None" Height="100%">
                             <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" VerticalGap="6px" Height="100%">
                                 <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
-                                    <FluentText Size="TextSize.Size400" Weight="TextWeight.Semibold">@card.First().Label</FluentText>
+                                    <FluentText Size="TextSize.Size500" Weight="TextWeight.Semibold">@card.First().Label</FluentText>
                                     <ul class="step-card-steps">
                                         @foreach (Step step in card)
                                         {
@@ -180,7 +205,7 @@
 
                                 <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
                                     <FluentProgressBar Value="cardPercent" Max="100" Width="100%" />
-                                    <FluentText Size="TextSize.Size300" Align="TextAlign.End" Class="muted">@cardPercent%</FluentText>
+                                    <FluentText Size="TextSize.Size500" Weight="TextWeight.Semibold" Align="TextAlign.End">@cardPercent%</FluentText>
                                 </FluentStack>
                             </FluentStack>
                             </FluentCard>
@@ -206,15 +231,14 @@
             else if (package is { } archive)
             {
                 <FluentStack Orientation="Orientation.Vertical" HorizontalAlignment="HorizontalAlignment.Start" VerticalGap="12px" Class="distillation-done">
-                    <FluentText As="TextTag.Paragraph" Size="TextSize.Size500" Weight="TextWeight.Semibold" Class="distillation-done-headline">
+                    <FluentText As="TextTag.Paragraph" Size="TextSize.Size800" Weight="TextWeight.Regular" Class="distillation-done-headline">
                         Your domain has been distilled.
                     </FluentText>
 
-                    @* Green, the colour of what is verified: the one archive the domain is correct inside. *@
-                    <FluentCompoundButton Size="ButtonSize.Large" BackgroundColor="var(--alembic-success)" Color="var(--alembic-bg-deep)"
-                                          Label="@ArchiveName" OnClick="DownloadAsync">
-                        <Description>@written.Count files, @(archive.Length / 1024) KB</Description>
-                    </FluentCompoundButton>
+                    <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="14px">
+                        <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="DownloadAsync">Download @ArchiveName</FluentButton>
+                        <FluentText Size="TextSize.Size500" Class="muted">@written.Count files, @(archive.Length / 1024) KB</FluentText>
+                    </FluentStack>
 
                     <FluentButton Appearance="ButtonAppearance.Outline" OnClick="AgainAsync">Run again</FluentButton>
                 </FluentStack>
@@ -222,7 +246,7 @@
             else
             {
                 <FluentStack Orientation="Orientation.Horizontal">
-                    <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="FinalizeAsync">Finalize domain</FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="FinalizeAsync">Generate domain</FluentButton>
                 </FluentStack>
             }
         </div>
@@ -691,9 +715,9 @@
     };
 
     /// <summary>
-    /// How full the vessel's belly is: its diameter is 30.4.
+    /// How full the vessel's belly is: its inner diameter is 59.
     /// </summary>
-    private double FillHeight => Math.Round(30.4 * Percent / 100.0, 1);
+    private double FillHeight => Math.Round(59 * Percent / 100.0, 1);
 
     /// <summary>
     /// A number as an SVG attribute reads it, whatever the server's culture.
