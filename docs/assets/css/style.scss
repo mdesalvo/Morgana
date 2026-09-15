@@ -47,8 +47,44 @@ body {
 // itself in prose instead, the way the README does.
 .page-header { display: none; }
 
+// The whole page sits in one card drawn like a handbook page, so the site reads as the
+// handbooks' first sheet.
 .main-content {
   color: $body-text-color;
+  position: relative;
+  overflow: hidden;
+  margin: 48px auto;
+  padding: 48px 56px;
+  background-color: $morgana-surface;
+  border: 1px solid $morgana-border;
+  border-radius: 20px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  &::before {
+    top: -80px; right: -80px;
+    width: 300px; height: 300px;
+    background: radial-gradient(circle, rgba($morgana-purple-mid, 0.15) 0%, transparent 70%);
+  }
+
+  &::after {
+    bottom: -60px; left: -60px;
+    width: 250px; height: 250px;
+    background: radial-gradient(circle, rgba($morgana-magenta, 0.1) 0%, transparent 70%);
+  }
+
+  // A phone keeps a gutter outside the card and gives the text back the padding.
+  @media screen and (max-width: 42em) {
+    margin: 16px;
+    padding: 28px 20px;
+  }
 
   h1, h2, h3, h4, h5, h6 { color: $section-headings-color; }
 
