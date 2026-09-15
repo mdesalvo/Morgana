@@ -14,6 +14,7 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
 
 ### 🔄 Changed
 - **`other` intent belongs to the Classifier** — the complement of a domain is no longer declared by every `agents.json`, but described once in the Classifier prompt. The name is reserved: a plugin declaring it is refused
+- **Alembic has a brand new look and layout** — the workbench has been rewritten on Microsoft's **Fluent UI Blazor 5**
 - Updated `Microsoft.Agents.AI` to 1.21.0
 - Updated `Microsoft.Extensions.AI` to 10.10.0
 
