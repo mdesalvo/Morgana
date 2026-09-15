@@ -436,11 +436,12 @@
 
     /// <summary>
     /// Where a finding points, one badge per name: a judged finding lists the agents it involves, a finding decided
-    /// by reading spells one element's path, and neither the quotes nor the dots it was written with reach the badge.
+    /// by reading spells one element's path, and neither the quotes, the backticks nor the dots it was written with
+    /// reach the badge.
     /// </summary>
     private static IEnumerable<string> Places(string where) =>
         where.Split([',', '.'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-             .Select(place => place.Replace("'", string.Empty).Replace("\"", string.Empty).Trim())
+             .Select(place => place.Replace("'", string.Empty).Replace("\"", string.Empty).Replace("`", string.Empty).Trim())
              .Where(place => place.Length > 0);
 
 }
