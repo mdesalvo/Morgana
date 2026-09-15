@@ -119,12 +119,6 @@
 
         <div class="panel-block">
             <FluentDivider />
-            @* Opt-in: a further model call per agent, spent on files only a source checkout of Morgana can replay. *@
-            <FluentCheckbox @bind-Value="includeScenarios" @bind-Value:after="InvalidateAsync" Disabled="running" Size="CheckboxSize.Large">
-                <LabelTemplate>
-                    <FluentText Size="TextSize.Size400">Also generate the starter harness scenarios (one more model call per agent)</FluentText>
-                </LabelTemplate>
-            </FluentCheckbox>
 
             @if (running)
             {
@@ -280,14 +274,14 @@
     }
 
     /// <summary>
-    /// One thing the archive is built toward: the configuration or one agent's class, mock or scenarios.
+    /// One thing the archive is built toward: the configuration or one agent's class or mock.
     /// </summary>
     private sealed class Step
     {
         /// <summary>The agent it belongs to; empty for the configuration.</summary>
         public required string AgentId { get; init; }
 
-        /// <summary>structure, code, mock or scenarios.</summary>
+        /// <summary>structure, code or mock.</summary>
         public required string Kind { get; init; }
 
         /// <summary>The agent as its card names it.</summary>
@@ -306,11 +300,6 @@
     /// Every agent's MCP rows.
     /// </summary>
     private readonly Dictionary<AgentDraft, List<McpRow>> mcp = [];
-
-    /// <summary>
-    /// Whether the client asked for the starter harness scenarios.
-    /// </summary>
-    private bool includeScenarios;
 
     /// <summary>
     /// Whether distilling was refused, so every missing fact shows as an error.
@@ -541,9 +530,8 @@
 
             // Off the renderer's context, so every progress report gets through while the build writes.
             DomainDraft draft = Draft;
-            bool scenarios = includeScenarios;
             CancellationToken token = buildCancellation.Token;
-            package = await Task.Run(() => AssetPackageService.BuildAsync(draft, scenarios, progress, token));
+            package = await Task.Run(() => AssetPackageService.BuildAsync(draft, progress, token));
 
             foreach (Step step in plan)
                 step.Done = true;
@@ -605,8 +593,8 @@
     private const string ArchiveName = "alembic.zip";
 
     /// <summary>
-    /// The steps in the order the package service writes them: the configuration, every agent's class
-    /// and mock, then every agent's scenarios.
+    /// The steps in the order the package service writes them: the configuration, then every agent's
+    /// class and mock.
     /// </summary>
     private List<Step> BuildPlan()
     {
@@ -619,10 +607,6 @@
             if (agent.Tools.Count > 0)
                 steps.Add(new Step { AgentId = agent.ID!, Kind = "mock", Label = Named(agent) });
         }
-
-        if (includeScenarios)
-            foreach (AgentDraft agent in Agents)
-                steps.Add(new Step { AgentId = agent.ID!, Kind = "scenarios", Label = Named(agent) });
 
         return steps;
     }
@@ -653,9 +637,6 @@
                         return plan.FirstOrDefault(step => step.AgentId == id && step.Kind == "mock");
                 }
             }
-
-            if (path.StartsWith($"Scenarios/{id}-", StringComparison.Ordinal) || path == $"Scenarios/{id}.FAILED.txt")
-                return plan.FirstOrDefault(step => step.AgentId == id && step.Kind == "scenarios");
         }
 
         return null;
@@ -691,7 +672,7 @@
     {
         get
         {
-            List<Step> awaitingModel = [.. plan.Where(step => !step.Done && step.Kind is "mock" or "scenarios")];
+            List<Step> awaitingModel = [.. plan.Where(step => !step.Done && step.Kind == "mock")];
 
             return awaitingModel.Count == 0
                 ? null
@@ -706,7 +687,6 @@
     {
         "code" => "class",
         "mock" => "tools",
-        "scenarios" => "scenarios",
         _ => kind
     };
 
@@ -730,7 +710,6 @@
             "structure" => "Writing the domain's configuration and reports…",
             "code" => $"Distilling {step.Label}: writing its agent class…",
             "mock" => $"Distilling {step.Label}: writing its tools…",
-            "scenarios" => $"Distilling {step.Label}: writing its starter scenarios…",
             _ => "Distilling…"
         };
 
@@ -744,7 +723,6 @@
             "structure" => "the configuration",
             "code" => $"{step.Label}'s agent class",
             "mock" => $"{step.Label}'s tool class",
-            "scenarios" => $"{step.Label}'s scenarios",
             _ => step.Label
         };
 

@@ -12,17 +12,12 @@
     <ItemGroup>
        <!-- Alembic's own conducting prose, embedded the way morgana.json is embedded in Morgana.AI. -->
        <EmbeddedResource Include="alembic.json" />
-
-       <!-- One template per behavioural use-case worth protecting: adding one is a file in this folder. -->
-       <EmbeddedResource Include="Harness\Templates\*.yaml" />
     </ItemGroup>
 
     <ItemGroup>
        <!-- Pinned: the workbench is built against this release's public surface and moves only when a
             new one has been chosen and the UI checked again. -->
-       <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" Version="5.0.0-rc.5-26219.1" />
-       <PackageReference Include="YamlDotNet" Version="18.*" />
-    </ItemGroup>
+       <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" Version="5.0.0-rc.5-26219.1" />    </ItemGroup>
 
     <ItemGroup>
        <ProjectReference Include="..\..\Morgana\Morgana.AI\Morgana.AI.csproj" />

@@ -1362,11 +1362,11 @@ public class InterviewService : IInterviewService
             "{Pass} is answering {Length} characters from the client",
             PassPromptIds[interviewState.Pass], message.Length);
 
+        using CancellationTokenSource bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        bounded.CancelAfter(turnCeiling);
+
         try
         {
-            using CancellationTokenSource bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            bounded.CancelAfter(turnCeiling);
-
             AgentResponse response = await agent.RunAsync(
                 new ChatMessage(ChatRole.User, message), session, cancellationToken: bounded.Token);
 
@@ -1402,13 +1402,23 @@ public class InterviewService : IInterviewService
             interviewState.Traits = [.. interviewState.PendingTraits];
             interviewState.Chosen = false;
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (bounded.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             logger.LogError(
                 "{Pass} was still waiting after {Elapsed:0.0}s and was given up on",
                 PassPromptIds[interviewState.Pass], Stopwatch.GetElapsedTime(startedAt).TotalSeconds);
 
             interviewState.Error = "That turn took too long and was given up on. Your work is safe — send the answer again.";
+        }
+        // Neither the turn's ceiling nor the client stopped this turn: a call beneath it gave up on its
+        // own, so blaming the ceiling would send whoever reads the log after the wrong setting.
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogError(
+                "{Pass} was cancelled beneath the turn after {Elapsed:0.0}s, inside its ceiling",
+                PassPromptIds[interviewState.Pass], Stopwatch.GetElapsedTime(startedAt).TotalSeconds);
+
+            interviewState.Error = "The model stopped answering before the turn was done. Your work is safe — send the answer again.";
         }
         catch (Exception ex)
         {
@@ -1479,7 +1489,7 @@ public class InterviewService : IInterviewService
     /// agent this domain does not hold, a section a pass owns no field for — each is refused with a
     /// sentence the model is expected to act on in the same turn. Nothing outside that exchange
     /// could see it, so a pass that told the client an edge was set while its own tool had refused
-    /// the call read exactly like one that succeeded, on the screen and in a harness run alike.
+    /// the call read exactly like one that succeeded.
     /// Arguments are kept short: what identifies a call is the names it carried, not the paragraph
     /// of prose one of them holds.
     /// </remarks>

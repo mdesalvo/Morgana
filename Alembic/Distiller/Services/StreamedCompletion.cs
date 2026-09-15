@@ -8,7 +8,7 @@ namespace Distiller.Services;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Everything Alembic emits as an artifact — a tool class, a harness scenario — is a whole file and
+/// Everything Alembic emits as an artifact — a tool class, a coherence report — is a whole file and
 /// a file's length is a property of what it describes rather than a number choosable in advance. So
 /// nothing here declares an output ceiling: what the deployment's tier configures still holds per
 /// request and this keeps asking until the answer is finished.

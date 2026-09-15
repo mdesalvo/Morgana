@@ -45,7 +45,6 @@ For production hotfixes, activated when the user says:
    - `<repo root>/Examples/Examples.csproj`
    - `<repo root>/PromptHarness/PromptHarness.csproj`
    - `<repo root>/Alembic/Directory.Build.props`
-   - `<repo root>/Alembic/PromptHarness/PromptHarness.csproj`
 
 4. **Add new section in CHANGELOG.md**
    - Read `<repo root>/CHANGELOG.md`

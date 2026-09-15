@@ -32,7 +32,6 @@ public class AssetPackageService : IAssetPackageService
     private readonly ISolutionEmitService solutionEmitService;
     private readonly ICodeEmitService codeEmitService;
     private readonly IToolMockService toolMockService;
-    private readonly IScenarioAuthorService scenarioAuthorService;
     private readonly IMigrationReportService migrationReportService;
     private readonly ILogger logger;
 
@@ -44,16 +43,14 @@ public class AssetPackageService : IAssetPackageService
     /// <param name="solutionEmitService">Writes the project and solution files the generated sources live in.</param>
     /// <param name="codeEmitService">Writes the deterministic <c>.g.cs</c> half of each agent and tool class.</param>
     /// <param name="toolMockService">Writes the authored mock half of each tool class — the one call that can fail.</param>
-    /// <param name="scenarioAuthorService">Writes the starter PromptHarness scenarios per agent.</param>
     /// <param name="migrationReportService">Builds <c>MIGRATION.md</c> from the Draft's diff against its baseline.</param>
-    /// <param name="logger">Used to record per-agent mock/scenario failures that the archive still ships around.</param>
+    /// <param name="logger">Used to record per-agent mock failures that the archive still ships around.</param>
     public AssetPackageService(
         IDraftExportService draftExportService,
         IDraftSerializationService draftSerializationService,
         ISolutionEmitService solutionEmitService,
         ICodeEmitService codeEmitService,
         IToolMockService toolMockService,
-        IScenarioAuthorService scenarioAuthorService,
         IMigrationReportService migrationReportService,
         ILogger logger)
     {
@@ -62,7 +59,6 @@ public class AssetPackageService : IAssetPackageService
         this.solutionEmitService = solutionEmitService;
         this.codeEmitService = codeEmitService;
         this.toolMockService = toolMockService;
-        this.scenarioAuthorService = scenarioAuthorService;
         this.migrationReportService = migrationReportService;
         this.logger = logger;
     }
@@ -71,13 +67,11 @@ public class AssetPackageService : IAssetPackageService
     /// <remarks>
     /// Entries are written in the order a client would want to trust them: the marker and the
     /// configuration first, then the project scaffolding, then the generated and authored C# per
-    /// agent, then scenarios last — the one thing whose absence is least likely to matter on the
-    /// day the archive is opened. The whole method runs inside one <see cref="ZipArchive"/>, so a
-    /// failure past the marker still yields a partial-but-openable zip rather than nothing.
+    /// agent. The whole method runs inside one <see cref="ZipArchive"/>, so a failure past the
+    /// marker still yields a partial-but-openable zip rather than nothing.
     /// </remarks>
     public async Task<byte[]> BuildAsync(
         DomainDraft draft,
-        bool includeScenarios = true,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -137,34 +131,6 @@ public class AssetPackageService : IAssetPackageService
                         progress, cancellationToken);
                 }
             }
-
-            // Last and caught the same way. Scenarios are the most valuable thing in the archive on
-            // the day someone edits the prose and the least valuable on the day it is downloaded —
-            // so a domain whose scenarios failed still ships and says so.
-            //
-            // Never an early return from inside this block: the archive's central directory is
-            // written when the ZipArchive is disposed and a buffer read before that is a file no
-            // unzip program will open.
-            foreach (AgentDraft agent in includeScenarios
-                         ? draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID))
-                         : [])
-            {
-                try
-                {
-                    foreach (EmittedFile scenario in await scenarioAuthorService.AuthorAsync(agent, agent.ID!, cancellationToken))
-                        await WriteAsync(archive, scenario.Path, scenario.Content, progress, cancellationToken);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    logger.LogError(ex, "Could not author scenarios for {AgentId}", agent.ID);
-
-                    await WriteAsync(archive, $"Scenarios/{agent.ID}.FAILED.txt",
-                        $"Alembic could not write starter scenarios for this agent: {ex.Message}\n\n"
-                        + "Nothing else in the archive depends on them. Write them by hand against the harness's own\n"
-                        + "Scenarios directory, or morganize it again.",
-                        progress, cancellationToken);
-                }
-            }
         }
 
         return buffer.ToArray();
@@ -206,7 +172,6 @@ public class AssetPackageService : IAssetPackageService
         | `Tools/*.g.cs` | Alembic's. Attributes, constructor and one `partial` signature per tool |
         | `Tools/*.cs` | **yours.** Written once as a working mock, never written again |
         | `MIGRATION.md` | what this differs from, if anything was uploaded |
-        | `Scenarios/*.yaml` | starter PromptHarness scenarios — yours from here |
         | `alembic-draft.json` | the interview's save file — upload it to carry on |
         | `alembic-emit.marker` | Alembic's own — lets a re-upload of this archive be recognised as one, nothing else |
 
@@ -240,40 +205,5 @@ public class AssetPackageService : IAssetPackageService
         The mocks return plausible data of your domain, so you can talk to your agents on the first
         run and hear whether their prose is right — which is what the interview was for. Replace
         them with your real integration when it is.
-
-        ## The scenarios
-
-        A domain agent is its prose and prose gets edited. `Scenarios/` holds the starting set:
-        drop the files into PromptHarness's own `Scenarios` directory, point its plugin reference at
-        the project in this archive instead of Morgana's own example and add a test that names each
-        scenario (one `[InlineData("scenario-id")]` per file, same shape PromptHarness's own tests
-        already use).
-
-        **This needs a source checkout of Morgana, not just a running one.** PromptHarness boots
-        Morgana in-process to observe it — it is not a client of a deployed instance the way this
-        plugin is. Unzipping this archive next to a Morgana you only run (a container, a managed
-        deployment) gives you nothing to point PromptHarness at; you need PromptHarness's own source
-        beside a source checkout of Morgana itself, on the same filesystem. Where that is not your
-        situation, keep the YAML — it costs nothing to hold onto — for the day it is.
-
-        They are a floor, never a suite — Alembic knows what your agents were designed to do, which
-        is what a first scenario is made of and knows nothing about what will actually go wrong,
-        which is what every scenario after it is made of.
-
-        They are **domain scenarios only** and that is the whole of what they should be. The guard,
-        the classifier, quick replies, turn continuation, rich cards, channel degradation, history
-        summarization and the context cycle are framework behaviour: they hold for every domain and
-        Morgana ships her own scenarios for them, maintained where the policies are. Yours sit beside
-        hers and never re-test them.
-
-        They assert that a tool ran, never what it returned. That is deliberate: an assertion on a
-        mock's data fails the day you wire in the real system, which is the day the suite most needs
-        to still work.
-
-        Each one is a behavioural use-case Alembic carries — the flow the agent exists for, the
-        boundary it refuses, the confirmation it owes, the detail it withholds — derived against your
-        domain and written in your words. You will not have every one for every agent and that is
-        the point rather than a gap: an agent whose tools only look things up has no irreversible
-        action to confirm, so that scenario was declined instead of invented.
         """;
 }

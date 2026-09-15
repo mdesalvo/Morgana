@@ -48,7 +48,7 @@ Colleagues live in this instance — a remote peer is not declarable yet (see Fu
 
 ## [0.28.0] - 2026-08-23
 ### 🎯 Major Feature: Alembic — Turnkey Domain Onboarding
-This release introduces **Alembic**, a Blazor Server workbench that distils a live interview with a domain expert into a complete, ready-to-build **Morgana domain** — intents, agent prose, tool contracts, generated C# and a starter non-regression suite — **with no prompt ever authored by hand**.
+This release introduces **Alembic**, a Blazor Server workbench that distils a live interview with a domain expert into a complete, ready-to-build **Morgana domain** — intents, agent prose, tool contracts and generated C# — **with no prompt ever authored by hand**.
 A domain-mapping pass turns the client's own words into intents; five further passes per agent (Target, Personality, Toolkit, Instructions, Formatting) build its prose incrementally, each reading back only what is already settled.
 The result is deterministically validated, composed exactly as the running agent's own model will read it and packaged as **one downloadable C# archive** ready to be built, taking a client from a description of their business to a running, testable Morgana plugin in one sitting.
 ### 🎯 Major Feature: Cauldron Widget — Morgana Living Into Any Existing Site
@@ -77,7 +77,7 @@ Framing itself is **closed by default** — a site may host the widget only once
   - SignalR presentation race — a fresh conversation's greeting could reach an empty group and be discarded without a trace, since Cauldron joined the group only after the start response returned.
 
 ### 🚀 Future Enablement
-- **Turnkey plugin onboarding at scale** — Alembic turns "write a Morgana domain" from a prompt-engineering exercise into a guided interview, opening the framework to domain experts who have never written a system prompt; its own non-regression suite (`Alembic/PromptHarness`, distinct from Morgana's own `PromptHarness`) keeps the workbench itself honest as it evolves.
+- **Turnkey plugin onboarding at scale** — Alembic turns "write a Morgana domain" from a prompt-engineering exercise into a guided interview, opening the framework to domain experts who have never written a system prompt.
 - **Morgana reaching users where they already are** — the widget turns adoption from "migrate a site onto Cauldron" into "paste one tag", making every existing web property a candidate surface without touching its stack or its release cycle. The per-origin allowlist makes each of those surfaces explicitly granted and individually revocable, which is the natural hook for per-site conversation policy, attribution and analytics.
 - **Embedding on sites outside the operator's control** — because the conversation runs in a sandboxed frame on Cauldron's own origin rather than inside the host document, a site can carry Morgana without being able to read what visitors say to her and she cannot be reached by the host page's scripts. That boundary is the precondition for handing the widget to partners and to customers' own portals, rather than only to properties the Morgana operator already owns.
 

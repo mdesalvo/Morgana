@@ -10,15 +10,13 @@ it, every service states its contract in its own XML doc and every pass states i
 ## What is Alembic
 
 A **Blazor Server** application giving a client the *initial morganization* turnkey: an AI-conducted
-functional interview distilled into a complete Morgana domain — intents, agent prose, tool contracts,
-C# assets and starter non-regression scenarios.
+functional interview distilled into a complete Morgana domain — intents, agent prose, tool contracts
+and C# assets.
 
 The name follows the repo's habit of naming the instrument (Cauldron the vessel, Grimoire the book,
 Rune the mark): an *alembic* is the apparatus that distils.
 
-`Alembic/` holds two projects, each with its own solution: `Distiller/` (the workbench, on Fluent UI
-Blazor 5) and `PromptHarness/` (its own non-regression harness, nested for tidiness and deliberately
-not a client of Distiller's code).
+`Alembic/` holds one project with its own solution: `Distiller/`, the workbench, on Fluent UI Blazor 5.
 
 ## What Alembic is not
 
@@ -189,7 +187,7 @@ described by the phrase the classifier routes on; once the territory is settled 
 land here, a territory says what this desk answers for and a caller weighing its question against both
 is weighing it against two different things.
 
-What is decidable by reading is checked without a model, in validation and in the harness: a territory
+What is decidable by reading is checked without a model, in validation: a territory
 naming the desk's own tools is an inventory, one identical to the routing phrase is the classifier's
 sentence recycled and two desks publishing the same territory are one desk as far as a caller can tell.
 
@@ -366,29 +364,6 @@ Every check in `DraftValidationService` is decidable by reading the Draft, no mo
 rule the framework enforces at startup and **the duplication is the entire value**: the framework's
 exception arrives after the client has packaged, deployed and run; the same sentence here arrives while it
 costs nothing to change. Each finding carries a `Because` naming the rule.
-
-### The starter scenarios: templates in, one domain out
-
-Alembic writes the **starting set and no more**: it knows what the agents were designed to do, which is
-what a first scenario is made of and nothing about what will actually go wrong, which is every scenario
-after it. Running them needs a **source checkout** of Morgana, since PromptHarness boots it in-process.
-
-The split: **which behaviours are worth protecting** is knowledge about agents, true before any client
-arrives, settled once as `Distiller/Harness/Templates/*.yaml`. **Which words say them here** is knowledge
-about the client's business, so the model derives: replace every `{{…}}`, change nothing else. Asking a
-model for "two or three scenarios" was the earlier, wrong shape — it made the model choose which behaviours
-matter, the decision it is worst placed to take. Applicability is decided in C# only for what a template
-structurally needs (a tool, two tools, a context parameter); everything semantic is the model's.
-
-**Nothing is copied from `PromptHarness/`**, which is entirely infrastructural. That is what makes the suite
-100% domain **structurally**: the vocabulary a derivation may use is exactly the union of keys the templates
-use.
-
-**A derivation may drop a key and may never add one** — the whole check, enough because the template *is*
-the vocabulary. It runs at the emit because it cannot be caught later: `ScenarioLoader` ignores an unmatched
-property, so an invented key is dropped without a sound and the scenario loads, runs, passes and asserts
-nothing. A scenario that fails still ships, the problem written across its top: a silently missing scenario
-costs the client more than a visibly broken one.
 
 ### The coherence pass
 

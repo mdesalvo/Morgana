@@ -395,7 +395,6 @@
         <span>Blazor Server</span>
         <span>Fluent UI Blazor</span>
         <span>Morgana.AI</span>
-        <span>PromptHarness</span>
       </div>
     </div>
 
@@ -411,9 +410,8 @@
         <li><a href="#interview-walkthrough"><span class="toc-num">04</span><span class="toc-title">The Interview, Step by Step</span><span class="toc-dots"></span><span class="toc-page">6</span></a></li>
         <li><a href="#the-domain"><span class="toc-num">05</span><span class="toc-title">The Domain: Colleagues and Validation</span><span class="toc-dots"></span><span class="toc-page">7</span></a></li>
         <li><a href="#morganization"><span class="toc-num">06</span><span class="toc-title">Morganization</span><span class="toc-dots"></span><span class="toc-page">8</span></a></li>
-        <li><a href="#non-regression-scenarios"><span class="toc-num">07</span><span class="toc-title">Prompt Harness: AI-driven Non-Regression Scenarios</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
-        <li><a href="#configuration-reference"><span class="toc-num">08</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
-        <li><a href="#quick-reference"><span class="toc-num">09</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">11</span></a></li>
+        <li><a href="#configuration-reference"><span class="toc-num">07</span><span class="toc-title">Configuration Reference</span><span class="toc-dots"></span><span class="toc-page">9</span></a></li>
+        <li><a href="#quick-reference"><span class="toc-num">08</span><span class="toc-title">Quick Reference</span><span class="toc-dots"></span><span class="toc-page">10</span></a></li>
       </ul>
 
       <div class="page-footer">
@@ -427,7 +425,7 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="architecture-overview">
       <h2>Architecture Overview</h2>
-      <p>Alembic is Morgana's <strong>authoring workbench</strong>: an AI-conducted functional interview that distils a domain expert's own words into a complete Morgana domain (<strong>intents, agent prose, tool contracts, C# assets and non-regression scenarios</strong>) with no prompt ever written by hand. It is <strong>not a channel</strong>: it never calls a running Morgana, holds no JWT, joins no conversation pipeline: its only external dependency is an LLM. And it is <strong>not a filesystem tool</strong>: configuration arrives as an <strong>upload</strong> and leaves as a <strong>download</strong>, since at runtime Alembic can live anywhere: a cloud, an on-prem box beside Morgana, a laptop.</p>
+      <p>Alembic is Morgana's <strong>authoring workbench</strong>: an AI-conducted functional interview that distils a domain expert's own words into a complete Morgana domain (<strong>intents, agent prose, tool contracts and C# assets</strong>) with no prompt ever written by hand. It is <strong>not a channel</strong>: it never calls a running Morgana, holds no JWT, joins no conversation pipeline: its only external dependency is an LLM. And it is <strong>not a filesystem tool</strong>: configuration arrives as an <strong>upload</strong> and leaves as a <strong>download</strong>, since at runtime Alembic can live anywhere: a cloud, an on-prem box beside Morgana, a laptop.</p>
       <p>Alembic is itself <strong>an agent of Morgana</strong>: its own prompt is layered from an <code>alembic.json</code> of identical shape to a domain agent's (Target / Instructions / Personality / Formatting), composed with Morgana's own Personality resolved live from <code>morgana.json</code>: the same framework the domains it authors will run under.</p>
 
       <div class="pillars">
@@ -447,9 +445,9 @@
           <p>One archive: a ready .csproj/.slnx, generated <code>AgentX.g.cs</code> sources split from a client-owned <code>AgentX.cs</code> half, a working LLM-authored mock per toolkit and an unconditional migration report.</p>
         </div>
         <div class="pillar">
-          <div class="icon">&#x1F9EA;</div>
-          <h4>Non-Regression from Day One</h4>
-          <p>A starter PromptHarness suite is derived from behavioural templates for the domain just authored, plus a cross-agent coherence pass that catches overlapping intents before the client leaves.</p>
+          <div class="icon">&#x1F50D;</div>
+          <h4>Coherence Before Leaving</h4>
+          <p>A cross-agent coherence pass reads the agents side by side and catches what only shows between them, overlapping intents included, before the client leaves.</p>
         </div>
       </div>
 
@@ -458,9 +456,7 @@
         <thead><tr><th>Component</th><th>Role</th><th>Technology</th><th>Default Port</th></tr></thead>
         <tbody>
           <tr><td><strong>Distiller</strong></td><td>The workbench itself: the interview, the colleagues, validation, emit</td><td>ASP.NET 10, Blazor Server, Microsoft Fluent UI Blazor 5</td><td>5005</td></tr>
-          <tr><td><strong>LLM</strong></td><td>Language model provider, <code>Performance</code> tier only</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>n/a</td></tr>
-          <tr><td><strong>PromptHarness</strong></td><td>Alembic's own non-regression suite: drives a scripted interview and asserts on what the interview conduct and finalization emit produce</td><td>xUnit v3, in-process</td><td>n/a</td></tr>
-        </tbody>
+          <tr><td><strong>LLM</strong></td><td>Language model provider, <code>Performance</code> tier only</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>n/a</td></tr>        </tbody>
       </table>
 
       <div class="info-box">
@@ -645,38 +641,7 @@
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 9 — PROMPT HARNESS: AI-DRIVEN NON-REGRESSION SCENARIOS                 -->
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <div class="page" id="non-regression-scenarios">
-      <h2>Prompt Harness: AI-driven Non-Regression Scenarios</h2>
-      <p>A domain agent <em>is</em> its prose and prose gets edited: a client who leaves without scenarios has a domain nobody can revise safely. On request (a box on the Archive card, one more model call per agent) Alembic derives a starting <strong>PromptHarness</strong> suite from a library of behavioural templates, replacing every domain-word placeholder with this domain's own language.</p>
-
-      <table>
-        <thead><tr><th>Template</th><th>Protects</th></tr></thead>
-        <tbody>
-          <tr><td>capability-happy-path</td><td>The flow the agent exists for, end to end</td></tr>
-          <tr><td>prerequisite-before-action</td><td>It asks for what it needs instead of inventing it</td></tr>
-          <tr><td>confirmation-before-commit</td><td>Nothing irreversible happens before a yes</td></tr>
-          <tr><td>boundary-refusal</td><td>The edge its own Target commits it not to cross</td></tr>
-          <tr><td>tool-choice-under-ambiguity</td><td>A request between two tools reaches the right one</td></tr>
-          <tr><td>absent-subject</td><td>It says nothing was found instead of writing something plausible</td></tr>
-          <tr><td>withheld-detail</td><td>What its Formatting keeps back stays back</td></tr>
-          <tr><td>established-context-not-reasked</td><td>A value given once is not asked for twice</td></tr>
-        </tbody>
-      </table>
-
-      <div class="info-box">
-        <strong>Alembic tests itself, too:</strong> a dedicated <code>Alembic/PromptHarness</code> (distinct from the one shipped for Morgana) drives a scripted domain expert through a real interview and asserts on the mapping, the conduct across passes and the finalization emit, so the workbench stays honest as it evolves.
-      </div>
-
-      <div class="page-footer">
-        <span>Alembic Handbook</span>
-        <span>9</span>
-      </div>
-    </div>
-
-    <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 10 — CONFIGURATION REFERENCE                                           -->
+    <!-- PAGE 9 — CONFIGURATION REFERENCE                                            -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="configuration-reference">
       <h2>Configuration Reference</h2>
@@ -707,12 +672,12 @@
 
       <div class="page-footer">
         <span>Alembic Handbook</span>
-        <span>10</span>
+        <span>9</span>
       </div>
     </div>
 
     <!-- ════════════════════════════════════════════════════════════════════════ -->
-    <!-- PAGE 11 — QUICK REFERENCE                                                    -->
+    <!-- PAGE 10 — QUICK REFERENCE                                                    -->
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="quick-reference">
       <h2>Quick Reference</h2>
@@ -720,9 +685,7 @@
         <thead><tr><th>Resource</th><th>Location</th></tr></thead>
         <tbody>
           <tr><td>Source code</td><td>github.com/mdesalvo/Morgana (<code>Alembic/</code>)</td></tr>
-          <tr><td>The workbench</td><td><code>Alembic/Distiller/</code>, own <code>Distiller.slnx</code></td></tr>
-          <tr><td>Alembic's own tests</td><td><code>Alembic/PromptHarness/</code>, own <code>PromptHarness.slnx</code></td></tr>
-          <tr><td>Local run</td><td>https://localhost:5005 (no running Morgana required)</td></tr>
+          <tr><td>The workbench</td><td><code>Alembic/Distiller/</code>, own <code>Distiller.slnx</code></td></tr>          <tr><td>Local run</td><td>https://localhost:5005 (no running Morgana required)</td></tr>
           <tr><td>Design doctrine</td><td><code>Alembic/CLAUDE.md</code></td></tr>
           <tr><td>Changelog</td><td>CHANGELOG.md in repository root</td></tr>
         </tbody>
@@ -730,7 +693,7 @@
 
       <div class="page-footer">
         <span>Alembic Handbook</span>
-        <span>11</span>
+        <span>10</span>
       </div>
     </div>
 

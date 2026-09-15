@@ -55,7 +55,6 @@ builder.Services.AddSingleton<ICodeEmitService, CodeEmitService>();
 builder.Services.AddSingleton<IToolMockService, ToolMockService>();
 builder.Services.AddSingleton<IMigrationReportService, MigrationReportService>();
 
-builder.Services.AddSingleton<IScenarioAuthorService, ScenarioAuthorService>();
 builder.Services.AddSingleton<ICoherenceService, CoherenceService>();
 builder.Services.AddSingleton<IDomainReadingService, DomainReadingService>();
 builder.Services.AddSingleton<ICoherenceApplyService, CoherenceApplyService>();

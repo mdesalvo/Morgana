@@ -35,13 +35,6 @@ COPY Alembic/ Alembic/
 COPY Morgana/Morgana.AI/ Morgana/Morgana.AI/
 COPY Morgana/Morgana.Contracts/ Morgana/Morgana.Contracts/
 
-# Nothing of the repo-root PromptHarness is copied and nothing needs to be. Alembic's own harness
-# component is its own — the behavioural templates under Alembic/Distiller/Harness/Templates,
-# embedded — so the repo layout stopped being load-bearing for this build when they replaced the
-# linked scenario schema. Alembic/PromptHarness/ (the non-regression suite for Alembic itself) is
-# copied along with the rest of Alembic/ above but never referenced by the build below — inert in
-# the image, same as any other unused source directory.
-
 # Build application in Release mode — InsideDockerBuild skips
 # Directory.Build.targets' host-side .env.versions generation, which can't see
 # sibling projects here.
