@@ -1,4 +1,6 @@
 ﻿using System.Collections.Concurrent;
+using System.Text.Json;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -8,10 +10,15 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Manages MCP client connections: pooling and lazy connect. Pool key comes straight from
-/// <see cref="UsesMCPServerAttribute"/> (URI for Http, command path for Stdio) — no external
-/// configuration needed, agents are fully self-contained.
+/// Manages MCP client connections: pooling, lazy connect and recovery from an ended session. Pool key
+/// comes straight from <see cref="UsesMCPServerAttribute"/> (URI for Http, command path for Stdio) — no
+/// external configuration needed, agents are fully self-contained.
 /// </summary>
+/// <remarks>
+/// MCP lets a server end a session at any time and requires the client to open a new one, which the SDK
+/// leaves to its caller: an ended client stays ended. So a pooled client whose session has ended is replaced
+/// once for all its sharers. Only discovery runs again on the new session: a tool call may already have taken effect.
+/// </remarks>
 public class MCPClientRegistryService : IMCPClientRegistryService
 {
     /// <summary>
@@ -26,6 +33,13 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     /// live client per key with no double-connect.
     /// </summary>
     private readonly ConcurrentDictionary<string, MCPClient> mcpClients;
+
+    /// <summary>
+    /// One gate per pool key around the replacement of an ended client. Every conversation sharing that
+    /// server meets the ended session at about the same moment: the first one replaces the client and
+    /// the others adopt the replacement instead of opening a session each.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> reconnectGates;
 
     /// <summary>
     /// Latches true after the first <see cref="Dispose"/>/<see cref="DisposeAsync"/>.
@@ -43,6 +57,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     {
         this.logger = logger;
         mcpClients = new ConcurrentDictionary<string, MCPClient>();
+        reconnectGates = new ConcurrentDictionary<string, SemaphoreSlim>();
     }
 
     /// <summary>
@@ -69,6 +84,10 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         // and every agent declaring that same server wants the session already open.
         if (mcpClients.TryGetValue(poolKey, out MCPClient? pooledMCPClient))
         {
+            // A session the server has already ended serves nobody: it is replaced before being handed out
+            if (pooledMCPClient.IsSessionEnded)
+                return await ReconnectAsync(serverAttribute, pooledMCPClient);
+
             logger.LogDebug("Reusing existing MCP client for: {Key}", poolKey);
             return pooledMCPClient;
         }
@@ -98,6 +117,168 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         {
             logger.LogError(ex, "Failed to connect to MCP server: {Key}", poolKey);
             throw new InvalidOperationException($"Failed to connect to MCP server '{poolKey}'", ex);
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<IList<AIFunction>> DiscoverResilientToolsAsync(UsesMCPServerAttribute serverAttribute, CancellationToken cancellationToken = default)
+    {
+        // Each tool remembers the session it was discovered on, so it can tell that session ending from a failure of its own
+        ToolBinding[] toolBindings = await ExecuteWithReconnectAsync(serverAttribute, async mcpClient =>
+        {
+            IList<McpClientTool> discoveredTools = await mcpClient.DiscoverToolsAsync(cancellationToken);
+            return discoveredTools.Select(discoveredTool => new ToolBinding(discoveredTool, mcpClient)).ToArray();
+        });
+
+        return [.. toolBindings.Select(toolBinding => new ReconnectingMCPTool(toolBinding, serverAttribute, this))];
+    }
+
+    /// <summary>
+    /// Runs <paramref name="operation"/> on the pooled client of the declared server. When the operation
+    /// fails because that client's session has ended, the client is replaced and the operation retried
+    /// once. Any other failure propagates, as does a second one. Reserved for operations without effects
+    /// on the server, such as discovery: a call that may already have run there must not run again.
+    /// </summary>
+    private async Task<T> ExecuteWithReconnectAsync<T>(UsesMCPServerAttribute serverAttribute, Func<MCPClient, Task<T>> operation)
+    {
+        MCPClient mcpClient = await GetOrCreateClientAsync(serverAttribute);
+        try
+        {
+            return await operation(mcpClient);
+        }
+        catch (Exception ex) when (mcpClient.IsSessionEnded)
+        {
+            // Only the first caller meeting the ended session sees the server's 404, the others see their call
+            // cancelled: the ended session is the signal, whatever the exception.
+            logger.LogWarning(ex, "MCP session ended for {Key}; reconnecting and retrying once", PoolKey(serverAttribute));
+            MCPClient reconnectedMCPClient = await ReconnectAsync(serverAttribute, mcpClient);
+            return await operation(reconnectedMCPClient);
+        }
+    }
+
+    /// <summary>
+    /// Replaces <paramref name="endedMCPClient"/> in the pool with a client on a new session. Callers queue
+    /// behind the pool key's gate and whoever arrives after the replacement adopts it.
+    /// </summary>
+    private async Task<MCPClient> ReconnectAsync(UsesMCPServerAttribute serverAttribute, MCPClient endedMCPClient)
+    {
+        string poolKey = PoolKey(serverAttribute);
+        SemaphoreSlim reconnectGate = reconnectGates.GetOrAdd(poolKey, _ => new SemaphoreSlim(1, 1));
+
+        await reconnectGate.WaitAsync();
+        try
+        {
+            // A registry being shut down opens no new session, even for a tool still held by a live agent
+            ObjectDisposedException.ThrowIf(disposed, this);
+
+            // Another conversation already replaced the ended client while this one waited at the gate
+            if (mcpClients.TryGetValue(poolKey, out MCPClient? currentMCPClient)
+                && !ReferenceEquals(currentMCPClient, endedMCPClient)
+                && !currentMCPClient.IsSessionEnded)
+            {
+                return currentMCPClient;
+            }
+
+            logger.LogWarning("Replacing the MCP client of {Key}: its session has ended", poolKey);
+
+            // Removed only while it is still the ended one, so a live client pooled meanwhile is never thrown away
+            if (currentMCPClient is not null && mcpClients.TryRemove(new KeyValuePair<string, MCPClient>(poolKey, currentMCPClient)))
+                await currentMCPClient.DisposeAsync();
+
+            // An unreachable server fails here and leaves the key empty: the next caller connects from scratch
+            MCPClient reconnectedMCPClient = await MCPClient.ConnectAsync(serverAttribute, logger);
+            if (mcpClients.TryAdd(poolKey, reconnectedMCPClient))
+                return reconnectedMCPClient;
+
+            // A first connection outside the gate got into the pool meanwhile: that one is shared, this one closed
+            await reconnectedMCPClient.DisposeAsync();
+            return mcpClients[poolKey];
+        }
+        finally
+        {
+            reconnectGate.Release();
+        }
+    }
+
+    /// <summary>A discovered tool paired with the client whose session it calls through.</summary>
+    private sealed record ToolBinding(McpClientTool Tool, MCPClient MCPClient);
+
+    /// <summary>
+    /// An MCP tool an agent can hold for its whole conversation. The agent discovers its tools once, when it
+    /// is created, so a bare tool would stay bound to that session. This one moves to the live session of its
+    /// server when its own has ended and runs the call there, once.
+    /// </summary>
+    private sealed class ReconnectingMCPTool : AIFunction
+    {
+        /// <summary>The pool the tool reconnects through, so every conversation on that server shares one new session.</summary>
+        private readonly MCPClientRegistryService registry;
+
+        /// <summary>The server the tool belongs to.</summary>
+        private readonly UsesMCPServerAttribute serverAttribute;
+
+        /// <summary>
+        /// The tool and session calls currently go through, swapped whole after a reconnect. Two calls racing
+        /// over an ended session both refresh it harmlessly: the pool's gate gives them the same new session.
+        /// </summary>
+        private volatile ToolBinding toolBinding;
+
+        /// <summary>Captures the declaration the model sees from the tool as first discovered.</summary>
+        public ReconnectingMCPTool(ToolBinding discoveredToolBinding, UsesMCPServerAttribute serverAttribute, MCPClientRegistryService registry)
+        {
+            toolBinding = discoveredToolBinding;
+            this.serverAttribute = serverAttribute;
+            this.registry = registry;
+
+            Name = discoveredToolBinding.Tool.Name;
+            Description = discoveredToolBinding.Tool.Description;
+            JsonSchema = discoveredToolBinding.Tool.JsonSchema;
+            ReturnJsonSchema = discoveredToolBinding.Tool.ReturnJsonSchema;
+            JsonSerializerOptions = discoveredToolBinding.Tool.JsonSerializerOptions;
+        }
+
+        /// <inheritdoc/>
+        public override string Name { get; }
+
+        /// <inheritdoc/>
+        public override string Description { get; }
+
+        /// <inheritdoc/>
+        public override JsonElement JsonSchema { get; }
+
+        /// <inheritdoc/>
+        public override JsonElement? ReturnJsonSchema { get; }
+
+        /// <inheritdoc/>
+        public override JsonSerializerOptions JsonSerializerOptions { get; }
+
+        /// <summary>
+        /// Calls the server through a live session: a session the library reports as ended is replaced before
+        /// the call is sent. A call that fails is never sent again, since it may already have taken effect on
+        /// the server. It propagates as it would from the bare tool and the next call finds the new session.
+        /// </summary>
+        protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+        {
+            ToolBinding liveToolBinding = toolBinding.MCPClient.IsSessionEnded
+                ? await RebindToLiveSessionAsync(cancellationToken)
+                : toolBinding;
+
+            return await liveToolBinding.Tool.InvokeAsync(arguments, cancellationToken);
+        }
+
+        /// <summary>
+        /// Moves the tool onto the live session of its server. The new session hands out new tool instances,
+        /// matched back by the name the model called, which MCP makes unique within a server.
+        /// </summary>
+        private async Task<ToolBinding> RebindToLiveSessionAsync(CancellationToken cancellationToken)
+        {
+            toolBinding = await registry.ExecuteWithReconnectAsync(serverAttribute, async mcpClient =>
+            {
+                IList<McpClientTool> discoveredTools = await mcpClient.DiscoverToolsAsync(cancellationToken);
+                McpClientTool discoveredTool = discoveredTools.FirstOrDefault(tool => string.Equals(tool.Name, Name, StringComparison.Ordinal))
+                    ?? throw new InvalidOperationException($"MCP server '{serverAttribute.Command}' no longer advertises tool '{Name}'.");
+                return new ToolBinding(discoveredTool, mcpClient);
+            });
+            return toolBinding;
         }
     }
 
@@ -200,6 +381,13 @@ public class MCPClient : IAsyncDisposable
     /// Matches the pool key used by <see cref="MCPClientRegistryService"/>.
     /// </summary>
     public string ServerLabel { get; }
+
+    /// <summary>
+    /// True once the session behind this client is over — ended by the server, lost with the network or the
+    /// process, or disposed. Such a client never recovers, while a call merely cancelled by its caller leaves
+    /// the session open.
+    /// </summary>
+    public bool IsSessionEnded => mcpClient.Completion.IsCompleted;
 
     /// <summary>
     /// Private: instances come only from <see cref="ConnectAsync"/>, so a wrapper never

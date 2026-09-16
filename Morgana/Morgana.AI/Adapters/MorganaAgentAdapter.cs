@@ -912,8 +912,8 @@ public class MorganaAgentAdapter
 
     /// <summary>
     /// Discovers tools from a single MCP server. Tools retain server-declared names and schema
-    /// untouched — <see cref="McpClientTool"/> already is an <see cref="AIFunction"/>, so no
-    /// wrapping or conversion is applied.
+    /// untouched and survive the server ending its session for the whole life of the agent, which
+    /// discovers them only once, at creation.
     /// </summary>
     /// <param name="serverAttribute">Attribute declaring the MCP server (transport, command, args)</param>
     /// <returns>Server's tools as AIFunctions</returns>
@@ -921,8 +921,7 @@ public class MorganaAgentAdapter
     {
         logger.LogInformation("Registering MCP tools from server: {ServerAttributeCommand}", serverAttribute.Command);
 
-        MCPClient mcpClient = await imcpClientRegistryService.GetOrCreateClientAsync(serverAttribute);
-        IList<McpClientTool> mcpTools = await mcpClient.DiscoverToolsAsync();
+        IList<AIFunction> mcpTools = await imcpClientRegistryService.DiscoverResilientToolsAsync(serverAttribute);
 
         // A reachable server that advertises zero tools is not an error (it may expose
         // none yet, or only prompts/resources): warn for visibility and return — there is
@@ -933,7 +932,7 @@ public class MorganaAgentAdapter
             return [];
         }
 
-        foreach (McpClientTool mcpTool in mcpTools)
+        foreach (AIFunction mcpTool in mcpTools)
             logger.LogInformation("Registered MCP tool: {McpToolName}", mcpTool.Name);
 
         logger.LogInformation("Successfully registered {McpToolsCount} MCP tools from {ServerAttributeCommand}", mcpTools.Count, serverAttribute.Command);

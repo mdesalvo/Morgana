@@ -222,7 +222,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `HandlesIntentAgentRegistryService` | `IAgentRegistryService` | Discovers agents by attribute; bidirectional intent validation; validates `[ConsultsAgent]` |
 | `RequiresLLMTierValidationService` | `ILLMTierValidationService` | Every agent must declare a tier the active provider configures |
 | `ProvidesToolForIntentRegistryService` | `IToolRegistryService` | Discovers tools; warns on orphans; errors on duplicates |
-| `MCPClientRegistryService` | `IMCPClientRegistryService` | MCP connection pool keyed by URI or `stdio:{command}` |
+| `MCPClientRegistryService` | `IMCPClientRegistryService` | MCP connection pool keyed by URI or `stdio:{command}`. A client the library reports ended is replaced; only discovery is retried, never a tool call |
 | `SQLiteConversationPersistenceService` | `IConversationPersistenceService` | Per-conversation SQLite: encrypted session BLOBs, the shared-context registry |
 | `SQLiteRateLimitService` | `IRateLimitService` | Sliding window per minute, hour and day. **Fails open** |
 | `SQLiteDustLimitService` | `IDustLimitService` | Owns **every** dust question asked anywhere — no caller does the arithmetic itself. Thresholds 70%, 90%, lockout. **Fails open** |
