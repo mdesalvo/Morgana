@@ -63,6 +63,19 @@ public sealed class ConsoleUiService
     /// </summary>
     private readonly List<DisplayedMessage> history = [];
 
+    /// <summary>
+    /// The rows of the first <see cref="historyRowsMessageCount"/> messages of <see cref="history"/>, wrapped at
+    /// <see cref="historyRowsWidth"/>. History only grows, so a frame renders just the messages added since the
+    /// last one: a keystroke costs the prompt alone, whatever the length of the conversation.
+    /// </summary>
+    private readonly List<IRenderable> historyRows = [];
+
+    /// <summary>How many messages of <see cref="history"/> are already rendered into <see cref="historyRows"/>.</summary>
+    private int historyRowsMessageCount;
+
+    /// <summary>Terminal width <see cref="historyRows"/> was wrapped at; a resize to another width renders the history again.</summary>
+    private int historyRowsWidth = -1;
+
     /// <summary>Thread-safe queue of messages posted by <see cref="WebhookReceiverService"/> awaiting render.</summary>
     private readonly Channel<ChannelMessage> incoming = Channel.CreateUnbounded<ChannelMessage>();
 
@@ -651,19 +664,18 @@ public sealed class ConsoleUiService
             inputRows = inputRows.GetRange(inputRows.Count - bodyHeight, bodyHeight);
         }
 
-        // Materialise the whole conversation as single rows, then take a window of it. The input
-        // row(s) are NOT part of the stream: they stay pinned at the bottom (the sacred prompt),
-        // so the history gets whatever height the input leaves free.
-        List<IRenderable> contentRows = [];
-        foreach (DisplayedMessage message in history)
-            contentRows.AddRange(RenderMessageRows(message, termWidth));
+        // The conversation as single rows, then a window of it. The input row(s) are NOT part of the
+        // stream: they stay pinned at the bottom (the sacred prompt), so the history gets whatever
+        // height the input leaves free.
+        RenderNewHistoryRows(termWidth);
+        List<IRenderable> contentRows = historyRows;
 
         int contentHeight = Math.Max(0, bodyHeight - inputRows.Count);
 
         // Anchor the window. scrollOffset counts rows up from the bottom; clamp it to the live
         // content so a resize or a shorter conversation can't strand the viewport off the end.
         // Scrolling is only enabled at rest (see ReadKeysLoop), so during a turn the offset is 0
-        // and this pins to the bottom — the previous live behaviour, unchanged.
+        // and this pins to the bottom.
         int maxOffset = Math.Max(0, contentRows.Count - contentHeight);
         scrollOffset = Math.Clamp(scrollOffset, 0, maxOffset);
         int windowEnd = contentRows.Count - scrollOffset;
@@ -679,6 +691,24 @@ public sealed class ConsoleUiService
             rows.Add(contentRows[i]);
         rows.AddRange(inputRows);
         return new Rows(rows);
+    }
+
+    /// <summary>
+    /// Brings <see cref="historyRows"/> up to date with <see cref="history"/> at <paramref name="termWidth"/>:
+    /// only the messages committed since the previous frame are rendered, unless the width changed.
+    /// Must be called under <see cref="renderLock"/>.
+    /// </summary>
+    private void RenderNewHistoryRows(int termWidth)
+    {
+        if (historyRowsWidth != termWidth)
+        {
+            historyRows.Clear();
+            historyRowsMessageCount = 0;
+            historyRowsWidth = termWidth;
+        }
+
+        for (; historyRowsMessageCount < history.Count; historyRowsMessageCount++)
+            historyRows.AddRange(RenderMessageRows(history[historyRowsMessageCount], termWidth));
     }
 
     /// <summary>

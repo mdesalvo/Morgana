@@ -30,9 +30,11 @@ server-side**, even were a future Rune to claim them — which is why the aggres
 
 ## Lifecycle
 
-Logging is cleared, Kestrel starts listening, the webhook receiver is wired to the UI queue, the
-conversation is opened with the handshake, then `RunAsync` blocks on the Live loop until `/quit` or
-`Esc`. A `finally` ends the conversation and stops the host.
+Logging is cleared, Kestrel starts listening, then `ConversationLifecycleService` wires the webhook
+receiver to the UI queue, opens the conversation with the handshake (retried at
+`MorganaStartRetryPolicy`'s pace while Morgana is unreachable) and blocks on the Live loop until
+`/quit` or `Esc`. A `finally` ends the conversation and stops the host. The webhook accepts only
+deliveries for the conversation on screen and answers 404 to any other.
 
 ## Authentication
 
