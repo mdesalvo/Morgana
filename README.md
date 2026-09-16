@@ -22,14 +22,14 @@ The system is powered by **Microsoft.Agents.AI**, enabling seamless integration 
 Morgana **reimagines conversational AI** through 5 foundational pillars that **work in harmony** to deliver an **orchestration framework** that is powerful yet **remarkably simple to configure**.
 
 <p align="center">
-  <a href="#-morgana-actor-system">🎭 Actor System</a> |
-  <a href="#-morgana-agent-system">🤖 Agent System</a> |
-  <a href="#-morgana-prompt-system">📝 Prompt System</a> |
-  <a href="#-morgana-context-system">💾 Context System</a> |
-  <a href="#-morgana-channel-system">📡 Channel System</a>
+  <a href="#-actor-system">🎭 Actor System</a> |
+  <a href="#-agent-system">🤖 Agent System</a> |
+  <a href="#-prompt-system">📝 Prompt System</a> |
+  <a href="#-context-system">💾 Context System</a> |
+  <a href="#-channel-system">📡 Channel System</a>
 </p>
 
-### 🎭 Morgana Actor System
+### 🎭 Actor System
 
 <details>
 <summary><i>Resilient multi-channel orchestration through Akka.NET message-driven architecture</i></summary>
@@ -89,7 +89,7 @@ graph LR
 
 </details>
 
-### 🤖 Morgana Agent System
+### 🤖 Agent System
 
 <details>
 <summary><i>Declarative specialization with automatic discovery and dynamic capabilities (MCP + A2A)</i></summary>
@@ -150,7 +150,7 @@ A colleague living in the same installation needs nothing configured: that traff
 
 </details>
 
-### 📝 Morgana Prompt System
+### 📝 Prompt System
 
 <details>
 <summary><i>First-class artifacts with layered personality architecture and structured behavioral policies</i></summary>
@@ -172,7 +172,7 @@ Prompts also define **Global Policies** that are automatically composed into age
 
 </details>
 
-### 💾 Morgana Context System
+### 💾 Context System
 
 <details>
 <summary><i>Private by default, self-synchronizing where it matters</i></summary>
@@ -185,7 +185,7 @@ Conversations survive restarts and agent handoffs without losing this context. U
 
 </details>
 
-### 📡 Morgana Channel System
+### 📡 Channel System
 
 <details>
 <summary><i>One brain, every surface: rich where it can be, plain where it must be</i></summary>
@@ -251,7 +251,7 @@ Reaching Morgana from a browser does not require landing on Cauldron: it publish
 <script src="https://your-cauldron-host/widget/morgana-widget.js" defer></script>
 ```
 
-No parameters: the loader reads its own `src` to learn which Cauldron to open, so a copied snippet points back at the deployment it came from. Closed, it is a floating pill carrying Morgana's animated face; opened, a sandboxed `<iframe>` running the **real** Cauldron chat: streaming, rich cards, quick replies, dust gauge. A closed shadow root keeps the two stylesheets from reaching each other while the iframe keeps the conversation on Cauldron's own origin, unreadable from the host page. Framing stays closed until a site is listed in `Cauldron:Widget:AllowedEmbedOrigins`.
+No parameters: it reads its own `src` to learn which Cauldron to open, so a copied snippet points back at the deployment it came from. Closed, it is a floating pill carrying Morgana's animated face; opened, a sandboxed `<iframe>` running the **real** Cauldron chat: streaming, rich cards, quick replies, dust gauge. A closed shadow root keeps the two stylesheets from reaching each other while the iframe keeps the conversation on Cauldron's own origin, unreadable from the host page. Framing stays closed until a site is listed in `Cauldron:Widget:AllowedEmbedOrigins`.
 </details>
 
 These pillars are argued at length in the [**Morgana Handbook**](https://mdesalvo.github.io/Morgana/Morgana-Handbook.html).
