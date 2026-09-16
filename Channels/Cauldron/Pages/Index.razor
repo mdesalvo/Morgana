@@ -237,6 +237,10 @@
                 }
             }
         }
+        catch (OperationCanceledException)
+        {
+            // The circuit went away while Morgana was still unreachable: nobody is left to tell
+        }
         catch (Exception ex)
         {
             ChatStateService.AddErrorBanner($"Critical initialization error: {ex.Message}", "critical_initialization_failed", 30);

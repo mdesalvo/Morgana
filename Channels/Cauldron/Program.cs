@@ -1,6 +1,7 @@
 using Cauldron.Handlers;
 using Cauldron.Interfaces;
 using Cauldron.Services;
+using Microsoft.AspNetCore.SignalR.Client;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -55,6 +56,10 @@ builder.Services.AddSingleton<ILogger>(sp =>
 // SignalR client service for real-time communication with Morgana backend
 // Manages WebSocket connection, automatic reconnection and message routing
 builder.Services.AddScoped<SignalRService>();
+
+// Pace of the attempts to reach Morgana's hub, at first connection and after a drop
+// Singleton: it holds no state, every circuit reads the same schedule
+builder.Services.AddSingleton<IRetryPolicy, MorganaHubRetryPolicy>();
 
 // Dynamic configuration-based landing message service
 // Selects a random welcome message during the "magic sparkle" loading
