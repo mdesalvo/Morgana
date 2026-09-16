@@ -31,15 +31,14 @@ public sealed class MorganaClientService
     /// (<c>channelName=grimoire</c>, <c>deliveryMode=webhook</c>, full TTY capability
     /// profile, callback URL).
     /// </summary>
-    public async Task<string> StartConversationAsync(CancellationToken cancellationToken = default)
+    /// <param name="candidateConversationId">The id proposed to Morgana; the server is source of truth, so Grimoire uses the one returned.</param>
+    /// <param name="cancellationToken">Abandons the handshake when the process is stopping.</param>
+    public async Task<string> StartConversationAsync(string candidateConversationId, CancellationToken cancellationToken = default)
     {
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
 
-        // We mint a candidate id ("N" = 32-char hex, no dashes — matches Morgana's
-        // conversation id shape), but the server is source of truth: whatever it returns
-        // on the response is what Grimoire will use from this point on.
         StartConversationRequest body = new(
-            ConversationId: Guid.NewGuid().ToString("N"),
+            ConversationId: candidateConversationId,
             ChannelMetadata: GrimoireChannelMetadata.Build(callbackUrl));
 
         HttpResponseMessage response = await httpClient.PostAsJsonAsync(

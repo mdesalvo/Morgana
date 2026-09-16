@@ -27,6 +27,11 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
   - After a reconnection to Morgana the conversation groups were never joined again, so replies went to a group this client had left: the typing indicator stayed on screen and the input stayed locked until a reload
   - The connection to Morgana was given up for good after about 17 seconds of reconnection attempts, so any longer outage (e.g: a Morgana redeploy) left every open chat offline until a reload
   - A Morgana unreachable at page load showed an error banner and was never tried again, leaving the chat offline until a reload
+cioe- **Grimoire (4)**
+  - A message arriving just as the typewriter finished a reply, such as a dust warning, could land in the conversation above the reply it follows
+  - Every typewriter tick went through the whole conversation again: the cost of each tick grew with the length of the chat
+  - A Morgana unreachable at startup ended Grimoire with an error and was never tried again
+  - Any delivery reaching Grimoire's callback was shown on screen, even one meant for another conversation such as an abandoned start attempt or a previous run on the same port
 
 ### 🚀 Future Enablement
 - **A federation of Morgana** — every installation already describes itself completely on an open card, so nothing stands between today and a **directory of peers**: point a Morgana at a list of addresses and its agents discover, in one pass, every competence the federation can answer for. The pieces are all published; what is left is the collecting

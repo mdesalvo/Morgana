@@ -55,6 +55,19 @@ public sealed class ConsoleUiService
     private readonly List<DisplayedMessage> history = [];
 
     /// <summary>
+    /// The rows of the first <see cref="historyRowsMessageCount"/> messages of <see cref="history"/>, wrapped at
+    /// <see cref="historyRowsWidth"/>. History only grows, so a frame renders just the messages added since the
+    /// last one: a typewriter tick costs the streaming pane alone, whatever the length of the conversation.
+    /// </summary>
+    private readonly List<IRenderable> historyRows = [];
+
+    /// <summary>How many messages of <see cref="history"/> are already rendered into <see cref="historyRows"/>.</summary>
+    private int historyRowsMessageCount;
+
+    /// <summary>Terminal width <see cref="historyRows"/> was wrapped at; a resize to another width renders the history again.</summary>
+    private int historyRowsWidth = -1;
+
+    /// <summary>
     /// Single FIFO queue for everything Morgana pushes over the webhook surface — both full
     /// <see cref="ChannelMessage"/>s (<c>/morgana-hook</c>) and incremental stream chunks
     /// (<c>/morgana-hook/chunk</c>) land here as <see cref="InboundEvent"/>s. Unifying the two
@@ -121,6 +134,12 @@ public sealed class ConsoleUiService
 
     /// <summary>Active typewriter timer, or null when no streaming session is in flight.</summary>
     private Timer? typewriterTimer;
+
+    /// <summary>
+    /// Identifies the streaming session the running timer belongs to. Disposing a timer does not recall
+    /// a tick already queued, so a tick carrying an older session must find nothing to do.
+    /// </summary>
+    private int typewriterSession;
 
     /// <summary>Per-tick reveal cadence in milliseconds, read once from configuration at startup.</summary>
     private readonly int streamingTickMilliseconds;
@@ -373,24 +392,26 @@ public sealed class ConsoleUiService
         if (typewriterTimer is not null)
             return;
 
-        // Fire immediately (dueTime=0) and then every streamingTickMilliseconds. The first tick
-        // takes renderLock again — the lock is reentrant-safe via System.Threading.Lock semantics
-        // is NOT true; Lock is NOT reentrant, so the tick MUST run on a different thread.
-        // Timer callbacks always run on the threadpool, never on the calling thread, so we're safe.
-        typewriterTimer = new Timer(_ => TypewriterTick(ctx), null, 0, streamingTickMilliseconds);
+        // The first tick fires at once on the thread pool, where it takes renderLock after this caller has released it
+        int session = ++typewriterSession;
+        typewriterTimer = new Timer(_ => TypewriterTick(ctx, session), null, 0, streamingTickMilliseconds);
     }
 
     /// <summary>
     /// Reveals up to <see cref="streamingTickChars"/> characters from <see cref="streamingPending"/>
-    /// into <see cref="streamingDisplayed"/> and refreshes the UI. When the buffer drains AND finals
+    /// into <see cref="streamingDisplayed"/> and refreshes the UI. When the buffer drains and finals
     /// have arrived (<see cref="streamingComplete"/>), commits all deferred
     /// <see cref="pendingFinalMessages"/> in order and tears the session down.
     /// </summary>
-    private void TypewriterTick(LiveDisplayContext ctx)
+    /// <remarks>The commit happens under the same lock as an arriving message, so a message landing meanwhile is committed after the reply it follows.</remarks>
+    private void TypewriterTick(LiveDisplayContext ctx, int session)
     {
-        List<ChannelMessage>? toCommit = null;
         lock (renderLock)
         {
+            // A tick queued before its session was torn down: the live display may already be gone
+            if (typewriterTimer is null || session != typewriterSession)
+                return;
+
             if (streamingPending.Length > 0)
             {
                 int charsToTake = Math.Min(streamingTickChars, streamingPending.Length);
@@ -406,17 +427,12 @@ public sealed class ConsoleUiService
             if (!streamingComplete || pendingFinalMessages.Count == 0)
                 return;
 
-            toCommit = [.. pendingFinalMessages];
-            pendingFinalMessages.Clear();
             streamingComplete = false;
             streamingDisplayed = string.Empty;
             StopTypewriter();
+            while (pendingFinalMessages.TryDequeue(out ChannelMessage? pendingFinalMessage))
+                CommitFinalMessage(ctx, pendingFinalMessage);
         }
-
-        // Commit outside the lock — CommitFinalMessage takes the lock itself and we don't want
-        // to acquire it twice (System.Threading.Lock is not reentrant).
-        foreach (ChannelMessage msg in toCommit)
-            CommitFinalMessage(ctx, msg);
     }
 
     /// <summary>Disposes <see cref="typewriterTimer"/> and clears the reference. Must be called under <see cref="renderLock"/>.</summary>
@@ -448,17 +464,16 @@ public sealed class ConsoleUiService
             }
 
             // No active typewriter — go straight to history.
+            CommitFinalMessage(ctx, message);
+            return exitRequested;
         }
-
-        CommitFinalMessage(ctx, message);
-        return exitRequested;
     }
 
     /// <summary>
     /// Commits a final <see cref="ChannelMessage"/> to history, updates the dust gauge / header /
     /// dead-state latch and refreshes the live view. Invoked either inline by
     /// <see cref="HandleInboundMessage"/> (no streaming) or by <see cref="TypewriterTick"/> once
-    /// the buffer drains.
+    /// the buffer drains. Must be called under <see cref="renderLock"/>.
     /// </summary>
     private void CommitFinalMessage(LiveDisplayContext ctx, ChannelMessage message)
     {
@@ -466,84 +481,80 @@ public sealed class ConsoleUiService
         // own colour even on the farewell line that carries AgentCompleted=true.
         string messageSpeaker = string.IsNullOrWhiteSpace(message.AgentName) ? "Morgana" : message.AgentName;
 
-        lock (renderLock)
+        history.Add(new DisplayedMessage(messageSpeaker, message.Text, RowColor(message, messageSpeaker), message.RichCard));
+
+        // On agent completion append a base-Morgana courtesy line — same pattern
+        // as Cauldron's ChatStateService.AddCompletionMessageIfNeeded.
+        if (message.AgentCompleted && IsSpecializedAgent(message.AgentName))
         {
-
-            history.Add(new DisplayedMessage(messageSpeaker, message.Text, RowColor(message, messageSpeaker), message.RichCard));
-
-            // On agent completion append a base-Morgana courtesy line — same pattern
-            // as Cauldron's ChatStateService.AddCompletionMessageIfNeeded.
-            if (message.AgentCompleted && IsSpecializedAgent(message.AgentName))
-            {
-                string completion = string.Format(agentExitTemplate, message.AgentName);
-                history.Add(new DisplayedMessage("Morgana", completion, MorganaColor));
-            }
-
-            // Revert the sticky header to Morgana on completion so the next user
-            // turn doesn't render under the outgoing agent's colour.
-            currentSpeaker = message.AgentCompleted || string.IsNullOrWhiteSpace(message.AgentName)
-                ? "Morgana"
-                : message.AgentName;
-
-            // Refresh the header gauge from ANY metadata-bearing message. The main
-            // assistant response carries the pre-delivery estimate; the trailing
-            // warning/exhaustion (same turn, moments later) carries the AUTHORITATIVE
-            // post-send level. For Grimoire's full capability profile the channel
-            // adapter short-circuits and the two values usually coincide, but we still
-            // honour the trailing reading so that any future change (an experimental
-            // server-side post-processing pass, a future Grimoire variant with a tighter
-            // budget) snaps the gauge to the truthful post-send number without any code
-            // change here. Spectre's diffing makes an unchanged segment an invisible no-op.
-            if (message.ConversationMetadata?.DustLevel is { } level)
-            {
-                // Truncate toward zero, don't round: a sub-1% residual reads as 0% — that
-                // swallowed fraction is the slack that funds per-channel presentation
-                // messages and the let-it-finish turn.
-                int dustLevel = Math.Clamp((int)(level * 100), 0, 100);
-                // Scale color with depletion: mirrors Cauldron DustMeter thresholds (>30% ok, >10% low, ≤10% critical).
-                string dustColor = level > 0.30 ? DustColor : level > 0.10 ? DustLowColor : DustCriticalColor;
-                _dustSegment = $"   [grey54]dust[/] [bold {dustColor}]{dustLevel}%[/]";
-            }
-
-            // Terminal lockout. Morgana proactively pushes this at end of turn
-            // (same ErrorReason as the doomed-next-send path), so the user sees
-            // it BEFORE wasting a keystroke. Morgana's text says "start a new
-            // one to keep going" — true for Cauldron, NOT for Grimoire, which has no
-            // in-process restart. So latch a one-way dead state: the red banner
-            // line above stays as Morgana's canonical word and BuildInputRows
-            // overrides the prompt with a Grimoire-honest "quit and relaunch" hint.
-            if (string.Equals(message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal))
-            {
-                conversationDead = true;
-                currentInput = string.Empty; // discard any half-typed doomed line
-                cursorPosition = 0;
-                // Tear down any quick replies a same-turn agent message already activated:
-                // the dead latch suppresses them on both the render and input gates anyway,
-                // but clearing the backing state makes "game over" explicit rather than masked.
-                quickReplyActive = false;
-                activeQuickReplies = null;
-            }
-
-            // Quick replies turn the bottom line INTO the prompt for this turn: instead of
-            // freeing the text input, enter "QR mode" where the offered options ARE the prompt
-            // and ReadKeysLoop drives a selection over them. Mirrors Cauldron locking its
-            // textarea while quick replies are pending. Suppressed once the conversation is
-            // dust-dead — the dead latch wins, there's nothing left to branch into.
-            if (!conversationDead && message.QuickReplies is { Count: > 0 })
-            {
-                activeQuickReplies = message.QuickReplies;
-                quickReplyIndex = 0;
-                quickReplyActive = true;
-            }
-
-            // Release the input gate: ReadKeysLoop was swallowing keystrokes until
-            // this first webhook delivery landed. (No-op once conversationDead:
-            // ReadKeysLoop keeps swallowing on the dead latch regardless. In QR mode the
-            // text input stays suspended too, but via quickReplyActive, not this flag.)
-            awaitingResponse = false;
-            ctx.UpdateTarget(BuildLayout());
-            ctx.Refresh();
+            string completion = string.Format(agentExitTemplate, message.AgentName);
+            history.Add(new DisplayedMessage("Morgana", completion, MorganaColor));
         }
+
+        // Revert the sticky header to Morgana on completion so the next user
+        // turn doesn't render under the outgoing agent's colour.
+        currentSpeaker = message.AgentCompleted || string.IsNullOrWhiteSpace(message.AgentName)
+            ? "Morgana"
+            : message.AgentName;
+
+        // Refresh the header gauge from ANY metadata-bearing message. The main
+        // assistant response carries the pre-delivery estimate; the trailing
+        // warning/exhaustion (same turn, moments later) carries the AUTHORITATIVE
+        // post-send level. For Grimoire's full capability profile the channel
+        // adapter short-circuits and the two values usually coincide, but we still
+        // honour the trailing reading so that any future change (an experimental
+        // server-side post-processing pass, a future Grimoire variant with a tighter
+        // budget) snaps the gauge to the truthful post-send number without any code
+        // change here. Spectre's diffing makes an unchanged segment an invisible no-op.
+        if (message.ConversationMetadata?.DustLevel is { } level)
+        {
+            // Truncate toward zero, don't round: a sub-1% residual reads as 0% — that
+            // swallowed fraction is the slack that funds per-channel presentation
+            // messages and the let-it-finish turn.
+            int dustLevel = Math.Clamp((int)(level * 100), 0, 100);
+            // Scale color with depletion: mirrors Cauldron DustMeter thresholds (>30% ok, >10% low, ≤10% critical).
+            string dustColor = level > 0.30 ? DustColor : level > 0.10 ? DustLowColor : DustCriticalColor;
+            _dustSegment = $"   [grey54]dust[/] [bold {dustColor}]{dustLevel}%[/]";
+        }
+
+        // Terminal lockout. Morgana proactively pushes this at end of turn
+        // (same ErrorReason as the doomed-next-send path), so the user sees
+        // it BEFORE wasting a keystroke. Morgana's text says "start a new
+        // one to keep going" — true for Cauldron, NOT for Grimoire, which has no
+        // in-process restart. So latch a one-way dead state: the red banner
+        // line above stays as Morgana's canonical word and BuildInputRows
+        // overrides the prompt with a Grimoire-honest "quit and relaunch" hint.
+        if (string.Equals(message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal))
+        {
+            conversationDead = true;
+            currentInput = string.Empty; // discard any half-typed doomed line
+            cursorPosition = 0;
+            // Tear down any quick replies a same-turn agent message already activated:
+            // the dead latch suppresses them on both the render and input gates anyway,
+            // but clearing the backing state makes "game over" explicit rather than masked.
+            quickReplyActive = false;
+            activeQuickReplies = null;
+        }
+
+        // Quick replies turn the bottom line INTO the prompt for this turn: instead of
+        // freeing the text input, enter "QR mode" where the offered options ARE the prompt
+        // and ReadKeysLoop drives a selection over them. Mirrors Cauldron locking its
+        // textarea while quick replies are pending. Suppressed once the conversation is
+        // dust-dead — the dead latch wins, there's nothing left to branch into.
+        if (!conversationDead && message.QuickReplies is { Count: > 0 })
+        {
+            activeQuickReplies = message.QuickReplies;
+            quickReplyIndex = 0;
+            quickReplyActive = true;
+        }
+
+        // Release the input gate: ReadKeysLoop was swallowing keystrokes until
+        // this first webhook delivery landed. (No-op once conversationDead:
+        // ReadKeysLoop keeps swallowing on the dead latch regardless. In QR mode the
+        // text input stays suspended too, but via quickReplyActive, not this flag.)
+        awaitingResponse = false;
+        ctx.UpdateTarget(BuildLayout());
+        ctx.Refresh();
     }
 
     /// <summary>Polls <see cref="Console.KeyAvailable"/> every 25 ms and dispatches keys: in quick-reply mode the arrows move the highlight and Enter sends the choice; otherwise Enter commits (or exits on <c>/quit</c>), Backspace edits, Esc exits, printable chars append to the buffer.</summary>
@@ -959,25 +970,22 @@ public sealed class ConsoleUiService
             inputRows = inputRows.GetRange(inputRows.Count - bodyHeight, bodyHeight);
         }
 
-        // The scrollable content is the whole conversation stream: every history message
-        // (markdown + rich card, memoised per width) followed by the live streaming pane. We
-        // materialise it once — cheap, since each message's rows are cached — then take a window.
-        // The input row(s) are NOT part of the stream: they stay pinned at the bottom (the sacred
-        // prompt), so the content gets whatever height the input leaves free.
-        List<IRenderable> contentRows = [];
-        foreach (DisplayedMessage message in history)
-            contentRows.AddRange(RenderMessageRows(message, termWidth));
-        contentRows.AddRange(BuildStreamingRows(termWidth));
+        // The scrollable content is the whole conversation stream: the history rows followed by the
+        // live streaming pane. The input row(s) are NOT part of the stream: they stay pinned at the
+        // bottom (the sacred prompt), so the content gets whatever height the input leaves free.
+        RenderNewHistoryRows(termWidth);
+        List<IRenderable> streamingRows = BuildStreamingRows(termWidth);
+        int contentRowCount = historyRows.Count + streamingRows.Count;
 
         int contentHeight = Math.Max(0, bodyHeight - inputRows.Count);
 
         // Anchor the window. scrollOffset counts rows up from the bottom of the stream; clamp it
         // to the live content so a resize or a shorter conversation can't strand the viewport off
         // the end. Scrolling is only enabled at rest (see ReadKeysLoop), so during a turn the
-        // offset is 0 and this pins to the bottom — the previous live behaviour, unchanged.
-        int maxOffset = Math.Max(0, contentRows.Count - contentHeight);
+        // offset is 0 and this pins to the bottom.
+        int maxOffset = Math.Max(0, contentRowCount - contentHeight);
         scrollOffset = Math.Clamp(scrollOffset, 0, maxOffset);
-        int windowEnd = contentRows.Count - scrollOffset;
+        int windowEnd = contentRowCount - scrollOffset;
         int windowStart = Math.Max(0, windowEnd - contentHeight);
 
         // Light the header glyphs only when scrolling is actually actionable — don't tease ▲▼
@@ -988,7 +996,7 @@ public sealed class ConsoleUiService
 
         List<IRenderable> rows = new(contentHeight + inputRows.Count);
         for (int i = windowStart; i < windowEnd; i++)
-            rows.Add(contentRows[i]);
+            rows.Add(i < historyRows.Count ? historyRows[i] : streamingRows[i - historyRows.Count]);
         rows.AddRange(inputRows);
         return new Rows(rows);
     }
@@ -1025,26 +1033,35 @@ public sealed class ConsoleUiService
     /// a bold <c>"Who: "</c> prefix on the first row, followed — when the message carries a
     /// <see cref="DisplayedMessage.Card"/> — by the card Spectrized through
     /// <see cref="RichCardTerminalRenderService"/> (separated by one blank row, mirroring
-    /// Cauldron's text-bubble-then-card stacking). The result is memoised on the message keyed by
-    /// <paramref name="termWidth"/> so the typewriter's 15 ms ticks — which re-render the whole
-    /// body — don't re-parse markdown for every history entry on every frame. The cache
-    /// invalidates automatically when the terminal width changes (resize).
+    /// Cauldron's text-bubble-then-card stacking).
     /// </summary>
-    /// <remarks>Mutates <paramref name="message"/>'s cache fields; always invoked under <see cref="renderLock"/> via <see cref="BuildBody"/>.</remarks>
     private List<Markup> RenderMessageRows(DisplayedMessage message, int termWidth)
     {
-        if (message.CachedWidth == termWidth && message.CachedRows is not null)
-            return message.CachedRows;
-
         List<Markup> rows = markdownRenderer.RenderToRows(message.Text, message.Color, $"{message.Who}: ", termWidth);
         if (message.Card is not null)
         {
             rows.Add(new Markup(string.Empty));
             rows.AddRange(richCardRenderer.RenderRichCard(message.Card, message.Color, termWidth));
         }
-        message.CachedRows = rows;
-        message.CachedWidth = termWidth;
         return rows;
+    }
+
+    /// <summary>
+    /// Brings <see cref="historyRows"/> up to date with <see cref="history"/> at <paramref name="termWidth"/>:
+    /// only the messages committed since the previous frame are rendered, unless the width changed.
+    /// Must be called under <see cref="renderLock"/>.
+    /// </summary>
+    private void RenderNewHistoryRows(int termWidth)
+    {
+        if (historyRowsWidth != termWidth)
+        {
+            historyRows.Clear();
+            historyRowsMessageCount = 0;
+            historyRowsWidth = termWidth;
+        }
+
+        for (; historyRowsMessageCount < history.Count; historyRowsMessageCount++)
+            historyRows.AddRange(RenderMessageRows(history[historyRowsMessageCount], termWidth));
     }
 
     /// <summary>
@@ -1197,10 +1214,7 @@ public sealed class ConsoleUiService
 
     /// <summary>
     /// A single history entry: speaker name, raw (markdown) text, the base Spectre colour token
-    /// for the speaker and an optional <see cref="Card"/> rendered beneath the text. Carries a
-    /// per-width memo of the rendered rows so the typewriter's per-tick full-body redraw doesn't
-    /// re-parse markdown/cards for stable history on every frame — see <see cref="RenderMessageRows"/>.
-    /// A class (not a record) because the cache fields are mutated in place after construction.
+    /// for the speaker and an optional <see cref="Card"/> rendered beneath the text.
     /// </summary>
     private sealed class DisplayedMessage(string who, string text, string color, RichCard? card = null)
     {
@@ -1210,12 +1224,6 @@ public sealed class ConsoleUiService
 
         /// <summary>Optional rich card delivered with the message, Spectrized beneath the prose. Null for user echoes, system notices and agent-completion courtesy lines.</summary>
         public RichCard? Card { get; } = card;
-
-        /// <summary>Terminal width the cached rows were wrapped at, or -1 when never rendered.</summary>
-        public int CachedWidth { get; set; } = -1;
-
-        /// <summary>Memoised rendered rows valid for <see cref="CachedWidth"/>, or null when stale.</summary>
-        public List<Markup>? CachedRows { get; set; }
     }
 
     /// <summary>
