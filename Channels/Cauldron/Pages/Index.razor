@@ -4,7 +4,6 @@
 @inject IStreamingService StreamingService
 @inject SignalRService SignalRService
 @inject ILandingMessageService LandingMessageService
-@inject IMarkdownRendererService MarkdownRenderer
 @inject NavigationManager NavigationManager
 @implements IAsyncDisposable
 
@@ -63,7 +62,8 @@
             <div class="temporary-messages-container" aria-live="assertive" aria-relevant="additions">
                 @foreach (ChannelMessage temporaryMessage in ChatStateService.TemporaryMessages)
                 {
-                    <FadingMessage Message="@temporaryMessage"
+                    <FadingMessage @key="temporaryMessage"
+                                   Message="@temporaryMessage"
                                    DurationSeconds="@(temporaryMessage.FadingMessageDurationSeconds ?? 10)"
                                    OnDismissed="@HandleMessageDismissed"/>
                 }
@@ -102,60 +102,12 @@
         else
         {
             <!-- Message list -->
+            @* Keyed by instance, so a row keeps its cached HTML when the typing placeholder is swapped out *@
             @foreach (ChatMessage chatMessage in ChatStateService.ChatMessages)
             {
-                <div class="message @chatMessage.Role"
-                     aria-label="@(chatMessage.Role == "user" ? "You" : chatMessage.AgentName)">
-                    @* Only the assistant side gets an avatar; user messages sit bare on the right *@
-                    @if (chatMessage.Role == "assistant")
-                    {
-                        <img src="images/morgana-avatar.jpg"
-                             alt="@chatMessage.AgentName"
-                             class="message-avatar"
-                             style="border: 2px solid @ChatStateService.GetAvatarBorderColor(chatMessage.AgentName);"/>
-                    }
-                    <div class="message-bubble @(chatMessage.IsStreaming ? "streaming" : "")">
-                        @* A typing row is a placeholder: it holds the spot the real answer
-                           will take, so nothing jumps when the two are swapped. *@
-                        @if (chatMessage.IsTyping)
-                        {
-                            <div class="typing-indicator @(ChatStateService.IsSpecializedAgent(chatMessage.AgentName) ? "specialized" : "base")"
-                                 role="status"
-                                 aria-label="@(chatMessage.AgentName) is typing">
-                                <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
-                                <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
-                                <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
-                            </div>
-                        }
-                        else
-                        {
-                            @* Message content (text) *@
-                            <div class="message-text @(chatMessage.Type == MessageType.Presentation ? "completion-text" : "")">
-                                @MarkdownRenderer.ToHtml(chatMessage.Text)
-                            </div>
-
-                            @* Rich card (if present) *@
-                            @if (chatMessage.RichCard != null)
-                            {
-                                <RichCard Card="@chatMessage.RichCard" />
-                            }
-
-                            @* Quick replies (if present) *@
-                            @* Withheld while streaming: buttons that appear mid-sentence invite
-                               a click on a reply the user has not finished reading. *@
-                            @if (chatMessage is { QuickReplies.Count: > 0, IsStreaming: false })
-                            {
-                                <QuickReplyButton Replies="@chatMessage.QuickReplies"
-                                                  OnSelect="@((reply) => SelectQuickReplyAsync(reply, chatMessage))"
-                                                  IsDisabled="@(chatMessage.SelectedQuickReplyId != null || chatMessage.IsLastHistoryMessage == false)"
-                                                  SelectedReplyId="@chatMessage.SelectedQuickReplyId"/>
-                            }
-
-                            <!-- Message timestamp -->
-                            <div class="message-time">@chatMessage.Timestamp.ToString("HH:mm")</div>
-                        }
-                    </div>
-                </div>
+                <ChatMessageView @key="chatMessage"
+                                 Message="@chatMessage"
+                                 OnQuickReplySelected="@((reply) => SelectQuickReplyAsync(reply, chatMessage))" />
             }
         }
 

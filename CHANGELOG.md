@@ -20,6 +20,10 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
 
 ### 🐛 Fixed
 - **A deployment may bring several plugins** — every `agents.json` found is merged into the domain, instead of the first one discovered silently winning. Two plugins claiming the same intent, or the same prompt id, are refused at startup naming both
+- **Cauldron (3)**
+  - Every typewriter tick redrew the whole conversation, running Markdown and the HTML sanitizer again on every message and every rich card field: the server-side cost grew with the length of the chat
+  - Dismissing a warning banner could hide the one after it without ever removing it, since banners were matched to their components by position: a hidden dust-exhaustion notice left the input locked with no explanation on screen
+  - The typewriter ran on its own thread with no guard against the arrival of the final message, which could append a stray character to the finished reply or throw on the timer thread and bring the whole Cauldron process down
 
 ### 🚀 Future Enablement
 - **A federation of Morgana** — every installation already describes itself completely on an open card, so nothing stands between today and a **directory of peers**: point a Morgana at a list of addresses and its agents discover, in one pass, every competence the federation can answer for. The pieces are all published; what is left is the collecting

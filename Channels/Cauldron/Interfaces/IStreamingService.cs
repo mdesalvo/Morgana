@@ -13,7 +13,7 @@ public interface IStreamingService : IAsyncDisposable
     event Action? OnStateChanged;
 
     /// <summary>
-    /// True if a streaming session is active.
+    /// True while a response is still arriving, so the next complete message is its ending.
     /// </summary>
     bool IsStreaming { get; }
 
@@ -25,7 +25,7 @@ public interface IStreamingService : IAsyncDisposable
 
     /// <summary>
     /// Finalizes the current streaming session with the complete message metadata.
-    /// The typewriter timer continues draining the buffer naturally before cleanup.
+    /// The server's text replaces the streamed one and whatever was still buffered is dropped.
     /// </summary>
     void FinalizeStreaming(ChannelMessage completeMessage);
 }

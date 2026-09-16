@@ -1,0 +1,142 @@
+@namespace Cauldron.Components
+@inject IChatStateService ChatStateService
+@inject IMarkdownRendererService MarkdownRenderer
+
+@*
+    One row of the conversation. The chat page repaints on every typewriter tick, so each row
+    repaints only when its own message changed: an untouched row costs nothing, instead of a
+    Markdown pass plus a sanitizer pass per message per tick.
+*@
+
+<div class="message @Message.Role"
+     aria-label="@(Message.Role == "user" ? "You" : Message.AgentName)">
+    @* Only the assistant side gets an avatar; user messages sit bare on the right *@
+    @if (Message.Role == "assistant")
+    {
+        <img src="images/morgana-avatar.jpg"
+             alt="@Message.AgentName"
+             class="message-avatar"
+             style="border: 2px solid @ChatStateService.GetAvatarBorderColor(Message.AgentName);"/>
+    }
+    <div class="message-bubble @(Message.IsStreaming ? "streaming" : "")">
+        @* A typing row is a placeholder: it holds the spot the real answer
+           will take, so nothing jumps when the two are swapped. *@
+        @if (Message.IsTyping)
+        {
+            <div class="typing-indicator @(ChatStateService.IsSpecializedAgent(Message.AgentName) ? "specialized" : "base")"
+                 role="status"
+                 aria-label="@(Message.AgentName) is typing">
+                <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
+                <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
+                <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6-6.3 4.6 2.3-7-6-4.6h7.6z"/></svg></span>
+            </div>
+        }
+        else
+        {
+            <div class="message-text @(Message.Type == MessageType.Presentation ? "completion-text" : "")">
+                @renderedHtml
+            </div>
+
+            @if (Message.RichCard != null)
+            {
+                <RichCard Card="@Message.RichCard" />
+            }
+
+            @* Withheld while streaming: buttons that appear mid-sentence invite
+               a click on a reply the user has not finished reading. *@
+            @if (Message is { QuickReplies.Count: > 0, IsStreaming: false })
+            {
+                <QuickReplyButton Replies="@Message.QuickReplies"
+                                  OnSelect="@OnQuickReplySelected"
+                                  IsDisabled="@(Message.SelectedQuickReplyId != null || Message.IsLastHistoryMessage == false)"
+                                  SelectedReplyId="@Message.SelectedQuickReplyId"/>
+            }
+
+            <div class="message-time">@Message.Timestamp.ToString("HH:mm")</div>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>
+    /// The message to display. Streaming and quick-reply selection mutate it in place, so the
+    /// same instance arrives again with different content.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public ChatMessage Message { get; set; } = null!;
+
+    /// <summary>
+    /// Raised with the reply the user picked on this message's quick replies.
+    /// </summary>
+    [Parameter]
+    public EventCallback<QuickReply> OnQuickReplySelected { get; set; }
+
+    /// <summary>
+    /// The fields of the message that the markup reads. Two equal snapshots mean the row on
+    /// screen is already current.
+    /// </summary>
+    private readonly record struct DisplayedState(
+        string Text,
+        string AgentName,
+        MessageType Type,
+        bool IsTyping,
+        bool IsStreaming,
+        string? SelectedQuickReplyId,
+        List<QuickReply>? QuickReplies,
+        Morgana.Contracts.RichCard? RichCard);
+
+    /// <summary>
+    /// What the row showed at its last repaint.
+    /// </summary>
+    private DisplayedState displayedState;
+
+    /// <summary>
+    /// The text the cached HTML was produced from, so the Markdown is rendered once per text change.
+    /// </summary>
+    private string? renderedText;
+
+    /// <summary>
+    /// The sanitized HTML of the message text.
+    /// </summary>
+    private MarkupString renderedHtml;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        // The first paint skips the comparison, so its state is recorded once the row is on screen
+        if (firstRender)
+            displayedState = CaptureState();
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Read once: during streaming the typewriter keeps appending to the text concurrently.
+        string text = Message.Text;
+
+        // A typing row has no text to show: the sanitizer pass costs even on an empty string
+        if (!Message.IsTyping && !string.Equals(text, renderedText, StringComparison.Ordinal))
+        {
+            renderedHtml = MarkdownRenderer.ToHtml(text);
+            renderedText = text;
+        }
+    }
+
+    protected override bool ShouldRender()
+    {
+        DisplayedState currentState = CaptureState();
+        if (currentState == displayedState)
+            return false;
+
+        displayedState = currentState;
+        return true;
+    }
+
+    private DisplayedState CaptureState() => new(
+        renderedText ?? string.Empty,
+        Message.AgentName,
+        Message.Type,
+        Message.IsTyping,
+        Message.IsStreaming,
+        Message.SelectedQuickReplyId,
+        Message.QuickReplies,
+        Message.RichCard);
+}

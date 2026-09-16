@@ -30,4 +30,26 @@
     /// </summary>
     [Parameter]
     public Morgana.Contracts.RichCard? Card { get; set; }
+
+    /// <summary>
+    /// The card currently on screen. A card is an immutable contract, so the same instance means
+    /// the same content and every field can skip its Markdown and sanitizer pass.
+    /// </summary>
+    private Morgana.Contracts.RichCard? displayedCard;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        // The first paint skips the comparison, so its card is recorded once it is on screen
+        if (firstRender)
+            displayedCard = Card;
+    }
+
+    protected override bool ShouldRender()
+    {
+        if (ReferenceEquals(Card, displayedCard))
+            return false;
+
+        displayedCard = Card;
+        return true;
+    }
 }
