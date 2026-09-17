@@ -15,8 +15,6 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
 ### 🔄 Changed
 - **`other` intent belongs to the Classifier** — the complement of a domain is no longer declared by every `agents.json`, but described once in the Classifier prompt. The name is reserved: a plugin declaring it is refused
 - **Alembic has a brand new look and layout** — the workbench has been redesigned on Microsoft's **Fluent UI Blazor 5**
-- Updated `Microsoft.Agents.AI` to 1.21.0
-- Updated `Microsoft.Extensions.AI` to 10.10.0
 
 ### 🐛 Fixed
 - **A deployment may bring several plugins** — every `agents.json` found is merged into the domain, instead of the first one discovered silently winning. Two plugins claiming the same intent, or the same prompt id, are refused at startup naming both
@@ -37,6 +35,10 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
   - A Morgana unreachable at startup ended Rune with an error and was never tried again
   - Any delivery reaching Rune's callback was shown on screen, even one meant for another conversation such as an abandoned start attempt or a previous run on the same port
 
+### 📦 Dependencies
+- Updated `Microsoft.Agents.AI` to 1.21.0
+- Updated `Microsoft.Extensions.AI` to 10.10.0
+
 ### 🚀 Future Enablement
 - **A federation of Morgana** — every installation already describes itself completely on an open card, so nothing stands between today and a **directory of peers**: point a Morgana at a list of addresses and its agents discover, in one pass, every competence the federation can answer for. The pieces are all published; what is left is the collecting
 
@@ -52,10 +54,8 @@ Colleagues live in this instance — a remote peer is not declarable yet (see Fu
 - **`ConsultMeFor`** — a new section of domain prompt, stating the territory this desk answers for. It is what a colleague reads before asking
 - **`PeerConsultation`** — a new global policy: what is licit to ask a colleague and how one answers
 
-### 🔄 Changed
+### 📦 Dependencies
 - Updated `Microsoft.Agents.AI` to 1.20.0
-
-### 🐛 Fixed
 
 ### 🚀 Future Enablement
 - **Agents beyond this process** — the asking side already holds a standard `A2AAgent` resolved from a card, so a remote colleague needs a way to declare one (an address, an issuer of its own) rather than new machinery
@@ -80,17 +80,19 @@ Framing itself is **closed by default** — a site may host the widget only once
 
 ### 🔄 Changed
 - **`MorganaChatReducer` replacing `SummarizingChatReducer` as history reducer** — gaining complete control over history reduction strategies while maintaining backward compatibility.
-- Updated `Microsoft.Agents.AI` to 1.19.0
-- Updated `Microsoft.Extensions.AI` to 10.9.0
-- Updated `ModelContextProtocol.Core` to 2.2.0
-- Updated `OllamaSharp` to 5.4.30
-- Updated `OpenTelemetry` to 1.18.0
 
 ### 🐛 Fixed
 - Text welded across tool calls — a turn that calls a tool writes several assistant messages and their texts were concatenated with nothing in between.
 - History losing part of a reply on resume — only the last assistant message of a turn is marked user-facing, so everything written before a tool call vanished from the rendered history while the live reply had shown it.
 - **Cauldron (1)**
   - SignalR presentation race — a fresh conversation's greeting could reach an empty group and be discarded without a trace, since Cauldron joined the group only after the start response returned.
+
+### 📦 Dependencies
+- Updated `Microsoft.Agents.AI` to 1.19.0
+- Updated `Microsoft.Extensions.AI` to 10.9.0
+- Updated `ModelContextProtocol.Core` to 2.2.0
+- Updated `OllamaSharp` to 5.4.30
+- Updated `OpenTelemetry` to 1.18.0
 
 ### 🚀 Future Enablement
 - **Turnkey plugin onboarding at scale** — Alembic turns "write a Morgana domain" from a prompt-engineering exercise into a guided interview, opening the framework to domain experts who have never written a system prompt.
@@ -106,7 +108,6 @@ Framing itself is **closed by default** — a site may host the widget only once
 ### 🔄 Changed
 - GuardActor has been hardened against **social engineering**: now recognizes and refuses attempts to claim false authority over Morgana or to talk her into revealing her own inner workings, even when dressed up as a polite, in-character favor rather than an obvious demand
 - Grimoire and Rune's "thinking hint" is now tinted in the speaker's own colour instead of a flat grey (colour is part of Morgana's identity, not just decoration on the finished reply)
-- Updated `Microsoft.Agents.AI` dependency to 1.17.0
 
 ### 🐛 Fixed
 - A safety block from the LLM provider itself (e.g. a jailbreak attempt caught by Azure's own content filter) is now treated as a genuine violation instead of silently letting the message through
@@ -123,6 +124,9 @@ Framing itself is **closed by default** — a site may host the widget only once
 - **Grimoire/Rune (2)**
   - Raw terminal control bytes (ESC, BEL, ...) in message text or an agent name passed straight through to the TTY unfiltered, letting untrusted text ring the terminal bell or inject ANSI/OSC sequences (rename the terminal title, move the cursor, ...)
   - The terminal's own cursor was never hidden, so it showed up as a stray blinking block wherever Spectre's repaints last left it
+
+### 📦 Dependencies
+- Updated `Microsoft.Agents.AI` dependency to 1.17.0
 
 
 ## [0.26.0] - 2026-08-01
@@ -144,14 +148,16 @@ In practice, the harness **has already surfaced multiple behavioral and authorit
 
 ### 🔄 Changed
 - Removed the keyword-based anti-profanity filter in favor of the complete AI-based guardrail
-- Updated `Microsoft.Agents.AI` dependency to 1.16.0
-- Updated `Microsoft.Extensions.AI` dependency to 10.7.0
-- Updated `ModelContextProtocol.Core` dependency to 2.0.0-rc.1
 
 ### 🐛 Fixed
 - Tool parameters were never described to the model, which had no way to know their meaning and had to guess from their name alone
 - MCP tool schemas were rebuilt lossily on discovery: optional parameters appeared required, nested objects and arrays were flattened and argument values could be silently corrupted
 - The router's per-agent cache was case-sensitive, so an intent whose casing didn't exactly match the classifier's output could spawn a duplicate agent instead of reusing the correct one
+
+### 📦 Dependencies
+- Updated `Microsoft.Agents.AI` dependency to 1.16.0
+- Updated `Microsoft.Extensions.AI` dependency to 10.7.0
+- Updated `ModelContextProtocol.Core` dependency to 2.0.0-rc.1
 
 ### 🚀 Future Enablement
 - **Safe automated prompt optimization** — The presence of an automated regression gateway makes it possible to safely run LLM-powered prompt-refinement loops, letting an external model refactor or compress prompt prose while `PromptHarness` mathematically guarantees no loss in behavior or context.
@@ -172,13 +178,15 @@ A billing FAQ agent runs on the efficient model while a contract-analysis agent 
 - Support **Azure AI Foundry v1** endpoints in AzureOpenAI provider
 
 ### 🔄 Changed
-- **BREAKING — config schema**: `Morgana:LLM:{Provider}` drops the singular `Model`/`DeploymentName` and the provider-level `MagicDust` section in favor of the two-tier `Tiers` map (`Efficiency`/`Performance`) with per-model pricing (existing User Secrets/env deployments must migrate). Local single-model deployments (e.g. Ollama) now declare a single `Efficiency` entry.
-- Updated `Microsoft.Agents.AI` dependency to 1.13.0
-- Updated `ModelContextProtocol.Core` dependency to 1.4.1
-- Update `OllamaSharp` to 5.4.26
+- `Morgana:LLM:{Provider}` drops the singular `Model`/`DeploymentName` and the provider-level `MagicDust` section in favor of the two-tier `Tiers` map (`Efficiency`/`Performance`) with per-model pricing (existing User Secrets/env deployments must migrate). Local single-model deployments (e.g. Ollama) now declare a single `Efficiency` entry.
 
 ### 🐛 Fixed
 - Active quick replies on the last turn (e.g. a farewell prompt) could show up disabled after a page refresh/resume
+
+### 📦 Dependencies
+- Updated `Microsoft.Agents.AI` dependency to 1.13.0
+- Updated `ModelContextProtocol.Core` dependency to 1.4.1
+- Update `OllamaSharp` to 5.4.26
 
 ### 🚀 Future Enablement
 - **Per-intent LLM economics** — with tiers declared per agent and dust attributed per agent+tier, a deployment can now see **which domain costs what and rebalance** (e.g: promote a struggling agent, demote an overserved one) by touching just one attribute and one config entry
@@ -229,12 +237,12 @@ As the budget drains Morgana emits **one-shot advisory warnings at 70% and 90%**
 - Rune sticky-header dust gauge for the TTY channel
 - `morgana.dust.consumed` OpenTelemetry counter (tagged by `llm_role` and conversation) for cost observability
 
-### 🔄 Changed
-- Updated `Microsoft.Agents.AI` dependency to 1.6.2
-
 ### 🐛 Fixed
 - The Cauldron textarea and send button were live during the initial presentation-load window
 - MCP tool registration aborted permanently when a serverless or horizontally-scaled MCP host dropped the session between connect and tool discovery (the MCP specs mandate HTTP 404 on a session-bearing request)
+
+### 📦 Dependencies
+- Updated `Microsoft.Agents.AI` dependency to 1.6.2
 
 ### 🚀 Future Enablement
 - **Adaptive Dust Pricing & Budget Analytics** — With `dust_usage_log` capturing per-call, per-role token economics and the `morgana.dust.consumed` counter feeding OpenTelemetry, operators can build **per-conversation cost dashboards** and graduate from a static `BudgetPerConversation` to **adaptive budgets** tuned per tenant, channel or agent mix — turning the dust model into a data-driven cost-governance lever rather than a fixed ceiling.
@@ -262,9 +270,6 @@ Now every agent loads the shared registry at the start of each turn and merges i
 - Use `OpenTelemetryChatClient` to get automatic `gen_ai.*` telemetry across LLM providers
 - Bump Rune's `MaxMessageLength` advertised budget capability to 500
 - Restyled Morgana's messaging avatar in Cauldron
-- Updated `Microsoft.Agents.AI` dependency to 1.6.1
-- Updated `Microsoft.Extensions.AI` dependency to 10.6.0
-- Updated `ModelContextProtocol.Core` dependency to 1.3.0
 
 ### 🐛 Fixed
 - Make Rune exit cleanly when its host terminal is killed brutally, so the container terminates and docker releases `morgana-network` instead of leaving it attached and tripping `compose down` with "_Resource is still in use_"
@@ -273,6 +278,11 @@ Now every agent loads the shared registry at the start of each turn and merges i
 - Solve memory leak due to unbounded growth of MCP executor cache
 - Solve memory leak due to undisposed OTel spans in `ConversationSupervisorActor.PostStop`
 - Filter intermediate tool-use assistant messages from rendered history (observed on Haiku 4.5)
+
+### 📦 Dependencies
+- Updated `Microsoft.Agents.AI` dependency to 1.6.1
+- Updated `Microsoft.Extensions.AI` dependency to 10.6.0
+- Updated `ModelContextProtocol.Core` dependency to 1.3.0
 
 ### 🚀 Future Enablement
 - **LLM Provider Cost Optimization via Cache Analytics** — With system prompt caching now active across Anthropic (and extensible to Azure OpenAI and other providers), Morgana can surface **cache performance dashboards** showing hit rate, token savings per provider, cost-per-conversation trends and cache density metrics. Combined with OpenTelemetry's `gen_ai.usage.cache_*` attributes, operators gain data-driven visibility into which LLM providers and prompt strategies deliver best cost-performance, unlocking competitive cost optimization across multi-provider deployments.
@@ -300,10 +310,6 @@ This release introduces **Rune**, a second reference channel that brings Morgana
 - **BREAKING**: The `Morgana:CauldronURL` setting has been removed from `appsettings.json`, `docker-compose.yml` and all references; the CORS policy (renamed from `AllowBlazor` to `Channel`) now uses `SetIsOriginAllowed(_ => true)` in place of a single-origin whitelist. JWT authentication is the sole trust boundary at the channel edge — any origin may reach Morgana, but only signed tokens from declared issuers are accepted
 - **BREAKING**: The `Morgana:Authentication:Enabled` toggle has been removed. Authentication is now unconditionally enforced: every request must carry a valid bearer token, there is no config flag to bypass it. Migration: delete the `Enabled` key from your `Morgana:Authentication` section; any deployment that relied on `Enabled: false` for development must now mint valid JWTs (or swap `IAuthenticationService` for a dev-only stub in DI)
 - **BREAKING**: JWT authentication now uses **per-issuer signing keys**. `Morgana:Authentication:SymmetricKey` and `Morgana:Authentication:ValidIssuers[]` have been replaced by `Morgana:Authentication:Issuers[]`, an array of `{ Name, SymmetricKey }` entries. `JWTAuthenticationService` peeks the `iss` claim, looks up the matching entry and validates the signature with that issuer's own key; unknown issuers are rejected outright. Migration: replace the flat `{ SymmetricKey, ValidIssuers: ["cauldron"] }` pair with `{ Issuers: [{ "Name": "cauldron", "SymmetricKey": "..." }] }`
-- Updated `Microsoft.Agents.AI` dependency to 1.2.0
-- Updated `Microsoft.Extensions.AI` dependency to 10.5.0
-- Updated `ModelContextProtocol.Core` dependency to 1.2.0
-- Updated `OllamaSharp` dependency to v5.4.25
 
 ### 🐛 Fixed
 - Race condition on conversation resume where `MorganaController` created the `ConversationSupervisorActor` directly in parallel to `ConversationManagerActor.HandleCreateConversationAsync`, causing an `InvalidActorNameException` ("Actor name supervisor-... is not unique"), killing the manager and leaving the conversation without registered channel metadata
@@ -315,6 +321,12 @@ This release introduces **Rune**, a second reference channel that brings Morgana
 - `RouterActor.HandleAgentStreamChunk` fallback branch for orphan stream chunks used `Context.Parent.Tell(chunk)`, which resolved to the `/user` guardian (the router is created flat under the guardian, not as a child of the supervisor) and silently dropped the chunk to dead letters
 - Cauldron circuit crashed with `InvalidOperationException: Collection was modified; enumeration operation may not execute` when SignalR `ReceiveMessage` / `ReceiveStreamChunk` callbacks mutated `ChatStateService.ChatMessages` on the SignalR dispatch thread while Blazor's `BuildRenderTree` enumerated the same list on the circuit thread
 - History resume could reconcile quick replies from the previous assistant turn onto a later rich card, while dropping the intermediate assistant text entirely
+
+### 📦 Dependencies
+- Updated `Microsoft.Agents.AI` dependency to 1.2.0
+- Updated `Microsoft.Extensions.AI` dependency to 10.5.0
+- Updated `ModelContextProtocol.Core` dependency to 1.2.0
+- Updated `OllamaSharp` dependency to v5.4.25
 
 ### 🚀 Future Enablement
 - **Custom channels (IVR, SMS, RCS, Twilio, WhatsApp, plain HTTP client, …)** — With the `IChannelService` abstraction, the `AdaptingChannelService` decorator and the persistence-backed capability handshake all in place, a new outbound channel can plug in declaring its own capability budget at conversation start and get automatic degradation of any rich message without any change to producers, actors or prompts
@@ -348,11 +360,13 @@ This release completes the **Cauldron extension points** model: `IChatStateServi
 - Cauldron settings moved under `Cauldron` root key for clearer semantic (was `Morgana`)
 - Improved OpenTelemetry observability: accurate turn span, metrics and exception recording
 - Improved health check endpoint with actor system liveness detection
-- Updated `Microsoft.Agents.AI` dependency to 1.0.0
-- Updated `ModelContextProtocol.Core` dependency to 1.1.0
 
 ### 🐛 Fixed
 - `Index.razor@isSending` not being reset on HTTP error response in `SendMessageAsync`, which permanently blocked user input after a failed send
+
+### 📦 Dependencies
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0
+- Updated `ModelContextProtocol.Core` dependency to 1.1.0
 
 ### 🚀 Future Enablement
 - **Secure multi-tenant deployment** — With JWT authentication in place, Morgana is ready for scenarios where multiple Cauldron instances (or third-party frontends) connect to a shared Morgana backend, each identified by their token claims.
@@ -377,10 +391,10 @@ This release completes the **Morgana.AI extension points** model: `IGuardRailSer
 - `GuardActor`, `ClassifierActor` and `ConversationSupervisorActor` have been refactored to delegate behavioural logic entirely to their respective extension point services — actors are now thin orchestration shells with no embedded LLM or business logic.
 - Added setting `Morgana:ActorSystem:EnableGuardrail` as general switch for guardrail aspects (e.g: for Ollama development scenarios)
 - Added setting `Morgana:ActorSystem:TimeoutSeconds` to tweak default actors/agents timeout (e.g: for Ollama development scenarios)
+
+### 📦 Dependencies
 - Updated `Azure.AI.OpenAI` dependency to 2.9.0-beta.1
 - Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.4
-
-### 🐛 Fixed
 
 ### 🚀 Future Enablement
 - **Morgana.AI Extensibility** — Morgana.AI becomes a fully customizable conversational AI framework where the default implementations ship as sensible out-of-the-box baselines.
@@ -412,33 +426,20 @@ This release sets the milestone of distributing **Morgana.AI** as **NuGet** pack
 - Array-based exporter configuration supporting multiple simultaneous exporters
 - Built-in exporters: `console` (development), `otlp` (Jaeger, Grafana Tempo, Azure Monitor, Datadog, ...)
 
-```json
-{
-  "Morgana": {
-    "OpenTelemetry": {
-      "Enabled": true,
-      "ServiceName": "Morgana",
-      "Exporters": [
-        { "Name": "console", "Enabled": true },
-        { "Name": "otlp", "Enabled": true, "Endpoint": "http://localhost:4317" }
-      ]
-    }
-  }
-}
-```
-
 ### 🔄 Changed
 - Morgana's avatar is now animated (with magical glowing effects when thinking)
 - Send button has been componentized and totally restyled
 - Make streaming response mode configurable under `StreamingResponse:Enabled` appsetting
-- Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.3
-- Updated `Microsoft.Extensions.AI` dependency to 12.4.0
-- Updated `ModelContextProtocol.Core` dependency to 1.0.0
 
 ### 🐛 Fixed
 - Docker images did not copy `Morgana.Examples.dll` into `plugins` directory, generating an agentless Morgana
 - Ensure to queue shared context updates received before first agent session is established
 - Fixed conversation resume not displaying assistant messages when using `Anthropic` as the LLM provider.
+
+### 📦 Dependencies
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0-rc.3
+- Updated `Microsoft.Extensions.AI` dependency to 12.4.0
+- Updated `ModelContextProtocol.Core` dependency to 1.0.0
 
 ### 🚀 Future Enablement
 - **Production observability** — With an OTLP backend (Jaeger, Grafana Tempo, Azure Monitor, ...), every Morgana conversation becomes fully navigable: intent distribution, per-agent TTFT trends, guard violation rates and pipeline latencies all visible on a single dashboard
@@ -446,8 +447,6 @@ This release sets the milestone of distributing **Morgana.AI** as **NuGet** pack
 
 
 ## [0.17.0] - 2026-02-11
-
-### ✨ Added
 
 ### 🔄 Changed
 - `PluginLoaderService` now follows *directories-to-scan* paradigm instead of *assemblies-to-scan*. Morgana gains a **true plugin system**!
@@ -481,10 +480,6 @@ This release introduces **Rich Cards**, a compositional visual presentation syst
 **Conversation Persistence for Rich Cards**
 - Rich cards automatically saved and restored during conversation resume
 - Follows exact pattern of Quick Replies: extracted from `SetRichCard` function calls, attached to subsequent assistant messages
-
-### 🔄 Changed
-
-### 🐛 Fixed
 
 ### 🚀 Future Enablement
 - **Tool output standardization** - Rich Cards establish a pattern for tool developers: return structured JSON, let LLM handle presentation through SetRichCard, separating data retrieval from visualization concerns
@@ -525,10 +520,10 @@ This release introduces **automatic conversation history management** through **
 
 ### 🔄 Changed
 - Converted residual Akka.NET `.Ask` flows into `.Tell` pattern, eliminating temporary actors and improving guard+classifier performances
+
+### 📦 Dependencies
 - Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260205.1
 - Updated `ModelContextProtocol.Core` dependency to 0.8.0-preview.1
-
-### 🐛 Fixed
 
 ### 🚀 Future Enablement
 - **Production cost predictability** - 60%+ token reduction enables sustainable deployment of long-running customer service conversations without budget concerns, transforming Morgana from prototype to production-ready platform
@@ -561,10 +556,6 @@ This release introduces **native streaming response delivery**, providing **imme
 - Color-coded indicators:
   - **Violet stars** (primary color) for base Morgana agent
   - **Pink stars** (secondary color) for specialized agents
-
-### 🔄 Changed
-
-### 🐛 Fixed
 
 ### 🚀 Future Enablement
 - **Token-level analytics and optimization** - Streaming architecture enables precise measurement of time-to-first-token (TTFT) and tokens-per-second (TPS) metrics, unlocking data-driven LLM provider selection and cost-per-performance optimization
@@ -613,13 +604,15 @@ CREATE TABLE rate_limit_log (
 ### 🔄 Changed
 - Standardized failure handling across all actors using `Records.FailureContext` wrapper for consistent error routing
 - Unified error and warning handling in Cauldron: All runtime errors and system warnings now use auto-dismissing `FadingMessage` component with severity-appropriate durations, replacing scattered error banner implementations
-- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260128.1
-- Updated `ModelContextProtocol.Core` dependency to 0.7.0-preview.1
 
 ### 🐛 Fixed
 - Certain LLM providers (like OpenAI) generate response messages with Unix timestamps (without milliseconds component)
 - Fixed dead letter issues in actor error handling by implementing unified `FailureContext` pattern to preserve sender references
 - Fixed residual dead letter in `ConversationManagerActor` which still responded to conversation creation or resume
+
+### 📦 Dependencies
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260128.1
+- Updated `ModelContextProtocol.Core` dependency to 0.7.0-preview.1
 
 ### 🚀 Future Enablement
 - **Operational cost control and budget predictability** - Direct protection against uncontrolled token and API resource consumption, enabling production deployment of Morgana with predictable and sustainable costs, even with large user bases
@@ -663,10 +656,6 @@ This release introduces **complete Docker containerization** of both **Morgana (
 - AES-256 encryption key generation documented (OpenSSL/PowerShell commands)
 - LLM provider configuration: Anthropic Claude or Azure OpenAI (runtime-switchable)
 - Network isolation: Dedicated Docker bridge network for internal service communication
-
-### 🔄 Changed
-
-### 🐛 Fixed
 
 ### 🚀 Future Enablement
 This release unlocks:
@@ -714,7 +703,6 @@ This release introduces **virtual unified conversation timeline**, enabling **Ca
 - **Presentation message injection**: Synthetic presentation message prepended when history exists (for visual consistency)
 
 ### 🔄 Changed
-- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260121.1
 - Enhanced `MorganaAIContextProvider` to handle context data as **thread-safe** and **immutable** collections
 - Optimized `ConversationController` to replace `Ask<T>` with `Tell` fire-and-forget
 - Introduced SignalR data contract between Morgana and Cauldron for better maintainability
@@ -722,6 +710,9 @@ This release introduces **virtual unified conversation timeline**, enabling **Ca
 ### 🐛 Fixed
 - User messages were sent to the agent's thread without timestamp
 - Concurrent agent responses were displayed out of order due to processing time differences
+
+### 📦 Dependencies
+- Updated `Microsoft.Agents.AI` dependency to 1.0.0-preview.260121.1
 
 ### 🚀 Future Enablement
 This release unlocks:
@@ -776,8 +767,6 @@ CREATE TABLE morgana (
 - AgentName is now contextualized to color scheme of the current agent for better usabilty (instead of white)
 - Status of SignalR connection is now green or red for better usabilty (instead of white)
 - Refactored RouterActor from eager to lazy agent creation (Akka.NET best practice for hierarchical actor systems)
-
-### 🐛 Fixed
 
 ### 🚀 Future Enablement
 This release unlocks:
@@ -872,8 +861,6 @@ This release introduces **industrial-grade MCP support**, enabling agents to dyn
 - Migrated solution files to **slnx** format
 - Centralized project definition via **Directory.Build.Props** standard
 - Reorganized solution into **4 framework projects** (Morgana.Startup, Morgana.Foundations, Morgana.Actors, Morgana.Agents) plus **1 didactic bonus** (Morgana.Example)
-
-### 🐛 Fixed
 
 ### 🚀 Future Enablement
 This release unlocks:
@@ -1156,16 +1143,10 @@ This refactoring unlocks:
 
 
 ## [0.1.0] - 2025-12-10
-
-### ✨ Added
 - Initial public release of **Morgana** and **Morgana.Web**
 - Multi-turn conversational pipeline with supervised agent orchestration
 - Integration with **Microsoft.Agents.AI** for LLM-based decision and tool execution
 - Dedicated **ConversationManagerAgent** for per-session lifecycle handling
 - Policy-aware **Guard Agent** ensuring compliance and professional tone
 - Real-time conversational streaming through **SignalR**
-- BillingExecutor enhanced with local memory and `#INT#` interactive protocol
-
-### 🔄 Changed
-
-### 🐛 Fixed
+- `#INT#` interactive protocol for turn continuation
