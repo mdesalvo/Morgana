@@ -298,7 +298,7 @@ public sealed class RichCardTerminalRenderService
         string alt = string.IsNullOrWhiteSpace(image.Alt) ? "image" : Plain(image.Alt);
         List<CardLine> output = [.. WrapText($"[image: {alt}]", width).Select(slice => Content([new CardSeg(slice, MutedForeground)]))];
         if (!string.IsNullOrWhiteSpace(image.Src))
-            output.AddRange(WrapText($"({image.Src})", width).Select(slice => Content([new CardSeg(slice, MutedForeground)])));
+            output.AddRange(WrapText($"({TerminalCellService.StripControlCharacters(image.Src)})", width).Select(slice => Content([new CardSeg(slice, MutedForeground)])));
         if (!string.IsNullOrWhiteSpace(image.Caption))
             foreach (string slice in WrapText(Plain(image.Caption), width))
                 output.Add(Content([new CardSeg(slice, $"{MutedForeground} italic")]));
@@ -379,7 +379,10 @@ public sealed class RichCardTerminalRenderService
     /// non-shortcode <c>:TADA:</c>), so the conversion must happen before either step. A resolved glyph is then
     /// measured correctly by <c>GetCellWidth</c>, keeping the right border aligned.</summary>
     private string Plain(string? text) =>
-        string.IsNullOrEmpty(text) ? string.Empty : cells.StripVariationSelectors(Emoji.Replace(Markdown.ToPlainText(text, Pipeline).Trim()));
+        string.IsNullOrEmpty(text)
+            ? string.Empty
+            : cells.StripVariationSelectors(Emoji.Replace(
+                Markdown.ToPlainText(TerminalCellService.StripControlCharacters(text), Pipeline).Trim()));
 
     /// <summary>Wraps to terminal columns — delegates to <see cref="TerminalCellService.Wrap"/>.</summary>
     private List<string> WrapText(string text, int width) => cells.Wrap(text, width);

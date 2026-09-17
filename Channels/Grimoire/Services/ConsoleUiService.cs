@@ -41,6 +41,9 @@ public sealed class ConsoleUiService
     /// <summary>Color for error notices (dust exhausted / delivery error): red.</summary>
     private const string ErrorColor = "red";
 
+    /// <summary>Fallback for <c>Grimoire:ReplyTimeoutSeconds</c> when absent or non-positive.</summary>
+    private const int DefaultReplyTimeoutSeconds = 120;
+
     /// <summary>Fallback for <c>Grimoire:AgentExitMessage</c> when the setting is absent.</summary>
     private const string DefaultAgentExitMessage = "{0} has completed its spell. I'm back to you!";
 
@@ -66,6 +69,12 @@ public sealed class ConsoleUiService
 
     /// <summary>Terminal width <see cref="historyRows"/> was wrapped at; a resize to another width renders the history again.</summary>
     private int historyRowsWidth = -1;
+
+    /// <summary>Last terminal width the frame was drawn against, kept as the fallback of <see cref="ReadViewport"/>; the 80x24 seed only ever shows if the very first frame finds no terminal.</summary>
+    private int lastViewportWidth = 80;
+
+    /// <summary>Last terminal height the frame was drawn against, kept as the fallback of <see cref="ReadViewport"/>.</summary>
+    private int lastViewportHeight = 24;
 
     /// <summary>
     /// Single FIFO queue for everything Morgana pushes over the webhook surface — both full
@@ -220,6 +229,19 @@ public sealed class ConsoleUiService
     /// <summary>Renders a turn's quick replies to the selectable prompt surface.</summary>
     private readonly QuickReplyTerminalRenderService quickReplyRenderer;
 
+    /// <summary>
+    /// How long a turn may go completely silent before the prompt is handed back to the user. It measures
+    /// silence, not the length of the turn: a streamed reply pushes the deadline back with every chunk,
+    /// so a long answer that is still arriving is never declared lost. From <c>Grimoire:ReplyTimeoutSeconds</c>.
+    /// </summary>
+    private readonly TimeSpan replyTimeout;
+
+    /// <summary>Ends the countdown on the turn in flight; null when nothing is being waited for. Mutated only under <see cref="renderLock"/>.</summary>
+    private CancellationTokenSource? replyWatchdog;
+
+    /// <summary>Fires when the host stops, so a deadline armed mid-turn dies with the process rather than outliving the live display.</summary>
+    private CancellationToken uiStopping;
+
     /// <summary>Serializes mutations of <see cref="history"/>, <see cref="currentInput"/>, <see cref="currentSpeaker"/> and the paired <see cref="LiveDisplayContext.UpdateTarget"/>/<see cref="LiveDisplayContext.Refresh"/> calls. The resize callback runs on its own thread (SIGWINCH handler / polling task) and would otherwise race with <see cref="ReadKeysLoop"/> and <see cref="DrainInboundLoop"/> over the shared list. Uses <see cref="System.Threading.Lock"/> (.NET 9+) instead of <c>object</c> so the compiler emits the optimised primitive and rejects misuse (e.g. passing the lock as an <c>object</c>).</summary>
     private readonly Lock renderLock = new();
 
@@ -232,6 +254,10 @@ public sealed class ConsoleUiService
         QuickReplyTerminalRenderService quickReplyRenderer)
     {
         agentExitTemplate = configuration["Grimoire:AgentExitMessage"] ?? DefaultAgentExitMessage;
+
+        // A non-positive wait would declare every turn lost the instant it is sent, so it falls back too
+        int replyTimeoutSeconds = configuration.GetValue<int?>("Grimoire:ReplyTimeoutSeconds") ?? DefaultReplyTimeoutSeconds;
+        replyTimeout = TimeSpan.FromSeconds(replyTimeoutSeconds > 0 ? replyTimeoutSeconds : DefaultReplyTimeoutSeconds);
         this.viewportResizeWatcher = viewportResizeWatcher;
         this.markdownRenderer = markdownRenderer;
         this.richCardRenderer = richCardRenderer;
@@ -320,6 +346,15 @@ public sealed class ConsoleUiService
                     }
                 });
 
+                // Paint the opening frame. Morgana's first delivery is what normally brings the screen
+                // to life, and a backend too slow for the startup wait, or unable to reach the callback,
+                // would otherwise leave the user staring at a blank terminal with no header, no
+                // conversation id and no sign that Grimoire is waiting on anything.
+                lock (renderLock)
+                    ctx.Refresh();
+
+                uiStopping = cancellationToken;
+
                 Task readLoop = Task.Run(() => ReadKeysLoop(ctx, onSend, cancellationToken), cancellationToken);
                 Task drainLoop = Task.Run(() => DrainInboundLoop(ctx, cancellationToken), cancellationToken);
                 try
@@ -382,6 +417,11 @@ public sealed class ConsoleUiService
         lock (renderLock)
         {
             streamingPending += chunkText;
+
+            // A chunk is Morgana answering, so the silence the deadline measures starts over here
+            if (awaitingResponse)
+                StartReplyWatchdog(ctx);
+
             EnsureTypewriterStarted(ctx);
         }
     }
@@ -452,6 +492,10 @@ public sealed class ConsoleUiService
     {
         lock (renderLock)
         {
+            // Morgana has spoken, so the turn is no longer at risk of being declared lost — called
+            // on arrival, not on commit, since the typewriter may hold the text for a while yet
+            CancelReplyWatchdog();
+
             if (typewriterTimer is not null && (streamingPending.Length > 0 || streamingDisplayed.Length > 0))
             {
                 // Typewriter still revealing: enqueue the final and let the timer commit when
@@ -479,7 +523,11 @@ public sealed class ConsoleUiService
     {
         // Attribute the row to whoever authored it: a specialised agent keeps its
         // own colour even on the farewell line that carries AgentCompleted=true.
-        string messageSpeaker = string.IsNullOrWhiteSpace(message.AgentName) ? "Morgana" : message.AgentName;
+        // The name comes over the unauthenticated callback, so it is cleaned once here and every
+        // place that shows it afterwards — row prefix, header, courtesy line — reuses this value.
+        string messageSpeaker = string.IsNullOrWhiteSpace(message.AgentName)
+            ? "Morgana"
+            : TerminalCellService.StripControlCharacters(message.AgentName);
 
         history.Add(new DisplayedMessage(messageSpeaker, message.Text, RowColor(message, messageSpeaker), message.RichCard));
 
@@ -487,7 +535,7 @@ public sealed class ConsoleUiService
         // as Cauldron's ChatStateService.AddCompletionMessageIfNeeded.
         if (message.AgentCompleted && IsSpecializedAgent(message.AgentName))
         {
-            string completion = string.Format(agentExitTemplate, message.AgentName);
+            string completion = string.Format(agentExitTemplate, messageSpeaker);
             history.Add(new DisplayedMessage("Morgana", completion, MorganaColor));
         }
 
@@ -495,7 +543,7 @@ public sealed class ConsoleUiService
         // turn doesn't render under the outgoing agent's colour.
         currentSpeaker = message.AgentCompleted || string.IsNullOrWhiteSpace(message.AgentName)
             ? "Morgana"
-            : message.AgentName;
+            : messageSpeaker;
 
         // Refresh the header gauge from ANY metadata-bearing message. The main
         // assistant response carries the pre-delivery estimate; the trailing
@@ -581,6 +629,13 @@ public sealed class ConsoleUiService
 
                 key = Console.ReadKey(intercept: true);
             }
+            catch (OperationCanceledException)
+            {
+                // Shutdown was asked for (Ctrl+C, SIGTERM, SIGHUP): close the delivery stream so the
+                // conversation loop returns as well, and leave the exit flag alone — nobody typed /quit.
+                inbound.Writer.TryComplete();
+                return;
+            }
             catch (Exception ex) when (ex is IOException or InvalidOperationException)
             {
                 exitRequested = true;
@@ -665,6 +720,14 @@ public sealed class ConsoleUiService
                     try
                     {
                         await onSend(toSend);
+
+                        // Morgana took the message: from here only its reply can reopen the prompt,
+                        // so give that reply a deadline. A turn already answered has nothing to watch.
+                        lock (renderLock)
+                        {
+                            if (awaitingResponse)
+                                StartReplyWatchdog(ctx);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -690,8 +753,7 @@ public sealed class ConsoleUiService
                         {
                             currentInput = currentInput.Remove(cursorPosition - 1, 1);
                             cursorPosition--;
-                            ctx.UpdateTarget(BuildLayout());
-                            ctx.Refresh();
+                            RefreshWhenInputSettles(ctx);
                         }
                     }
                     break;
@@ -702,8 +764,7 @@ public sealed class ConsoleUiService
                         if (cursorPosition < currentInput.Length)
                         {
                             currentInput = currentInput.Remove(cursorPosition, 1);
-                            ctx.UpdateTarget(BuildLayout());
-                            ctx.Refresh();
+                            RefreshWhenInputSettles(ctx);
                         }
                     }
                     break;
@@ -713,8 +774,7 @@ public sealed class ConsoleUiService
                         if (cursorPosition > 0)
                         {
                             cursorPosition--;
-                            ctx.UpdateTarget(BuildLayout());
-                            ctx.Refresh();
+                            RefreshWhenInputSettles(ctx);
                         }
                     }
                     break;
@@ -724,8 +784,7 @@ public sealed class ConsoleUiService
                         if (cursorPosition < currentInput.Length)
                         {
                             cursorPosition++;
-                            ctx.UpdateTarget(BuildLayout());
-                            ctx.Refresh();
+                            RefreshWhenInputSettles(ctx);
                         }
                     }
                     break;
@@ -752,8 +811,7 @@ public sealed class ConsoleUiService
                                 // Insert AT the caret (not append) so typing mid-line splices in place.
                                 currentInput = currentInput.Insert(cursorPosition, key.KeyChar.ToString());
                                 cursorPosition++;
-                                ctx.UpdateTarget(BuildLayout());
-                                ctx.Refresh();
+                                RefreshWhenInputSettles(ctx);
                             }
                         }
                     }
@@ -812,6 +870,13 @@ public sealed class ConsoleUiService
         try
         {
             await onSend(chosen.Value);
+
+            // A chosen quick reply is a turn like any other and deserves the same deadline
+            lock (renderLock)
+            {
+                if (awaitingResponse)
+                    StartReplyWatchdog(ctx);
+            }
         }
         catch (Exception ex)
         {
@@ -825,6 +890,81 @@ public sealed class ConsoleUiService
                 ctx.Refresh();
             }
         }
+    }
+
+    /// <summary>
+    /// Gives the turn in flight <see cref="replyTimeout"/> of silence before the user gets the prompt back
+    /// with an honest notice. Every sign of life — a chunk, a message — arms it again from zero, so only a
+    /// turn Morgana has genuinely abandoned expires. Must be called under <see cref="renderLock"/>.
+    /// </summary>
+    private void StartReplyWatchdog(LiveDisplayContext ctx)
+    {
+        CancelReplyWatchdog();
+        CancellationTokenSource watchdog = CancellationTokenSource.CreateLinkedTokenSource(uiStopping);
+        replyWatchdog = watchdog;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(replyTimeout, watchdog.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // Morgana spoke in time, or the process is going down: whoever called the deadline off owns it
+                return;
+            }
+
+            lock (renderLock)
+            {
+                // The deadline has expired, so the next turn must not find it still standing: a turn that
+                // ends up calling off a deadline already spent would take the conversation down with it
+                if (ReferenceEquals(replyWatchdog, watchdog))
+                {
+                    replyWatchdog = null;
+                    watchdog.Dispose();
+                }
+
+                // A reply that landed while the deadline was expiring wins: the prompt is already back
+                if (!awaitingResponse || conversationDead)
+                    return;
+
+                // The typewriter is still revealing what Morgana already sent: the turn is alive and
+                // owed the rest of its text, however long the reveal takes
+                if (streamingPending.Length > 0)
+                {
+                    StartReplyWatchdog(ctx);
+                    return;
+                }
+
+                // What the stream did reveal is what Morgana actually said, so it is kept as the turn's
+                // reply rather than left hanging in a pane the next turn would write underneath
+                if (streamingDisplayed.Length > 0)
+                {
+                    history.Add(new DisplayedMessage(currentSpeaker, streamingDisplayed, SpeakerColor(currentSpeaker)));
+                    streamingDisplayed = string.Empty;
+                }
+                streamingComplete = false;
+                pendingFinalMessages.Clear();
+                StopTypewriter();
+
+                history.Add(new DisplayedMessage(
+                    "system",
+                    $"no answer from Morgana after {replyTimeout.TotalSeconds:0}s — the turn may be lost, ask again or press Esc to quit",
+                    ErrorColor));
+                awaitingResponse = false;
+                ctx.UpdateTarget(BuildLayout());
+                ctx.Refresh();
+            }
+        }, CancellationToken.None);
+    }
+
+    /// <summary>Calls off the deadline on the turn in flight, leaving none armed. A deadline that already expired retired itself. Must be called under <see cref="renderLock"/>.</summary>
+    private void CancelReplyWatchdog()
+    {
+        replyWatchdog?.Cancel();
+        replyWatchdog?.Dispose();
+        replyWatchdog = null;
     }
 
     /// <summary>Number of rows the scrollback advances per keystroke. Fixed (not configurable).</summary>
@@ -861,6 +1001,47 @@ public sealed class ConsoleUiService
             ctx.UpdateTarget(BuildLayout());
             ctx.Refresh();
         }
+    }
+
+    /// <summary>
+    /// Current terminal size, falling back to the last one seen when the terminal no longer answers. A
+    /// window closed mid-frame must not break the repaint in progress: the frame is drawn against stale
+    /// but plausible dimensions and the process leaves through the ordinary SIGHUP path moments later.
+    /// </summary>
+    private (int Width, int Height) ReadViewport()
+    {
+        try
+        {
+            lastViewportWidth = Math.Max(1, Console.WindowWidth);
+            lastViewportHeight = Math.Max(0, Console.WindowHeight);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException)
+        {
+            // Terminal disconnected: the last known size is the best answer available
+        }
+        return (lastViewportWidth, lastViewportHeight);
+    }
+
+    /// <summary>
+    /// Repaints the screen unless further keystrokes are already queued. A pasted line reaches Grimoire
+    /// one glyph at a time and only its settled state is worth showing, so a long paste costs one frame
+    /// instead of one per character. A terminal that has gone away reports nothing pending, leaving the
+    /// tear-down to the next read from it. Must be called under <see cref="renderLock"/>.
+    /// </summary>
+    private void RefreshWhenInputSettles(LiveDisplayContext ctx)
+    {
+        try
+        {
+            if (Console.KeyAvailable)
+                return;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException)
+        {
+            // The terminal is gone; paint the frame anyway and let the key loop take the exit path
+        }
+
+        ctx.UpdateTarget(BuildLayout());
+        ctx.Refresh();
     }
 
     /// <summary>Builds the two-row Spectre layout (fixed 3-row header + flex body).</summary>
@@ -958,8 +1139,8 @@ public sealed class ConsoleUiService
     /// </remarks>
     private IRenderable BuildBody()
     {
-        int termWidth = Math.Max(1, Console.WindowWidth);
-        int bodyHeight = Math.Max(0, Console.WindowHeight - 3 /* header panel */);
+        (int termWidth, int termHeight) = ReadViewport();
+        int bodyHeight = Math.Max(0, termHeight - 3 /* header panel */);
 
         List<IRenderable> inputRows = BuildInputRows(termWidth);
         if (inputRows.Count > bodyHeight && bodyHeight > 0)

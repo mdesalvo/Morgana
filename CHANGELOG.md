@@ -25,11 +25,18 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
   - After a reconnection to Morgana the conversation groups were never joined again, so replies went to a group this client had left: the typing indicator stayed on screen and the input stayed locked until a reload
   - The connection to Morgana was given up for good after about 17 seconds of reconnection attempts, so any longer outage (e.g: a Morgana redeploy) left every open chat offline until a reload
   - A Morgana unreachable at page load showed an error banner and was never tried again, leaving the chat offline until a reload
-- **Grimoire (4)**
+- **Grimoire (11)**
   - A message arriving just as the typewriter finished a reply, such as a dust warning, could land in the conversation above the reply it follows
   - Every typewriter tick went through the whole conversation again: the cost of each tick grew with the length of the chat
   - A Morgana unreachable at startup ended Grimoire with an error and was never tried again
   - Any delivery reaching Grimoire's callback was shown on screen, even one meant for another conversation such as an abandoned start attempt or a previous run on the same port
+  - The characters a terminal obeys rather than draws were cleaned out of prose alone: a speaker name, a quick-reply label or a card field carrying an escape sequence still reached the terminal, which acted on it
+  - A turn Morgana accepted but never delivered left the conversation locked for the life of the process, with quitting as the only way out
+  - Every character typed redrew the whole screen, so pasting a line cost one full repaint per glyph in it
+  - The settings Grimoire cannot run without failed far from their cause: a backend URL that is not absolute http(s) ended the process on an unrelated line, a signing key left at its placeholder died at the handshake
+  - A delivery whose body was not a message at all, on either the message or the chunk endpoint, was answered as a failure of Grimoire's own instead of as the malformed request it is
+  - Closing the terminal window while Grimoire was drawing a frame could break the drawing instead of letting the process leave the way it does on any other close
+  - Quitting with Ctrl+C left the keyboard loop failing on its way out rather than ending
 - **Rune (9)**
   - Every keystroke redrew the whole screen and wrapped the whole conversation again: the cost of typing grew with the length of the chat and a pasted line paid it once per character
   - A Morgana unreachable at startup ended Rune with an error and was never tried again

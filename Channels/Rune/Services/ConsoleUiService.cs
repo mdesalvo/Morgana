@@ -43,8 +43,13 @@ public sealed class ConsoleUiService
     /// <summary>Fallback for <c>Rune:AgentExitMessage</c> when the setting is absent.</summary>
     private const string DefaultAgentExitMessage = "{0} has completed its spell. I'm back to you!";
 
-    /// <summary>Fallback for <c>Rune:ReplyTimeoutSeconds</c> when absent or non-positive.</summary>
-    private const int DefaultReplyTimeoutSeconds = 120;
+    /// <summary>
+    /// Fallback for <c>Rune:ReplyTimeoutSeconds</c> when absent or non-positive. Generous, because a turn
+    /// gives Rune no sign of life at all: with no streaming there is nothing between the message and the
+    /// reply, so this measures the whole turn — tool chains and remote colleagues included — where a rich
+    /// channel would only be measuring silence between chunks.
+    /// </summary>
+    private const int DefaultReplyTimeoutSeconds = 180;
 
     /// <summary>
     /// Matches a run of three or more consecutive newlines (i.e. two or more blank lines).

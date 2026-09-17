@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using Grimoire.Handlers;
 using Grimoire.Interfaces;
 using Morgana.Contracts;
@@ -49,6 +50,43 @@ Console.InputEncoding  = Encoding.UTF8;
 if (!AnsiConsole.Profile.Capabilities.Interactive)
 {
     Console.WriteLine("Grimoire requires an interactive TTY but the current output stream is not one. Launch it from a real terminal emulator (bash, zsh, pwsh, ...); if you are running it from an IDE, enable the equivalent of 'emulate terminal' on the run configuration.");
+    return;
+}
+
+// ==============================================================================
+// 2b. CONFIGURATION GATE - THE THREE SETTINGS GRIMOIRE CANNOT RUN WITHOUT
+// ==============================================================================
+// Backend address, callback address and signing key are each fatal on their own:
+// without them Grimoire can neither reach Morgana, be reached back, nor be trusted.
+// Checked together up front so a fresh checkout is told exactly what is missing
+// while there is still a readable terminal — once the Live UI owns it, and with
+// logging silenced, the same omission would surface as a bare stack trace.
+
+// An address Grimoire can actually dial: anything else (a bare host:port, a path, a scheme
+// nobody serves) is parsed happily and only fails once the first call is already on its way.
+static bool IsReachableUrl(string? value) =>
+    Uri.TryCreate(value, UriKind.Absolute, out Uri? url)
+    && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps);
+
+string?[] requiredSettings =
+[
+    IsReachableUrl(builder.Configuration["Grimoire:MorganaURL"])
+        ? null
+        : "Grimoire:MorganaURL must be Morgana's absolute http(s) base URL (for example https://localhost:5001).",
+    IsReachableUrl(builder.Configuration["Grimoire:CallbackURL"])
+        ? null
+        : "Grimoire:CallbackURL is required for webhook-based delivery and must be the absolute http(s) URL Morgana posts replies to (for example https://localhost:5004/morgana-hook).",
+    // The shipped value is a marker, not a key: left in place it buys a 401 from Morgana one
+    // handshake later, where the reason is far less obvious than it is here
+    builder.Configuration["Grimoire:Authentication:SymmetricKey"] is not { Length: > 0 } key || key == "_SECURE_OVERRIDE_"
+        ? "Grimoire:Authentication:SymmetricKey is required and must match Morgana's Authentication:Issuers entry for Name=grimoire. Supply it through user-secrets or an environment variable."
+        : null
+];
+if (requiredSettings.Any(problem => problem is not null))
+{
+    Console.WriteLine("Grimoire cannot start with the configuration it was given:");
+    foreach (string problem in requiredSettings.OfType<string>())
+        Console.WriteLine($"  - {problem}");
     return;
 }
 
@@ -143,7 +181,16 @@ PosixSignalRegistration? sighupRegistration = OperatingSystem.IsWindows()
 // conversation is refused with 404, so Morgana logs the misdelivery on its side.
 app.MapPost("/morgana-hook", async (HttpContext httpContext, WebhookReceiverService receiverService) =>
 {
-    ChannelMessage? message = await httpContext.Request.ReadFromJsonAsync<ChannelMessage>();
+    ChannelMessage? message;
+    try
+    {
+        message = await httpContext.Request.ReadFromJsonAsync<ChannelMessage>();
+    }
+    catch (JsonException)
+    {
+        return Results.BadRequest();
+    }
+
     if (message is null)
         return Results.BadRequest();
     return receiverService.Dispatch(message) ? Results.Ok() : Results.NotFound();
@@ -155,7 +202,16 @@ app.MapPost("/morgana-hook", async (HttpContext httpContext, WebhookReceiverServ
 // when the final ChannelMessage lands on /morgana-hook.
 app.MapPost("/morgana-hook/chunk", async (HttpContext httpContext, WebhookReceiverService receiverService) =>
 {
-    StreamChunkRequest? chunk = await httpContext.Request.ReadFromJsonAsync<StreamChunkRequest>();
+    StreamChunkRequest? chunk;
+    try
+    {
+        chunk = await httpContext.Request.ReadFromJsonAsync<StreamChunkRequest>();
+    }
+    catch (JsonException)
+    {
+        return Results.BadRequest();
+    }
+
     if (chunk is null)
         return Results.BadRequest();
     return receiverService.DispatchChunk(chunk) ? Results.Ok() : Results.NotFound();

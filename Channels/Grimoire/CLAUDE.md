@@ -86,13 +86,24 @@ agent colour because streamed chunks are assumed to come from agents, which avoi
 
 `Console.ReadKey(intercept: true)` on a background task polling every 25 ms — Spectre's Live
 rendering cannot share stdin with a first-class prompt. **Enter** commits (or exits on `/quit`),
-**Backspace** deletes, **Esc** exits.
+**Backspace** and **Delete** remove around the caret, **←/→** move it, **Esc** exits. Repainting
+waits for the keystrokes to stop, so a pasted line costs one frame rather than one per character.
+
+A turn that goes silent for `Grimoire:ReplyTimeoutSeconds` releases the prompt with a red notice.
+The deadline measures **silence, not duration**: every chunk arms it again from zero and a
+typewriter still revealing text holds it off, so only an abandoned turn expires.
 
 ### Resume
 
 **There is none.** Every process start begins a fresh conversation. Keep that explicit: a future
 Grimoire picking up a conversation id from a store must **re-announce the handshake**, since
 `ConversationManagerActor` re-persists channel metadata on resume.
+
+## Startup
+
+Backend URL, callback URL and signing key are checked before anything else, every problem reported at
+once: the two URLs must be absolute `http(s)`, the key must no longer be the shipped
+`_SECURE_OVERRIDE_` marker. Each is fatal and the Live UI would swallow the reason.
 
 ## Key configuration
 
@@ -101,6 +112,7 @@ Grimoire picking up a conversation id from a store must **re-announce the handsh
 | `Grimoire:MorganaURL` · `:CallbackURL` | Backend base URL; the absolute URL Morgana POSTs to (default `https://localhost:5004/morgana-hook`) |
 | `Grimoire:Authentication:*` | `SymmetricKey` matching Morgana's entry for `Name=grimoire`, plus `Issuer` and `Audience` |
 | `Grimoire:AgentExitMessage` · `:LandingMessages` | The courtesy line on agent completion; the startup lines, cleared when the Live UI takes over. Both mirror Cauldron's |
+| `Grimoire:ReplyTimeoutSeconds` | How long a turn may go silent before the prompt comes back with a red notice (default 120). Every chunk restarts the count |
 | `Grimoire:StartupTimeoutSeconds` | How long to wait for Morgana's first delivery before entering the Live UI anyway (default 30). Raise it on providers with cold starts |
 | `Grimoire:StreamingResponse:*` | `TypewriterTickMilliseconds` (15), `TypewriterTickChars` (1) |
 
@@ -120,6 +132,10 @@ Grimoire picking up a conversation id from a store must **re-announce the handsh
 
 ## Conventions
 
+- **Nothing from the callback is drawn raw** — the webhook is unauthenticated by design, so prose,
+  speaker name, quick-reply labels and card fields all pass `TerminalCellService.StripControlCharacters`
+  before reaching Spectre. `Markup.Escape` guards the `[` of the markup syntax and nothing else: an
+  ESC or OSC sequence slips straight through it and is obeyed by the user's terminal
 - **Logging is silenced at startup** — the Live UI owns the terminal; errors surface as red in-UI lines
 - **Singletons**: one process is one session. Multi-session would first have to move
   `ConsoleUiService.history` and the receiver's callback onto a per-conversation scope

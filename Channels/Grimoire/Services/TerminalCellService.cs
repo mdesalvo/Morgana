@@ -4,7 +4,7 @@ using Spectre.Console;
 namespace Grimoire.Services;
 
 /// <summary>
-/// Terminal-cell-width text measurement shared by Grimoire's TTY renderers (Markdown, rich card,
+/// Terminal-safe text shared by Grimoire's TTY renderers (Markdown, rich card,
 /// quick reply): rune-safe wrap/truncate so a wide CJK glyph or an emoji-presentation sequence
 /// (resolved via <see cref="Emoji.Replace"/> upstream in each renderer) is measured in the columns
 /// the terminal actually draws, not in UTF-16 chars — keeping every renderer's "one row = exactly
@@ -13,6 +13,17 @@ namespace Grimoire.Services;
 /// </summary>
 public sealed class TerminalCellService
 {
+    /// <summary>
+    /// Strips ASCII/Unicode control characters (ESC, BEL, C1 controls, ...) out of a single-line piece
+    /// of text bound for the terminal. <see cref="Markup.Escape"/> only neutralizes Spectre's own
+    /// <c>[ ]</c> markup syntax — a raw control byte (an OSC sequence renaming the terminal title, a
+    /// cursor move, the BEL that rings the system bell) passes straight through it and is obeyed by the
+    /// user's TTY. Everything Morgana sends arrives over an unauthenticated callback, so a speaker name,
+    /// a quick-reply label and a card field are all untrusted the moment they are about to be drawn.
+    /// </summary>
+    public static string StripControlCharacters(string text) =>
+        text.Any(char.IsControl) ? new string(text.Where(c => !char.IsControl(c)).ToArray()) : text;
+
     // Spectre's Wcwidth table is the source of truth for "how many columns does this glyph
     // actually occupy on screen" — 0 for combining marks/variation selectors, 2 for wide CJK,
     // 1 for everything else. Every other method here is built on top of this single call.

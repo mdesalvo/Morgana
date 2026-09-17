@@ -98,7 +98,7 @@ picking up a conversation id from a store must **re-announce the handshake**, si
 | `Rune:Authentication:*` | `SymmetricKey` matching Morgana's entry for `Name=rune`, plus `Issuer` and `Audience` |
 | `Rune:MaxMessageLength` | The cap advertised at the handshake. Default `500`, aggressive on purpose so the downgrade runs every turn. Raising it (say `2000`) softens the rewrite without losing the profile; anything below `RichFeaturesMinLength` keeps rich features forced off server-side |
 | `Rune:MaxInputLength` | What the *user* may type in one turn, default `500`. Independent of `MaxMessageLength`, which caps what Morgana may send back: the two travel in opposite directions and nothing couples them |
-| `Rune:ReplyTimeoutSeconds` | How long a sent turn may go unanswered before the prompt comes back with a red notice (default 120). Raise it alongside `StartupTimeoutSeconds` on slow providers |
+| `Rune:ReplyTimeoutSeconds` | How long a sent turn may go unanswered before the prompt comes back with a red notice (default 180). Deliberately higher than Grimoire's: a poor channel sees nothing until the reply lands, so the wait covers the whole turn — tool chains and remote colleagues included — not the silence between chunks |
 | `Rune:AgentExitMessage` · `:LandingMessages` | The courtesy line on agent completion; the startup lines, cleared when the Live UI takes over. Both mirror Cauldron's |
 | `Rune:StartupTimeoutSeconds` | How long to wait for Morgana's first delivery before entering the Live UI anyway (default 30). Raise it on providers with cold starts |
 

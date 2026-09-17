@@ -78,7 +78,9 @@ public sealed class QuickReplyTerminalRenderService
         // and rich-card renderers — Markup leaves :shortcodes: literal in this path otherwise. Strip
         // variation selectors too, so the cell-measured truncation below agrees with what the
         // terminal actually draws (e.g. an emoji-presentation warning sign).
-        string label = cells.Trunc(cells.StripVariationSelectors(Emoji.Replace(quickReply.Label)), Math.Max(1, width - 4));
+        string label = cells.Trunc(
+            cells.StripVariationSelectors(Emoji.Replace(TerminalCellService.StripControlCharacters(quickReply.Label))),
+            Math.Max(1, width - 4));
         StringBuilder sb = new(width + 32);
         AppendCaret(sb, active, accentColor);
         sb.Append('[').Append(ChipStyle(quickReply, active, accentColor)).Append("] ").Append(Markup.Escape(label)).Append(" [/]");

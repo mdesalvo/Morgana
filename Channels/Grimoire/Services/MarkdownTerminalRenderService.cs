@@ -87,7 +87,7 @@ public sealed class MarkdownTerminalRenderService
     /// <summary>Prepends a bold speaker tag to the first renderable (non-rule) line, or inserts a new leading line if there is none.</summary>
     internal static void PrependSpeaker(List<RenderedLine> lines, string speakerPrefix, string baseColor)
     {
-        StyledSpan prefix = new(speakerPrefix, baseColor, "bold");
+        StyledSpan prefix = new(TerminalCellService.StripControlCharacters(speakerPrefix), baseColor, "bold");
         int target = lines.FindIndex(l => !l.IsRule);
         if (target < 0)
         {
@@ -181,7 +181,7 @@ public sealed class MarkdownTerminalRenderService
         List<RenderedLine> output = [];
         for (int i = 0; i < code.Lines.Count; i++)
         {
-            string text = StripControlCharacters(code.Lines.Lines[i].Slice.ToString());
+            string text = TerminalCellService.StripControlCharacters(code.Lines.Lines[i].Slice.ToString());
             output.Add(new RenderedLine([new StyledSpan(text, CodeBlockForeground, CodeBackground)], false));
         }
         return output;
@@ -296,22 +296,10 @@ public sealed class MarkdownTerminalRenderService
 
     private static void Append(List<StyledSpan> spans, string text, string foreground, string decorations)
     {
-        text = StripControlCharacters(text);
+        text = TerminalCellService.StripControlCharacters(text);
         if (text.Length > 0)
             spans.Add(new StyledSpan(text, foreground, decorations));
     }
-
-    /// <summary>
-    /// Strips ASCII/Unicode control characters (ESC, BEL, C1 controls, ...) out of text bound
-    /// for the terminal. <see cref="Markup.Escape"/> only neutralizes Spectre's own <c>[ ]</c>
-    /// markup syntax — a raw control byte in the source text (an OSC sequence renaming the
-    /// terminal title, a cursor move, the BEL that rings the system bell, ...) passes straight
-    /// through it and gets interpreted by the user's TTY. Every literal-text entry point in this
-    /// renderer funnels through here or <see cref="RenderCodeBlock"/> before becoming a
-    /// <see cref="StyledSpan"/>, so nothing reaches Spectre unfiltered.
-    /// </summary>
-    private static string StripControlCharacters(string text) =>
-        text.Any(char.IsControl) ? new string(text.Where(c => !char.IsControl(c)).ToArray()) : text;
 
     /// <summary>Joins two decoration token strings with a space, tolerating empties.</summary>
     private static string Combine(string a, string b) =>
