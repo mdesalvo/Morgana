@@ -67,6 +67,13 @@ timer; each tick consumes N chars from the buffer. **Finalization overwrites the
 server-authoritative version**, which may differ from what was streamed if the channel adapter
 rewrote the message — the server is the source of truth, streamed chunks are progressive preview.
 
+## Startup
+
+Backend URL and signing key are checked before anything is registered, both problems reported at
+once: the URL must be absolute `http(s)`, the key must no longer be the shipped `_SECURE_OVERRIDE_`
+marker. Each is fatal: refusing here beats failing one request at a time with visitors already on
+the page. There is no callback address to check: replies come down the hub connection Cauldron opens.
+
 ## A turn that never comes back
 
 Delivery is a push, so a reply reaches a client that is connected and in its group. Two things can

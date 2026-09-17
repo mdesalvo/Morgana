@@ -12,6 +12,41 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 // Cauldron is a modular web layer that talks with the Morgana conversational AI platform.
 
 // ============================================================================
+// 0. CONFIGURATION GATE - THE TWO SETTINGS CAULDRON CANNOT RUN WITHOUT
+// ============================================================================
+// Backend address and signing key are each fatal on their own: without them
+// Cauldron serves a chat that can neither reach Morgana nor be trusted by it.
+// Refused here, both problems named at once, rather than one failed request at
+// a time once visitors are already on the page. There is no callback address to
+// check: replies are pushed down the hub connection Cauldron itself opens.
+
+// An address Cauldron can actually dial, for the REST calls and for the hub alike: anything
+// else (a bare host:port, a path, a scheme nobody serves) is parsed happily and only fails
+// once the first call is already on its way.
+static bool IsReachableUrl(string? value) =>
+    Uri.TryCreate(value, UriKind.Absolute, out Uri? url)
+    && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps);
+
+string?[] requiredSettings =
+[
+    IsReachableUrl(builder.Configuration["Cauldron:MorganaURL"])
+        ? null
+        : "Cauldron:MorganaURL must be Morgana's absolute http(s) base URL (for example https://localhost:5001).",
+    // The shipped value is a marker, not a key: left in place it buys a 401 from Morgana at the
+    // first conversation, where the reason is far less obvious than it is here
+    builder.Configuration["Cauldron:Authentication:SymmetricKey"] is not { Length: > 0 } key || key == "_SECURE_OVERRIDE_"
+        ? "Cauldron:Authentication:SymmetricKey is required and must match Morgana's Authentication:Issuers entry for Name=cauldron. Supply it through user-secrets or an environment variable."
+        : null
+];
+if (requiredSettings.Any(problem => problem is not null))
+{
+    Console.Error.WriteLine("Cauldron cannot start with the configuration it was given:");
+    foreach (string problem in requiredSettings.OfType<string>())
+        Console.Error.WriteLine($"  - {problem}");
+    return;
+}
+
+// ============================================================================
 // 1. BLAZOR SERVER CONFIGURATION
 // ============================================================================
 // Blazor Server provides server-side rendering with real-time UI updates via SignalR.

@@ -14,11 +14,11 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
 
 ### 🔄 Changed
 - **`other` intent belongs to the Classifier** — the complement of a domain is no longer declared by every `agents.json`, but described once in the Classifier prompt. The name is reserved: a plugin declaring it is refused
+- **A deployment may bring several plugins** — every `agents.json` found is merged into the domain, instead of the first one discovered silently winning. Two plugins claiming the same intent, or the same prompt id, are refused at startup naming both
 - **Alembic has a brand new look and layout** — the workbench has been redesigned on Microsoft's **Fluent UI Blazor 5**
 
 ### 🐛 Fixed
-- **A deployment may bring several plugins** — every `agents.json` found is merged into the domain, instead of the first one discovered silently winning. Two plugins claiming the same intent, or the same prompt id, are refused at startup naming both
-- **Cauldron (8)**
+- **Cauldron (9)**
   - Every typewriter tick redrew the whole conversation, running Markdown and the HTML sanitizer again on every message and every rich card field: the server-side cost grew with the length of the chat
   - Dismissing a warning banner could hide the one after it without ever removing it, since banners were matched to their components by position: a hidden dust-exhaustion notice left the input locked with no explanation on screen
   - The typewriter ran on its own thread with no guard against the arrival of the final message, which could append a stray character to the finished reply or throw on the timer thread and bring the whole Cauldron process down
@@ -27,6 +27,7 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
   - A Morgana unreachable at page load showed an error banner and was never tried again, leaving the chat offline until a reload
   - Joining the groups again restored what Morgana said next, never what it had said during the gap: a reply pushed while the client sat between two connections was gone for good, leaving the chat to wait on a turn that was in fact already answered. What was delivered in the meantime is now asked for and put back in the conversation
   - A turn Morgana accepted but never delivered left the chat waiting for the rest of the session: the only way out was starting a new conversation, which throws this one away
+  - The settings Cauldron cannot run without failed far from their cause: a backend URL that is not absolute http(s) brought the application down on an unrelated line, a signing key left at its placeholder served a chat refused by Morgana at the first conversation
 - **Grimoire (11)**
   - A message arriving just as the typewriter finished a reply, such as a dust warning, could land in the conversation above the reply it follows
   - Every typewriter tick went through the whole conversation again: the cost of each tick grew with the length of the chat
