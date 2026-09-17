@@ -59,7 +59,7 @@ if (!AnsiConsole.Profile.Capabilities.Interactive)
 // Backend address, callback address and signing key are each fatal on their own:
 // without them Grimoire can neither reach Morgana, be reached back, nor be trusted.
 // Checked together up front so a fresh checkout is told exactly what is missing
-// while there is still a readable terminal — once the Live UI owns it, and with
+// while there is still a readable terminal — once the Live UI owns it, with
 // logging silenced, the same omission would surface as a bare stack trace.
 
 // An address Grimoire can actually dial: anything else (a bare host:port, a path, a scheme

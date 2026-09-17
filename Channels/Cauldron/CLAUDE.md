@@ -67,6 +67,20 @@ timer; each tick consumes N chars from the buffer. **Finalization overwrites the
 server-authoritative version**, which may differ from what was streamed if the channel adapter
 rewrote the message — the server is the source of truth, streamed chunks are progressive preview.
 
+## A turn that never comes back
+
+Delivery is a push, so a reply reaches a client that is connected and in its group. Two things can
+break that. Both used to leave the composer shut with the typing indicator pulsing until a
+reload:
+
+- **A reconnection.** The new connection id belongs to no group, so a reply pushed in between is
+  gone. On coming back online Cauldron asks Morgana for the conversation and puts back whatever it
+  does not have. Only Morgana's side is recovered: the user's own turn is already on screen.
+- **A backend that accepts the turn but never answers.** A deadline of `Cauldron:ReplyTimeoutSeconds`
+  frees the composer and says so. It measures silence: every chunk pushes it back while a typewriter
+  still revealing text holds it off, so only an abandoned turn expires. What a stream had revealed
+  stays in the conversation as the partial reply it is.
+
 ## The embeddable widget
 
 `Widget` is a static-asset Razor Class Library — no C#, no Razor, no server of its own. Cauldron
@@ -102,6 +116,7 @@ collide with the widget's CSS or inherit into its shadow root.
 | `Cauldron:MorganaURL` | Backend base URL for REST plus SignalR (default `https://localhost:5001`) |
 | `Cauldron:Authentication:*` | `SymmetricKey` matching Morgana's entry for `Name=cauldron`, plus `Issuer` and `Audience` |
 | `Cauldron:AgentExitMessage` | The courtesy line injected when a specialised agent completes; `{0}` is its display name. Mirrors Rune's |
+| `Cauldron:ReplyTimeoutSeconds` | How long a turn may go silent before the composer is freed with a notice (default 120). Every chunk restarts the count |
 | `Cauldron:StreamingResponse:*` | `TypewriterTickMilliseconds` (15), `TypewriterTickChars` (1) |
 | `Cauldron:LandingMessages` | The "warming up" lines for the sparkle loader, picked at random per session |
 | `Cauldron:Widget:AllowedEmbedOrigins` | Origins allowed to frame Cauldron, emitted as CSP `frame-ancestors`. Empty (the default) means `'self'` only: **no external site can embed the widget until its origin is listed** |

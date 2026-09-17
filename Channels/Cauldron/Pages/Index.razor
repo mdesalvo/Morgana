@@ -170,6 +170,7 @@
     /// </summary>
     private Action? onStreamingStateChanged;
     private Action<bool>? onConnectionStateChanged;
+    private Action? onTurnAbandoned;
 
     // =========================================================================
     // LIFECYCLE
@@ -201,9 +202,24 @@
             onConnectionStateChanged = (connected) =>
             {
                 ChatStateService.IsConnected = connected;
+
+                // Back online: a reply pushed while this client was out of its group is gone for
+                // good unless it is asked for. Without it the composer would stay shut on a turn
+                // that Morgana has in fact already answered.
+                if (connected)
+                    _ = InvokeAsync(async () =>
+                    {
+                        if (await ConversationLifecycleService.RecoverMissedRepliesAsync())
+                            StateHasChanged();
+                    });
+
                 InvokeAsync(StateHasChanged);
             };
             SignalRService.OnConnectionStateChanged += onConnectionStateChanged;
+
+            // A turn given up on changes what is on screen from a thread of its own
+            onTurnAbandoned = () => InvokeAsync(StateHasChanged);
+            ConversationLifecycleService.OnTurnAbandoned += onTurnAbandoned;
 
             // Guards against re-running the whole bootstrap when the component re-initialises
             // on a circuit that already has its conversation.
@@ -394,6 +410,8 @@
         {
             try
             {
+                // Morgana is answering, so the turn keeps its place however long the answer runs
+                ConversationLifecycleService.NoteReplyActivity();
                 await StreamingService.HandleChunkAsync(chunkText);
             }
             catch (Exception ex)
@@ -562,6 +580,8 @@
             SignalRService.OnConnectionStateChanged -= onConnectionStateChanged;
         if (onStreamingStateChanged is not null)
             StreamingService.OnStateChanged -= onStreamingStateChanged;
+        if (onTurnAbandoned is not null)
+            ConversationLifecycleService.OnTurnAbandoned -= onTurnAbandoned;
 
         await StreamingService.DisposeAsync();
         await SignalRService.StopAsync();

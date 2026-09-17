@@ -40,4 +40,23 @@ public interface IConversationLifecycleService
     /// </summary>
     /// <returns>True if the message was sent successfully.</returns>
     Task<bool> SendMessageAsync(string text);
+
+    /// <summary>
+    /// Raised when a turn in flight has gone silent for longer than <c>Cauldron:ReplyTimeoutSeconds</c>
+    /// and is given up on. The subscriber owns the repaint, since it alone runs on the circuit.
+    /// </summary>
+    event Action? OnTurnAbandoned;
+
+    /// <summary>
+    /// Records that Morgana is answering — a chunk or a message — so the turn in flight keeps its
+    /// place. A turn that has already been answered or given up on is unaffected.
+    /// </summary>
+    void NoteReplyActivity();
+
+    /// <summary>
+    /// Recovers a reply pushed while this client was away, typically across a reconnection: the
+    /// conversation is compared with what Morgana holds and anything missing is appended.
+    /// Returns whether a turn that was waiting is now answered.
+    /// </summary>
+    Task<bool> RecoverMissedRepliesAsync();
 }

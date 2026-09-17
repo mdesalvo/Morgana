@@ -262,7 +262,7 @@ public sealed class ConsoleUiService
                 });
 
                 // Paint the opening frame. Morgana's first delivery is what normally brings the screen
-                // to life, and a backend too slow for the startup wait, or unable to reach the callback,
+                // to life. A backend too slow for the startup wait, or unable to reach the callback,
                 // would otherwise leave the user staring at a blank terminal with no header, no
                 // conversation id and no sign that Rune is waiting on anything.
                 lock (renderLock)
@@ -391,7 +391,7 @@ public sealed class ConsoleUiService
             catch (OperationCanceledException)
             {
                 // Shutdown was asked for (Ctrl+C, SIGTERM, SIGHUP): close the delivery stream so the
-                // conversation loop returns as well, and leave the exit flag alone — nobody typed /quit.
+                // conversation loop returns as well. The exit flag stays untouched — nobody typed /quit.
                 incoming.Writer.TryComplete();
                 return;
             }

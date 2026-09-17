@@ -15,7 +15,27 @@ public class ConversationLifecycleService : IConversationLifecycleService
     private readonly IConversationStorageService _storage;
     private readonly IConversationHistoryService _history;
     private readonly IChatStateService _chatStateService;
+    private readonly IStreamingService _streamingService;
     private readonly ILogger _logger;
+
+    /// <summary>Fallback for <c>Cauldron:ReplyTimeoutSeconds</c> when absent or non-positive.</summary>
+    private const int DefaultReplyTimeoutSeconds = 120;
+
+    /// <summary>
+    /// How long a turn may go completely silent before it is given up on. It measures silence, not
+    /// the length of the turn: every chunk pushes the deadline back, so a long answer still arriving
+    /// is never given up on. From <c>Cauldron:ReplyTimeoutSeconds</c>.
+    /// </summary>
+    private readonly TimeSpan _replyTimeout;
+
+    /// <summary>Counts down the silence on the turn in flight; null when nothing is being waited for.</summary>
+    private Timer? _replyDeadline;
+
+    /// <summary>Guards the deadline against a reply and a shutdown reaching it at the same moment.</summary>
+    private readonly Lock _replyDeadlineLock = new();
+
+    /// <inheritdoc />
+    public event Action? OnTurnAbandoned;
 
     public ConversationLifecycleService(
         HttpClient http,
@@ -23,6 +43,8 @@ public class ConversationLifecycleService : IConversationLifecycleService
         IConversationStorageService storage,
         IConversationHistoryService history,
         IChatStateService chatState,
+        IStreamingService streaming,
+        IConfiguration configuration,
         ILogger logger)
     {
         _http = http;
@@ -30,7 +52,12 @@ public class ConversationLifecycleService : IConversationLifecycleService
         _storage = storage;
         _history = history;
         _chatStateService = chatState;
+        _streamingService = streaming;
         _logger = logger;
+
+        // A non-positive wait would give up on every turn the instant it is sent, so it falls back too
+        int replyTimeoutSeconds = configuration.GetValue<int?>("Cauldron:ReplyTimeoutSeconds") ?? DefaultReplyTimeoutSeconds;
+        _replyTimeout = TimeSpan.FromSeconds(replyTimeoutSeconds > 0 ? replyTimeoutSeconds : DefaultReplyTimeoutSeconds);
     }
 
     /// <summary>
@@ -282,6 +309,9 @@ public class ConversationLifecycleService : IConversationLifecycleService
                 return false;
             }
 
+            // Morgana took the message: from here only its reply can free the composer, so give
+            // that reply a deadline of silence
+            NoteReplyActivity();
             return true;
         }
         catch (Exception ex)
@@ -292,6 +322,114 @@ public class ConversationLifecycleService : IConversationLifecycleService
                 $"Connection error: {ex.Message}. Please try again.",
                 "send_message_exception");
             _chatStateService.IsSending = false;
+            return false;
+        }
+    }
+
+    /// <inheritdoc />
+    public void NoteReplyActivity()
+    {
+        lock (_replyDeadlineLock)
+        {
+            _replyDeadline?.Dispose();
+            _replyDeadline = new Timer(_ => GiveUpOnTurn(), null, _replyTimeout, Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    /// <summary>Stops waiting on the turn in flight, leaving no deadline standing.</summary>
+    private void CancelReplyDeadline()
+    {
+        lock (_replyDeadlineLock)
+        {
+            _replyDeadline?.Dispose();
+            _replyDeadline = null;
+        }
+    }
+
+    /// <summary>
+    /// The turn has gone silent for the whole timeout. What a stream had already revealed is kept as
+    /// the partial reply it is, the composer is freed and the conversation says plainly that the
+    /// answer may never come — better than a typing indicator that would pulse for the rest of the
+    /// session. The repaint belongs to the subscriber, which is the one running on the circuit.
+    /// </summary>
+    private void GiveUpOnTurn()
+    {
+        // Text already received is still being revealed: Morgana has spoken and the screen is simply
+        // catching up, so the turn is alive and keeps its place
+        if (_streamingService.IsRevealing)
+        {
+            NoteReplyActivity();
+            return;
+        }
+
+        CancelReplyDeadline();
+
+        if (!_chatStateService.IsSending && !_chatStateService.HasTypingIndicator())
+            return;
+
+        _streamingService.AbandonStreaming();
+        _chatStateService.RemoveTypingIndicator();
+        _chatStateService.IsSending = false;
+        _chatStateService.AddChatError(
+            $"No answer from Morgana after {_replyTimeout.TotalSeconds:0} seconds. The turn may be lost — ask again.",
+            "reply_timeout");
+
+        OnTurnAbandoned?.Invoke();
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> RecoverMissedRepliesAsync()
+    {
+        // Nothing is waiting, so nothing was missed while this client was away
+        if (!_chatStateService.IsSending && !_chatStateService.HasTypingIndicator())
+            return false;
+
+        if (string.IsNullOrWhiteSpace(_chatStateService.ConversationId))
+            return false;
+
+        try
+        {
+            ConversationHistoryResponse? history = await _history.GetHistoryAsync(_chatStateService.ConversationId);
+            if (history?.Messages is not { Length: > 0 })
+                return false;
+
+            // What Morgana answered past what is on screen is what was pushed to a group this client
+            // had left. Only Morgana's side is recovered: the user's own turn went up on screen the
+            // moment it was sent and Morgana holds its own copy of it, which would read as a second
+            // one. The synthetic handover lines carry a backdated timestamp, so they never pass for
+            // the newest thing seen.
+            DateTime lastSeen = _chatStateService.ChatMessages.Count > 0
+                ? _chatStateService.ChatMessages.Max(message => message.Timestamp)
+                : DateTime.MinValue;
+
+            MorganaChatMessage[] missed =
+            [
+                .. history.Messages.Where(message =>
+                    message.Type == ChatMessageType.Assistant && message.Timestamp > lastSeen)
+            ];
+            if (missed.Length == 0)
+                return false;
+
+            _logger.LogInformation("Recovered {Count} message(s) delivered while this client was away", missed.Length);
+
+            // A stream cut short by the disconnection is closed first: the authoritative text is
+            // among the recovered messages and would otherwise be told twice on screen
+            _streamingService.AbandonStreaming();
+            _chatStateService.RemoveTypingIndicator();
+
+            foreach (MorganaChatMessage message in missed)
+                _chatStateService.ChatMessages.Add(MapToChatMessage(message));
+
+            _chatStateService.CurrentAgentName = missed[^1].AgentName ?? _chatStateService.CurrentAgentName;
+            _chatStateService.IsSending = false;
+            CancelReplyDeadline();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // The turn keeps waiting: the deadline is still standing and will close it if the reply
+            // truly never came
+            _logger.LogError(ex, "Could not recover the messages delivered while this client was away");
             return false;
         }
     }

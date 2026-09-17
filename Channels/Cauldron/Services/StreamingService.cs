@@ -46,6 +46,19 @@ public class StreamingService : IStreamingService
         }
     }
 
+    /// <summary>
+    /// True while text already received is still being revealed. A turn in this state is alive:
+    /// Morgana has spoken and the screen is simply catching up with it.
+    /// </summary>
+    public bool IsRevealing
+    {
+        get
+        {
+            lock (_sessionLock)
+                return _streamingBuffer.Length > 0;
+        }
+    }
+
     public StreamingService(IChatStateService chatState, IConfiguration configuration)
     {
         _chatStateService = chatState;
@@ -144,6 +157,24 @@ public class StreamingService : IStreamingService
 
             // Clearing the flag is what lets the next tick tear the session down
             _currentStreamingMessage.IsStreaming = false;
+        }
+    }
+
+    /// <summary>
+    /// Closes a response Morgana stopped sending. What was revealed stays in the conversation as the
+    /// partial reply it is, because it is what Morgana actually said; the session is freed so the
+    /// next turn does not write into a message belonging to the abandoned one.
+    /// </summary>
+    public bool AbandonStreaming()
+    {
+        lock (_sessionLock)
+        {
+            if (_currentStreamingMessage is null)
+                return false;
+
+            _currentStreamingMessage.IsStreaming = false;
+            StopStreaming();
+            return true;
         }
     }
 
