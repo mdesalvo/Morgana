@@ -25,7 +25,7 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
   - After a reconnection to Morgana the conversation groups were never joined again, so replies went to a group this client had left: the typing indicator stayed on screen and the input stayed locked until a reload
   - The connection to Morgana was given up for good after about 17 seconds of reconnection attempts, so any longer outage (e.g: a Morgana redeploy) left every open chat offline until a reload
   - A Morgana unreachable at page load showed an error banner and was never tried again, leaving the chat offline until a reload
-  - A reply pushed while the client was between two connections was lost for good: the chat came back online on a turn Morgana had in fact already answered, with the typing indicator pulsing and the composer shut. What was delivered in the meantime is now asked for and put back in the conversation
+  - Joining the groups again restored what Morgana said next, never what it had said during the gap: a reply pushed while the client sat between two connections was gone for good, leaving the chat to wait on a turn that was in fact already answered. What was delivered in the meantime is now asked for and put back in the conversation
   - A turn Morgana accepted but never delivered left the chat waiting for the rest of the session: the only way out was starting a new conversation, which throws this one away
 - **Grimoire (11)**
   - A message arriving just as the typewriter finished a reply, such as a dust warning, could land in the conversation above the reply it follows
