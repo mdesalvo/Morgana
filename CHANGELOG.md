@@ -30,7 +30,7 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
   - Every typewriter tick went through the whole conversation again: the cost of each tick grew with the length of the chat
   - A Morgana unreachable at startup ended Grimoire with an error and was never tried again
   - Any delivery reaching Grimoire's callback was shown on screen, even one meant for another conversation such as an abandoned start attempt or a previous run on the same port
-- **Rune (8)**
+- **Rune (9)**
   - Every keystroke redrew the whole screen and wrapped the whole conversation again: the cost of typing grew with the length of the chat and a pasted line paid it once per character
   - A Morgana unreachable at startup ended Rune with an error and was never tried again
   - Any delivery reaching Rune's callback was shown on screen, even one meant for another conversation such as an abandoned start attempt or a previous run on the same port
