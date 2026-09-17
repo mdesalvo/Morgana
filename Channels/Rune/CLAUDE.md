@@ -30,7 +30,10 @@ server-side**, even were a future Rune to claim them — which is why the aggres
 
 ## Lifecycle
 
-Logging is cleared, Kestrel starts listening, then `ConversationLifecycleService` wires the webhook
+Backend URL, callback URL and signing key are checked before anything else, every problem reported
+at once: the two URLs must be absolute `http(s)`, the key must no longer be the shipped
+`_SECURE_OVERRIDE_` marker. Each is fatal and the Live UI would swallow the reason. Logging is then cleared,
+Kestrel starts listening and `ConversationLifecycleService` wires the webhook
 receiver to the UI queue, opens the conversation with the handshake (retried at
 `MorganaStartRetryPolicy`'s pace while Morgana is unreachable) and blocks on the Live loop until
 `/quit` or `Esc`. A `finally` ends the conversation and stops the host. The webhook accepts only
@@ -63,16 +66,23 @@ by the adapter upstream**, which is the point of the channel. Channel identity l
 
 ## Terminal UI
 
-Spectre.Console `LiveDisplay` plus `Layout`: a sticky header (speaker, truncated conversation id)
-over a scrolling body, with the input line at the bottom. There is no streaming pane — there is no
-streaming. Colours: `magenta1` for base Morgana, `hotpink` for a specialised agent, white for the
-user.
+Spectre.Console `LiveDisplay` plus `Layout`: a sticky header (speaker, truncated conversation id,
+dust gauge, scroll and input-length indicators) over a scrolling body, with the input line at the
+bottom. There is no streaming pane — there is no streaming. Colours: `#10b981` emerald for base
+Morgana, `#6ee7b7` light green for a specialised agent, white for the user, orange for advisory
+warnings and red for errors.
 
 ### Input
 
 `Console.ReadKey(intercept: true)` on a background task polling every 25 ms — Spectre's Live
 rendering cannot share stdin with a first-class prompt. **Enter** commits (or exits on `/quit`),
-**Backspace** deletes, **Esc** exits.
+**Backspace** and **Delete** remove around the caret, **←/→** move it, **Esc** exits. At rest
+**↑/↓** and **PgUp/PgDn** scroll the transcript back; they are ignored while a turn is in flight, so
+the window never moves under an arriving reply. Repainting waits for the keystrokes to stop, so a
+pasted line costs one frame rather than one per character.
+
+A turn that Morgana accepts but never answers releases the prompt after `Rune:ReplyTimeoutSeconds`
+with a red notice, instead of locking the conversation until the process is killed.
 
 ### Resume
 
@@ -87,6 +97,8 @@ picking up a conversation id from a store must **re-announce the handshake**, si
 | `Rune:MorganaURL` · `:CallbackURL` | Backend base URL; the absolute URL Morgana POSTs to (default `https://localhost:5003/morgana-hook`) |
 | `Rune:Authentication:*` | `SymmetricKey` matching Morgana's entry for `Name=rune`, plus `Issuer` and `Audience` |
 | `Rune:MaxMessageLength` | The cap advertised at the handshake. Default `500`, aggressive on purpose so the downgrade runs every turn. Raising it (say `2000`) softens the rewrite without losing the profile; anything below `RichFeaturesMinLength` keeps rich features forced off server-side |
+| `Rune:MaxInputLength` | What the *user* may type in one turn, default `500`. Independent of `MaxMessageLength`, which caps what Morgana may send back: the two travel in opposite directions and nothing couples them |
+| `Rune:ReplyTimeoutSeconds` | How long a sent turn may go unanswered before the prompt comes back with a red notice (default 120). Raise it alongside `StartupTimeoutSeconds` on slow providers |
 | `Rune:AgentExitMessage` · `:LandingMessages` | The courtesy line on agent completion; the startup lines, cleared when the Live UI takes over. Both mirror Cauldron's |
 | `Rune:StartupTimeoutSeconds` | How long to wait for Morgana's first delivery before entering the Live UI anyway (default 30). Raise it on providers with cold starts |
 

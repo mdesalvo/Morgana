@@ -30,10 +30,16 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
   - Every typewriter tick went through the whole conversation again: the cost of each tick grew with the length of the chat
   - A Morgana unreachable at startup ended Grimoire with an error and was never tried again
   - Any delivery reaching Grimoire's callback was shown on screen, even one meant for another conversation such as an abandoned start attempt or a previous run on the same port
-- **Rune (3)**
-  - Every keystroke wrapped the whole conversation again: the cost of typing grew with the length of the chat
+- **Rune (8)**
+  - Every keystroke redrew the whole screen and wrapped the whole conversation again: the cost of typing grew with the length of the chat and a pasted line paid it once per character
   - A Morgana unreachable at startup ended Rune with an error and was never tried again
   - Any delivery reaching Rune's callback was shown on screen, even one meant for another conversation such as an abandoned start attempt or a previous run on the same port
+  - The line breaks Morgana wrote never reached the screen: a reply laid out on several lines arrived as a single paragraph, with the last word of a line glued to the first word of the next
+  - A turn Morgana accepted but never delivered left the conversation locked for the life of the process, with quitting as the only way out
+  - The settings Rune cannot run without failed far from their cause: a backend URL that is not absolute http(s) ended the process on an unrelated line, a signing key left at its placeholder died at the handshake
+  - A delivery whose body was not a message at all was answered as a failure of Rune's own, instead of as the malformed request it is
+  - Closing the terminal window while Rune was drawing a frame could break the drawing instead of letting the process leave the way it does on any other close
+  - Quitting with Ctrl+C left the keyboard loop failing on its way out rather than ending
 
 ### 📦 Dependencies
 - Updated `Microsoft.Agents.AI` to 1.21.0
