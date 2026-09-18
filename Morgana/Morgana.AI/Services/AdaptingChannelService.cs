@@ -19,9 +19,8 @@ public class AdaptingChannelService : IChannelService
     private readonly IChannelServiceFactory channelServiceFactory;
 
     /// <summary>
-    /// Registry of per-conversation channel metadata, populated by <c>ConversationManagerActor</c>
-    /// at handshake and queried here on every send to recover the capability budget and delivery
-    /// mode for the outgoing conversation.
+    /// Per-conversation channel metadata, recorded at the handshake and queried here on every send
+    /// to recover the capability budget and delivery mode for the outgoing conversation.
     /// </summary>
     private readonly IChannelMetadataStore channelMetadataStore;
 
@@ -46,15 +45,12 @@ public class AdaptingChannelService : IChannelService
     }
 
     /// <inheritdoc/>
-    /// <exception cref="InvalidOperationException">
-    /// No channel metadata is registered for the message's conversation — an internal invariant
-    /// violation, see <see cref="GetRegisteredMetadataOrThrow"/>.
-    /// </exception>
+    /// <exception cref="InvalidOperationException">The message's conversation has no handshake on record.</exception>
     public async Task SendMessageAsync(ChannelMessage channelMessage)
     {
         // One lookup serving both concerns below: capabilities decide what the message becomes,
         // coordinates decide who carries it.
-        ChannelMetadata registeredChannelMetadata = GetRegisteredMetadataOrThrow(channelMessage.ConversationId);
+        ChannelMetadata registeredChannelMetadata = await channelMetadataStore.GetChannelMetadataAsync(channelMessage.ConversationId);
 
         // Adapt before resolving the transport, never after: what the transport is handed must already
         // fit the channel and AdaptAsync short-circuits without I/O when it already does.
@@ -70,40 +66,18 @@ public class AdaptingChannelService : IChannelService
     }
 
     /// <inheritdoc/>
-    /// <exception cref="InvalidOperationException">
-    /// No channel metadata is registered for <paramref name="conversationId"/> — an internal
-    /// invariant violation, see <see cref="GetRegisteredMetadataOrThrow"/>.
-    /// </exception>
-    public Task SendStreamChunkAsync(string conversationId, string chunkText)
+    /// <exception cref="InvalidOperationException"><paramref name="conversationId"/> has no handshake on record.</exception>
+    public async Task SendStreamChunkAsync(string conversationId, string chunkText)
     {
         // Read for its coordinates alone: a chunk is a fragment of still-forming text, so the
         // capability budget the same record carries has nothing here to act on.
-        ChannelMetadata registeredChannelMetadata = GetRegisteredMetadataOrThrow(conversationId);
+        ChannelMetadata registeredChannelMetadata = await channelMetadataStore.GetChannelMetadataAsync(conversationId);
 
         // The route the conversation announced at the handshake, looked up again per chunk rather
         // than held: one decorator serves every conversation.
         IChannelService concreteChannelService = channelServiceFactory.Resolve(registeredChannelMetadata.Coordinates.DeliveryMode);
 
         // Puts the fragment on the channel, which appends it to the message taking shape on screen.
-        return concreteChannelService.SendStreamChunkAsync(conversationId, chunkText);
-    }
-
-    /// <summary>
-    /// Looks up the registered channel metadata or throws. A miss here is an internal invariant
-    /// violation, not a client mistake — the start-conversation gate and ConversationManagerActor
-    /// guarantee registration before any send path can be reached.
-    /// </summary>
-    /// <param name="conversationId">Conversation whose handshake record is looked up.</param>
-    /// <returns>The registered metadata: coordinates (for transport resolution) plus capabilities (for adaptation).</returns>
-    /// <exception cref="InvalidOperationException">No metadata is registered for the conversation.</exception>
-    private ChannelMetadata GetRegisteredMetadataOrThrow(string conversationId)
-    {
-        // Throwing beats sending blind: with no handshake there is neither a transport to pick nor a
-        // budget to degrade against and guessing either would deliver something nobody declared.
-        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out ChannelMetadata? registeredChannelMetadata))
-            throw new InvalidOperationException(
-                $"No channel metadata registered for conversation {conversationId}; " +
-                "the start-conversation gate should have ensured registration before any send.");
-        return registeredChannelMetadata;
+        await concreteChannelService.SendStreamChunkAsync(conversationId, chunkText);
     }
 }

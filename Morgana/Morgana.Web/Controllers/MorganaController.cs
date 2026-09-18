@@ -24,6 +24,7 @@ public class MorganaController : ControllerBase
     private readonly ILogger logger;
     private readonly IChannelService channelService;
     private readonly IChannelServiceFactory channelServiceFactory;
+    private readonly IChannelMetadataStore channelMetadataStore;
     private readonly IConversationPersistenceService conversationPersistenceService;
     private readonly IAuthenticationService authenticationService;
     private readonly IRateLimitService rateLimitService;
@@ -40,6 +41,7 @@ public class MorganaController : ControllerBase
         ILogger logger,
         IChannelService channelService,
         IChannelServiceFactory channelServiceFactory,
+        IChannelMetadataStore channelMetadataStore,
         IConversationPersistenceService conversationPersistenceService,
         IAuthenticationService authenticationService,
         IRateLimitService rateLimitService,
@@ -51,6 +53,7 @@ public class MorganaController : ControllerBase
         this.logger = logger;
         this.channelService = channelService;
         this.channelServiceFactory = channelServiceFactory;
+        this.channelMetadataStore = channelMetadataStore;
         this.conversationPersistenceService = conversationPersistenceService;
         this.authenticationService = authenticationService;
         this.rateLimitService = rateLimitService;
@@ -60,11 +63,12 @@ public class MorganaController : ControllerBase
     }
 
     /// <summary>
-    /// Starts a new conversation by creating a ConversationManagerActor and triggering presentation generation.
+    /// Starts a new conversation: settles its handshake on record, then creates the
+    /// ConversationManagerActor and triggers presentation generation.
     /// </summary>
     /// <param name="request">Request containing the conversation ID to start</param>
     /// <returns>
-    /// 202 Accepted with conversation details immediately.
+    /// 202 Accepted once the conversation exists on record: a message sent right after is served.
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpPost("conversation/start")]
@@ -104,29 +108,33 @@ public class MorganaController : ControllerBase
 
             // Webhook-specific addressing gate: the push-style transport cannot route outbound
             // traffic without a reachable callback URL, so a handshake declaring deliveryMode=webhook
-            // without a well-formed absolute URL is rejected here — the same shape as the generic
-            // gate above, just narrower. Other transports (signalr, future pull/duplex modes) leave
-            // CallbackUrl null; no requirement applies to them.
+            // without an absolute http(s) URL is rejected here — the same shape as the generic gate
+            // above, just narrower. The scheme is required too: on Unix a bare path such as "/hook"
+            // parses as an absolute file URI, which nothing can POST to. Other transports (signalr,
+            // future pull/duplex modes) leave CallbackUrl null; no requirement applies to them.
             string normalisedDeliveryMode = request.ChannelMetadata.Coordinates.DeliveryMode.Trim().ToLowerInvariant();
             if (normalisedDeliveryMode == Constants.DeliveryModes.Webhook
-                 && (string.IsNullOrWhiteSpace(request.ChannelMetadata.Coordinates.CallbackUrl)
-                     || !Uri.TryCreate(request.ChannelMetadata.Coordinates.CallbackUrl, UriKind.Absolute, out _)))
+                 && !(Uri.TryCreate(request.ChannelMetadata.Coordinates.CallbackUrl, UriKind.Absolute, out Uri? callbackUri)
+                      && (callbackUri.Scheme == Uri.UriSchemeHttp || callbackUri.Scheme == Uri.UriSchemeHttps)))
             {
                 logger.LogWarning(
                     "Start requested for conversation {ConversationId} with deliveryMode=webhook but missing or invalid callbackUrl; returning 400",
                     request.ConversationId);
                 return BadRequest(new
                 {
-                    error = "deliveryMode=webhook requires a well-formed absolute callbackUrl in channel coordinates.",
+                    error = "deliveryMode=webhook requires an absolute http(s) callbackUrl in channel coordinates.",
                     conversationId = request.ConversationId
                 });
             }
 
+            // Settled before answering, so the conversation exists on record the moment the client
+            // learns it started: a message it sends straight away finds it, on this process or any other.
+            await channelMetadataStore.RegisterChannelMetadataAsync(request.ConversationId, request.ChannelMetadata);
+
             IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
                 Constants.Actors.Manager, request.ConversationId);
 
-            manager.Tell(new Records.CreateConversation(
-                request.ConversationId, false, request.ChannelMetadata));
+            manager.Tell(new Records.CreateConversation(request.ConversationId));
 
             logger.LogInformation("Conversation creation queued: {RequestConversationId}", request.ConversationId);
 
@@ -177,11 +185,13 @@ public class MorganaController : ControllerBase
     }
 
     /// <summary>
-    /// Resumes an existing conversation by restoring actor hierarchy and active agent state from persistent storage.
+    /// Resumes an existing conversation for a client coming back to it: reports what it needs to
+    /// redraw its state. Read-only: the conversation's actors come back with its next message.
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation to resume</param>
     /// <returns>
-    /// 202 Accepted with conversation details and restored active agent immediately.
+    /// 202 Accepted with conversation details and the active agent on record.
+    /// 404 Not Found if the conversation was never started.
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpPost("conversation/{conversationId}/resume")]
@@ -206,32 +216,17 @@ public class MorganaController : ControllerBase
                 return NotFound(new { error = "Conversation not found", conversationId });
             }
 
-            // Resume the manager owning this conversation
-            IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
-                Constants.Actors.Manager, conversationId);
-
-            // Send it the message to restore this conversation
-            manager.Tell(new Records.CreateConversation(
-                conversationId, true));
-
-            // Get most recent active agent from database
+            // Nothing is set up here: the conversation's actors come back with its first message and
+            // take their state from its record, exactly as after a restart. The active agent is read
+            // only to be reported to the client.
             string? lastActiveAgent = await conversationPersistenceService
                 .GetMostRecentActiveAgentAsync(conversationId);
 
-            // Tell manager to restore active agent, if found
-            if (!string.IsNullOrWhiteSpace(lastActiveAgent))
-                manager.Tell(new Records.RestoreActiveAgent(lastActiveAgent));
-
             logger.LogInformation(
-                "Conversation resume queued: {ConversationId} with active agent: {LastActiveAgent}", conversationId, lastActiveAgent);
+                "Conversation resumed: {ConversationId} with active agent: {LastActiveAgent}", conversationId, lastActiveAgent);
 
-            // Surface the REMAINING dust fraction on resume (fuel-gauge semantics:
-            // 1.0 = full, 0.0 = empty) so the client can rehydrate its gauge immediately.
-            // Floor to whole-percent steps so this matches the gauge display and the
-            // DustLevel <= 0.0 exhaustion gate. Null when dust limiting is disabled.
-            double? dustLevel = dustLimitingOptions.Enabled
-                ? Math.Floor(Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0) * 100.0) / 100.0
-                : null;
+            // The gauge as the client last saw it, so it is redrawn immediately on resume
+            double? dustLevel = await dustLimitService.GetRemainingLevelAsync(conversationId);
 
             // If the resumed conversation is already dust-dead, hand the client the
             // canonical terminal message (the very same dustLimitingOptions.ErrorMessage
@@ -291,7 +286,11 @@ public class MorganaController : ControllerBase
 
             logger.LogInformation("Retrieved {ChatMessagesLength} messages for conversation {ConversationId}", chatMessages.Length, conversationId);
 
-            return Ok(new ConversationHistoryResponse(chatMessages));
+            // The gauge travels with the transcript: a client catching up on replies it missed
+            // redraws it as the pushes it missed would have
+            return Ok(new ConversationHistoryResponse(
+                chatMessages,
+                await dustLimitService.GetRemainingLevelAsync(conversationId)));
         }
         catch (Exception ex)
         {
@@ -308,6 +307,7 @@ public class MorganaController : ControllerBase
     /// <param name="request">Request containing conversation ID and message text</param>
     /// <returns>
     /// 202 Accepted immediately after message is queued.
+    /// 404 Not Found if the conversation was never started.
     /// 500 Internal Server Error on failure to queue message.
     /// </returns>
     [HttpPost("conversation/{conversationId}/message")]
@@ -319,6 +319,17 @@ public class MorganaController : ControllerBase
             (IActionResult? authFailure, string? callerId) = await AuthenticateRequestAsync();
             if (authFailure is not null)
                 return authFailure;
+            #endregion
+
+            #region Unknown Conversation
+            // A message only continues a conversation that was started: it opens none. Checked
+            // before the rate limiter, whose own bookkeeping would otherwise create the conversation's
+            // database and with it a conversation that never had a handshake.
+            if (!conversationPersistenceService.ConversationExists(request.ConversationId))
+            {
+                logger.LogWarning("Message for unknown conversation {RequestConversationId}; returning 404", request.ConversationId);
+                return NotFound(new { error = "Conversation not found", conversationId = request.ConversationId });
+            }
             #endregion
 
             #region Rate Limiting

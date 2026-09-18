@@ -57,6 +57,20 @@ public interface IChatStateService
     double? DustLevel { get; set; }
 
     /// <summary>
+    /// The latest timestamp Morgana wrote on a reply this client was given, pushed or recovered.
+    /// It is what a catch-up compares the conversation's history with: both sides of the
+    /// comparison come from Morgana's clock, so a skewed clock here cannot hide or repeat a reply.
+    /// </summary>
+    DateTime LatestDeliveredTimestamp { get; }
+
+    /// <summary>
+    /// Records that a reply Morgana stamped at <paramref name="morganaTimestamp"/> is on screen.
+    /// Only a message Morgana also keeps in the conversation's history belongs here, never a
+    /// transient warning or anything stamped by this client.
+    /// </summary>
+    void NoteDelivered(DateTime morganaTimestamp);
+
+    /// <summary>
     /// Adds a user message to the chat.
     /// </summary>
     void AddUserMessage(string text);

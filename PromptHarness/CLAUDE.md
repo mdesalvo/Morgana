@@ -31,7 +31,7 @@ project: every build setting lives in the `.csproj`, so it carries unchanged acr
 
 ## Commands
 
-Thirteen test classes. **Never combine filters**: four groups carry a process-wide boot knob the
+Fourteen test classes. **Never combine filters**: four groups carry a process-wide boot knob the
 others must not see. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
@@ -42,6 +42,7 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~HarnessSmokeTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~StartupValidationTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~AgentCardTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PeerFederationTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ConversationApiTests"
 
 # blocking
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ContextHandlingTests"
@@ -88,7 +89,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `ServedConsultationTests` | — | This installation answering a partner: which conversation, what it cost, how many exchanges are admitted |
 | `SummarizationTests` | — | The reducer's own prompt, unreachable at the default 21-message trigger |
 | `DustTests` | — | The budget thresholds, crossed in order. Evidence-driven rather than turn-pinned: how many turns it takes is a real token measurement |
-| `AgentCardTests` · `StartupValidationTests` · `PeerFederationTests` | none | Wire contracts and boot refusals, asserted deterministically. **Every literal is spelled out in the test** rather than read from `Constants`: a test comparing a constant against itself asserts that a constant equals a constant, while the point is to notice a published document changing shape under whoever consumes it |
+| `AgentCardTests` · `StartupValidationTests` · `PeerFederationTests` · `ConversationApiTests` | none | Wire contracts and boot refusals, asserted deterministically. **Every literal is spelled out in the test** rather than read from `Constants`: a test comparing a constant against itself asserts that a constant equals a constant, while the point is to notice a published document changing shape under whoever consumes it |
 | `FederationTests` | — | Two Morganas, one consulting the other — the only test where the card is written by a Morgana, read by a Morgana and the token one mints is proven by the other |
 
 **The judge sees exactly what a user would see** — text, buttons, the card as rendered — never the

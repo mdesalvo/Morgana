@@ -147,10 +147,10 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `conversation/start` | POST | Validates `ChannelMetadata` (required), creates the manager actor |
+| `conversation/start` | POST | Validates `ChannelMetadata` (required), settles it on record, then creates the manager actor |
 | `conversation/{id}/end` | POST | Stops the supervisor |
-| `conversation/{id}/resume` | POST | 404 if unknown; restores the active agent |
-| `conversation/{id}/message` | POST | Auth, then rate limit, then dust budget, then `UserMessage` |
+| `conversation/{id}/resume` | POST | 404 if unknown; read-only, reports the active agent and the dust level |
+| `conversation/{id}/message` | POST | Auth, 404 if unknown, then rate limit, then dust budget, then `UserMessage` |
 | `conversation/{id}/history` | GET | `ConversationHistoryResponse` |
 | `health` | GET | Actor system liveness |
 
@@ -231,7 +231,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `HistoryReducerService` | *(factory)* | Builds `MorganaChatReducer` from config; `null` means "hand the LLM everything" |
 | `MorganaChatReducer` | `IChatReducer` | Replaces MEAI's summarizer, which drops every function-call message — so a tool-driven agent's summary reported, accurately for its view, that no tool ran |
 | `AdaptingChannelService` | `IChannelService` | Decorator: degrade through `MorganaChannelAdapter`, then dispatch by `deliveryMode` |
-| `ChannelMetadataStore` | `IChannelMetadataStore` | Leaf singleton, so concrete transports read per-conversation coordinates without a DI cycle |
+| `ChannelMetadataStore` | `IChannelMetadataStore` | The one owner of a conversation's channel: normalises the handshake, persists it and refuses a conversation without one. Leaf singleton, so concrete transports read it without a DI cycle |
 
 ## LLM providers and tiers
 
@@ -350,11 +350,24 @@ ChannelMetadataStore                          leaf singleton, read by both
 
 **Handshake**: at start the client announces `ChannelMetadata` — `ChannelCoordinates` (channelName
 plus deliveryMode) and `ChannelCapabilities`. The controller rejects a missing or unserved
-`deliveryMode`; coordinates are normalized (trim, lowercase) and persisted.
+`deliveryMode`, then `ChannelMetadataStore` settles it before `start` answers: coordinates trimmed
+and lowercased, capabilities turned into what Morgana will actually send (a channel too short for
+rich features loses them, one whose messages will need adapting loses streaming), then persisted.
+Every reader takes that record as is, with no channel rule of its own.
+
+**Surviving a restart**: a conversation is served from its record, never from which endpoint reached
+this process first. The channel is read back by the store, the active agent by the supervisor at its
+first turn, so a client that only reconnected its transport carries on where it was. `resume` sets
+nothing up: it only tells a returning client what to redraw.
+
+**A delivery that fails is repaired by the side that sees it fail.** A SignalR push to an empty group
+is lost without a trace on Morgana's side, so the client catches up from the history when it comes
+back. A webhook POST that fails is seen by Morgana, which delivers it again for about half a minute.
+A reply is dated identically on the push and in the history (`RecordedTimestamp`), which is what lets
+a catch-up tell a missed reply from one already shown.
 
 **Adaptation** (`MorganaChannelAdapter.AdaptAsync`): short-circuit if it fits the budget, then an
-LLM-guided rewrite, then a Markdig template fallback. Never throws. Streaming is suppressed upstream
-when unsupported or when adaptation would be needed.
+LLM-guided rewrite, then a Markdig template fallback. Never throws.
 
 ## Persistence
 

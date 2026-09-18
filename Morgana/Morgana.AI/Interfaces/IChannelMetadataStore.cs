@@ -1,45 +1,50 @@
-using System.Diagnostics.CodeAnalysis;
 using Morgana.Contracts;
 
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
-/// In-process registry of per-conversation <see cref="ChannelMetadata"/> (channel
-/// name plus capability budget). Owned by the same singleton that decorates the outbound
-/// channel (<c>AdaptingChannelService</c>) so the decorator can look up the metadata to
-/// apply when degrading an outbound <see cref="ChannelMessage"/>, while producers
-/// (typically <c>ConversationManagerActor</c>) register and unregister entries at
-/// conversation start / end.
+/// The channel of each conversation: coordinates plus capability budget, settled once at the
+/// handshake. Every outbound path reads it: the adapting decorator, the concrete transports, the
+/// presenter and the supervisor stamping per-turn agent requests.
 /// </summary>
 /// <remarks>
-/// <para><strong>Lifecycle:</strong></para>
-/// <list type="bullet">
-/// <item><term>RegisterChannelMetadata</term><description>Called by <c>ConversationManagerActor</c> after the channel handshake (or after restoring a persisted entry on resume), once per conversation.</description></item>
-/// <item><term>TryGetChannelMetadata</term><description>Called by the decorator on every outbound send and by <c>ConversationSupervisorActor</c> when constructing per-turn <c>AgentRequest</c>.</description></item>
-/// <item><term>UnregisterChannelMetadata</term><description>Called by <c>ConversationManagerActor</c> on conversation end / actor stop to release the entry.</description></item>
-/// </list>
-/// <para><strong>Why not actor-resident state:</strong></para>
-/// <para>The decorator lives in DI as a singleton and cannot ask Akka for an actor reference
-/// on the hot send path. Keeping a process-wide registry keyed by conversation id is the
-/// simplest way to give the decorator O(1) access without breaking the existing actor model.</para>
+/// <para><strong>The conversation database is the record, memory only a copy of it.</strong> A
+/// conversation outlives the process serving it: after a restart the first message may reach a host
+/// that never saw its handshake, through a client that only reconnected its transport. A lookup that
+/// misses in memory is therefore answered from the persisted handshake, so no caller depends on
+/// which endpoint happened to reach this process first.</para>
+/// <para><strong>The store alone decides what a channel gets.</strong> What a channel declares is
+/// turned into what Morgana will send it once, at registration, then persisted in that form: no
+/// reader applies a channel rule of its own. Likewise a missing handshake is refused here and never
+/// restated by a reader, since none of them has a fallback.</para>
+/// <para><strong>Why a leaf singleton:</strong> the decorator lives in DI and cannot ask Akka for an
+/// actor reference on the hot send path, while folding the registry into it would close a DI cycle
+/// with the transports that read it too.</para>
 /// </remarks>
 public interface IChannelMetadataStore
 {
     /// <summary>
-    /// Registers (or replaces) the channel metadata for a conversation.
+    /// Settles the handshake of a conversation being started. What the channel declared is
+    /// normalised into what Morgana will send it, persisted in the conversation's database and kept
+    /// in memory. Once this returns the conversation exists on record.
     /// </summary>
-    void RegisterChannelMetadata(string conversationId, ChannelMetadata channelMetadata);
+    /// <returns>The channel as every reader will see it from now on.</returns>
+    /// <remarks>A handshake that cannot be persisted fails the call: the conversation does not exist
+    /// and the start must fail, since nothing else of it could be recorded either.</remarks>
+    Task<ChannelMetadata> RegisterChannelMetadataAsync(string conversationId, ChannelMetadata declaredChannelMetadata);
 
     /// <summary>
-    /// Removes the metadata entry for a conversation. No-op if no entry exists.
+    /// Drops the in-memory copy of a conversation's handshake. The persisted record stays, so a
+    /// later lookup for the same conversation still finds it.
     /// </summary>
-    void UnregisterChannelMetadata(string conversationId);
+    void EvictChannelMetadata(string conversationId);
 
     /// <summary>
-    /// Looks up the channel metadata for a conversation.
+    /// Returns the channel of a conversation, from memory or else from its database. Every send
+    /// asks, stream chunks included: past the first lookup the answer is in memory, with no I/O.
     /// </summary>
-    /// <returns>True when an entry exists; false otherwise. A false result indicates that the
-    /// controller gate or the manager registration step was bypassed and callers must treat
-    /// this as an invariant violation — there is no transport-level default to fallback to.</returns>
-    bool TryGetChannelMetadata(string conversationId, [NotNullWhen(true)] out ChannelMetadata? channelMetadata);
+    /// <exception cref="InvalidOperationException">The conversation never completed a handshake:
+    /// the start-conversation gate refuses to open one without it, so this is a fault to surface
+    /// and never a case to serve.</exception>
+    ValueTask<ChannelMetadata> GetChannelMetadataAsync(string conversationId);
 }

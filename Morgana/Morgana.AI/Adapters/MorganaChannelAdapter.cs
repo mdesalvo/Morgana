@@ -175,12 +175,15 @@ public class MorganaChannelAdapter
       + (channelMessage.RichCard?.EstimateCost() ?? 0)
       + (channelMessage.QuickReplies?.Sum(quickReply => quickReply.EstimateCost()) ?? 0);
 
-    // Detects markdown via Markdig parser: plain text = ParagraphBlock + LiteralInline only.
+    // Detects markdown via Markdig parser: plain text is paragraphs of literals, whose lines may
+    // simply follow one another. Only a hard break (trailing spaces, backslash) is markdown syntax.
     private static bool ContainsMarkdown(string text)
     {
         MarkdownDocument document = Markdown.Parse(text);
         return document.Descendants()
-                       .Any(node => node is not ParagraphBlock && node is not LiteralInline);
+                       .Any(node => node is not ParagraphBlock
+                                    && node is not LiteralInline
+                                    && node is not LineBreakInline { IsHard: false });
     }
 
     // Enforces MaxMessageLength: strip markdown first (cheaper); truncate with ellipsis if still over.

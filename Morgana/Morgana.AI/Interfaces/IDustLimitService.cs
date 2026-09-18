@@ -45,6 +45,14 @@ public interface IDustLimitService
     Task<double> GetUsageRatioAsync(string conversationId);
 
     /// <summary>
+    /// The level a channel's dust gauge shows: the fraction of the budget still available (1.0 =
+    /// full, 0.0 = spent), floored to whole-percent steps so 0.0 is exactly the over-budget state
+    /// <see cref="IsOverBudgetAsync"/> blocks on. Null when dust limiting is disabled, which tells a
+    /// channel to show no gauge at all.
+    /// </summary>
+    Task<double?> GetRemainingLevelAsync(string conversationId);
+
+    /// <summary>
     /// Atomically checks the 70% and 90% thresholds against their one-shot flags, marking
     /// any newly-crossed threshold so it never re-triggers. Returns which warnings the caller
     /// should emit. (false, false) on error or when disabled.

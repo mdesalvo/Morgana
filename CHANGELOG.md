@@ -7,18 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.31.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: Cross-Instance collaboration over A2A
-Morgana now speaks the **A2A protocol** instance to instance. Every agent is published at `/a2a/{intent}` with its well-known agent card. Agents can consult peers living on **remote Morgana instances**: `[ConsultsAgent("shipping", "acme")]` names an "acme" partner trusted under `Morgana:AgentToAgent:Partners` on which the agent "shipping" can be engaged.
+Morgana now speaks the **A2A protocol** instance to instance. Every agent is published at `/a2a/{intent}` with its well-known agent card. Agents can consult (and be consulted by) peers living on **remote Morgana instances**: `[ConsultsAgent("shipping", "acme")]` names an "acme" partner trusted under `Morgana:AgentToAgent:Partners` on which their agent "shipping" can be engaged and from which this Morgana may also be engaged.
 
 ### ✨ Added
-- **`[ConsultsAgent("intent", "partner")]`** and **`Partners[]`** — a peer published by a trusted remote installation, opening Morgana to remote A2A collaboration
+- **`[ConsultsAgent("intent", "partner")]`** and **`Partners[]`** — a peer published by a trusted remote installation, opening Morgana to **remote A2A collaboration**
 
 ### 🔄 Changed
-- **`other` intent belongs to the Classifier** — the complement of a domain is no longer declared by every `agents.json`, but described once in the Classifier prompt. The name is reserved: a plugin declaring it is refused
-- **A deployment may bring several plugins** — every `agents.json` found is merged into the domain, instead of the first one discovered silently winning. Two plugins claiming the same intent, or the same prompt id, are refused at startup naming both
-- **Alembic has a brand new look and layout** — the workbench has been redesigned on Microsoft's **Fluent UI Blazor 5**
+- **`other` intent belongs to the Classifier**: the complement of a domain is no longer declared by every `agents.json`, but described once in the Classifier prompt. The name is reserved: a plugin declaring it is refused
+- **A deployment may bring several plugins**: every `agents.json` found is merged into the domain, instead of the first one discovered silently winning. Two plugins claiming the same intent, or the same prompt id, are refused at startup naming both
+- **Alembic has a brand new layout**: the workbench has been redesigned on Microsoft's **Fluent UI Blazor 5**
 
 ### 🐛 Fixed
-- **Cauldron (9)**
+- A conversation could not survive a Morgana restart: its first message afterwards failed without an answer and the agent the user was talking to was forgotten, so even a working reply would have treated the answer to that agent's question as a brand-new request
+- A reply a webhook channel could not take at that moment was lost for good, leaving the turn to expire on the channel's own deadline
+- When the model provider left a reply undated, the history dated it at the moment it was read, so a resumed conversation could list it out of place
+- The classifier's confidence was written in the host's locale: this could make it read "0,95" instead of "0.95", so telemetry and any tool reading it back found no number
+- Plain prose running over several lines was taken for Markdown, so a channel without Markdown support (e.g: Rune) paid an LLM rewrite for a reply that already fitted it
+- **Cauldron (12)**
   - Every typewriter tick redrew the whole conversation, running Markdown and the HTML sanitizer again on every message and every rich card field: the server-side cost grew with the length of the chat
   - Dismissing a warning banner could hide the one after it without ever removing it, since banners were matched to their components by position: a hidden dust-exhaustion notice left the input locked with no explanation on screen
   - The typewriter ran on its own thread with no guard against the arrival of the final message, which could append a stray character to the finished reply or throw on the timer thread and bring the whole Cauldron process down
@@ -27,6 +32,9 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
   - A Morgana unreachable at page load showed an error banner and was never tried again, leaving the chat offline until a reload
   - Joining the groups again restored what Morgana said next, never what it had said during the gap: a reply pushed while the client sat between two connections was gone for good, leaving the chat to wait on a turn that was in fact already answered. What was delivered in the meantime is now asked for and put back in the conversation
   - A turn Morgana accepted but never delivered left the chat waiting for the rest of the session: the only way out was starting a new conversation, which throws this one away
+  - The replies missed across a reconnection were found by comparing the Cauldron host's clock with Morgana's: a reply could be missed or come back a second time
+  - A reply cut short by a reconnection stayed on screen as a fragment beside the full reply recovered after it
+  - A turn that went silent was given up on without checking whether Morgana had in fact answered it
   - The settings Cauldron cannot run without failed far from their cause: a backend URL that is not absolute http(s) brought the application down on an unrelated line, a signing key left at its placeholder served a chat refused by Morgana at the first conversation
 - **Grimoire (11)**
   - A message arriving just as the typewriter finished a reply, such as a dust warning, could land in the conversation above the reply it follows

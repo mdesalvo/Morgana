@@ -170,7 +170,7 @@
     /// </summary>
     private Action? onStreamingStateChanged;
     private Action<bool>? onConnectionStateChanged;
-    private Action? onTurnAbandoned;
+    private Action? onReplyDeadlineExpired;
 
     // =========================================================================
     // LIFECYCLE
@@ -207,19 +207,16 @@
                 // good unless it is asked for. Without it the composer would stay shut on a turn
                 // that Morgana has in fact already answered.
                 if (connected)
-                    _ = InvokeAsync(async () =>
-                    {
-                        if (await ConversationLifecycleService.RecoverMissedRepliesAsync())
-                            StateHasChanged();
-                    });
+                    _ = InvokeAsync(DeliverMissedRepliesAsync);
 
                 InvokeAsync(StateHasChanged);
             };
             SignalRService.OnConnectionStateChanged += onConnectionStateChanged;
 
-            // A turn given up on changes what is on screen from a thread of its own
-            onTurnAbandoned = () => InvokeAsync(StateHasChanged);
-            ConversationLifecycleService.OnTurnAbandoned += onTurnAbandoned;
+            // The deadline expires on a timer thread: the turn is settled on the circuit, which alone
+            // may touch what is on screen
+            onReplyDeadlineExpired = () => _ = InvokeAsync(SettleSilentTurnAsync);
+            ConversationLifecycleService.OnReplyDeadlineExpired += onReplyDeadlineExpired;
 
             // Guards against re-running the whole bootstrap when the component re-initialises
             // on a circuit that already has its conversation.
@@ -347,6 +344,12 @@
                 if (ChatStateService.ConversationId != message.ConversationId)
                     return;
 
+                // A reply this client already has, pushed and then read back from the history by a
+                // catch-up that overlapped the push: it is on screen once
+                if (message.Timestamp <= ChatStateService.LatestDeliveredTimestamp)
+                    return;
+                ChatStateService.NoteDelivered(message.Timestamp);
+
                 // PATH 1: this message closes a response already typing itself out on screen
                 if (StreamingService.IsStreaming)
                 {
@@ -389,6 +392,49 @@
             }
             await Task.CompletedTask;
         });
+    }
+
+    /// <summary>
+    /// Puts on screen what Morgana pushed while this client could not receive it, through the same
+    /// path a push takes, so a recovered reply looks and behaves exactly like one never missed.
+    /// </summary>
+    /// <returns>True when at least one reply was recovered.</returns>
+    private async Task<bool> DeliverMissedRepliesAsync()
+    {
+        IReadOnlyList<ChannelMessage> missedReplies = await ConversationLifecycleService.GetMissedRepliesAsync();
+
+        foreach (ChannelMessage missedReply in missedReplies)
+            await HandleMessageReceivedAsync(missedReply);
+
+        return missedReplies.Count > 0;
+    }
+
+    /// <summary>
+    /// Settles a turn that has gone silent for the whole reply timeout. A reply Morgana wrote but
+    /// could not push wins over the notice: the history is asked before the turn is given up on.
+    /// </summary>
+    private async Task SettleSilentTurnAsync()
+    {
+        // Text already received is still being revealed: Morgana has spoken and the screen is simply
+        // catching up, so the turn is alive and keeps its place
+        if (StreamingService.IsRevealing)
+        {
+            ConversationLifecycleService.NoteReplyActivity();
+            return;
+        }
+
+        if (!ConversationLifecycleService.IsAwaitingReply)
+            return;
+
+        if (await DeliverMissedRepliesAsync())
+            return;
+
+        // A push may have answered the turn while the history was being read
+        if (!ConversationLifecycleService.IsAwaitingReply)
+            return;
+
+        ConversationLifecycleService.AbandonTurn();
+        StateHasChanged();
     }
 
     // =========================================================================
@@ -580,8 +626,8 @@
             SignalRService.OnConnectionStateChanged -= onConnectionStateChanged;
         if (onStreamingStateChanged is not null)
             StreamingService.OnStateChanged -= onStreamingStateChanged;
-        if (onTurnAbandoned is not null)
-            ConversationLifecycleService.OnTurnAbandoned -= onTurnAbandoned;
+        if (onReplyDeadlineExpired is not null)
+            ConversationLifecycleService.OnReplyDeadlineExpired -= onReplyDeadlineExpired;
 
         await StreamingService.DisposeAsync();
         await SignalRService.StopAsync();

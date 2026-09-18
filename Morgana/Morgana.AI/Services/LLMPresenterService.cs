@@ -74,29 +74,21 @@ public class LLMPresenterService : IPresenterService
 
     /// <inheritdoc/>
     /// <exception cref="InvalidOperationException">
-    /// No channel metadata is registered for <paramref name="conversationId"/>. This is an invariant
-    /// violation (the controller gate or the ConversationManagerActor registration step was bypassed),
-    /// not an LLM failure, so it is surfaced rather than routed to the fallback.
+    /// The conversation has no handshake on record: not an LLM failure, so it is surfaced rather than
+    /// routed to the fallback.
     /// </exception>
-    public Task<Records.PresentationResult> GenerateAsync(
+    public async Task<Records.PresentationResult> GenerateAsync(
         IReadOnlyList<Records.IntentDefinition> displayableIntents,
         string conversationId)
     {
-        // Resolve the originating channel from the conversation id.
-        // The store contract guarantees an entry exists once the controller gate and ConversationManagerActor have run,
-        // so a miss here is an invariant violation we have to surface rather than mask.
-        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out ChannelMetadata? channelMetadata))
-        {
-            throw new InvalidOperationException(
-                $"LLMPresenterService: no channel metadata registered for conversation '{conversationId}'. " +
-                "This indicates the controller gate or the ConversationManagerActor registration step was bypassed.");
-        }
+        // The originating channel decides what the presentation may carry
+        ChannelMetadata channelMetadata = await channelMetadataStore.GetChannelMetadataAsync(conversationId);
 
         // Single-shot per channel. The first caller for `channelName` triggers BuildPresentationResultAsync
         // through the Lazy<Task<>>; every subsequent caller re-enters the same Task and observes
         // the same materialised PresentationResult.
         ChannelCapabilities channelCapabilities = channelMetadata.Capabilities;
-        return cache.GetOrAdd(
+        return await cache.GetOrAdd(
             channelMetadata.Coordinates.ChannelName,
             key => new Lazy<Task<Records.PresentationResult>>(
                         () => BuildPresentationResultAsync(displayableIntents, channelCapabilities, key))

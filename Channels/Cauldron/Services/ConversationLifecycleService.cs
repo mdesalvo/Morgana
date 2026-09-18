@@ -35,7 +35,10 @@ public class ConversationLifecycleService : IConversationLifecycleService
     private readonly Lock _replyDeadlineLock = new();
 
     /// <inheritdoc />
-    public event Action? OnTurnAbandoned;
+    public event Action? OnReplyDeadlineExpired;
+
+    /// <inheritdoc />
+    public bool IsAwaitingReply => _chatStateService.IsSending || _chatStateService.HasTypingIndicator();
 
     public ConversationLifecycleService(
         HttpClient http,
@@ -332,7 +335,7 @@ public class ConversationLifecycleService : IConversationLifecycleService
         lock (_replyDeadlineLock)
         {
             _replyDeadline?.Dispose();
-            _replyDeadline = new Timer(_ => GiveUpOnTurn(), null, _replyTimeout, Timeout.InfiniteTimeSpan);
+            _replyDeadline = new Timer(_ => OnReplyDeadlineExpired?.Invoke(), null, _replyTimeout, Timeout.InfiniteTimeSpan);
         }
     }
 
@@ -346,26 +349,10 @@ public class ConversationLifecycleService : IConversationLifecycleService
         }
     }
 
-    /// <summary>
-    /// The turn has gone silent for the whole timeout. What a stream had already revealed is kept as
-    /// the partial reply it is, the composer is freed and the conversation says plainly that the
-    /// answer may never come — better than a typing indicator that would pulse for the rest of the
-    /// session. The repaint belongs to the subscriber, which is the one running on the circuit.
-    /// </summary>
-    private void GiveUpOnTurn()
+    /// <inheritdoc />
+    public void AbandonTurn()
     {
-        // Text already received is still being revealed: Morgana has spoken and the screen is simply
-        // catching up, so the turn is alive and keeps its place
-        if (_streamingService.IsRevealing)
-        {
-            NoteReplyActivity();
-            return;
-        }
-
         CancelReplyDeadline();
-
-        if (!_chatStateService.IsSending && !_chatStateService.HasTypingIndicator())
-            return;
 
         _streamingService.AbandonStreaming();
         _chatStateService.RemoveTypingIndicator();
@@ -373,65 +360,36 @@ public class ConversationLifecycleService : IConversationLifecycleService
         _chatStateService.AddChatError(
             $"No answer from Morgana after {_replyTimeout.TotalSeconds:0} seconds. The turn may be lost — ask again.",
             "reply_timeout");
-
-        OnTurnAbandoned?.Invoke();
     }
 
     /// <inheritdoc />
-    public async Task<bool> RecoverMissedRepliesAsync()
+    public async Task<IReadOnlyList<ChannelMessage>> GetMissedRepliesAsync()
     {
         // Nothing is waiting, so nothing was missed while this client was away
-        if (!_chatStateService.IsSending && !_chatStateService.HasTypingIndicator())
-            return false;
+        if (!IsAwaitingReply || string.IsNullOrWhiteSpace(_chatStateService.ConversationId))
+            return [];
 
-        if (string.IsNullOrWhiteSpace(_chatStateService.ConversationId))
-            return false;
+        ConversationHistoryResponse? history = await _history.GetHistoryAsync(_chatStateService.ConversationId);
+        if (history?.Messages is not { Length: > 0 })
+            return [];
 
-        try
-        {
-            ConversationHistoryResponse? history = await _history.GetHistoryAsync(_chatStateService.ConversationId);
-            if (history?.Messages is not { Length: > 0 })
-                return false;
+        // Morgana's side past the latest reply this client was given is what it pushed while the
+        // client was away. The user's own turn is already on screen, so it is never taken back.
+        MorganaChatMessage[] missed =
+        [
+            .. history.Messages.Where(message => message.Type == ChatMessageType.Assistant
+                                                 && message.Timestamp > _chatStateService.LatestDeliveredTimestamp)
+        ];
 
-            // What Morgana answered past what is on screen is what was pushed to a group this client
-            // had left. Only Morgana's side is recovered: the user's own turn went up on screen the
-            // moment it was sent and Morgana holds its own copy of it, which would read as a second
-            // one. The synthetic handover lines carry a backdated timestamp, so they never pass for
-            // the newest thing seen.
-            DateTime lastSeen = _chatStateService.ChatMessages.Count > 0
-                ? _chatStateService.ChatMessages.Max(message => message.Timestamp)
-                : DateTime.MinValue;
-
-            MorganaChatMessage[] missed =
-            [
-                .. history.Messages.Where(message =>
-                    message.Type == ChatMessageType.Assistant && message.Timestamp > lastSeen)
-            ];
-            if (missed.Length == 0)
-                return false;
-
+        if (missed.Length > 0)
             _logger.LogInformation("Recovered {Count} message(s) delivered while this client was away", missed.Length);
 
-            // A stream cut short by the disconnection is closed first: the authoritative text is
-            // among the recovered messages and would otherwise be told twice on screen
-            _streamingService.AbandonStreaming();
-            _chatStateService.RemoveTypingIndicator();
-
-            foreach (MorganaChatMessage message in missed)
-                _chatStateService.ChatMessages.Add(MapToChatMessage(message));
-
-            _chatStateService.CurrentAgentName = missed[^1].AgentName ?? _chatStateService.CurrentAgentName;
-            _chatStateService.IsSending = false;
-            CancelReplyDeadline();
-            return true;
-        }
-        catch (Exception ex)
-        {
-            // The turn keeps waiting: the deadline is still standing and will close it if the reply
-            // truly never came
-            _logger.LogError(ex, "Could not recover the messages delivered while this client was away");
-            return false;
-        }
+        // The latest reply carries the dust gauge as it stands now, as its own push would have
+        return
+        [
+            .. missed.Select((message, index) => ToChannelMessage(
+                message, index == missed.Length - 1 ? new ConversationMetadata(history.DustLevel) : null))
+        ];
     }
 
     // =========================================================================
@@ -451,6 +409,10 @@ public class ConversationLifecycleService : IConversationLifecycleService
             }
 
             _logger.LogInformation("Retrieved {Count} messages from history", history.Messages.Length);
+
+            // Everything Morgana said so far is on screen from here: a later catch-up starts past it
+            foreach (MorganaChatMessage message in history.Messages.Where(message => message.Type == ChatMessageType.Assistant))
+                _chatStateService.NoteDelivered(message.Timestamp);
 
             // Walked in order so the synthetic handover lines can be woven in at the right spot
             for (int i = 0; i < history.Messages.Length; i++)
@@ -542,6 +504,23 @@ public class ConversationLifecycleService : IConversationLifecycleService
             QuickReplies = message.QuickReplies,
             RichCard = message.RichCard,
             IsLastHistoryMessage = message.IsLastHistoryMessage
+        };
+
+    /// <summary>
+    /// Turns a reply read back from the history into the message a push would have carried, so it
+    /// goes on screen through the same path as a reply that was never missed.
+    /// </summary>
+    private static ChannelMessage ToChannelMessage(MorganaChatMessage message, ConversationMetadata? conversationMetadata) =>
+        new()
+        {
+            ConversationMetadata = conversationMetadata,
+            ConversationId = message.ConversationId,
+            Text = message.Text,
+            Timestamp = message.Timestamp,
+            AgentName = message.AgentName,
+            AgentCompleted = message.AgentCompleted,
+            QuickReplies = message.QuickReplies,
+            RichCard = message.RichCard
         };
 
     private async Task<bool> FallbackToNewConversationAsync()

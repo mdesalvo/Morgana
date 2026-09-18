@@ -24,6 +24,12 @@ public class ConversationSupervisorActor : MorganaActor
     private readonly IAgentConfigurationService agentConfigService;
     private readonly IPresenterService presenterService;
 
+    /// <summary>
+    /// Holds which agent the conversation was left talking to, the one fact this supervisor must read
+    /// back before its first turn: a process that restarted mid-exchange knows it from nowhere else.
+    /// </summary>
+    private readonly IConversationPersistenceService conversationPersistenceService;
+
     /* Actors directly orchestrated by the supervisor */
     private readonly IActorRef guard;
     private readonly IActorRef classifier;
@@ -40,6 +46,12 @@ public class ConversationSupervisorActor : MorganaActor
     /// Used for agent name display and tracking.
     /// </summary>
     private string? activeAgentIntent;
+
+    /// <summary>
+    /// Whether this supervisor has already taken the active agent from the conversation's record.
+    /// Read once, on its first turn: from then on this supervisor is the one keeping it current.
+    /// </summary>
+    private bool hasReadPersistedActiveAgent;
 
     /// <summary>
     /// Flag indicating whether the presentation message has been sent.
@@ -68,12 +80,14 @@ public class ConversationSupervisorActor : MorganaActor
         IChannelMetadataStore channelMetadataStore,
         IAgentConfigurationService agentConfigService,
         IPresenterService presenterService,
+        IConversationPersistenceService conversationPersistenceService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
         this.channelService = channelService;
         this.channelMetadataStore = channelMetadataStore;
         this.agentConfigService = agentConfigService;
         this.presenterService = presenterService;
+        this.conversationPersistenceService = conversationPersistenceService;
 
         guard = Context.System.GetOrCreateActorAsync<GuardActor>(
             Constants.Actors.Guard, conversationId).GetAwaiter().GetResult();
@@ -109,8 +123,8 @@ public class ConversationSupervisorActor : MorganaActor
         // Delivers the welcome message once generated (see HandlePresentationGenerated).
         ReceiveAsync<Records.PresentationContext>(HandlePresentationGenerated);
 
-        // Starts a turn for an incoming user message (see HandleUserMessage).
-        Receive<Records.UserMessage>(HandleUserMessage);
+        // Starts a turn for an incoming user message (see HandleUserMessageAsync).
+        ReceiveAsync<Records.UserMessage>(HandleUserMessageAsync);
 
         RegisterCommonHandlers();
     }
@@ -119,11 +133,24 @@ public class ConversationSupervisorActor : MorganaActor
     /// Opens the turn span and dispatches to <see cref="GuardActor"/>. Applies to both new
     /// requests and follow-ups: every user message goes through the guard check first.
     /// </summary>
-    private void HandleUserMessage(Records.UserMessage msg)
+    private async Task HandleUserMessageAsync(Records.UserMessage msg)
     {
         IActorRef originalSender = Sender;
 
         actorLogger.Info("User message received, routing through guard check");
+
+        // Settled before the turn starts, because the turn decides on it: with an agent left
+        // mid-exchange this message is its answer, never a new request to classify.
+        if (!hasReadPersistedActiveAgent)
+        {
+            await RestorePersistedActiveAgentAsync();
+            hasReadPersistedActiveAgent = true;
+        }
+
+        // The channel's budget for everything this turn produces, carried with the turn to each
+        // agent request it ends up sending.
+        ChannelMetadata channelMetadata = await channelMetadataStore.GetChannelMetadataAsync(conversationId);
+        ChannelCapabilities turnCapabilities = channelMetadata.Capabilities;
 
         // Starts "morgana.turn", the root OTel span for this entire turn — the one unit of work a
         // trace viewer (Jaeger/Tempo) shows per user message, with every later stage (guard,
@@ -147,7 +174,7 @@ public class ConversationSupervisorActor : MorganaActor
         guardSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
 
         // Moves the FSM to AwaitingGuardCheck, carrying ctx forward.
-        Records.ProcessingContext ctx = new Records.ProcessingContext(msg, originalSender, TurnContext: turnContext);
+        Records.ProcessingContext ctx = new Records.ProcessingContext(msg, originalSender, turnCapabilities, TurnContext: turnContext);
         Become(() => AwaitingGuardCheck(ctx));
 
         // Engage the guard actor with the utterance from the user
@@ -325,7 +352,7 @@ public class ConversationSupervisorActor : MorganaActor
                     ctx.OriginalMessage.Text,
                     null,
                     ctx.TurnContext,          // propagate context to agent
-                    GetEffectiveCapabilities()));
+                    ctx.ChannelCapabilities));
             }
             else
             {
@@ -333,7 +360,7 @@ public class ConversationSupervisorActor : MorganaActor
 
                 // Starts "morgana.classifier", the second child span under morgana.turn, before
                 // the Tell to ClassifierActor — same rationale as the guard span opened in
-                // HandleUserMessage: capturing the duration from here, not from when
+                // HandleUserMessageAsync: capturing the duration from here, not from when
                 // AwaitingClassification receives the result, means it covers the full
                 // round-trip rather than just ClassifierActor's own processing time.
                 classifierSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.ClassifierActivity, ActivityKind.Internal, ctx.TurnContext);
@@ -399,7 +426,7 @@ public class ConversationSupervisorActor : MorganaActor
                     ctx.OriginalMessage.Text,
                     ctx.Classification,
                     ctx.TurnContext,
-                    GetEffectiveCapabilities()));
+                    ctx.ChannelCapabilities));
             }
             else
             {
@@ -491,7 +518,7 @@ public class ConversationSupervisorActor : MorganaActor
                 ctx.OriginalMessage.Text,
                 classification,
                 ctx.TurnContext,              // propagate context to router → agent
-                GetEffectiveCapabilities()));
+                ctx.ChannelCapabilities));
         });
 
         // Routes an explicit ClassifierActor failure (a thrown exception) to FallbackToOther.
@@ -568,7 +595,7 @@ public class ConversationSupervisorActor : MorganaActor
                 ctx.OriginalMessage.Text,
                 fallbackClassification,
                 ctx.TurnContext,
-                GetEffectiveCapabilities()));
+                ctx.ChannelCapabilities));
         }
         #endregion
     }
@@ -670,7 +697,7 @@ public class ConversationSupervisorActor : MorganaActor
 
                 // Sends the agent's response back to the client, forwarding the classification's
                 // intent and metadata, the agent's completion flag, quick replies and rich card,
-                // and the original message's timestamp.
+                // and the timestamp the reply is recorded under.
                 ctx.OriginalSender.Tell(new Records.ConversationResponse(
                     response.Response,
                     ctx.Classification?.Intent,
@@ -678,7 +705,7 @@ public class ConversationSupervisorActor : MorganaActor
                     agentName,
                     response.IsCompleted,
                     response.QuickReplies,
-                    ctx.OriginalMessage.Timestamp,
+                    response.RecordedTimestamp,
                     response.RichCard));
 
                 // Closes the turn span, tagged with the classified intent and whether the agent completed.
@@ -740,7 +767,7 @@ public class ConversationSupervisorActor : MorganaActor
                     Constants.Morgana,
                     true,
                     response.QuickReplies,
-                    DateTime.UtcNow,
+                    null,
                     response.RichCard));
 
                 // Closes the turn span as completed, tagged with the classified intent.
@@ -870,9 +897,8 @@ public class ConversationSupervisorActor : MorganaActor
                 }
 
                 // Sends the agent's response back to the client. Unlike AwaitingAgentResponse's
-                // equivalent Tell, Intent/Metadata are hardcoded null and the timestamp is
-                // DateTime.UtcNow rather than an original message timestamp — this state has
-                // neither to forward (see the comment above currentIntent).
+                // equivalent Tell, Intent/Metadata are hardcoded null: this state has neither to
+                // forward (see the comment above currentIntent).
                 originalSender.Tell(new Records.ConversationResponse(
                     response.Response,
                     null,
@@ -880,7 +906,7 @@ public class ConversationSupervisorActor : MorganaActor
                     agentName,
                     response.IsCompleted,
                     response.QuickReplies,
-                    DateTime.UtcNow,
+                    response.RecordedTimestamp,
                     response.RichCard));
 
                 // Closes the turn span, tagged with the active agent's intent and whether it completed.
@@ -1073,38 +1099,6 @@ public class ConversationSupervisorActor : MorganaActor
     }
 
     /// <summary>
-    /// Resolves the capability budget to stamp on outgoing <see cref="Records.AgentRequest"/>s. A
-    /// missing metadata entry is an invariant violation, not a recoverable case — the controller
-    /// gate and ConversationManagerActor guarantee it exists before any turn reaches here.
-    /// </summary>
-    private ChannelCapabilities GetEffectiveCapabilities()
-    {
-        // Looks up the capabilities this conversation's channel declared at handshake time.
-        // Missing means the invariant the doc comment above describes was violated — not a case
-        // to recover from, hence the throw rather than a fallback default.
-        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out ChannelMetadata? registeredChannelMetadata))
-            throw new InvalidOperationException(
-                $"No channel metadata registered for conversation {conversationId}; " +
-                "the start-conversation gate and ConversationManagerActor should have ensured registration before any turn.");
-
-        ChannelCapabilities channelCapabilities = registeredChannelMetadata.Capabilities;
-
-        // True when the channel lacks at least one rich feature Morgana may produce — the case
-        // MorganaChannelAdapter will need to rewrite the message for, downstream of this call.
-        bool willNeedAdaptation = !channelCapabilities.SupportsRichCards
-                                   || !channelCapabilities.SupportsQuickReplies
-                                   || !channelCapabilities.SupportsMarkdown;
-
-        // Streamed chunks bypass the adapter, so a channel that will need adaptation would show
-        // the user raw content that then gets visibly rewritten once the adapted message lands —
-        // suppressing streaming here avoids that jarring flash-then-rewrite.
-        if (willNeedAdaptation && channelCapabilities.SupportsStreaming)
-            return channelCapabilities with { SupportsStreaming = false };
-
-        return channelCapabilities;
-    }
-
-    /// <summary>
     /// Builds the display name shown to the client for a given intent: the bare persona,
     /// or the persona qualified by the intent when one is available.
     /// </summary>
@@ -1119,53 +1113,39 @@ public class ConversationSupervisorActor : MorganaActor
         return $"Morgana ({capitalizedIntent})";
     }
 
-    // Only reached on conversation resume: ConversationManagerActor sends this after loading a
-    // persisted conversation whose last turn left an agent active, so this supervisor instance
-    // (freshly created, activeAgent still null) can pick up the multi-turn state where it left off.
-    private void HandleRestoreActiveAgent(Records.RestoreActiveAgent msg)
-    {
-        actorLogger.Info($"Restoring active agent: {msg.AgentIntent}");
-        
-        // Tell the router to rehydrate an agent for the given intent
-        router.Tell(new Records.RestoreAgentRequest(msg.AgentIntent));
-    }
-
     /// <summary>
-    /// Completes the resume flow HandleRestoreActiveAgent started: records the rehydrated agent
-    /// as active, or clears it if RouterActor couldn't recreate one for the given intent.
+    /// Takes back the agent the conversation was left talking to, as its record states it, then has
+    /// the router bring that agent up. When nothing is active on record or the router cannot bring
+    /// that agent up, the conversation has none: its next message is classified as a new request.
     /// </summary>
-    private void HandleRestoreAgentResponse(Records.RestoreAgentResponse response)
+    private async Task RestorePersistedActiveAgentAsync()
     {
-        if (response.AgentRef != null)
+        string? persistedAgentIntent = await conversationPersistenceService.GetMostRecentActiveAgentAsync(conversationId);
+        if (persistedAgentIntent is null)
+            return;
+
+        actorLogger.Info($"Restoring active agent: {persistedAgentIntent}");
+
+        try
         {
-            // RouterActor rehydrated the agent: picks up the multi-turn state exactly where the
-            // persisted conversation left off.
+            // The turn about to start routes by this answer, so it is had before the turn goes on.
+            // A one-off lookup: nothing streams and the router asks nothing back of this supervisor.
+            Records.RestoreAgentResponse response = await router.Ask<Records.RestoreAgentResponse>(
+                new Records.RestoreAgentRequest(persistedAgentIntent),
+                TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"])));
+
             activeAgent = response.AgentRef;
-            activeAgentIntent = response.AgentIntent;
-            actorLogger.Info($"Active agent restored: {activeAgent.Path} with intent {activeAgentIntent}");
+            activeAgentIntent = response.AgentRef is null ? null : response.AgentIntent;
         }
-        else
+        catch (Exception ex)
         {
-            // No agent could be recreated for this intent: falls back to no active agent, so the
-            // next message classifies as a brand-new request instead of routing to nothing.
-            activeAgent = null;
-            activeAgentIntent = null;
-            actorLogger.Warning($"Could not restore agent for intent '{response.AgentIntent}' - clearing active agent");
+            actorLogger.Error(ex, $"Router did not bring up agent '{persistedAgentIntent}'");
         }
-    }
 
-    /// <inheritdoc/>
-    protected override void RegisterCommonHandlers()
-    {
-        // Registers whatever handlers MorganaActor wires into every state (e.g. health checks) —
-        // called from every state method in this class so those stay available regardless of FSM state.
-        base.RegisterCommonHandlers();
-
-        // Asks RouterActor to recreate the agent for a resumed conversation (see HandleRestoreActiveAgent).
-        Receive<Records.RestoreActiveAgent>(HandleRestoreActiveAgent);
- 
-        // Records the recreated agent, or clears activeAgent if it couldn't be restored (see HandleRestoreAgentResponse).
-        Receive<Records.RestoreAgentResponse>(HandleRestoreAgentResponse);
+        if (activeAgent is null)
+            actorLogger.Warning($"Could not restore agent for intent '{persistedAgentIntent}' - no active agent");
+        else
+            actorLogger.Info($"Active agent restored: {activeAgent.Path} with intent {activeAgentIntent}");
     }
 
     /// <summary>

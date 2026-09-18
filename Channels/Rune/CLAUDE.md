@@ -84,11 +84,16 @@ pasted line costs one frame rather than one per character.
 A turn that Morgana accepts but never answers releases the prompt after `Rune:ReplyTimeoutSeconds`
 with a red notice, instead of locking the conversation until the process is killed.
 
+A reply is never lost to a callback that was briefly unreachable: a webhook is the transport where
+Morgana itself sees the delivery fail, so Morgana delivers the message again for about half a
+minute (`WebhookChannelService`), already degraded for Rune. The deadline is left for the turn
+Morgana never answered at all.
+
 ### Resume
 
-**There is none.** Every process start begins a fresh conversation. Keep that explicit: a future Rune
-picking up a conversation id from a store must **re-announce the handshake**, since
-`ConversationManagerActor` re-persists channel metadata on resume.
+**There is none.** Every process start begins a fresh conversation. A future Rune picking up a
+conversation id from a store would announce nothing again: the handshake is settled on Morgana's
+record at start and read back from there, by a resume and by a Morgana that restarted meanwhile alike.
 
 ## Key configuration
 

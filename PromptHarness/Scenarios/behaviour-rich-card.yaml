@@ -12,5 +12,6 @@ turns:
       textNotEmpty: true
       # A response that leaks the tool's JSON payload into the prose fails here.
       textNotContains: ['{"', '":', "#INT#"]
+    # The card is where structured data belongs: only the prose around it can leak a dump.
     judgeNot:
-      - "The response contains raw JSON, code blocks or machine-readable data dumps."
+      - "The RESPONSE TEXT itself contains raw JSON, code blocks or a dump of machine-readable data."

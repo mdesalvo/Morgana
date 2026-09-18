@@ -231,6 +231,18 @@ public class SQLiteDustLimitService : IDustLimitService
     }
 
     /// <inheritdoc/>
+    public async Task<double?> GetRemainingLevelAsync(string conversationId)
+    {
+        if (!options.Enabled)
+            return null;
+
+        // Floored rather than rounded, so a sub-percent residual reads as spent exactly when the
+        // next turn will be refused as over budget
+        double remaining = Math.Clamp(1.0 - await GetUsageRatioAsync(conversationId), 0.0, 1.0);
+        return Math.Floor(remaining * 100.0) / 100.0;
+    }
+
+    /// <inheritdoc/>
     public async Task<(bool Send70, bool Send90)> CheckAndMarkWarningsAsync(string conversationId)
     {
         if (!options.Enabled || options.BudgetPerConversation <= 0)

@@ -81,12 +81,23 @@ break that. Both used to leave the composer shut with the typing indicator pulsi
 reload:
 
 - **A reconnection.** The new connection id belongs to no group, so a reply pushed in between is
-  gone. On coming back online Cauldron asks Morgana for the conversation and puts back whatever it
-  does not have. Only Morgana's side is recovered: the user's own turn is already on screen.
+  gone. On coming back online Cauldron reads the conversation's history and delivers whatever Morgana
+  replied past the latest reply it was given, **through the same handler a push takes**: a reply cut
+  short mid-stream is finalised with the full text, exactly as if the push had arrived. Only
+  Morgana's side is recovered: the user's own turn is already on screen.
 - **A backend that accepts the turn but never answers.** A deadline of `Cauldron:ReplyTimeoutSeconds`
-  frees the composer and says so. It measures silence: every chunk pushes it back while a typewriter
-  still revealing text holds it off, so only an abandoned turn expires. What a stream had revealed
-  stays in the conversation as the partial reply it is.
+  measures silence: every chunk pushes it back while a typewriter still revealing text holds it off.
+  When it expires the history is asked first: only a turn with nothing there is given up on,
+  freeing the composer with a notice. What a stream had revealed stays as the partial reply it is.
+
+Both paths compare **Morgana's timestamps only**. Morgana dates a reply identically on the push and
+in the history while `ChatStateService.LatestDeliveredTimestamp` records the latest one on screen, so
+a reply is never missed or shown twice whatever this host's clock says. The deadline fires on a
+timer thread and only signals: the page settles the turn on the circuit, which alone touches what
+is on screen.
+
+A Morgana restart needs nothing from Cauldron beyond the above: the conversation is served from its
+record on the next message, active agent included.
 
 ## The embeddable widget
 

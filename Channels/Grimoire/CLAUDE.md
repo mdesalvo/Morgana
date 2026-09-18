@@ -93,11 +93,15 @@ A turn that goes silent for `Grimoire:ReplyTimeoutSeconds` releases the prompt w
 The deadline measures **silence, not duration**: every chunk arms it again from zero and a
 typewriter still revealing text holds it off, so only an abandoned turn expires.
 
+A reply is never lost to a callback that was briefly unreachable: a webhook is the transport where
+Morgana itself sees the delivery fail, so Morgana delivers the message again for about half a
+minute (`WebhookChannelService`). The deadline is left for the turn Morgana never answered at all.
+
 ### Resume
 
-**There is none.** Every process start begins a fresh conversation. Keep that explicit: a future
-Grimoire picking up a conversation id from a store must **re-announce the handshake**, since
-`ConversationManagerActor` re-persists channel metadata on resume.
+**There is none.** Every process start begins a fresh conversation. A future Grimoire picking up a
+conversation id from a store would announce nothing again: the handshake is settled on Morgana's
+record at start and read back from there, by a resume and by a Morgana that restarted meanwhile alike.
 
 ## Startup
 

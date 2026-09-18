@@ -135,8 +135,8 @@ public interface IConversationPersistenceService
     /// <summary>
     /// Loads the channel metadata previously persisted for a conversation. Returns
     /// <c>null</c> when the conversation database does not exist or contains no metadata
-    /// row (e.g. legacy conversations created before the channel handshake was introduced),
-    /// in which case callers should fall back to the channel's hard-coded default metadata.
+    /// row (e.g. legacy conversations created before the channel handshake was introduced):
+    /// such a conversation has no channel on record and callers refuse to serve it.
     /// </summary>
     /// <param name="conversationId">Conversation identifier (used to locate the per-conversation DB).</param>
     /// <returns>The persisted <see cref="ChannelMetadata"/>, or null if absent.</returns>

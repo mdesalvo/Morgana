@@ -32,13 +32,14 @@ Activated when the user says things like:
 2. **Ask the target scope** with `AskUserQuestion`, multi-select. **Enumerate `PromptHarness/Tests/`
    first and offer what is actually there** — the class list below is a description of a moving
    directory, not a contract, and a `--filter` naming a class that no longer exists runs zero tests
-   and exits 0: a green nobody asked for. Thirteen classes at the time of writing, in four families:
+   and exits 0: a green nobody asked for. Fourteen classes at the time of writing, in four families:
 
    *Deterministic — no model, no cost. Run them first: they are the cheapest way to learn the
    topology under test is sane before any billed turn.*
    - Startup validation (`StartupValidationTests` — an incoherent partner declaration must stop the boot)
    - Agent card (`AgentCardTests` — the published card and how far the gate behind it reaches)
    - Peer federation (`PeerFederationTests` — the outbound half: which cards this side accepts, what it signs, where a credential may go)
+   - Conversation API (`ConversationApiTests` — who the channel API lets in, what a start must announce, how an unknown conversation is answered. The conversations it needs on record are synthesised into the run's storage; its one model call is the presentation of its single real start)
 
    *Blocking — a silent failure mode, which is why these two are the ones a revision stops on.*
    - Context (`ContextHandlingTests` — the context cycle, the closed vocabulary, cross-agent)
@@ -58,7 +59,7 @@ Activated when the user says things like:
 
    Plus `HarnessSmokeTests`, which is not a choice: step 4 runs it regardless.
 
-   `AskUserQuestion` takes at most four options, so thirteen checkboxes do not fit: ask by **family**
+   `AskUserQuestion` takes at most four options, so fourteen checkboxes do not fit: ask by **family**
    — the four above, multi-select — and let a user wanting a single class say so through "Other".
    A user who has already said "everything" has answered this question; do not ask it again.
 
@@ -104,6 +105,7 @@ Activated when the user says things like:
    dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~StartupValidationTests"
    dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~AgentCardTests"
    dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PeerFederationTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ConversationApiTests"
 
    # Blocking
    Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ContextHandlingTests"

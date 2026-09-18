@@ -7,8 +7,14 @@ namespace Morgana.Web.Services;
 /// Webhook implementation of IChannelService: POSTs ChannelMessages to callbackUrl declared in ChannelCoordinates
 /// at conversation-start (deliveryMode=webhook). Callback URL loaded per-send from IChannelMetadataStore persisted data.
 /// Does NOT sign POSTs (asymmetric trust: channel signs toward Morgana, not vice versa; mirrors GitHub/Stripe/Twilio conventions).
-/// SendStreamChunkAsync POSTs to {callbackUrl}/chunk with minimal body. HTTP failures logged and swallowed (no agent fault).
+/// SendStreamChunkAsync POSTs to {callbackUrl}/chunk with minimal body. HTTP failures never fault the agent turn.
 /// </summary>
+/// <remarks>
+/// A webhook is the one transport where Morgana itself sees a delivery fail, so it is the one that
+/// delivers again: a message the callback could not take is re-sent on <see cref="RedeliveryDelays"/>
+/// while the failure may pass, already adapted to the channel. A chunk is not: the final message
+/// that follows carries the whole text anyway.
+/// </remarks>
 public class WebhookChannelService : IChannelService
 {
     /// <summary>
@@ -19,6 +25,17 @@ public class WebhookChannelService : IChannelService
     internal const string HttpClientName = "Morgana.Webhook";
 
     /// <summary>
+    /// The waits before each new attempt at a message the callback could not take, about half a
+    /// minute in all: long enough to ride out a callback that is restarting or briefly unreachable,
+    /// well inside the reply timeout a webhook channel gives a turn before declaring it lost.
+    /// </summary>
+    private static readonly TimeSpan[] RedeliveryDelays =
+    [
+        TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4),
+        TimeSpan.FromSeconds(8), TimeSpan.FromSeconds(15)
+    ];
+
+    /// <summary>
     /// HTTP client factory used to rent a fresh <see cref="HttpClient"/> per send. Using a factory
     /// (instead of injecting a long-lived <see cref="HttpClient"/>) preserves the handler-rotation
     /// semantics that make <see cref="IHttpClientFactory"/> the supported pattern for singleton
@@ -27,9 +44,8 @@ public class WebhookChannelService : IChannelService
     private readonly IHttpClientFactory httpClientFactory;
 
     /// <summary>
-    /// Source of truth for per-conversation channel coordinates. Populated by
-    /// <c>ConversationManagerActor</c> at handshake; queried here on every send to recover the
-    /// callback URL for this conversation without duplicating addressing state.
+    /// Source of truth for per-conversation channel coordinates, settled at the handshake; queried
+    /// here on every send to recover the callback URL for this conversation.
     /// </summary>
     private readonly IChannelMetadataStore channelMetadataStore;
 
@@ -55,10 +71,8 @@ public class WebhookChannelService : IChannelService
     /// <inheritdoc/>
     public async Task SendMessageAsync(ChannelMessage channelMessage)
     {
-        if (!channelMetadataStore.TryGetChannelMetadata(channelMessage.ConversationId, out ChannelMetadata? channelMetadata))
-            throw new InvalidOperationException(
-                $"No channel metadata registered for conversation {channelMessage.ConversationId}; " +
-                "the start-conversation gate should have ensured registration before any webhook dispatch.");
+        // The callback this conversation announced at the handshake is where the message goes
+        ChannelMetadata channelMetadata = await channelMetadataStore.GetChannelMetadataAsync(channelMessage.ConversationId);
 
         string? callbackUrl = channelMetadata.Coordinates.CallbackUrl;
         if (string.IsNullOrWhiteSpace(callbackUrl))
@@ -66,38 +80,62 @@ public class WebhookChannelService : IChannelService
                 $"Webhook dispatch for conversation {channelMessage.ConversationId} has no callbackUrl in coordinates; " +
                 "the start-conversation gate should have rejected a deliveryMode=webhook handshake without an absolute callbackUrl.");
 
-        try
+        HttpClient httpClient = httpClientFactory.CreateClient(HttpClientName);
+        for (int failedAttempts = 0; ; failedAttempts++)
         {
-            HttpClient httpClient = httpClientFactory.CreateClient(HttpClientName);
-            using HttpResponseMessage response = await httpClient.PostAsJsonAsync(callbackUrl, channelMessage);
-            if (!response.IsSuccessStatusCode)
+            string failure;
+            bool mayPass;
+            try
             {
-                string body = await response.Content.ReadAsStringAsync();
+                using HttpResponseMessage response = await httpClient.PostAsJsonAsync(callbackUrl, channelMessage);
+                if (response.IsSuccessStatusCode)
+                {
+                    logger.LogInformation(
+                        "Webhook delivered to conversation {ConversationId} at {CallbackUrl}: type={Type}, agent={Agent}, completed={Completed}",
+                        channelMessage.ConversationId, callbackUrl, channelMessage.MessageType, channelMessage.AgentName, channelMessage.AgentCompleted);
+                    return;
+                }
+
+                failure = $"{(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}";
+                mayPass = MayPass(response.StatusCode);
+            }
+            catch (Exception ex)
+            {
+                // Unreachable, refused, timed out: the callback may be back in a moment
+                failure = ex.Message;
+                mayPass = true;
+            }
+
+            if (!mayPass || failedAttempts == RedeliveryDelays.Length)
+            {
                 logger.LogError(
-                    "Webhook callback returned {StatusCode} for conversation {ConversationId} at {CallbackUrl}: {Body}",
-                    (int)response.StatusCode, channelMessage.ConversationId, callbackUrl, body);
+                    "Webhook not delivered to conversation {ConversationId} at {CallbackUrl} after {Attempts} attempt(s): {Failure}",
+                    channelMessage.ConversationId, callbackUrl, failedAttempts + 1, failure);
                 return;
             }
 
-            logger.LogInformation(
-                "Webhook delivered to conversation {ConversationId} at {CallbackUrl}: type={Type}, agent={Agent}, completed={Completed}",
-                channelMessage.ConversationId, callbackUrl, channelMessage.MessageType, channelMessage.AgentName, channelMessage.AgentCompleted);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex,
-                "Failed to deliver webhook for conversation {ConversationId} at {CallbackUrl}",
-                channelMessage.ConversationId, callbackUrl);
+            TimeSpan redeliveryDelay = RedeliveryDelays[failedAttempts];
+            logger.LogWarning(
+                "Webhook to conversation {ConversationId} at {CallbackUrl} failed ({Failure}); delivering again in {RedeliveryDelay}",
+                channelMessage.ConversationId, callbackUrl, failure, redeliveryDelay);
+            await Task.Delay(redeliveryDelay);
         }
     }
+
+    /// <summary>
+    /// Tells a refusal that may pass from one that will not. A server error, a timeout or a callback
+    /// asking to slow down may clear up; any other client error is the callback's answer about this
+    /// message (a channel no longer showing the conversation, say): repeating it changes nothing.
+    /// </summary>
+    private static bool MayPass(System.Net.HttpStatusCode statusCode) =>
+        (int)statusCode >= 500
+        || statusCode is System.Net.HttpStatusCode.RequestTimeout or System.Net.HttpStatusCode.TooManyRequests;
 
     /// <inheritdoc/>
     public async Task SendStreamChunkAsync(string conversationId, string chunkText)
     {
-        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out ChannelMetadata? channelMetadata))
-            throw new InvalidOperationException(
-                $"No channel metadata registered for conversation {conversationId}; " +
-                "the start-conversation gate should have ensured registration before any stream chunk dispatch.");
+        // The callback this conversation announced at the handshake is where the chunk goes
+        ChannelMetadata channelMetadata = await channelMetadataStore.GetChannelMetadataAsync(conversationId);
 
         string? callbackUrl = channelMetadata.Coordinates.CallbackUrl;
         if (string.IsNullOrWhiteSpace(callbackUrl))
@@ -125,10 +163,12 @@ public class WebhookChannelService : IChannelService
         }
         catch (Exception ex)
         {
-            // Same reliability contract as SendMessageAsync: a misbehaving callback target must not fault the agent turn.
-            logger.LogError(ex,
-                "Failed to deliver stream chunk for conversation {ConversationId} at {ChunkUrl}",
-                conversationId, chunkUrl);
+            // A lost chunk costs the user only the progressive reveal: the final message carries the
+            // whole text and is delivered again. A cut callback loses every chunk of a turn, so one
+            // line each, without the stack.
+            logger.LogWarning(
+                "Stream chunk not delivered to conversation {ConversationId} at {ChunkUrl}: {Failure}",
+                conversationId, chunkUrl, ex.Message);
         }
     }
 }

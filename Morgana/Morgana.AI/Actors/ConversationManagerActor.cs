@@ -26,18 +26,10 @@ public class ConversationManagerActor : MorganaActor
     private readonly IChannelService channelService;
 
     /// <summary>
-    /// In-process registry where this actor publishes the per-conversation channel metadata,
-    /// so the <c>AdaptingChannelService</c> decorator can degrade outbound messages on every
-    /// send and <c>ConversationSupervisorActor</c> can stamp the capabilities on per-turn
-    /// agent requests.
+    /// The conversation's channel, settled at the handshake before this actor exists. This actor
+    /// only drops the in-memory copy when the conversation stops being served here.
     /// </summary>
     private readonly IChannelMetadataStore channelMetadataStore;
-
-    /// <summary>
-    /// Persistence service used to save the channel metadata at conversation start
-    /// (handshake) and to load it on restore.
-    /// </summary>
-    private readonly IConversationPersistenceService conversationPersistenceService;
 
     /// <summary>
     /// Per-conversation lifetime token-budget limiter. Read after each turn to stamp the
@@ -51,8 +43,8 @@ public class ConversationManagerActor : MorganaActor
     private readonly Records.DustLimitingOptions dustLimitingOptions;
 
     /// <summary>
-    /// Reference to the active conversation supervisor actor.
-    /// Null until a conversation is created.
+    /// Reference to the conversation supervisor actor. Null until the conversation is started here or
+    /// its first message reaches this process. The supervisor dying clears it again.
     /// </summary>
     private IActorRef? supervisor;
 
@@ -61,8 +53,7 @@ public class ConversationManagerActor : MorganaActor
     /// </summary>
     /// <param name="conversationId">Unique identifier for this conversation</param>
     /// <param name="channelService">Channel service used to deliver outbound messages to the end user</param>
-    /// <param name="channelMetadataStore">Registry where this actor publishes the per-conversation channel metadata</param>
-    /// <param name="conversationPersistenceService">Persistence service used to save/load the channel handshake</param>
+    /// <param name="channelMetadataStore">The conversation's channel, whose in-memory copy this actor releases</param>
     /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
     /// <param name="dustLimitingOptions">Dust-limiting policy and warning message templates</param>
     /// <param name="llmService">LLM service for AI completions</param>
@@ -72,7 +63,6 @@ public class ConversationManagerActor : MorganaActor
         string conversationId,
         IChannelService channelService,
         IChannelMetadataStore channelMetadataStore,
-        IConversationPersistenceService conversationPersistenceService,
         IDustLimitService dustLimitService,
         IOptions<Records.DustLimitingOptions> dustLimitingOptions,
         ILLMService llmService,
@@ -81,7 +71,6 @@ public class ConversationManagerActor : MorganaActor
     {
         this.channelService = channelService;
         this.channelMetadataStore = channelMetadataStore;
-        this.conversationPersistenceService = conversationPersistenceService;
         this.dustLimitService = dustLimitService;
         this.dustLimitingOptions = dustLimitingOptions.Value;
 
@@ -91,12 +80,10 @@ public class ConversationManagerActor : MorganaActor
         ReceiveAsync<Records.UserMessage>(HandleUserMessageAsync);
 
         // Handle conversation lifecycle requests:
-        // - CreateConversation: creates supervisor actor, triggers automatic presentation generation
+        // - CreateConversation: creates supervisor actor, triggers the presentation of a new conversation
         // - TerminateConversation: stops supervisor actor and clears reference
-        // - RestoreActiveAgent: forwards the restore request to the supervisor (used on resume)
         ReceiveAsync<Records.CreateConversation>(HandleCreateConversationAsync);
         ReceiveAsync<Records.TerminateConversation>(HandleTerminateConversationAsync);
-        Receive<Records.RestoreActiveAgent>(HandleRestoreActiveAgent);
         ReceiveAsync<Records.ConversationResponse>(HandleConversationResponseAsync);
 
         // Handle supervisor responses:
@@ -115,166 +102,46 @@ public class ConversationManagerActor : MorganaActor
     }
 
     /// <summary>
-    /// Handles conversation creation requests.
-    /// Creates and watches the supervisor actor, then triggers automatic presentation generation.
+    /// Handles the start of a new conversation, whose handshake the controller has already settled:
+    /// creates the supervisor and has it present Morgana to the user.
     /// </summary>
     /// <param name="msg">Conversation creation request message</param>
     private async Task HandleCreateConversationAsync(Records.CreateConversation msg)
     {
         actorLogger.Info($"Creating conversation {msg.ConversationId}");
 
-        // Check if the supervisor has already been created for this conversation: the manager owns
-        // exactly one, so a repeated create (or a resume landing on a live manager) is a no-op.
-        if (supervisor is null)
-        {
-            // Resolve and publish the per-conversation channel metadata BEFORE creating the
-            // supervisor, so any outbound message produced by the supervisor (including the
-            // presentation on a fresh start) is already covered by the registered entry.
-            ChannelMetadata effectiveMetadata = await ResolveChannelMetadataAsync(msg);
-            channelMetadataStore.RegisterChannelMetadata(msg.ConversationId, effectiveMetadata);
-            actorLogger.Info(
-                $"Channel metadata registered for {msg.ConversationId}: " +
-                $"channel={effectiveMetadata.Coordinates.ChannelName}, " +
-                $"delivery={effectiveMetadata.Coordinates.DeliveryMode}, " +
-                $"rc={effectiveMetadata.Capabilities.SupportsRichCards}, " +
-                $"qr={effectiveMetadata.Capabilities.SupportsQuickReplies}, " +
-                $"str={effectiveMetadata.Capabilities.SupportsStreaming}, " +
-                $"md={effectiveMetadata.Capabilities.SupportsMarkdown}, " +
-                $"max={effectiveMetadata.Capabilities.MaxMessageLength}");
-
-            // Create the FSM orchestrator of the turn pipeline, named after this conversation
-            // (/user/supervisor-{conversationId}), reusing it if the actor path already exists.
-            supervisor = await Context.System.GetOrCreateActorAsync<ConversationSupervisorActor>(
-                Constants.Actors.Supervisor, msg.ConversationId);
-
-            // Watch the supervisor so its death arrives here as a Terminated message
-            // (handled above) instead of taking the manager down with a DeathPactException.
-            Context.Watch(supervisor);
-
-            actorLogger.Info("Supervisor created: {0}", supervisor.Path);
-
-            // Trigger automatic presentation (only in case of new conversation)
-            if (!msg.IsRestore)
-            {
-                // Asks the supervisor for the welcome message and its quick replies, which travel
-                // back through the ordinary outbound path as the first message of the conversation.
-                supervisor.Tell(new Records.GeneratePresentationMessage());
-
-                actorLogger.Info("Presentation generation triggered");
-            }
-        }
-    }
-
-    /// <summary>
-    /// Resolves channel metadata: fresh start persists metadata from controller gate (lowercased);
-    /// restore loads from DB. No fallback on restore — pre-handshake conversations or lost rows
-    /// are refused to prevent inventing an identity.
-    /// </summary>
-    private async Task<ChannelMetadata> ResolveChannelMetadataAsync(Records.CreateConversation msg)
-    {
-        // Split the two provenances of the metadata: a fresh start carries the handshake declared
-        // by the client, a resume has nothing to carry and must read back what was persisted.
-        if (!msg.IsRestore)
-        {
-            // Fresh start: the controller has already gated the request and guarantees
-            // ChannelMetadata is present (Morgana refuses handshakes from channels that do
-            // not announce themselves). A null here would be an internal bug, not a client
-            // mistake — fail loudly so the regression surfaces immediately.
-            if (msg.ChannelMetadata is null)
-                throw new InvalidOperationException(
-                    $"Fresh conversation {msg.ConversationId} reached the manager without channel metadata; " +
-                    "the start-conversation gate in MorganaController should have rejected this.");
-
-            // Normalise the declaration at the ingress so every downstream consumer sees
-            // consistent data: ChannelName and DeliveryMode are trimmed and lowercased so their
-            // name spaces stay case-insensitive end-to-end and Capabilities are reconciled
-            // against the AdaptiveMessaging policy (see NormaliseCapabilities) before being
-            // persisted and registered.
-            ChannelMetadata channelMetadata = new ChannelMetadata
-            {
-                Coordinates = msg.ChannelMetadata.Coordinates with
-                {
-                    ChannelName = msg.ChannelMetadata.Coordinates.ChannelName.Trim().ToLowerInvariant(),
-                    DeliveryMode = msg.ChannelMetadata.Coordinates.DeliveryMode.Trim().ToLowerInvariant()
-                },
-                Capabilities = NormaliseCapabilities(msg.ChannelMetadata.Capabilities)
-            };
-
-            try
-            {
-                // Persist the normalised handshake in the conversation DB so a later resume can
-                // recover the channel identity; a failure here is logged and swallowed, since the
-                // in-memory registration below keeps the current lifetime fully functional.
-                await conversationPersistenceService.SaveChannelMetadataAsync(msg.ConversationId, channelMetadata);
-            }
-            catch (Exception ex)
-            {
-                actorLogger.Error(ex, "Failed to persist channel metadata for {0}; in-memory entry will still be registered", msg.ConversationId);
-            }
-
-            return channelMetadata;
-        }
-
-        // Restore path: metadata must have been announced and persisted in a previous
-        // lifetime of the conversation. No fallback to the transport's self-advertised
-        // identity — that would reintroduce the transport≡channel coupling we just removed.
-        ChannelMetadata? restoredChannelMetadata = await conversationPersistenceService.LoadChannelMetadataAsync(msg.ConversationId);
-        if (restoredChannelMetadata is null)
-            throw new InvalidOperationException(
-                $"Restore requested for conversation {msg.ConversationId} but no channel metadata is persisted; " +
-                "Morgana refuses to invent a channel identity for a conversation whose origin is unknown.");
-
-        return restoredChannelMetadata;
-    }
-
-    /// <summary>
-    /// Normalises incoherent ChannelCapabilities at ingress. Channels with MaxMessageLength
-    /// below RichFeaturesMinLength threshold are treated as primitive (clear rich cards/quick replies).
-    /// Streaming is untouched — transport property orthogonal to length cap. Null/non-positive
-    /// threshold disables heuristic and restores full trust of declarations.
-    /// </summary>
-    private ChannelCapabilities NormaliseCapabilities(ChannelCapabilities declaredCapabilities)
-    {
-        // A channel declaring no length cap has nothing to be judged primitive by: its
-        // declaration is taken at face value and returned untouched.
-        if (declaredCapabilities.MaxMessageLength is not { } max)
-            return declaredCapabilities;
-
-        // Read the configured minimum length a channel must afford for rich features to be believable.
-        int threshold = configuration.GetValue<int>("Morgana:AdaptiveMessaging:RichFeaturesMinLength", 0);
-        if (threshold <= 0 || max >= threshold)
-            return declaredCapabilities;
-
-        return declaredCapabilities with
-        {
-            SupportsRichCards = false,
-            SupportsQuickReplies = false
-        };
-    }
-
-    /// <summary>
-    /// Forwards a <see cref="Records.RestoreActiveAgent"/> request to the supervisor.
-    /// Routing through the manager (instead of having the controller create the supervisor
-    /// directly) guarantees ordering: the preceding <see cref="Records.CreateConversation"/>
-    /// is drained from this mailbox first, so the supervisor and the channel metadata are
-    /// always registered before the restore request reaches it — no race between two parallel
-    /// <c>ActorOf("supervisor-...")</c> calls.
-    /// </summary>
-    private void HandleRestoreActiveAgent(Records.RestoreActiveAgent msg)
-    {
-        // Guard against a restore arriving without a supervisor to hand it to: the ordering
-        // guaranteed by this mailbox makes it a bug rather than a race, so it is logged and dropped
-        // instead of creating a supervisor here.
-        if (supervisor is null)
-        {
-            actorLogger.Warning("RestoreActiveAgent received but supervisor is not yet created for {0}; dropping request", conversationId);
+        // A repeated start finds its supervisor already there and presents nothing twice
+        if (!await EnsureSupervisorAsync())
             return;
-        }
 
-        // Hands the restore over to the supervisor, the only actor that owns the activeAgent slot:
-        // once it is set, the next user message skips classification and goes straight to that agent.
-        actorLogger.Info("Forwarding RestoreActiveAgent(intent={0}) to supervisor", msg.AgentIntent);
-        supervisor.Tell(msg);
+        // Asks the supervisor for the welcome message and its quick replies, which travel back
+        // through the ordinary outbound path as the first message of the conversation.
+        supervisor!.Tell(new Records.GeneratePresentationMessage());
+        actorLogger.Info("Presentation generation triggered");
+    }
+
+    /// <summary>
+    /// Gives the conversation a supervisor when it has none: at the start, on the first message a
+    /// process receives for a conversation it never saw start, after the supervisor died. Nothing
+    /// is handed to it: it takes the conversation's state from the conversation's record.
+    /// </summary>
+    /// <returns>True when a supervisor was created, false when one was already there.</returns>
+    private async Task<bool> EnsureSupervisorAsync()
+    {
+        if (supervisor is not null)
+            return false;
+
+        // The FSM orchestrator of the turn pipeline, named after this conversation
+        // (/user/supervisor-{conversationId}), reusing it if the actor path already exists.
+        supervisor = await Context.System.GetOrCreateActorAsync<ConversationSupervisorActor>(
+            Constants.Actors.Supervisor, conversationId);
+
+        // Watch the supervisor so its death arrives here as a Terminated message
+        // (handled above) instead of taking the manager down with a DeathPactException.
+        Context.Watch(supervisor);
+
+        actorLogger.Info("Supervisor created: {0}", supervisor.Path);
+        return true;
     }
 
     /// <summary>
@@ -301,9 +168,9 @@ public class ConversationManagerActor : MorganaActor
             actorLogger.Info("Supervisor stopped for conversation {0}", msg.ConversationId);
         }
 
-        // Removes the channel metadata from the in-process registry: the conversation is over and
-        // nothing more will be sent out, so the entry would only be a leak.
-        channelMetadataStore.UnregisterChannelMetadata(msg.ConversationId);
+        // The conversation is over and nothing more goes out: the in-memory copy of its handshake
+        // would only be a leak, while the record stays for a later resume.
+        channelMetadataStore.EvictChannelMetadata(msg.ConversationId);
 
         return Task.CompletedTask;
     }
@@ -320,27 +187,15 @@ public class ConversationManagerActor : MorganaActor
     {
         actorLogger.Info($"Received message in conversation {conversationId}: {msg.Text}");
 
-        // Check whether the supervisor is there to receive the turn: normally it was created at
-        // conversation start, so its absence means it died (Terminated cleared the reference) and
-        // must be recreated here rather than losing the message.
-        if (supervisor == null)
-        {
-            // Recreate the FSM orchestrator under the same conversation-scoped path.
-            supervisor = await Context.System.GetOrCreateActorAsync<ConversationSupervisorActor>(
-                Constants.Actors.Supervisor, msg.ConversationId);
+        // Normally the supervisor is already there. It is not when it died or when this process never
+        // saw the conversation start, as after a restart: either way the turn does not wait on it.
+        await EnsureSupervisorAsync();
 
-            // Watch the new instance too, so a further death is again seen as Terminated
-            // instead of a DeathPactException.
-            Context.Watch(supervisor);
-
-            actorLogger.Warning("Supervisor was missing; created new supervisor: {0}", supervisor.Path);
-        }
-
-        actorLogger.Info("Forwarding message to supervisor at {0}", supervisor.Path);
+        actorLogger.Info("Forwarding message to supervisor at {0}", supervisor!.Path);
 
         // Hands the turn to the supervisor with Tell rather than Ask: the answer comes back
         // asynchronously as stream chunks plus a final ConversationResponse, not as a single reply.
-        supervisor.Tell(msg);
+        supervisor!.Tell(msg);
     }
 
     /// <summary>
@@ -349,24 +204,11 @@ public class ConversationManagerActor : MorganaActor
     /// </summary>
     /// <param name="chunk">Streaming chunk containing partial response text</param>
     /// <remarks>
-    /// Chunks are suppressed entirely when the active channel does not advertise
-    /// <see cref="ChannelCapabilities.SupportsStreaming"/>. The final complete message
-    /// still reaches the client via <see cref="HandleConversationResponseAsync"/>, so no content
-    /// is lost — only the progressive rendering effect is skipped.
+    /// A chunk only exists for a channel that takes streaming: the agent streams by the capabilities
+    /// stamped on its request, which were settled once at the handshake (see NormaliseCapabilities).
     /// </remarks>
     private async Task HandleStreamChunkAsync(Records.AgentStreamChunk chunk)
     {
-        // Skip streaming entirely on channels that don't support it.
-        // The final response is delivered as a single structured message by HandleConversationResponseAsync.
-        if (!channelMetadataStore.TryGetChannelMetadata(conversationId, out ChannelMetadata? registeredMetadata))
-            throw new InvalidOperationException(
-                $"No channel metadata registered for conversation {conversationId}; " +
-                "the start-conversation gate should have ensured registration before any stream chunk.");
-
-        // No way to proceed if streaming is unsupported by the channel
-        if (!registeredMetadata.Capabilities.SupportsStreaming)
-            return;
-
         try
         {
             // Forward chunk to client via the active channel for progressive rendering
@@ -397,9 +239,8 @@ public class ConversationManagerActor : MorganaActor
         // this message's own adaptation, which cannot be known until the adapter has run. So the
         // value rides on the main response as a best effort and the reading taken after the send
         // (below) supersedes it on the trailing warning message. Null when dust limiting is off.
-        ConversationMetadata? preSendMetadata = dustLimitingOptions.Enabled
-            ? new ConversationMetadata(
-                Math.Floor(Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0) * 100.0) / 100.0)
+        ConversationMetadata? preSendMetadata = await dustLimitService.GetRemainingLevelAsync(conversationId) is { } preSendLevel
+            ? new ConversationMetadata(preSendLevel)
             : null;
 
         try
@@ -414,7 +255,9 @@ public class ConversationManagerActor : MorganaActor
                 QuickReplies = response.QuickReplies,
                 AgentName = response.AgentName ?? Constants.Morgana,
                 AgentCompleted = response.AgentCompleted,
-                Timestamp = response.OriginalTimestamp ?? DateTime.UtcNow,
+                // Dated as the history keeps it, so a client catching up recognises the reply it was
+                // pushed. A reply no agent recorded is dated now: the history never shows it.
+                Timestamp = response.RecordedTimestamp ?? DateTime.UtcNow,
                 RichCard = response.RichCard,
                 ConversationMetadata = preSendMetadata
             });
@@ -430,9 +273,8 @@ public class ConversationManagerActor : MorganaActor
             // authoritative end-of-turn level — the same number IsOverBudgetAsync will see on the
             // next send — so the warning/exhaustion decision below and the gauge the trailing
             // message carries, are taken on it rather than on the stale pre-send snapshot.
-            ConversationMetadata? postSendMetadata = dustLimitingOptions.Enabled
-                ? new ConversationMetadata(
-                    Math.Floor(Math.Clamp(1.0 - await dustLimitService.GetUsageRatioAsync(conversationId), 0.0, 1.0) * 100.0) / 100.0)
+            ConversationMetadata? postSendMetadata = await dustLimitService.GetRemainingLevelAsync(conversationId) is { } postSendLevel
+                ? new ConversationMetadata(postSendLevel)
                 : null;
 
             // Announces the lockout on the very turn that drained the budget, delivery included,
@@ -576,15 +418,15 @@ public class ConversationManagerActor : MorganaActor
     }
 
     /// <summary>
-    /// Deregisters this conversation's channel metadata so a stop that skips
+    /// Evicts the in-memory copy of this conversation's handshake so a stop that skips
     /// <see cref="HandleTerminateConversationAsync"/> (a supervision failure, a system shutdown)
-    /// can't leave a stale entry behind in <see cref="IChannelMetadataStore"/>.
+    /// can't leave it behind in <see cref="IChannelMetadataStore"/>.
     /// </summary>
     protected override void PostStop()
     {
-        // Drops the registry entry on any stop, including the ones that never went through
-        // HandleTerminateConversationAsync, where the unregistration would otherwise be missed.
-        channelMetadataStore.UnregisterChannelMetadata(conversationId);
+        // Drops the copy on any stop, including the ones that never went through
+        // HandleTerminateConversationAsync, where the eviction would otherwise be missed.
+        channelMetadataStore.EvictChannelMetadata(conversationId);
 
         actorLogger.Info($"ConversationManagerActor stopped for {conversationId}");
 

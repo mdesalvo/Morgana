@@ -175,7 +175,8 @@ public class RouterActor : MorganaActor
                 response.IsCompleted,
                 agentSender,
                 response.QuickReplies,
-                response.RichCard));
+                response.RichCard,
+                response.RecordedTimestamp));
         }
         else
         {

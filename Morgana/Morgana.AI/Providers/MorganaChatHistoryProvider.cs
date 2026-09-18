@@ -135,13 +135,12 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         // so only the new user/tool messages for this turn arrive here.
         List<ChatMessage> newMessages = [.. context.RequestMessages, .. context.ResponseMessages ?? []];
 
-        // Stamp response messages with a server-side UTC timestamp.
+        // Every response message carries Morgana's own clock, whatever the provider stamped or left
+        // unstamped: the history orders turns by it and a client catching up after a disconnection
+        // compares it with the timestamps of the replies it was delivered.
         int responseStartIndex = context.RequestMessages?.Count() ?? 0;
         for (int i = responseStartIndex; i < newMessages.Count; i++)
-        {
-            if (newMessages[i].CreatedAt.HasValue)
-                newMessages[i].CreatedAt = DateTimeOffset.UtcNow;
-        }
+            newMessages[i].CreatedAt = DateTimeOffset.UtcNow;
 
         historyState.Messages.AddRange(newMessages);
         sessionState.SaveState(context.Session, historyState);

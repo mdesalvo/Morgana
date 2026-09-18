@@ -34,6 +34,9 @@ public static class Records
     /// <summary>
     /// Supervisor → Manager final response: text, classification, metadata, agent info, optional quick replies/rich card.
     /// AgentName: agent identifier (e.g., "Morgana (Billing)"). AgentCompleted: flags multi-turn completion.
+    /// RecordedTimestamp: the timestamp the conversation's history keeps this reply under, so the reply
+    /// pushed live and the same reply read back later are recognisably one. Null for a reply no agent
+    /// recorded (a guard rejection, a disambiguation, a fallback), which the history never shows.
     /// </summary>
     public record ConversationResponse(
         string Response,
@@ -42,22 +45,16 @@ public static class Records
         string? AgentName = null,
         bool AgentCompleted = false,
         List<QuickReply>? QuickReplies = null,
-        DateTime? OriginalTimestamp = null,
+        DateTime? RecordedTimestamp = null,
         RichCard? RichCard = null);
 
     /// <summary>
-    /// Request to create a new conversation and initialize the actor hierarchy.
+    /// Request to start a new conversation: creates its supervisor and has Morgana present herself.
+    /// The handshake is already settled on record by the time it is sent, so it carries none.
     /// </summary>
     /// <param name="ConversationId">Unique identifier for the new conversation</param>
-    /// <param name="IsRestore">Flag indicating that the conversation is being created or restored</param>
-    /// <param name="ChannelMetadata">Channel metadata declared by the originating client at start
-    /// (channel name + capability budget). Required on fresh starts — Morgana refuses to
-    /// create a conversation for a channel that does not announce itself. Null on restore,
-    /// where the manager loads the persisted entry instead.</param>
     public record CreateConversation(
-        string ConversationId,
-        bool IsRestore,
-        ChannelMetadata? ChannelMetadata = null);
+        string ConversationId);
 
     /// <summary>
     /// Request to terminate a conversation and stop all associated actors.
@@ -91,13 +88,6 @@ public static class Records
         /// <example>3q2+7w8e9r0t1y2u3i4o5p6a7s8d9f0g1h2j3k4l5z6x7c8v9b0n1m2==</example>
         public string EncryptionKey { get; set; } = string.Empty;
     }
-
-    /// <summary>
-    /// Request to restore active agent state when resuming a conversation from persistence.
-    /// Sent to ConversationSupervisor after conversation resume to set activeAgent and activeAgentIntent.
-    /// </summary>
-    /// <param name="AgentIntent">Intent of the agent that was last active (e.g., "billing", "contract")</param>
-    public record RestoreActiveAgent(string AgentIntent);
 
     /// <summary>
     /// Request sent to RouterActor to restore/resolve an agent by intent.
@@ -637,12 +627,15 @@ public static class Records
     /// <summary>
     /// Agent response: text, IsCompleted flag (true→idle, false→agent stays active),
     /// optional QuickReplies, optional RichCard for structured UX (e.g., contract terms, invoice details).
+    /// RecordedTimestamp: the timestamp the agent's session keeps this reply under, carried to the
+    /// channel so the history and the live push date the reply identically. Null when nothing was recorded.
     /// </summary>
     public record AgentResponse(
         string Response,
         bool IsCompleted = true,
         List<QuickReply>? QuickReplies = null,
-        RichCard? RichCard = null);
+        RichCard? RichCard = null,
+        DateTime? RecordedTimestamp = null);
 
     /// <summary>
     /// Response from RouterActor containing both the agent's response and a reference to the agent actor.
@@ -653,12 +646,14 @@ public static class Records
     /// <param name="AgentRef">Actor reference to the agent that generated this response</param>
     /// <param name="QuickReplies">Optional list of quick reply buttons from the agent</param>
     /// <param name="RichCard">Optional rich card from the agent</param>
+    /// <param name="RecordedTimestamp">The timestamp the agent's session keeps this reply under</param>
     public record ActiveAgentResponse(
         string Response,
         bool IsCompleted,
         IActorRef AgentRef,
         List<QuickReply>? QuickReplies = null,
-        RichCard? RichCard = null);
+        RichCard? RichCard = null,
+        DateTime? RecordedTimestamp = null);
 
     /// <summary>
     /// Represents a streaming chunk from an agent during real-time response generation.
@@ -854,11 +849,13 @@ public static class Records
     /// </summary>
     /// <param name="OriginalMessage">The user message being processed</param>
     /// <param name="OriginalSender">Actor reference to reply to (typically ConversationManagerActor)</param>
+    /// <param name="ChannelCapabilities">The channel's budget for this turn, stamped on every agent request it sends</param>
     /// <param name="Classification">Intent classification result (populated after ClassifierActor processes message)</param>
     /// <param name="TurnContext">OpenTelemetry activity context for the current turn span.</param>
     public record ProcessingContext(
         UserMessage OriginalMessage,
         IActorRef OriginalSender,
+        ChannelCapabilities ChannelCapabilities,
         ClassificationResult? Classification = null,
         ActivityContext TurnContext = default);
 

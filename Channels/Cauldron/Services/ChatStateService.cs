@@ -70,6 +70,16 @@ public class ChatStateService : IChatStateService
     /// </summary>
     public double? DustLevel { get; set; }
 
+    /// <inheritdoc />
+    public DateTime LatestDeliveredTimestamp { get; private set; } = DateTime.MinValue;
+
+    /// <inheritdoc />
+    public void NoteDelivered(DateTime morganaTimestamp)
+    {
+        if (morganaTimestamp > LatestDeliveredTimestamp)
+            LatestDeliveredTimestamp = morganaTimestamp;
+    }
+
     // =========================================================================
     // MESSAGE OPERATIONS
     // =========================================================================
@@ -318,5 +328,6 @@ public class ChatStateService : IChatStateService
         IsInitialized = false;
         HasCheckedStorage = false;
         DustLevel = null;
+        LatestDeliveredTimestamp = DateTime.MinValue;
     }
 }

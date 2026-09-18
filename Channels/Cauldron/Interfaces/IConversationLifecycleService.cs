@@ -1,3 +1,5 @@
+using Morgana.Contracts;
+
 namespace Cauldron.Interfaces;
 
 /// <summary>
@@ -42,10 +44,14 @@ public interface IConversationLifecycleService
     Task<bool> SendMessageAsync(string text);
 
     /// <summary>
-    /// Raised when a turn in flight has gone silent for longer than <c>Cauldron:ReplyTimeoutSeconds</c>
-    /// and is given up on. The subscriber owns the repaint, since it alone runs on the circuit.
+    /// Raised, from a timer thread, when a turn in flight has gone silent for longer than
+    /// <c>Cauldron:ReplyTimeoutSeconds</c>. Nothing on screen has changed yet: the subscriber, which
+    /// alone runs on the circuit, settles the turn by recovering its reply or abandoning it.
     /// </summary>
-    event Action? OnTurnAbandoned;
+    event Action? OnReplyDeadlineExpired;
+
+    /// <summary>True while a sent turn is waiting on Morgana's reply.</summary>
+    bool IsAwaitingReply { get; }
 
     /// <summary>
     /// Records that Morgana is answering — a chunk or a message — so the turn in flight keeps its
@@ -54,9 +60,15 @@ public interface IConversationLifecycleService
     void NoteReplyActivity();
 
     /// <summary>
-    /// Recovers a reply pushed while this client was away, typically across a reconnection: the
-    /// conversation is compared with what Morgana holds and anything missing is appended.
-    /// Returns whether a turn that was waiting is now answered.
+    /// Asks Morgana for the replies it wrote to this conversation past the latest one this client
+    /// was given, as the messages a push would have carried. Empty when nothing is waiting, when
+    /// nothing is missing or when Morgana cannot be asked right now.
     /// </summary>
-    Task<bool> RecoverMissedRepliesAsync();
+    Task<IReadOnlyList<ChannelMessage>> GetMissedRepliesAsync();
+
+    /// <summary>
+    /// Gives up on the turn in flight: what a stream had revealed stays as the partial reply it is,
+    /// the composer is freed and the conversation says plainly that the answer may never come.
+    /// </summary>
+    void AbandonTurn();
 }

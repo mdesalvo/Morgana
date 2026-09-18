@@ -429,7 +429,9 @@ public class MorganaAgent : MorganaActor
             await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted);
             agentLogger.LogInformation("Saved conversation state for {AgentIdentifier}", AgentIdentifier);
 
-            senderRef.Tell(new Records.AgentResponse(llmResponseText, isCompleted, quickReplies, richCard));
+            // Dated as the history keeps it, so a client catching up recognises the reply it was pushed
+            senderRef.Tell(new Records.AgentResponse(
+                llmResponseText, isCompleted, quickReplies, richCard, finalAssistantMessage?.CreatedAt?.UtcDateTime));
         }
         catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } cre
                                      && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))

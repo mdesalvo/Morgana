@@ -39,5 +39,8 @@ public record ResumeConversationResponse(
 /// </summary>
 /// <param name="Messages">Conversation messages in chronological order across all participating
 /// agents. Never empty on a 200: an empty history is reported as 404.</param>
+/// <param name="DustLevel">REMAINING dust as a fraction of the conversation's budget (1.0 = full,
+/// 0.0 = spent), the same level every pushed message carries. Null when dust limiting is disabled.</param>
 public record ConversationHistoryResponse(
-    MorganaChatMessage[] Messages);
+    MorganaChatMessage[] Messages,
+    double? DustLevel = null);

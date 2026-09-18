@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Globalization;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
@@ -141,7 +142,9 @@ public class LLMClassifierService : IClassifierService
             // ClassificationResult.Intent and is used for normal (non-ambiguous) routing regardless
             // of whether we end up flagging a collision below.
             (string topIntentName, double topIntentScore) = rankedIntentScores[0];
-            string topIntentConfidence = topIntentScore.ToString("F2");
+            // Read back from telemetry and metadata by whoever consumes them, so it is written the
+            // same on every host whatever its locale, as the fallbacks' literal "0.00" already is
+            string topIntentConfidence = topIntentScore.ToString("F2", CultureInfo.InvariantCulture);
             Dictionary<string, string> metadata = new()
             {
                 ["intent"] = topIntentName,

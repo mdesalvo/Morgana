@@ -365,7 +365,9 @@ public static partial class ExpectationChecker
         MarkdownDocument document = Markdown.Parse(text);
         foreach (MarkdownObject node in document.Descendants())
         {
-            if (node is not ParagraphBlock && node is not LiteralInline)
+            // Lines of prose simply following one another are plain text: only a hard break
+            // (trailing spaces, backslash) is markdown syntax
+            if (node is not ParagraphBlock && node is not LiteralInline && node is not LineBreakInline { IsHard: false })
                 return true;
         }
 
