@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.31.0] - UNDER DEVELOPMENT
+## [0.31.0] - 2026-09-19
 ### 🎯 Major Feature: Cross-Instance collaboration over A2A
 Morgana now speaks the **A2A protocol** instance to instance. Every agent is published at `/a2a/{intent}` with its well-known agent card. Agents can consult (and be consulted by) peers living on **remote Morgana instances**: `[ConsultsAgent("shipping", "acme")]` names an "acme" partner trusted under `Morgana:AgentToAgent:Partners` on which their agent "shipping" can be engaged and from which this Morgana may also be engaged.
 
