@@ -30,7 +30,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5001
 
-      # Authentication (JWT) - per-channel keys (3 is harness, which isn't dockerized).
+      # Authentication (JWT) - one key per channel this installation serves.
       # Agents of this installation consult each other under a key coined at startup: nothing to set.
       - Morgana__Authentication__Issuers__0__Name=cauldron
       - Morgana__Authentication__Issuers__0__SymmetricKey=${JWT_SYMMETRIC_KEY}

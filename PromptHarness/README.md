@@ -95,13 +95,12 @@ On top of that it overrides, per run:
 | `OpenTelemetry:Exporters[*]:Enabled` → false | the in-process listener needs no collector |
 | `RateLimiting:Enabled`, `DustLimiting:Enabled` → false | a repeated-run suite would throttle itself |
 | `ActorSystem:EnableGuardrail` → `Harness:EnableGuardrail` | off by default: no scenario asserts moderation and every guarded turn is an extra LLM call |
-| `Authentication:Issuers[harness]:SymmetricKey` → random | minted per run, never written to disk |
+| `Authentication:Issuers[harness]` → appended | name and key both declared per run, the key minted fresh and never written to disk: an instrument's channel identity is not something a deployed installation should carry in its own configuration |
 | `AgentToAgent:Partners[harness-peer]` → appended | a partner admitted to `inventory` and to no other desk, declared per run rather than shipped: it exists to be turned away, which is the only way `AgentCardTests` can observe that the A2A gate is shut *selectively* and not merely shut. Its key, its reach and its ceiling are one entry |
 
-The only thing the repository must carry is the `harness` entry in
-`Morgana.Web/appsettings.json` → `Morgana:Authentication:Issuers`, with the usual
-`_SECURE_OVERRIDE_` placeholder. Without it the harness refuses to start, by design: it authenticates
-as its own channel and will not run against an instance that has not declared it.
+The repository carries nothing on the harness's behalf: the instance under test declares the
+channels it actually serves and the harness appends its own issuer past them, so an installation
+never ships an admitted identity that only an instrument uses.
 
 ## Running it
 
