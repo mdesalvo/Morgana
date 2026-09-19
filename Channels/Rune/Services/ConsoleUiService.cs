@@ -719,9 +719,10 @@ public sealed class ConsoleUiService
 
         // Scrollback indicator: ▲ when older content sits above the viewport, ▼ when the user has
         // scrolled up (content below). Each glyph is lit in the user colour when that direction is
-        // available, dim otherwise; the whole segment is omitted unless at least one is actionable
-        // so a live, fully-visible conversation keeps a clean header. BuildBody set these flags for
-        // this same frame (see BuildLayout's ordering) and only when scrolling is enabled.
+        // available, dim otherwise: scrolling is the user's own action, not the speaker's, so it stays
+        // outside the colour the header band spends on whoever holds the mic. The whole segment is
+        // omitted unless at least one glyph is actionable, so a live, fully-visible conversation keeps
+        // a clean header. BuildBody set these flags for this same frame (see BuildLayout's ordering).
         string scrollSegment = scrollHasAbove || scrollHasBelow
             ? $"   {(scrollHasAbove ? $"[{UserColor}]▲[/]" : "[grey50]▲[/]")}{(scrollHasBelow ? $"[{UserColor}]▼[/]" : "[grey50]▼[/]")}"
             : string.Empty;
@@ -752,7 +753,9 @@ public sealed class ConsoleUiService
         return new Panel(Align.Center(content, VerticalAlignment.Middle))
         {
             Border = BoxBorder.Rounded,
-            BorderStyle = new Style(Color.Grey50),
+            // The frame carries the same colour as the speaker name inside it, so who holds the mic
+            // is legible from the whole header band rather than from one word in it.
+            BorderStyle = Style.Parse(speakerColor),
             Header = new PanelHeader(""),
             Padding = new Padding(1, 0, 1, 0),
             Expand = true
@@ -1016,8 +1019,8 @@ public sealed class ConsoleUiService
         if (rows.Count == 0)
             return rows;
 
-        // Grey50 matches BuildHeader's Panel BorderStyle, so the prompt frame reads as the same
-        // chrome family as the header rather than a second, competing accent colour.
+        // Neutral grey keeps the prompt frame as plain chrome: the speaker colour is spoken for by
+        // the header band, so the input area must not read as a second, competing accent.
         Markup border = new($"[grey50]{new string('─', Math.Max(1, termWidth))}[/]");
         return [border, .. rows, border];
     }
