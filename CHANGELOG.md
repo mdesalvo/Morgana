@@ -62,6 +62,7 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
 ### 📦 Dependencies
 - Updated `Microsoft.Agents.AI` to 1.21.0
 - Updated `Microsoft.Extensions.AI` to 10.10.0
+- Updated `OpenTelemetry` to 1.19.0
 
 ### 🚀 Future Enablement
 - **A federation of Morgana** — every installation already describes itself completely on an open card, so nothing stands between today and a **directory of peers**: point a Morgana at a list of addresses and its agents discover, in one pass, every competence the federation can answer for. The pieces are all published; what is left is the collecting
