@@ -1,5 +1,4 @@
 using Microsoft.Agents.AI;
-using Microsoft.Agents.AI.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Morgana.AI.SessionStores;
@@ -34,6 +33,10 @@ public sealed class MorganaHostedAgentSession : AgentSession
     }
 }
 
+// The session contract of the hosting layer is published as evaluation-only, so a Morgana that
+// serves A2A at all has to take it as it stands: nothing here chooses to use a provisional API.
+#pragma warning disable MAAI001
+
 /// <summary>
 /// The <see cref="AgentSessionStore"/> of <c>MorganaHostedAgent</c>: turns a request's A2A context
 /// id into the conversation it is served on. It stores nothing.
@@ -67,16 +70,16 @@ public sealed class MorganaHostedAgentSessionStore : AgentSessionStore
     }
 
     /// <inheritdoc />
-    public override ValueTask<AgentSession> GetSessionAsync(AIAgent agent, string sessionStoreId, CancellationToken cancellationToken = default)
+    public override ValueTask<AgentSession?> GetSessionAsync(AIAgent agent, AgentSessionStoreKey sessionStoreKey, CancellationToken cancellationToken = default)
     {
         string? callerIssuer = callerIssuerResolver();
-        string conversationId = ResolveConversationId(sessionStoreId, callerIssuer);
+        string conversationId = ResolveConversationId(sessionStoreKey.SessionId, callerIssuer);
 
         logger.LogInformation(
             "Inbound A2A request from '{CallerIssuer}' for agent '{AgentName}' on conversation '{ConversationId}'",
             callerIssuer ?? "an undeclared system", agent.Name, conversationId);
 
-        return ValueTask.FromResult<AgentSession>(new MorganaHostedAgentSession(conversationId, callerIssuer));
+        return ValueTask.FromResult<AgentSession?>(new MorganaHostedAgentSession(conversationId, callerIssuer));
     }
 
     /// <summary>
@@ -99,10 +102,8 @@ public sealed class MorganaHostedAgentSessionStore : AgentSessionStore
             : $"{callerIssuer}{ForeignConversationSeparator}{sessionStoreId}";
 
     /// <inheritdoc />
-    public override ValueTask SaveSessionAsync(AIAgent agent, string sessionStoreId, AgentSession session, CancellationToken cancellationToken = default)
-        => ValueTask.CompletedTask;
-
-    /// <inheritdoc />
-    public override ValueTask DeleteSessionAsync(AIAgent agent, string sessionStoreId, CancellationToken cancellationToken = default)
+    public override ValueTask SaveSessionAsync(AIAgent agent, AgentSessionStoreKey sessionStoreKey, AgentSession session, CancellationToken cancellationToken = default)
         => ValueTask.CompletedTask;
 }
+
+#pragma warning restore MAAI001

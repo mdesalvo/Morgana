@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
+### 📦 Dependencies
+- Updated `Microsoft.Agents.AI` to 1.22.0
+
 ### 🚀 Future Enablement
 
 ## [0.31.0] - 2026-09-20

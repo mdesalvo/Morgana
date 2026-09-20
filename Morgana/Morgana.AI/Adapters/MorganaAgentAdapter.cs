@@ -6,7 +6,6 @@ using Microsoft.Agents.AI.A2A;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using ModelContextProtocol.Client;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Attributes;
 using Morgana.AI.ChatClients;
