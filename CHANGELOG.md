@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🔄 Changed
 
 ### 🐛 Fixed
+- Morgana now remembers the whole conversation as it appears on screen: nothing disappears on a refresh any more, neither the message just sent nor anything already shown
 
 ### 📦 Dependencies
 - Updated `Microsoft.Agents.AI` to 1.22.0
