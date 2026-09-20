@@ -44,8 +44,6 @@ public sealed class ConsoleUiService
     /// <summary>Fallback for <c>Grimoire:ReplyTimeoutSeconds</c> when absent or non-positive.</summary>
     private const int DefaultReplyTimeoutSeconds = 120;
 
-    /// <summary>Fallback for <c>Grimoire:AgentExitMessage</c> when the setting is absent.</summary>
-    private const string DefaultAgentExitMessage = "{0} has completed its spell. I'm back to you!";
 
     /// <summary>
     /// Source of truth: every message ever displayed, chronologically ordered, append-only.
@@ -86,8 +84,6 @@ public sealed class ConsoleUiService
     /// </summary>
     private readonly Channel<InboundEvent> inbound = Channel.CreateUnbounded<InboundEvent>();
 
-    /// <summary>Format string for the courtesy line appended when a specialised agent completes.</summary>
-    private readonly string agentExitTemplate;
 
     /// <summary>Buffer holding keystrokes not yet committed with <see cref="ConsoleKey.Enter"/>.</summary>
     private string currentInput = string.Empty;
@@ -245,7 +241,7 @@ public sealed class ConsoleUiService
     /// <summary>Serializes mutations of <see cref="history"/>, <see cref="currentInput"/>, <see cref="currentSpeaker"/> and the paired <see cref="LiveDisplayContext.UpdateTarget"/>/<see cref="LiveDisplayContext.Refresh"/> calls. The resize callback runs on its own thread (SIGWINCH handler / polling task) and would otherwise race with <see cref="ReadKeysLoop"/> and <see cref="DrainInboundLoop"/> over the shared list. Uses <see cref="System.Threading.Lock"/> (.NET 9+) instead of <c>object</c> so the compiler emits the optimised primitive and rejects misuse (e.g. passing the lock as an <c>object</c>).</summary>
     private readonly Lock renderLock = new();
 
-    /// <summary>Reads the <c>Grimoire:AgentExitMessage</c> template, falling back to <see cref="DefaultAgentExitMessage"/>, the typewriter cadence settings and captures the injected resize watcher and the three DI-registered renderers.</summary>
+    /// <summary>Reads the typewriter cadence settings and captures the injected resize watcher and the three DI-registered renderers.</summary>
     public ConsoleUiService(
         IConfiguration configuration,
         IViewportResizeWatcher viewportResizeWatcher,
@@ -253,8 +249,6 @@ public sealed class ConsoleUiService
         RichCardTerminalRenderService richCardRenderer,
         QuickReplyTerminalRenderService quickReplyRenderer)
     {
-        agentExitTemplate = configuration["Grimoire:AgentExitMessage"] ?? DefaultAgentExitMessage;
-
         // A non-positive wait would declare every turn lost the instant it is sent, so it falls back too
         int replyTimeoutSeconds = configuration.GetValue<int?>("Grimoire:ReplyTimeoutSeconds") ?? DefaultReplyTimeoutSeconds;
         replyTimeout = TimeSpan.FromSeconds(replyTimeoutSeconds > 0 ? replyTimeoutSeconds : DefaultReplyTimeoutSeconds);
@@ -530,14 +524,6 @@ public sealed class ConsoleUiService
             : TerminalCellService.StripControlCharacters(message.AgentName);
 
         history.Add(new DisplayedMessage(messageSpeaker, message.Text, RowColor(message, messageSpeaker), message.RichCard));
-
-        // On agent completion append a base-Morgana courtesy line — same pattern
-        // as Cauldron's ChatStateService.AddCompletionMessageIfNeeded.
-        if (message.AgentCompleted && IsSpecializedAgent(message.AgentName))
-        {
-            string completion = string.Format(agentExitTemplate, messageSpeaker);
-            history.Add(new DisplayedMessage("Morgana", completion, MorganaColor));
-        }
 
         // Revert the sticky header to Morgana on completion so the next user
         // turn doesn't render under the outgoing agent's colour.

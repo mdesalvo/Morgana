@@ -34,9 +34,9 @@ public static class Records
     /// <summary>
     /// Supervisor → Manager final response: text, classification, metadata, agent info, optional quick replies/rich card.
     /// AgentName: agent identifier (e.g., "Morgana (Billing)"). AgentCompleted: flags multi-turn completion.
-    /// RecordedTimestamp: the timestamp the conversation's history keeps this reply under, so the reply
-    /// pushed live and the same reply read back later are recognisably one. Null for a reply no agent
-    /// recorded (a guard rejection, a disambiguation, a fallback), which the history never shows.
+    /// RecordedTimestamp: the instant an agent recorded this reply in its own session, carried so the reply
+    /// pushed live and the same reply read back later are recognisably one. Null when no agent wrote it —
+    /// a refusal, a disambiguation, a fallback: Morgana said it, so she is the one who files and dates it.
     /// </summary>
     public record ConversationResponse(
         string Response,
@@ -622,7 +622,8 @@ public static class Records
         string? Content,
         ClassificationResult? Classification,
         ActivityContext TurnContext = default,
-        ChannelCapabilities? Capabilities = null);
+        ChannelCapabilities? Capabilities = null,
+        bool ContentAlreadyStored = false);
 
     /// <summary>
     /// Agent response: text, IsCompleted flag (true→idle, false→agent stays active),
@@ -852,12 +853,19 @@ public static class Records
     /// <param name="ChannelCapabilities">The channel's budget for this turn, stamped on every agent request it sends</param>
     /// <param name="Classification">Intent classification result (populated after ClassifierActor processes message)</param>
     /// <param name="TurnContext">OpenTelemetry activity context for the current turn span.</param>
+    /// <param name="UserMessageAlreadyStored">
+    /// True when no agent was active as this turn arrived, which is when Morgana saves the phrase on
+    /// her own side of the conversation. Settled once at ingress, then carried through the turn: an
+    /// agent engaged a moment later would otherwise make the answer unreadable, since by then one is
+    /// active although none was when the user spoke.
+    /// </param>
     public record ProcessingContext(
         UserMessage OriginalMessage,
         IActorRef OriginalSender,
         ChannelCapabilities ChannelCapabilities,
         ClassificationResult? Classification = null,
-        ActivityContext TurnContext = default);
+        ActivityContext TurnContext = default,
+        bool UserMessageAlreadyStored = false);
 
     // --- MorganaAgent Contexts ---
 

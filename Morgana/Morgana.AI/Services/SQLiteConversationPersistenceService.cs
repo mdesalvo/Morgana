@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
+using Morgana.AI.Providers;
 using Morgana.Contracts;
 using static Morgana.AI.Records;
 
@@ -23,6 +24,15 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     /// Logger for schema migrations, session save/load and decryption failures.
     /// </summary>
     private readonly ILogger logger;
+
+    /// <summary>Where the agent framework files provider state inside a serialized session.</summary>
+    private const string RowStateBagProperty = "stateBag";
+
+    /// <summary>The history provider's own slot in that state, named after the provider itself.</summary>
+    private const string RowHistoryStateKey = nameof(MorganaChatHistoryProvider);
+
+    /// <summary>The transcript inside that slot.</summary>
+    private const string RowMessagesProperty = "messages";
 
     /// <summary>
     /// Persistence configuration from <c>Morgana:ConversationPersistence</c>: <c>StoragePath</c>
@@ -297,36 +307,11 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 string agentName = (string)sqliteDataReader["agent_name"];
                 bool agentCompleted = (long)sqliteDataReader["is_active"] == 0;
 
-                // Decrypt and deserialize agent session
+                // Every participant's row is read the same way, the orchestrator's included: what
+                // differs between them is what else the row carries, never where the transcript sits.
                 byte[] encryptedAgentSessionJsonString = (byte[])sqliteDataReader["agent_session"];
-                string agentSessionJsonString = Decrypt(encryptedAgentSessionJsonString);
-                JsonElement agentSessionJsonElement = JsonSerializer.Deserialize<JsonElement>(
-                    agentSessionJsonString, jsonSerializerOptions);
-
-                // Extract messages array from AgentSession structure.
-                // Microsoft.Agents.AI framework serializes provider state under: stateBag → {StateKey} → {payload}.
-                // MorganaChatHistoryProvider.StateKey = "MorganaChatHistoryProvider"
-                if (!agentSessionJsonElement.TryGetProperty("stateBag", out JsonElement stateBagElement))
-                {
-                    logger.LogWarning("AgentSession for {AgentName} missing 'stateBag' property, skipping", agentName);
-                    continue;
-                }
-                if (!stateBagElement.TryGetProperty("MorganaChatHistoryProvider", out JsonElement chatHistoryProviderStateElement))
-                {
-                    logger.LogWarning("AgentSession.stateBag for {AgentName} missing 'MorganaChatHistoryProvider' property, skipping", agentName);
-                    continue;
-                }
-                if (!chatHistoryProviderStateElement.TryGetProperty("messages", out JsonElement messagesElement))
-                {
-                    logger.LogWarning("AgentSession.stateBag.MorganaChatHistoryProvider for {AgentName} missing 'messages' property, skipping", agentName);
-                    continue;
-                }
-
-                // Deserialize messages to ChatMessage array
-                ChatMessage[]? chatMessages = JsonSerializer.Deserialize<ChatMessage[]>(
-                    messagesElement.GetRawText(),
-                    jsonSerializerOptions) ?? throw new InvalidOperationException(
-                        $"Failed to deserialize Messages for agent {agentName} in conversation {conversationId}");
+                IReadOnlyList<ChatMessage> chatMessages = ReadRowMessages(
+                    Decrypt(encryptedAgentSessionJsonString), agentName, conversationId, jsonSerializerOptions);
 
                 // Add all messages with agent metadata.
                 // Filtering of intermediate (non-user-facing) assistant messages happens later in
@@ -351,6 +336,78 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to retrieve conversation history for {ConversationId}", conversationId);
+            throw;
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task AppendOrchestratorMessagesAsync(
+        string conversationId,
+        IReadOnlyList<ChatMessage> messages)
+    {
+        if (messages.Count == 0)
+            return;
+
+        string orchestratorIdentifier = $"{Constants.Morgana}-{conversationId}";
+
+        try
+        {
+            string sqliteConnectionString = GetConnectionString(conversationId);
+            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
+            await sqliteConnection.OpenAsync();
+
+            // The orchestrator speaks before any desk does — the welcome opens the conversation —
+            // so this may be the first write the database ever receives.
+            await EnsureDatabaseInitializedAsync(sqliteConnection);
+
+            // Read and write are one step: the user's phrase arrives on one path while an answer
+            // leaves on another. Either losing the other's line would tear a hole in the dialogue.
+            await using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
+            try
+            {
+                await using SqliteCommand readCommand = sqliteConnection.CreateCommand();
+                readCommand.Transaction = sqliteTransaction;
+                readCommand.CommandText = "SELECT agent_session FROM morgana WHERE agent_identifier = @agent_identifier;";
+                readCommand.Parameters.AddWithValue("@agent_identifier", orchestratorIdentifier);
+
+                object? storedRow = await readCommand.ExecuteScalarAsync();
+                List<ChatMessage> storedMessages = storedRow is byte[] encryptedStoredRow
+                    ? [.. ReadRowMessages(Decrypt(encryptedStoredRow), Constants.Morgana, conversationId)]
+                    : [];
+
+                storedMessages.AddRange(messages);
+                byte[] encryptedRow = Encrypt(WriteRowMessages(storedMessages));
+
+                await using SqliteCommand writeCommand = sqliteConnection.CreateCommand();
+                writeCommand.Transaction = sqliteTransaction;
+                writeCommand.CommandText =
+"""
+INSERT INTO morgana (agent_identifier, agent_name, agent_session, creation_date, last_update, is_active)
+VALUES (@agent_identifier, @agent_name, @agent_session, @now, @now, 0)
+ON CONFLICT(agent_identifier) DO UPDATE SET
+    agent_session = excluded.agent_session, last_update = @now;
+""";
+                writeCommand.Parameters.AddWithValue("@agent_identifier", orchestratorIdentifier);
+                writeCommand.Parameters.AddWithValue("@agent_name", Constants.Morgana);
+                writeCommand.Parameters.AddWithValue("@agent_session", encryptedRow);
+                writeCommand.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+
+                await writeCommand.ExecuteNonQueryAsync();
+                await sqliteTransaction.CommitAsync();
+
+                logger.LogInformation(
+                    "Appended {Count} orchestrator message(s) to conversation {ConversationId} — {Total} on record",
+                    messages.Count, conversationId, storedMessages.Count);
+            }
+            catch
+            {
+                await sqliteTransaction.RollbackAsync();
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to append orchestrator messages to conversation {ConversationId}", conversationId);
             throw;
         }
     }
@@ -759,6 +816,74 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     }
 
     /// <summary>
+    /// Reads the messages a conversation row holds. Returns an empty sequence for a row whose
+    /// shape carries none, so one unreadable participant costs its own lines rather than the
+    /// whole dialogue.
+    /// </summary>
+    /// <remarks>
+    /// The one place that knows how a row encodes its messages, paired with <see cref="WriteRowMessages"/>.
+    /// A desk's row is the agent session the desk resurrects itself from, written by the agent
+    /// framework; the orchestrator's carries the same outer shape with nothing but messages inside.
+    /// Both are read here, so the framework's layout is known at one address instead of wherever a
+    /// caller happens to need a transcript.
+    /// </remarks>
+    private IReadOnlyList<ChatMessage> ReadRowMessages(
+        string rowJson,
+        string authorName,
+        string conversationId,
+        JsonSerializerOptions? jsonSerializerOptions = null)
+    {
+        jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
+
+        JsonElement rowElement = JsonSerializer.Deserialize<JsonElement>(rowJson, jsonSerializerOptions);
+
+        if (!rowElement.TryGetProperty(RowStateBagProperty, out JsonElement stateBagElement))
+        {
+            logger.LogWarning("Conversation row for {AuthorName} missing '{Property}', skipping", authorName, RowStateBagProperty);
+            return [];
+        }
+        if (!stateBagElement.TryGetProperty(RowHistoryStateKey, out JsonElement historyStateElement))
+        {
+            logger.LogWarning("Conversation row for {AuthorName} missing '{Property}', skipping", authorName, RowHistoryStateKey);
+            return [];
+        }
+        if (!historyStateElement.TryGetProperty(RowMessagesProperty, out JsonElement messagesElement))
+        {
+            logger.LogWarning("Conversation row for {AuthorName} missing '{Property}', skipping", authorName, RowMessagesProperty);
+            return [];
+        }
+
+        return JsonSerializer.Deserialize<ChatMessage[]>(messagesElement.GetRawText(), jsonSerializerOptions)
+               ?? throw new InvalidOperationException(
+                   $"Failed to deserialize messages for '{authorName}' in conversation {conversationId}");
+    }
+
+    /// <summary>
+    /// Builds the row of a participant that holds messages and nothing else, which is the
+    /// orchestrator alone. Its output is read back by <see cref="ReadRowMessages"/> exactly as a
+    /// desk's row is, so a transcript is assembled without asking who wrote which row.
+    /// </summary>
+    private static string WriteRowMessages(
+        IReadOnlyList<ChatMessage> messages,
+        JsonSerializerOptions? jsonSerializerOptions = null)
+    {
+        jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
+
+        return JsonSerializer.Serialize(
+            new Dictionary<string, object>
+            {
+                [RowStateBagProperty] = new Dictionary<string, object>
+                {
+                    [RowHistoryStateKey] = new Dictionary<string, object>
+                    {
+                        [RowMessagesProperty] = messages
+                    }
+                }
+            },
+            jsonSerializerOptions);
+    }
+
+    /// <summary>
     /// Processes raw messages from AgentSession into UI-ready MorganaChatMessage array.
     /// Handles quick reply extraction, message filtering and chronological ordering.
     /// </summary>
@@ -844,6 +969,13 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             {
                 pendingRichCardCallId = null;
                 pendingQuickRepliesCallId = null;
+
+                // The agent holds this phrase only so its model could read it: no agent was active
+                // when it arrived, so Morgana saved it on her own side. Closing the pending
+                // attachments above still applies — the turn happened either way — but the phrase
+                // itself is taken from where it was saved, so the user reads it once.
+                if (chatMessage.AdditionalProperties?.ContainsKey(Constants.MessageProperties.ContextOnly) == true)
+                    continue;
             }
 
             // Check for SetRichCard function call

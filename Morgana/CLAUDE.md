@@ -141,7 +141,8 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
 4. **AwaitingAgentResponse / AwaitingFollowUpResponse** — the agent runs its tool loop and streams.
    The wait here is a budget on **silence**, not on the turn: every chunk renews it and so does
    `AgentStillWorking` on updates carrying no text — without it a consultation reads as a dead agent
-5. Back to **Idle** — the response is forwarded through `IChannelService`
+5. Back to **Idle** — the response is forwarded through `IChannelService`, followed by Morgana's own
+   closing line (`AgentExitMessage`) when a desk signalled completion
 
 ### REST API
 
@@ -218,7 +219,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json`, domain from `agents.json`. Throws if one ID is declared in both |
 | `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads: the fenced two-layer prompt, tool descriptions, the per-turn held-context declaration, the colleagues declaration, a colleague's question |
 | `ConfigurationAgentDirectoryService` | `IAgentDirectoryService` | Both halves of A2A discovery, plus `ValidateTrustConfiguration` and `ValidatePublishedAddress` |
-| `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Merges every plugin's `agents.json`. Refuses a duplicated intent or prompt id and the reserved name `other` |
+| `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Merges every plugin's `agents.json`. Refuses a duplicated intent or prompt id and the reserved names `other` and `Morgana`. Its refusals are fatal |
 | `HandlesIntentAgentRegistryService` | `IAgentRegistryService` | Discovers agents by attribute; bidirectional intent validation; validates `[ConsultsAgent]` |
 | `RequiresLLMTierValidationService` | `ILLMTierValidationService` | Every agent must declare a tier the active provider configures |
 | `ProvidesToolForIntentRegistryService` | `IToolRegistryService` | Discovers tools; warns on orphans; errors on duplicates |
@@ -376,13 +377,19 @@ Per-conversation SQLite at `{StoragePath}/morgana-{conversationId}.db`, schema v
 
 | Table | Purpose |
 |---|---|
-| `morgana` | Per-agent `AgentSession` BLOBs, AES-256-CBC encrypted |
+| `morgana` | One row per participant, AES-256-CBC encrypted: each agent's `AgentSession`, plus Morgana's own, holding messages alone |
 | `rate_limit_log` | Sliding window |
 | `channel_metadata` | The persisted handshake |
 | `shared_context` | Cross-agent variables, first-write-wins |
 | `dust_budget` · `dust_usage_log` | Lifetime budget, per-charge attribution |
 
-History retrieval decrypts each agent row, applies a user-facing filter, merges chronologically and
+**A user's phrase is Morgana's when no agent is active and the active agent's otherwise; an answer
+belongs to whoever wrote it.** So the phrase is saved at ingress, before the guard. The copy the
+routed agent keeps for its model carries `morgana:context_only`. Chrome enters no row: the fading
+banners, the typing indicator. Morgana has a row without being an agent — see
+`IConversationPersistenceService`, which alone knows how a row encodes its messages.
+
+History retrieval decrypts each row, applies a user-facing filter, merges chronologically and
 extracts quick replies and rich cards from the stored function calls.
 
 ## Authentication
@@ -413,6 +420,7 @@ fails or opens, silently.**
 3. Every `[ConsultsAgent]` names a reachable colleague and no two fold to one function name
 4. Tools: warn on orphans, error on duplicates for one intent
 5. Plugin `agents.json` files merge with no duplicated intent or prompt id and none declares `other`
+   or `Morgana`
 6. No `Tiers` entry left on its override placeholder, no empty `Tiers` map
 7. Every admitted issuer — channel, partner and the ring alike — carries a name and a key of at least 256 bits and no name is admitted twice
 8. `ValidateTrustConfiguration`: each `Partners[]` entry names somebody once, does something, is coherent per open direction and carries a key that can sign

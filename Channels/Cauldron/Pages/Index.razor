@@ -355,7 +355,6 @@
                 {
                     StreamingService.FinalizeStreaming(message);
                     ChatStateService.UpdateAgentFromMessage(message);
-                    ChatStateService.AddCompletionMessageIfNeeded(message);
                     ChatStateService.IsSending = false;
                     StateHasChanged();
                     return;
@@ -370,16 +369,13 @@
                 {
                     ConversationId = message.ConversationId,
                     Text = message.Text,
-                    Role = "assistant",
+                    Type = MessageType.Assistant,
                     Timestamp = message.Timestamp,
                     QuickReplies = message.QuickReplies,
                     AgentName = message.AgentName ?? "Morgana",
                     AgentCompleted = false,
                     RichCard = message.RichCard
                 });
-
-                // Add completion message if needed (shared logic)
-                ChatStateService.AddCompletionMessageIfNeeded(message);
 
                 // Reset sending state - message received via SignalR
                 ChatStateService.IsSending = false;

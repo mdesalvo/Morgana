@@ -414,57 +414,25 @@ public class ConversationLifecycleService : IConversationLifecycleService
             foreach (MorganaChatMessage message in history.Messages.Where(message => message.Type == ChatMessageType.Assistant))
                 _chatStateService.NoteDelivered(message.Timestamp);
 
-            // Walked in order so the synthetic handover lines can be woven in at the right spot
-            for (int i = 0; i < history.Messages.Length; i++)
+            // Redrawn exactly as Morgana kept it: the handover lines are hers and travel in the
+            // history like anything else she said, so there is nothing left to infer here.
+            foreach (MorganaChatMessage historyMessage in history.Messages)
+                _chatStateService.ChatMessages.Add(MapToChatMessage(historyMessage));
+
+            // Morgana saves a phrase the moment it arrives, so a history ending on the visitor's
+            // own words means that turn is still being worked on — typically a reload during it.
+            bool isTurnInFlight = history.Messages.Last().Type == ChatMessageType.User;
+
+            // The composer stays shut and the wait resumes where the reload cut it. This also
+            // recovers a reply pushed into the gap before this client rejoined its group: the
+            // deadline asks the history first and gives up only on a turn with nothing there.
+            if (isTurnInFlight)
             {
-                // Handover lines are never persisted, so they are reconstructed here by spotting
-                // a user turn that sits between two different agents.
-                if (string.Equals(history.Messages[i].Role, "user", StringComparison.OrdinalIgnoreCase))
-                {
-                    bool isPrecededByAssistant = i > 0
-                        && string.Equals(history.Messages[i - 1].Role, "assistant", StringComparison.OrdinalIgnoreCase);
-                    bool isFollowedByAssistant = i + 1 < history.Messages.Length
-                        && string.Equals(history.Messages[i + 1].Role, "assistant", StringComparison.OrdinalIgnoreCase);
-                    bool isTurnBoundary = isPrecededByAssistant
-                        && isFollowedByAssistant
-                        && !string.Equals(history.Messages[i - 1].AgentName, history.Messages[i + 1].AgentName, StringComparison.OrdinalIgnoreCase);
+                _chatStateService.IsSending = true;
+                _chatStateService.AddTypingIndicator();
+                NoteReplyActivity();
 
-                    if (isTurnBoundary)
-                    {
-                        // Backdated just before the user message it precedes, so it reads as the
-                        // specialist signing off rather than answering.
-                        _chatStateService.ChatMessages.Add(new ChatMessage
-                        {
-                            ConversationId = history.Messages[i].ConversationId,
-                            Text = _chatStateService.GetCompletionMessage(history.Messages[i - 1].AgentName),
-                            Role = "assistant",
-                            Timestamp = history.Messages[i].Timestamp.AddMilliseconds(-5),
-                            AgentName = "Morgana",
-                            AgentCompleted = true,
-                            Type = MessageType.Presentation
-                        });
-                    }
-                }
-
-                _chatStateService.ChatMessages.Add(MapToChatMessage(history.Messages[i]));
-            }
-
-            // The loop above only catches handovers followed by another turn. A conversation that
-            // ended while a specialist was active needs its closing line added here.
-            MorganaChatMessage lastMsg = history.Messages.Last();
-            if (_chatStateService.IsSpecializedAgent(lastMsg.AgentName)
-                && !_chatStateService.IsSpecializedAgent(_chatStateService.CurrentAgentName))
-            {
-                _chatStateService.ChatMessages.Add(new ChatMessage
-                {
-                    ConversationId = lastMsg.ConversationId,
-                    Text = _chatStateService.GetCompletionMessage(lastMsg.AgentName),
-                    Role = "assistant",
-                    Timestamp = lastMsg.Timestamp.AddMilliseconds(-5),
-                    AgentName = "Morgana",
-                    AgentCompleted = true,
-                    Type = MessageType.Presentation
-                });
+                _logger.LogInformation("History ends on a user turn: resuming the wait for Morgana's reply");
             }
 
             return true;

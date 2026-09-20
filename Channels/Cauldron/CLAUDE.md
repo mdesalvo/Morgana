@@ -133,7 +133,6 @@ collide with the widget's CSS or inherit into its shadow root.
 |---|---|
 | `Cauldron:MorganaURL` | Backend base URL for REST plus SignalR (default `https://localhost:5001`) |
 | `Cauldron:Authentication:*` | `SymmetricKey` matching Morgana's entry for `Name=cauldron`, plus `Issuer` and `Audience` |
-| `Cauldron:AgentExitMessage` | The courtesy line injected when a specialised agent completes; `{0}` is its display name. Mirrors Rune's |
 | `Cauldron:ReplyTimeoutSeconds` | How long a turn may go silent before the composer is freed with a notice (default 120). Every chunk restarts the count |
 | `Cauldron:StreamingResponse:*` | `TypewriterTickMilliseconds` (15), `TypewriterTickChars` (1) |
 | `Cauldron:LandingMessages` | The "warming up" lines for the sparkle loader, picked at random per session |
@@ -145,8 +144,9 @@ collide with the widget's CSS or inherit into its shadow root.
   Morgana against a specialised agent
 - **Quick reply gating**: textarea and send button are disabled while unselected quick replies or a
   typing indicator are active
-- **Completion messages**: `AgentCompleted = true` injects a transition message; on resume, the
-  lifecycle service detects turn boundaries in the history and injects the same synthetically
+- **Nothing is invented**: the line closing a specialist's engagement is a message Morgana sends, so
+  it arrives and resumes like any other. A history ending on a user turn means that turn is still
+  running: the composer stays shut and the wait resumes
 
 ## Build and Run
 

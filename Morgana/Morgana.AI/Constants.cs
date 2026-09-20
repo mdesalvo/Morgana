@@ -8,7 +8,7 @@ namespace Morgana.AI;
 public static class Constants
 {
     /// <summary>
-    /// The name of the system, on which everything else rests...
+    /// The reserved name of the system, on which everything else rests...
     /// </summary>
     public const string Morgana = "Morgana";
 
@@ -123,6 +123,13 @@ public static class Constants
         /// <summary>What the user is asked when two intents collide too closely to route between.</summary>
         public const string DisambiguationMessage = "DisambiguationMessage";
 
+        /// <summary>
+        /// What Morgana says when a desk finishes and the conversation comes back to her. <c>{0}</c>
+        /// is that desk's display name. Authored here because it is Morgana speaking: every channel
+        /// used to carry its own copy and invent when to show it, from a history that never held it.
+        /// </summary>
+        public const string AgentExitMessage = "AgentExitMessage";
+
         /// <summary>What the user is told when classification lands on an intent no agent handles.</summary>
         public const string UnrecognizedIntentError = "UnrecognizedIntentError";
 
@@ -131,6 +138,28 @@ public static class Constants
         /// so it is authored beside the vocabulary it closes rather than in any plugin.
         /// </summary>
         public const string ComplementIntentDescription = "ComplementIntentDescription";
+    }
+
+    /// <summary>
+    /// What kind of thing an outbound message is, declared on <c>ChannelMessage.MessageType</c> and
+    /// read by every channel to decide how to paint it. Two of them are conversation — somebody
+    /// said something to somebody — and the rest are notices about the conversation rather than
+    /// part of it: a channel shows those as banners that fade. Morgana keeps none of them on
+    /// record, because a transcript is what was said.
+    /// </summary>
+    public static class MessageTypes
+    {
+        /// <summary>An answer, from a desk or from Morgana herself.</summary>
+        public const string Assistant = "assistant";
+
+        /// <summary>Morgana opening a conversation or handing one back, styled apart from an answer.</summary>
+        public const string Presentation = "presentation";
+
+        /// <summary>A notice about the conversation carrying no reply, such as a budget running low.</summary>
+        public const string SystemWarning = "system_warning";
+
+        /// <summary>A notice that something stopped the turn, such as a budget that ran out.</summary>
+        public const string Error = "error";
     }
 
     /// <summary>
@@ -194,6 +223,15 @@ public static class Constants
         /// <c>SQLiteConversationPersistenceService.ExtractTextFromMessage</c>.
         /// </summary>
         public const string TurnText = "morgana:turn_text";
+
+        /// <summary>
+        /// Written by <c>MorganaAgent</c> on a user message the orchestrator had already filed as
+        /// her own, which is every phrase that arrived while no agent was active. The agent keeps
+        /// the phrase because its model must read it. This says the phrase belongs to somebody
+        /// else's side of the conversation: a transcript takes it from there and skips this copy,
+        /// so the user reads what they said once rather than twice.
+        /// </summary>
+        public const string ContextOnly = "morgana:context_only";
 
         /// <summary>A2A message metadata naming the agent that asked. Dotted, not colon-separated, because it travels the protocol.</summary>
         public const string CallerIntent = "morgana:caller";

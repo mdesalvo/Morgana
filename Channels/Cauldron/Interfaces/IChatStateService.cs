@@ -107,20 +107,10 @@ public interface IChatStateService
     void DismissTemporaryMessage(ChannelMessage message);
 
     /// <summary>
-    /// Gets the completion message when an agent finishes its task.
-    /// </summary>
-    string GetCompletionMessage(string agentName);
-
-    /// <summary>
     /// Updates the current agent name based on a received SignalR message.
     /// </summary>
     /// <returns>True if agent name was actually changed.</returns>
     bool UpdateAgentFromMessage(ChannelMessage message);
-
-    /// <summary>
-    /// Adds a completion presentation message if the agent just finished.
-    /// </summary>
-    void AddCompletionMessageIfNeeded(ChannelMessage message);
 
     /// <summary>
     /// Checks if an agent name represents a specialized agent (not base Morgana).
