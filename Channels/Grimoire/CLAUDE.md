@@ -115,7 +115,7 @@ once: the two URLs must be absolute `http(s)`, the key must no longer be the shi
 |---|---|
 | `Grimoire:MorganaURL` · `:CallbackURL` | Backend base URL; the absolute URL Morgana POSTs to (default `https://localhost:5004/morgana-hook`) |
 | `Grimoire:Authentication:*` | `SymmetricKey` matching Morgana's entry for `Name=grimoire`, plus `Issuer` and `Audience` |
-| `Grimoire:AgentExitMessage` · `:LandingMessages` | The courtesy line on agent completion; the startup lines, cleared when the Live UI takes over. Both mirror Cauldron's |
+| `Grimoire:LandingMessages` | The startup lines, cleared when the Live UI takes over. Mirrors Cauldron's |
 | `Grimoire:ReplyTimeoutSeconds` | How long a turn may go silent before the prompt comes back with a red notice (default 120). Every chunk restarts the count |
 | `Grimoire:StartupTimeoutSeconds` | How long to wait for Morgana's first delivery before entering the Live UI anyway (default 30). Raise it on providers with cold starts |
 | `Grimoire:StreamingResponse:*` | `TypewriterTickMilliseconds` (15), `TypewriterTickChars` (1) |
