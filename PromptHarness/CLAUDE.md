@@ -31,8 +31,8 @@ project: every build setting lives in the `.csproj`, so it carries unchanged acr
 
 ## Commands
 
-Fourteen test classes. **Never combine filters**: four groups carry a process-wide boot knob the
-others must not see. Never parallelise invocations either — they share one `bin`/`obj`.
+Fifteen test classes. **Never combine filters**: five groups carry a process-wide boot knob the
+others must not see and two of those five share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
 # the rig, before believing any scenario result
@@ -58,6 +58,7 @@ Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~Guard
 Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~SummarizationTests"
 Harness__DustBudgetPerConversation=15 dotnet test … --filter "FullyQualifiedName~DustTests"
 Harness__FederatedPeer=true dotnet test … --filter "FullyQualifiedName~FederationTests"
+Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~ConversationPersistenceTests"
 
 # one scenario — the id is a Theory argument, so match DisplayName, never the FQN
 dotnet test PromptHarness.csproj --filter "DisplayName~behaviour-rich-card"
@@ -89,6 +90,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `ServedConsultationTests` | — | This installation answering a partner: which conversation, what it cost, how many exchanges are admitted |
 | `SummarizationTests` | — | The reducer's own prompt, unreachable at the default 21-message trigger |
 | `DustTests` | — | The budget thresholds, crossed in order. Evidence-driven rather than turn-pinned: how many turns it takes is a real token measurement |
+| `ConversationPersistenceTests` | — | Who owns each line of a conversation, how it is dated and in what order it is read back. The record is photographed after every exchange rather than at the end, because a transcript that reads correctly can still have been written by the wrong participant. Asserts nothing about wording: the oracle is what the channel was pushed and what the channel said. Shares the guard's knob, since a refused turn is one of the five it stages |
 | `AgentCardTests` · `StartupValidationTests` · `PeerFederationTests` · `ConversationApiTests` | none | Wire contracts and boot refusals, asserted deterministically. **Every literal is spelled out in the test** rather than read from `Constants`: a test comparing a constant against itself asserts that a constant equals a constant, while the point is to notice a published document changing shape under whoever consumes it |
 | `FederationTests` | — | Two Morganas, one consulting the other — the only test where the card is written by a Morgana, read by a Morgana and the token one mints is proven by the other |
 

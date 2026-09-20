@@ -32,7 +32,7 @@ Activated when the user says things like:
 2. **Ask the target scope** with `AskUserQuestion`, multi-select. **Enumerate `PromptHarness/Tests/`
    first and offer what is actually there** — the class list below is a description of a moving
    directory, not a contract, and a `--filter` naming a class that no longer exists runs zero tests
-   and exits 0: a green nobody asked for. Fourteen classes at the time of writing, in four families:
+   and exits 0: a green nobody asked for. Fifteen classes at the time of writing, in four families:
 
    *Deterministic — no model, no cost. Run them first: they are the cheapest way to learn the
    topology under test is sane before any billed turn.*
@@ -53,6 +53,7 @@ Activated when the user says things like:
    *Boot-flagged — each needs a process-wide knob the other groups must NOT carry, so each is its own
    invocation. This is the whole reason filters are never combined.*
    - Guard (`GuardTests` — `Harness__EnableGuardrail=true`)
+   - Conversation persistence (`ConversationPersistenceTests` — `Harness__EnableGuardrail=true`, the same knob as the guard group but its own invocation: it stages one refused turn among the five it drives and follows the database after each one)
    - Summarizer (`SummarizationTests` — `Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4`)
    - Dust (`DustTests` — `Harness__DustBudgetPerConversation=15`; 3 and 8 both let one turn jump past 90% straight into exhaustion, which reads as "90% never appeared")
    - Federation (`FederationTests` — `Harness__FederatedPeer=true`, which stands a **second Morgana** up and **replaces the whole domain** of the instance under test with one toolless desk. Every other group would find its own desks missing, so this one never shares an invocation with anything)
@@ -123,6 +124,7 @@ Activated when the user says things like:
    Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~SummarizationTests"
    Harness__DustBudgetPerConversation=15 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~DustTests"
    Harness__FederatedPeer=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"
+   Harness__EnableGuardrail=true dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ConversationPersistenceTests"
    ```
 
    **Read the test count in every summary line, not only the pass/fail verdict.** A filter matching
