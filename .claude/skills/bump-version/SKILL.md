@@ -58,6 +58,8 @@ For production hotfixes, activated when the user says:
 
    ### 🐛 Fixed
 
+   ### 📦 Dependencies
+
    ### 🚀 Future Enablement
    ```
    - **For hotfixes** (Z increment):
