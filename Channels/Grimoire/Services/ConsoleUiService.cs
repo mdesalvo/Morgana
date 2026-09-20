@@ -13,7 +13,7 @@ namespace Grimoire.Services;
 /// scrolling body (chat history), input buffer at bottom. Webhook messages refresh the UI;
 /// keystrokes captured via Console.ReadKey. Input gated during Morgana's turn (Escape exits).
 /// </summary>
-public sealed class ConsoleUiService
+public sealed class ConsoleUiService : ITerminalUi
 {
     /// <summary>Color for base Morgana turns. Matches Cauldron's <c>--primary-color #8b5cf6</c>.</summary>
     private const string MorganaColor = "#8b5cf6";
@@ -279,6 +279,9 @@ public sealed class ConsoleUiService
 
     /// <summary>Called by <see cref="WebhookReceiverService"/> when Morgana delivers a streaming chunk.</summary>
     public void EnqueueChunk(string chunkText) => inbound.Writer.TryWrite(new ChunkEvent(chunkText));
+
+    /// <summary>Grimoire renders chunks, so every delta Morgana streams reaches the typewriter pane.</summary>
+    public Action<StreamChunkRequest>? ChunkSink => chunk => EnqueueChunk(chunk.ChunkText);
 
     /// <summary>
     /// Starts the live terminal UI. Returns when the user types <c>/quit</c> or the cancellation

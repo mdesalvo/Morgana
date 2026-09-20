@@ -14,7 +14,7 @@ namespace Rune.Services;
 /// scrolling body (chat history), input buffer at bottom. Webhook messages refresh the UI;
 /// keystrokes captured via Console.ReadKey. Input gated during Morgana's turn (Escape exits).
 /// </summary>
-public sealed class ConsoleUiService
+public sealed class ConsoleUiService : ITerminalUi
 {
     /// <summary>Color for base Morgana turns: Emerald green.</summary>
     private const string MorganaColor = "#10b981";

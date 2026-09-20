@@ -129,7 +129,7 @@ builder.Services.AddSingleton<MorganaClientService>();
 builder.Services.AddSingleton<MorganaStartRetryPolicy>();
 builder.Services.AddSingleton<ConversationLifecycleService>();
 builder.Services.AddSingleton<WebhookReceiverService>();
-builder.Services.AddSingleton<ConsoleUiService>();
+builder.Services.AddSingleton<ITerminalUi, ConsoleUiService>();
 builder.Services.AddSingleton<LandingMessageService>();
 builder.Services.AddSingleton<TerminalCellService>();
 

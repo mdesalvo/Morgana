@@ -1,15 +1,16 @@
+using Microsoft.Extensions.Configuration;
+using Morgana.Terminal.Interfaces;
 using Spectre.Console;
-using Morgana.Terminal.Services;
 
-namespace Rune.Services;
+namespace Morgana.Terminal.Services;
 
 /// <summary>
-/// Drives the one conversation a Rune process lives for: opens it with Morgana, waits for the
+/// Drives the one conversation a TTY channel process lives for: opens it with Morgana, waits for the
 /// presentation, hands the terminal to the live UI and ends the conversation when the UI returns.
 /// </summary>
 public sealed class ConversationLifecycleService
 {
-    /// <summary>Fallback for <c>Rune:StartupTimeoutSeconds</c> when absent or non-positive.</summary>
+    /// <summary>Fallback for the channel's <c>StartupTimeoutSeconds</c> when absent or non-positive.</summary>
     private const int DefaultStartupTimeoutSeconds = 30;
 
     /// <summary>Opens, feeds and ends the conversation on Morgana's REST endpoints.</summary>
@@ -22,7 +23,7 @@ public sealed class ConversationLifecycleService
     private readonly WebhookReceiverService webhookReceiverService;
 
     /// <summary>The live terminal UI the conversation is handed to once Morgana has spoken.</summary>
-    private readonly ConsoleUiService consoleUiService;
+    private readonly ITerminalUi terminalUi;
 
     /// <summary>Supplies the line shown while the handshake is under way.</summary>
     private readonly LandingMessageService landingMessageService;
@@ -39,17 +40,18 @@ public sealed class ConversationLifecycleService
         MorganaClientService morganaClientService,
         MorganaStartRetryPolicy startRetryPolicy,
         WebhookReceiverService webhookReceiverService,
-        ConsoleUiService consoleUiService,
+        ITerminalUi terminalUi,
         LandingMessageService landingMessageService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ChannelProfile profile)
     {
         this.morganaClientService = morganaClientService;
         this.startRetryPolicy = startRetryPolicy;
         this.webhookReceiverService = webhookReceiverService;
-        this.consoleUiService = consoleUiService;
+        this.terminalUi = terminalUi;
         this.landingMessageService = landingMessageService;
 
-        int startupTimeoutSeconds = configuration.GetValue<int?>("Rune:StartupTimeoutSeconds") ?? DefaultStartupTimeoutSeconds;
+        int startupTimeoutSeconds = configuration.GetValue<int?>(profile.SectionKey("StartupTimeoutSeconds")) ?? DefaultStartupTimeoutSeconds;
         startupTimeout = TimeSpan.FromSeconds(startupTimeoutSeconds > 0 ? startupTimeoutSeconds : DefaultStartupTimeoutSeconds);
     }
 
@@ -78,7 +80,7 @@ public sealed class ConversationLifecycleService
 
             // The host's stopping token tears the UI down on SIGTERM, SIGINT and SIGHUP, so the process
             // can exit and docker's --rm reclaims the container
-            await consoleUiService.RunAsync(
+            await terminalUi.RunAsync(
                 conversationId,
                 text => morganaClientService.SendMessageAsync(conversationId, text),
                 stopping);
@@ -100,8 +102,11 @@ public sealed class ConversationLifecycleService
         webhookReceiverService.OnMessage = message =>
         {
             firstMessageArrived.TrySetResult();
-            consoleUiService.EnqueueIncoming(message);
+            terminalUi.EnqueueIncoming(message);
         };
+
+        // A channel that renders no chunks leaves the sink unset, and the receiver turns them away
+        webhookReceiverService.OnChunk = terminalUi.ChunkSink;
         return firstMessageArrived.Task;
     }
 
