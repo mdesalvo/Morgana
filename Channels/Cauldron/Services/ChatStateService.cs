@@ -95,7 +95,7 @@ public class ChatStateService : IChatStateService
         {
             ConversationId = ConversationId,
             Text = text,
-            Role = "user",
+            Type = MessageType.User,
             Timestamp = DateTime.UtcNow
         });
     }
@@ -110,7 +110,7 @@ public class ChatStateService : IChatStateService
         ChatMessages.Add(new ChatMessage
         {
             ConversationId = ConversationId,
-            Role = "assistant",
+            Type = MessageType.Assistant,
             IsTyping = true,
             AgentName = CurrentAgentName,
             Timestamp = DateTime.UtcNow
@@ -155,7 +155,6 @@ public class ChatStateService : IChatStateService
         {
             ConversationId = ConversationId,
             Text = "Sorry, an error occurred. Please try again.",
-            Role = "assistant",
             Timestamp = DateTime.UtcNow,
             IsError = true,
             AgentName = CurrentAgentName,
@@ -228,16 +227,6 @@ public class ChatStateService : IChatStateService
         IsSpecializedAgent(agentName ?? "Morgana") ? "var(--secondary-color)" : "var(--primary-color)";
 
     /// <summary>
-    /// Gets the completion message when an agent finishes its task.
-    /// </summary>
-    public string GetCompletionMessage(string agentName)
-    {
-        string template = _configuration["Cauldron:AgentExitMessage"]
-                          ?? "{0} has completed its spell. I'm back to you!";
-        return string.Format(template, agentName);
-    }
-
-    /// <summary>
     /// Updates the current agent name based on a received SignalR message.
     /// </summary>
     /// <returns>True if agent name was actually changed.</returns>
@@ -255,28 +244,6 @@ public class ChatStateService : IChatStateService
             return true;
         }
         return false;
-    }
-
-    /// <summary>
-    /// Adds a completion presentation message if the agent just finished.
-    /// </summary>
-    public void AddCompletionMessageIfNeeded(ChannelMessage message)
-    {
-        // Only a specialist earns a handover line: base Morgana finishing a turn is just a turn
-        if (message.AgentCompleted && IsSpecializedAgent(message.AgentName))
-        {
-            // Timestamped just after the message it follows, so ordering by time keeps it last
-            ChatMessages.Add(new ChatMessage
-            {
-                ConversationId = message.ConversationId,
-                Text = GetCompletionMessage(message.AgentName),
-                Role = "assistant",
-                Timestamp = message.Timestamp.AddMilliseconds(5),
-                AgentName = "Morgana",
-                AgentCompleted = true,
-                Type = MessageType.Presentation
-            });
-        }
     }
 
     // =========================================================================

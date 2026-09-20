@@ -144,6 +144,18 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                                     + "Delete the declaration.");
                             }
 
+                            // The orchestrator answers under this name and its words are filed under
+                            // it in the conversation record. A desk taking the name would take over
+                            // that record. It would also become indistinguishable from the
+                            // orchestrator to everyone who tells the two apart by name.
+                            if (string.Equals(intent.Name, Constants.Morgana, StringComparison.OrdinalIgnoreCase))
+                            {
+                                throw new InvalidOperationException(
+                                    $"Plugin '{declaringAssembly}' declares the intent '{intent.Name}', which is reserved: it names the "
+                                    + "system itself, which answers under it and keeps its own side of the conversation under it. "
+                                    + "Rename the intent.");
+                            }
+
                             if (declaringAssemblyByIntent.TryGetValue(intent.Name, out string? firstAssembly))
                             {
                                 throw new InvalidOperationException(
@@ -175,7 +187,12 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                         }
                     }
                 }
-                catch (Exception ex)
+                // The refusals above are verdicts on a domain that is readable and wrong — a reserved
+                // name, a name claimed twice — and each is meant to stop startup where it is stated.
+                // Swallowed here they would drop the whole domain instead. The operator would
+                // meet the consequence much later, as a prompt that cannot be found for an intent
+                // nobody refused: the wrong place to go looking.
+                catch (Exception ex) when (ex is not InvalidOperationException)
                 {
                     // A half-built plugin left in plugins/ costs itself: the search goes on through the
                     // other assemblies rather than taking Morgana's startup down with it.

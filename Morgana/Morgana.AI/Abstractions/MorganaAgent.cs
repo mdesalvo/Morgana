@@ -258,10 +258,28 @@ public class MorganaAgent : MorganaActor
             // agent's own session chronologically: a message without a timestamp cannot be placed.
             ChatMessage userMessage = new ChatMessage(ChatRole.User, req.Content!) { CreatedAt = DateTimeOffset.UtcNow };
 
+            // A phrase that arrived while no agent was active is already saved as Morgana's own.
+            // This agent keeps it because its model has to read it, marked as somebody else's so a
+            // transcript shows the user their own words once.
+            if (req.ContentAlreadyStored)
+            {
+                userMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
+                userMessage.AdditionalProperties[Constants.MessageProperties.ContextOnly] = true;
+            }
+
             // History length before this turn runs: everything appended past this point belongs to
             // the turn, which is what agent.tools_invoked must report — the span is per-turn, so
             // reporting the whole session would attribute every past tool call to this one.
             int historyBaseline = aiChatHistoryProvider.GetMessages(aiAgentSession).Count;
+
+            // The phrase enters the session before a single token is spent on it. The turn below runs
+            // on the session alone, so nothing reaches the model twice. Written out too, because
+            // when this agent was already active nobody else saved the phrase: its own row is the
+            // only record. A client reloading mid-turn reads it back from here instead of
+            // watching it vanish. The row is left active on purpose: a turn interrupted here resumes
+            // at the desk that was working on it.
+            aiChatHistoryProvider.AppendMessage(aiAgentSession, userMessage);
+            await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted: false);
 
             // Streaming is gated on two independent signals:
             //   1. Global config flag (Morgana:AdaptiveMessaging:EnableStreamingResponse)
@@ -283,8 +301,8 @@ public class MorganaAgent : MorganaActor
                 string? lastTextMessageId = null;
 
                 // The whole turn runs here — tool calls included, which surface as chunks carrying no text.
-                // The session is written as the stream advances, so it is already complete when it ends.
-                await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(userMessage, aiAgentSession))
+                // The phrase being answered is the one already filed above, so nothing is handed in here.
+                await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(aiAgentSession))
                 {
                     if (!string.IsNullOrEmpty(chunk.Text))
                     {
@@ -333,9 +351,9 @@ public class MorganaAgent : MorganaActor
             else
             {
                 Stopwatch responseStopwatch = Stopwatch.StartNew();
-                // Same turn as the streaming branch, awaited whole: nothing reaches the channel until the
-                // model and every tool it decided to call, are done.
-                AgentResponse response = await aiAgent.RunAsync(userMessage, aiAgentSession);
+                // Same turn as the streaming branch, answering the same already-filed phrase: nothing
+                // reaches the channel until the model and every tool it decided to call, are done.
+                AgentResponse response = await aiAgent.RunAsync(aiAgentSession);
                 responseStopwatch.Stop();
 
                 // Assembled message by message rather than through AgentResponse.Text, which is

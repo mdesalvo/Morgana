@@ -124,7 +124,7 @@ public class LLMPresenterService : IPresenterService
             {
                 ConversationId = $"{channelName}-presentation-cache",
                 Text = presentationResult.Message,
-                MessageType = "presentation",
+                MessageType = Constants.MessageTypes.Presentation,
                 QuickReplies = presentationResult.QuickReplies,
                 AgentName = Constants.Morgana,
                 AgentCompleted = false

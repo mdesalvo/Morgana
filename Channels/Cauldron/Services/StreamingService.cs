@@ -90,7 +90,7 @@ public class StreamingService : IStreamingService
                 {
                     ConversationId = _chatStateService.ConversationId,
                     Text = string.Empty,
-                    Role = "assistant",
+                    Type = MessageType.Assistant,
                     Timestamp = DateTime.UtcNow,
                     AgentName = _chatStateService.CurrentAgentName,
                     IsStreaming = true

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Akka.Actor;
 using Akka.Event;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Extensions;
@@ -147,6 +148,17 @@ public class ConversationSupervisorActor : MorganaActor
             hasReadPersistedActiveAgent = true;
         }
 
+        // With no desk mid-exchange, this phrase is addressed to Morgana herself: she guards it,
+        // she classifies it, she answers it unless she hands it to a desk. So she files it now,
+        // before the guard has even seen it — which is what lets a client that reloads during the
+        // guard or the classifier read back what it just said. An agent that was already active
+        // saves the phrase into its own session instead, because that session is its record.
+        bool noActiveAgent = activeAgent == null;
+        if (noActiveAgent)
+            await conversationPersistenceService.AppendOrchestratorMessagesAsync(
+                conversationId,
+                [new ChatMessage(ChatRole.User, msg.Text) { CreatedAt = DateTimeOffset.UtcNow }]);
+
         // The channel's budget for everything this turn produces, carried with the turn to each
         // agent request it ends up sending.
         ChannelMetadata channelMetadata = await channelMetadataStore.GetChannelMetadataAsync(conversationId);
@@ -174,7 +186,8 @@ public class ConversationSupervisorActor : MorganaActor
         guardSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
 
         // Moves the FSM to AwaitingGuardCheck, carrying ctx forward.
-        Records.ProcessingContext ctx = new Records.ProcessingContext(msg, originalSender, turnCapabilities, TurnContext: turnContext);
+        Records.ProcessingContext ctx = new Records.ProcessingContext(
+            msg, originalSender, turnCapabilities, TurnContext: turnContext, UserMessageAlreadyStored: noActiveAgent);
         Become(() => AwaitingGuardCheck(ctx));
 
         // Engage the guard actor with the utterance from the user
@@ -243,14 +256,23 @@ public class ConversationSupervisorActor : MorganaActor
             // ctx.Message and quickReplies rewritten (rich card prose, buttons flattened to a
             // numbered list, markdown stripped) — before it's ever handed to the concrete SignalR
             // or webhook transport. Nothing below this line controls what the user actually sees.
+            // The welcome is Morgana's first word and the only one spoken before anyone has asked
+            // anything: dated once here, so the record and the push agree and a returning client
+            // recognises the greeting it already has.
+            DateTime presentationTimestamp = DateTime.UtcNow;
+            await conversationPersistenceService.AppendOrchestratorMessagesAsync(
+                conversationId,
+                [new ChatMessage(ChatRole.Assistant, ctx.Message) { CreatedAt = presentationTimestamp }]);
+
             await channelService.SendMessageAsync(new ChannelMessage
             {
                 ConversationId = conversationId,
                 Text = ctx.Message,
-                MessageType = "presentation",
+                MessageType = Constants.MessageTypes.Presentation,
                 QuickReplies = quickReplies,
                 AgentName = Constants.Morgana,
-                AgentCompleted = false
+                AgentCompleted = false,
+                Timestamp = presentationTimestamp
             });
 
             actorLogger.Info("Presentation sent successfully");
@@ -282,7 +304,7 @@ public class ConversationSupervisorActor : MorganaActor
         // The compliant-or-not verdict actually arriving from GuardActor — the two handlers
         // below (Status.Failure, ReceiveTimeout) cover the other ways this round-trip can end:
         // GuardActor throwing, or it simply never answering in time.
-        Receive<Records.GuardCheckResponse>(response => {
+        ReceiveAsync<Records.GuardCheckResponse>(async response => {
             // Cancels the guard-check window now that GuardActor actually answered — this
             // handler is about to Become() into AwaitingClassification, AwaitingFollowUpResponse,
             // or Idle on rejection and each of those arms (or clears) its own timeout
@@ -306,6 +328,15 @@ public class ConversationSupervisorActor : MorganaActor
             if (!response.Compliant)
             {
                 actorLogger.Warning($"Message rejected by guard: {response.Violation}");
+
+                // An agent was mid-exchange, so nobody stored the phrase at ingress: the agent
+                // would have done it, but the guard just made sure it never runs. Morgana answers this
+                // turn instead, so the phrase is hers to keep — without it the refusal would sit in
+                // the transcript with nothing above it explaining what was refused.
+                if (!ctx.UserMessageAlreadyStored)
+                    await conversationPersistenceService.AppendOrchestratorMessagesAsync(
+                        conversationId,
+                        [new ChatMessage(ChatRole.User, ctx.OriginalMessage.Text) { CreatedAt = DateTime.UtcNow }]);
 
                 // Sends the guard's rejection text back to the client as the whole reply, tagged
                 // with whatever classification is currently on ctx and the follow-up's active
@@ -352,7 +383,8 @@ public class ConversationSupervisorActor : MorganaActor
                     ctx.OriginalMessage.Text,
                     null,
                     ctx.TurnContext,          // propagate context to agent
-                    ctx.ChannelCapabilities));
+                    ctx.ChannelCapabilities,
+                    ctx.UserMessageAlreadyStored));
             }
             else
             {
@@ -426,7 +458,8 @@ public class ConversationSupervisorActor : MorganaActor
                     ctx.OriginalMessage.Text,
                     ctx.Classification,
                     ctx.TurnContext,
-                    ctx.ChannelCapabilities));
+                    ctx.ChannelCapabilities,
+                    ctx.UserMessageAlreadyStored));
             }
             else
             {
@@ -518,7 +551,8 @@ public class ConversationSupervisorActor : MorganaActor
                 ctx.OriginalMessage.Text,
                 classification,
                 ctx.TurnContext,              // propagate context to router → agent
-                ctx.ChannelCapabilities));
+                ctx.ChannelCapabilities,
+                ctx.UserMessageAlreadyStored));
         });
 
         // Routes an explicit ClassifierActor failure (a thrown exception) to FallbackToOther.
@@ -595,7 +629,8 @@ public class ConversationSupervisorActor : MorganaActor
                 ctx.OriginalMessage.Text,
                 fallbackClassification,
                 ctx.TurnContext,
-                ctx.ChannelCapabilities));
+                ctx.ChannelCapabilities,
+                ctx.UserMessageAlreadyStored));
         }
         #endregion
     }
@@ -633,7 +668,7 @@ public class ConversationSupervisorActor : MorganaActor
                 GetAgentDisplayName(ctx.Classification?.Intent),
                 false,
                 null,
-                ctx.OriginalMessage.Timestamp,
+                null,
                 null));
 
             // Closes the turn span with an error status, tagged with whatever intent was classified for this turn.
@@ -708,6 +743,11 @@ public class ConversationSupervisorActor : MorganaActor
                     response.RecordedTimestamp,
                     response.RichCard));
 
+                // The desk has finished: Morgana takes the conversation back and says so, behind
+                // the answer above rather than in place of it.
+                if (response.IsCompleted)
+                    TellAgentFarewell(ctx.OriginalSender, agentName);
+
                 // Closes the turn span, tagged with the classified intent and whether the agent completed.
                 CloseTurnSpan(intent: ctx.Classification?.Intent, completed: response.IsCompleted);
 
@@ -731,7 +771,7 @@ public class ConversationSupervisorActor : MorganaActor
                     GetAgentDisplayName(ctx.Classification?.Intent),
                     false,
                     null,
-                    ctx.OriginalMessage.Timestamp,
+                    null,
                     null));
 
                 // Closes the turn span with an error status, attaching the exception and tagging
@@ -909,6 +949,11 @@ public class ConversationSupervisorActor : MorganaActor
                     response.RecordedTimestamp,
                     response.RichCard));
 
+                // The desk has finished: Morgana takes the conversation back and says so, behind
+                // the answer above rather than in place of it.
+                if (response.IsCompleted)
+                    TellAgentFarewell(originalSender, agentName);
+
                 // Closes the turn span, tagged with the active agent's intent and whether it completed.
                 CloseTurnSpan(intent: currentIntent, completed: response.IsCompleted);
 
@@ -1050,7 +1095,7 @@ public class ConversationSupervisorActor : MorganaActor
             Constants.Morgana,
             false,
             quickReplies,
-            ctx.OriginalMessage.Timestamp,
+            null,
             null));
 
         // Closes the turn span, tagged with the colliding intent the classifier reported.
@@ -1096,6 +1141,41 @@ public class ConversationSupervisorActor : MorganaActor
         // No actual async work happens here — Task.CompletedTask just satisfies the ReceiveAsync
         // signature this handler is wired to.
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Says the line that closes a desk's engagement and brings the conversation back to Morgana,
+    /// sent right behind that desk's own last answer so the two arrive in the order they were said.
+    /// </summary>
+    /// <remarks>
+    /// Only a specialised desk earns one: Morgana finishing a turn of her own is just a turn. Until
+    /// this existed the line was never spoken at all — each channel inferred that a handover had
+    /// happened by reading a transcript that did not contain it, then wrote its own words in
+    /// Morgana's mouth. Said here it is hers, dated when it was said, the same in every channel.
+    /// </remarks>
+    private void TellAgentFarewell(IActorRef sender, string departingAgentName)
+    {
+        if (string.Equals(departingAgentName, Constants.Morgana, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        string farewellTemplate = promptResolverService
+            .ResolveAsync(Constants.Morgana).GetAwaiter().GetResult()
+            .GetAdditionalProperty<string>(Constants.PromptProperties.AgentExitMessage);
+
+        if (string.IsNullOrWhiteSpace(farewellTemplate))
+            return;
+
+        // Undated on purpose: nobody recorded it, so it is filed as Morgana's and stamped after
+        // the answer it follows.
+        sender.Tell(new Records.ConversationResponse(
+            string.Format(farewellTemplate, departingAgentName),
+            null,
+            null,
+            Constants.Morgana,
+            true,
+            null,
+            null,
+            null));
     }
 
     /// <summary>

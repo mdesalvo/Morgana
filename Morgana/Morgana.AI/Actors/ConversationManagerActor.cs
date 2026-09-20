@@ -1,5 +1,6 @@
 using Akka.Actor;
 using Akka.Event;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Morgana.AI.Abstractions;
@@ -43,6 +44,19 @@ public class ConversationManagerActor : MorganaActor
     private readonly Records.DustLimitingOptions dustLimitingOptions;
 
     /// <summary>
+    /// Keeps Morgana's own side of the conversation: every answer that passes through here without
+    /// an agent having recorded it is hers. A transcript that lacked it would show the user a
+    /// question of theirs with nothing under it.
+    /// </summary>
+    private readonly IConversationPersistenceService conversationPersistenceService;
+
+    /// <summary>
+    /// The instant the last answer went out under. Kept so a turn closing with two answers dates
+    /// them apart: a client takes anything dated no later than what it holds as a repeat.
+    /// </summary>
+    private DateTime lastAnswerTimestamp = DateTime.MinValue;
+
+    /// <summary>
     /// Reference to the conversation supervisor actor. Null until the conversation is started here or
     /// its first message reaches this process. The supervisor dying clears it again.
     /// </summary>
@@ -55,6 +69,7 @@ public class ConversationManagerActor : MorganaActor
     /// <param name="channelService">Channel service used to deliver outbound messages to the end user</param>
     /// <param name="channelMetadataStore">The conversation's channel, whose in-memory copy this actor releases</param>
     /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
+    /// <param name="conversationPersistenceService">Keeps Morgana's own answers on the conversation's record</param>
     /// <param name="dustLimitingOptions">Dust-limiting policy and warning message templates</param>
     /// <param name="llmService">LLM service for AI completions</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
@@ -64,6 +79,7 @@ public class ConversationManagerActor : MorganaActor
         IChannelService channelService,
         IChannelMetadataStore channelMetadataStore,
         IDustLimitService dustLimitService,
+        IConversationPersistenceService conversationPersistenceService,
         IOptions<Records.DustLimitingOptions> dustLimitingOptions,
         ILLMService llmService,
         IPromptResolverService promptResolverService,
@@ -72,6 +88,7 @@ public class ConversationManagerActor : MorganaActor
         this.channelService = channelService;
         this.channelMetadataStore = channelMetadataStore;
         this.dustLimitService = dustLimitService;
+        this.conversationPersistenceService = conversationPersistenceService;
         this.dustLimitingOptions = dustLimitingOptions.Value;
 
         // Handle incoming user messages:
@@ -243,6 +260,31 @@ public class ConversationManagerActor : MorganaActor
             ? new ConversationMetadata(preSendLevel)
             : null;
 
+        // One instant for this answer, whether it comes dated by the agent that recorded it or is
+        // dated here. The record and the push must agree to the millisecond: a client compares the
+        // two to tell a reply it already has from one it missed, so two readings of the clock would
+        // make the same answer arrive twice.
+        DateTime answerTimestamp = response.RecordedTimestamp ?? DateTime.UtcNow;
+
+        // Two answers can now close one turn — a desk's own, then Morgana taking the conversation
+        // back — and a client discards anything dated no later than what it already has. Sharing an
+        // instant with the answer it follows would make the second one vanish on the way out, with
+        // no trace anywhere and no catch-up able to recover it. Only an answer dated here can be
+        // nudged: one an agent recorded must keep the date its own session holds it under.
+        if (response.RecordedTimestamp is null && answerTimestamp <= lastAnswerTimestamp)
+            answerTimestamp = lastAnswerTimestamp.AddMilliseconds(1);
+
+        lastAnswerTimestamp = answerTimestamp;
+
+        // Undated by an agent means no agent wrote it: a refusal, a disambiguation, an intent
+        // nobody handles, a turn that ran out of time. Morgana said it, so it goes on her side of
+        // the conversation — otherwise a client rereading the history finds its own question with
+        // no answer under it and has to invent one, which is what every channel used to do.
+        if (response.RecordedTimestamp is null)
+            await conversationPersistenceService.AppendOrchestratorMessagesAsync(
+                conversationId,
+                [new ChatMessage(ChatRole.Assistant, response.Response) { CreatedAt = answerTimestamp }]);
+
         try
         {
             // Delivers the turn's answer to the user through the adapting channel service, which
@@ -251,13 +293,12 @@ public class ConversationManagerActor : MorganaActor
             {
                 ConversationId = conversationId,
                 Text = response.Response,
-                MessageType = "assistant",
+                MessageType = Constants.MessageTypes.Assistant,
                 QuickReplies = response.QuickReplies,
                 AgentName = response.AgentName ?? Constants.Morgana,
                 AgentCompleted = response.AgentCompleted,
-                // Dated as the history keeps it, so a client catching up recognises the reply it was
-                // pushed. A reply no agent recorded is dated now: the history never shows it.
-                Timestamp = response.RecordedTimestamp ?? DateTime.UtcNow,
+                // Dated as the history keeps it, so a client catching up recognises the reply it was pushed
+                Timestamp = answerTimestamp,
                 RichCard = response.RichCard,
                 ConversationMetadata = preSendMetadata
             });
@@ -348,7 +389,7 @@ public class ConversationManagerActor : MorganaActor
             {
                 ConversationId = conversationId,
                 Text = FormatDustMessage(template, remaining),
-                MessageType = "system_warning",
+                MessageType = Constants.MessageTypes.SystemWarning,
                 ErrorReason = send90 ? "dust_budget_low_90" : "dust_budget_low_70",
                 AgentName = Constants.Morgana,
                 AgentCompleted = false,
@@ -383,7 +424,7 @@ public class ConversationManagerActor : MorganaActor
             {
                 ConversationId = conversationId,
                 Text = dustLimitingOptions.ErrorMessage,
-                MessageType = "error",
+                MessageType = Constants.MessageTypes.Error,
                 ErrorReason = "dust_budget_exhausted",
                 AgentName = Constants.Morgana,
                 AgentCompleted = false,

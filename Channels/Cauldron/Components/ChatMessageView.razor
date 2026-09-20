@@ -9,9 +9,9 @@
 *@
 
 <div class="message @Message.Role"
-     aria-label="@(Message.Role == "user" ? "You" : Message.AgentName)">
+     aria-label="@(Message.Type == MessageType.User ? "You" : Message.AgentName)">
     @* Only the assistant side gets an avatar; user messages sit bare on the right *@
-    @if (Message.Role == "assistant")
+    @if (Message.Type != MessageType.User)
     {
         <img src="images/morgana-avatar.jpg"
              alt="@Message.AgentName"

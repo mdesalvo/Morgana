@@ -87,6 +87,22 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     public List<ChatMessage> GetMessages(AgentSession session) =>
         sessionState.GetOrInitializeState(session).Messages;
 
+    /// <summary>
+    /// Files the user's message into the history before the turn runs, so it can be persisted
+    /// ahead of the LLM instead of only once the turn closes.
+    /// </summary>
+    public void AppendMessage(AgentSession session, ChatMessage message)
+    {
+        MorganaHistoryState historyState = sessionState.GetOrInitializeState(session);
+        historyState.Messages.Add(message);
+        sessionState.SaveState(session, historyState);
+
+        logger.LogInformation(
+            $"{nameof(MorganaChatHistoryProvider)} FILED an inbound {{Role}} message ahead of the turn " +
+            $"— total history: {{Count}} for agent '{{AgentIntent}}'",
+            message.Role, historyState.Messages.Count, agentIntent);
+    }
+
     // =========================================================================
     // ChatHistoryProvider overrides
     // =========================================================================

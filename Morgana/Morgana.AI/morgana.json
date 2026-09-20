@@ -155,6 +155,9 @@
               ]
             }
           ]
+        },
+        {
+          "AgentExitMessage": "{0} has completed its spell and the circle returns to me. What else can I conjure for you?"
         }
       ]
     },

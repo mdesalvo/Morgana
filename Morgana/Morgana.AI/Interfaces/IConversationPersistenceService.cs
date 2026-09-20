@@ -96,6 +96,29 @@ public interface IConversationPersistenceService
         JsonSerializerOptions? jsonSerializerOptions = null);
 
     /// <summary>
+    /// Appends messages to the orchestrator's own side of the conversation, creating it on first
+    /// write. What Morgana says in her own voice is filed here — the welcome, a refusal, a
+    /// disambiguation, the line handing a conversation back — beside the desks' own rows, so that
+    /// <see cref="GetConversationHistoryAsync"/> returns a dialogue with no gaps for a channel to
+    /// guess at. The user's phrase is saved here too, whenever no agent was active when it arrived.
+    /// </summary>
+    /// <param name="conversationId">Conversation whose orchestrator side is being appended to.</param>
+    /// <param name="messages">Messages to append, in the order they were spoken. An empty sequence writes nothing.</param>
+    /// <remarks>
+    /// <para>Deliberately not addressable by author: this reaches one row and only that row. A desk's
+    /// row carries a live agent session that the desk resurrects itself from, so messages appended to
+    /// it from outside would discard everything else that session holds. The orchestrator owns no
+    /// session and no model, which is what makes her row safe to append to from anywhere.</para>
+    /// <para>Concurrent appends are expected — the user's phrase arrives on one path while an answer
+    /// leaves on another — so implementations must read, extend and write back as one step.</para>
+    /// <para>The row is never left active: the orchestrator is not a desk a conversation can be
+    /// resumed onto. What reports the active agent must keep naming real desks only.</para>
+    /// </remarks>
+    Task AppendOrchestratorMessagesAsync(
+        string conversationId,
+        IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> messages);
+
+    /// <summary>
     /// Ensures the conversation database exists and is initialized with the latest schema.
     /// Idempotent - safe to call multiple times (checks PRAGMA user_version).
     /// </summary>

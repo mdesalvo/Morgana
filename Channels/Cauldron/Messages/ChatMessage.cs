@@ -68,24 +68,19 @@ public class ChatMessage
     /// </summary>
     public string? SelectedQuickReplyId { get; set; }
 
+    /// <summary>Stylesheet class for a row the visitor wrote, matching <c>.message.user</c>.</summary>
+    private const string UserRoleClass = "user";
+
+    /// <summary>Stylesheet class for every other row, matching <c>.message.assistant</c>.</summary>
+    private const string AssistantRoleClass = "assistant";
+
     /// <summary>
-    /// The message role as CSS wants it, projected from <see cref="Type"/>. Everything that is
-    /// not a user message renders on the assistant side, presentation and error lines included.
-    /// Setting it collapses to User or Assistant, so the finer types survive only if set directly.
+    /// The message role as the stylesheet wants it, projected from <see cref="Type"/>. Everything
+    /// that is not a user message renders on the assistant side, presentation and error lines
+    /// included. Read-only: <see cref="Type"/> is the state and this is only how it is painted.
     /// </summary>
     public string Role
-    {
-        get => Type switch
-        {
-            MessageType.User => "user",
-            _ => "assistant"
-        };
-        set => Type = value switch
-        {
-            "user" => MessageType.User,
-            _ => MessageType.Assistant
-        };
-    }
+        => Type == MessageType.User ? UserRoleClass : AssistantRoleClass;
 
     /// <summary>
     /// Indicates whether this message is a typing indicator.

@@ -40,9 +40,6 @@ public sealed class ConsoleUiService
     /// <summary>Color for error notices (dust exhausted / delivery error): red.</summary>
     private const string ErrorColor = "red";
 
-    /// <summary>Fallback for <c>Rune:AgentExitMessage</c> when the setting is absent.</summary>
-    private const string DefaultAgentExitMessage = "{0} has completed its spell. I'm back to you!";
-
     /// <summary>
     /// Fallback for <c>Rune:ReplyTimeoutSeconds</c> when absent or non-positive. Generous, because a turn
     /// gives Rune no sign of life at all: with no streaming there is nothing between the message and the
@@ -92,9 +89,6 @@ public sealed class ConsoleUiService
 
     /// <summary>Thread-safe queue of messages posted by <see cref="WebhookReceiverService"/> awaiting render.</summary>
     private readonly Channel<ChannelMessage> incoming = Channel.CreateUnbounded<ChannelMessage>();
-
-    /// <summary>Format string for the courtesy line appended when a specialised agent completes.</summary>
-    private readonly string agentExitTemplate;
 
     /// <summary>
     /// How long a turn may stay silent before the prompt is handed back to the user. The message was
@@ -180,11 +174,9 @@ public sealed class ConsoleUiService
     /// <summary>Serializes mutations of <see cref="history"/>, <see cref="currentInput"/>, <see cref="currentSpeaker"/> and the paired <see cref="LiveDisplayContext.UpdateTarget"/>/<see cref="LiveDisplayContext.Refresh"/> calls. The resize callback runs on its own thread (SIGWINCH handler / polling task) and would otherwise race with <see cref="ReadKeysLoop"/> and <see cref="DrainIncomingLoop"/> over the shared list. Uses <see cref="System.Threading.Lock"/> (.NET 9+) instead of <c>object</c> so the compiler emits the optimised primitive and rejects misuse (e.g. passing the lock as an <c>object</c>).</summary>
     private readonly Lock renderLock = new();
 
-    /// <summary>Reads the <c>Rune:AgentExitMessage</c> template, falling back to <see cref="DefaultAgentExitMessage"/> and captures the injected resize watcher.</summary>
+    /// <summary>Captures the injected resize watcher.</summary>
     public ConsoleUiService(IConfiguration configuration, IViewportResizeWatcher viewportResizeWatcher, TerminalCellService cells)
     {
-        agentExitTemplate = configuration["Rune:AgentExitMessage"] ?? DefaultAgentExitMessage;
-
         // A non-positive wait would declare every turn lost the instant it is sent, so it falls back too
         int replyTimeoutSeconds = configuration.GetValue<int?>("Rune:ReplyTimeoutSeconds") ?? DefaultReplyTimeoutSeconds;
         replyTimeout = TimeSpan.FromSeconds(replyTimeoutSeconds > 0 ? replyTimeoutSeconds : DefaultReplyTimeoutSeconds);
@@ -294,14 +286,6 @@ public sealed class ConsoleUiService
                 lock (renderLock)
                 {
                     history.Add(new DisplayedMessage(messageSpeaker, SanitizeMessageText(message.Text), RowColor(message, messageSpeaker)));
-
-                    // On agent completion append a base-Morgana courtesy line — same pattern
-                    // as Cauldron's ChatStateService.AddCompletionMessageIfNeeded.
-                    if (message.AgentCompleted && IsSpecializedAgent(message.AgentName))
-                    {
-                        string completion = string.Format(agentExitTemplate, messageSpeaker);
-                        history.Add(new DisplayedMessage("Morgana", completion, MorganaColor));
-                    }
 
                     // Revert the sticky header to Morgana on completion so the next user
                     // turn doesn't render under the outgoing agent's colour.
