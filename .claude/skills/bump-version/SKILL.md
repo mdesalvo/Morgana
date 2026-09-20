@@ -61,11 +61,13 @@ For production hotfixes, activated when the user says:
    ### 📦 Dependencies
 
    ### 🚀 Future Enablement
+
    ```
    - **For hotfixes** (Z increment):
    ```
    ## [X.Y.Z] - UNDER DEVELOPMENT
    ### 🐛 Fixed
+
    ```
    - Replace `X.Y.Z` with the newly calculated version
 
