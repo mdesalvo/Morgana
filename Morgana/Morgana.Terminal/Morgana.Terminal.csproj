@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Title>Morgana.Terminal</Title>
+    <OutputType>Library</OutputType>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.*" />
+    <PackageReference Include="Spectre.Console" Version="0.57.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Morgana.Contracts\Morgana.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

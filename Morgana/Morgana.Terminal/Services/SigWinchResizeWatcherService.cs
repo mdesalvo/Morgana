@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
-using Rune.Interfaces;
+using Morgana.Terminal.Interfaces;
 
-namespace Rune.Services;
+namespace Morgana.Terminal.Services;
 
 /// <summary>
 /// POSIX implementation of <see cref="IViewportResizeWatcher"/>: hooks SIGWINCH,
@@ -14,7 +14,7 @@ namespace Rune.Services;
 /// <see cref="PosixSignalRegistration.Create"/> accepts arbitrary positive enum
 /// values and treats them as raw OS signal numbers. SIGWINCH is signal 28 on every
 /// mainstream Unix (Linux on all common architectures, macOS/Darwin, FreeBSD), so
-/// the cast is portable across the POSIX family Rune targets.
+/// the cast is portable across the POSIX family the channels target.
 /// </remarks>
 public sealed class SigWinchResizeWatcherService : IViewportResizeWatcher
 {

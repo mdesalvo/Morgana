@@ -2,8 +2,11 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using Morgana.Contracts;
-using Rune.Handlers;
-using Rune.Interfaces;
+using Morgana.Terminal;
+using Morgana.Terminal.Handlers;
+using Morgana.Terminal.Interfaces;
+using Morgana.Terminal.Services;
+using Rune.Messages;
 using Rune.Services;
 using Spectre.Console;
 
@@ -98,6 +101,10 @@ builder.Logging.ClearProviders();
 // ==============================================================================
 // 4. OUTBOUND TO MORGANA - JWT + HTTP CLIENT
 // ==============================================================================
+// The channel profile is the single statement of who Rune is and what little it can render: the
+// shared terminal library reads its handshake, its token claims and its configuration root from here.
+builder.Services.AddSingleton(RuneChannelProfile.Build(builder.Configuration));
+
 // MorganaAuthHandler self-issues short-lived JWTs with iss=rune on each request.
 // The named HttpClient "Morgana" targets the Morgana base URL from configuration
 // and runs through the handler so the Authorization header is set automatically.
@@ -110,6 +117,7 @@ builder.Services.AddHttpClient("Morgana", client =>
 // ==============================================================================
 // 5. SERVICES
 // ==============================================================================
+// Morgana.Terminal hosts what both TTY channels do the same way; the rest is Rune's own.
 // MorganaClientService         : wraps start/send/end conversation lifecycle.
 // MorganaStartRetryPolicy      : paces the attempts to open the conversation while Morgana is unreachable.
 // ConversationLifecycleService : opens the conversation, waits for the presentation, runs the UI and ends it.

@@ -1,9 +1,9 @@
-using Grimoire.Services;
+using Morgana.Terminal.Services;
 
-namespace Grimoire.Interfaces;
+namespace Morgana.Terminal.Interfaces;
 
 /// <summary>
-/// Abstraction over the terminal-resize notification so <see cref="ConsoleUiService"/> can
+/// Abstraction over the terminal-resize notification so a channel's console UI can
 /// stay platform-agnostic. The concrete strategy is picked at startup in
 /// <c>Program.cs</c> based on <see cref="OperatingSystem"/>: SIGWINCH on POSIX,
 /// polling on Windows. See <see cref="SigWinchResizeWatcherService"/> and

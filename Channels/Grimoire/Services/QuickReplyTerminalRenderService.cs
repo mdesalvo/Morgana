@@ -2,6 +2,7 @@ using System.Linq;
 using System.Text;
 using Morgana.Contracts;
 using Spectre.Console;
+using Morgana.Terminal.Services;
 
 namespace Grimoire.Services;
 

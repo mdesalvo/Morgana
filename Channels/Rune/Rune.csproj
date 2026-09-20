@@ -8,6 +8,7 @@
 
     <ItemGroup>
        <ProjectReference Include="..\..\Morgana\Morgana.Contracts\Morgana.Contracts.csproj" />
+       <ProjectReference Include="..\..\Morgana\Morgana.Terminal\Morgana.Terminal.csproj" />
     </ItemGroup>
 
 </Project>

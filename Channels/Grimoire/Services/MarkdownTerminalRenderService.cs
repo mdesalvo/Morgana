@@ -3,6 +3,7 @@ using Markdig;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Spectre.Console;
+using Morgana.Terminal.Services;
 
 namespace Grimoire.Services;
 

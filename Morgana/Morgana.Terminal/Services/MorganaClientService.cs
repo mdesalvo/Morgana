@@ -1,7 +1,8 @@
-using Rune.Messages;
+using System.Net.Http.Json;
+using Microsoft.Extensions.Configuration;
 using Morgana.Contracts;
 
-namespace Rune.Services;
+namespace Morgana.Terminal.Services;
 
 /// <summary>
 /// Thin REST client wrapping the Morgana conversation lifecycle endpoints
@@ -11,38 +12,30 @@ namespace Rune.Services;
 /// </summary>
 public sealed class MorganaClientService
 {
-    /// <summary>Fallback cap advertised at the handshake when <c>Rune:MaxMessageLength</c> is absent.</summary>
-    private const int DefaultMaxMessageLength = 500;
-
     /// <summary>Produces the named <c>Morgana</c> <see cref="HttpClient"/> with the JWT handler already wired in.</summary>
     private readonly IHttpClientFactory httpClientFactory;
+
+    /// <summary>Identity and capability budget announced on every handshake.</summary>
+    private readonly ChannelProfile profile;
 
     /// <summary>Absolute URL Morgana POSTs inbound messages to; re-announced on every handshake.</summary>
     private readonly string callbackUrl;
 
-    /// <summary>Hard cap Rune advertises to Morgana's channel adapter; <c>null</c> means "no cap".</summary>
-    private readonly int? maxMessageLength;
-
-    /// <summary>Captures the callback URL (required) and the advertised message length cap.</summary>
-    /// <exception cref="InvalidOperationException">Thrown when <c>Rune:CallbackURL</c> is missing.</exception>
-    public MorganaClientService(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+    /// <summary>Captures the callback URL (required).</summary>
+    /// <exception cref="InvalidOperationException">Thrown when the channel's <c>CallbackURL</c> is missing.</exception>
+    public MorganaClientService(IHttpClientFactory httpClientFactory, IConfiguration configuration, ChannelProfile profile)
     {
         this.httpClientFactory = httpClientFactory;
-        callbackUrl = configuration["Rune:CallbackURL"]
-            ?? throw new InvalidOperationException("Rune:CallbackURL is required for webhook-based delivery.");
-
-        // Rune:MaxMessageLength governs the hard cap Rune announces to Morgana at the
-        // handshake. Default (500) stays aggressive so the downgrade path is exercised on
-        // every turn — the "poor but honest" profile Rune was built for — but can be raised
-        // (or set to null to mean "no cap") without recompiling.
-        maxMessageLength = configuration.GetValue<int?>("Rune:MaxMessageLength") ?? DefaultMaxMessageLength;
+        this.profile = profile;
+        callbackUrl = configuration[profile.SectionKey("CallbackURL")]
+            ?? throw new InvalidOperationException($"{profile.SectionKey("CallbackURL")} is required for webhook-based delivery.");
     }
 
     /// <summary>
-    /// Opens a new conversation with Morgana, declaring Rune's handshake
-    /// (<c>channelName=rune</c>, <c>deliveryMode=webhook</c>, capabilities off, callback URL).
+    /// Opens a new conversation with Morgana, declaring the channel's handshake: its name, the
+    /// webhook delivery mode, the capability profile it can render and the callback URL.
     /// </summary>
-    /// <param name="candidateConversationId">The id proposed to Morgana; the server is source of truth, so Rune uses the one returned.</param>
+    /// <param name="candidateConversationId">The id proposed to Morgana; the server is source of truth, so the channel uses the one returned.</param>
     /// <param name="cancellationToken">Abandons the handshake when the process is stopping.</param>
     public async Task<string> StartConversationAsync(string candidateConversationId, CancellationToken cancellationToken = default)
     {
@@ -50,7 +43,7 @@ public sealed class MorganaClientService
 
         StartConversationRequest body = new(
             ConversationId: candidateConversationId,
-            ChannelMetadata: RuneChannelMetadata.Build(callbackUrl, maxMessageLength));
+            ChannelMetadata: profile.BuildMetadata(callbackUrl));
 
         HttpResponseMessage response = await httpClient.PostAsJsonAsync(
             "/api/morgana/conversation/start", body, cancellationToken);
@@ -75,7 +68,7 @@ public sealed class MorganaClientService
 
         // 429 (rate-limit OR dust exhaustion) is not a transport failure: before returning
         // it the backend has already pushed a user-facing explanatory ChannelMessage over
-        // the webhook (rendered by DrainIncomingLoop, with its own terminal styling). Letting
+        // the webhook, which the UI renders with its own terminal styling. Letting
         // EnsureSuccessStatusCode throw here would surface a raw "send failed: 429" line that
         // buries that message and reads like a crash. Swallow it and let the channel speak —
         // same contract Cauldron honours. Any other non-success still throws so genuine

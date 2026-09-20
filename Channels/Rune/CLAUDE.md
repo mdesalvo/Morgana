@@ -61,8 +61,15 @@ the decision recorded there.
 
 A `ProjectReference` on **`Morgana.Contracts`**, consumed directly, responses included. Rune still
 renders no `QuickReply` or `RichCard`: they arrive as part of the shared contract **already stripped
-by the adapter upstream**, which is the point of the channel. Channel identity lives channel-side in
-`Messages/RuneChannelMetadata.cs`.
+by the adapter upstream**, which is the point of the channel.
+
+A second `ProjectReference` on **`Morgana.Terminal`**, the library the two TTY channels share:
+authentication, the Morgana REST client, the start-retry policy, the webhook dispatcher, the landing
+messages, the resize watchers and the terminal-cell measurement. It is internal to the repository and
+never published, so its surface answers to Rune and Grimoire alone. Spectre.Console and the JWT
+package arrive with it. Identity stays channel-side in `Messages/RuneChannelProfile.cs`: the
+`ChannelProfile` is the one statement of who Rune is, and the library reads the handshake, the token
+claims and the `Rune:` configuration root from it.
 
 ## Terminal UI
 
@@ -127,4 +134,6 @@ record at start and read back from there, by a resume and by a Morgana that rest
 - **Singletons**: one process is one session. Multi-session would first have to move the UI history
   and the receiver's callback onto a per-conversation scope
 - **Never enrich Rune.** Its value is exactly what it cannot do: raise a capability here and the
-  degradation path stops being exercised anywhere
+  degradation path stops being exercised anywhere. Sharing `Morgana.Terminal` with the rich-TTY
+  channel does not soften this: a feature of Grimoire's reaches Rune only if someone opts Rune in,
+  and the flags in `RuneChannelProfile` are the place where that would have to be written

@@ -1,11 +1,11 @@
 using System.Text;
 using Spectre.Console;
 
-namespace Grimoire.Services;
+namespace Morgana.Terminal.Services;
 
 /// <summary>
-/// Terminal-safe text shared by Grimoire's TTY renderers (Markdown, rich card,
-/// quick reply): rune-safe wrap/truncate so a wide CJK glyph or an emoji-presentation sequence
+/// Terminal-safe text shared by every TTY renderer a channel owns (prose, and the rich card and
+/// quick reply of a channel that declares them): rune-safe wrap/truncate so a wide CJK glyph or an emoji-presentation sequence
 /// (resolved via <see cref="Emoji.Replace"/> upstream in each renderer) is measured in the columns
 /// the terminal actually draws, not in UTF-16 chars — keeping every renderer's "one row = exactly
 /// width columns" invariant honest, the same contract <c>ConsoleUiService.BuildBody</c> budgets

@@ -1,11 +1,11 @@
 using Morgana.Contracts;
 
-namespace Rune.Services;
+namespace Morgana.Terminal.Services;
 
 /// <summary>
 /// Thin dispatcher invoked by the minimal-API <c>POST /morgana-hook</c> endpoint.
 /// Decouples the HTTP surface from the console UI: <see cref="OnMessage"/> is wired
-/// by <see cref="ConversationLifecycleService"/> after both the receiver and the UI have been
+/// by the channel's conversation lifecycle after both the receiver and the UI have been
 /// resolved from DI, avoiding a constructor-level circular dependency.
 /// </summary>
 public sealed class WebhookReceiverService
@@ -24,8 +24,14 @@ public sealed class WebhookReceiverService
         set => expectedConversationId = value;
     }
 
-    /// <summary>Callback invoked for every accepted message; wired to <see cref="ConsoleUiService.EnqueueIncoming"/>.</summary>
+    /// <summary>Callback invoked for every accepted message; wired to the UI's inbound queue.</summary>
     public Action<ChannelMessage>? OnMessage { get; set; }
+
+    /// <summary>
+    /// Callback invoked for every accepted stream chunk; left unwired by a channel that declares no
+    /// streaming, which then turns every chunk away rather than accepting one it cannot show.
+    /// </summary>
+    public Action<StreamChunkRequest>? OnChunk { get; set; }
 
     /// <summary>Forwards the message to <see cref="OnMessage"/> when it belongs to the expected conversation; returns whether it did.</summary>
     public bool Dispatch(ChannelMessage message)
@@ -34,6 +40,16 @@ public sealed class WebhookReceiverService
             return false;
 
         OnMessage?.Invoke(message);
+        return true;
+    }
+
+    /// <summary>Forwards the chunk to <see cref="OnChunk"/> when it belongs to the expected conversation and the channel renders chunks at all; returns whether it did.</summary>
+    public bool DispatchChunk(StreamChunkRequest chunk)
+    {
+        if (OnChunk is not { } onChunk || !IsExpected(chunk.ConversationId))
+            return false;
+
+        onChunk(chunk);
         return true;
     }
 

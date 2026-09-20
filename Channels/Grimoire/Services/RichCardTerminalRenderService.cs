@@ -2,6 +2,7 @@ using System.Text;
 using Morgana.Contracts;
 using Markdig;
 using Spectre.Console;
+using Morgana.Terminal.Services;
 
 namespace Grimoire.Services;
 

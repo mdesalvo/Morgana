@@ -1,7 +1,7 @@
 using System.Net;
 using System.Security.Authentication;
 
-namespace Rune.Services;
+namespace Morgana.Terminal.Services;
 
 /// <summary>
 /// Paces the attempts to open the conversation while Morgana is unreachable at startup. It never gives

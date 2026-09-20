@@ -55,8 +55,15 @@ without revisiting the decision recorded there.
 
 A `ProjectReference` on **`Morgana.Contracts`**, consumed directly — requests, responses and
 `StreamChunkRequest`, the `{callbackUrl}/chunk` body, which lives there too and is consumed by
-Morgana.Web's own `WebhookChannelService`. There is no private copy on either side. Channel identity
-lives channel-side in `Messages/GrimoireChannelMetadata.cs`.
+Morgana.Web's own `WebhookChannelService`. There is no private copy on either side.
+
+A second `ProjectReference` on **`Morgana.Terminal`**, the library the two TTY channels share:
+authentication, the Morgana REST client, the start-retry policy, the webhook dispatcher, the landing
+messages, the resize watchers and the terminal-cell measurement. It is internal to the repository and
+never published, so its surface answers to Grimoire and Rune alone. Spectre.Console and the JWT
+package arrive with it. Identity stays channel-side in `Messages/GrimoireChannelProfile.cs`: the
+`ChannelProfile` is the one statement of who Grimoire is, and the library reads the handshake, the
+token claims and the `Grimoire:` configuration root from it.
 
 ## Terminal UI
 

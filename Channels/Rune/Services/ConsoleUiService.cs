@@ -1,7 +1,8 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
-using Rune.Interfaces;
+using Morgana.Terminal.Interfaces;
+using Morgana.Terminal.Services;
 using Morgana.Contracts;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -281,7 +282,7 @@ public sealed class ConsoleUiService
                 // instead of re-reading the raw field.
                 string messageSpeaker = string.IsNullOrWhiteSpace(message.AgentName)
                     ? "Morgana"
-                    : StripControlCharacters(message.AgentName);
+                    : TerminalCellService.StripControlCharacters(message.AgentName);
 
                 lock (renderLock)
                 {
@@ -1027,20 +1028,9 @@ public sealed class ConsoleUiService
         pos + 1 < currentInput.Length && char.IsHighSurrogate(currentInput[pos]) && char.IsLowSurrogate(currentInput[pos + 1]) ? 2 : 1;
 
     /// <summary>
-    /// Strips ASCII/Unicode control characters (ESC, BEL, C1 controls, ...) out of a speaker name bound
-    /// for the terminal. <see cref="Markup.Escape"/> only neutralizes Spectre's own <c>[ ]</c> markup
-    /// syntax — a raw control byte arriving over the webhook (an OSC sequence renaming the terminal
-    /// title, a cursor move, the BEL that rings the system bell, ...) passes straight through it and
-    /// gets interpreted by the user's TTY. A name occupies the single header slot and the row prefix,
-    /// where a line break carries no meaning, so here every control character goes.
-    /// </summary>
-    private static string StripControlCharacters(string text) =>
-        text.Any(char.IsControl) ? new string(text.Where(c => !char.IsControl(c)).ToArray()) : text;
-
-    /// <summary>
     /// Cleans reply text bound for the terminal, keeping the line structure Morgana authored: newlines
     /// survive, a tab becomes a space and every other control character is dropped for the reasons given
-    /// in <see cref="StripControlCharacters"/>. The breaks are load-bearing — <see cref="RenderMessageRows"/>
+    /// in <see cref="TerminalCellService.StripControlCharacters"/>. The breaks are load-bearing — <see cref="RenderMessageRows"/>
     /// turns each one into a row, so dropping them would glue the last word of a line to the first of the
     /// next and hand the wrapper one endless paragraph.
     /// </summary>

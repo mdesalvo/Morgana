@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 ### 🔄 Changed
+- Introduced `Morgana.Terminal` library to decouple Grimoire and Rune from the plumbing aspects they share (authentication, Morgana client, webhook dispatcher, terminal rendering), leaving each channel to declare only its own capability profile
 
 ### 🐛 Fixed
 - Morgana now remembers the whole conversation as it appears on screen: nothing disappears on a refresh any more, neither the message just sent nor anything already shown

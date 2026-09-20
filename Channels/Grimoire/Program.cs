@@ -1,10 +1,13 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
-using Grimoire.Handlers;
-using Grimoire.Interfaces;
-using Morgana.Contracts;
+using Grimoire.Messages;
 using Grimoire.Services;
+using Morgana.Contracts;
+using Morgana.Terminal;
+using Morgana.Terminal.Handlers;
+using Morgana.Terminal.Interfaces;
+using Morgana.Terminal.Services;
 using Spectre.Console;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -101,6 +104,10 @@ builder.Logging.ClearProviders();
 // ==============================================================================
 // 4. OUTBOUND TO MORGANA - JWT + HTTP CLIENT
 // ==============================================================================
+// The channel profile is the single statement of who Grimoire is and what it can render: the
+// shared terminal library reads its handshake, its token claims and its configuration root from here.
+builder.Services.AddSingleton(GrimoireChannelProfile.Instance);
+
 // MorganaAuthHandler self-issues short-lived JWTs with iss=grimoire on each request.
 // The named HttpClient "Morgana" targets the Morgana base URL from configuration
 // and runs through the handler so the Authorization header is set automatically.
@@ -113,10 +120,11 @@ builder.Services.AddHttpClient("Morgana", client =>
 // ==============================================================================
 // 5. SERVICES
 // ==============================================================================
+// Morgana.Terminal hosts what both TTY channels do the same way; the rest is Grimoire's own.
 // MorganaClientService            : wraps start/send/end conversation lifecycle.
 // MorganaStartRetryPolicy         : paces the attempts to open the conversation while Morgana is unreachable.
 // ConversationLifecycleService    : opens the conversation, waits for the presentation, runs the UI and ends it.
-// WebhookReceiverService         : thin dispatcher invoked by the /morgana-hook endpoint.
+// WebhookReceiverService          : thin dispatcher invoked by the /morgana-hook endpoint.
 // ConsoleUiService                : Spectre.Console Live(Layout) with sticky header + REPL body.
 // LandingMessageService           : picks a random "warming up" line for the startup window.
 // TerminalCellService             : rune-safe terminal-cell-width wrap/truncate, shared by the three renderers below.

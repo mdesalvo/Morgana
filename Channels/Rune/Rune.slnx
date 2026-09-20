@@ -4,4 +4,5 @@
     <File Path="CLAUDE.md" />
   </Folder>
   <Project Path="Rune.csproj" />
+  <Project Path="..\..\Morgana\Morgana.Terminal\Morgana.Terminal.csproj" />
 </Solution>

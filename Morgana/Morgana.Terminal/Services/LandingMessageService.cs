@@ -1,7 +1,9 @@
-namespace Rune.Services;
+using Microsoft.Extensions.Configuration;
+
+namespace Morgana.Terminal.Services;
 
 /// <summary>
-/// Picks a random landing message from the <c>Rune:LandingMessages</c> configured pool
+/// Picks a random landing message from the channel's <c>LandingMessages</c> configured pool
 /// — mirror of <c>Cauldron:LandingMessageService</c>. Used to print a friendly
 /// "Morgana is warming up" line on stdout during the short startup window before the
 /// Spectre.Console Live UI takes over: Kestrel bind, JWT signing, TLS handshake,
@@ -13,9 +15,10 @@ public sealed class LandingMessageService
     private readonly string[] landingMessages;
     private readonly Random random = new Random();
 
-    public LandingMessageService(IConfiguration configuration)
+    /// <summary>Reads the channel's own pool of startup lines, falling back to a single built-in line.</summary>
+    public LandingMessageService(IConfiguration configuration, ChannelProfile profile)
     {
-        landingMessages = configuration.GetSection("Rune:LandingMessages").Get<string[]>()
+        landingMessages = configuration.GetSection(profile.SectionKey("LandingMessages")).Get<string[]>()
             ?? ["🔮 Warming up the magic... almost there! 🔮"];
     }
 

@@ -1,4 +1,5 @@
 using Spectre.Console;
+using Morgana.Terminal.Services;
 
 namespace Rune.Services;
 

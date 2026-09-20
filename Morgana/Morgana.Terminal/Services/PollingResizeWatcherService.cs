@@ -1,6 +1,6 @@
-using Rune.Interfaces;
+using Morgana.Terminal.Interfaces;
 
-namespace Rune.Services;
+namespace Morgana.Terminal.Services;
 
 /// <summary>
 /// Windows fallback implementation of <see cref="IViewportResizeWatcher"/>:
