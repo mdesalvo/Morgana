@@ -19,14 +19,15 @@ The system is powered by **Microsoft.Agents.AI**, enabling seamless integration 
 
 ## Core Philosophy
 
-Morgana **reimagines conversational AI** through 5 foundational pillars that **work in harmony** to deliver an **orchestration framework** that is powerful yet **remarkably simple to configure**.
+Morgana **reimagines conversational AI** through 6 foundational pillars that **work in harmony** to deliver an **orchestration framework** that is powerful yet **remarkably simple to configure**.
 
 <p align="center">
   <a href="#-actor-system">🎭 Actor System</a> |
   <a href="#-agent-system">🤖 Agent System</a> |
   <a href="#-prompt-system">📝 Prompt System</a> |
   <a href="#-context-system">💾 Context System</a> |
-  <a href="#-channel-system">📡 Channel System</a>
+  <a href="#-channel-system">📡 Channel System</a> |
+  <a href="#-authoring-system">✨ Authoring System</a>
 </p>
 
 ### 🎭 Actor System
@@ -254,20 +255,38 @@ Reaching Morgana from a browser does not require landing on Cauldron: it publish
 No parameters: it reads its own `src` to learn which Cauldron to open, so a copied snippet points back at the deployment it came from. Closed, it is a floating pill carrying Morgana's animated face; opened, a sandboxed `<iframe>` running the **real** Cauldron chat: streaming, rich cards, quick replies, dust gauge. A closed shadow root keeps the two stylesheets from reaching each other while the iframe keeps the conversation on Cauldron's own origin, unreadable from the host page. Framing stays closed until a site is listed in `Cauldron:Widget:AllowedEmbedOrigins`.
 </details>
 
+### ✨ Authoring System
+
+<details>
+<summary><i>An AI-driven workbench that distils domain expertise into production-ready agents</i></summary>
+
+Morgana recognizes that the hardest part of building agents isn't infrastructure: it's authoring clear, internally-consistent domain prompts and tool contracts. **Alembic** is the authoring workbench that solves this problem by conducting an AI-driven interview with domain experts, distilling their knowledge into a complete, buildable plugin—intents, agent prose, tool contracts and working C#, all ready to drop into production.
+
+Alembic runs standalone (no Morgana instance required), talking only to an LLM, so domain experts can model their business on their own schedule. The interview captures the vocabulary, reasoning patterns and tool interactions unique to each domain, then generates an archive that plugs into Morgana as a plugin DLL.
+
+The result is **prose as a first-class artifact**: agents are authored by people who understand the domain, not engineers guessing at the automation. Changes to behavior flow from changes to the prompt configuration, versioned and auditable like any source code, without requiring recompilation or redeployment cycles.
+
+<details>
+<summary><b>▶️ Running it</b>: <i>a build plus a profile-gated compose service</i></summary>
+
+```bash
+# 🔨 Build it (optional)
+dotnet build ./Alembic
+
+# 🧪 Model a domain, at http://localhost:5005
+docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
+```
+
+</details>
+
+</details>
+
 These pillars are argued at length in the [**Morgana Handbook**](https://mdesalvo.github.io/Morgana/Morgana-Handbook.html).
 
 ---
 
-## Hands On!
+## 🚀 Quick Start
 
-<p align="center">
-  <a href="#-quick-start">🚀 Quick Start</a> |
-  <a href="#-authoring-a-domain-alembic">🧪 Alembic</a>
-</p>
-
-### 🚀 Quick Start
-
-<details>
 <summary><i>From a cloned repository to a running Morgana, one channel at a time</i></summary>
 
 <details open>
@@ -323,33 +342,5 @@ docker compose --env-file .env --env-file .env.versions run --rm --service-ports
 ```bash
 docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases rune
 ```
-
-</details>
-
-</details>
-
-### 🧪 Authoring a Domain: Alembic
-
-<details>
-<summary><i>An AI-conducted interview that distils a whole domain into a buildable plugin</i></summary>
-
-Agents can be authored entirely by hand: `agents.json` plus a thin C# class against the **Morgana.AI** NuGet package. The shorter path is **Alembic**, Morgana's authoring workbench: an AI-conducted interview that distils a new domain from scratch, or extends an existing one, into intents, agent prose, tool contracts and working C#, packaged as one downloadable archive ready to be built into a plugin. It talks to no Morgana instance (only to an LLM), so it runs on its own, whenever somebody sits down to model a business.
-
-The interview, what it distils and how the archive is built are walked through in the [**Alembic Handbook**](https://mdesalvo.github.io/Morgana/Alembic-Handbook.html).
-
-<details>
-<summary><b>▶️ Running it</b>: <i>a build plus a profile-gated compose service</i></summary>
-
-It joins no network, so compose keeps it behind a profile: `up` never starts it.
-
-```bash
-# 🔨 Build it (optional)
-dotnet build ./Alembic
-
-# 🧪 Model a domain, at http://localhost:5005
-docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
-```
-
-</details>
 
 </details>
