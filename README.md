@@ -287,8 +287,6 @@ These pillars are argued at length in the [**Morgana Handbook**](https://mdesalv
 
 ## 🚀 Quick Start
 
-<summary><i>From a cloned repository to a running Morgana, one channel at a time</i></summary>
-
 <details open>
 <summary><b>⚙️ Setup</b>: <i>once, before any channel</i></summary>
 
