@@ -281,7 +281,7 @@ docker compose --env-file .env --env-file .env.versions --profile authoring up a
 
 </details>
 
-These pillars are argued at length in the [**Morgana Handbook**](https://mdesalvo.github.io/Morgana/Morgana-Handbook.html).
+These pillars are argued at length in the [**project handbooks**](https://mdesalvo.github.io/Morgana/).
 
 ---
 
