@@ -270,7 +270,7 @@ The result is **prose as a first-class artifact**: agents are authored by people
 <summary><b>▶️ Running it</b>: <i>a build plus a profile-gated compose service</i></summary>
 
 ```bash
-# 🔨 Build it (optional)
+# 🔨 Build it
 dotnet build ./Alembic
 
 # 🧪 Model a domain, at http://localhost:5005
