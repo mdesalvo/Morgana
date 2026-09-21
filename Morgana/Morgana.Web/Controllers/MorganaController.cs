@@ -12,7 +12,7 @@ using Morgana.Contracts;
 namespace Morgana.Web.Controllers;
 
 /// <summary>
-/// REST API for conversation lifecycle (start/end/resume/message/history) and message routing to actor system.
+/// REST API for conversation lifecycle (start/end/resume/message/history), published commands and message routing to actor system.
 /// Integrates with SignalR for real-time bidirectional communication; OTel turn Activity boundary.
 /// Validates channel metadata, authentication, rate limits, dust budget at every request gate.
 /// </summary>
@@ -31,9 +31,10 @@ public class MorganaController : ControllerBase
     private readonly Records.RateLimitOptions rateLimitOptions;
     private readonly IDustLimitService dustLimitService;
     private readonly Records.DustLimitingOptions dustLimitingOptions;
+    private readonly ICommandRegistryService commandRegistryService;
 
     /// <summary>
-    /// Initializes controller with actor system, authentication, rate/dust limits and channel factory.
+    /// Initializes controller with actor system, authentication, rate/dust limits, channel factory and command registry.
     /// Validates channel metadata handshake and delivery mode at conversation start.
     /// </summary>
     public MorganaController(
@@ -47,7 +48,8 @@ public class MorganaController : ControllerBase
         IRateLimitService rateLimitService,
         IOptions<Records.RateLimitOptions> rateLimitOptions,
         IDustLimitService dustLimitService,
-        IOptions<Records.DustLimitingOptions> dustLimitingOptions)
+        IOptions<Records.DustLimitingOptions> dustLimitingOptions,
+        ICommandRegistryService commandRegistryService)
     {
         this.actorSystem = actorSystem;
         this.logger = logger;
@@ -60,6 +62,7 @@ public class MorganaController : ControllerBase
         this.rateLimitOptions = rateLimitOptions.Value;
         this.dustLimitService = dustLimitService;
         this.dustLimitingOptions = dustLimitingOptions.Value;
+        this.commandRegistryService = commandRegistryService;
     }
 
     /// <summary>
@@ -332,61 +335,9 @@ public class MorganaController : ControllerBase
             }
             #endregion
 
-            #region Rate Limiting
-            Records.RateLimitResult rateLimitResult = await rateLimitService.CheckAndRecordAsync(request.ConversationId);
-            if (!rateLimitResult.IsAllowed)
-            {
-                logger.LogWarning(
-                    "Rate limit exceeded for conversation {RequestConversationId}: {ViolatedLimit}", request.ConversationId, rateLimitResult.ViolatedLimit);
-
-                string rateLimitViolation = GetRateLimitErrorMessage(rateLimitResult);
-                await channelService.SendMessageAsync(new ChannelMessage
-                {
-                    ConversationId = request.ConversationId,
-                    Text = rateLimitViolation,
-                    MessageType = "system_warning",
-                    ErrorReason = "rate_limit_exceeded",
-                    AgentName = "Morgana",
-                    AgentCompleted = false
-                });
-
-                Response.Headers.Append("Retry-After", rateLimitResult.RetryAfterSeconds?.ToString() ?? "60");
-                return StatusCode(429, new
-                {
-                    error = "Rate limit exceeded",
-                    violatedLimit = rateLimitResult.ViolatedLimit,
-                    retryAfterSeconds = rateLimitResult.RetryAfterSeconds,
-                    message = rateLimitViolation
-                });
-            }
-            #endregion
-
-            #region Dust Limiting
-            // Orthogonal to rate limiting: the rate limiter caps message frequency, the dust
-            // limiter caps token consumption. Checked after it, same 429 shape. Once the
-            // budget is spent the conversation is terminal — there is no continuation, the
-            // user must start a brand-new conversation.
-            if (await dustLimitService.IsOverBudgetAsync(request.ConversationId))
-            {
-                logger.LogWarning(
-                    "Dust budget exhausted for conversation {RequestConversationId}", request.ConversationId);
-
-                await channelService.SendMessageAsync(new ChannelMessage
-                {
-                    ConversationId = request.ConversationId,
-                    Text = dustLimitingOptions.ErrorMessage,
-                    MessageType = "error",
-                    ErrorReason = "dust_budget_exhausted",
-                    AgentName = "Morgana",
-                    AgentCompleted = false
-                });
-
-                return StatusCode(429, new
-                {
-                    error = "Dust budget exhausted",
-                    message = dustLimitingOptions.ErrorMessage
-                });
-            }
+            #region Rate And Dust Limiting
+            if (await RefuseOverRateOrDustLimitAsync(request.ConversationId) is { } limitRefusal)
+                return limitRefusal;
             #endregion
 
             logger.LogInformation("Sending message to conversation {RequestConversationId}", request.ConversationId);
@@ -449,7 +400,142 @@ public class MorganaController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// Lists the commands this installation executes on a conversation's behalf, for a channel to offer
+    /// in its command palette next to its own.
+    /// </summary>
+    /// <returns>200 OK with a <see cref="CommandCatalogResponse"/>, empty when no command is installed.</returns>
+    [HttpGet("commands")]
+    public async Task<IActionResult> GetCommandCatalog()
+    {
+        (IActionResult? authFailure, _) = await AuthenticateRequestAsync();
+        if (authFailure is not null)
+            return authFailure;
+
+        // The same catalogue for every channel: which commands a channel shows is the channel's choice
+        return Ok(new CommandCatalogResponse(commandRegistryService.GetCatalog()));
+    }
+
+    /// <summary>
+    /// Runs one of the published commands on a conversation. The outcome reaches the user over the
+    /// channel's transport, as a reply does. A command meets the rate and dust limits a message meets:
+    /// it is a request the user fired and it may well spend tokens.
+    /// </summary>
+    /// <returns>
+    /// 202 Accepted once the command has run.
+    /// 400 Bad Request when no command answers to the name.
+    /// 404 Not Found if the conversation was never started.
+    /// 429 Too Many Requests on the same limits a message meets.
+    /// 500 Internal Server Error on failure.
+    /// </returns>
+    [HttpPost("conversation/{conversationId}/command")]
+    public async Task<IActionResult> ExecuteCommand([FromBody] ExecuteCommandRequest request)
+    {
+        try
+        {
+            (IActionResult? authFailure, _) = await AuthenticateRequestAsync();
+            if (authFailure is not null)
+                return authFailure;
+
+            // A command acts on a conversation that was started and opens none, exactly as a message does:
+            // checked before the rate limiter, whose bookkeeping would otherwise create its database
+            if (!conversationPersistenceService.ConversationExists(request.ConversationId))
+            {
+                logger.LogWarning("Command for unknown conversation {RequestConversationId}; returning 404", request.ConversationId);
+                return NotFound(new { error = "Conversation not found", conversationId = request.ConversationId });
+            }
+
+            // An unknown name is the channel's mistake, not the user's: nothing is pushed to the conversation
+            if (commandRegistryService.ResolveCommand(request.Name) is not { } command)
+            {
+                logger.LogWarning("Unknown command '{CommandName}' for conversation {RequestConversationId}", request.Name, request.ConversationId);
+                return BadRequest(new { error = "Unknown command", name = request.Name });
+            }
+
+            // Resolved first: an unknown name is refused without counting against the user's limits
+            if (await RefuseOverRateOrDustLimitAsync(request.ConversationId) is { } limitRefusal)
+                return limitRefusal;
+
+            // The command answers the user itself over the channel, so the HTTP reply only acknowledges it ran
+            logger.LogInformation("Running command '{CommandName}' on conversation {RequestConversationId}", command.Descriptor.Name, request.ConversationId);
+            await command.ExecuteAsync(request.ConversationId);
+
+            return Accepted(new { conversationId = request.ConversationId, command = command.Descriptor.Name });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to run command '{CommandName}' on conversation {RequestConversationId}", request.Name, request.ConversationId);
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
     #region Utilities
+    /// <summary>
+    /// Holds a request that would start work on <paramref name="conversationId"/> to the rate limit, then to
+    /// the dust budget. Returns the 429 to answer with, after pushing the user-facing explanation over the
+    /// channel. Null when the request may proceed.
+    /// </summary>
+    private async Task<IActionResult?> RefuseOverRateOrDustLimitAsync(string conversationId)
+    {
+        // Checking also records the request, so every call here counts towards the window whatever follows
+        Records.RateLimitResult rateLimitResult = await rateLimitService.CheckAndRecordAsync(conversationId);
+        if (!rateLimitResult.IsAllowed)
+        {
+            logger.LogWarning(
+                "Rate limit exceeded for conversation {RequestConversationId}: {ViolatedLimit}", conversationId, rateLimitResult.ViolatedLimit);
+
+            // The user hears why over the channel; the 429 below is for the client, which does not show it
+            string rateLimitViolation = GetRateLimitErrorMessage(rateLimitResult);
+            await channelService.SendMessageAsync(new ChannelMessage
+            {
+                ConversationId = conversationId,
+                Text = rateLimitViolation,
+                MessageType = "system_warning",
+                ErrorReason = "rate_limit_exceeded",
+                AgentName = "Morgana",
+                AgentCompleted = false
+            });
+
+            // A window that reports no wait still gets a minute, so a client never retries in a tight loop
+            Response.Headers.Append("Retry-After", rateLimitResult.RetryAfterSeconds?.ToString() ?? "60");
+            return StatusCode(429, new
+            {
+                error = "Rate limit exceeded",
+                violatedLimit = rateLimitResult.ViolatedLimit,
+                retryAfterSeconds = rateLimitResult.RetryAfterSeconds,
+                message = rateLimitViolation
+            });
+        }
+
+        // Orthogonal to rate limiting: the rate limiter caps message frequency, the dust
+        // limiter caps token consumption. Checked after it, same 429 shape. Once the
+        // budget is spent the conversation is terminal — there is no continuation, the
+        // user must start a brand-new conversation.
+        if (await dustLimitService.IsOverBudgetAsync(conversationId))
+        {
+            logger.LogWarning(
+                "Dust budget exhausted for conversation {RequestConversationId}", conversationId);
+
+            await channelService.SendMessageAsync(new ChannelMessage
+            {
+                ConversationId = conversationId,
+                Text = dustLimitingOptions.ErrorMessage,
+                MessageType = "error",
+                ErrorReason = "dust_budget_exhausted",
+                AgentName = "Morgana",
+                AgentCompleted = false
+            });
+
+            return StatusCode(429, new
+            {
+                error = "Dust budget exhausted",
+                message = dustLimitingOptions.ErrorMessage
+            });
+        }
+
+        return null;
+    }
+
     /// <summary>
     /// Validates the bearer token from the Authorization header when authentication is enabled.
     /// Returns null if the token is valid; returns an IActionResult (401) on failure.

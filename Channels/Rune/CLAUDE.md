@@ -36,7 +36,7 @@ at once: the two URLs must be absolute `http(s)`, the key must no longer be the 
 Kestrel starts listening and `ConversationLifecycleService` wires the webhook
 receiver to the UI queue, opens the conversation with the handshake (retried at
 `MorganaStartRetryPolicy`'s pace while Morgana is unreachable) and blocks on the Live loop until
-`/quit` or `Esc`. A `finally` ends the conversation and stops the host. The webhook accepts only
+`/exit` or `Esc`. A `finally` ends the conversation and stops the host. The webhook accepts only
 deliveries for the conversation on screen and answers 404 to any other.
 
 ## Authentication
@@ -84,11 +84,15 @@ warnings and red for errors.
 ### Input
 
 `Console.ReadKey(intercept: true)` on a background task polling every 25 ms — Spectre's Live
-rendering cannot share stdin with a first-class prompt. **Enter** commits (or exits on `/quit`),
+rendering cannot share stdin with a first-class prompt. **Enter** commits,
 **Backspace** and **Delete** remove around the caret, **←/→** move it, **Esc** exits. At rest
 **↑/↓** and **PgUp/PgDn** scroll the transcript back; they are ignored while a turn is in flight, so
 the window never moves under an arriving reply. Repainting waits for the keystrokes to stop, so a
 pasted line costs one frame rather than one per character.
+
+**Commands**: a leading `/` opens the shared palette (`Morgana.Terminal`): `/new`, `/exit` and
+whatever Morgana publishes. Esc dismisses it. The list filters as you type and Enter runs the
+highlighted candidate, as in Claude Code.
 
 A turn that Morgana accepts but never answers releases the prompt after `Rune:ReplyTimeoutSeconds`
 with a red notice, instead of locking the conversation until the process is killed.
@@ -138,4 +142,5 @@ record at start and read back from there, by a resume and by a Morgana that rest
 - **Never enrich Rune.** Its value is exactly what it cannot do: raise a capability here and the
   degradation path stops being exercised anywhere. Sharing `Morgana.Terminal` with the rich-TTY
   channel does not soften this: a feature of Grimoire's reaches Rune only if someone opts Rune in,
-  and the flags in `RuneChannelProfile` are the place where that would have to be written
+  and the flags in `RuneChannelProfile` are the place where that would have to be written. Local
+  chrome such as the command palette is not a capability

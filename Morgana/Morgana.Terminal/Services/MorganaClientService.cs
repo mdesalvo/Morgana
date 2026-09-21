@@ -6,7 +6,7 @@ namespace Morgana.Terminal.Services;
 
 /// <summary>
 /// Thin REST client wrapping the Morgana conversation lifecycle endpoints
-/// (<c>/api/morgana/conversation/start</c>, <c>.../message</c>, <c>.../end</c>).
+/// (<c>/api/morgana/conversation/start</c>, <c>.../message</c>, <c>.../command</c>, <c>.../end</c>) and the command catalogue.
 /// Relies on <see cref="IHttpClientFactory"/>'s named <c>Morgana</c> client, which
 /// is wired with the per-issuer JWT <see cref="Handlers.MorganaAuthHandler"/>.
 /// </summary>
@@ -73,6 +73,33 @@ public sealed class MorganaClientService
         // buries that message and reads like a crash. Swallow it and let the channel speak —
         // same contract Cauldron honours. Any other non-success still throws so genuine
         // failures stay visible.
+        if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+            return;
+
+        response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Reads the commands Morgana publishes, for the palette to list next to the channel's own.</summary>
+    public async Task<IReadOnlyList<CommandDescriptor>> GetCommandCatalogAsync(CancellationToken cancellationToken = default)
+    {
+        HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
+        CommandCatalogResponse? catalog = await httpClient.GetFromJsonAsync<CommandCatalogResponse>(
+            "/api/morgana/commands", cancellationToken);
+
+        // An empty body reads as no published command, not as a broken contract: the palette still has the local ones
+        return catalog?.Commands ?? [];
+    }
+
+    /// <summary>Runs one of Morgana's published commands on the given conversation; its outcome arrives over the webhook.</summary>
+    public async Task RunCommandAsync(string conversationId, string name, CancellationToken cancellationToken = default)
+    {
+        HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
+        HttpResponseMessage response = await httpClient.PostAsJsonAsync(
+            $"/api/morgana/conversation/{conversationId}/command",
+            new ExecuteCommandRequest(conversationId, name),
+            cancellationToken);
+
+        // A command meets the limits a message meets: Morgana explains a 429 over the webhook just the same
         if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
             return;
 

@@ -94,9 +94,13 @@ agent colour because streamed chunks are assumed to come from agents, which avoi
 ### Input
 
 `Console.ReadKey(intercept: true)` on a background task polling every 25 ms — Spectre's Live
-rendering cannot share stdin with a first-class prompt. **Enter** commits (or exits on `/quit`),
+rendering cannot share stdin with a first-class prompt. **Enter** commits,
 **Backspace** and **Delete** remove around the caret, **←/→** move it, **Esc** exits. Repainting
 waits for the keystrokes to stop, so a pasted line costs one frame rather than one per character.
+
+**Commands**: a leading `/` opens the shared palette (`Morgana.Terminal`): `/new`, `/exit` and
+whatever Morgana publishes. Esc dismisses it. The list filters as you type and Enter runs the
+highlighted candidate, as in Claude Code. It opens over pending quick replies too.
 
 A turn that goes silent for `Grimoire:ReplyTimeoutSeconds` releases the prompt with a red notice.
 The deadline measures **silence, not duration**: every chunk arms it again from zero and a

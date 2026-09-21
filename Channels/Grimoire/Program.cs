@@ -121,7 +121,10 @@ builder.Services.AddHttpClient("Morgana", client =>
 // 5. SERVICES
 // ==============================================================================
 // Morgana.Terminal hosts what both TTY channels do the same way; the rest is Grimoire's own.
-// MorganaClientService            : wraps start/send/end conversation lifecycle.
+// MorganaClientService            : wraps start/send/command/end conversation lifecycle and the command catalogue.
+// TerminalSessionService          : names the conversation on screen and opens a fresh one, at startup or on /new.
+// TerminalCommandRegistryService  : discovers the terminal commands at startup and runs them; Morgana's join later.
+// CommandPaletteService           : the command dropdown under the prompt, dressed in Grimoire's palette theme.
 // MorganaStartRetryPolicy         : paces the attempts to open the conversation while Morgana is unreachable.
 // ConversationLifecycleService    : opens the conversation, waits for the presentation, runs the UI and ends it.
 // WebhookReceiverService          : thin dispatcher invoked by the /morgana-hook endpoint.
@@ -132,6 +135,10 @@ builder.Services.AddHttpClient("Morgana", client =>
 // RichCardTerminalRenderService   : renders a RichCard to a bordered Spectre box.
 // QuickReplyTerminalRenderService : renders a turn's quick replies to the selectable prompt surface.
 builder.Services.AddSingleton<MorganaClientService>();
+builder.Services.AddSingleton<TerminalSessionService>();
+builder.Services.AddSingleton<TerminalCommandRegistryService>();
+builder.Services.AddSingleton<CommandPaletteService>();
+builder.Services.AddSingleton(GrimoireCommandPaletteTheme.Instance);
 builder.Services.AddSingleton<MorganaStartRetryPolicy>();
 builder.Services.AddSingleton<ConversationLifecycleService>();
 builder.Services.AddSingleton<WebhookReceiverService>();

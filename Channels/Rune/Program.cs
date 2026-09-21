@@ -118,14 +118,21 @@ builder.Services.AddHttpClient("Morgana", client =>
 // 5. SERVICES
 // ==============================================================================
 // Morgana.Terminal hosts what both TTY channels do the same way; the rest is Rune's own.
-// MorganaClientService         : wraps start/send/end conversation lifecycle.
-// MorganaStartRetryPolicy      : paces the attempts to open the conversation while Morgana is unreachable.
-// ConversationLifecycleService : opens the conversation, waits for the presentation, runs the UI and ends it.
-// WebhookReceiverService       : thin dispatcher invoked by the /morgana-hook endpoint.
-// ConsoleUiService             : Spectre.Console Live(Layout) with sticky header + REPL body.
-// LandingMessageService        : picks a random "warming up" line for the startup window.
-// TerminalCellService          : rune-safe terminal-cell-width wrap, used by ConsoleUiService's own rendering.
+// MorganaClientService           : wraps start/send/command/end conversation lifecycle and the command catalogue.
+// TerminalSessionService         : names the conversation on screen and opens a fresh one, at startup or on /new.
+// TerminalCommandRegistryService : discovers the terminal commands at startup and runs them; Morgana's join later.
+// CommandPaletteService          : the command dropdown under the prompt, dressed in Rune's palette theme.
+// MorganaStartRetryPolicy        : paces the attempts to open the conversation while Morgana is unreachable.
+// ConversationLifecycleService   : opens the conversation, waits for the presentation, runs the UI and ends it.
+// WebhookReceiverService         : thin dispatcher invoked by the /morgana-hook endpoint.
+// ConsoleUiService               : Spectre.Console Live(Layout) with sticky header + REPL body.
+// LandingMessageService          : picks a random "warming up" line for the startup window.
+// TerminalCellService            : rune-safe terminal-cell-width wrap, used by ConsoleUiService's own rendering.
 builder.Services.AddSingleton<MorganaClientService>();
+builder.Services.AddSingleton<TerminalSessionService>();
+builder.Services.AddSingleton<TerminalCommandRegistryService>();
+builder.Services.AddSingleton<CommandPaletteService>();
+builder.Services.AddSingleton(RuneCommandPaletteTheme.Instance);
 builder.Services.AddSingleton<MorganaStartRetryPolicy>();
 builder.Services.AddSingleton<ConversationLifecycleService>();
 builder.Services.AddSingleton<WebhookReceiverService>();

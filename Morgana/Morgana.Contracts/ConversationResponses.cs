@@ -44,3 +44,10 @@ public record ResumeConversationResponse(
 public record ConversationHistoryResponse(
     MorganaChatMessage[] Messages,
     double? DustLevel = null);
+
+/// <summary>
+/// Response body of <c>GET /api/morgana/commands</c> (200 OK): every command Morgana executes on a
+/// conversation's behalf. Empty when none is installed, never null.
+/// </summary>
+/// <param name="Commands">The published commands, in the order a palette should list them.</param>
+public record CommandCatalogResponse(IReadOnlyList<CommandDescriptor> Commands);
