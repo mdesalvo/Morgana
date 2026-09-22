@@ -325,17 +325,16 @@ docker compose --env-file .env --env-file .env.versions down
 </details>
 
 <details>
-<summary><b>📟 Morgana on Grimoire</b>: <i>the rich TTY, on the stack started above</i></summary>
+<summary><b>📟 Morgana on Grimoire</b>: <i>the rich TTY channel, on the stack started above</i></summary>
 
 ```bash
-# --use-aliases is mandatory: without it the webhook callback fails DNS resolution
 docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases grimoire
 ```
 
 </details>
 
 <details>
-<summary><b>📜 Morgana on Rune</b>: <i>the deliberately poor TTY, same stack</i></summary>
+<summary><b>📜 Morgana on Rune</b>: <i>the basic TTY channel, same stack as Grimoire</i></summary>
 
 ```bash
 docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases rune
