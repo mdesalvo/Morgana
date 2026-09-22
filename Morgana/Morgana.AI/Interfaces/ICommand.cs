@@ -17,6 +17,6 @@ public interface ICommand
     /// </summary>
     CommandDescriptor Descriptor { get; }
 
-    /// <summary>Runs the command on a conversation already known to exist, whose caller has passed the rate and dust limits.</summary>
-    Task ExecuteAsync(string conversationId);
+    /// <summary>Runs the command on a conversation already known to exist, whose caller has passed the rate and dust limits, with the <paramref name="options"/> the user wrote at the prompt, already checked against what the descriptor declares.</summary>
+    Task ExecuteAsync(string conversationId, IReadOnlyDictionary<string, string> options);
 }

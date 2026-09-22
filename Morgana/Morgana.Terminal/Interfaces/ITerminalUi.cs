@@ -29,6 +29,13 @@ public interface ITerminalUi
     void RequestExit();
 
     /// <summary>
+    /// Writes <paramref name="text"/> into the transcript as a line of the channel's own, which is how a command
+    /// that neither speaks to Morgana nor changes the screen reports what it did. <paramref name="isFailure"/>
+    /// marks what went wrong, so the two read apart at a glance.
+    /// </summary>
+    void ShowNotice(string text, bool isFailure = false);
+
+    /// <summary>
     /// Opens a turn the way a typed line does: <paramref name="echo"/> appears as the user's line, the prompt
     /// waits for Morgana's reply under the channel's reply deadline and <paramref name="dispatch"/> sends the
     /// request. A dispatch that fails is reported in the transcript and gives the prompt back.

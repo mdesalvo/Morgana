@@ -16,6 +16,6 @@ public abstract class TerminalCommand
     /// <summary>Whether it may run once the dust budget is exhausted, when nothing more can be asked of Morgana.</summary>
     public virtual bool AvailableWhenSpent => false;
 
-    /// <summary>Runs the command on <paramref name="ui"/>; <paramref name="cancellationToken"/> fires when the user leaves or the process stops.</summary>
-    public abstract Task ExecuteAsync(ITerminalUi ui, CancellationToken cancellationToken);
+    /// <summary>Runs the command on <paramref name="ui"/> with the <paramref name="options"/> the user wrote, already checked against what the descriptor declares; <paramref name="cancellationToken"/> fires when the user leaves or the process stops.</summary>
+    public abstract Task ExecuteAsync(ITerminalUi ui, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken);
 }

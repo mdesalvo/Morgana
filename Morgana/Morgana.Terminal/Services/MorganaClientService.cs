@@ -90,13 +90,28 @@ public sealed class MorganaClientService
         return catalog?.Commands ?? [];
     }
 
+    /// <summary>Reads the conversation as Morgana has it on record, in chronological order; empty when it holds nothing yet.</summary>
+    public async Task<IReadOnlyList<MorganaChatMessage>> GetHistoryAsync(string conversationId, CancellationToken cancellationToken = default)
+    {
+        HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
+        HttpResponseMessage response = await httpClient.GetAsync($"/api/morgana/conversation/{conversationId}/history", cancellationToken);
+
+        // A conversation nobody has spoken in yet is reported as absent, which is not a failure to report upwards
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return [];
+
+        response.EnsureSuccessStatusCode();
+        ConversationHistoryResponse? history = await response.Content.ReadFromJsonAsync<ConversationHistoryResponse>(cancellationToken);
+        return history?.Messages ?? [];
+    }
+
     /// <summary>Runs one of Morgana's published commands on the given conversation; its outcome arrives over the webhook. Morgana refuses a command asking to be confirmed unless <paramref name="confirmed"/> carries the user's Yes.</summary>
-    public async Task RunCommandAsync(string conversationId, string name, bool confirmed = false, CancellationToken cancellationToken = default)
+    public async Task RunCommandAsync(string conversationId, string name, IReadOnlyDictionary<string, string>? options = null, bool confirmed = false, CancellationToken cancellationToken = default)
     {
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
         HttpResponseMessage response = await httpClient.PostAsJsonAsync(
             $"/api/morgana/conversation/{conversationId}/command",
-            new ExecuteCommandRequest(conversationId, name, confirmed),
+            new ExecuteCommandRequest(conversationId, name, confirmed, options),
             cancellationToken);
 
         // A command meets the limits a message meets: Morgana explains a 429 over the webhook just the same

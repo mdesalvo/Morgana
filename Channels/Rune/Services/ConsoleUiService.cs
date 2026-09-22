@@ -585,7 +585,7 @@ public sealed class ConsoleUiService : ITerminalUi
     /// <summary>Gives <paramref name="key"/> to the question a command is waiting on; false when no command is.</summary>
     private bool TryHandleConfirmationKey(LiveDisplayContext ctx, ConsoleKeyInfo key)
     {
-        CommandDescriptor? questionedCommand;
+        CommandInvocation? questionedInvocation;
         ConfirmationOutcome outcome;
         lock (renderLock)
         {
@@ -593,24 +593,24 @@ public sealed class ConsoleUiService : ITerminalUi
                 return false;
 
             // Which command the answer belongs to is only readable while the question is still open
-            questionedCommand = commandConfirmation.PendingCommand;
+            questionedInvocation = commandConfirmation.PendingInvocation;
             outcome = commandConfirmation.HandleKey(key);
             ctx.UpdateTarget(BuildLayout());
             ctx.Refresh();
         }
 
-        if (questionedCommand is null)
+        if (questionedInvocation is null)
             return true;
 
         switch (outcome)
         {
             case ConfirmationOutcome.Confirmed:
                 // The command runs beside this loop, so Esc is still read while it waits on Morgana
-                _ = RunCommandAsync(ctx, questionedCommand, confirmed: true);
+                _ = RunCommandAsync(ctx, questionedInvocation, confirmed: true);
                 break;
             case ConfirmationOutcome.Declined:
                 // A command that leaves no trace of having been asked for would read as a swallowed keystroke
-                ShowSystemNotice(ctx, $"/{questionedCommand.Name} was not run", WarningColor);
+                ShowSystemNotice(ctx, $"/{questionedInvocation.Command.Name} was not run", WarningColor);
                 break;
         }
         return true;
@@ -678,34 +678,45 @@ public sealed class ConsoleUiService : ITerminalUi
             return;
         }
 
-        // A command that cannot be taken back puts its question on the prompt; whether it ever runs is the answer's business
-        if (command.RequiresConfirmation)
+        // The values are read off the line the user typed, then judged by what the command says it takes:
+        // a line that cannot be read runs nothing, since the missing half would be guessed at
+        IReadOnlyDictionary<string, string> options = CommandLineParser.ParseOptions(line, out string? lineProblem);
+        if ((lineProblem ?? command.DescribeOptionProblem(options)) is { } problem)
         {
-            AskForConfirmation(ctx, command);
+            ShowSystemNotice(ctx, problem, WarningColor);
             return;
         }
 
-        await RunCommandAsync(ctx, command, confirmed: false);
+        CommandInvocation invocation = new(command, options);
+
+        // A command that cannot be taken back puts its question on the prompt; whether it ever runs is the answer's business
+        if (command.RequiresConfirmation)
+        {
+            AskForConfirmation(ctx, invocation);
+            return;
+        }
+
+        await RunCommandAsync(ctx, invocation, confirmed: false);
     }
 
-    /// <summary>Puts <paramref name="command"/>'s Yes/No question on the prompt, where it stays until it is answered.</summary>
-    private void AskForConfirmation(LiveDisplayContext ctx, CommandDescriptor command)
+    /// <summary>Puts <paramref name="invocation"/>'s Yes/No question on the prompt, where it stays until it is answered.</summary>
+    private void AskForConfirmation(LiveDisplayContext ctx, CommandInvocation invocation)
     {
         lock (renderLock)
         {
-            commandConfirmation.Ask(command);
+            commandConfirmation.Ask(invocation);
             ctx.UpdateTarget(BuildLayout());
             ctx.Refresh();
         }
     }
 
-    /// <summary>Runs <paramref name="command"/>, carrying the <paramref name="confirmed"/> answer it asked for; a failure is explained in the transcript.</summary>
-    private async Task RunCommandAsync(LiveDisplayContext ctx, CommandDescriptor command, bool confirmed)
+    /// <summary>Runs <paramref name="invocation"/>, carrying the <paramref name="confirmed"/> answer it asked for; a failure is explained in the transcript.</summary>
+    private async Task RunCommandAsync(LiveDisplayContext ctx, CommandInvocation invocation, bool confirmed)
     {
         try
         {
             // The command decides what happens next through this UI: leave, open a turn or swap the conversation
-            await commandRegistry.ExecuteCommandAsync(command.Name, this, confirmed, commandCancellation.Token);
+            await commandRegistry.ExecuteCommandAsync(invocation, this, confirmed, commandCancellation.Token);
         }
         catch (OperationCanceledException) when (commandCancellation.IsCancellationRequested)
         {
@@ -714,7 +725,7 @@ public sealed class ConsoleUiService : ITerminalUi
         catch (Exception ex)
         {
             // Logging is silenced under the live UI, so the transcript is the only place the failure can surface
-            ShowSystemNotice(ctx, $"/{command.Name} failed: {ex.Message}", ErrorColor);
+            ShowSystemNotice(ctx, $"/{invocation.Command.Name} failed: {ex.Message}", ErrorColor);
         }
     }
 
@@ -745,6 +756,10 @@ public sealed class ConsoleUiService : ITerminalUi
         commandCancellation.Cancel();
         incoming.Writer.TryComplete();
     }
+
+    /// <inheritdoc />
+    public void ShowNotice(string text, bool isFailure = false) =>
+        ShowSystemNotice(liveContext, text, isFailure ? ErrorColor : WarningColor);
 
     /// <inheritdoc />
     public Task SubmitTurnAsync(string echo, Func<Task> dispatch) => SubmitTurnAsync(liveContext, echo, dispatch);

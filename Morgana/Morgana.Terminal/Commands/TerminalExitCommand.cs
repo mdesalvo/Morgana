@@ -20,7 +20,7 @@ public sealed class TerminalExitCommand : TerminalCommand
     public override bool AvailableWhenSpent => true;
 
     /// <inheritdoc />
-    public override Task ExecuteAsync(ITerminalUi ui, CancellationToken cancellationToken)
+    public override Task ExecuteAsync(ITerminalUi ui, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken)
     {
         // The live UI returns and the lifecycle ends the conversation on screen
         ui.RequestExit();

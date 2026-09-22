@@ -74,8 +74,17 @@ public sealed class CommandPaletteService
         // Tab completes to the highlighted row, the one the user sees selected, not necessarily the first
         IReadOnlyList<CommandDescriptor> matchingCommands = FindMatchingCommands(input, conversationSpent);
 
-        // The canonical name replaces whatever was typed, an alias included
-        return matchingCommands.Count == 0 ? null : $"/{matchingCommands[HighlightedIndexFor(input, matchingCommands.Count)].Name}";
+        if (matchingCommands.Count == 0)
+            return null;
+
+        // Only the name is rewritten, an alias included: values already written stay as they were typed, while
+        // a command that takes them leaves the caret past a space, where the first one goes
+        CommandDescriptor completed = matchingCommands[HighlightedIndexFor(input, matchingCommands.Count)];
+        int optionsStart = input.IndexOf(' ');
+        if (optionsStart >= 0)
+            return $"/{completed.Name}{input[optionsStart..]}";
+
+        return completed.Options is { Count: > 0 } ? $"/{completed.Name} " : $"/{completed.Name}";
     }
 
     /// <summary>The command Enter runs for <paramref name="input"/>; null when nothing matches it.</summary>
@@ -96,7 +105,7 @@ public sealed class CommandPaletteService
     public bool NamesCommandExactly(string input, bool conversationSpent)
     {
         // The line is drawn in the match colour at this point, as Claude Code does: what was typed is a command in itself
-        string typedCommandName = ExtractTypedCommandName(input);
+        string typedCommandName = CommandLineParser.ParseName(input);
         return IsCommandLine(input) && registry.ListAvailableCommands(conversationSpent)
             .Any(command => NameAndAliasesOf(command).Any(name => string.Equals(name, typedCommandName, StringComparison.OrdinalIgnoreCase)));
     }
@@ -110,7 +119,7 @@ public sealed class CommandPaletteService
         // A terminal reporting no width still gets one cell per row
         width = Math.Max(1, width);
 
-        // A line without the slash has no palette, and the highlight is forgotten with it: deleting the slash and
+        // A line without the slash has no palette; the highlight is forgotten with it: deleting the slash and
         // typing it again starts from the first command
         if (!IsCommandLine(input))
         {
@@ -134,7 +143,7 @@ public sealed class CommandPaletteService
             matchingCommands.Skip(windowStart).Take(visibleCount).Max(command => CommandLabel(command).GetCellWidth()));
 
         // Only the window is drawn; the highlighted row wears the match colour, the first one until the arrows move it
-        string typedCommandName = ExtractTypedCommandName(input);
+        string typedCommandName = CommandLineParser.ParseName(input);
         List<Markup> rows = new(visibleCount + 1);
         for (int index = windowStart; index < windowStart + visibleCount; index++)
             rows.Add(RenderCommandRow(matchingCommands[index], typedCommandName, index == highlighted, labelWidth, width));
@@ -149,7 +158,7 @@ public sealed class CommandPaletteService
     private IReadOnlyList<CommandDescriptor> FindMatchingCommands(string input, bool conversationSpent)
     {
         // Empty right after the slash; an empty name matches every command, so a bare slash lists them all
-        string typedCommandName = ExtractTypedCommandName(input);
+        string typedCommandName = CommandLineParser.ParseName(input);
 
         // Commands of equal rank keep the registry's order, so the list does not reshuffle between keystrokes.
         // The registry already left out what a spent conversation forbids
@@ -230,11 +239,18 @@ public sealed class CommandPaletteService
     /// <summary>The name and every alias a command answers to.</summary>
     private static IEnumerable<string> NameAndAliasesOf(CommandDescriptor command) => [command.Name, .. command.Aliases ?? []];
 
-    /// <summary>The name as the user types it, followed by the aliases that also reach it.</summary>
-    private string CommandLabel(CommandDescriptor command) =>
-        command.Aliases is { Count: > 0 } aliases
-            ? SanitizeForTerminal($"/{command.Name} ({string.Join(", ", aliases)})")
-            : SanitizeForTerminal($"/{command.Name}");
+    /// <summary>The name as the user types it, the aliases that also reach it, then the options it takes.</summary>
+    private string CommandLabel(CommandDescriptor command)
+    {
+        string aliases = command.Aliases is { Count: > 0 } names ? $" ({string.Join(", ", names)})" : string.Empty;
+
+        // Optional values are bracketed, required ones bare: the line doubles as the spelling to copy
+        string options = command.Options is { Count: > 0 } declared
+            ? " " + string.Join(' ', declared.Select(option => option.Required ? $"{option.Name}:<value>" : $"[{option.Name}:<value>]"))
+            : string.Empty;
+
+        return SanitizeForTerminal($"/{command.Name}{aliases}{options}");
+    }
 
     /// <summary>
     /// Prepares text published by Morgana for the terminal. It arrives from the network, so control characters
@@ -243,9 +259,6 @@ public sealed class CommandPaletteService
     /// </summary>
     private string SanitizeForTerminal(string text) =>
         TerminalCellService.StripControlCharacters(cells.StripVariationSelectors(Emoji.Replace(text)));
-
-    /// <summary>The name typed after the slash; a trailing space is not part of it.</summary>
-    private static string ExtractTypedCommandName(string input) => (IsCommandLine(input) ? input[1..] : input).Trim();
 
     /// <summary>Where the highlight sits for <paramref name="input"/> among <paramref name="matchCount"/> matching commands.</summary>
     private int HighlightedIndexFor(string input, int matchCount)

@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Morgana.Contracts;
 using Morgana.Terminal.Abstractions;
 using Morgana.Terminal.Interfaces;
+using Morgana.Terminal.Messages;
 
 namespace Morgana.Terminal.Services;
 
@@ -63,17 +64,19 @@ public sealed class TerminalCommandRegistryService
             .OrderBy(command => command.Name, StringComparer.OrdinalIgnoreCase)
     ];
 
-    /// <summary>Runs the command named <paramref name="name"/>, here or on Morgana depending on whose it is. A command declaring it must be confirmed runs on nothing less than a <paramref name="confirmed"/> the channel obtained from the user.</summary>
-    /// <exception cref="InvalidOperationException">Thrown when no command answers to the name, or when one that must be confirmed was not.</exception>
-    public Task ExecuteCommandAsync(string name, ITerminalUi ui, bool confirmed, CancellationToken cancellationToken)
+    /// <summary>Runs <paramref name="invocation"/>, here or on Morgana depending on whose command it is. A command declaring it must be confirmed runs on nothing less than a <paramref name="confirmed"/> the channel obtained from the user.</summary>
+    /// <exception cref="InvalidOperationException">Thrown when no command answers to the name, when its options are not what it declares, or when one that must be confirmed was not.</exception>
+    public Task ExecuteCommandAsync(CommandInvocation invocation, ITerminalUi ui, bool confirmed, CancellationToken cancellationToken)
     {
+        string name = invocation.Command.Name;
+
         // A terminal command runs in this process, the one owning the screen and the conversation's lifecycle
         if (terminalCommands.FirstOrDefault(command => AnswersToName(command.Descriptor, name)) is { } terminalCommand)
         {
-            // Nothing on this side of the wire would refuse an unconfirmed run, so the same gate Morgana
-            // applies to its own commands is applied here to the terminal's
-            RefuseUnconfirmed(terminalCommand.Descriptor, confirmed);
-            return terminalCommand.ExecuteAsync(ui, cancellationToken);
+            // Nothing on this side of the wire would refuse a malformed or unconfirmed run, so the gates
+            // Morgana applies to its own commands are applied here to the terminal's
+            RefuseUnrunnable(terminalCommand.Descriptor, invocation.Options, confirmed);
+            return terminalCommand.ExecuteAsync(ui, invocation.Options, cancellationToken);
         }
 
         // Any other name must be one of Morgana's: the palette never offers a name neither side knows
@@ -82,11 +85,17 @@ public sealed class TerminalCommandRegistryService
 
         // Morgana's command is a turn: echoed as the user's line, answered as a reply. The conversation is read
         // now, not when the catalogue came, since /new may have replaced it in between
-        RefuseUnconfirmed(morganaCommand, confirmed);
+        RefuseUnrunnable(morganaCommand, invocation.Options, confirmed);
         return ui.SubmitTurnAsync(
-            $"/{morganaCommand.Name}",
-            () => morganaClientService.RunCommandAsync(session.ConversationId, morganaCommand.Name, confirmed, cancellationToken));
+            EchoOf(morganaCommand, invocation.Options),
+            () => morganaClientService.RunCommandAsync(session.ConversationId, morganaCommand.Name, invocation.Options, confirmed, cancellationToken));
     }
+
+    /// <summary>The line a command puts in the transcript as the user's own: what they typed, spelled canonically.</summary>
+    private static string EchoOf(CommandDescriptor command, IReadOnlyDictionary<string, string> options) =>
+        options.Count == 0
+            ? $"/{command.Name}"
+            : $"/{command.Name} {string.Join(' ', options.Select(option => $"{option.Key}:{option.Value}"))}";
 
     /// <summary>Reads the commands Morgana publishes, keeping those the palette can offer.</summary>
     public async Task LoadMorganaCatalogAsync(CancellationToken cancellationToken)
@@ -114,11 +123,14 @@ public sealed class TerminalCommandRegistryService
         ];
     }
 
-    /// <summary>Refuses <paramref name="command"/> when it asks the user to confirm and <paramref name="confirmed"/> says nobody did.</summary>
-    /// <exception cref="InvalidOperationException">Thrown when the command must be confirmed and was not.</exception>
-    private static void RefuseUnconfirmed(CommandDescriptor command, bool confirmed)
+    /// <summary>Refuses <paramref name="command"/> when its options are not what it declares, or when it asks the user to confirm and <paramref name="confirmed"/> says nobody did.</summary>
+    /// <exception cref="InvalidOperationException">Thrown when the command cannot be run as asked.</exception>
+    private static void RefuseUnrunnable(CommandDescriptor command, IReadOnlyDictionary<string, string> options, bool confirmed)
     {
-        // The user sees this as the command failing, which is what an unanswered question must amount to
+        // The user sees these as the command failing, which is what an unanswered question or a value the
+        // command cannot use must amount to
+        if (command.DescribeOptionProblem(options) is { } optionProblem)
+            throw new InvalidOperationException(optionProblem);
         if (command.RequiresConfirmation && !confirmed)
             throw new InvalidOperationException($"'{command.Name}' runs only on an explicit confirmation.");
     }

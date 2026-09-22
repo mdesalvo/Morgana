@@ -41,23 +41,23 @@ public sealed class CommandConfirmationService
         this.theme = theme;
     }
 
-    /// <summary>The command waiting on an answer, null when the prompt is free.</summary>
-    public CommandDescriptor? PendingCommand { get; private set; }
+    /// <summary>The command waiting on an answer, with the values it would run on; null when the prompt is free.</summary>
+    public CommandInvocation? PendingInvocation { get; private set; }
 
     /// <summary>Tells whether a question is on screen, which suspends every other use of the keyboard while it lasts.</summary>
-    public bool IsPending => PendingCommand is not null;
+    public bool IsPending => PendingInvocation is not null;
 
-    /// <summary>Puts <paramref name="command"/>'s question on screen, with the highlight on No.</summary>
-    public void Ask(CommandDescriptor command)
+    /// <summary>Puts <paramref name="invocation"/>'s question on screen, with the highlight on No.</summary>
+    public void Ask(CommandInvocation invocation)
     {
-        PendingCommand = command;
+        PendingInvocation = invocation;
         yesHighlighted = false;
     }
 
     /// <summary>
     /// Answers the question with <paramref name="key"/>: y and n decide outright, the arrows move the highlight,
     /// Enter takes what is highlighted and Esc walks away. Every other key leaves the question standing.
-    /// Reading <see cref="PendingCommand"/> before the call is the only way to learn which command a
+    /// Reading <see cref="PendingInvocation"/> before the call is the only way to learn which command a
     /// <see cref="ConfirmationOutcome.Confirmed"/> belongs to, since the question is closed by either answer.
     /// </summary>
     public ConfirmationOutcome HandleKey(ConsoleKeyInfo key)
@@ -97,14 +97,20 @@ public sealed class CommandConfirmationService
     /// </summary>
     public List<Markup> RenderQuestion(int width)
     {
-        if (PendingCommand is not { } command)
+        if (PendingInvocation is not { } invocation)
             return [];
 
         // A terminal reporting no width still gets one cell per row
         width = Math.Max(1, width);
 
+        // The values are named in the question because they are usually what makes the gesture irreversible:
+        // which file is about to be written over is the thing to read before answering
+        string values = invocation.Options.Count == 0
+            ? string.Empty
+            : " " + string.Join(' ', invocation.Options.Select(option => $"{option.Key}:{option.Value}"));
+
         // The name alone would not say what is about to happen to the conversation, so the command's own line comes with it
-        string question = SanitizeForTerminal($"⚠ Run /{command.Name}? {command.Description}");
+        string question = SanitizeForTerminal($"⚠ Run /{invocation.Command.Name}{values}? {invocation.Command.Description}");
 
         // The highlighted answer wears the channel's primary inverted, the shape the palette's caret row already has
         string yes = RenderAnswer("Yes", yesHighlighted);
@@ -127,7 +133,7 @@ public sealed class CommandConfirmationService
     /// <summary>Closes the question, answering it with <paramref name="confirmed"/>.</summary>
     private ConfirmationOutcome Close(bool confirmed)
     {
-        PendingCommand = null;
+        PendingInvocation = null;
         return confirmed ? ConfirmationOutcome.Confirmed : ConfirmationOutcome.Declined;
     }
 

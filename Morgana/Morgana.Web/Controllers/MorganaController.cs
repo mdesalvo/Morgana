@@ -423,7 +423,7 @@ public class MorganaController : ControllerBase
     /// </summary>
     /// <returns>
     /// 202 Accepted once the command has run.
-    /// 400 Bad Request when no command answers to the name, or when one that must be confirmed was not.
+    /// 400 Bad Request when no command answers to the name, when its options are not what it declares, or when one that must be confirmed was not.
     /// 404 Not Found if the conversation was never started.
     /// 429 Too Many Requests on the same limits a message meets.
     /// 500 Internal Server Error on failure.
@@ -452,6 +452,15 @@ public class MorganaController : ControllerBase
                 return BadRequest(new { error = "Unknown command", name = request.Name });
             }
 
+            // A value the command never declared, or one it cannot work without, is refused before anything
+            // reaches the conversation: the option is judged by the command's own rule, the one the channel used
+            if (command.Descriptor.DescribeOptionProblem(request.Options) is { } optionProblem)
+            {
+                logger.LogWarning("Command '{CommandName}' was asked for with options it cannot take on conversation {RequestConversationId}: {OptionProblem}",
+                    command.Descriptor.Name, request.ConversationId, optionProblem);
+                return BadRequest(new { error = optionProblem, name = command.Descriptor.Name });
+            }
+
             // A command that cannot be taken back runs only on a Yes the channel says it obtained. Nothing
             // reaches the conversation otherwise: a channel with no confirmation of its own simply cannot run one
             if (command.Descriptor.RequiresConfirmation && !request.Confirmed)
@@ -467,7 +476,7 @@ public class MorganaController : ControllerBase
 
             // The command answers the user itself over the channel, so the HTTP reply only acknowledges it ran
             logger.LogInformation("Running command '{CommandName}' on conversation {RequestConversationId}", command.Descriptor.Name, request.ConversationId);
-            await command.ExecuteAsync(request.ConversationId);
+            await command.ExecuteAsync(request.ConversationId, request.Options ?? new Dictionary<string, string>());
 
             return Accepted(new { conversationId = request.ConversationId, command = command.Descriptor.Name });
         }

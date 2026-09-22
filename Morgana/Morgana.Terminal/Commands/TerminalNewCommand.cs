@@ -30,7 +30,7 @@ public sealed class TerminalNewCommand : TerminalCommand
     public override bool AvailableWhenSpent => true;
 
     /// <inheritdoc />
-    public override Task ExecuteAsync(ITerminalUi ui, CancellationToken cancellationToken) =>
+    public override Task ExecuteAsync(ITerminalUi ui, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken) =>
         // The screen swaps only once the fresh conversation exists; opening it is this command's own business
         ui.ReplaceConversationAsync(OpenFreshConversationAsync, cancellationToken);
 
