@@ -70,8 +70,8 @@ drives the turn through `ITerminalUi` — queue a delivery, own the terminal —
 needs to know how a channel draws anything. It is internal to the repository and
 never published, so its surface answers to Rune and Grimoire alone. Spectre.Console and the JWT
 package arrive with it. Identity stays channel-side in `Messages/RuneChannelProfile.cs`: the
-`ChannelProfile` is the one statement of who Rune is, and the library reads the handshake, the token
-claims and the `Rune:` configuration root from it.
+`ChannelProfile` is the one statement of who Rune is: from it the library reads the handshake, the
+token claims and the `Rune:` configuration root.
 
 ## Terminal UI
 
@@ -93,7 +93,7 @@ pasted line costs one frame rather than one per character.
 **Commands**: a leading `/` opens the shared palette (`Morgana.Terminal`): `/new`, `/exit` and
 whatever Morgana publishes. Esc dismisses it. The list filters as you type and Enter runs the
 highlighted candidate, as in Claude Code. A command declaring `RequiresConfirmation` takes
-the prompt over with a Yes/No question instead of running, and Morgana refuses it without that answer.
+the prompt over with a Yes/No question instead of running; Morgana refuses it without that answer.
 
 A turn that Morgana accepts but never answers releases the prompt after `Rune:ReplyTimeoutSeconds`
 with a red notice, instead of locking the conversation until the process is killed.

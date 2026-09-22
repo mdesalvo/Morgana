@@ -75,7 +75,7 @@ public sealed class CommandConfirmationService
             case ConsoleKey.Enter:
                 return Close(yesHighlighted);
 
-            // Esc is what leaves every other terminal state, and here it can only mean the command was a mistake
+            // Esc is what leaves every other terminal state; here it can only mean the command was a mistake
             case ConsoleKey.Escape:
                 return Close(false);
         }
