@@ -92,7 +92,8 @@ pasted line costs one frame rather than one per character.
 
 **Commands**: a leading `/` opens the shared palette (`Morgana.Terminal`): `/new`, `/exit` and
 whatever Morgana publishes. Esc dismisses it. The list filters as you type and Enter runs the
-highlighted candidate, as in Claude Code.
+highlighted candidate, as in Claude Code. A command declaring `RequiresConfirmation` takes
+the prompt over with a Yes/No question instead of running, and Morgana refuses it without that answer.
 
 A turn that Morgana accepts but never answers releases the prompt after `Rune:ReplyTimeoutSeconds`
 with a red notice, instead of locking the conversation until the process is killed.

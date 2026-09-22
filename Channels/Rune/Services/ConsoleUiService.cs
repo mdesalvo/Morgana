@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Morgana.Terminal.Interfaces;
+using Morgana.Terminal.Messages;
 using Morgana.Terminal.Services;
 using Morgana.Contracts;
 using Spectre.Console;
@@ -174,6 +175,9 @@ public sealed class ConsoleUiService : ITerminalUi
     /// <summary>The dropdown of commands shown under the prompt while the line starts with a slash. Called only under <see cref="renderLock"/>.</summary>
     private readonly CommandPaletteService commandPalette;
 
+    /// <summary>The Yes/No question a command that cannot be taken back must have answered first. Called only under <see cref="renderLock"/>.</summary>
+    private readonly CommandConfirmationService commandConfirmation;
+
     /// <summary>Runs the command the palette resolved.</summary>
     private readonly TerminalCommandRegistryService commandRegistry;
 
@@ -199,7 +203,7 @@ public sealed class ConsoleUiService : ITerminalUi
     private readonly Lock renderLock = new();
 
     /// <summary>Reads the reply deadline and the input cap. Captures the resize watcher, the cell measurement, the command palette and the command registry.</summary>
-    public ConsoleUiService(IConfiguration configuration, IViewportResizeWatcher viewportResizeWatcher, TerminalCellService cells, CommandPaletteService commandPalette, TerminalCommandRegistryService commandRegistry)
+    public ConsoleUiService(IConfiguration configuration, IViewportResizeWatcher viewportResizeWatcher, TerminalCellService cells, CommandPaletteService commandPalette, CommandConfirmationService commandConfirmation, TerminalCommandRegistryService commandRegistry)
     {
         // A non-positive wait would declare every turn lost the instant it is sent, so it falls back too
         int replyTimeoutSeconds = configuration.GetValue<int?>("Rune:ReplyTimeoutSeconds") ?? DefaultReplyTimeoutSeconds;
@@ -207,6 +211,7 @@ public sealed class ConsoleUiService : ITerminalUi
         this.viewportResizeWatcher = viewportResizeWatcher;
         this.cells = cells;
         this.commandPalette = commandPalette;
+        this.commandConfirmation = commandConfirmation;
         this.commandRegistry = commandRegistry;
 
         // Non-positive (or absent) falls back to 500 so a misconfiguration can't lock the prompt shut.
@@ -423,6 +428,11 @@ public sealed class ConsoleUiService : ITerminalUi
                 return;
             }
 
+            // A command waiting on a Yes or a No owns the keyboard: until it is answered nothing else may be
+            // typed, run or exited, so the question cannot be walked away from by accident
+            if (TryHandleConfirmationKey(ctx, key))
+                continue;
+
             // The palette owns the arrows, Tab and Esc while a command line is being typed, so it comes before
             // the scrollback that would otherwise take the arrows and the exit Esc otherwise means
             if (TryHandleCommandPaletteKey(ctx, key.Key))
@@ -572,6 +582,40 @@ public sealed class ConsoleUiService : ITerminalUi
         }
     }
 
+    /// <summary>Gives <paramref name="key"/> to the question a command is waiting on; false when no command is.</summary>
+    private bool TryHandleConfirmationKey(LiveDisplayContext ctx, ConsoleKeyInfo key)
+    {
+        CommandDescriptor? questionedCommand;
+        ConfirmationOutcome outcome;
+        lock (renderLock)
+        {
+            if (!commandConfirmation.IsPending)
+                return false;
+
+            // Which command the answer belongs to is only readable while the question is still open
+            questionedCommand = commandConfirmation.PendingCommand;
+            outcome = commandConfirmation.HandleKey(key);
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+
+        if (questionedCommand is null)
+            return true;
+
+        switch (outcome)
+        {
+            case ConfirmationOutcome.Confirmed:
+                // The command runs beside this loop, so Esc is still read while it waits on Morgana
+                _ = RunCommandAsync(ctx, questionedCommand, confirmed: true);
+                break;
+            case ConfirmationOutcome.Declined:
+                // A command that leaves no trace of having been asked for would read as a swallowed keystroke
+                ShowSystemNotice(ctx, $"/{questionedCommand.Name} was not run", WarningColor);
+                break;
+        }
+        return true;
+    }
+
     /// <summary>Gives the arrows, Tab and Esc to the palette while a command line is typed at rest; false leaves the key to the loop.</summary>
     private bool TryHandleCommandPaletteKey(LiveDisplayContext ctx, ConsoleKey key)
     {
@@ -634,10 +678,34 @@ public sealed class ConsoleUiService : ITerminalUi
             return;
         }
 
+        // A command that cannot be taken back puts its question on the prompt; whether it ever runs is the answer's business
+        if (command.RequiresConfirmation)
+        {
+            AskForConfirmation(ctx, command);
+            return;
+        }
+
+        await RunCommandAsync(ctx, command, confirmed: false);
+    }
+
+    /// <summary>Puts <paramref name="command"/>'s Yes/No question on the prompt, where it stays until it is answered.</summary>
+    private void AskForConfirmation(LiveDisplayContext ctx, CommandDescriptor command)
+    {
+        lock (renderLock)
+        {
+            commandConfirmation.Ask(command);
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+    }
+
+    /// <summary>Runs <paramref name="command"/>, carrying the <paramref name="confirmed"/> answer it asked for; a failure is explained in the transcript.</summary>
+    private async Task RunCommandAsync(LiveDisplayContext ctx, CommandDescriptor command, bool confirmed)
+    {
         try
         {
             // The command decides what happens next through this UI: leave, open a turn or swap the conversation
-            await commandRegistry.ExecuteCommandAsync(command.Name, this, commandCancellation.Token);
+            await commandRegistry.ExecuteCommandAsync(command.Name, this, confirmed, commandCancellation.Token);
         }
         catch (OperationCanceledException) when (commandCancellation.IsCancellationRequested)
         {
@@ -1199,6 +1267,11 @@ public sealed class ConsoleUiService : ITerminalUi
     /// </remarks>
     private List<IRenderable> BuildInputRows(int termWidth)
     {
+        // A command waiting on an answer takes the prompt over entirely: until it is answered there is nothing
+        // else the user can do here, a spent conversation included
+        if (commandConfirmation.IsPending)
+            return [.. commandConfirmation.RenderQuestion(termWidth)];
+
         // Terminal state supersedes everything but a command line being typed, which is how the user gets
         // out of it. Morgana's banner already told the user the dust ran out; here they learn the way on.
         if (conversationDead && !CommandPaletteService.IsCommandLine(currentInput))

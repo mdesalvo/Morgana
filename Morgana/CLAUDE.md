@@ -153,7 +153,7 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
 | `conversation/{id}/resume` | POST | 404 if unknown; read-only, reports the active agent and the dust level |
 | `conversation/{id}/message` | POST | Auth, 404 if unknown, then rate limit, then dust budget, then `UserMessage` |
 | `conversation/{id}/history` | GET | `ConversationHistoryResponse` |
-| `conversation/{id}/command` | POST | Auth, 404 if unknown, 400 for an unknown name, rate limit, dust budget, then runs it; the outcome arrives over the channel |
+| `conversation/{id}/command` | POST | Auth, 404 if unknown, 400 for an unknown name or a missing confirmation, rate limit, dust budget, then runs it; the outcome arrives over the channel |
 | `commands` | GET | `CommandCatalogResponse`: every `ICommand` registered in DI, empty by default |
 | `health` | GET | Actor system liveness |
 

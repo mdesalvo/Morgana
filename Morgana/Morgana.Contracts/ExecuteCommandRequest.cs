@@ -7,7 +7,13 @@ namespace Morgana.Contracts;
 /// </summary>
 /// <param name="ConversationId">Unique identifier of the target conversation</param>
 /// <param name="Name">The command as <see cref="CommandDescriptor.Name"/> or one of its aliases names it, without slash</param>
+/// <param name="Confirmed">
+/// The channel's statement that the user answered Yes to the question a
+/// <see cref="CommandDescriptor.RequiresConfirmation"/> command asks. Left false for every other command,
+/// which is why the gate is fail-closed: a channel that never implemented the question cannot run one
+/// </param>
 public record ExecuteCommandRequest(
     string ConversationId,
-    string Name
+    string Name,
+    bool Confirmed = false
 );

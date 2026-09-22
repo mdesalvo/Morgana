@@ -423,7 +423,7 @@ public class MorganaController : ControllerBase
     /// </summary>
     /// <returns>
     /// 202 Accepted once the command has run.
-    /// 400 Bad Request when no command answers to the name.
+    /// 400 Bad Request when no command answers to the name, or when one that must be confirmed was not.
     /// 404 Not Found if the conversation was never started.
     /// 429 Too Many Requests on the same limits a message meets.
     /// 500 Internal Server Error on failure.
@@ -450,6 +450,15 @@ public class MorganaController : ControllerBase
             {
                 logger.LogWarning("Unknown command '{CommandName}' for conversation {RequestConversationId}", request.Name, request.ConversationId);
                 return BadRequest(new { error = "Unknown command", name = request.Name });
+            }
+
+            // A command that cannot be taken back runs only on a Yes the channel says it obtained. Nothing
+            // reaches the conversation otherwise: a channel with no confirmation of its own simply cannot run one
+            if (command.Descriptor.RequiresConfirmation && !request.Confirmed)
+            {
+                logger.LogWarning("Command '{CommandName}' needs confirmation and none was carried; refusing for conversation {RequestConversationId}",
+                    command.Descriptor.Name, request.ConversationId);
+                return BadRequest(new { error = "Command requires confirmation", name = command.Descriptor.Name });
             }
 
             // Resolved first: an unknown name is refused without counting against the user's limits

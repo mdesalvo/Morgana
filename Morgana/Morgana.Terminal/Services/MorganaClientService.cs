@@ -90,13 +90,13 @@ public sealed class MorganaClientService
         return catalog?.Commands ?? [];
     }
 
-    /// <summary>Runs one of Morgana's published commands on the given conversation; its outcome arrives over the webhook.</summary>
-    public async Task RunCommandAsync(string conversationId, string name, CancellationToken cancellationToken = default)
+    /// <summary>Runs one of Morgana's published commands on the given conversation; its outcome arrives over the webhook. Morgana refuses a command asking to be confirmed unless <paramref name="confirmed"/> carries the user's Yes.</summary>
+    public async Task RunCommandAsync(string conversationId, string name, bool confirmed = false, CancellationToken cancellationToken = default)
     {
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
         HttpResponseMessage response = await httpClient.PostAsJsonAsync(
             $"/api/morgana/conversation/{conversationId}/command",
-            new ExecuteCommandRequest(conversationId, name),
+            new ExecuteCommandRequest(conversationId, name, confirmed),
             cancellationToken);
 
         // A command meets the limits a message meets: Morgana explains a 429 over the webhook just the same

@@ -22,7 +22,9 @@ public sealed class TerminalNewCommand : TerminalCommand
     }
 
     /// <inheritdoc />
-    public override CommandDescriptor Descriptor { get; } = new("new", "Start a fresh conversation with Morgana");
+    public override CommandDescriptor Descriptor { get; } =
+        // The conversation on screen is ended by this, so it is asked for twice before anything is lost
+        new("new", "Start a fresh conversation with Morgana", RequiresConfirmation: true);
 
     /// <summary>A spent conversation is exactly what this command is the way out of.</summary>
     public override bool AvailableWhenSpent => true;
