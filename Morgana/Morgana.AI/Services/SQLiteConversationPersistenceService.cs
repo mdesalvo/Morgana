@@ -438,7 +438,11 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
     }
 
     /// <inheritdoc/>
-    public async Task SaveParticipantMessagesAsync(string conversationId, string agentName, IReadOnlyList<ChatMessage> messages)
+    public async Task<bool> SaveParticipantMessagesAsync(
+        string conversationId,
+        string agentName,
+        IReadOnlyList<ChatMessage> messages,
+        int messagesReadCount)
     {
         // The same identifier the desk's own turns write under: a row is reached by who wrote it and where
         string agentIdentifier = $"{agentName}-{conversationId}";
@@ -462,9 +466,26 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 if (await readCommand.ExecuteScalarAsync() is not byte[] encryptedRow)
                     throw new InvalidOperationException($"No row for '{agentName}' in conversation {conversationId}.");
 
+                // What the row holds now decides whether the caller still describes it: a desk only ever
+                // appends to its own history, so a row that grew shorter is one this caller read in another life
+                string storedRow = Decrypt(encryptedRow);
+                IReadOnlyList<ChatMessage> storedMessages = ReadRowMessages(storedRow, agentName, conversationId);
+                if (storedMessages.Count < messagesReadCount)
+                {
+                    await sqliteTransaction.RollbackAsync();
+                    logger.LogWarning(
+                        "The row of '{AgentName}' in conversation {ConversationId} holds {StoredCount} message(s) where the caller read {ReadCount}; leaving it alone",
+                        agentName, conversationId, storedMessages.Count, messagesReadCount);
+                    return false;
+                }
+
+                // A turn the desk saved while the caller was working is kept exactly as the desk wrote it:
+                // the caller speaks for the messages it read, never for what was said after them
+                List<ChatMessage> rewrittenMessages = [.. messages, .. storedMessages.Skip(messagesReadCount)];
+
                 // Only the history is swapped: a desk's row also carries the context variables its session
                 // holds, which belong to the desk and to nobody correcting its transcript
-                string rewrittenRow = ReplaceRowMessages(Decrypt(encryptedRow), messages, agentName, conversationId);
+                string rewrittenRow = ReplaceRowMessages(storedRow, rewrittenMessages, agentName, conversationId);
 
                 await using SqliteCommand writeCommand = sqliteConnection.CreateCommand();
                 writeCommand.Transaction = sqliteTransaction;
@@ -480,8 +501,10 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 await writeCommand.ExecuteNonQueryAsync();
                 await sqliteTransaction.CommitAsync();
 
-                logger.LogInformation("Rewrote the {Count} message(s) of '{AgentName}' in conversation {ConversationId}",
-                    messages.Count, agentName, conversationId);
+                logger.LogInformation(
+                    "Rewrote the {Count} message(s) of '{AgentName}' in conversation {ConversationId}, keeping {KeptCount} written since",
+                    messages.Count, agentName, conversationId, storedMessages.Count - messagesReadCount);
+                return true;
             }
             catch
             {

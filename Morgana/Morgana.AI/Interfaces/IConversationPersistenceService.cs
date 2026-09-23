@@ -135,7 +135,17 @@ public interface IConversationPersistenceService
     /// <param name="conversationId">Conversation the desk belongs to.</param>
     /// <param name="agentName">The desk as its row names it.</param>
     /// <param name="messages">The desk's messages, in order, as they are to stand on record.</param>
-    Task SaveParticipantMessagesAsync(string conversationId, string agentName, IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> messages);
+    /// <param name="messagesReadCount">
+    /// How many messages the caller had when it composed <paramref name="messages"/>. A desk speaking
+    /// meanwhile appends to its own row, so whatever arrived past that point is kept as it is found; a row
+    /// that instead grew shorter is one the caller no longer describes, so nothing is written.
+    /// </param>
+    /// <returns>True when the row was rewritten; false when the desk left it in a state this caller cannot speak for.</returns>
+    Task<bool> SaveParticipantMessagesAsync(
+        string conversationId,
+        string agentName,
+        IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> messages,
+        int messagesReadCount);
 
     /// <summary>
     /// Ensures the conversation database exists and is initialized with the latest schema.

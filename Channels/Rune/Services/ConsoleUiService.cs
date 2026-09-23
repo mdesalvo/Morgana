@@ -149,6 +149,26 @@ public sealed class ConsoleUiService : ITerminalUi
     private volatile bool awaitingResponse = true;
 
     /// <summary>
+    /// The desk carrying the conversation, null while Morgana holds it herself. Told by the deliveries, kept
+    /// apart from the speaker the header shows: one decides what a palette may offer, the other what colour
+    /// a row is drawn in. A display choice must never decide which commands exist.
+    /// </summary>
+    private volatile string? deskCarryingConversation;
+
+    /// <summary>
+    /// When the turn on the wire opened. A command reporting its progress renews the silence deadline, which
+    /// is what keeps a working command from being declared lost; past this turn's ceiling it stops renewing,
+    /// so a command reporting for ever cannot hold the prompt for ever. Written under <see cref="renderLock"/>.
+    /// </summary>
+    private DateTime turnStartedAtUtc = DateTime.UtcNow;
+
+    /// <summary>
+    /// How long a turn may go on being renewed by what a command reports. Derived from the silence deadline
+    /// rather than configured: a turn worth several deadlines of reporting is a command nobody is waiting for.
+    /// </summary>
+    private readonly TimeSpan reportingCeiling;
+
+    /// <summary>
     /// Latched true when Morgana delivers the terminal dust-exhaustion notice
     /// (<c>ErrorReason == "dust_budget_exhausted"</c>). The conversation is spent: only a command line
     /// allowed on a spent conversation can be typed and the prompt names the two ways out, <c>/new</c>
@@ -236,6 +256,10 @@ public sealed class ConsoleUiService : ITerminalUi
         // A non-positive wait would declare every turn lost the instant it is sent, so it falls back too
         int replyTimeoutSeconds = configuration.GetValue<int?>("Rune:ReplyTimeoutSeconds") ?? DefaultReplyTimeoutSeconds;
         replyTimeout = TimeSpan.FromSeconds(replyTimeoutSeconds > 0 ? replyTimeoutSeconds : DefaultReplyTimeoutSeconds);
+
+        // Five deadlines of a command reporting on itself: long enough for real work on a long conversation,
+        // short enough that a command reporting for ever gives the prompt back to the user the same day
+        reportingCeiling = replyTimeout * 5;
         this.viewportResizeWatcher = viewportResizeWatcher;
         this.cells = cells;
         this.commandPalette = commandPalette;
@@ -356,8 +380,10 @@ public sealed class ConsoleUiService : ITerminalUi
                     {
                         commandProgress.Show(progressFrame);
 
-                        // A command reporting is Morgana working, so the silence the deadline measures starts over
-                        if (awaitingResponse)
+                        // A command reporting is Morgana working, so the silence the deadline measures starts
+                        // over — until the turn outlives its reporting ceiling, past which a command talking to
+                        // itself is left to the deadline like any other turn nobody answers
+                        if (awaitingResponse && DateTime.UtcNow - turnStartedAtUtc < reportingCeiling)
                             StartReplyWatchdog(ctx, uiStopping);
 
                         ctx.UpdateTarget(BuildLayout());
@@ -387,9 +413,17 @@ public sealed class ConsoleUiService : ITerminalUi
                     // turn doesn't render under the outgoing agent's colour. A command's report says nothing
                     // about who is carrying the conversation, so the header is left where the last turn put it.
                     if (!isCommandReport)
+                    {
                         currentSpeaker = message.AgentCompleted || string.IsNullOrWhiteSpace(message.AgentName)
                             ? "Morgana"
                             : messageSpeaker;
+
+                        // A desk that signalled completion has handed the conversation back, so nothing
+                        // addressed at the desk carrying it applies any more; a reply from Morgana says the same
+                        deskCarryingConversation = message.AgentCompleted || !IsSpecializedAgent(message.AgentName)
+                            ? null
+                            : messageSpeaker;
+                    }
 
                     // Refresh the header gauge from ANY metadata-bearing message. The main
                     // assistant response carries the pre-delivery estimate; the trailing
@@ -906,7 +940,17 @@ public sealed class ConsoleUiService : ITerminalUi
     /// one hands the conversation over. Read under <see cref="renderLock"/> by every caller.
     /// </summary>
     private TerminalConversationState ConversationState() =>
-        new(conversationDead, !string.Equals(currentSpeaker, "Morgana", StringComparison.Ordinal));
+        new(conversationDead, deskCarryingConversation is not null);
+
+    /// <summary>
+    /// Opens a turn on the wire: from here the silence deadline is measured, along with how long what a
+    /// command reports may keep renewing it. Must be called under <see cref="renderLock"/>.
+    /// </summary>
+    private void BeginTurn()
+    {
+        awaitingResponse = true;
+        turnStartedAtUtc = DateTime.UtcNow;
+    }
 
     /// <summary>
     /// Gives the prompt back at the end of a turn, however it ended: answered, failed or given up on. A bar
@@ -973,7 +1017,7 @@ public sealed class ConsoleUiService : ITerminalUi
         {
             // Echo and thinking hint go up before the send, so a slow backend still feels answered
             history.Add(new DisplayedMessage("You", echo, UserColor));
-            awaitingResponse = true;
+            BeginTurn();
             scrollOffset = 0; // jump back to the live bottom for the new turn
             ctx.UpdateTarget(BuildLayout());
             ctx.Refresh();
@@ -1022,7 +1066,7 @@ public sealed class ConsoleUiService : ITerminalUi
             // The prompt waits while the conversation is opened, as it waits for a reply
             lock (renderLock)
             {
-                awaitingResponse = true;
+                BeginTurn();
                 scrollOffset = 0;
                 ctx.UpdateTarget(BuildLayout());
                 ctx.Refresh();
@@ -1058,7 +1102,7 @@ public sealed class ConsoleUiService : ITerminalUi
                 ResetScreenForConversation(openedConversationId);
 
                 // The fresh conversation's presentation is a reply like any other and gets the same deadline
-                awaitingResponse = true;
+                BeginTurn();
                 StartReplyWatchdog(ctx, uiStopping);
                 ctx.UpdateTarget(BuildLayout());
                 ctx.Refresh();
@@ -1084,6 +1128,7 @@ public sealed class ConsoleUiService : ITerminalUi
 
         // Header back to base Morgana; the gauge stays hidden until the new conversation reports its dust
         currentSpeaker = "Morgana";
+        deskCarryingConversation = null;
         conversationId = openedConversationId;
         _dustSegment = string.Empty;
 

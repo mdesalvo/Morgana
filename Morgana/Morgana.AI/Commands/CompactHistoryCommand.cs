@@ -144,8 +144,17 @@ public sealed class CompactHistoryCommand : ICommand
         int foldedMessages = await reducer.CompactAsync(history, CancellationToken.None);
 
         // A fold that came to nothing leaves the row alone: rewriting it would date a record that did not change
-        if (foldedMessages > 0)
-            await persistenceService.SaveParticipantMessagesAsync(conversationId, desk, history);
+        if (foldedMessages == 0)
+            return 0;
+
+        // The fold took a call to a model to compose, during which the desk may have served a turn. What it
+        // wrote is kept; what this command read is what it speaks for. A row it can no longer speak for is
+        // left as the desk made it — a saving is never worth a message
+        if (!await persistenceService.SaveParticipantMessagesAsync(conversationId, desk, history, history.Count))
+        {
+            logger.LogWarning("'{Desk}' wrote to conversation {ConversationId} while it was being folded; the fold was dropped", desk, conversationId);
+            return 0;
+        }
 
         // What the summary answers for, which the closing line reports as compacted
         return foldedMessages;
