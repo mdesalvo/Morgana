@@ -148,8 +148,8 @@ public class ConversationSupervisorActor : MorganaActor
             hasReadPersistedActiveAgent = true;
         }
 
-        // With no desk mid-exchange, this phrase is addressed to Morgana herself: she guards it,
-        // she classifies it, she answers it unless she hands it to a desk. So she files it now,
+        // With no agent mid-exchange, this phrase is addressed to Morgana herself: she guards it,
+        // she classifies it, she answers it unless she hands it to an agent. So she files it now,
         // before the guard has even seen it — which is what lets a client that reloads during the
         // guard or the classifier read back what it just said. An agent that was already active
         // saves the phrase into its own session instead, because that session is its record.
@@ -743,7 +743,7 @@ public class ConversationSupervisorActor : MorganaActor
                     response.RecordedTimestamp,
                     response.RichCard));
 
-                // The desk has finished: Morgana takes the conversation back and says so, behind
+                // The agent has finished: Morgana takes the conversation back and says so, behind
                 // the answer above rather than in place of it.
                 if (response.IsCompleted)
                     TellAgentFarewell(ctx.OriginalSender, agentName);
@@ -949,7 +949,7 @@ public class ConversationSupervisorActor : MorganaActor
                     response.RecordedTimestamp,
                     response.RichCard));
 
-                // The desk has finished: Morgana takes the conversation back and says so, behind
+                // The agent has finished: Morgana takes the conversation back and says so, behind
                 // the answer above rather than in place of it.
                 if (response.IsCompleted)
                     TellAgentFarewell(originalSender, agentName);
@@ -1144,11 +1144,11 @@ public class ConversationSupervisorActor : MorganaActor
     }
 
     /// <summary>
-    /// Says the line that closes a desk's engagement and brings the conversation back to Morgana,
-    /// sent right behind that desk's own last answer so the two arrive in the order they were said.
+    /// Says the line that closes an agent's engagement and brings the conversation back to Morgana,
+    /// sent right behind that agent's own last answer so the two arrive in the order they were said.
     /// </summary>
     /// <remarks>
-    /// Only a specialised desk earns one: Morgana finishing a turn of her own is just a turn. Until
+    /// Only a specialised agent earns one: Morgana finishing a turn of her own is just a turn. Until
     /// this existed the line was never spoken at all — each channel inferred that a handover had
     /// happened by reading a transcript that did not contain it, then wrote its own words in
     /// Morgana's mouth. Said here it is hers, dated when it was said, the same in every channel.

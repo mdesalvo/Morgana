@@ -14,9 +14,9 @@ namespace Morgana.Contracts;
 /// </param>
 /// <param name="Options">The values the command accepts at the prompt; a command taking none declares nothing.</param>
 /// <param name="RequiresActiveAgent">
-/// True when the command acts on the desk carrying the conversation, so it is offered only while one is
+/// True when the command acts on the agent carrying the conversation, so it is offered only while one is
 /// carrying it and refused otherwise. What Morgana says in her own voice — a welcome, a refusal, a
-/// disambiguation — belongs to no desk, so a command scoped this way has nothing to act on there.
+/// disambiguation — belongs to no agent, so a command scoped this way has nothing to act on there.
 /// </param>
 public record CommandDescriptor(
     string Name,

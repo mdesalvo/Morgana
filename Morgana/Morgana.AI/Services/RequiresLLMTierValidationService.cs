@@ -45,7 +45,7 @@ public class RequiresLLMTierValidationService : ILLMTierValidationService
         foreach ((string intent, Type agentType) in agentRegistry)
         {
             // The die this agent runs on, fixed for its life. A domain author declares it because only
-            // they know whether the desk needs deep reasoning or merely routine work.
+            // they know whether the agent needs deep reasoning or merely routine work.
             RequiresLLMTierAttribute? tierAttribute =
                 agentType.GetCustomAttribute<RequiresLLMTierAttribute>();
 
@@ -58,7 +58,7 @@ public class RequiresLLMTierValidationService : ILLMTierValidationService
             }
 
             // Declared but unavailable here: the choice was made, this deployment cannot honour it. No
-            // fallback to the other die, since running a desk on a model nobody chose is the same defect.
+            // fallback to the other die, since running an agent on a model nobody chose is the same defect.
             if (!configuredTiers.Contains(tierAttribute.Tier))
                 unconfiguredTier.Add($"{agentType.Name} requires tier '{tierAttribute.Tier}' (intent '{intent}')");
         }

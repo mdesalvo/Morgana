@@ -14,15 +14,15 @@ public static class CardProjection
 {
     /// <summary>The card as a caller meets it at this point of the interview.</summary>
     /// <remarks>
-    /// The card exists from the moment the map names the desk and it describes it with the phrase the
+    /// The card exists from the moment the map names the agent and it describes it with the phrase the
     /// classifier routes on until the territory is settled, which is what it says from then onwards.
     /// One description or the other, never both: the routing phrase says which utterances land here
-    /// and the territory says what this desk answers for, so a caller reading them together would be
+    /// and the territory says what this agent answers for, so a caller reading them together would be
     /// weighing its question against two different things.
     /// <para>
     /// The skills are the agent's own tools, which is what an external consumer of the card reads. A
     /// colleague inside Morgana is offered the description alone: an inventory of functions invites a
-    /// caller to rule out a question the desk has never seen.
+    /// caller to rule out a question the agent has never seen.
     /// </para>
     /// </remarks>
     public static string Render(IntentDraft intent, AgentDraft agent)
@@ -32,7 +32,7 @@ public static class CardProjection
             : intent.Description ?? string.Empty;
 
         string skills = agent.Tools.Count == 0
-            ? "    skills advertised: none — this desk declares no tool of its own"
+            ? "    skills advertised: none — this agent declares no tool of its own"
             : string.Join("\n", agent.Tools.Select(tool => $"    skill '{tool.Name}': {tool.Description}"));
 
         return $"The card '{intent.Name}' presents to anyone who might consult it:\n"

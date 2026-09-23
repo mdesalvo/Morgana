@@ -357,7 +357,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
             await sqliteConnection.OpenAsync();
 
-            // The orchestrator speaks before any desk does — the welcome opens the conversation —
+            // The orchestrator speaks before any agent does — the welcome opens the conversation —
             // so this may be the first write the database ever receives.
             await EnsureDatabaseInitializedAsync(sqliteConnection);
 
@@ -425,12 +425,12 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
 
         await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
 
-        // A desk is addressed by the identifier its own turns write under, so the caller names the desk
+        // An agent is addressed by the identifier its own turns write under, so the caller names the agent
         // and the conversation rather than having to know how the two are spelled together
         sqliteCommand.CommandText = "SELECT agent_session FROM morgana WHERE agent_identifier = @agent_identifier;";
         sqliteCommand.Parameters.AddWithValue("@agent_identifier", $"{agentName}-{conversationId}");
 
-        // A desk that has never taken a turn here holds no history, which the caller reads as nothing to do
+        // An agent that has never taken a turn here holds no history, which the caller reads as nothing to do
         object? storedRow = await sqliteCommand.ExecuteScalarAsync();
         return storedRow is byte[] encryptedRow
             ? ReadRowMessages(Decrypt(encryptedRow), agentName, conversationId)
@@ -444,7 +444,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
         IReadOnlyList<ChatMessage> messages,
         int messagesReadCount)
     {
-        // The same identifier the desk's own turns write under: a row is reached by who wrote it and where
+        // The same identifier the agent's own turns write under: a row is reached by who wrote it and where
         string agentIdentifier = $"{agentName}-{conversationId}";
 
         try
@@ -452,7 +452,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             await using SqliteConnection sqliteConnection = new SqliteConnection(GetConnectionString(conversationId));
             await sqliteConnection.OpenAsync();
 
-            // Read and write are one step: the desk this row belongs to may be writing its own turn
+            // Read and write are one step: the agent this row belongs to may be writing its own turn
             await using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
             try
             {
@@ -461,12 +461,12 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 readCommand.CommandText = "SELECT agent_session FROM morgana WHERE agent_identifier = @agent_identifier;";
                 readCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
 
-                // A desk with no row has no session to correct: creating one here would invent a
+                // An agent with no row has no session to correct: creating one here would invent a
                 // participant the conversation never had
                 if (await readCommand.ExecuteScalarAsync() is not byte[] encryptedRow)
                     throw new InvalidOperationException($"No row for '{agentName}' in conversation {conversationId}.");
 
-                // What the row holds now decides whether the caller still describes it: a desk only ever
+                // What the row holds now decides whether the caller still describes it: an agent only ever
                 // appends to its own history, so a row that grew shorter is one this caller read in another life
                 string storedRow = Decrypt(encryptedRow);
                 IReadOnlyList<ChatMessage> storedMessages = ReadRowMessages(storedRow, agentName, conversationId);
@@ -479,18 +479,18 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                     return false;
                 }
 
-                // A turn the desk saved while the caller was working is kept exactly as the desk wrote it:
+                // A turn the agent saved while the caller was working is kept exactly as the agent wrote it:
                 // the caller speaks for the messages it read, never for what was said after them
                 List<ChatMessage> rewrittenMessages = [.. messages, .. storedMessages.Skip(messagesReadCount)];
 
-                // Only the history is swapped: a desk's row also carries the context variables its session
-                // holds, which belong to the desk and to nobody correcting its transcript
+                // Only the history is swapped: an agent's row also carries the context variables its session
+                // holds, which belong to the agent and to nobody correcting its transcript
                 string rewrittenRow = ReplaceRowMessages(storedRow, rewrittenMessages, agentName, conversationId);
 
                 await using SqliteCommand writeCommand = sqliteConnection.CreateCommand();
                 writeCommand.Transaction = sqliteTransaction;
 
-                // The row keeps the state it had: whether the desk is still working on the conversation
+                // The row keeps the state it had: whether the agent is still working on the conversation
                 // says nothing about its history having been rewritten
                 writeCommand.CommandText =
                     "UPDATE morgana SET agent_session = @agent_session, last_update = @now WHERE agent_identifier = @agent_identifier;";
@@ -929,7 +929,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     /// </summary>
     /// <remarks>
     /// The one place that knows how a row encodes its messages, paired with <see cref="WriteRowMessages"/>.
-    /// A desk's row is the agent session the desk resurrects itself from, written by the agent
+    /// An agent's row is the agent session the agent resurrects itself from, written by the agent
     /// framework; the orchestrator's carries the same outer shape with nothing but messages inside.
     /// Both are read here, so the framework's layout is known at one address instead of wherever a
     /// caller happens to need a transcript.
@@ -968,7 +968,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     /// <summary>
     /// Builds the row of a participant that holds messages and nothing else, which is the
     /// orchestrator alone. Its output is read back by <see cref="ReadRowMessages"/> exactly as a
-    /// desk's row is, so a transcript is assembled without asking who wrote which row.
+    /// agent's row is, so a transcript is assembled without asking who wrote which row.
     /// </summary>
     private static string WriteRowMessages(
         IReadOnlyList<ChatMessage> messages,
@@ -992,7 +992,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 
     /// <summary>
     /// Returns <paramref name="rowJson"/> with its history replaced by <paramref name="messages"/> and
-    /// everything else untouched. A desk's row carries its context state beside its history, so the
+    /// everything else untouched. An agent's row carries its context state beside its history, so the
     /// history is swapped where it sits rather than the row being rebuilt around it.
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown when the row does not hold a history to replace.</exception>
@@ -1005,18 +1005,18 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     {
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
 
-        // The row travels as the session wrote it, so it is taken apart rather than modelled: what a desk
+        // The row travels as the session wrote it, so it is taken apart rather than modelled: what an agent
         // keeps beside its history is its own business and must come out the other side untouched
         JsonNode rowNode = JsonNode.Parse(rowJson)
             ?? throw new InvalidOperationException($"The row of '{authorName}' in conversation {conversationId} is empty.");
 
         // A row without the history the chat provider keeps is one this rewrite cannot be about: writing a
-        // history into it would invent state the desk never had
+        // history into it would invent state the agent never had
         if (rowNode[RowStateBagProperty]?[RowHistoryStateKey] is not JsonObject historyState)
             throw new InvalidOperationException(
                 $"The row of '{authorName}' in conversation {conversationId} holds no history to rewrite.");
 
-        // The messages take the place of the ones that were there, where they were, so the desk reads them
+        // The messages take the place of the ones that were there, where they were, so the agent reads them
         // back as its own history and finds everything else exactly as it left it
         historyState[RowMessagesProperty] = JsonNode.Parse(JsonSerializer.Serialize(messages, jsonSerializerOptions));
         return rowNode.ToJsonString(jsonSerializerOptions);
@@ -1333,13 +1333,13 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         // What this turn actually said, which is not always the text of this one message.
         string messageText = ExtractTextFromMessage(chatMessage);
 
-        // A transcript knows only who spoke: everything not the user is Morgana, whichever desk answered.
+        // A transcript knows only who spoke: everything not the user is Morgana, whichever agent answered.
         ChatMessageType messageType = chatMessage.Role == ChatRole.User
             ? ChatMessageType.User
             : ChatMessageType.Assistant;
 
         // The name a channel prints beside the bubble. The pipeline speaking in its own voice is plain
-        // "Morgana"; a desk is named beside it, so a user sees one assistant with several competences.
+        // "Morgana"; an agent is named beside it, so a user sees one assistant with several competences.
         string displayAgentName = chatMessage.Role == ChatRole.User
             ? "User"
             : string.IsNullOrEmpty(agentName) || agentName.Equals(Constants.Morgana, StringComparison.OrdinalIgnoreCase)

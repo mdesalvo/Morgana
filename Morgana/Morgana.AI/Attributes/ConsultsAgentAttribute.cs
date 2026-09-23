@@ -19,8 +19,8 @@ public class ConsultsAgentAttribute : Attribute
 
     /// <summary>
     /// Instance publishing the colleague, as named in <c>Morgana:AgentToAgent:Partners</c>, or
-    /// <c>null</c> when it is an agent of THIS installation. A name and not an address: whose desk to
-    /// call is the agent author's decision, where that desk runs is the deployment's.
+    /// <c>null</c> when it is an agent of THIS installation. A name and not an address: whose agent to
+    /// call is the agent author's decision, where that agent runs is the deployment's.
     /// </summary>
     public string? Instance { get; }
 

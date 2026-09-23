@@ -277,7 +277,7 @@ public class MorganaAgent : MorganaActor
             // when this agent was already active nobody else saved the phrase: its own row is the
             // only record. A client reloading mid-turn reads it back from here instead of
             // watching it vanish. The row is left active on purpose: a turn interrupted here resumes
-            // at the desk that was working on it.
+            // at the agent that was working on it.
             aiChatHistoryProvider.AppendMessage(aiAgentSession, userMessage);
             await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted: false);
 
@@ -341,7 +341,7 @@ public class MorganaAgent : MorganaActor
                     {
                         // The turn is advancing on something with no text in it — a tool being called
                         // or a colleague being asked. The supervisor's wait counts silence and a
-                        // consultation is a whole turn at another desk: unannounced, it reads as an
+                        // consultation is a whole turn at another agent: unannounced, it reads as an
                         // agent that has died and the user's turn is abandoned while its answer is
                         // still being written.
                         senderRef.Tell(new Records.AgentStillWorking());

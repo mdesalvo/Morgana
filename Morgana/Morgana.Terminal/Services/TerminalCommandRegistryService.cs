@@ -62,7 +62,7 @@ public sealed class TerminalCommandRegistryService
         .. terminalCommands.Where(command => !state.Spent || command.AvailableWhenSpent).Select(command => command.Descriptor)
             .Concat(state.Spent ? [] : morganaCommands)
 
-            // A command acting on the desk carrying the conversation is not offered while Morgana is holding it
+            // A command acting on the agent carrying the conversation is not offered while Morgana is holding it
             // herself: there would be nothing for it to act on, which the user should not have to discover by running it
             .Where(command => !command.RequiresActiveAgent || state.AgentCarriesConversation)
             .OrderBy(command => command.Name, StringComparer.OrdinalIgnoreCase)

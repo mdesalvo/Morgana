@@ -14,7 +14,7 @@ namespace Morgana.AI.Interfaces;
 /// not a turn in it. Its outcome is shown on the channel that asked and leaves no trace, so a conversation read
 /// back later runs from one turn to the next as though no command had been run between them. Whatever a
 /// command writes on the record is therefore the work itself, never a report of it: <c>/compact</c> leaves a
-/// summary in a desk's history because that is how a fold is carried, not to tell anyone it happened.
+/// summary in an agent's history because that is how a fold is carried, not to tell anyone it happened.
 /// </remarks>
 public interface ICommand
 {

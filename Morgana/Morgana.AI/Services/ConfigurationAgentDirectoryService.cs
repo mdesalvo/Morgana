@@ -28,7 +28,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
 
     /// <summary>
     /// How long a colleague's published card is reused before it is read from its publisher again.
-    /// Long, because a card describes a desk and a desk changes when somebody redeploys it; short
+    /// Long, because a card describes an agent and an agent changes when somebody redeploys it; short
     /// enough that a partner which moved is followed without restarting this installation.
     /// </summary>
     private static readonly TimeSpan PeerCardFreshness = TimeSpan.FromMinutes(10);
@@ -86,7 +86,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
 
     /// <summary>
     /// What each colleague published, keyed by the endpoint it was read from, so the conversations
-    /// that follow do not each ask a partner to describe the same desk again.
+    /// that follow do not each ask a partner to describe the same agent again.
     /// </summary>
     private readonly ConcurrentDictionary<string, Lazy<Task<PeerCardReading>>> peerCardReadings = new(StringComparer.OrdinalIgnoreCase);
 
@@ -144,7 +144,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     public async Task<AgentCard?> GetAgentCardAsync(string intent)
     {
         // One projection at a time. Two agents built at once would otherwise each read configuration
-        // and prompts to describe the same desk, so the wait covers the whole projection below.
+        // and prompts to describe the same agent, so the wait covers the whole projection below.
         await cardsLock.WaitAsync();
 
         try
@@ -264,7 +264,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
         try
         {
             // What the colleague published, as read by whoever got there first: a card describes a
-            // desk rather than a conversation, so every conversation reading the same one would be
+            // agent rather than a conversation, so every conversation reading the same one would be
             // asking a partner the same question over and over while its own first turn waits.
             AgentCard? card = await ReadPeerCardAsync(baseAddress, peer.Intent);
 
@@ -452,7 +452,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
             {
                 throw new InvalidOperationException(
                     "A Morgana:AgentToAgent:Partners entry is missing \"Name\". It is what [ConsultsAgent] writes to reach "
-                    + "that partner's desks and the name its own calls arrive under.");
+                    + "that partner's agents and the name its own calls arrive under.");
             }
 
             // Reserved for this installation's own agents, whose consultations are signed with a secret
@@ -607,7 +607,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// <returns>The published card, or <c>null</c> when it could not be read.</returns>
     private async Task<AgentCard?> ReadPeerCardAsync(string baseAddress, string intent)
     {
-        // The endpoint is the identity, not the intent: the same desk name at two systems is two
+        // The endpoint is the identity, not the intent: the same agent name at two systems is two
         // colleagues and the address is what separates them.
         string endpoint = $"{baseAddress}{Constants.AgentToAgent.AgentPathPrefix}/{intent}";
 
@@ -837,21 +837,21 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
             return null;
 
         // The prose the agent was authored with: its ConsultMeFor becomes the card's description and its
-        // tool definitions become the skills, so nothing about this desk is written twice.
+        // tool definitions become the skills, so nothing about this agent is written twice.
         Records.Prompt prompt = await promptResolverService.ResolveAsync(intent);
 
         // Left empty when the server has not bound yet, which is the normal case: cards are projected
         // while the endpoints are still being mapped. Whichever ask first finds an address settles it.
         string? baseAddress = hostAddressService.ResolveBaseAddress();
 
-        // Everything a stranger needs to decide whether to ask this desk and how to be let in.
+        // Everything a stranger needs to decide whether to ask this agent and how to be let in.
         return new AgentCard
         {
             Name = definition.Name,
 
             // The agent's own address to whoever might consult it. The intent description stands in
             // when there is none, but it is a routing phrase written for the classifier — it tells a
-            // caller which user utterances land here, never what this desk answers for.
+            // caller which user utterances land here, never what this agent answers for.
             Description = string.IsNullOrWhiteSpace(prompt.ConsultMeFor) ? definition.Description : prompt.ConsultMeFor,
             Version = LocalCardVersion,
             Skills = ProjectSkills(prompt),
@@ -952,7 +952,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     {
         /// <summary>
         /// Whether this reading has to be taken again. A colleague that answered is trusted far
-        /// longer than one that did not: the first describes a desk, the second an outage.
+        /// longer than one that did not: the first describes an agent, the second an outage.
         /// </summary>
         public bool IsStale
             => DateTimeOffset.UtcNow - ReadAt > (Card is null ? PeerCardUnreachableWindow : PeerCardFreshness);
@@ -1033,7 +1033,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
                 return base.SendAsync(request, cancellationToken);
             }
 
-            // A token minted for this one request and naming the asking desk, now that the destination is
+            // A token minted for this one request and naming the asking agent, now that the destination is
             // known to be the colleague's own.
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", MintToken());
 
@@ -1042,7 +1042,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
 
         /// <summary>Issues a token naming the asking agent, valid for <see cref="TokenLifetime"/>.</summary>
         /// <remarks>
-        /// The subject is the asking agent's intent, so what the callee logs and traces is which desk
+        /// The subject is the asking agent's intent, so what the callee logs and traces is which agent
         /// asked, not merely which installation. Neither claim is read as a permission by either side.
         /// </remarks>
         private string MintToken()

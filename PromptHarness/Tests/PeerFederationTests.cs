@@ -55,7 +55,7 @@ public sealed class PeerFederationTests
     /// <summary>Colleague being consulted, published by <see cref="PartnerName"/>.</summary>
     private const string PeerIntent = "shipping";
 
-    /// <summary>Desk on this side doing the asking, which the minted token names as its subject.</summary>
+    /// <summary>Agent on this side doing the asking, which the minted token names as its subject.</summary>
     private const string CallerIntent = "billing";
 
     /// <summary>Name the standard bearer scheme is declared under on a served card.</summary>
@@ -78,7 +78,7 @@ public sealed class PeerFederationTests
         Assert.Contains(PartnerAudience, token.Audiences);
         Assert.DoesNotContain(LocalAudience, token.Audiences);
 
-        // Which desk asked, so what a partner logs is a colleague rather than merely an installation.
+        // Which agent asked, so what a partner logs is a colleague rather than merely an installation.
         Assert.Equal(CallerIntent, token.Subject);
     }
 
@@ -139,7 +139,7 @@ public sealed class PeerFederationTests
         StubCard(peer, peerAddress, RequireBearer());
         StubConsultationEndpoint(peer);
 
-        // A card describes a desk rather than a conversation. Read per conversation, a partner would
+        // A card describes an agent rather than a conversation. Read per conversation, a partner would
         // be answering the same question over and over while this side's own first turn waits on it.
         ConfigurationAgentDirectoryService directory = BuildDirectory(peerAddress);
         await ResolveAsync(directory);

@@ -125,7 +125,7 @@ The harness owns **no `Morgana:` configuration and no secrets**. It shares `Morg
 `UserSecretsId`, resolves that project's settings plus the shared store and republishes the result
 to the host as environment variables. On top it overrides, per run: a throwaway storage path;
 exporters off; rate and dust limiting off; the guard rail per `Harness:EnableGuardrail`; a random key
-for the `harness` issuer; one partner appended, admitted to a single desk.
+for the `harness` issuer; one partner appended, admitted to a single agent.
 
 The repository must carry the `harness` entry under `Morgana:Authentication:Issuers` or the fixture
 refuses to start — by design: it authenticates as its own channel.

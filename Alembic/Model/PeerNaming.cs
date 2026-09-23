@@ -30,7 +30,7 @@ public static class PeerNaming
     /// </summary>
     /// <remarks>
     /// Case-insensitive on both halves, the way the framework matches an intent and an instance entry.
-    /// The pair and not the intent, because one desk may hold a colleague of the same name at two
+    /// The pair and not the intent, because one agent may hold a colleague of the same name at two
     /// installations, which the framework offers as two distinct functions.
     /// </remarks>
     /// <param name="peer">One colleague.</param>

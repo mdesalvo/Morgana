@@ -8,7 +8,7 @@ namespace Examples.Data;
 /// The single system of record of The Greenhouse &amp; Nursery, shared by every agent of this
 /// plugin: customers, catalog and stock, orders, the Green Care Plan and its clauses, invoices
 /// and their detail lines. One shop, one database — an invoice line points at the very order
-/// that produced it and the customer code a customer gives the accounts desk is the same code
+/// that produced it and the customer code a customer gives the accounts agent is the same code
 /// the greenhouse ledger and the care plan are keyed by.
 /// </summary>
 /// <remarks>
@@ -221,7 +221,7 @@ internal static class GreenhouseDatabaseHelper
     /// <summary>
     /// The shop's ONE backoffice write path onto <c>Invoices</c>/<c>InvoiceLines</c>. Whoever
     /// dispositively charges a customer — the greenhouse ledger confirming an order, the Green
-    /// Care Plan desk enrolling a new plan — calls this instead of writing those two tables
+    /// Care Plan agent enrolling a new plan — calls this instead of writing those two tables
     /// itself, so every agent's writes land in the identical shape: a line joins the customer's
     /// invoice already open (Pending) for the calendar month of <paramref name="chargeDate"/>, or
     /// opens a fresh one if none is. This is deliberately in the shared helper, not owned by

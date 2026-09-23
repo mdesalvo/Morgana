@@ -60,7 +60,7 @@ public class DraftValidationService : IDraftValidationService
         Collect(findings, ValidationCheck.Colleagues, found => ValidateConsultations(draft, found));
 
         // The agent is checked beside the entry that routes to it: what a colleague is published
-        // and what the classifier routes on are two sentences about one desk and only readable
+        // and what the classifier routes on are two sentences about one agent and only readable
         // against each other.
         foreach (AgentDraft agent in draft.Agents)
         {
@@ -272,11 +272,11 @@ public class DraftValidationService : IDraftValidationService
                 "The agent has nothing to say to a colleague consulting it.",
                 "ConsultMeFor is what a colleague reads to decide whether a question is this agent's; without it the card falls back to the intent description, which is a routing phrase written for the classifier.") { Step = InterviewStep.AgentTerritory });
 
-        // The card carries one sentence about this desk and a colleague weighing a question reads
+        // The card carries one sentence about this agent and a colleague weighing a question reads
         // that and nothing else. Two ways it comes out useless are decidable here: written as the
-        // operations the desk performs, which invites a caller to rule its question out, and left as
+        // operations the agent performs, which invites a caller to rule its question out, and left as
         // the phrase the classifier routes on, which says which utterances land here rather than
-        // what this desk answers for.
+        // what this agent answers for.
         string? territory = AgentRows.Plain(agent.ConsultMeFor);
 
         if (!string.IsNullOrWhiteSpace(territory))
@@ -294,7 +294,7 @@ public class DraftValidationService : IDraftValidationService
             if (intent is not null && string.Equals(Compact(territory), Compact(intent.Description), StringComparison.OrdinalIgnoreCase))
                 findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                     "What this agent publishes to a colleague is its own routing description.",
-                    "The intent description tells the classifier which user utterances land here, never what this desk answers for — a caller reading it back learns nothing it could ask about.") { Step = InterviewStep.AgentTerritory });
+                    "The intent description tells the classifier which user utterances land here, never what this agent answers for — a caller reading it back learns nothing it could ask about.") { Step = InterviewStep.AgentTerritory });
         }
 
         if (string.IsNullOrWhiteSpace(agent.Instructions))

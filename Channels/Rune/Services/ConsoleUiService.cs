@@ -149,11 +149,11 @@ public sealed class ConsoleUiService : ITerminalUi
     private volatile bool awaitingResponse = true;
 
     /// <summary>
-    /// The desk carrying the conversation, null while Morgana holds it herself. Told by the deliveries, kept
+    /// The agent carrying the conversation, null while Morgana holds it herself. Told by the deliveries, kept
     /// apart from the speaker the header shows: one decides what a palette may offer, the other what colour
     /// a row is drawn in. A display choice must never decide which commands exist.
     /// </summary>
-    private volatile string? deskCarryingConversation;
+    private volatile string? agentCarryingConversation;
 
     /// <summary>
     /// When the turn on the wire opened. A command reporting its progress renews the silence deadline, which
@@ -418,9 +418,9 @@ public sealed class ConsoleUiService : ITerminalUi
                             ? "Morgana"
                             : messageSpeaker;
 
-                        // A desk that signalled completion has handed the conversation back, so nothing
-                        // addressed at the desk carrying it applies any more; a reply from Morgana says the same
-                        deskCarryingConversation = message.AgentCompleted || !IsSpecializedAgent(message.AgentName)
+                        // An agent that signalled completion has handed the conversation back, so nothing
+                        // addressed at the agent carrying it applies any more; a reply from Morgana says the same
+                        agentCarryingConversation = message.AgentCompleted || !IsSpecializedAgent(message.AgentName)
                             ? null
                             : messageSpeaker;
                     }
@@ -935,12 +935,12 @@ public sealed class ConsoleUiService : ITerminalUi
     }
 
     /// <summary>
-    /// The conversation as the palette must judge it: whether the budget is spent and whether a desk is
-    /// carrying it. The desk is read off the speaker the header names, which goes back to Morgana the moment
+    /// The conversation as the palette must judge it: whether the budget is spent and whether an agent is
+    /// carrying it. The agent is read off the speaker the header names, which goes back to Morgana the moment
     /// one hands the conversation over. Read under <see cref="renderLock"/> by every caller.
     /// </summary>
     private TerminalConversationState ConversationState() =>
-        new(conversationDead, deskCarryingConversation is not null);
+        new(conversationDead, agentCarryingConversation is not null);
 
     /// <summary>
     /// Opens a turn on the wire: from here the silence deadline is measured, along with how long what a
@@ -1128,7 +1128,7 @@ public sealed class ConsoleUiService : ITerminalUi
 
         // Header back to base Morgana; the gauge stays hidden until the new conversation reports its dust
         currentSpeaker = "Morgana";
-        deskCarryingConversation = null;
+        agentCarryingConversation = null;
         conversationId = openedConversationId;
         _dustSegment = string.Empty;
 

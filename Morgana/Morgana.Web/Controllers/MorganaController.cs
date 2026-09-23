@@ -423,7 +423,7 @@ public class MorganaController : ControllerBase
     /// </summary>
     /// <returns>
     /// 202 Accepted once the command has run.
-    /// 400 Bad Request when no command answers to the name, when its options are not what it declares, when one that must be confirmed was not, or when one needing a desk finds none carrying the conversation.
+    /// 400 Bad Request when no command answers to the name, when its options are not what it declares, when one that must be confirmed was not, or when one needing an agent finds none carrying the conversation.
     /// 404 Not Found if the conversation was never started.
     /// 429 Too Many Requests on the same limits a message meets.
     /// 500 Internal Server Error on failure.
@@ -452,13 +452,13 @@ public class MorganaController : ControllerBase
                 return BadRequest(new { error = "Unknown command", name = request.Name });
             }
 
-            // A command acting on the desk carrying the conversation has nothing to act on while Morgana is
-            // holding it herself: what she says in her own voice belongs to no desk, so summarizing or
+            // A command acting on the agent carrying the conversation has nothing to act on while Morgana is
+            // holding it herself: what she says in her own voice belongs to no agent, so summarizing or
             // otherwise reworking "the agent's" side there would reach the presentation and the refusals
             if (command.Descriptor.RequiresActiveAgent
                 && await conversationPersistenceService.GetMostRecentActiveAgentAsync(request.ConversationId) is not { Length: > 0 })
             {
-                logger.LogWarning("Command '{CommandName}' needs a desk carrying conversation {RequestConversationId}, which none is",
+                logger.LogWarning("Command '{CommandName}' needs an agent carrying conversation {RequestConversationId}, which none is",
                     command.Descriptor.Name, request.ConversationId);
                 return BadRequest(new { error = "Command requires an agent carrying the conversation", name = command.Descriptor.Name });
             }
@@ -591,7 +591,7 @@ public class MorganaController : ControllerBase
         }
 
         // A caller is a channel or a colleague, never both. A partner's key was cut to consult this
-        // installation's agents over A2A, where its inbound policy may hold it to a few desks; letting
+        // installation's agents over A2A, where its inbound policy may hold it to a few agents; letting
         // it open a conversation here would hand it every agent back through the classifier, past the
         // very boundary that policy draws.
         if (authResult.IsPartner)

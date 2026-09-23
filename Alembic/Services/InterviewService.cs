@@ -59,7 +59,7 @@ public class InterviewService : IInterviewService
                                       + "people with.",
         [InterviewStep.AgentToolkit] = "This step settles its Toolkit, which gives it everything it can "
                                          + "reach outside the conversation.",
-        [InterviewStep.AgentTerritory] = "This step settles its ConsultMeFor, which gives it what this desk is "
+        [InterviewStep.AgentTerritory] = "This step settles its ConsultMeFor, which gives it what this agent is "
                                          + "the one to be asked about.",
         [InterviewStep.AgentInstructions] = "This step settles its Instructions, which give it how it goes "
                                           + "about the work.",
@@ -947,7 +947,7 @@ public class InterviewService : IInterviewService
 
         // An agent is about its intent from its first pass, not from the moment it is let in. Every
         // mid-interview check reading the pair — the findings, the recap, the colleague rules — was
-        // otherwise looking at an agent no intent could reach and reporting the very desk being
+        // otherwise looking at an agent no intent could reach and reporting the very agent being
         // written as unhandled. Only while it is blank: one out of the client's own configuration
         // arrives with an ID that already reaches it and Morgana matches the two case-insensitively.
         if (interviewState.OnAnEntry && string.IsNullOrWhiteSpace(interviewState.Agent.ID))
@@ -1047,16 +1047,16 @@ public class InterviewService : IInterviewService
     /// The whole of what one pass knows about the trade it is asking about: every pass is a fresh
     /// session and a step that opens knowing only the configuration asks a shopkeeper what a system
     /// ought to be able to check, because nothing on its side of the boundary says there is a shop.
-    /// The desk in hand comes last and nearest the question, since that is what this step is about.
+    /// The agent in hand comes last and nearest the question, since that is what this step is about.
     /// It is given as fact to build questions on, never as prose to copy into a section.
     /// </remarks>
     private string Known(InterviewState interviewState)
     {
         List<KnownFact> trade = [.. (draftStateService.Current?.Learned ?? [])];
-        List<KnownFact> desk = interviewState.OnAnEntry ? [.. interviewState.Agent.Known] : [];
+        List<KnownFact> agent = interviewState.OnAnEntry ? [.. interviewState.Agent.Known] : [];
         List<string> neighbours = Neighbours(interviewState);
 
-        if (trade.Count == 0 && desk.Count == 0 && neighbours.Count == 0)
+        if (trade.Count == 0 && agent.Count == 0 && neighbours.Count == 0)
             return string.Empty;
 
         string told = " What is known about their work — build your questions on it, never ask any of "
@@ -1065,22 +1065,22 @@ public class InterviewService : IInterviewService
         if (trade.Count > 0)
             told += "\nAbout their business: " + Facts(trade);
 
-        if (desk.Count > 0)
-            told += "\nAbout this desk: " + Facts(desk);
+        if (agent.Count > 0)
+            told += "\nAbout this agent: " + Facts(agent);
 
-        // The other desks arrive as subjects rather than as sentences: nine of them read whole would
+        // The other agents arrive as subjects rather than as sentences: nine of them read whole would
         // be forty sentences carried into every question, nearly all about counters this step will
         // never touch. What is listed is enough to know whether one of them bears on the question in
         // hand, which is the only moment the sentences themselves are worth fetching.
         if (neighbours.Count > 0)
-            told += "\nThe other desks of this domain and what is on record about each — call RecallDesk "
+            told += "\nThe other agents of this domain and what is on record about each — call RecallAgent "
                     + "with a name to read one, where what it keeps bears on the question you are about "
                     + "to ask: " + string.Join(" ", neighbours);
 
         // Said and read are not worth the same and the difference is stated once, at the foot of the
         // list: an agent that arrived in an upload carries finished prose and no memory of the
         // conversation behind it, so everything known about it is Alembic's own reading.
-        if (trade.Concat(desk).Any(fact => fact.Inferred))
+        if (trade.Concat(agent).Any(fact => fact.Inferred))
             told += "\nWhat is marked (read, not said) was taken off the configuration they uploaded and "
                     + "nobody has confirmed it. Treat it as a reading that may be wrong: let it be "
                     + "corrected inside a question you were going to ask anyway and never put it to them "
@@ -1097,14 +1097,14 @@ public class InterviewService : IInterviewService
             $"- {fact.Subject}: {fact.Fact}" + (fact.Inferred ? " (read, not said)" : string.Empty)));
 
     /// <summary>
-    /// What is known about every other desk of the domain, named one by one.
+    /// What is known about every other agent of the domain, named one by one.
     /// </summary>
     /// <remarks>
-    /// A desk is only itself next to the ones beside it: what the accounts counter does with a
+    /// An agent is only itself next to the ones beside it: what the accounts counter does with a
     /// delivery query is a fact about the accounts counter and about this one at the same time. A
-    /// step that saw only the desk in hand would ask about it as though the shop had one counter,
+    /// step that saw only the agent in hand would ask about it as though the shop had one counter,
     /// which is how the same ground ends up claimed twice and how a boundary gets drawn against
-    /// nothing. Both the written agents and the entries still ahead, since a desk nobody has opened
+    /// nothing. Both the written agents and the entries still ahead, since an agent nobody has opened
     /// yet is still on the map the client dictated.
     /// </remarks>
     private List<string> Neighbours(InterviewState interviewState)
@@ -1289,7 +1289,7 @@ public class InterviewService : IInterviewService
             [nameof(InterviewTools.ShowWhatIsWritten)] = tools.ShowWhatIsWritten,
             [nameof(InterviewTools.NoteDomainFact)] = tools.NoteDomainFact,
             [nameof(InterviewTools.DropDomainFact)] = tools.DropDomainFact,
-            [nameof(InterviewTools.RecallDesk)] = tools.RecallDesk,
+            [nameof(InterviewTools.RecallAgent)] = tools.RecallAgent,
             [nameof(InterviewTools.SetTraits)] = tools.SetTraits,
             [nameof(InterviewTools.GetExistingIntents)] = tools.GetExistingIntents,
             [nameof(InterviewTools.GetDomainAgents)] = tools.GetDomainAgents,

@@ -124,8 +124,8 @@ public static class Constants
         public const string DisambiguationMessage = "DisambiguationMessage";
 
         /// <summary>
-        /// What Morgana says when a desk finishes and the conversation comes back to her. <c>{0}</c>
-        /// is that desk's display name. Authored here because it is Morgana speaking: every channel
+        /// What Morgana says when an agent finishes and the conversation comes back to her. <c>{0}</c>
+        /// is that agent's display name. Authored here because it is Morgana speaking: every channel
         /// used to carry its own copy and invent when to show it, from a history that never held it.
         /// </summary>
         public const string AgentExitMessage = "AgentExitMessage";
@@ -134,7 +134,7 @@ public static class Constants
         public const string UnrecognizedIntentError = "UnrecognizedIntentError";
 
         /// <summary>
-        /// What a request matching no modelled desk is. It belongs to the classifier and to no domain,
+        /// What a request matching no modelled agent is. It belongs to the classifier and to no domain,
         /// so it is authored beside the vocabulary it closes rather than in any plugin.
         /// </summary>
         public const string ComplementIntentDescription = "ComplementIntentDescription";
@@ -149,7 +149,7 @@ public static class Constants
     /// </summary>
     public static class MessageTypes
     {
-        /// <summary>An answer, from a desk or from Morgana herself.</summary>
+        /// <summary>An answer, from an agent or from Morgana herself.</summary>
         public const string Assistant = "assistant";
 
         /// <summary>Morgana opening a conversation or handing one back, styled apart from an answer.</summary>
@@ -293,7 +293,7 @@ public static class Constants
     public static class Intents
     {
         /// <summary>
-        /// The complement of whatever domain is deployed: what a request matching no modelled desk
+        /// The complement of whatever domain is deployed: what a request matching no modelled agent
         /// is. No agent handles it, it is never offered as a quick reply and never counts as a
         /// collision candidate. Routed all the same, so the router answers with its
         /// unrecognized-intent message rather than the pipeline stalling.

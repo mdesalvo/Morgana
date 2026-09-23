@@ -60,9 +60,9 @@ public sealed class A2AAuthenticationFilter(
 
         // Authentic is not enough here: behind this filter a request reaches an agent's actor
         // directly, with none of the guard, classifier, rate limit and dust budget a channel's own
-        // path goes through. Which desks a caller reaches is drawn from the partner declarations
+        // path goes through. Which agents a caller reaches is drawn from the partner declarations
         // alone, so a channel's key is turned away by the same test that scopes a partner — never
-        // admitted to one desk and refused at another for two different reasons.
+        // admitted to one agent and refused at another for two different reasons.
         if (authentication.Issuer is null || !admittedIssuers.Contains(authentication.Issuer))
         {
             logger.LogWarning(

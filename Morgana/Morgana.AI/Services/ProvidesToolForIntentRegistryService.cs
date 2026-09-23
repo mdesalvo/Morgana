@@ -88,21 +88,21 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
                     return [];
                 }
             })
-            // Concrete tools that declare which desk they belong to. A tool without the attribute
+            // Concrete tools that declare which agent they belong to. A tool without the attribute
             // belongs to no agent, so nothing could ever reach it.
             .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaTool)))
             .Where(t => t.GetCustomAttribute<ProvidesToolForIntentAttribute>() != null);
 
         foreach (Type toolType in toolTypes)
         {
-            // Which desk this tool belongs to, in the author's own words. Never absent: a type that does
+            // Which agent this tool belongs to, in the author's own words. Never absent: a type that does
             // not declare one was filtered out above, so the filter is the guard.
             ProvidesToolForIntentAttribute declaration = toolType.GetCustomAttribute<ProvidesToolForIntentAttribute>()!;
 
             // Lowercased on the way in, since an intent is typed by hand here and in agents.json.
             string intent = declaration.Intent.ToLowerInvariant();
 
-            // The first tool found keeps the desk. Overwriting would hand the intent to whichever
+            // The first tool found keeps the agent. Overwriting would hand the intent to whichever
             // assembly the runtime happened to enumerate last.
             if (registry.TryGetValue(intent, out Type? value))
             {
@@ -173,11 +173,11 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
             Console.WriteLine($"  ⚠️  Tool '{registry.GetValueOrDefault(intent)?.Name ?? "unknown"}' provides intent '{intent}' but no agent handles this intent.");
         }
 
-        // The pairs that hold. Printed too, so the absence of a desk from this list is itself readable.
+        // The pairs that hold. Printed too, so the absence of an agent from this list is itself readable.
         foreach (string intent in agentIntents.Intersect(toolIntents, StringComparer.OrdinalIgnoreCase))
             Console.WriteLine($"✅ Tool Registry: Agent '{intent}' → Tool '{registry.GetValueOrDefault(intent)?.Name ?? "unknown"}'");
 
-        // Two tools claiming one desk, which unlike the warnings above is a defect somebody must fix:
+        // Two tools claiming one agent, which unlike the warnings above is a defect somebody must fix:
         // one of the two is unreachable, whichever assembly order decided it.
         if (registrationErrors.Count > 0)
         {

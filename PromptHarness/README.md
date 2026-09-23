@@ -58,7 +58,7 @@ that already exists for production reasons.
 
 **One proposition, one act.** A judge is a model and every extra thing asked of it in one line is
 another thing it can get wrong — so a proposition names a single act, in a single clause. A list of
-synonyms for the same act is fine (`another desk, office or department`); a conjunction of two
+synonyms for the same act is fine (`another agent, office or department`); a conjunction of two
 distinct claims is not (`says it was billed **and** invites them to ask about the invoice` — two
 propositions) and neither is a comparative (`describes the invoice **rather than** merely saying it
 was billed`), which asks for a judgement of proportion instead of a fact. A proposition needing a
@@ -96,7 +96,7 @@ On top of that it overrides, per run:
 | `RateLimiting:Enabled`, `DustLimiting:Enabled` → false | a repeated-run suite would throttle itself |
 | `ActorSystem:EnableGuardrail` → `Harness:EnableGuardrail` | off by default: no scenario asserts moderation and every guarded turn is an extra LLM call |
 | `Authentication:Issuers[harness]` → appended | name and key both declared per run, the key minted fresh and never written to disk: an instrument's channel identity is not something a deployed installation should carry in its own configuration |
-| `AgentToAgent:Partners[harness-peer]` → appended | a partner admitted to `inventory` and to no other desk, declared per run rather than shipped: it exists to be turned away, which is the only way `AgentCardTests` can observe that the A2A gate is shut *selectively* and not merely shut. Its key, its reach and its ceiling are one entry |
+| `AgentToAgent:Partners[harness-peer]` → appended | a partner admitted to `inventory` and to no other agent, declared per run rather than shipped: it exists to be turned away, which is the only way `AgentCardTests` can observe that the A2A gate is shut *selectively* and not merely shut. Its key, its reach and its ceiling are one entry |
 
 The repository carries nothing on the harness's behalf: the instance under test declares the
 channels it actually serves and the harness appends its own issuer past them, so an installation
@@ -142,7 +142,7 @@ per proposition on structurally-passing turns. The default is 5 runs.
 
 **`P994E` is not an arbitrary string.** The example plugin models one shop, *The Greenhouse &
 Nursery*, on one SQLite system of record shipped as a seed (`Examples/Data/Examples.db`) and every
-desk of that shop keys on the customer code: `P994E` is the seeded customer who has invoices, a
+agent of that shop keys on the customer code: `P994E` is the seeded customer who has invoices, a
 Green Care Plan and past orders. A code nobody is registered under is refused by Billing, by the
 plan and by any attempt to raise an order — so a scenario that hands the agent an invented code is
 measuring a "customer not found" answer, not the behaviour it names. The seed's calendar is rebased

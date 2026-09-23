@@ -51,7 +51,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     public string IssuerKey { get; private set; } = string.Empty;
 
     /// <summary>
-    /// Partner this run declares, admitted to <see cref="ScopedPartnerAgent"/> and to no other desk,
+    /// Partner this run declares, admitted to <see cref="ScopedPartnerAgent"/> and to no other agent,
     /// so the scope half of the A2A gate has something to actually refuse.
     /// </summary>
     /// <remarks>
@@ -80,7 +80,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     public int ScopedPartnerIndex { get; private set; }
 
     /// <summary>
-    /// A second partner, admitted to the same desk but allowed to open exactly one conversation an
+    /// A second partner, admitted to the same agent but allowed to open exactly one conversation an
     /// hour, so the ceiling can be observed doing something rather than merely being declared.
     /// </summary>
     /// <remarks>
@@ -121,7 +121,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <summary>The name that installation knows this one by, which its gate expects in the token.</summary>
     public const string FederatedCallerName = "front";
 
-    /// <summary>The desk the other installation publishes and this one has no books for.</summary>
+    /// <summary>The agent the other installation publishes and this one has no books for.</summary>
     public const string FederatedPeerAgent = "inventory";
 
     /// <summary>The colleague as it appears in the asking agent's own tool list.</summary>
@@ -212,8 +212,8 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
         // Step 4b: on a federation run, the other installation goes up first. It inherits everything
         // just published — provider, keys, tiers — and is told only what makes it somebody else: its
-        // own address and storage, the shipped domain instead of the one desk above and the partner
-        // declaration admitting this instance to the desk it publishes.
+        // own address and storage, the shipped domain instead of the one agent above and the partner
+        // declaration admitting this instance to the agent it publishes.
         if (Options.FederatedPeer)
             Peer = await FederatedPeerHost.StartAsync(federatedPeerPort, BuildFederatedPeerEnvironment(), Options.StartupTimeoutSeconds);
 
@@ -389,7 +389,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{harnessIssuerIndex}__SymmetricKey", IssuerKey);
 
         // One partner appended past the last index the host's own appsettings uses: admitted to a
-        // single desk, which is the only way the scope half of the A2A gate can be observed at all —
+        // single agent, which is the only way the scope half of the A2A gate can be observed at all —
         // refusing an unauthenticated call proves the door is shut, not that it is shut selectively.
         // Its key, its reach and its ceiling are one entry, so there is no second half to forget.
         ScopedPartnerIndex = Configuration.GetSection("Morgana:AgentToAgent:Partners").GetChildren().Count();
@@ -428,7 +428,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         FreePartnerIndex = MeteredPartnerIndex + 1;
 
         // On a federation run the instance under test knows one more partner — a whole other
-        // installation — and its own domain is replaced by the single desk that holds a colleague
+        // installation — and its own domain is replaced by the single agent that holds a colleague
         // there. Off, none of this is written and the instance is the one every other group drives.
         if (Options.FederatedPeer)
             ApplyFederationEnvironment();
@@ -603,11 +603,11 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// Tells the instance under test that it holds one desk of its own and one colleague abroad.
+    /// Tells the instance under test that it holds one agent of its own and one colleague abroad.
     /// </summary>
     /// <remarks>
     /// The domain is <em>replaced</em> rather than added to: loading the shipped one beside it would
-    /// give this instance a greenhouse of its own, and a desk that can answer from its own books
+    /// give this instance a greenhouse of its own, and an agent that can answer from its own books
     /// proves nothing about a colleague across the wire. What is left is one agent whose only
     /// competence is having that colleague.
     /// </remarks>
@@ -615,7 +615,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     {
         // The one domain this instance holds on this run, in place of the shipped one. Replaced and
         // not added to: an installation reads one agents.json, so two deployed domains would race
-        // and the desk declaring a colleague abroad would be the one whose intents went missing.
+        // and the agent declaring a colleague abroad would be the one whose intents went missing.
         Environment.SetEnvironmentVariable("Morgana__Plugins__Directories__0", "federation-plugins");
 
         // The partner the plugin's own attribute names. Its address is where the other installation
@@ -629,7 +629,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{FederatedPartnerIndex}__OutboundPolicy__Enabled", "true");
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{FederatedPartnerIndex}__OutboundPolicy__Issuer", FederatedCallerName);
 
-        // The two partners declared above this one are admitted to a desk the shipped domain
+        // The two partners declared above this one are admitted to an agent the shipped domain
         // publishes and this domain does not, which startup refuses. They belong to the groups that
         // drive the instance as itself, so on this run they are parked rather than corrected.
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__Enabled", "false");
@@ -641,7 +641,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
     /// <summary>
     /// Tells the other installation who it is: the shipped domain, and one partner admitted to the
-    /// desk this instance has no books for.
+    /// agent this instance has no books for.
     /// </summary>
     /// <remarks>
     /// Everything else it needs — provider, tiers, keys, the switches this suite turns off — it
@@ -656,7 +656,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             ["Morgana__Plugins__Directories__0"] = "plugins",
 
             // The same slot, read from the other side of the relationship: this installation admits
-            // the caller instead of consulting it, and only at the desk it actually publishes.
+            // the caller instead of consulting it, and only at the agent it actually publishes.
             [$"Morgana__AgentToAgent__Partners__{FederatedPartnerIndex}__Name"] = FederatedCallerName,
             [$"Morgana__AgentToAgent__Partners__{FederatedPartnerIndex}__SymmetricKey"] = FederationKey,
             [$"Morgana__AgentToAgent__Partners__{FederatedPartnerIndex}__Enabled"] = "true",
@@ -668,7 +668,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
                 ScopedPartnerConversationsPerHour.ToString(),
 
             // The two partners the instance under test declares for its own groups are admitted to
-            // that same desk, which this installation does publish — they stay parked all the same,
+            // that same agent, which this installation does publish — they stay parked all the same,
             // since nothing on this run signs as either of them.
             [$"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__Enabled"] = "false",
             [$"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__Enabled"] = "false",

@@ -85,7 +85,7 @@ public sealed class HarnessOptions
     /// <remarks>
     /// Off by default and process-wide when on, exactly like the guard rail and the dust budget: it
     /// replaces the whole domain of the instance under test with the one agent that holds a colleague
-    /// abroad, so every other group would find its own desks missing. Run it on its own:
+    /// abroad, so every other group would find its own agents missing. Run it on its own:
     /// <c>Harness__FederatedPeer=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"</c>
     /// </remarks>
     public bool FederatedPeer { get; init; }

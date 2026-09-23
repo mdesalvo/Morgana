@@ -589,7 +589,7 @@ public class MorganaAgentAdapter
 
         int maxRoundsPerTurn = configuration.GetValue("Morgana:AgentToAgent:MaxRoundsPerTurn", 4);
 
-        // Every colleague is reached for at once. They are independent desks, often at different
+        // Every colleague is reached for at once. They are independent agents, often at different
         // systems. Asking them one after another would make this agent's first turn wait out the
         // sum of whatever they each take — a partner that is slow would set the pace for all of them.
         (string FunctionName, AIFunction Function, string Territory)?[] resolvedColleagues =
@@ -645,7 +645,7 @@ public class MorganaAgentAdapter
                 ? await a2aPeerAgent.CreateSessionAsync(conversationId)
                 : await peerAgent.CreateSessionAsync();
 
-            // The desk being consulted, named in the guards' refusals to the model and in the trace of
+            // The agent being consulted, named in the guards' refusals to the model and in the trace of
             // the exchange.
             string peerIntent = attribute.Intent;
 
@@ -825,7 +825,7 @@ public class MorganaAgentAdapter
             if (envelope?.DustConsumed is not > 0)
                 return peerResponse;
 
-            // Attributed to the desk and system that burned it, so the spend stays readable as a bill.
+            // Attributed to the agent and system that burned it, so the spend stays readable as a bill.
             if (peerSystem is not null)
                 await dustLimitService.ChargeAsync(
                     conversationId, envelope.DustConsumed.Value, $"{Constants.Morgana} ({peerIntent}@{peerSystem})");
@@ -851,7 +851,7 @@ public class MorganaAgentAdapter
     /// Intents are authored freely while a function name is not, so anything outside the permitted
     /// alphabet folds to an underscore; the prefix keeps a colleague visibly distinct from the
     /// agent's own tools in the model's tool list. A colleague published by an instance carries that
-    /// instance in the name, so an agent may hold two colleagues handling the same intent at two desks
+    /// instance in the name, so an agent may hold two colleagues handling the same intent at two agents
     /// without them colliding. Public because the startup check must derive the same name: instance
     /// names are written by people and two of them can fold to one function, which is a startup error
     /// rather than something to discover when the provider rejects the tool list.

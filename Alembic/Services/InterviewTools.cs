@@ -231,7 +231,7 @@ public class InterviewTools
     /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
     /// <see cref="ConsultMeForMarker"/>. Written by the same pass and from the same scope, because it
     /// is that scope addressed to a different reader: a colleague deciding whether a question is this
-    /// desk's. So it names a territory and never a list of what the agent can do — a caller handed an
+    /// agent's. So it names a territory and never a list of what the agent can do — a caller handed an
     /// inventory rules questions out instead of asking them. Short by nature, which is why the shape
     /// it reports against is tighter than the Target's.
     /// </remarks>
@@ -522,17 +522,17 @@ public class InterviewTools
     }
 
     /// <summary>
-    /// How much one desk, or the business itself, may hold on record before it has to be tidied.
+    /// How much one agent, or the business itself, may hold on record before it has to be tidied.
     /// </summary>
     /// <remarks>
-    /// Not a storage limit: every step opens holding what is known about the desk in hand, so a
+    /// Not a storage limit: every step opens holding what is known about the agent in hand, so a
     /// record that grows without end is a step reading forty sentences to ask one question. Reaching
     /// it is a sign two facts have become one fact said twice, which is the pass's own to settle.
     /// </remarks>
     private const int MemoryCeiling = 14;
 
     /// <summary>
-    /// Where what is found out is kept: with the desk in hand, or with the business.
+    /// Where what is found out is kept: with the agent in hand, or with the business.
     /// </summary>
     /// <remarks>
     /// The map and the closing step both stand on the whole domain, and the closing step stands past
@@ -550,7 +550,7 @@ public class InterviewTools
     /// Every pass is a fresh session that reads what is written and nothing else, so what the client
     /// says about their trade is spent the moment the turn ends unless it is written down here. That
     /// is how a step three passes later comes to ask a shopkeeper what a system ought to be able to
-    /// check: it never knew there was a shop. A fact about the desk in hand is kept with that agent
+    /// check: it never knew there was a shop. A fact about the agent in hand is kept with that agent
     /// and travels with it; a fact about the business itself is kept for the whole domain. Neither
     /// ever enters the domain — this is what the questions are made of, not what the agents say.
     /// </remarks>
@@ -617,44 +617,44 @@ public class InterviewTools
     }
 
     /// <summary>
-    /// Hands back what is on record about one of the other desks of this domain.
+    /// Hands back what is on record about one of the other agents of this domain.
     /// </summary>
     /// <remarks>
-    /// A step opens holding what is known about its own desk and the business, and only the subjects
-    /// the other desks keep — a domain of nine desks read whole would be forty sentences carried into
+    /// A step opens holding what is known about its own agent and the business, and only the subjects
+    /// the other agents keep — a domain of nine agents read whole would be forty sentences carried into
     /// every question, most of them about counters this step will never touch. This is how the rest
     /// is reached, when a subject listed there turns out to bear on the question in hand: whether the
     /// counter next door already takes deposits decides whether this one should.
     /// </remarks>
-    /// <param name="intent">The desk's own intent name, as the opening message lists it.</param>
-    public string RecallDesk(string intent)
+    /// <param name="intent">The agent's own intent name, as the opening message lists it.</param>
+    public string RecallAgent(string intent)
     {
         string named = intent.Trim();
         DomainDraft draft = draftStateService.Current ?? new DomainDraft();
 
-        // A desk of this domain is an entry of the map, written or still ahead — the same universe
+        // An agent of this domain is an entry of the map, written or still ahead — the same universe
         // the opening message lists its neighbours from. Resolved against the written agents alone,
-        // this denied the existence of every desk the interview had not reached yet, which is most
+        // this denied the existence of every agent the interview had not reached yet, which is most
         // of them on the first agent and all of them the client had just dictated.
         IntentDraft? entry = draft.Intents.Concat(interviewState.Map).FirstOrDefault(candidate =>
             string.Equals(candidate.Name, named, StringComparison.OrdinalIgnoreCase));
 
-        AgentDraft? desk = draft.Agents.FirstOrDefault(agent =>
+        AgentDraft? agent = draft.Agents.FirstOrDefault(agent =>
             string.Equals(agent.ID, named, StringComparison.OrdinalIgnoreCase));
 
-        if (entry is null && desk is null)
-            return $"There is no desk called '{named}' in this domain. The opening message lists them by name.";
+        if (entry is null && agent is null)
+            return $"There is no agent called '{named}' in this domain. The opening message lists them by name.";
 
-        // What the map says about a desk nobody has opened yet is the whole of what is known about
+        // What the map says about an agent nobody has opened yet is the whole of what is known about
         // it, and it is worth more than a refusal: the routing sentence the client dictated is the
         // only account of that counter anybody has.
-        if (desk is null || desk.Known.Count == 0)
+        if (agent is null || agent.Known.Count == 0)
             return string.IsNullOrWhiteSpace(entry?.Description)
                 ? $"Nothing is on record about how they work at '{named}'."
                 : $"Nothing is on record yet about how they work at '{named}'. The map describes it as: {entry.Description}";
 
         return $"What is known about '{named}':\n"
-               + string.Join("\n", desk.Known.Select(known =>
+               + string.Join("\n", agent.Known.Select(known =>
                    $"- {known.Subject}: {known.Fact}" + (known.Inferred ? " (read off their configuration, not said)" : string.Empty)));
     }
 
@@ -1006,7 +1006,7 @@ public class InterviewTools
     /// </summary>
     /// <remarks>
     /// The classifier reads this description against every other one, so it is the map's to write
-    /// and the map writes it before any agent exists. Once a desk has stated the competence it is
+    /// and the map writes it before any agent exists. Once an agent has stated the competence it is
     /// the one to answer for, the same subject is known in sharper words than the map could reach,
     /// and the routing that lands a user here can be said with them. Only this entry's own
     /// description: every other one is settled and reading them back is what keeps this one distinct.
@@ -1091,7 +1091,7 @@ public class InterviewTools
                    InterviewStep.DomainMapper => $"the first of the {interviewState.Map.Count} kinds of request you mapped, taken one at a time until every one has its agent.",
                    InterviewStep.AgentTarget => "how this agent should sound to the people who write in.",
                    InterviewStep.AgentPersonality => "the toolkit — what this agent has to reach for outside the conversation.",
-                   InterviewStep.AgentToolkit => "what this desk is the one to be asked about, which is what another desk of theirs reads before it asks.",
+                   InterviewStep.AgentToolkit => "what this agent is the one to be asked about, which is what another agent of theirs reads before it asks.",
                    InterviewStep.AgentTerritory => "the agent's own instructions and the way it presents what its tools return.",
                    InterviewStep.DomainColleagues => "nothing — the domain is finished and they land on it whole, to read, weigh and take away.",
                    _ => "the agent joins the domain and they can review or export it."

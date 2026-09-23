@@ -91,13 +91,13 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
 
 ## [0.29.0] - 2026-09-01
 ### 🎯 Major Feature: Cross-Agent collaboration over A2A
-Morgana now speaks the **A2A protocol** end to end. An agent declares `[ConsultsAgent("billing")]` and that colleague becomes a `consult_{intent}` function in its tool list; the agent so named is published at `/a2a/{intent}` with a well-known agent card. The card is open, so anything that speaks A2A can discover it; the endpoint behind it is authenticated and Morgana signs its own peer traffic under the `morgana` issuer. So an agent stops sending the user back and forth between desks and collaborates with the collegue _behind the hood_ over the A2A protocol.
+Morgana now speaks the **A2A protocol** end to end. An agent declares `[ConsultsAgent("billing")]` and that colleague becomes a `consult_{intent}` function in its tool list; the agent so named is published at `/a2a/{intent}` with a well-known agent card. The card is open, so anything that speaks A2A can discover it; the endpoint behind it is authenticated and Morgana signs its own peer traffic under the `morgana` issuer. So an agent stops sending the user back and forth between agents and collaborates with the collegue _behind the hood_ over the A2A protocol.
 Colleagues live in this instance — a remote peer is not declarable yet (see Future Enablement) but the wire is the standard one at both ends. It is **opt-in and pays for itself only where declared**: nothing is published for an agent nobody consults and an agent that neither declares a colleague nor is named as one gets no endpoint, no policy and no extra tokens. A domain without `[ConsultsAgent]` anywhere, or a deployment with `Morgana:AgentToAgent:Enabled` false, is exactly the Morgana it was before.
 
 ### ✨ Added
 - **`[ConsultsAgent("intent")]`** — a new attribute naming the colleagues an agent may consult, opening Morgana to A2A collaboration
 - **A2A endpoints** — `/a2a/{intent}` and its `/.well-known/agent-card.json`, stood up only for the agents somebody declares as a colleague and authenticated like the rest of the API
-- **`ConsultMeFor`** — a new section of domain prompt, stating the territory this desk answers for. It is what a colleague reads before asking
+- **`ConsultMeFor`** — a new section of domain prompt, stating the territory this agent answers for. It is what a colleague reads before asking
 - **`PeerConsultation`** — a new global policy: what is licit to ask a colleague and how one answers
 
 ### 📦 Dependencies

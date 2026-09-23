@@ -14,7 +14,7 @@ namespace Alembic.Services;
 /// </summary>
 /// <remarks>
 /// Once per upload rather than once per step, and over the whole domain rather than one agent at a
-/// time: what the shop does is one subject and a desk read on its own invites the same sentence
+/// time: what the shop does is one subject and an agent read on its own invites the same sentence
 /// being written about three of them. The interview then opens on any entry of it already knowing
 /// the trade, which is the whole point — the client may go straight to correcting the third agent
 /// and never pass through the ones that would have taught Alembic anything.
@@ -99,7 +99,7 @@ public class DomainReadingService : IDomainReadingService
     /// </summary>
     /// <remarks>
     /// Only onto agents that hold nothing yet: a reading must never come in over what the client
-    /// themselves said about a desk in an earlier sitting of the same file.
+    /// themselves said about an agent in an earlier sitting of the same file.
     /// </remarks>
     private static int Keep(DomainDraft draft, Reading reading)
     {
@@ -112,15 +112,15 @@ public class DomainReadingService : IDomainReadingService
                 written++;
             }
 
-        foreach (DeskReading desk in reading.Desks ?? [])
+        foreach (AgentReading agentReading in reading.Agents ?? [])
         {
             AgentDraft? agent = draft.Agents.FirstOrDefault(candidate =>
-                string.Equals(candidate.ID, desk.Intent, StringComparison.OrdinalIgnoreCase));
+                string.Equals(candidate.ID, agentReading.Intent, StringComparison.OrdinalIgnoreCase));
 
             if (agent is null || agent.Known.Count > 0)
                 continue;
 
-            foreach (ReadFact fact in Sentences(desk.Facts))
+            foreach (ReadFact fact in Sentences(agentReading.Facts))
             {
                 agent.Known.Add(new KnownFact(fact.Subject.Trim(), fact.Fact.Trim(), Inferred: true));
                 written++;
@@ -148,7 +148,7 @@ public class DomainReadingService : IDomainReadingService
     {
         StringBuilder described = new StringBuilder();
 
-        described.AppendLine("# The desks of this domain, by the intent name each answers to");
+        described.AppendLine("# The agents of this domain, by the intent name each answers to");
         described.AppendLine();
 
         foreach (AgentDraft agent in draft.Agents)
@@ -183,13 +183,13 @@ public class DomainReadingService : IDomainReadingService
         return described.ToString();
     }
 
-    /// <summary>What the reader answers: the shop as a whole, then each desk of it.</summary>
+    /// <summary>What the reader answers: the shop as a whole, then each agent of it.</summary>
     private sealed record Reading(
         [property: JsonPropertyName("business")] List<ReadFact>? Business,
-        [property: JsonPropertyName("desks")] List<DeskReading>? Desks);
+        [property: JsonPropertyName("agents")] List<AgentReading>? Agents);
 
-    /// <summary>One desk of the answer, named by the intent it answers to.</summary>
-    private sealed record DeskReading(
+    /// <summary>One agent of the answer, named by the intent it answers to.</summary>
+    private sealed record AgentReading(
         [property: JsonPropertyName("intent")] string Intent,
         [property: JsonPropertyName("facts")] List<ReadFact>? Facts);
 

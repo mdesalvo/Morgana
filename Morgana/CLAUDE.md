@@ -74,15 +74,15 @@ is the exception and is described below, having none.
 
 ### Examples (the plugin, no `CLAUDE.md` of its own)
 
-**One organization, several desks**: not three unrelated demos but three roles inside one fictional
+**One organization, several agents**: not three unrelated demos but three roles inside one fictional
 shop, *The Greenhouse & Nursery*, on **one** SQLite system of record (`Data/Examples.db`, seeded and
-rebased onto the current month at deployment). Each desk writes only its own competence, yet the
-books stay consistent whichever desk closes a sale: `InventoryAgent`'s order confirmation and
+rebased onto the current month at deployment). Each agent writes only its own competence, yet the
+books stay consistent whichever agent closes a sale: `InventoryAgent`'s order confirmation and
 `ContractAgent`'s plan enrolment are the two dispositive actions and both bill through the identical
 shared path, `GreenhouseDatabaseHelper.BillCustomerAsync`. `BillingAgent` is read-only — every line
-on its books was written by another desk.
+on its books was written by another agent.
 
-The plugin also exists to show two structural things: the desks **consult each other**
+The plugin also exists to show two structural things: the agents **consult each other**
 (`Billing → Inventory`, `Contract → Billing`, deliberately a chain and not a triangle, so the
 refusal of a second hop is exercised too) and `MonkeyAgent` is the one agent whose tools are
 acquired at runtime from an MCP server, with an empty context vocabulary.
@@ -142,7 +142,7 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
    The wait here is a budget on **silence**, not on the turn: every chunk renews it and so does
    `AgentStillWorking` on updates carrying no text — without it a consultation reads as a dead agent
 5. Back to **Idle** — the response is forwarded through `IChannelService`, followed by Morgana's own
-   closing line (`AgentExitMessage`) when a desk signalled completion
+   closing line (`AgentExitMessage`) when an agent signalled completion
 
 ### REST API
 
@@ -219,7 +219,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `LLMGuardRailService` | `IGuardRailService` | LLM policy check. **Fails open** |
 | `LLMPresenterService` | `IPresenterService` | Welcome message and quick replies. Never throws |
 | `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or alias is fatal |
-| `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active desk's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
+| `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json`, domain from `agents.json`. Throws if one ID is declared in both |
 | `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads: the fenced two-layer prompt, tool descriptions, the per-turn held-context declaration, the colleagues declaration, a colleague's question |
 | `ConfigurationAgentDirectoryService` | `IAgentDirectoryService` | Both halves of A2A discovery, plus `ValidateTrustConfiguration` and `ValidatePublishedAddress` |

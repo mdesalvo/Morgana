@@ -141,7 +141,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // carried by the policy every peer-capable agent reads and repeating it per colleague would
         // pay for it once per function. The card's skills are deliberately absent too — an inventory
         // of the colleague's functions is what a caller audits to rule a question out and what falls
-        // to that desk is the colleague's own to state.
+        // to that agent is the colleague's own to state.
         => Task.FromResult(peerCard.Description ?? "");
 
     /// <inheritdoc />

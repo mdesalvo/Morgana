@@ -5,7 +5,7 @@ namespace PromptHarness.Infrastructure.Wiring;
 
 /// <summary>
 /// The second Morgana of a federation run: another installation, in another process, publishing the
-/// desk the instance under test consults across the wire.
+/// agent the instance under test consults across the wire.
 /// </summary>
 /// <remarks>
 /// <para>A process rather than a second host beside the first, because configuration reaches a

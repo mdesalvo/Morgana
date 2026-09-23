@@ -136,7 +136,7 @@ public sealed class AgentCardTests
     public async Task Agent_endpoint_refuses_a_partner_not_admitted_to_it(string closedAgent)
     {
         // Proven to be a colleague and still turned away: this run declares its partner as admitted
-        // to one desk and every other desk of the same installation answers it exactly as it answers
+        // to one agent and every other agent of the same installation answers it exactly as it answers
         // a stranger. That is what lets an installation be opened to a customer, a
         // supplier or a marketplace one agent at a time, rather than whole or not at all.
         HttpResponseMessage response = await CallAgentAsync(

@@ -38,8 +38,8 @@ public static class A2APublicationExtensions
     public static WebApplicationBuilder AddMorganaA2A(this WebApplicationBuilder builder, IReadOnlyCollection<string> publishedIntents)
     {
         // Answering a colleague runs a real agent against a real model, so the wait is a turn's and
-        // not a request timeout in disguise — but the innermost step of one: the desk that answers
-        // gives up before the desk that asked, which gives up before the turn carrying them both.
+        // not a request timeout in disguise — but the innermost step of one: the agent that answers
+        // gives up before the agent that asked, which gives up before the turn carrying them both.
         TimeSpan a2aRequestTimeout = Records.PeerConsultationWaits.From(builder.Configuration).Callee;
 
         // The session store has to know which system is asking and the hosting layer hands it only a

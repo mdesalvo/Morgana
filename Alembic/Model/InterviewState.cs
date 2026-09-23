@@ -36,9 +36,9 @@ public enum InterviewStep
     AgentToolkit,
 
     /// <summary>
-    /// What this desk is characteristically the one to be asked about: its ConsultMeFor and nothing
-    /// else. After the toolkit, because a territory a desk's own tools do not cover is a promise
-    /// another desk would hold it to.
+    /// What this agent is characteristically the one to be asked about: its ConsultMeFor and nothing
+    /// else. After the toolkit, because a territory an agent's own tools do not cover is a promise
+    /// another agent would hold it to.
     /// </summary>
     AgentTerritory,
 
@@ -446,11 +446,11 @@ public sealed class InterviewState
     }
 
     /// <summary>
-    /// What the desk answers for, written for another desk to read.
+    /// What the agent answers for, written for another agent to read.
     /// </summary>
     /// <remarks>
     /// Every agent owes one, edges or none: it is published on the agent's card and read by whoever
-    /// holds a question this desk might settle, so an agent without one is finished for itself and
+    /// holds a question this agent might settle, so an agent without one is finished for itself and
     /// mute to everyone else — and nothing inside the domain can notice the silence.
     /// </remarks>
     private List<string> MissingTerritory() =>
