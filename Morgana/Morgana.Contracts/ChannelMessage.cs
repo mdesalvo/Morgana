@@ -87,6 +87,14 @@ public sealed class ChannelMessage
     public int? FadingMessageDurationSeconds { get; init; } = 10;
 
     /// <summary>
+    /// How far the command that sent this message has got. Present only on a frame a running command
+    /// pushes: it reports work rather than saying something, so a channel drawing it keeps it out of the
+    /// transcript and lets the next frame replace it. Null on everything said in the conversation.
+    /// </summary>
+    [JsonPropertyName("progress")]
+    public CommandProgress? Progress { get; init; }
+
+    /// <summary>
     /// Conversation-level metadata (e.g. remaining dust budget). Characterises the
     /// conversation, not this message. Null when no such metadata is available.
     /// </summary>

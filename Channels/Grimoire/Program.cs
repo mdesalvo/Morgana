@@ -126,6 +126,8 @@ builder.Services.AddHttpClient("Morgana", client =>
 // TerminalCommandRegistryService  : discovers the terminal commands at startup and runs them; Morgana's join later.
 // CommandPaletteService           : the command dropdown under the prompt, dressed in Grimoire's palette theme.
 // CommandConfirmationService      : the Yes/No a command that cannot be taken back is held by, in the same theme.
+// CommandProgressService          : the bar a running command reports itself through, in the same theme.
+// CommandOptionPromptService      : the form asking for the values a command declares, in the same theme.
 // MorganaStartRetryPolicy         : paces the attempts to open the conversation while Morgana is unreachable.
 // ConversationLifecycleService    : opens the conversation, waits for the presentation, runs the UI and ends it.
 // WebhookReceiverService          : thin dispatcher invoked by the /morgana-hook endpoint.
@@ -140,7 +142,9 @@ builder.Services.AddSingleton<TerminalSessionService>();
 builder.Services.AddSingleton<TerminalCommandRegistryService>();
 builder.Services.AddSingleton<CommandPaletteService>();
 builder.Services.AddSingleton<CommandConfirmationService>();
-builder.Services.AddSingleton(GrimoireCommandPaletteTheme.Instance);
+builder.Services.AddSingleton<CommandProgressService>();
+builder.Services.AddSingleton<CommandOptionPromptService>();
+builder.Services.AddSingleton(GrimoireCommandTheme.Instance);
 builder.Services.AddSingleton<MorganaStartRetryPolicy>();
 builder.Services.AddSingleton<ConversationLifecycleService>();
 builder.Services.AddSingleton<WebhookReceiverService>();

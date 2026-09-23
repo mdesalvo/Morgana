@@ -8,8 +8,8 @@ namespace Morgana.Terminal.Services;
 /// The Yes/No question that stands between a command declaring <see cref="CommandDescriptor.RequiresConfirmation"/>
 /// and its running: which command is waiting on an answer, which option is highlighted, what the keys mean and how
 /// the question is drawn. Every TTY channel asks it the same way, in its own
-/// <see cref="Messages.CommandPaletteTheme"/> — a channel with no quick replies included, since this is local chrome
-/// and not a capability. It holds the pending question, so every call must come under the render lock of the UI.
+/// <see cref="Messages.CommandTheme"/>, a channel with no quick replies included: the question is drawn by the
+/// channel itself, never a capability it had to declare. It holds the pending question, so every call must come under the render lock of the UI.
 /// </summary>
 public sealed class CommandConfirmationService
 {
@@ -29,13 +29,13 @@ public sealed class CommandConfirmationService
     private readonly TerminalCellService cells;
 
     /// <summary>The channel's primary colour, which marks the highlighted answer.</summary>
-    private readonly CommandPaletteTheme theme;
+    private readonly CommandTheme theme;
 
     /// <summary>Whether the highlight sits on Yes; No holds it until the user moves it, so a stray Enter runs nothing.</summary>
     private bool yesHighlighted;
 
     /// <summary>Captures the cell measurement and the channel's theme.</summary>
-    public CommandConfirmationService(TerminalCellService cells, CommandPaletteTheme theme)
+    public CommandConfirmationService(TerminalCellService cells, CommandTheme theme)
     {
         this.cells = cells;
         this.theme = theme;

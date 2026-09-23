@@ -13,12 +13,18 @@ namespace Morgana.Contracts;
 /// Yes/No answer before running it and Morgana refuses a run that does not carry one.
 /// </param>
 /// <param name="Options">The values the command accepts at the prompt; a command taking none declares nothing.</param>
+/// <param name="RequiresActiveAgent">
+/// True when the command acts on the desk carrying the conversation, so it is offered only while one is
+/// carrying it and refused otherwise. What Morgana says in her own voice — a welcome, a refusal, a
+/// disambiguation — belongs to no desk, so a command scoped this way has nothing to act on there.
+/// </param>
 public record CommandDescriptor(
     string Name,
     string Description,
     IReadOnlyList<string>? Aliases = null,
     bool RequiresConfirmation = false,
-    IReadOnlyList<CommandOption>? Options = null)
+    IReadOnlyList<CommandOption>? Options = null,
+    bool RequiresActiveAgent = false)
 {
     /// <summary>
     /// What is wrong with <paramref name="options"/> for this command, as a line the user can read; null when

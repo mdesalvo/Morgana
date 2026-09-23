@@ -194,6 +194,47 @@ public sealed class MorganaChatReducer : IChatReducer
     }
 
     /// <summary>
+    /// Folds everything but the most recent <c>targetCount</c> messages into a summary now, whatever the
+    /// history's size; it reports how many were folded, zero when there is nothing behind the kept window.
+    /// The hysteresis buffer is deliberately not consulted: it exists to keep turns from paying for a
+    /// reduction they did not ask for, while this fold is asked for.
+    /// </summary>
+    /// <remarks>
+    /// The summary is stamped onto the caller's own message, exactly as an automatic reduction stamps it,
+    /// so a session saved after this call carries the fold: from then on its window is measured from the
+    /// stamp and every message behind it is what the summary stands for. Nothing is removed from the record.
+    /// </remarks>
+    public async Task<int> CompactAsync(IEnumerable<ChatMessage> messages, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+
+        // An earlier fold leaves its own mark in the history, so what this one may fold is what has been
+        // said since that mark, never the whole conversation again
+        SummarizedConversation conversation = SummarizedConversation.FromChatMessages(messages);
+
+        // No buffer above the target here: the buffer exists to spare turns a reduction nobody asked for,
+        // while this fold was asked for. So the cut falls wherever the kept window ends, tool exchanges
+        // and the opening user turn respected exactly as they are on an automatic reduction
+        int indexOfFirstMessageToKeep = conversation.FindIndexOfFirstMessageToKeep(targetCount, thresholdCount: 0);
+
+        // Everything said so far already fits the window a turn would be given: folding would spend a call
+        // to summarize what the model was going to read whole anyway
+        if (indexOfFirstMessageToKeep <= 0)
+            return 0;
+
+        logger.LogInformation(
+            "MorganaChatReducer folding {SummarizedCount} message(s) on demand, keeping {KeptCount}",
+            indexOfFirstMessageToKeep, conversation.UnsummarizedCount - indexOfFirstMessageToKeep);
+
+        // The summary lands on the message it stands behind, in the caller's own history: that mark is the
+        // whole effect of this call: it is what a later reduction reads to know where its window opens
+        await conversation.ResummarizeAsync(chatClient, indexOfFirstMessageToKeep, SummarizationPrompt, cancellationToken);
+
+        // What the summary now answers for, which is what the user is told was compacted
+        return indexOfFirstMessageToKeep;
+    }
+
+    /// <summary>
     /// A conversation split into running summary, leading system message and messages not yet summarized.
     /// Ported from <c>SummarizingChatReducer.SummarizedConversation</c>; only
     /// <see cref="ToSummarizerChatMessages"/> departs from it.

@@ -119,6 +119,25 @@ public interface IConversationPersistenceService
         IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> messages);
 
     /// <summary>
+    /// Reads the messages a desk's row holds, as they were written, for work done on the record rather
+    /// than inside a turn. Empty when that desk has no row in this conversation.
+    /// </summary>
+    /// <param name="conversationId">Conversation the desk belongs to.</param>
+    /// <param name="agentName">The desk as its row names it, such as "billing".</param>
+    Task<IReadOnlyList<Microsoft.Extensions.AI.ChatMessage>> LoadParticipantMessagesAsync(string conversationId, string agentName);
+
+    /// <summary>
+    /// Writes <paramref name="messages"/> back as that desk's messages, leaving the rest of its row exactly
+    /// as it was: a desk's session carries context state beside its history, none of which is the caller's
+    /// to rewrite. Implementations must refuse a row that does not exist rather than create one, since a
+    /// desk with no row has no session to correct.
+    /// </summary>
+    /// <param name="conversationId">Conversation the desk belongs to.</param>
+    /// <param name="agentName">The desk as its row names it.</param>
+    /// <param name="messages">The desk's messages, in order, as they are to stand on record.</param>
+    Task SaveParticipantMessagesAsync(string conversationId, string agentName, IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> messages);
+
+    /// <summary>
     /// Ensures the conversation database exists and is initialized with the latest schema.
     /// Idempotent - safe to call multiple times (checks PRAGMA user_version).
     /// </summary>

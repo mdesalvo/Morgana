@@ -8,7 +8,7 @@ namespace Morgana.Terminal.Services;
 /// <summary>
 /// The dropdown that opens under the prompt as soon as the line starts with <c>/</c>: which commands match,
 /// which one is highlighted, what Tab completes to, what Enter runs and how it is drawn. Every TTY channel
-/// gets the same palette in its own <see cref="CommandPaletteTheme"/>. It holds the highlight, so every call
+/// gets the same palette in its own <see cref="CommandTheme"/>. It holds the highlight, so every call
 /// must come under the render lock of the UI that owns it.
 /// </summary>
 public sealed class CommandPaletteService
@@ -35,7 +35,7 @@ public sealed class CommandPaletteService
     private readonly TerminalCellService cells;
 
     /// <summary>The channel's primary colour, which marks the highlighted candidate.</summary>
-    private readonly CommandPaletteTheme theme;
+    private readonly CommandTheme theme;
 
     /// <summary>The line the highlight was placed against; any other line puts it back on the first match.</summary>
     private string highlightedForInput = string.Empty;
@@ -44,7 +44,7 @@ public sealed class CommandPaletteService
     private int highlightedCommandIndex;
 
     /// <summary>Captures the registry, the cell measurement and the channel's theme.</summary>
-    public CommandPaletteService(TerminalCommandRegistryService registry, TerminalCellService cells, CommandPaletteTheme theme)
+    public CommandPaletteService(TerminalCommandRegistryService registry, TerminalCellService cells, CommandTheme theme)
     {
         this.registry = registry;
         this.cells = cells;
@@ -55,10 +55,10 @@ public sealed class CommandPaletteService
     public static bool IsCommandLine(string input) => input.StartsWith('/');
 
     /// <summary>Moves the highlight by <paramref name="rowOffset"/> rows, wrapping at both ends.</summary>
-    public void MoveHighlight(string input, bool conversationSpent, int rowOffset)
+    public void MoveHighlight(string input, TerminalConversationState state, int rowOffset)
     {
         // The highlight walks the list the user is looking at, the commands the typed name still matches
-        IReadOnlyList<CommandDescriptor> matchingCommands = FindMatchingCommands(input, conversationSpent);
+        IReadOnlyList<CommandDescriptor> matchingCommands = FindMatchingCommands(input, state);
         if (matchingCommands.Count == 0)
             return;
 
@@ -69,10 +69,10 @@ public sealed class CommandPaletteService
     }
 
     /// <summary>The line Tab turns <paramref name="input"/> into: the highlighted command spelled out. Null when no command matches.</summary>
-    public string? CompleteHighlightedCommand(string input, bool conversationSpent)
+    public string? CompleteHighlightedCommand(string input, TerminalConversationState state)
     {
         // Tab completes to the highlighted row, the one the user sees selected, not necessarily the first
-        IReadOnlyList<CommandDescriptor> matchingCommands = FindMatchingCommands(input, conversationSpent);
+        IReadOnlyList<CommandDescriptor> matchingCommands = FindMatchingCommands(input, state);
 
         if (matchingCommands.Count == 0)
             return null;
@@ -88,9 +88,9 @@ public sealed class CommandPaletteService
     }
 
     /// <summary>The command Enter runs for <paramref name="input"/>; null when nothing matches it.</summary>
-    public CommandDescriptor? ResolveCommandToRun(string input, bool conversationSpent)
+    public CommandDescriptor? ResolveCommandToRun(string input, TerminalConversationState state)
     {
-        IReadOnlyList<CommandDescriptor> matchingCommands = FindMatchingCommands(input, conversationSpent);
+        IReadOnlyList<CommandDescriptor> matchingCommands = FindMatchingCommands(input, state);
         if (matchingCommands.Count == 0)
             return null;
 
@@ -102,11 +102,11 @@ public sealed class CommandPaletteService
     public string MatchColor => theme.PrimaryColor;
 
     /// <summary>Tells whether <paramref name="input"/> names an available command exactly, by its name or an alias.</summary>
-    public bool NamesCommandExactly(string input, bool conversationSpent)
+    public bool NamesCommandExactly(string input, TerminalConversationState state)
     {
         // The line is drawn in the match colour at this point, as Claude Code does: what was typed is a command in itself
         string typedCommandName = CommandLineParser.ParseName(input);
-        return IsCommandLine(input) && registry.ListAvailableCommands(conversationSpent)
+        return IsCommandLine(input) && registry.ListAvailableCommands(state)
             .Any(command => NameAndAliasesOf(command).Any(name => string.Equals(name, typedCommandName, StringComparison.OrdinalIgnoreCase)));
     }
 
@@ -114,7 +114,7 @@ public sealed class CommandPaletteService
     /// Draws the palette for <paramref name="input"/>: the matching commands, then the controls line. Every row is one
     /// markup of at most <paramref name="width"/> cells, so the UI can budget them against its history.
     /// </summary>
-    public List<Markup> RenderPalette(string input, bool conversationSpent, int width)
+    public List<Markup> RenderPalette(string input, TerminalConversationState state, int width)
     {
         // A terminal reporting no width still gets one cell per row
         width = Math.Max(1, width);
@@ -128,7 +128,7 @@ public sealed class CommandPaletteService
         }
 
         // The line typed is the user's own, but it is echoed back through Markup, so it is cleaned all the same
-        IReadOnlyList<CommandDescriptor> matchingCommands = FindMatchingCommands(input, conversationSpent);
+        IReadOnlyList<CommandDescriptor> matchingCommands = FindMatchingCommands(input, state);
         if (matchingCommands.Count == 0)
             return [new Markup($"[{DescriptionStyle}]{Markup.Escape(cells.Trunc(SanitizeForTerminal($"no command matches {input}"), width))}[/]")];
 
@@ -155,7 +155,7 @@ public sealed class CommandPaletteService
     }
 
     /// <summary>The available commands matching the name typed so far, best match first.</summary>
-    private IReadOnlyList<CommandDescriptor> FindMatchingCommands(string input, bool conversationSpent)
+    private IReadOnlyList<CommandDescriptor> FindMatchingCommands(string input, TerminalConversationState state)
     {
         // Empty right after the slash; an empty name matches every command, so a bare slash lists them all
         string typedCommandName = CommandLineParser.ParseName(input);
@@ -164,7 +164,7 @@ public sealed class CommandPaletteService
         // The registry already left out what a spent conversation forbids
         return
         [
-            .. registry.ListAvailableCommands(conversationSpent)
+            .. registry.ListAvailableCommands(state)
                 .Select((command, order) => (Command: command, Order: order, Rank: RankCommandAgainstTypedName(command, typedCommandName)))
                 .Where(candidate => candidate.Rank >= 0)
                 .OrderBy(candidate => candidate.Rank)

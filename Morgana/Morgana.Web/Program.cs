@@ -4,6 +4,7 @@ using Akka.DependencyInjection;
 using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
+using Morgana.AI.Commands;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using Morgana.AI.Telemetry;
@@ -130,6 +131,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
 // - ICommandRegistryService: Publishes the commands channels may run on a conversation (every ICommand registered here)
 // - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI, OpenAI), two-tier Efficiency/Performance via each provider's Tiers{} configuration
+// - ICommand: 
 
 builder.Services.AddSingleton<IMCPClientRegistryService, MCPClientRegistryService>();
 builder.Services.AddSingleton<IToolRegistryService, ProvidesToolForIntentRegistryService>();
@@ -144,6 +146,7 @@ builder.Services.AddSingleton<IGuardRailService, LLMGuardRailService>();
 builder.Services.AddSingleton<IClassifierService, LLMClassifierService>();
 builder.Services.AddSingleton<IPresenterService, LLMPresenterService>();
 builder.Services.AddSingleton<ICommandRegistryService, CommandRegistryService>();
+builder.Services.AddSingleton<ICommand, CompactHistoryCommand>();
 builder.Services.AddSingleton<ILLMService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();

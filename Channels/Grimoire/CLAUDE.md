@@ -101,7 +101,9 @@ waits for the keystrokes to stop, so a pasted line costs one frame rather than o
 **Commands**: a leading `/` opens the shared palette (`Morgana.Terminal`): `/new`, `/exit` and
 whatever Morgana publishes. Esc dismisses it. The list filters as you type and Enter runs the
 highlighted candidate, as in Claude Code. It opens over pending quick replies too. A command declaring `RequiresConfirmation` takes
-the prompt over with a Yes/No question instead of running; Morgana refuses it without that answer.
+the prompt over with a Yes/No question instead of running; Morgana refuses it without that answer. A command
+reporting progress draws its bar where the prompt is, replacing the frame before it; none of it is kept
+in the transcript.
 
 A turn that goes silent for `Grimoire:ReplyTimeoutSeconds` releases the prompt with a red notice.
 The deadline measures **silence, not duration**: every chunk arms it again from zero and a

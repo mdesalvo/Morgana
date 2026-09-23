@@ -1,5 +1,6 @@
 ﻿using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Agents.AI;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.AI;
@@ -408,6 +409,89 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to append orchestrator messages to conversation {ConversationId}", conversationId);
+            throw;
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<IReadOnlyList<ChatMessage>> LoadParticipantMessagesAsync(string conversationId, string agentName)
+    {
+        // A conversation nobody has spoken in has no database, which is not a failure to report
+        if (!ConversationExists(conversationId))
+            return [];
+
+        await using SqliteConnection sqliteConnection = new SqliteConnection(GetConnectionString(conversationId));
+        await sqliteConnection.OpenAsync();
+
+        await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+
+        // A desk is addressed by the identifier its own turns write under, so the caller names the desk
+        // and the conversation rather than having to know how the two are spelled together
+        sqliteCommand.CommandText = "SELECT agent_session FROM morgana WHERE agent_identifier = @agent_identifier;";
+        sqliteCommand.Parameters.AddWithValue("@agent_identifier", $"{agentName}-{conversationId}");
+
+        // A desk that has never taken a turn here holds no history, which the caller reads as nothing to do
+        object? storedRow = await sqliteCommand.ExecuteScalarAsync();
+        return storedRow is byte[] encryptedRow
+            ? ReadRowMessages(Decrypt(encryptedRow), agentName, conversationId)
+            : [];
+    }
+
+    /// <inheritdoc/>
+    public async Task SaveParticipantMessagesAsync(string conversationId, string agentName, IReadOnlyList<ChatMessage> messages)
+    {
+        // The same identifier the desk's own turns write under: a row is reached by who wrote it and where
+        string agentIdentifier = $"{agentName}-{conversationId}";
+
+        try
+        {
+            await using SqliteConnection sqliteConnection = new SqliteConnection(GetConnectionString(conversationId));
+            await sqliteConnection.OpenAsync();
+
+            // Read and write are one step: the desk this row belongs to may be writing its own turn
+            await using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
+            try
+            {
+                await using SqliteCommand readCommand = sqliteConnection.CreateCommand();
+                readCommand.Transaction = sqliteTransaction;
+                readCommand.CommandText = "SELECT agent_session FROM morgana WHERE agent_identifier = @agent_identifier;";
+                readCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
+
+                // A desk with no row has no session to correct: creating one here would invent a
+                // participant the conversation never had
+                if (await readCommand.ExecuteScalarAsync() is not byte[] encryptedRow)
+                    throw new InvalidOperationException($"No row for '{agentName}' in conversation {conversationId}.");
+
+                // Only the history is swapped: a desk's row also carries the context variables its session
+                // holds, which belong to the desk and to nobody correcting its transcript
+                string rewrittenRow = ReplaceRowMessages(Decrypt(encryptedRow), messages, agentName, conversationId);
+
+                await using SqliteCommand writeCommand = sqliteConnection.CreateCommand();
+                writeCommand.Transaction = sqliteTransaction;
+
+                // The row keeps the state it had: whether the desk is still working on the conversation
+                // says nothing about its history having been rewritten
+                writeCommand.CommandText =
+                    "UPDATE morgana SET agent_session = @agent_session, last_update = @now WHERE agent_identifier = @agent_identifier;";
+                writeCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
+                writeCommand.Parameters.AddWithValue("@agent_session", Encrypt(rewrittenRow));
+                writeCommand.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+
+                await writeCommand.ExecuteNonQueryAsync();
+                await sqliteTransaction.CommitAsync();
+
+                logger.LogInformation("Rewrote the {Count} message(s) of '{AgentName}' in conversation {ConversationId}",
+                    messages.Count, agentName, conversationId);
+            }
+            catch
+            {
+                await sqliteTransaction.RollbackAsync();
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to rewrite the messages of '{AgentName}' in conversation {ConversationId}", agentName, conversationId);
             throw;
         }
     }
@@ -881,6 +965,38 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
                 }
             },
             jsonSerializerOptions);
+    }
+
+    /// <summary>
+    /// Returns <paramref name="rowJson"/> with its history replaced by <paramref name="messages"/> and
+    /// everything else untouched. A desk's row carries its context state beside its history, so the
+    /// history is swapped where it sits rather than the row being rebuilt around it.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when the row does not hold a history to replace.</exception>
+    private static string ReplaceRowMessages(
+        string rowJson,
+        IReadOnlyList<ChatMessage> messages,
+        string authorName,
+        string conversationId,
+        JsonSerializerOptions? jsonSerializerOptions = null)
+    {
+        jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
+
+        // The row travels as the session wrote it, so it is taken apart rather than modelled: what a desk
+        // keeps beside its history is its own business and must come out the other side untouched
+        JsonNode rowNode = JsonNode.Parse(rowJson)
+            ?? throw new InvalidOperationException($"The row of '{authorName}' in conversation {conversationId} is empty.");
+
+        // A row without the history the chat provider keeps is one this rewrite cannot be about: writing a
+        // history into it would invent state the desk never had
+        if (rowNode[RowStateBagProperty]?[RowHistoryStateKey] is not JsonObject historyState)
+            throw new InvalidOperationException(
+                $"The row of '{authorName}' in conversation {conversationId} holds no history to rewrite.");
+
+        // The messages take the place of the ones that were there, where they were, so the desk reads them
+        // back as its own history and finds everything else exactly as it left it
+        historyState[RowMessagesProperty] = JsonNode.Parse(JsonSerializer.Serialize(messages, jsonSerializerOptions));
+        return rowNode.ToJsonString(jsonSerializerOptions);
     }
 
     /// <summary>

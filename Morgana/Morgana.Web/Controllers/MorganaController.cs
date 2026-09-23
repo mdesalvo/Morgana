@@ -423,7 +423,7 @@ public class MorganaController : ControllerBase
     /// </summary>
     /// <returns>
     /// 202 Accepted once the command has run.
-    /// 400 Bad Request when no command answers to the name, when its options are not what it declares, or when one that must be confirmed was not.
+    /// 400 Bad Request when no command answers to the name, when its options are not what it declares, when one that must be confirmed was not, or when one needing a desk finds none carrying the conversation.
     /// 404 Not Found if the conversation was never started.
     /// 429 Too Many Requests on the same limits a message meets.
     /// 500 Internal Server Error on failure.
@@ -450,6 +450,17 @@ public class MorganaController : ControllerBase
             {
                 logger.LogWarning("Unknown command '{CommandName}' for conversation {RequestConversationId}", request.Name, request.ConversationId);
                 return BadRequest(new { error = "Unknown command", name = request.Name });
+            }
+
+            // A command acting on the desk carrying the conversation has nothing to act on while Morgana is
+            // holding it herself: what she says in her own voice belongs to no desk, so summarizing or
+            // otherwise reworking "the agent's" side there would reach the presentation and the refusals
+            if (command.Descriptor.RequiresActiveAgent
+                && await conversationPersistenceService.GetMostRecentActiveAgentAsync(request.ConversationId) is not { Length: > 0 })
+            {
+                logger.LogWarning("Command '{CommandName}' needs a desk carrying conversation {RequestConversationId}, which none is",
+                    command.Descriptor.Name, request.ConversationId);
+                return BadRequest(new { error = "Command requires an agent carrying the conversation", name = command.Descriptor.Name });
             }
 
             // A value the command never declared, or one it cannot work without, is refused before anything

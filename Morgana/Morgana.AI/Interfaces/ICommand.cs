@@ -9,6 +9,13 @@ namespace Morgana.AI.Interfaces;
 /// Reliability contract: the outcome must reach the user as at least one <see cref="ChannelMessage"/>
 /// through <see cref="IChannelService"/>, since a channel holds its prompt until something lands.
 /// </summary>
+/// <remarks>
+/// Nothing a command says is kept: a transcript is what was said in the conversation, while a command is
+/// not a turn in it. Its outcome is shown on the channel that asked and leaves no trace, so a conversation read
+/// back later runs from one turn to the next as though no command had been run between them. Whatever a
+/// command writes on the record is therefore the work itself, never a report of it: <c>/compact</c> leaves a
+/// summary in a desk's history because that is how a fold is carried, not to tell anyone it happened.
+/// </remarks>
 public interface ICommand
 {
     /// <summary>
