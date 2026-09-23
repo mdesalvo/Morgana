@@ -12,7 +12,7 @@ namespace Morgana.Contracts;
 /// <param name="Command">The command the progress belongs to, without slash; successive frames of one command replace each other.</param>
 /// <param name="Label">What is being worked on right now, short enough to sit on one row.</param>
 /// <param name="Completed">Steps finished so far, between 0 and <paramref name="Total"/>.</param>
-/// <param name="Total">Steps the command will take, known before it starts; a command that cannot count its work declares 0, which asks for a waiting indicator rather than a bar.</param>
+/// <param name="Total">Steps the command will take, counted before it starts: a command reporting at all is one that knows what it is about to do, which is what makes the bar a measure rather than a decoration.</param>
 /// <param name="Finished">True on the last frame, which takes the widget off the screen.</param>
 public record CommandProgress(
     [property: JsonPropertyName("command")] string Command,

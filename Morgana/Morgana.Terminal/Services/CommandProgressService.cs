@@ -14,7 +14,7 @@ namespace Morgana.Terminal.Services;
 /// owns it.
 /// </summary>
 /// <remarks>
-/// Drawn here rather than taken from Spectre: its own <c>ProgressBar</c> is internal to the library, and the
+/// Drawn here rather than taken from Spectre: its own <c>ProgressBar</c> is internal to the library, while the
 /// public progress API takes the terminal over, which the live display of these channels already owns.
 /// </remarks>
 public sealed class CommandProgressService
@@ -66,48 +66,35 @@ public sealed class CommandProgressService
         // A terminal reporting no width still gets one cell per row
         width = Math.Max(1, width);
 
-        // A command that cannot count its steps says so instead of drawing a bar that would have to lie
-        string row = frame.Total <= 0
-            ? $"  {frame.Command}: {frame.Label}…"
-            : RenderBarRow(frame);
+        // A frame counting no steps at all would draw an empty bar promising nothing, so the widget stays away
+        if (frame.Total <= 0)
+            return [];
 
-        return [new Markup(Colorize(cells.Trunc(SanitizeForTerminal(row), width), frame))];
-    }
-
-    /// <summary>The row as text: the bar filled to the steps done, the count, then what is being worked on.</summary>
-    private string RenderBarRow(CommandProgress frame)
-    {
         // A frame counting past its own total would fill more of the bar than the bar has
         int completed = Math.Clamp(frame.Completed, 0, frame.Total);
         int filledCells = (int)Math.Round((double)completed / frame.Total * theme.ProgressWidth);
 
-        // Both halves come from the channel, so the bar reads as something this terminal would draw
-        string bar = new string(theme.ProgressFilledGlyph, filledCells)
-                     + new string(theme.ProgressEmptyGlyph, theme.ProgressWidth - filledCells);
-        return $"  {frame.Command} {bar} {completed}/{frame.Total}  {frame.Label}";
-    }
+        // The row is built in the three pieces it is painted in, never searched for its own glyphs: a label
+        // naming a file with a dash in it would otherwise be read as part of the bar it sits beside
+        string head = $"  {frame.Command} ";
+        string filled = new(theme.ProgressFilledGlyph, filledCells);
+        string remaining = new(theme.ProgressEmptyGlyph, theme.ProgressWidth - filledCells);
+        string tail = SanitizeForTerminal($" {completed}/{frame.Total}  {frame.Label}");
 
-    /// <summary>
-    /// Paints the row: the filled part of the bar in the channel's primary, everything else de-emphasised,
-    /// so the eye reads the measure and not the caption.
-    /// </summary>
-    private string Colorize(string row, CommandProgress frame)
-    {
-        // A bar that was cut to the terminal's width is painted by what survived the cut, never by what
-        // the frame said: the two parts must add up to the row actually drawn
-        string filled = new(theme.ProgressFilledGlyph, row.Count(character => character == theme.ProgressFilledGlyph));
-        string remaining = new(theme.ProgressEmptyGlyph, row.Count(character => character == theme.ProgressEmptyGlyph));
-        if (filled.Length + remaining.Length == 0)
-            return $"[{CaptionStyle}]{Markup.Escape(row)}[/]";
+        // Each piece takes what the ones before it left of the row, so a narrow terminal loses the label
+        // first, then the bar, never the name of the command doing the work
+        string drawnHead = cells.Trunc(head, width);
+        string drawnFilled = cells.Trunc(filled, width - drawnHead.GetCellWidth());
+        string drawnRemaining = cells.Trunc(remaining, width - drawnHead.GetCellWidth() - drawnFilled.GetCellWidth());
+        string drawnTail = cells.Trunc(tail, width - drawnHead.GetCellWidth() - drawnFilled.GetCellWidth() - drawnRemaining.GetCellWidth());
 
-        int barStart = row.IndexOfAny([theme.ProgressFilledGlyph, theme.ProgressEmptyGlyph]);
-        string head = row[..barStart];
-        string tail = row[(barStart + filled.Length + remaining.Length)..];
-
-        return $"[{CaptionStyle}]{Markup.Escape(head)}[/]"
-               + $"[{theme.PrimaryColor}]{filled}[/]"
-               + $"[{RemainingStyle}]{remaining}[/]"
-               + $"[{CaptionStyle}]{Markup.Escape(tail)}[/]";
+        return
+        [
+            new Markup($"[{CaptionStyle}]{Markup.Escape(drawnHead)}[/]"
+                       + $"[{theme.PrimaryColor}]{drawnFilled}[/]"
+                       + $"[{RemainingStyle}]{drawnRemaining}[/]"
+                       + $"[{CaptionStyle}]{Markup.Escape(drawnTail)}[/]")
+        ];
     }
 
     /// <summary>

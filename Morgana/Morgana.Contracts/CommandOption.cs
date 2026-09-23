@@ -8,7 +8,15 @@ namespace Morgana.Contracts;
 /// <param name="Name">The option as the user types it, lowercase and without colon: <c>path</c>, not <c>Path:</c>.</param>
 /// <param name="Description">One line telling the user what the value is for.</param>
 /// <param name="Required">True when the command cannot run without it, which is refused before anything happens.</param>
+/// <param name="DefaultValue">
+/// The value the command runs on when the user gives none: a channel proposes it ready to be accepted or
+/// edited, while a run carrying nothing for this option is given it rather than refused. A command that
+/// knows what a sensible answer looks like on the machine it runs on — a path under the user's own desktop,
+/// spelled the way that operating system spells one — says it here instead of leaving the shape to be guessed.
+/// It is one value decided once, so a command needing a different one each time asks for it instead.
+/// </param>
 public record CommandOption(
     string Name,
     string Description,
-    bool Required = false);
+    bool Required = false,
+    string? DefaultValue = null);

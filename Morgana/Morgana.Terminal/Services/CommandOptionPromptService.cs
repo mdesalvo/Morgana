@@ -89,6 +89,12 @@ public sealed class CommandOptionPromptService
     /// <summary>The option being asked for, null when nothing is.</summary>
     public CommandOption? CurrentOption => pendingOptions.Count > 0 ? pendingOptions.Peek() : null;
 
+    /// <summary>
+    /// The default of the option being asked, empty when it declares none. The line starts from it, which is
+    /// what turns a value the command would have used anyway into a choice the user can see and change.
+    /// </summary>
+    public string CurrentOptionDefault => CurrentOption?.DefaultValue ?? string.Empty;
+
     /// <summary>Closes the form, leaving the command unrun.</summary>
     public void Cancel()
     {
@@ -103,7 +109,7 @@ public sealed class CommandOptionPromptService
     /// <summary>
     /// Takes <paramref name="value"/> as the answer to the option being asked and moves to the next one.
     /// An empty answer skips an optional value; on a required one it is refused, which leaves the same
-    /// question standing. The invocation comes back once nothing is left to ask, and the form closes with it.
+    /// question standing. The invocation comes back once nothing is left to ask; the form closes with it.
     /// </summary>
     public CommandInvocation? Accept(string value)
     {

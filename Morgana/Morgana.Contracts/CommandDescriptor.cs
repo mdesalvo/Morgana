@@ -39,11 +39,35 @@ public record CommandDescriptor(
                 given => !declared.Any(option => string.Equals(option.Name, given, StringComparison.OrdinalIgnoreCase))) is { } unknown)
             return $"/{Name} takes no option named '{unknown}'";
 
-        // What the command cannot work without is asked for before anything happens, not discovered halfway through
-        if (declared.FirstOrDefault(option => option.Required && (options is null
-                || !options.Keys.Any(given => string.Equals(given, option.Name, StringComparison.OrdinalIgnoreCase)))) is { } missing)
+        // What the command cannot work without is asked for before anything happens, not discovered halfway
+        // through. An option carrying a default is never missing: the default is what the command runs on
+        if (declared.FirstOrDefault(option => option.Required && option.DefaultValue is null && !WasGiven(option, options)) is { } missing)
             return $"/{Name} needs {missing.Name}: {missing.Description}";
 
         return null;
     }
+
+    /// <summary>
+    /// <paramref name="options"/> as the command will read them: what the user gave, plus the declared
+    /// default of every option they left out. Applied once before running, so no command has to remember
+    /// its own defaults and every side of the wire runs on the same values.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ApplyDefaults(IReadOnlyDictionary<string, string>? options)
+    {
+        Dictionary<string, string> effective = options is null
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(options, StringComparer.OrdinalIgnoreCase);
+
+        foreach (CommandOption option in Options ?? [])
+        {
+            if (option.DefaultValue is { } fallback && !effective.ContainsKey(option.Name))
+                effective[option.Name] = fallback;
+        }
+
+        return effective;
+    }
+
+    /// <summary>Tells whether <paramref name="options"/> carries a value for <paramref name="option"/>, however it was spelled.</summary>
+    private static bool WasGiven(CommandOption option, IReadOnlyDictionary<string, string>? options) =>
+        options is not null && options.Keys.Any(given => string.Equals(given, option.Name, StringComparison.OrdinalIgnoreCase));
 }

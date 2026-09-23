@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Attributes;
+using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using Morgana.Contracts;
@@ -15,6 +16,9 @@ namespace Morgana.AI.Commands;
 /// </summary>
 public sealed class CompactHistoryCommand : ICommand
 {
+    /// <summary>The steps the command reports: reading the conversation on record, then the fold itself.</summary>
+    private const int ProgressSteps = 2;
+
     /// <summary>Names the desk the conversation is with, then holds the history this command rewrites.</summary>
     private readonly IConversationPersistenceService persistenceService;
 
@@ -26,6 +30,9 @@ public sealed class CompactHistoryCommand : ICommand
 
     /// <summary>Builds the reducer from the deployment's own history settings, the same one a turn would use.</summary>
     private readonly HistoryReducerService historyReducerService;
+
+    /// <summary>Charges the fold to the conversation, as every other call to a model is charged.</summary>
+    private readonly IDustLimitService dustLimitService;
 
     /// <summary>Carries the progress frames and the closing line to whoever asked.</summary>
     private readonly IChannelService channelService;
@@ -39,6 +46,7 @@ public sealed class CompactHistoryCommand : ICommand
         IAgentRegistryService agentRegistryService,
         ILLMService llmService,
         HistoryReducerService historyReducerService,
+        IDustLimitService dustLimitService,
         IChannelService channelService,
         ILogger logger)
     {
@@ -46,6 +54,7 @@ public sealed class CompactHistoryCommand : ICommand
         this.agentRegistryService = agentRegistryService;
         this.llmService = llmService;
         this.historyReducerService = historyReducerService;
+        this.dustLimitService = dustLimitService;
         this.channelService = channelService;
         this.logger = logger;
     }
@@ -65,7 +74,7 @@ public sealed class CompactHistoryCommand : ICommand
     {
         // The first frame goes up before anything is looked up: from the user's side the prompt is already
         // held, so a silent wait here would be indistinguishable from a command that did not start
-        await SendProgressAsync(conversationId, "reading the conversation");
+        await SendProgressAsync(conversationId, "reading the conversation", completed: 0);
 
         // The desk carrying the conversation is the one whose window a fold moves. It is there to be found:
         // the command declares it needs one, so a conversation Morgana is holding herself never gets here
@@ -78,7 +87,7 @@ public sealed class CompactHistoryCommand : ICommand
 
         // The second frame names the desk before the summarization call, which is the whole of the wait:
         // what the user watches advance is therefore attributed to whoever is being summarized
-        await SendProgressAsync(conversationId, $"summarizing what {desk} carries");
+        await SendProgressAsync(conversationId, $"summarizing what {desk} carries", completed: 1);
 
         try
         {
@@ -123,8 +132,8 @@ public sealed class CompactHistoryCommand : ICommand
 
         // The reducer is built from the deployment's own history settings, so an on-demand fold keeps
         // exactly the window a turn would have kept. A deployment running its agents on their full history
-        // configures none, and there is nothing here to force
-        if (historyReducerService.CreateReducer(ChatClientOf(desk)) is not MorganaChatReducer reducer)
+        // configures none, leaving nothing here to force
+        if (historyReducerService.CreateReducer(MeteredChatClientOf(desk, conversationId)) is not MorganaChatReducer reducer)
         {
             logger.LogInformation("History reduction is disabled, so '{Desk}' has nothing to fold", desk);
             return 0;
@@ -142,8 +151,12 @@ public sealed class CompactHistoryCommand : ICommand
         return foldedMessages;
     }
 
-    /// <summary>The client the fold is paid on: the tier the desk itself declares, so summarizing costs what that desk costs.</summary>
-    private IChatClient ChatClientOf(string desk)
+    /// <summary>
+    /// The client the fold is paid on: the tier the desk itself declares, so summarizing costs what that
+    /// desk costs, metered like every other call to a model — a saving that spent tokens off the books
+    /// would leave the conversation's budget claiming more than it has.
+    /// </summary>
+    private IChatClient MeteredChatClientOf(string desk, string conversationId)
     {
         Records.LLMTier tier = agentRegistryService.ResolveAgentFromIntent(desk)
             ?.GetCustomAttributes(typeof(RequiresLLMTierAttribute), inherit: false)
@@ -153,21 +166,26 @@ public sealed class CompactHistoryCommand : ICommand
             // every framework call falls back to
             ?? Records.LLMTier.Efficiency;
 
-        return llmService.GetChatClient(tier);
+        // Charged under the desk whose history is being folded, beside that desk's own turns on the ledger
+        return new DustAccountingChatClient(
+            llmService.GetChatClient(tier),
+            dustLimitService,
+            llmService.GetPricing(tier),
+            $"{Constants.Morgana} ({char.ToUpperInvariant(desk[0])}{desk[1..]}/{tier})",
+            conversationId);
     }
 
     /// <summary>Pushes one progress frame, with the line that says the same thing where no widget is drawn.</summary>
-    private Task SendProgressAsync(string conversationId, string label) =>
+    private Task SendProgressAsync(string conversationId, string label, int completed) =>
         channelService.SendMessageAsync(new ChannelMessage
         {
             ConversationId = conversationId,
-            Text = $"Compacting: {label}",
+            Text = $"Compacting: {label} ({completed + 1}/{ProgressSteps})",
             MessageType = Constants.MessageTypes.System,
             AgentName = Constants.Morgana,
             FadingMessageDurationSeconds = 3,
-            // Counted in no steps: the whole wait is one summarization call, which reports nothing of its own
-            // progress. A bar filling to a half it would then sit on promises a measure this work has not got
-            Progress = new CommandProgress(Descriptor.Name, label, Completed: 0, Total: 0)
+            // The steps are the command's own: what it has already done, out of what it set out to do
+            Progress = new CommandProgress(Descriptor.Name, label, completed, ProgressSteps)
         });
 
     /// <summary>Takes the widget off the screen, whatever the fold behind it came to.</summary>
@@ -179,7 +197,7 @@ public sealed class CompactHistoryCommand : ICommand
             MessageType = Constants.MessageTypes.System,
             AgentName = Constants.Morgana,
             FadingMessageDurationSeconds = 3,
-            Progress = new CommandProgress(Descriptor.Name, "done", Completed: 0, Total: 0, Finished: true)
+            Progress = new CommandProgress(Descriptor.Name, "done", ProgressSteps, ProgressSteps, Finished: true)
         });
 
     /// <summary>Writes the command's own outcome into the conversation, which is where the user reads it.</summary>

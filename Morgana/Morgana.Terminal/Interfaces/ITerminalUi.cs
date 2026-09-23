@@ -36,6 +36,13 @@ public interface ITerminalUi
     void ShowNotice(string text, bool isFailure = false);
 
     /// <summary>
+    /// Shows how far a command running here has got, in the same widget a command run on Morgana reports
+    /// itself through. Frames replace one another and none reaches the transcript; the widget goes when the
+    /// command returns, so a last frame marked finished is a courtesy rather than a duty.
+    /// </summary>
+    void ShowProgress(CommandProgress frame);
+
+    /// <summary>
     /// Opens a turn the way a typed line does: <paramref name="echo"/> appears as the user's line, the prompt
     /// waits for Morgana's reply under the channel's reply deadline and <paramref name="dispatch"/> sends the
     /// request. A dispatch that fails is reported in the transcript and gives the prompt back.

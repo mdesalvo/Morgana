@@ -74,13 +74,17 @@ public sealed class TerminalCommandRegistryService
     {
         string name = invocation.Command.Name;
 
+        // What the user left out is filled from the command's own declaration before anything runs, so a
+        // command reads one set of values whether they were typed, gathered by the form or never mentioned
+        IReadOnlyDictionary<string, string> options = invocation.Command.ApplyDefaults(invocation.Options);
+
         // A terminal command runs in this process, the one owning the screen and the conversation's lifecycle
         if (terminalCommands.FirstOrDefault(command => AnswersToName(command.Descriptor, name)) is { } terminalCommand)
         {
             // Nothing on this side of the wire would refuse a malformed or unconfirmed run, so the gates
             // Morgana applies to its own commands are applied here to the terminal's
-            RefuseUnrunnable(terminalCommand.Descriptor, invocation.Options, confirmed);
-            return terminalCommand.ExecuteAsync(ui, invocation.Options, cancellationToken);
+            RefuseUnrunnable(terminalCommand.Descriptor, options, confirmed);
+            return terminalCommand.ExecuteAsync(ui, options, cancellationToken);
         }
 
         // Any other name must be one of Morgana's: the palette never offers a name neither side knows
@@ -89,10 +93,10 @@ public sealed class TerminalCommandRegistryService
 
         // Morgana's command is a turn: echoed as the user's line, answered as a reply. The conversation is read
         // now, not when the catalogue came, since /new may have replaced it in between
-        RefuseUnrunnable(morganaCommand, invocation.Options, confirmed);
+        RefuseUnrunnable(morganaCommand, options, confirmed);
         return ui.SubmitTurnAsync(
-            EchoOf(morganaCommand, invocation.Options),
-            () => morganaClientService.RunCommandAsync(session.ConversationId, morganaCommand.Name, invocation.Options, confirmed, cancellationToken));
+            EchoOf(morganaCommand, options),
+            () => morganaClientService.RunCommandAsync(session.ConversationId, morganaCommand.Name, options, confirmed, cancellationToken));
     }
 
     /// <summary>The line a command puts in the transcript as the user's own: what they typed, spelled canonically.</summary>

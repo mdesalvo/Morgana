@@ -487,7 +487,9 @@ public class MorganaController : ControllerBase
 
             // The command answers the user itself over the channel, so the HTTP reply only acknowledges it ran
             logger.LogInformation("Running command '{CommandName}' on conversation {RequestConversationId}", command.Descriptor.Name, request.ConversationId);
-            await command.ExecuteAsync(request.ConversationId, request.Options ?? new Dictionary<string, string>());
+            // A channel that left an option out gets the command's own default, exactly as a channel drawing
+            // the form would have sent it: the values a command reads never depend on who called it
+            await command.ExecuteAsync(request.ConversationId, command.Descriptor.ApplyDefaults(request.Options));
 
             return Accepted(new { conversationId = request.ConversationId, command = command.Descriptor.Name });
         }
