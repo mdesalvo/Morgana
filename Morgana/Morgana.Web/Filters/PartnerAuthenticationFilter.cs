@@ -3,21 +3,17 @@ using Morgana.AI.Interfaces;
 
 namespace Morgana.Web.Filters;
 
-/// <summary>
-/// Applies Morgana's own authentication to one published A2A endpoint: the same issuer whitelist,
-/// the same audience, fail-closed, that <c>MorganaController</c> applies to every REST call — then
-/// narrows it to the systems admitted to <em>this</em> agent.
-/// </summary>
+/// <summary>Admits to one published A2A agent only the partners its inbound policy reaches, fail-closed.</summary>
 /// <remarks>
 /// Built once per published agent rather than resolved per request, so the scope it enforces is
 /// settled at startup beside the checks that validate it — exactly as the issuers themselves are
 /// baked once into <c>IAuthenticationService</c>.
 /// </remarks>
-/// <param name="authenticationService">Validates the bearer token, exactly as the controller does.</param>
+/// <param name="authenticationService">Validates the bearer token, exactly as the channels' gate does.</param>
 /// <param name="publishedIntent">Agent this filter guards, named in the diagnostics.</param>
 /// <param name="admittedIssuers">Partners whose inbound policy reaches this agent, plus this installation's own agents.</param>
 /// <param name="logger">Records who was turned away and why: the caller only ever sees a bare 401.</param>
-public sealed class A2AAuthenticationFilter(
+public sealed class PartnerAuthenticationFilter(
     IAuthenticationService authenticationService,
     string publishedIntent,
     HashSet<string> admittedIssuers,
@@ -47,7 +43,7 @@ public sealed class A2AAuthenticationFilter(
         if (authorization is null || !authorization.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase))
             return Results.Unauthorized();
 
-        // The same service the controller calls, so a peer request is proven exactly as a channel's
+        // The same service the channels' gate calls, so a peer request is proven exactly as a channel's
         // is — signature against that issuer's own key, audience and lifetime — and one gate cannot
         // quietly grow weaker than the other.
         Records.AuthenticationResult authentication =

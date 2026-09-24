@@ -340,7 +340,12 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // installation reads the first agents.json it finds and holds exactly one domain.
         Environment.SetEnvironmentVariable("Morgana__Plugins__Directories__0", "domain-plugins");
         Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableGuardrail", Options.EnableGuardrail ? "true" : "false");
-        Environment.SetEnvironmentVariable("Morgana__RateLimiting__Enabled", "false");
+
+        // Unset by default: only RateLimitTests sets it, in its own filtered dotnet test invocation, so no
+        // other group's conversation is ever refused for calling too often
+        Environment.SetEnvironmentVariable("Morgana__RateLimiting__Enabled", Options.RateLimitPerMinute is null ? "false" : "true");
+        if (Options.RateLimitPerMinute is { } rateLimitPerMinute)
+            Environment.SetEnvironmentVariable("Morgana__RateLimiting__MaxMessagesPerMinute", rateLimitPerMinute.ToString());
 
         // Unset by default (see HarnessOptions.DustBudgetPerConversation's own remarks): only
         // DustTests sets this, in its own filtered dotnet test invocation, so the rest of the suite

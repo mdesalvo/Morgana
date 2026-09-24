@@ -79,6 +79,13 @@ public sealed class HarnessOptions
     public double? DustBudgetPerConversation { get; init; }
 
     /// <summary>
+    /// Switches <c>Morgana:RateLimiting</c> on at boot with this many calls per minute, when set; rate
+    /// limiting is force-disabled otherwise. Process-wide like <see cref="DustBudgetPerConversation"/>:
+    /// only <c>RateLimitTests</c>' own filtered <c>dotnet test</c> invocation should ever set it.
+    /// </summary>
+    public int? RateLimitPerMinute { get; init; }
+
+    /// <summary>
     /// Whether this run stands a second Morgana up and points the instance under test at it as a
     /// partner, which is what <c>FederationTests</c> needs and nothing else does.
     /// </summary>

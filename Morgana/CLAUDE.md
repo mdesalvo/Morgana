@@ -110,9 +110,11 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 |---|---|
 | `Program.cs` | Full DI wiring. **Deliberately linear and un-extracted** — the boot *order* is load-bearing (plugins before the registry's checks, the actor system after DI, cards projected before Kestrel binds) and reading it top to bottom is the only thing that declares it |
 | `Extensions/A2APublicationExtensions.cs` | `AddMorganaA2A` / `MapMorganaA2AAsync` — the one feature whose halves must straddle `builder.Build()` |
-| `Controllers/MorganaController.cs` | REST at `api/morgana` |
+| `Controllers/MorganaController.cs` | REST at `api/morgana`: the conversation |
+| `Controllers/CommandController.cs` | REST at `api/morgana`: the command catalogue and its execution. Reaches no actor |
+| `Filters/ChannelAuthenticationFilter.cs` · `KnownConversationFilter.cs` · `CommandAdmissionFilter.cs` · `ConversationLimitsFilter.cs` | The REST gates as MVC filters. Their `Order` on each action is the gate order |
 | `Hubs/MorganaHub.cs` | SignalR at `/morganaHub` |
-| `Filters/A2AAuthenticationFilter.cs` | The controller's own auth gate, applied to the A2A JSON-RPC endpoints, fail-closed. The card endpoint stays open by design |
+| `Filters/PartnerAuthenticationFilter.cs` | The partners' auth gate on the A2A JSON-RPC endpoints: the channels' token validation, narrowed to the partners admitted to each agent, fail-closed. The card endpoint stays open by design |
 | `Services/PluginLoaderService.cs` | Scans `plugins/` for `MorganaAgent` subclasses |
 | `Services/KestrelHostAddressService.cs` | Reports the address Kestrel actually bound, so a card names a callable endpoint with nothing configured |
 | `Services/SignalRChannelService.cs` | Pushes messages and stream chunks over SignalR |
@@ -157,7 +159,7 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
 | `commands` | GET | `CommandCatalogResponse`: every `ICommand` registered in DI. The framework publishes `/compact` |
 | `health` | GET | Actor system liveness |
 
-Every endpoint authenticates through `AuthenticateRequestAsync` (Bearer JWT, fail-closed).
+Every endpoint but `health` authenticates through `ChannelAuthenticationFilter` (Bearer JWT, fail-closed).
 
 ### Multi-turn and shared context
 
@@ -204,7 +206,7 @@ What must be known before touching it:
 
 Everything else — the two-phase resolution, the middleware guards, what an answer costs and how it
 settles, the card's security literals — is argued in `ConfigurationAgentDirectoryService`,
-`MorganaAgentAdapter`, `MorganaHostedAgent`, `A2AAuthenticationFilter` and `Program.cs` section 9.5.
+`MorganaAgentAdapter`, `MorganaHostedAgent`, `PartnerAuthenticationFilter` and `Program.cs` section 9.5.
 
 OTel: a `morgana.consultation` span nested under the answering agent's work.
 

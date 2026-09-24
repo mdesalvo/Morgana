@@ -129,6 +129,9 @@ dotnet test … --filter "FullyQualifiedName~ActorTests"
 # the summarization group — requires a lowered boot-time reducer trigger, unset by default
 Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~SummarizationTests"
 
+# the rate limit group — deterministic, requires the boot-time limit, skipped without it
+Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateLimitTests"
+
 # one scenario — by DisplayName: the scenario id is a theory argument, not part of the FQN
 dotnet test … --filter "DisplayName~behaviour-rich-card"
 ```
