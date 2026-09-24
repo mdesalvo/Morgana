@@ -218,7 +218,7 @@ public sealed class HarnessChannel : IAsyncDisposable
     public async Task<ChannelMessage> SendAsync(string conversationId, string text, TimeSpan timeout)
     {
         using HttpRequestMessage request = Authorized(HttpMethod.Post, $"/api/morgana/conversation/{conversationId}/message");
-        request.Content = JsonContent.Create(new SendMessageRequest(conversationId, text));
+        request.Content = JsonContent.Create(new SendMessageRequest(text));
 
         using HttpResponseMessage response = await httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();

@@ -63,7 +63,7 @@ public sealed class MorganaClientService
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
         HttpResponseMessage response = await httpClient.PostAsJsonAsync(
             $"/api/morgana/conversation/{conversationId}/message",
-            new SendMessageRequest(conversationId, text),
+            new SendMessageRequest(text),
             cancellationToken);
 
         // 429 (rate-limit OR dust exhaustion) is not a transport failure: before returning
@@ -111,7 +111,7 @@ public sealed class MorganaClientService
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
         HttpResponseMessage response = await httpClient.PostAsJsonAsync(
             $"/api/morgana/conversation/{conversationId}/command",
-            new ExecuteCommandRequest(conversationId, name, confirmed, options),
+            new ExecuteCommandRequest(name, confirmed, options),
             cancellationToken);
 
         // A command meets the limits a message meets: Morgana explains a 429 over the webhook just the same

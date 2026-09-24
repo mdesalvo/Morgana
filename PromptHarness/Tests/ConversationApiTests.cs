@@ -216,9 +216,9 @@ public sealed class ConversationApiTests
     /// </summary>
     public static TheoryData<string, string, string?> RefusedCommandRequests => new()
     {
-        { "an unknown name", """{"conversationId":"{id}","name":"transmogrify"}""", "billing" },
-        { "no agent carrying the conversation", """{"conversationId":"{id}","name":"compact"}""", null },
-        { "an option the command does not declare", """{"conversationId":"{id}","name":"compact","options":{"depth":"3"}}""", "billing" }
+        { "an unknown name", """{"name":"transmogrify"}""", "billing" },
+        { "no agent carrying the conversation", """{"name":"compact"}""", null },
+        { "an option the command does not declare", """{"name":"compact","options":{"depth":"3"}}""", "billing" }
     };
 
     [Theory]
@@ -243,30 +243,12 @@ public sealed class ConversationApiTests
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
 
-        HttpResponseMessage response = await api.SendCommandAsync(conversationId, $$"""{"conversationId":"{{conversationId}}","name":"{{name}}"}""");
+        HttpResponseMessage response = await api.SendCommandAsync(conversationId, $$"""{"name":"{{name}}"}""");
 
         // An alias runs the command it belongs to, and the acknowledgement names that command
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(conversationId, body.GetProperty("conversationId").GetString());
         Assert.Equal("compact", body.GetProperty("command").GetString());
-    }
-
-    [Fact]
-    public async Task Command_serves_the_conversation_the_route_names()
-    {
-        string routeConversationId = ChannelApiClient.NewConversationId();
-        string bodyConversationId = ChannelApiClient.NewConversationId();
-        await api.SeedConversationOnRecordAsync(routeConversationId, activeAgent: "billing");
-
-        HttpResponseMessage response = await api.SendCommandAsync(
-            routeConversationId, $$"""{"conversationId":"{{bodyConversationId}}","name":"compact"}""");
-
-        // The gates admitted the conversation in the route, so that is the one served: a body naming
-        // another could otherwise pass every check on one conversation and act on a second
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(routeConversationId, body.GetProperty("conversationId").GetString());
-        Assert.False(api.ConversationIsOnRecord(bodyConversationId), "The conversation named only in the body was brought into being.");
     }
 }

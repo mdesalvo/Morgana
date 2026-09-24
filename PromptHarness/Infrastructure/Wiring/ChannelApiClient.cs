@@ -55,8 +55,8 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
         // the one the framework publishes, so the call is well-formed and only its credential is on trial.
         object? body = path.EndsWith("/start")
             ? new { conversationId }
-            : path.EndsWith("/message") ? new { conversationId, text = "Hello" }
-            : path.EndsWith("/command") ? new { conversationId, name = "compact" }
+            : path.EndsWith("/message") ? new { text = "Hello" }
+            : path.EndsWith("/command") ? new { name = "compact" }
             : null;
 
         return body is null

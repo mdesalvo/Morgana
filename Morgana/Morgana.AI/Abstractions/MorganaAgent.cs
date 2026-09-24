@@ -214,14 +214,18 @@ public class MorganaAgent : MorganaActor
             // Otherwise the field holds the live session, which is exactly what the row says at a turn's start.
             // The agent hands itself over because deserializing a session is its own responsibility.
             if (aiAgentSession is null || await persistenceService.IsDirtyAsync(AgentIdentifier))
-                aiAgentSession = await persistenceService.LoadAgentConversationAsync(AgentIdentifier, this);
-            if (aiAgentSession != null)
             {
-                agentLogger.LogInformation("Loaded existing conversation session for {AgentIdentifier}", AgentIdentifier);
+                aiAgentSession = await persistenceService.LoadAgentConversationAsync(AgentIdentifier, this);
 
-                agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.ResumeAgentConversation));
+                // Reported only when the record was actually read: a turn served from the live session resumes nothing
+                if (aiAgentSession != null)
+                {
+                    agentLogger.LogInformation("Loaded existing conversation session for {AgentIdentifier}", AgentIdentifier);
+
+                    agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.ResumeAgentConversation));
+                }
             }
-            else
+            if (aiAgentSession is null)
             {
                 // No row under this identifier: first time this agent is activated in the conversation.
                 // It starts with an empty history — the shared registry below is all it inherits.

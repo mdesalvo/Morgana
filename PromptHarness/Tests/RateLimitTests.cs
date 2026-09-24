@@ -69,9 +69,9 @@ public sealed class RateLimitTests
         for (int call = 1; call <= callsPerMinute; call++)
         {
             Assert.Equal(HttpStatusCode.BadRequest, (await api.SendCommandAsync(
-                conversationId, $$"""{"conversationId":"{{conversationId}}","name":"transmogrify"}""")).StatusCode);
+                conversationId, """{"name":"transmogrify"}""")).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await api.SendCommandAsync(
-                conversationId, $$$"""{"conversationId":"{{{conversationId}}}","name":"compact","options":{"depth":"3"}}""")).StatusCode);
+                conversationId, """{"name":"compact","options":{"depth":"3"}}""")).StatusCode);
         }
 
         // The whole window is still there for the requests the user actually made
@@ -110,5 +110,5 @@ public sealed class RateLimitTests
 
     /// <summary>One /compact on the conversation, the call every test here counts with.</summary>
     private Task<HttpResponseMessage> SendCompactAsync(string conversationId) =>
-        api.SendCommandAsync(conversationId, $$"""{"conversationId":"{{conversationId}}","name":"compact"}""");
+        api.SendCommandAsync(conversationId, """{"name":"compact"}""");
 }
