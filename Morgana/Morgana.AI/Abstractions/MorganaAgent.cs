@@ -210,10 +210,11 @@ public class MorganaAgent : MorganaActor
 
         try
         {
-            // Read from the database once per actor lifetime: on later turns the field already holds
-            // the live session and re-reading would discard everything this actor has appended since.
+            // Read from the database on first activation, or when the row was rewritten since this actor read it.
+            // Otherwise the field holds the live session, which is exactly what the row says at a turn's start.
             // The agent hands itself over because deserializing a session is its own responsibility.
-            aiAgentSession ??= await persistenceService.LoadAgentConversationAsync(AgentIdentifier, this);
+            if (aiAgentSession is null || await persistenceService.IsDirtyAsync(AgentIdentifier))
+                aiAgentSession = await persistenceService.LoadAgentConversationAsync(AgentIdentifier, this);
             if (aiAgentSession != null)
             {
                 agentLogger.LogInformation("Loaded existing conversation session for {AgentIdentifier}", AgentIdentifier);

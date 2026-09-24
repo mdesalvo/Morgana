@@ -141,6 +141,7 @@ public interface IConversationPersistenceService
     /// that instead grew shorter is one the caller no longer describes, so nothing is written.
     /// </param>
     /// <returns>True when the row was rewritten; false when the agent left it in a state this caller cannot speak for.</returns>
+    /// <remarks>A row rewritten here turns dirty for its agent until <see cref="LoadAgentConversationAsync"/> reads it again.</remarks>
     Task<bool> SaveParticipantMessagesAsync(
         string conversationId,
         string agentName,
@@ -229,4 +230,11 @@ public interface IConversationPersistenceService
     /// <param name="conversationId">Conversation identifier.</param>
     /// <returns><c>true</c> if the conversation is present in the store, <c>false</c> otherwise.</returns>
     bool ConversationExists(string conversationId);
+
+    /// <summary>
+    /// Whether the agent's row was rewritten by <see cref="SaveParticipantMessagesAsync"/> since the agent
+    /// last read it through <see cref="LoadAgentConversationAsync"/>: its copy in memory is then behind its record.
+    /// </summary>
+    /// <param name="agentIdentifier">The agent as its turns address it, <c>{agent_name}-{conversation_id}</c>.</param>
+    Task<bool> IsDirtyAsync(string agentIdentifier);
 }

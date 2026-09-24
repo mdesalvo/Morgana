@@ -197,9 +197,13 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
             await sqliteConnection.OpenAsync();
 
-            // Query agent session
+            // A conversation opened before the dirty flag existed gains its column before the read clears it
+            await EnsureDatabaseInitializedAsync(sqliteConnection);
+
+            // Reading the row is what brings the agent back in line with it, so the flag is cleared by the same
+            // statement: no rewrite can land between the read and the clearing and go unnoticed
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
-            sqliteCommand.CommandText = "SELECT agent_session FROM morgana WHERE agent_identifier = @agent_identifier;";
+            sqliteCommand.CommandText = "UPDATE morgana SET is_dirty = 0 WHERE agent_identifier = @agent_identifier RETURNING agent_session;";
             sqliteCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
 
             await using SqliteDataReader sqliteDataReader = await sqliteCommand.ExecuteReaderAsync();
@@ -452,6 +456,9 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             await using SqliteConnection sqliteConnection = new SqliteConnection(GetConnectionString(conversationId));
             await sqliteConnection.OpenAsync();
 
+            // A conversation opened before the dirty flag existed gains its column before the rewrite raises it
+            await EnsureDatabaseInitializedAsync(sqliteConnection);
+
             // Read and write are one step: the agent this row belongs to may be writing its own turn
             await using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
             try
@@ -491,9 +498,10 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 writeCommand.Transaction = sqliteTransaction;
 
                 // The row keeps the state it had: whether the agent is still working on the conversation
-                // says nothing about its history having been rewritten
+                // says nothing about its history having been rewritten. It turns dirty with the rewrite, since
+                // the agent's copy in memory still holds the history this write replaced.
                 writeCommand.CommandText =
-                    "UPDATE morgana SET agent_session = @agent_session, last_update = @now WHERE agent_identifier = @agent_identifier;";
+                    "UPDATE morgana SET agent_session = @agent_session, last_update = @now, is_dirty = 1 WHERE agent_identifier = @agent_identifier;";
                 writeCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
                 writeCommand.Parameters.AddWithValue("@agent_session", Encrypt(rewrittenRow));
                 writeCommand.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
@@ -773,6 +781,31 @@ WHERE id = 1;
     }
 
     /// <inheritdoc />
+    public async Task<bool> IsDirtyAsync(string agentIdentifier)
+    {
+        string[] agentIdentifierParts = agentIdentifier.Split('-', 2);
+        if (agentIdentifierParts.Length != 2)
+            throw new ArgumentException($"Invalid agent_identifier format: '{agentIdentifier}'. Expected format: '{{agent_name}}-{{conversation_id}}'");
+
+        // An agent whose conversation has no database has no row that anybody could have rewritten
+        if (!ConversationExists(agentIdentifierParts[1]))
+            return false;
+
+        await using SqliteConnection sqliteConnection = new SqliteConnection(GetConnectionString(agentIdentifierParts[1]));
+        await sqliteConnection.OpenAsync();
+
+        // A conversation opened before the dirty flag existed gains its column, clean, before it is asked
+        await EnsureDatabaseInitializedAsync(sqliteConnection);
+
+        await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+        sqliteCommand.CommandText = "SELECT is_dirty FROM morgana WHERE agent_identifier = @agent_identifier;";
+        sqliteCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
+
+        // No row yet is an agent's first activation, which reads its record anyway
+        return await sqliteCommand.ExecuteScalarAsync() is long and 1;
+    }
+
+    /// <inheritdoc/>
     public bool ConversationExists(string conversationId)
         => File.Exists(GetDatabasePath(conversationId));
 
@@ -801,7 +834,7 @@ WHERE id = 1;
         checkCommand.CommandText = "PRAGMA user_version;";
         long currentVersion = (long)(await checkCommand.ExecuteScalarAsync() ?? 0L);
 
-        if (currentVersion >= 5)
+        if (currentVersion >= 6)
             return; // Already initialized
 
         // Create schema. CREATE TABLE IF NOT EXISTS makes this safe to run on databases that
@@ -817,7 +850,8 @@ CREATE TABLE IF NOT EXISTS morgana (
     agent_session BLOB NOT NULL,
     creation_date TEXT NOT NULL,
     last_update TEXT NOT NULL,
-    is_active INTEGER NOT NULL DEFAULT 0
+    is_active INTEGER NOT NULL DEFAULT 0,
+    is_dirty INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS rate_limit_log (
@@ -860,13 +894,23 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 """;
         await schemaCommand.ExecuteNonQueryAsync();
 
-        // Mark database as initialized (version 5)
+        // v6 added is_dirty to a table an older database already holds, which the script above leaves as it
+        // was: the column is added there, every existing row clean, since none was rewritten behind its agent
+        await using SqliteCommand dirtyColumnCommand = connection.CreateCommand();
+        dirtyColumnCommand.CommandText = "SELECT COUNT(*) FROM pragma_table_info('morgana') WHERE name = 'is_dirty';";
+        if ((long)(await dirtyColumnCommand.ExecuteScalarAsync() ?? 0L) == 0)
+        {
+            dirtyColumnCommand.CommandText = "ALTER TABLE morgana ADD COLUMN is_dirty INTEGER NOT NULL DEFAULT 0;";
+            await dirtyColumnCommand.ExecuteNonQueryAsync();
+        }
+
+        // Mark database as initialized (version 6)
         await using SqliteCommand versionCommand = connection.CreateCommand();
-        versionCommand.CommandText = "PRAGMA user_version = 5;";
+        versionCommand.CommandText = "PRAGMA user_version = 6;";
         await versionCommand.ExecuteNonQueryAsync();
 
         logger.LogInformation(
-            "Initialized database schema v5 for: {GetFileName}", Path.GetFileName(connection.DataSource));
+            "Initialized database schema v6 for: {GetFileName}", Path.GetFileName(connection.DataSource));
     }
 
     /// <summary>

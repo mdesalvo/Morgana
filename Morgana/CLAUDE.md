@@ -379,11 +379,11 @@ LLM-guided rewrite, then a Markdig template fallback. Never throws.
 ## Persistence
 
 Per-conversation SQLite at `{StoragePath}/morgana-{conversationId}.db`, schema version in
-`PRAGMA user_version` (currently 5), idempotent initialization.
+`PRAGMA user_version` (currently 6), idempotent initialization.
 
 | Table | Purpose |
 |---|---|
-| `morgana` | One row per participant, AES-256-CBC encrypted: each agent's `AgentSession`, plus Morgana's own, holding messages alone |
+| `morgana` | One row per participant, AES-256-CBC encrypted: each agent's `AgentSession`, plus Morgana's own, holding messages alone. `is_dirty` marks a row rewritten behind its agent, which reads it again at its next turn |
 | `rate_limit_log` | Sliding window |
 | `channel_metadata` | The persisted handshake |
 | `shared_context` | Cross-agent variables, first-write-wins |
