@@ -91,7 +91,7 @@ public class LLMClassifierService : IClassifierService
         // The whole vocabulary the model may answer with, each name carrying the description that
         // teaches it what lands there. A name absent from this line cannot come back from a turn.
         // It closes on the complement of the domain — everything the domain does not cover — which
-        // is this actor's own word and not a desk anybody modelled: no plugin declares it, it routes
+        // is this actor's own word and not an agent anybody modelled: no plugin declares it, it routes
         // to no agent and its description is authored here, in the prompt that reads it.
         string formattedIntents = string.Join("|",
             intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})")
@@ -113,7 +113,7 @@ public class LLMClassifierService : IClassifierService
         try
         {
             // The only model call of a classification, always on the cheapest configured tier: choosing
-            // which desk a sentence belongs to is a routing decision, not domain reasoning.
+            // which agent a sentence belongs to is a routing decision, not domain reasoning.
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
                 classifierSystemPrompt,

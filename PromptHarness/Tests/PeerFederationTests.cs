@@ -27,13 +27,13 @@ namespace PromptHarness.Tests;
 /// it only runs when this installation is the one asking.</para>
 ///
 /// <para>The partner is stood up here rather than being a second Morgana: what is under test is what
-/// <b>leaves</b> — the card this side accepts, the token it mints and the origin it attaches it to —
-/// and a real peer would answer those questions with its own behaviour instead of with the cases a
+/// <b>leaves</b> (the card this side accepts, the token it mints and the origin it attaches it to)
+/// while a real peer would answer those questions with its own behaviour instead of with the cases a
 /// deployment actually has to survive. A card naming a third host, one demanding a scheme nobody here
-/// can present, one demanding nothing: each is a document, and a document is what this group serves.</para>
+/// can present, one demanding nothing: each is a document, which is what this group serves.</para>
 ///
 /// <para>Assertions read the request the peer recorded rather than the answer this side received. A
-/// consultation's answer is the peer's word; the token on the way in is ours, and it is the only part
+/// consultation's answer is the peer's word; the token on the way in is ours. It is the only part
 /// a deployment is exposed by. So a run that ends in an exception because the stub answered no proper
 /// envelope still proves what it was asked to prove, which is why the calls below are made without
 /// expecting one.</para>
@@ -55,7 +55,7 @@ public sealed class PeerFederationTests
     /// <summary>Colleague being consulted, published by <see cref="PartnerName"/>.</summary>
     private const string PeerIntent = "shipping";
 
-    /// <summary>Desk on this side doing the asking, which the minted token names as its subject.</summary>
+    /// <summary>Agent on this side doing the asking, which the minted token names as its subject.</summary>
     private const string CallerIntent = "billing";
 
     /// <summary>Name the standard bearer scheme is declared under on a served card.</summary>
@@ -78,7 +78,7 @@ public sealed class PeerFederationTests
         Assert.Contains(PartnerAudience, token.Audiences);
         Assert.DoesNotContain(LocalAudience, token.Audiences);
 
-        // Which desk asked, so what a partner logs is a colleague rather than merely an installation.
+        // Which agent asked, so what a partner logs is a colleague rather than merely an installation.
         Assert.Equal(CallerIntent, token.Subject);
     }
 
@@ -139,7 +139,7 @@ public sealed class PeerFederationTests
         StubCard(peer, peerAddress, RequireBearer());
         StubConsultationEndpoint(peer);
 
-        // A card describes a desk rather than a conversation. Read per conversation, a partner would
+        // A card describes an agent rather than a conversation. Read per conversation, a partner would
         // be answering the same question over and over while this side's own first turn waits on it.
         ConfigurationAgentDirectoryService directory = BuildDirectory(peerAddress);
         await ResolveAsync(directory);
@@ -271,7 +271,7 @@ public sealed class PeerFederationTests
     /// </summary>
     /// <remarks>
     /// The answer is discarded whatever it turns out to be: the stub answers no envelope this side
-    /// could read, and every assertion in this group is on what arrived at the peer.
+    /// could read, while every assertion in this group is on what arrived at the peer.
     /// </remarks>
     /// <param name="directory">Directory under test.</param>
     private static async Task ConsultAsync(ConfigurationAgentDirectoryService directory)

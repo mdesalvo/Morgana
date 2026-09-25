@@ -31,7 +31,7 @@ project: every build setting lives in the `.csproj`, so it carries unchanged acr
 
 ## Commands
 
-Fifteen test classes. **Never combine filters**: five groups carry a process-wide boot knob the
+Sixteen test classes. **Never combine filters**: six groups carry a process-wide boot knob the
 others must not see and two of those five share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
@@ -57,6 +57,7 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ServedConsultation
 Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
 Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~SummarizationTests"
 Harness__DustBudgetPerConversation=15 dotnet test … --filter "FullyQualifiedName~DustTests"
+Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateLimitTests"    # deterministic, skipped without the knob
 Harness__FederatedPeer=true dotnet test … --filter "FullyQualifiedName~FederationTests"
 Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~ConversationPersistenceTests"
 
@@ -90,6 +91,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `ServedConsultationTests` | — | This installation answering a partner: which conversation, what it cost, how many exchanges are admitted |
 | `SummarizationTests` | — | The reducer's own prompt, unreachable at the default 21-message trigger |
 | `DustTests` | — | The budget thresholds, crossed in order. Evidence-driven rather than turn-pinned: how many turns it takes is a real token measurement |
+| `RateLimitTests` | none | The REST gate's rate limit: the 429 past the window, refused commands left uncounted, one window shared by messages and commands. No model is reached |
 | `ConversationPersistenceTests` | — | Who owns each line of a conversation, how it is dated and in what order it is read back. The record is photographed after every exchange rather than at the end, because a transcript that reads correctly can still have been written by the wrong participant. Asserts nothing about wording: the oracle is what the channel was pushed and what the channel said. Shares the guard's knob, since a refused turn is one of the five it stages |
 | `AgentCardTests` · `StartupValidationTests` · `PeerFederationTests` · `ConversationApiTests` | none | Wire contracts and boot refusals, asserted deterministically. **Every literal is spelled out in the test** rather than read from `Constants`: a test comparing a constant against itself asserts that a constant equals a constant, while the point is to notice a published document changing shape under whoever consumes it |
 | `FederationTests` | — | Two Morganas, one consulting the other — the only test where the card is written by a Morgana, read by a Morgana and the token one mints is proven by the other |
@@ -125,7 +127,7 @@ The harness owns **no `Morgana:` configuration and no secrets**. It shares `Morg
 `UserSecretsId`, resolves that project's settings plus the shared store and republishes the result
 to the host as environment variables. On top it overrides, per run: a throwaway storage path;
 exporters off; rate and dust limiting off; the guard rail per `Harness:EnableGuardrail`; a random key
-for the `harness` issuer; one partner appended, admitted to a single desk.
+for the `harness` issuer; one partner appended, admitted to a single agent.
 
 The repository must carry the `harness` entry under `Morgana:Authentication:Issuers` or the fixture
 refuses to start — by design: it authenticates as its own channel.

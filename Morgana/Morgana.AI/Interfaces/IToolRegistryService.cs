@@ -28,8 +28,8 @@ public interface IToolRegistryService
     /// </summary>
     /// <param name="intent">The intent to find a tool for (e.g., "billing", "contract")</param>
     /// <returns>
-    /// Type of the MorganaTool class decorated with [ProvidesToolForIntent(intent)],
-    /// or null if no tool implementation found for this intent.
+    /// Type of the MorganaTool class decorated with [ProvidesToolForIntent(intent)];
+    /// null if no tool implementation found for this intent.
     /// </returns>
     Type? FindToolTypeForIntent(string intent);
 

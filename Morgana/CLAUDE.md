@@ -74,15 +74,15 @@ is the exception and is described below, having none.
 
 ### Examples (the plugin, no `CLAUDE.md` of its own)
 
-**One organization, several desks**: not three unrelated demos but three roles inside one fictional
+**One organization, several agents**: not three unrelated demos but three roles inside one fictional
 shop, *The Greenhouse & Nursery*, on **one** SQLite system of record (`Data/Examples.db`, seeded and
-rebased onto the current month at deployment). Each desk writes only its own competence, yet the
-books stay consistent whichever desk closes a sale: `InventoryAgent`'s order confirmation and
+rebased onto the current month at deployment). Each agent writes only its own competence, yet the
+books stay consistent whichever agent closes a sale: `InventoryAgent`'s order confirmation and
 `ContractAgent`'s plan enrolment are the two dispositive actions and both bill through the identical
 shared path, `GreenhouseDatabaseHelper.BillCustomerAsync`. `BillingAgent` is read-only — every line
-on its books was written by another desk.
+on its books was written by another agent.
 
-The plugin also exists to show two structural things: the desks **consult each other**
+The plugin also exists to show two structural things: the agents **consult each other**
 (`Billing → Inventory`, `Contract → Billing`, deliberately a chain and not a triangle, so the
 refusal of a second hop is exercised too) and `MonkeyAgent` is the one agent whose tools are
 acquired at runtime from an MCP server, with an empty context vocabulary.
@@ -110,9 +110,11 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 |---|---|
 | `Program.cs` | Full DI wiring. **Deliberately linear and un-extracted** — the boot *order* is load-bearing (plugins before the registry's checks, the actor system after DI, cards projected before Kestrel binds) and reading it top to bottom is the only thing that declares it |
 | `Extensions/A2APublicationExtensions.cs` | `AddMorganaA2A` / `MapMorganaA2AAsync` — the one feature whose halves must straddle `builder.Build()` |
-| `Controllers/MorganaController.cs` | REST at `api/morgana` |
+| `Controllers/MorganaController.cs` | REST at `api/morgana`: the conversation |
+| `Controllers/CommandController.cs` | REST at `api/morgana`: the command catalogue and its execution. Reaches no actor |
+| `Filters/ChannelAuthenticationFilter.cs` · `KnownConversationFilter.cs` · `CommandAdmissionFilter.cs` · `ConversationLimitsFilter.cs` | The REST gates as MVC filters. Their `Order` on each action is the gate order |
 | `Hubs/MorganaHub.cs` | SignalR at `/morganaHub` |
-| `Filters/A2AAuthenticationFilter.cs` | The controller's own auth gate, applied to the A2A JSON-RPC endpoints, fail-closed. The card endpoint stays open by design |
+| `Filters/PartnerAuthenticationFilter.cs` | The partners' auth gate on the A2A JSON-RPC endpoints: the channels' token validation, narrowed to the partners admitted to each agent, fail-closed. The card endpoint stays open by design |
 | `Services/PluginLoaderService.cs` | Scans `plugins/` for `MorganaAgent` subclasses |
 | `Services/KestrelHostAddressService.cs` | Reports the address Kestrel actually bound, so a card names a callable endpoint with nothing configured |
 | `Services/SignalRChannelService.cs` | Pushes messages and stream chunks over SignalR |
@@ -142,7 +144,7 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
    The wait here is a budget on **silence**, not on the turn: every chunk renews it and so does
    `AgentStillWorking` on updates carrying no text — without it a consultation reads as a dead agent
 5. Back to **Idle** — the response is forwarded through `IChannelService`, followed by Morgana's own
-   closing line (`AgentExitMessage`) when a desk signalled completion
+   closing line (`AgentExitMessage`) when an agent signalled completion
 
 ### REST API
 
@@ -153,9 +155,11 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
 | `conversation/{id}/resume` | POST | 404 if unknown; read-only, reports the active agent and the dust level |
 | `conversation/{id}/message` | POST | Auth, 404 if unknown, then rate limit, then dust budget, then `UserMessage` |
 | `conversation/{id}/history` | GET | `ConversationHistoryResponse` |
+| `conversation/{id}/command` | POST | Auth, 404 if unknown, 400 for an unknown name or a missing confirmation, rate limit, dust budget, then runs it; the outcome arrives over the channel |
+| `commands` | GET | `CommandCatalogResponse`: every `ICommand` registered in DI. The framework publishes `/compact` |
 | `health` | GET | Actor system liveness |
 
-Every endpoint authenticates through `AuthenticateRequestAsync` (Bearer JWT, fail-closed).
+Every endpoint but `health` authenticates through `ChannelAuthenticationFilter` (Bearer JWT, fail-closed).
 
 ### Multi-turn and shared context
 
@@ -202,7 +206,7 @@ What must be known before touching it:
 
 Everything else — the two-phase resolution, the middleware guards, what an answer costs and how it
 settles, the card's security literals — is argued in `ConfigurationAgentDirectoryService`,
-`MorganaAgentAdapter`, `MorganaHostedAgent`, `A2AAuthenticationFilter` and `Program.cs` section 9.5.
+`MorganaAgentAdapter`, `MorganaHostedAgent`, `PartnerAuthenticationFilter` and `Program.cs` section 9.5.
 
 OTel: a `morgana.consultation` span nested under the answering agent's work.
 
@@ -216,6 +220,8 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `LLMClassifierService` | `IClassifierService` | LLM intent classification; falls back to `"other"` at confidence 0 |
 | `LLMGuardRailService` | `IGuardRailService` | LLM policy check. **Fails open** |
 | `LLMPresenterService` | `IPresenterService` | Welcome message and quick replies. Never throws |
+| `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
+| `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json`, domain from `agents.json`. Throws if one ID is declared in both |
 | `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads: the fenced two-layer prompt, tool descriptions, the per-turn held-context declaration, the colleagues declaration, a colleague's question |
 | `ConfigurationAgentDirectoryService` | `IAgentDirectoryService` | Both halves of A2A discovery, plus `ValidateTrustConfiguration` and `ValidatePublishedAddress` |
@@ -373,11 +379,11 @@ LLM-guided rewrite, then a Markdig template fallback. Never throws.
 ## Persistence
 
 Per-conversation SQLite at `{StoragePath}/morgana-{conversationId}.db`, schema version in
-`PRAGMA user_version` (currently 5), idempotent initialization.
+`PRAGMA user_version` (currently 6), idempotent initialization.
 
 | Table | Purpose |
 |---|---|
-| `morgana` | One row per participant, AES-256-CBC encrypted: each agent's `AgentSession`, plus Morgana's own, holding messages alone |
+| `morgana` | One row per participant, AES-256-CBC encrypted: each agent's `AgentSession`, plus Morgana's own, holding messages alone. `is_dirty` marks a row rewritten behind its agent, which reads it again at its next turn; a turn saved in between keeps the rewrite |
 | `rate_limit_log` | Sliding window |
 | `channel_metadata` | The persisted handshake |
 | `shared_context` | Cross-agent variables, first-write-wins |

@@ -36,7 +36,7 @@ at once: the two URLs must be absolute `http(s)`, the key must no longer be the 
 Kestrel starts listening and `ConversationLifecycleService` wires the webhook
 receiver to the UI queue, opens the conversation with the handshake (retried at
 `MorganaStartRetryPolicy`'s pace while Morgana is unreachable) and blocks on the Live loop until
-`/quit` or `Esc`. A `finally` ends the conversation and stops the host. The webhook accepts only
+`/exit` or `Esc`. A `finally` ends the conversation and stops the host. The webhook accepts only
 deliveries for the conversation on screen and answers 404 to any other.
 
 ## Authentication
@@ -70,8 +70,8 @@ drives the turn through `ITerminalUi` — queue a delivery, own the terminal —
 needs to know how a channel draws anything. It is internal to the repository and
 never published, so its surface answers to Rune and Grimoire alone. Spectre.Console and the JWT
 package arrive with it. Identity stays channel-side in `Messages/RuneChannelProfile.cs`: the
-`ChannelProfile` is the one statement of who Rune is, and the library reads the handshake, the token
-claims and the `Rune:` configuration root from it.
+`ChannelProfile` is the one statement of who Rune is: from it the library reads the handshake, the
+token claims and the `Rune:` configuration root.
 
 ## Terminal UI
 
@@ -84,11 +84,19 @@ warnings and red for errors.
 ### Input
 
 `Console.ReadKey(intercept: true)` on a background task polling every 25 ms — Spectre's Live
-rendering cannot share stdin with a first-class prompt. **Enter** commits (or exits on `/quit`),
+rendering cannot share stdin with a first-class prompt. **Enter** commits,
 **Backspace** and **Delete** remove around the caret, **←/→** move it, **Esc** exits. At rest
 **↑/↓** and **PgUp/PgDn** scroll the transcript back; they are ignored while a turn is in flight, so
 the window never moves under an arriving reply. Repainting waits for the keystrokes to stop, so a
 pasted line costs one frame rather than one per character.
+
+**Commands**: a leading `/` opens the shared palette (`Morgana.Terminal`): `/new`, `/exit` and
+whatever Morgana publishes. Esc dismisses it. The list filters as you type and Enter runs the
+highlighted candidate, as in Claude Code. A command declaring `RequiresConfirmation` takes
+the prompt over with a Yes/No question instead of running; Morgana refuses it without that answer. **A command
+never enters the transcript**, neither its line nor its outcome: it holds the prompt while it runs, its progress
+bar and then its outcome are drawn above the prompt and the outcome goes at the next keystroke. One of Morgana's
+is called off after `Rune:CommandTimeoutSeconds`, which Morgana notices and stops without writing anything.
 
 A turn that Morgana accepts but never answers releases the prompt after `Rune:ReplyTimeoutSeconds`
 with a red notice, instead of locking the conversation until the process is killed.
@@ -113,6 +121,7 @@ record at start and read back from there, by a resume and by a Morgana that rest
 | `Rune:MaxMessageLength` | The cap advertised at the handshake. Default `500`, aggressive on purpose so the downgrade runs every turn. Raising it (say `2000`) softens the rewrite without losing the profile; anything below `RichFeaturesMinLength` keeps rich features forced off server-side |
 | `Rune:MaxInputLength` | What the *user* may type in one turn, default `500`. Independent of `MaxMessageLength`, which caps what Morgana may send back: the two travel in opposite directions and nothing couples them |
 | `Rune:ReplyTimeoutSeconds` | How long a sent turn may go unanswered before the prompt comes back with a red notice (default 180). Deliberately higher than Grimoire's: a poor channel sees nothing until the reply lands, so the wait covers the whole turn — tool chains and remote colleagues included — not the silence between chunks |
+| `Rune:CommandTimeoutSeconds` | How long the prompt waits on one of Morgana's commands before calling it off (default 120). The channel's own deadline: it never travels, Morgana only notices the call being dropped |
 | `Rune:LandingMessages` | The startup lines, cleared when the Live UI takes over. Mirrors Cauldron's |
 | `Rune:StartupTimeoutSeconds` | How long to wait for Morgana's first delivery before entering the Live UI anyway (default 30). Raise it on providers with cold starts |
 
@@ -137,5 +146,6 @@ record at start and read back from there, by a resume and by a Morgana that rest
   and the receiver's callback onto a per-conversation scope
 - **Never enrich Rune.** Its value is exactly what it cannot do: raise a capability here and the
   degradation path stops being exercised anywhere. Sharing `Morgana.Terminal` with the rich-TTY
-  channel does not soften this: a feature of Grimoire's reaches Rune only if someone opts Rune in,
-  and the flags in `RuneChannelProfile` are the place where that would have to be written
+  channel does not soften this: a feature of Grimoire's reaches Rune only if someone opts Rune in.
+  The flags in `RuneChannelProfile` are the place where that would have to be written. Local
+  chrome such as the command palette is not a capability

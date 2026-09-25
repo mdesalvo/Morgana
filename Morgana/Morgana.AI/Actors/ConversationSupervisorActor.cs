@@ -148,8 +148,8 @@ public class ConversationSupervisorActor : MorganaActor
             hasReadPersistedActiveAgent = true;
         }
 
-        // With no desk mid-exchange, this phrase is addressed to Morgana herself: she guards it,
-        // she classifies it, she answers it unless she hands it to a desk. So she files it now,
+        // With no agent mid-exchange, this phrase is addressed to Morgana herself: she guards it,
+        // she classifies it, she answers it unless she hands it to an agent. So she files it now,
         // before the guard has even seen it — which is what lets a client that reloads during the
         // guard or the classifier read back what it just said. An agent that was already active
         // saves the phrase into its own session instead, because that session is its record.
@@ -306,8 +306,8 @@ public class ConversationSupervisorActor : MorganaActor
         // GuardActor throwing, or it simply never answering in time.
         ReceiveAsync<Records.GuardCheckResponse>(async response => {
             // Cancels the guard-check window now that GuardActor actually answered — this
-            // handler is about to Become() into AwaitingClassification, AwaitingFollowUpResponse,
-            // or Idle on rejection and each of those arms (or clears) its own timeout
+            // handler is about to Become() into AwaitingClassification, AwaitingFollowUpResponse
+            // or Idle on rejection; each of those arms (or clears) its own timeout
             // independently. Clearing here just guarantees the guard check's own window never
             // carries over into whatever state runs next.
             Context.SetReceiveTimeout(null);
@@ -690,7 +690,7 @@ public class ConversationSupervisorActor : MorganaActor
         });
 
         // Renews the same window for work the user cannot see: a tool running, a colleague answering.
-        // The client is told nothing — there is nothing to show — and an agent that stops sending
+        // The client is told nothing, having nothing to show; an agent that stops sending
         // these is one that has genuinely stopped.
         Receive<Records.AgentStillWorking>(_ =>
             Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"]))));
@@ -731,7 +731,7 @@ public class ConversationSupervisorActor : MorganaActor
                 }
 
                 // Sends the agent's response back to the client, forwarding the classification's
-                // intent and metadata, the agent's completion flag, quick replies and rich card,
+                // intent and metadata, the agent's completion flag, quick replies, rich card
                 // and the timestamp the reply is recorded under.
                 ctx.OriginalSender.Tell(new Records.ConversationResponse(
                     response.Response,
@@ -743,7 +743,7 @@ public class ConversationSupervisorActor : MorganaActor
                     response.RecordedTimestamp,
                     response.RichCard));
 
-                // The desk has finished: Morgana takes the conversation back and says so, behind
+                // The agent has finished: Morgana takes the conversation back and says so, behind
                 // the answer above rather than in place of it.
                 if (response.IsCompleted)
                     TellAgentFarewell(ctx.OriginalSender, agentName);
@@ -949,7 +949,7 @@ public class ConversationSupervisorActor : MorganaActor
                     response.RecordedTimestamp,
                     response.RichCard));
 
-                // The desk has finished: Morgana takes the conversation back and says so, behind
+                // The agent has finished: Morgana takes the conversation back and says so, behind
                 // the answer above rather than in place of it.
                 if (response.IsCompleted)
                     TellAgentFarewell(originalSender, agentName);
@@ -1144,11 +1144,11 @@ public class ConversationSupervisorActor : MorganaActor
     }
 
     /// <summary>
-    /// Says the line that closes a desk's engagement and brings the conversation back to Morgana,
-    /// sent right behind that desk's own last answer so the two arrive in the order they were said.
+    /// Says the line that closes an agent's engagement and brings the conversation back to Morgana,
+    /// sent right behind that agent's own last answer so the two arrive in the order they were said.
     /// </summary>
     /// <remarks>
-    /// Only a specialised desk earns one: Morgana finishing a turn of her own is just a turn. Until
+    /// Only a specialised agent earns one: Morgana finishing a turn of her own is just a turn. Until
     /// this existed the line was never spoken at all — each channel inferred that a handover had
     /// happened by reading a transcript that did not contain it, then wrote its own words in
     /// Morgana's mouth. Said here it is hers, dated when it was said, the same in every channel.
@@ -1179,7 +1179,7 @@ public class ConversationSupervisorActor : MorganaActor
     }
 
     /// <summary>
-    /// Builds the display name shown to the client for a given intent: the bare persona,
+    /// Builds the display name shown to the client for a given intent: the bare persona
     /// or the persona qualified by the intent when one is available.
     /// </summary>
     private string GetAgentDisplayName(string? intent)

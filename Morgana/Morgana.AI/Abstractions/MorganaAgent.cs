@@ -210,17 +210,22 @@ public class MorganaAgent : MorganaActor
 
         try
         {
-            // Read from the database once per actor lifetime: on later turns the field already holds
-            // the live session and re-reading would discard everything this actor has appended since.
+            // Read from the database on first activation, or when the row was rewritten since this actor read it.
+            // Otherwise the field holds the live session, which is exactly what the row says at a turn's start.
             // The agent hands itself over because deserializing a session is its own responsibility.
-            aiAgentSession ??= await persistenceService.LoadAgentConversationAsync(AgentIdentifier, this);
-            if (aiAgentSession != null)
+            if (aiAgentSession is null || await persistenceService.IsDirtyAsync(AgentIdentifier))
             {
-                agentLogger.LogInformation("Loaded existing conversation session for {AgentIdentifier}", AgentIdentifier);
+                aiAgentSession = await persistenceService.LoadAgentConversationAsync(AgentIdentifier, this);
 
-                agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.ResumeAgentConversation));
+                // Reported only when the record was actually read: a turn served from the live session resumes nothing
+                if (aiAgentSession != null)
+                {
+                    agentLogger.LogInformation("Loaded existing conversation session for {AgentIdentifier}", AgentIdentifier);
+
+                    agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.ResumeAgentConversation));
+                }
             }
-            else
+            if (aiAgentSession is null)
             {
                 // No row under this identifier: first time this agent is activated in the conversation.
                 // It starts with an empty history — the shared registry below is all it inherits.
@@ -277,7 +282,7 @@ public class MorganaAgent : MorganaActor
             // when this agent was already active nobody else saved the phrase: its own row is the
             // only record. A client reloading mid-turn reads it back from here instead of
             // watching it vanish. The row is left active on purpose: a turn interrupted here resumes
-            // at the desk that was working on it.
+            // at the agent that was working on it.
             aiChatHistoryProvider.AppendMessage(aiAgentSession, userMessage);
             await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted: false);
 
@@ -341,7 +346,7 @@ public class MorganaAgent : MorganaActor
                     {
                         // The turn is advancing on something with no text in it — a tool being called
                         // or a colleague being asked. The supervisor's wait counts silence and a
-                        // consultation is a whole turn at another desk: unannounced, it reads as an
+                        // consultation is a whole turn at another agent: unannounced, it reads as an
                         // agent that has died and the user's turn is abandoned while its answer is
                         // still being written.
                         senderRef.Tell(new Records.AgentStillWorking());
@@ -422,7 +427,7 @@ public class MorganaAgent : MorganaActor
             agentSpan?.Dispose();
 
             // The exchange with a colleague is spent once it has been read. Clearing it here keeps
-            // it out of the caller's own session — see StripPeerConsultations — and is done after
+            // it out of the caller's own session (see StripPeerConsultations) and is done after
             // the span has been tagged, so telemetry still records that the colleague was consulted.
             StripPeerConsultations(aiAgentSession, historyBaseline);
 
@@ -672,7 +677,7 @@ public class MorganaAgent : MorganaActor
     /// </summary>
     /// <param name="session">Active agent session.</param>
     /// <param name="historyBaseline">Number of history messages present before the turn ran; everything past it belongs to this turn.</param>
-    /// <returns>Comma-separated tool names in call order — repetitions kept, since a repeated call is itself a signal — or an empty string when the turn called no tool.</returns>
+    /// <returns>Comma-separated tool names in call order, repetitions kept since a repeated call is itself a signal; empty when the turn called no tool.</returns>
     protected string GetToolsInvoked(AgentSession session, int historyBaseline)
         => string.Join(", ", aiChatHistoryProvider.GetMessages(session)
             .Skip(historyBaseline)

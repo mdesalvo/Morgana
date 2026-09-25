@@ -96,7 +96,7 @@ different purpose.
 |---|---|---|
 | `Target` | what this agent does well and existentially and what it is significant to say it does **not** do | 2-4 sentences |
 | `Personality` | the empathy, language, tone and humanity it meets the user with — voice only | 2-3 sentences |
-| `ConsultMeFor` | the competence this desk is characteristically the one to answer for | 1-2 sentences |
+| `ConsultMeFor` | the competence this agent is characteristically the one to answer for | 1-2 sentences |
 | `Instructions` | how it goes about it, what it is trying to achieve, what it must **not** do on the way | 2-5 sentences |
 | `Formatting` | how it presents its **own** information: which shape suits which tool's output | brief, concrete |
 
@@ -181,15 +181,15 @@ Morgana publishes one card per agent and builds it from three things: the intent
 **during the interview**, so what the model weighs and what validation reports is what a caller will
 be handed.
 
-**The card evolves and never says two things at once.** From the moment the map names a desk it is
+**The card evolves and never says two things at once.** From the moment the map names an agent it is
 described by the phrase the classifier routes on; once the territory is settled that description
 *becomes* the territory. The two are never shown side by side: a routing phrase says which utterances
-land here, a territory says what this desk answers for and a caller weighing its question against both
+land here, a territory says what this agent answers for and a caller weighing its question against both
 is weighing it against two different things.
 
 What is decidable by reading is checked without a model, in validation: a territory
-naming the desk's own tools is an inventory, one identical to the routing phrase is the classifier's
-sentence recycled and two desks publishing the same territory are one desk as far as a caller can tell.
+naming the agent's own tools is an inventory, one identical to the routing phrase is the classifier's
+sentence recycled and two agents publishing the same territory are one agent as far as a caller can tell.
 
 ### Alembic is an agent and its tools are declared the way an agent's are
 
@@ -251,12 +251,12 @@ fact — *nothing of this agent is written yet* or *this agent already exists an
 Each pass is a **fresh agent and a fresh session** by design: a pass carrying the whole interview in
 its context spends it re-litigating decisions already taken. What crosses a boundary is the
 *configuration*, read as settled fact — and, beside it, **what has been found out about the client's
-work**: `DomainDraft.Learned` for the business, `AgentDraft.Known` for each desk, every fact filed
+work**: `DomainDraft.Learned` for the business, `AgentDraft.Known` for each agent, every fact filed
 under a subject and marked whether the client said it or Alembic read it off their upload. The
 transcript still never crosses. The distinction is the whole of it: a decision re-read is a decision
 re-argued, where the trade is what the next question has to be made of — a pass that does not know
 there is a pastry counter asks a baker what a system ought to be able to check. A step opens holding
-its own desk and the business whole, the other desks by subject alone and `RecallDesk` for when one
+its own agent and the business whole, the other agents by subject alone and `RecallAgent` for when one
 of those subjects bears on the question in hand.
 
 ### The map first, then the agents
@@ -270,11 +270,11 @@ description is read by the classifier *against every other description*, a label
 user *against every other button* — both correct only side by side.
 
 **The territory is the sixth dimension and it is elicited, not derived.** It is not the `Target`
-addressed to a second reader: a `Target` is what this desk handles, a territory is the competence it is
-characteristically the one to answer for — what another desk would come to it for rather than answering
+addressed to a second reader: a `Target` is what this agent handles, a territory is the competence it is
+characteristically the one to answer for — what another agent would come to it for rather than answering
 *go to them*, which is worth nothing to whoever asked. Elicited whether or not A2A is ever switched on.
-It runs **after the toolkit**, the earliest it can be true: a territory the desk's own tools do not
-cover is a promise another desk would hold it to.
+It runs **after the toolkit**, the earliest it can be true: a territory the agent's own tools do not
+cover is a promise another agent would hold it to.
 
 **The one thing a later pass may write about an intent is its description, once the territory stands.**
 The classifier's sentence is the map's to write and the map writes it before any agent exists; the same
@@ -309,7 +309,7 @@ So `DeclareConsultation` takes the asking agent's rewritten prose **in the same 
 
 **The closing pass is handed each agent's territory and that is what keeps the repair honest.** The
 framework appends the colleague's own `ConsultMeFor` to the asking agent's prompt, so the boundary must
-state fact about this agent's **own** books and nothing about the other desk. A pass that could not read
+state fact about this agent's **own** books and nothing about the other agent. A pass that could not read
 the territory had only the colleague's `Target` and `Instructions` to work from, so asked to strike a
 refusal it wrote the colleague's *process* into the asking agent's prose instead — the defect the
 coherence pass reports as `colleague-out-of-step`.
@@ -318,7 +318,7 @@ What that prose must never carry: a rule about when to consult, how briefly, wha
 to do with the answer — every one of those is a framework rule and a second copy below is a second voice
 claiming the same authority.
 
-The client is asked a question about **their own work** — whether the accounts desk really rings the
+The client is asked a question about **their own work** — whether the accounts agent really rings the
 greenhouse — never which agent should call which, which is machinery they were never shown.
 
 An edge is touched in three places, each doing what the others cannot: **the interview asks** and is the

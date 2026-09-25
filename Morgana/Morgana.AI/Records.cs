@@ -296,7 +296,7 @@ public static class Records
         /// <summary>Master toggle. When false the limiter is fully bypassed (fail open).</summary>
         public bool Enabled { get; set; }
 
-        /// <summary>Total dust a conversation may consume over its lifetime.</summary>
+        /// <summary>Total dust a conversation may consume over its lifetime. Zero is a valid budget: spent from the start, so no turn or command is ever admitted.</summary>
         public double BudgetPerConversation { get; set; }
 
         /// <summary>One-shot advisory shown when consumption crosses 70%.</summary>
@@ -371,9 +371,9 @@ public static class Records
     public record PartnerOptions
     {
         /// <summary>
-        /// Name this partner is known by here: what <c>[ConsultsAgent]</c> writes to reach its desks
+        /// Name this partner is known by here: what <c>[ConsultsAgent]</c> writes to reach its agents
         /// and, unless a policy overrides it, the <c>iss</c> claim its own calls must arrive under.
-        /// Never a hostname — an attribute names whose desk is being called, while where that desk
+        /// Never a hostname — an attribute names whose agent is being called, while where that agent
         /// runs is deployment. <c>morgana</c> is reserved for this installation's own agents.
         /// </summary>
         public string Name { get; set; } = string.Empty;
@@ -436,7 +436,7 @@ public static class Records
     }
 
     /// <summary>
-    /// What a partner may do toward this installation: which desks it reaches and how often it may
+    /// What a partner may do toward this installation: which agents it reaches and how often it may
     /// open a new exchange at them.
     /// </summary>
     public record PartnerInboundPolicy
@@ -455,7 +455,7 @@ public static class Records
 
         /// <summary>
         /// Published agents this partner may consult, or <c>null</c> to admit it to every one of them.
-        /// This is how one company's several installations reach only the desks that concern them:
+        /// This is how one company's several installations reach only the agents that concern them:
         /// publication stays whole and what narrows is admission.
         /// </summary>
         public List<string>? OnAgents { get; set; }
@@ -671,7 +671,7 @@ public static class Records
     /// The supervisor's wait on an agent is a budget on silence and is renewed by every streamed
     /// chunk, so a turn that keeps writing is never cut short. Work producing no text would
     /// otherwise be indistinguishable from an agent that has died and the longest such work — a
-    /// consultation, which is a whole turn at another desk — is precisely the one most likely to
+    /// consultation, which is a whole turn at another agent — is precisely the one most likely to
     /// outlast the budget.
     /// </remarks>
     public record AgentStillWorking;

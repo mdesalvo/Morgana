@@ -45,7 +45,7 @@ public class Anthropic : MorganaLLM
         // shared across every tier.
         // Left to its defaults the SDK retries a rate-limited or overloaded call on its own, with a
         // backoff nobody sees and no ceiling anybody chose: a turn that is being throttled is
-        // indistinguishable from a turn that is thinking, for minutes, and the caller waits it out
+        // indistinguishable from a turn that is thinking, for minutes, while the caller waits it out
         // with nothing on the screen and nothing in the log. The timeout bounds ONE attempt, so the
         // worst case of a call is it times the retries — which is what any ceiling above has to be
         // read against, since a caller's own budget covers a whole agentic loop of such calls.

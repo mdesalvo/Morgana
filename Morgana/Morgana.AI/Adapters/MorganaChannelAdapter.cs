@@ -132,7 +132,8 @@ public class MorganaChannelAdapter
                     AgentName = channelMessage.AgentName,
                     AgentCompleted = channelMessage.AgentCompleted,
                     FadingMessageDurationSeconds = channelMessage.FadingMessageDurationSeconds,
-                    ConversationMetadata = channelMessage.ConversationMetadata
+                    ConversationMetadata = channelMessage.ConversationMetadata,
+                    Progress = channelMessage.Progress
                 };
             }
 
@@ -243,7 +244,11 @@ public class MorganaChannelAdapter
             AgentName = channelMessage.AgentName,
             AgentCompleted = channelMessage.AgentCompleted,
             FadingMessageDurationSeconds = channelMessage.FadingMessageDurationSeconds,
-            ConversationMetadata = channelMessage.ConversationMetadata
+            ConversationMetadata = channelMessage.ConversationMetadata,
+
+            // A command's frame stays one when its text is degraded: its finished frame is how a channel
+            // matches the outcome to the command it is waiting on
+            Progress = channelMessage.Progress
         };
     }
 

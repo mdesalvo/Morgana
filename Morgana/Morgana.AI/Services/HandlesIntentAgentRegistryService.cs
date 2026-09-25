@@ -9,8 +9,8 @@ namespace Morgana.AI.Services;
 
 /// <summary>
 /// Discovers agents via [HandlesIntent] attribute with bidirectional validation.
-/// Scans assemblies for MorganaAgent classes; validates: intents in config have agents, agents in code have config,
-/// and every declared peer consultation names an existing colleague. Performs LLM tier validation; throws on any mismatch.
+/// Scans assemblies for MorganaAgent classes; validates that intents in config have agents, that agents in code have
+/// config and that every declared peer consultation names an existing colleague. Performs LLM tier validation; throws on any mismatch.
 /// </summary>
 public class HandlesIntentAgentRegistryService : IAgentRegistryService
 {
@@ -61,13 +61,13 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     }
 
     /// <summary>
-    /// Scans every loaded assembly for <see cref="MorganaAgent"/> subclasses declaring an intent,
+    /// Scans every loaded assembly for <see cref="MorganaAgent"/> subclasses declaring an intent
     /// and returns the intent-to-type map, without validating it.
     /// </summary>
     /// <returns>Intent to agent type, case-insensitive; agents without <c>[HandlesIntent]</c> are skipped.</returns>
     public static Dictionary<string, Type> DiscoverAgents()
     {
-        // The roster of desks this installation answers with, one per intent. The two spellings that
+        // The roster of agents this installation answers with, one per intent. The two spellings that
         // must meet here are typed by hand in different files, so casing is not allowed to part them.
         Dictionary<string, Type> registry = new(StringComparer.OrdinalIgnoreCase);
 
@@ -89,7 +89,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 }
             })
             // Concrete agents only. An abstract base is scaffolding a domain author shares between
-            // desks, never a desk that answers.
+            // agents, never an agent that answers.
             .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaAgent)));
 
         foreach (Type? morganaAgentType in morganaAgentTypes)
@@ -154,7 +154,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         List<string> errors = [];
         HashSet<string> registeredIntents = [.. registry.Keys];
 
-        // Every configured intent is a modelled desk and is owed an agent. The one intent that is
+        // Every configured intent is a modelled agent and is owed an agent. The one intent that is
         // not — the complement of the domain — never reaches here: it belongs to the classifier and
         // is described in its prompt, so no domain declares it and none has to be excused for it.
         HashSet<string> classifierIntents = [.. configuredIntents.Select(intent => intent.Name)];

@@ -53,7 +53,7 @@ public sealed record ConsultationObservation(
     string? Answer);
 
 /// <summary>
-/// Everything the harness observed about one turn: what the user said, what the channel received,
+/// Everything the harness observed about one turn: what the user said, what the channel received
 /// and the two structural signals read from inside the process.
 /// </summary>
 /// <param name="ConversationId">Conversation the turn belongs to.</param>

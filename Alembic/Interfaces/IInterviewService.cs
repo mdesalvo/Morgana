@@ -9,8 +9,8 @@ namespace Alembic.Interfaces;
 /// Scoped, which in Blazor Server means one interview per circuit.
 /// <para>
 /// The division of labour is fixed and is the reason this service exists rather than a bare chat
-/// loop: the <b>state machine is C#</b> — which pass is running, which fields are set, what may be
-/// written next — and the <b>conducting is the model's</b> — which question to ask and how to turn
+/// loop: the <b>state machine is C#</b> (which pass is running, which fields are set, what may be
+/// written next) while the <b>conducting is the model's</b>: which question to ask and how to turn
 /// a domain expert's answer into dispositive prose. Facts about the configuration are never left to
 /// a model's discretion and phrasing is never left to a template.
 /// </para>

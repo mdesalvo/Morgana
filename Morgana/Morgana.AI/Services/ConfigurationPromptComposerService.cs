@@ -141,7 +141,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // carried by the policy every peer-capable agent reads and repeating it per colleague would
         // pay for it once per function. The card's skills are deliberately absent too — an inventory
         // of the colleague's functions is what a caller audits to rule a question out and what falls
-        // to that desk is the colleague's own to state.
+        // to that agent is the colleague's own to state.
         => Task.FromResult(peerCard.Description ?? "");
 
     /// <inheritdoc />
@@ -179,7 +179,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
             framework.Injections, Constants.Injections.PeerConsultationDeclaration);
 
         // What the question may not claim and what asking cannot obtain, kept apart from the note on
-        // how to answer: two rules of one length dilute each other, and only this one has to hold
+        // how to answer: two rules of one length dilute each other, while only this one has to hold
         // against text somebody else wrote. It also carries the fence the question is read inside.
         string guardrail = Records.Injection.ResolveTemplate(
             framework.Injections, Constants.Injections.PeerConsultationGuardrail);

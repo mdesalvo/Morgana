@@ -91,6 +91,9 @@ public sealed class HarnessChannel : IAsyncDisposable
     /// <summary>Absolute URL Morgana posts outbound messages to.</summary>
     private string callbackUrl = string.Empty;
 
+    /// <summary>Where this channel takes Morgana's deliveries, for a conversation seeded on record to name as its callback.</summary>
+    public string CallbackUrl => callbackUrl;
+
     /// <summary>
     /// Whether <see cref="SendAsync"/> should spend a short grace wait draining a possible trailing
     /// side message after every turn's primary response — see
@@ -218,7 +221,7 @@ public sealed class HarnessChannel : IAsyncDisposable
     public async Task<ChannelMessage> SendAsync(string conversationId, string text, TimeSpan timeout)
     {
         using HttpRequestMessage request = Authorized(HttpMethod.Post, $"/api/morgana/conversation/{conversationId}/message");
-        request.Content = JsonContent.Create(new SendMessageRequest(conversationId, text));
+        request.Content = JsonContent.Create(new SendMessageRequest(text));
 
         using HttpResponseMessage response = await httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
@@ -316,7 +319,7 @@ public sealed class HarnessChannel : IAsyncDisposable
     }
 
     /// <summary>Dequeues the next inbound message for a conversation, or throws on timeout.</summary>
-    private async Task<ChannelMessage> ReceiveAsync(string conversationId, TimeSpan timeout)
+    public async Task<ChannelMessage> ReceiveAsync(string conversationId, TimeSpan timeout)
     {
         // GetOrAdd rather than a plain lookup: the webhook handler in StartAsync above may have
         // already created (and possibly already written to) this conversation's queue by the time

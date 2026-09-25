@@ -1,23 +1,31 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
 ## [0.32.0] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Terminal Command System
+Grimoire and Rune now take **commands**: type `/` at the prompt and a palette opens listing everything this installation offers, beside the channel's own `/new` and `/exit`. It filters as you type and Enter runs the highlighted one. A command is not prose: it never reaches any agents, so it costs no reasoning and interrupts nothing the conversation was doing.
+
 ### ✨ Added
+- **Command palette in Grimoire and Rune**: every command this installation publishes, plus the channel's own, one keystroke from the prompt
+- **Confirmation on what cannot be undone**: a command declares that it must be confirmed; the user is asked before it runs
+- **Turn marker in Grimoire and Rune**: a dot in the speaker's own colour opens every line of the conversation, so a long transcript reads as turns rather than a wall of text
 
 ### 🔄 Changed
-- Introduced `Morgana.Terminal` library to decouple Grimoire and Rune from the plumbing aspects they share (authentication, Morgana client, webhook dispatcher, terminal rendering), leaving each channel to declare only its own capability profile
+- Introduced **`Morgana.Terminal`** library to decouple Grimoire and Rune from the plumbing aspects they share (authentication, Morgana client, webhook dispatcher, terminal rendering), leaving each channel to declare only its own capability profile
 
 ### 🐛 Fixed
 - Morgana now remembers the whole conversation as it appears on screen: nothing disappears on a refresh any more, neither the message just sent nor anything already shown
 
 ### 📦 Dependencies
 - Updated `Microsoft.Agents.AI` to 1.22.0
+- Updated `Microsoft.FluentUI` to 5.0.0 (**Alembic**)
 
 ### 🚀 Future Enablement
+- **Agentic terminals**: every command you add is one more thing Grimoire and Rune can *do*, not merely talk about. Ask the agent what should be done, then do it on the same screen, one slash away. The machinery is in: the list is yours to grow
 
 
 ## [0.31.0] - 2026-09-20
@@ -85,13 +93,13 @@ Morgana now speaks the **A2A protocol** instance to instance. Every agent is pub
 
 ## [0.29.0] - 2026-09-01
 ### 🎯 Major Feature: Cross-Agent collaboration over A2A
-Morgana now speaks the **A2A protocol** end to end. An agent declares `[ConsultsAgent("billing")]` and that colleague becomes a `consult_{intent}` function in its tool list; the agent so named is published at `/a2a/{intent}` with a well-known agent card. The card is open, so anything that speaks A2A can discover it; the endpoint behind it is authenticated and Morgana signs its own peer traffic under the `morgana` issuer. So an agent stops sending the user back and forth between desks and collaborates with the collegue _behind the hood_ over the A2A protocol.
+Morgana now speaks the **A2A protocol** end to end. An agent declares `[ConsultsAgent("billing")]` and that colleague becomes a `consult_{intent}` function in its tool list; the agent so named is published at `/a2a/{intent}` with a well-known agent card. The card is open, so anything that speaks A2A can discover it; the endpoint behind it is authenticated and Morgana signs its own peer traffic under the `morgana` issuer. So an agent stops sending the user back and forth between agents and collaborates with the collegue _behind the hood_ over the A2A protocol.
 Colleagues live in this instance — a remote peer is not declarable yet (see Future Enablement) but the wire is the standard one at both ends. It is **opt-in and pays for itself only where declared**: nothing is published for an agent nobody consults and an agent that neither declares a colleague nor is named as one gets no endpoint, no policy and no extra tokens. A domain without `[ConsultsAgent]` anywhere, or a deployment with `Morgana:AgentToAgent:Enabled` false, is exactly the Morgana it was before.
 
 ### ✨ Added
 - **`[ConsultsAgent("intent")]`** — a new attribute naming the colleagues an agent may consult, opening Morgana to A2A collaboration
 - **A2A endpoints** — `/a2a/{intent}` and its `/.well-known/agent-card.json`, stood up only for the agents somebody declares as a colleague and authenticated like the rest of the API
-- **`ConsultMeFor`** — a new section of domain prompt, stating the territory this desk answers for. It is what a colleague reads before asking
+- **`ConsultMeFor`** — a new section of domain prompt, stating the territory this agent answers for. It is what a colleague reads before asking
 - **`PeerConsultation`** — a new global policy: what is licit to ask a colleague and how one answers
 
 ### 📦 Dependencies

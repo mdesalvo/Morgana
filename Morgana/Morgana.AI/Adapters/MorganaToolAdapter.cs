@@ -10,7 +10,7 @@ namespace Morgana.AI.Adapters;
 /// </summary>
 /// <remarks>
 /// Bridges between Morgana tool definitions (from agents.json) and Microsoft.Extensions.AI AIFunction system.
-/// Manages registration of tool method delegates against their definitions, validates delegate signatures,
+/// Manages registration of tool method delegates against their definitions, validates delegate signatures
 /// and converts them to AIFunction instances for LLM tool calling. Tool descriptions are assembled by
 /// <see cref="IPromptComposerService"/>; parameter descriptions are passed through as authored.
 /// Workflow: Create adapter → AddTool for each → CreateAllFunctions to generate AIFunction[] → pass to AIAgent.

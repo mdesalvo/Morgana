@@ -23,8 +23,8 @@ public sealed class ScenarioDefinition
 
     /// <summary>
     /// How many of those runs must pass. Falls back to <c>Harness:DefaultMinPasses</c>. The
-    /// context-handling group sets this equal to <see cref="Runs"/>: its properties are contract,
-    /// and a contract that holds four times out of five does not hold.
+    /// context-handling group sets this equal to <see cref="Runs"/>: its properties are contract;
+    /// a contract that holds four times out of five does not hold.
     /// </summary>
     public int? MinPasses { get; init; }
 
@@ -107,7 +107,7 @@ public sealed class ExpectSpec
     public string? RichCard { get; init; }
 
     /// <summary>
-    /// Substrings that must appear somewhere in the rich card's flattened text (title, subtitle,
+    /// Substrings that must appear somewhere in the rich card's flattened text (title, subtitle
     /// and every component's own text — see <see cref="ExpectationChecker"/>'s flattening). For
     /// deterministic values only, e.g. a seal word pinned via <c>Harness:DeterministicSealWord</c>:
     /// the judge deliberately never sees a card's body (only its title), so a domain fact the agent

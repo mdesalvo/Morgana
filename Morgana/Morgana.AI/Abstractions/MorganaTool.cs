@@ -14,7 +14,7 @@ namespace Morgana.AI.Abstractions;
 /// </summary>
 /// <remarks>
 /// What a tool RETURNS is read by the model as the fourth voice in its prompt, after the framework
-/// layer, the domain layer and the tool descriptions — and it is the one voice with no declared
+/// layer, the domain layer and the tool descriptions. It is the one voice with no declared
 /// precedence, because it arrives mid-turn from outside the composed prompt. So a return value
 /// states FACTS about the data and the record: what was written, what was not, what this response
 /// does and does not carry. It never instructs behaviour ("tell the user to…", "offer to…", "call X

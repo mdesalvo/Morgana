@@ -7,7 +7,7 @@ namespace Alembic.Model;
 /// The interview's own material: what its questions are built on, never what the agents say. Kept
 /// apart by origin because the two are not worth the same. What the client said is settled and is
 /// never put to them again; what Alembic read off a configuration somebody else wrote is a reading
-/// that may be wrong, and a step holding one owes the client the chance to correct it inside a
+/// that may be wrong; a step holding one owes the client the chance to correct it inside a
 /// question it was going to ask anyway.
 /// </remarks>
 /// <param name="Subject">

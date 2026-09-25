@@ -152,6 +152,11 @@ public class SQLiteDustLimitService : IDustLimitService
         if (!options.Enabled)
             return false;
 
+        // A budget of zero is spent before anything is charged, whether or not the conversation has a
+        // record yet: nothing it could ask for is admitted
+        if (options.BudgetPerConversation <= 0)
+            return true;
+
         // No DB for a non-existent conversation → nothing consumed → not over budget.
         if (!persistenceService.ConversationExists(conversationId))
             return false;
@@ -199,8 +204,8 @@ public class SQLiteDustLimitService : IDustLimitService
     public async Task<double> GetConsumedSinceAsync(string conversationId, double baseline)
     {
         // Clamped here rather than at the call site: a ledger that appears to run backwards is this
-        // service's problem to absorb — a disabled limiter, a failed read, a database that vanished
-        // between the two — and never a negative cost handed to whoever asked what the work cost.
+        // service's problem to absorb (a disabled limiter, a failed read, a database that vanished
+        // between the two), never a negative cost handed to whoever asked what the work cost.
         double consumed = await GetConsumedAsync(conversationId);
         return consumed > baseline ? consumed - baseline : 0.0;
     }
@@ -208,9 +213,14 @@ public class SQLiteDustLimitService : IDustLimitService
     /// <inheritdoc/>
     public async Task<double> GetUsageRatioAsync(string conversationId)
     {
-        // Unmetered, or metered against no budget at all: either way there is no proportion to report.
-        if (!options.Enabled || options.BudgetPerConversation <= 0)
+        // Unmetered: there is no proportion to report.
+        if (!options.Enabled)
             return 0.0;
+
+        // A budget of zero is spent before anything is charged, as the gate already reads it: the gauge and
+        // the resume must say so too, rather than show a conversation nobody measures
+        if (options.BudgetPerConversation <= 0)
+            return 1.0;
 
         // No DB for a non-existent conversation → nothing consumed → ratio 0.
         if (!persistenceService.ConversationExists(conversationId))
@@ -245,6 +255,8 @@ public class SQLiteDustLimitService : IDustLimitService
     /// <inheritdoc/>
     public async Task<(bool Send70, bool Send90)> CheckAndMarkWarningsAsync(string conversationId)
     {
+        // A budget of zero never had a 70% to cross: the conversation is spent from its start and the
+        // exhaustion notice is the only thing left to tell
         if (!options.Enabled || options.BudgetPerConversation <= 0)
             return (false, false);
 

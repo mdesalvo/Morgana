@@ -192,8 +192,8 @@ public class InterviewTools
     /// Returns the domain map as it currently stands.
     /// </summary>
     /// <remarks>
-    /// Read back whole for the same reason the toolkit is: two descriptions overlap or they do not,
-    /// and that is only visible side by side. It is the one defect no prose downstream repairs — the
+    /// Read back whole for the same reason the toolkit is: two descriptions overlap or they do not;
+    /// that is only visible side by side. It is the one defect no prose downstream repairs — the
     /// user meets it as the wrong agent answering.
     /// </remarks>
     public string GetDomainMap()
@@ -231,7 +231,7 @@ public class InterviewTools
     /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
     /// <see cref="ConsultMeForMarker"/>. Written by the same pass and from the same scope, because it
     /// is that scope addressed to a different reader: a colleague deciding whether a question is this
-    /// desk's. So it names a territory and never a list of what the agent can do — a caller handed an
+    /// agent's. So it names a territory and never a list of what the agent can do — a caller handed an
     /// inventory rules questions out instead of asking them. Short by nature, which is why the shape
     /// it reports against is tighter than the Target's.
     /// </remarks>
@@ -264,7 +264,7 @@ public class InterviewTools
     /// the toolkit exists — Instructions speaks about the agent's tools, so nothing earlier may
     /// write it.
     /// <para>
-    /// The tightest shape of the five, and the one the client feels: what a tool does, needs and
+    /// The tightest shape of the five is the one the client feels: what a tool does, needs and
     /// refuses belongs to that tool's own description, so a section running long is one holding a
     /// line per tool — a second authority on each subject and, stated back on screen, a wall of
     /// text where a sentence was owed.
@@ -301,8 +301,8 @@ public class InterviewTools
     /// Opens a tool, or revises the description of one already open.
     /// </summary>
     /// <remarks>
-    /// Revising keeps the parameters. A tool's contract is settled in several turns — the name and
-    /// what it does come out of one answer, its inputs out of the next — and re-declaring it to
+    /// Revising keeps the parameters. A tool's contract is settled in several turns (the name and
+    /// what it does come out of one answer, its inputs out of the next), so re-declaring it to
     /// sharpen the description must not silently empty it.
     /// </remarks>
     public string DeclareTool(string name, string description)
@@ -522,20 +522,20 @@ public class InterviewTools
     }
 
     /// <summary>
-    /// How much one desk, or the business itself, may hold on record before it has to be tidied.
+    /// How much one agent, or the business itself, may hold on record before it has to be tidied.
     /// </summary>
     /// <remarks>
-    /// Not a storage limit: every step opens holding what is known about the desk in hand, so a
+    /// Not a storage limit: every step opens holding what is known about the agent in hand, so a
     /// record that grows without end is a step reading forty sentences to ask one question. Reaching
     /// it is a sign two facts have become one fact said twice, which is the pass's own to settle.
     /// </remarks>
     private const int MemoryCeiling = 14;
 
     /// <summary>
-    /// Where what is found out is kept: with the desk in hand, or with the business.
+    /// Where what is found out is kept: with the agent in hand, or with the business.
     /// </summary>
     /// <remarks>
-    /// The map and the closing step both stand on the whole domain, and the closing step stands past
+    /// The map and the closing step both stand on the whole domain; the closing step stands past
     /// the end of the map holding an agent nobody will write to — so what is learned there is about
     /// the business or it is lost with that empty agent.
     /// </remarks>
@@ -550,7 +550,7 @@ public class InterviewTools
     /// Every pass is a fresh session that reads what is written and nothing else, so what the client
     /// says about their trade is spent the moment the turn ends unless it is written down here. That
     /// is how a step three passes later comes to ask a shopkeeper what a system ought to be able to
-    /// check: it never knew there was a shop. A fact about the desk in hand is kept with that agent
+    /// check: it never knew there was a shop. A fact about the agent in hand is kept with that agent
     /// and travels with it; a fact about the business itself is kept for the whole domain. Neither
     /// ever enters the domain — this is what the questions are made of, not what the agents say.
     /// </remarks>
@@ -617,44 +617,44 @@ public class InterviewTools
     }
 
     /// <summary>
-    /// Hands back what is on record about one of the other desks of this domain.
+    /// Hands back what is on record about one of the other agents of this domain.
     /// </summary>
     /// <remarks>
-    /// A step opens holding what is known about its own desk and the business, and only the subjects
-    /// the other desks keep — a domain of nine desks read whole would be forty sentences carried into
+    /// A step opens holding what is known about its own agent and the business, with only the subjects
+    /// the other agents keep — a domain of nine agents read whole would be forty sentences carried into
     /// every question, most of them about counters this step will never touch. This is how the rest
     /// is reached, when a subject listed there turns out to bear on the question in hand: whether the
     /// counter next door already takes deposits decides whether this one should.
     /// </remarks>
-    /// <param name="intent">The desk's own intent name, as the opening message lists it.</param>
-    public string RecallDesk(string intent)
+    /// <param name="intent">The agent's own intent name, as the opening message lists it.</param>
+    public string RecallAgent(string intent)
     {
         string named = intent.Trim();
         DomainDraft draft = draftStateService.Current ?? new DomainDraft();
 
-        // A desk of this domain is an entry of the map, written or still ahead — the same universe
+        // An agent of this domain is an entry of the map, written or still ahead — the same universe
         // the opening message lists its neighbours from. Resolved against the written agents alone,
-        // this denied the existence of every desk the interview had not reached yet, which is most
+        // this denied the existence of every agent the interview had not reached yet, which is most
         // of them on the first agent and all of them the client had just dictated.
         IntentDraft? entry = draft.Intents.Concat(interviewState.Map).FirstOrDefault(candidate =>
             string.Equals(candidate.Name, named, StringComparison.OrdinalIgnoreCase));
 
-        AgentDraft? desk = draft.Agents.FirstOrDefault(agent =>
+        AgentDraft? agent = draft.Agents.FirstOrDefault(agent =>
             string.Equals(agent.ID, named, StringComparison.OrdinalIgnoreCase));
 
-        if (entry is null && desk is null)
-            return $"There is no desk called '{named}' in this domain. The opening message lists them by name.";
+        if (entry is null && agent is null)
+            return $"There is no agent called '{named}' in this domain. The opening message lists them by name.";
 
-        // What the map says about a desk nobody has opened yet is the whole of what is known about
-        // it, and it is worth more than a refusal: the routing sentence the client dictated is the
+        // What the map says about an agent nobody has opened yet is the whole of what is known about
+        // it. It is worth more than a refusal: the routing sentence the client dictated is the
         // only account of that counter anybody has.
-        if (desk is null || desk.Known.Count == 0)
+        if (agent is null || agent.Known.Count == 0)
             return string.IsNullOrWhiteSpace(entry?.Description)
                 ? $"Nothing is on record about how they work at '{named}'."
                 : $"Nothing is on record yet about how they work at '{named}'. The map describes it as: {entry.Description}";
 
         return $"What is known about '{named}':\n"
-               + string.Join("\n", desk.Known.Select(known =>
+               + string.Join("\n", agent.Known.Select(known =>
                    $"- {known.Subject}: {known.Fact}" + (known.Inferred ? " (read off their configuration, not said)" : string.Empty)));
     }
 
@@ -699,7 +699,7 @@ public class InterviewTools
     /// The turn that asks whether a section is right is the one turn where the client is approving
     /// exact words, so those words stand apart from the sentence introducing them. Run into one
     /// paragraph the two become a single stretch of prose in which nothing marks where Alembic stops
-    /// speaking and the agent's own text begins — and an approval given to that approves nothing in
+    /// speaking and the agent's own text begins. An approval given to that approves nothing in
     /// particular, which is the whole of what this interview is for.
     /// </remarks>
     /// <param name="written">The section's prose exactly as it now stands, with nothing added around it.</param>
@@ -828,7 +828,7 @@ public class InterviewTools
     /// <para>
     /// Chained consultation is reported rather than refused: the framework denies a colleague its own
     /// peer functions while it is answering, so an edge whose far end asks a third agent is legal,
-    /// simply narrower than it looks — and the model is told exactly that, in the answer, so it can
+    /// simply narrower than it looks. The model is told exactly that, in the answer, so it can
     /// say it to the client instead of promising a reach the domain does not have.
     /// </para>
     /// </remarks>
@@ -872,8 +872,8 @@ public class InterviewTools
             ? null
             : Marked(InstructionsMarker, askedInstructions);
 
-        // The boundary is as often in the Target as in the Instructions — it is where a boundary
-        // belongs — and one left refusing the colleague's subject goes on being read every turn.
+        // The boundary is as often in the Target as in the Instructions, since that is where a boundary
+        // belongs; one left refusing the colleague's subject goes on being read every turn.
         edge.AskingTarget = string.IsNullOrWhiteSpace(askingTarget)
             ? null
             : Marked(TargetMarker, askingTarget);
@@ -990,7 +990,7 @@ public class InterviewTools
     /// </summary>
     /// <remarks>
     /// The last reading of a territory before it is published: a Morgana carries this card on the
-    /// A2A endpoint of every agent it holds, and a colleague weighing a question reads its
+    /// A2A endpoint of every agent it holds; a colleague weighing a question reads its
     /// description and nothing else. A sentence that reads as a list of functions, or one that never
     /// left the routing phrase the classifier uses, is visible here and nowhere else in the
     /// interview.
@@ -1006,9 +1006,9 @@ public class InterviewTools
     /// </summary>
     /// <remarks>
     /// The classifier reads this description against every other one, so it is the map's to write
-    /// and the map writes it before any agent exists. Once a desk has stated the competence it is
-    /// the one to answer for, the same subject is known in sharper words than the map could reach,
-    /// and the routing that lands a user here can be said with them. Only this entry's own
+    /// and the map writes it before any agent exists. Once an agent has stated the competence it is
+    /// the one to answer for, the same subject is known in sharper words than the map could reach;
+    /// the routing that lands a user here can be said with them. Only this entry's own
     /// description: every other one is settled and reading them back is what keeps this one distinct.
     /// </remarks>
     public string SetIntentDescription(string description)
@@ -1063,7 +1063,7 @@ public class InterviewTools
     /// Declares the pass settled.
     /// </summary>
     /// <remarks>
-    /// Believed only as far as the state machine can confirm it. Which fields are set is a fact,
+    /// Believed only as far as the state machine can confirm it. Which fields are set is a fact
     /// and facts are not a model's to assert.
     /// </remarks>
     public string SetPassCompleted()
@@ -1071,7 +1071,7 @@ public class InterviewTools
         // Correcting, every section is written already, so each pass could settle the moment it
         // opened and the client would be walked through an edit that asked them nothing at all —
         // which is how a client who came to change a voice reached the end with the voice they
-        // came to change. A pass may still settle on their first word, and the doctrine's own fast
+        // came to change. A pass may still settle on their first word; the doctrine's own fast
         // path stands: what it may not do is settle before they have said one.
         if (interviewState.Revision is not null && interviewState.Exchanges == interviewState.PassOpenedAt)
             return "Not completed: this section is reopened and the client has not said a word about it yet. "
@@ -1091,7 +1091,7 @@ public class InterviewTools
                    InterviewStep.DomainMapper => $"the first of the {interviewState.Map.Count} kinds of request you mapped, taken one at a time until every one has its agent.",
                    InterviewStep.AgentTarget => "how this agent should sound to the people who write in.",
                    InterviewStep.AgentPersonality => "the toolkit — what this agent has to reach for outside the conversation.",
-                   InterviewStep.AgentToolkit => "what this desk is the one to be asked about, which is what another desk of theirs reads before it asks.",
+                   InterviewStep.AgentToolkit => "what this agent is the one to be asked about, which is what another agent of theirs reads before it asks.",
                    InterviewStep.AgentTerritory => "the agent's own instructions and the way it presents what its tools return.",
                    InterviewStep.DomainColleagues => "nothing — the domain is finished and they land on it whole, to read, weigh and take away.",
                    _ => "the agent joins the domain and they can review or export it."

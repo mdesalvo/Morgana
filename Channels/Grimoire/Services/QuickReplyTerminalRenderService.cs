@@ -52,8 +52,8 @@ public sealed class QuickReplyTerminalRenderService
     /// <summary>Resting style for a non-selected termination option — Morgana primary as foreground.</summary>
     private const string TerminationInactive = "#8b5cf6";
 
-    /// <summary>Affordance line: a TTY has no obvious "clickable button" cue, so spell out the controls.</summary>
-    private const string HintText = "↑↓ move · Enter choose · Esc quit";
+    /// <summary>Affordance line: a TTY has no obvious "clickable button" cue, so spell out the controls, the command palette included.</summary>
+    private const string HintText = "↑↓ move · Enter choose · / commands · Esc quit";
 
     /// <summary>
     /// Renders <paramref name="quickReplies"/> with the entry at <paramref name="selectedIndex"/>

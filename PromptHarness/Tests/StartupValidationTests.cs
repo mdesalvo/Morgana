@@ -155,9 +155,9 @@ public sealed class StartupValidationTests
     {
         // A permission granted over nothing, most often a typo, read by whoever wrote it as real access.
         Exception refusal = AssertRefusesToBoot(
-            ($"Morgana__AgentToAgent__Partners__{fixture.ScopedPartnerIndex}__InboundPolicy__OnAgents__0", "harness-nodesk"));
+            ($"Morgana__AgentToAgent__Partners__{fixture.ScopedPartnerIndex}__InboundPolicy__OnAgents__0", "harness-noagent"));
 
-        Assert.Contains("harness-nodesk", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("harness-noagent", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -79,13 +79,20 @@ public sealed class HarnessOptions
     public double? DustBudgetPerConversation { get; init; }
 
     /// <summary>
+    /// Switches <c>Morgana:RateLimiting</c> on at boot with this many calls per minute, when set; rate
+    /// limiting is force-disabled otherwise. Process-wide like <see cref="DustBudgetPerConversation"/>:
+    /// only <c>RateLimitTests</c>' own filtered <c>dotnet test</c> invocation should ever set it.
+    /// </summary>
+    public int? RateLimitPerMinute { get; init; }
+
+    /// <summary>
     /// Whether this run stands a second Morgana up and points the instance under test at it as a
     /// partner, which is what <c>FederationTests</c> needs and nothing else does.
     /// </summary>
     /// <remarks>
     /// Off by default and process-wide when on, exactly like the guard rail and the dust budget: it
     /// replaces the whole domain of the instance under test with the one agent that holds a colleague
-    /// abroad, so every other group would find its own desks missing. Run it on its own:
+    /// abroad, so every other group would find its own agents missing. Run it on its own:
     /// <c>Harness__FederatedPeer=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"</c>
     /// </remarks>
     public bool FederatedPeer { get; init; }

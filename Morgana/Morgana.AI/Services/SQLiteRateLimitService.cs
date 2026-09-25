@@ -202,8 +202,8 @@ public class SQLiteRateLimitService : IRateLimitService
         SqliteTransaction transaction,
         DateTime now)
     {
-        // ISO-8601 with a fixed-width, zero-padded format: request_timestamp is stored as TEXT,
-        // and this specific format sorts correctly under a plain lexicographic "<"/">=" comparison
+        // ISO-8601 with a fixed-width, zero-padded format: request_timestamp is stored as TEXT.
+        // This specific format sorts correctly under a plain lexicographic "<"/">=" comparison
         // — the same trick every timestamp comparison in this file relies on.
         // A day back, which outlives the widest configured window: anything older cannot affect a count.
         DateTime cutoff = now.AddDays(-1);
@@ -226,8 +226,8 @@ public class SQLiteRateLimitService : IRateLimitService
     /// <param name="transaction">The enclosing check-and-record transaction the counts are read in.</param>
     /// <param name="utcNow">Reference instant each window is measured back from.</param>
     /// <returns>
-    /// A denying <see cref="RateLimitResult"/> for the first window found over its cap — narrowest
-    /// first (minute, then hour, then day) — or <c>null</c> when every configured window has room.
+    /// A denying <see cref="RateLimitResult"/> for the first window found over its cap, narrowest
+    /// first (minute, then hour, then day); <c>null</c> when every configured window has room.
     /// </returns>
     private async Task<RateLimitResult?> CheckTimeWindowsAsync(
         SqliteConnection connection,

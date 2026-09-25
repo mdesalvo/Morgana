@@ -294,8 +294,7 @@ public class ConversationLifecycleService : IConversationLifecycleService
 
         try
         {
-            SendMessageRequest request = new(
-                ConversationId: _chatStateService.ConversationId,
+            SendMessageRequest request = new SendMessageRequest(
                 Text: text);
 
             HttpResponseMessage response = await _http.PostAsJsonAsync(

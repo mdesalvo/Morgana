@@ -112,8 +112,8 @@ public class CoherenceService : ICoherenceService
             .Replace(KindsPlaceholder, string.Join(", ", asked.Select(a => $"`{a.Id}`")), StringComparison.Ordinal);
 
         // The framework first, this pass's own prose under it. Every class this pass reports turns
-        // on a rule settled above the agent — prose restating one, a boundary the framework already
-        // draws, a colleague relation the framework already governs — and a reader who has not been
+        // on a rule settled above the agent (prose restating one, a boundary the framework already
+        // draws, a colleague relation the framework already governs) while a reader who has not been
         // told what those rules are is left judging by resemblance.
         string system = string.Join("\n\n",
             new[] { await alembicPromptService.ComposeFrameworkPrimerAsync(), coherence.Target, instructions, formatting }
@@ -191,7 +191,7 @@ public class CoherenceService : ICoherenceService
         sb.AppendLine("# Agents");
         sb.AppendLine();
         // Every agent below is described by its native tools alone. A Morgana agent may also be
-        // hybrid — native tools of its own plus arbitrary MCP tools reached at runtime — and which
+        // hybrid, with native tools of its own plus arbitrary MCP tools reached at runtime. Which
         // MCP servers an agent reaches is a C# fact (AgentCodeFacts.MCPServers) agents.json never
         // carries, whether that agent's own tool count here is zero or not. So a capability a
         // Target or Instructions promises with no native tool listed for it is not evidence of
@@ -205,7 +205,7 @@ public class CoherenceService : ICoherenceService
             sb.AppendLine();
 
             // ConsultMeFor rides with the four an agent reads about itself, though nobody but a
-            // colleague ever reads it: a desk claiming a territory its own Instructions refuse is a
+            // colleague ever reads it: an agent claiming a territory its own Instructions refuse is a
             // contradiction visible only when the two are set side by side, which is this pass's job.
             foreach (string? section in new[] { agent.Target, agent.ConsultMeFor, agent.Instructions, agent.Personality, agent.Formatting })
                 if (!string.IsNullOrWhiteSpace(section))

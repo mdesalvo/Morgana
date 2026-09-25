@@ -38,8 +38,8 @@ public static class A2APublicationExtensions
     public static WebApplicationBuilder AddMorganaA2A(this WebApplicationBuilder builder, IReadOnlyCollection<string> publishedIntents)
     {
         // Answering a colleague runs a real agent against a real model, so the wait is a turn's and
-        // not a request timeout in disguise — but the innermost step of one: the desk that answers
-        // gives up before the desk that asked, which gives up before the turn carrying them both.
+        // not a request timeout in disguise — but the innermost step of one: the agent that answers
+        // gives up before the agent that asked, which gives up before the turn carrying them both.
         TimeSpan a2aRequestTimeout = Records.PeerConsultationWaits.From(builder.Configuration).Callee;
 
         // The session store has to know which system is asking and the hosting layer hands it only a
@@ -78,7 +78,7 @@ public static class A2APublicationExtensions
                         // Read at the moment a session is asked for rather than when the store is built,
                         // which is once for every request that will ever arrive.
                         () => serviceProvider.GetRequiredService<IHttpContextAccessor>()
-                                             .HttpContext?.Items[A2AAuthenticationFilter.CallerIssuerItemKey] as string,
+                                             .HttpContext?.Items[PartnerAuthenticationFilter.CallerIssuerItemKey] as string,
                         serviceProvider.GetRequiredService<ILogger>()),
                     ServiceLifetime.Singleton,
                     false)
@@ -125,18 +125,18 @@ public static class A2APublicationExtensions
                 continue;
 
             // These endpoints are the hosting layer's, not a controller's, so they carry no gate of
-            // their own until one is put on them: A2AAuthenticationFilter is the same gate
-            // MorganaController applies, narrowed to the systems this particular agent admits. The scope
+            // their own until one is put on them: PartnerAuthenticationFilter is the same gate
+            // ChannelAuthenticationFilter applies, narrowed to the systems this particular agent admits. The scope
             // is resolved here, once, so the gate enforces the very declaration startup validated.
             app.MapA2AJsonRpc(publishedIntent, agentPath)
-               .AddEndpointFilter(new A2AAuthenticationFilter(
+               .AddEndpointFilter(new PartnerAuthenticationFilter(
                    app.Services.GetRequiredService<IAuthenticationService>(),
                    publishedIntent,
                    ConfigurationAgentDirectoryService.ResolveAdmittedIssuers(app.Configuration, publishedIntent),
                    app.Services.GetRequiredService<ILogger>()));
 
             // Asked for on the request rather than handed over here. The card projected a moment ago
-            // cannot yet name where this instance answers — Kestrel has bound nothing — and a document
+            // cannot yet name where this instance answers, since Kestrel has bound nothing; a document
             // completed later by mutating it would be read, by whoever asked in between, in whatever
             // state that pass had reached. Resolved per request there is no such moment.
             app.MapGet($"{agentPath}/{Constants.AgentToAgent.WellKnownAgentCardPath}",

@@ -9,7 +9,7 @@ using Morgana.AI.Attributes;
 namespace Examples.Tools;
 
 /// <summary>
-/// The Green Care Plan desk of The Greenhouse &amp; Nursery: the garden-care contract a customer
+/// The Green Care Plan agent of The Greenhouse &amp; Nursery: the garden-care contract a customer
 /// signs alongside their plants — tending visits, coverage, plant-health guarantee, fees, clauses
 /// and termination. Reads the same shared database the greenhouse ledger writes (see
 /// <see cref="GreenhouseDatabaseHelper"/>): the plan's terms are the shop's, the schedule is the

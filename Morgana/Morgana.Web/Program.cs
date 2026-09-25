@@ -4,6 +4,7 @@ using Akka.DependencyInjection;
 using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
+using Morgana.AI.Commands;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using Morgana.AI.Telemetry;
@@ -128,7 +129,9 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IGuardRailService: Checks user messages for content safety and compliance
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
+// - ICommandRegistryService: Publishes the commands channels may run on a conversation (every ICommand registered here)
 // - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI, OpenAI), two-tier Efficiency/Performance via each provider's Tiers{} configuration
+// - ICommand: One per command a channel may run on a conversation
 
 builder.Services.AddSingleton<IMCPClientRegistryService, MCPClientRegistryService>();
 builder.Services.AddSingleton<IToolRegistryService, ProvidesToolForIntentRegistryService>();
@@ -142,6 +145,8 @@ builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryS
 builder.Services.AddSingleton<IGuardRailService, LLMGuardRailService>();
 builder.Services.AddSingleton<IClassifierService, LLMClassifierService>();
 builder.Services.AddSingleton<IPresenterService, LLMPresenterService>();
+builder.Services.AddSingleton<ICommandRegistryService, CommandRegistryService>();
+builder.Services.AddSingleton<ICommand, CompactHistoryCommand>();
 builder.Services.AddSingleton<ILLMService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
@@ -328,12 +333,14 @@ builder.AddMorganaA2A(publishedIntents);
 
 WebApplication app = builder.Build();
 
-// The domain and the registry, read here rather than on the first conversation. Both refuse what they
-// cannot serve — a name two plugins claim, a reserved one a plugin took, an intent with no agent or an
-// agent with no intent — and a refusal is only a startup refusal if something asks at startup. Left to
-// the first turn, the same fault reaches a user as a conversation that never answers.
+// The domain, the agent registry and the command catalogue are read here rather than on first use. The
+// first two refuse a name two plugins claim, a reserved name a plugin took, an intent with no agent or an
+// agent with no intent; the catalogue refuses a command name claimed twice or a command declared wrongly.
+// A refusal is only a startup refusal if something asks at startup. Left to first use, the same fault
+// reaches a user as a conversation that never answers or a channel with no commands to offer.
 await app.Services.GetRequiredService<IAgentConfigurationService>().GetIntentsAsync();
 app.Services.GetRequiredService<IAgentRegistryService>();
+app.Services.GetRequiredService<ICommandRegistryService>();
 
 app.UseCors("Channel");                 // Open CORS; trust gate is JWT, not origin
 app.UseHttpsRedirection();              // Redirect HTTP to HTTPS

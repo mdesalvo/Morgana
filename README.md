@@ -147,7 +147,7 @@ graph LR
   B -- one answer --> U
 ```
 
-A colleague living in the same installation needs nothing configured: that traffic is signed under a key coined at every start. A colleague living in **another Morgana** is one `Morgana:AgentToAgent:Partners[]` entry away, carrying the shared key and one policy per direction (`OutboundPolicy` for the desks consulted there, `InboundPolicy` for the desks reachable from there, with the ceiling on how many conversations that partner may open). Where a colleague runs is a deployment decision and the prose of an agent never says.
+A colleague living in the same installation needs nothing configured: that traffic is signed under a key coined at every start. A colleague living in **another Morgana** is one `Morgana:AgentToAgent:Partners[]` entry away, carrying the shared key and one policy per direction (`OutboundPolicy` for the agents consulted there, `InboundPolicy` for the agents reachable from there, with the ceiling on how many conversations that partner may open). Where a colleague runs is a deployment decision and the prose of an agent never says.
 
 </details>
 

@@ -48,7 +48,7 @@ Activated when the user says things like:
    *Behavioural — billed, judged.*
    - Behavior (`BehaviourTests` — turn continuation, closure, rich cards)
    - Actors (`ActorTests` — classifier, channel adapter, presentation)
-   - Served consultation (`ServedConsultationTests` — this installation answering a partner: which conversation, what it cost, how many exchanges are admitted. Its refusals are decided before a desk is troubled and cost nothing; the rest runs a real model)
+   - Served consultation (`ServedConsultationTests` — this installation answering a partner: which conversation, what it cost, how many exchanges are admitted. Its refusals are decided before an agent is troubled and cost nothing; the rest runs a real model)
 
    *Boot-flagged — each needs a process-wide knob the other groups must NOT carry, so each is its own
    invocation. This is the whole reason filters are never combined.*
@@ -56,7 +56,7 @@ Activated when the user says things like:
    - Conversation persistence (`ConversationPersistenceTests` — `Harness__EnableGuardrail=true`, the same knob as the guard group but its own invocation: it stages one refused turn among the five it drives and follows the database after each one)
    - Summarizer (`SummarizationTests` — `Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4`)
    - Dust (`DustTests` — `Harness__DustBudgetPerConversation=15`; 3 and 8 both let one turn jump past 90% straight into exhaustion, which reads as "90% never appeared")
-   - Federation (`FederationTests` — `Harness__FederatedPeer=true`, which stands a **second Morgana** up and **replaces the whole domain** of the instance under test with one toolless desk. Every other group would find its own desks missing, so this one never shares an invocation with anything)
+   - Federation (`FederationTests` — `Harness__FederatedPeer=true`, which stands a **second Morgana** up and **replaces the whole domain** of the instance under test with one toolless agent. Every other group would find its own agents missing, so this one never shares an invocation with anything)
 
    Plus `HarnessSmokeTests`, which is not a choice: step 4 runs it regardless.
 

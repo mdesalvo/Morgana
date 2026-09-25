@@ -59,7 +59,7 @@ public class InterviewService : IInterviewService
                                       + "people with.",
         [InterviewStep.AgentToolkit] = "This step settles its Toolkit, which gives it everything it can "
                                          + "reach outside the conversation.",
-        [InterviewStep.AgentTerritory] = "This step settles its ConsultMeFor, which gives it what this desk is "
+        [InterviewStep.AgentTerritory] = "This step settles its ConsultMeFor, which gives it what this agent is "
                                          + "the one to be asked about.",
         [InterviewStep.AgentInstructions] = "This step settles its Instructions, which give it how it goes "
                                           + "about the work.",
@@ -202,7 +202,7 @@ public class InterviewService : IInterviewService
     /// Opens the interview, with the turn already claimed by whoever called.
     /// </summary>
     /// <remarks>
-    /// Answering when nothing is open starts it, and that is one gesture rather than two, so the
+    /// Answering when nothing is open starts it: one gesture rather than two, so the
     /// claim cannot be taken twice on the way through.
     /// </remarks>
     private async Task<InterviewState> StartCoreAsync(CancellationToken cancellationToken)
@@ -286,8 +286,8 @@ public class InterviewService : IInterviewService
         IntentDraft? intentDraft = draft.Intents.FirstOrDefault(i =>
             string.Equals(i.Name, agentID, StringComparison.OrdinalIgnoreCase));
 
-        // Both or neither. An agent whose intent is missing is a domain that would not start at all,
-        // and opening a section of it would have the client polishing something the classifier can
+        // Both or neither. An agent whose intent is missing is a domain that would not start at all;
+        // opening a section of it would have the client polishing something the classifier can
         // never reach. Review is where that is reported and repairing it is not this gesture's work.
         if (agentDraft is null || intentDraft is null)
             return false;
@@ -485,8 +485,8 @@ public class InterviewService : IInterviewService
         //
         // A loop rather than an if and it terminates: EnterPassAsync clears ReadyForReview, so it
         // takes a fresh confirmation from the new pass to go round again. A pass that genuinely
-        // settles the moment it opens is legal — a toolkit the client has already described in full
-        // — and would otherwise strand the interview one question short of moving.
+        // settles the moment it opens is legal (a toolkit the client has already described in full)
+        // and would otherwise strand the interview one question short of moving.
         //
         // The Return pass is where it stops, because what follows is the client's: letting the agent
         // into the domain is the one decision of the interview that is theirs.
@@ -733,16 +733,16 @@ public class InterviewService : IInterviewService
     /// What Alembic actually asked the client this turn: the last question, not everything it wrote.
     /// </summary>
     /// <remarks>
-    /// A run can hold several assistant messages — the model writes its question, calls a tool and
-    /// writes again — and <c>AgentResponse.Text</c> is all of them joined, so a question repeated
+    /// A run can hold several assistant messages (the model writes its question, calls a tool and
+    /// writes again) and <c>AgentResponse.Text</c> is all of them joined, so a question repeated
     /// after a tool call reached the screen twice over. The last message is not the answer either:
     /// the tail of a run is often the model narrating its own work ("I'll wait for their answer
     /// before setting the Target"), which leaves the client facing a box under a sentence that asks
     /// them nothing while the real question scrolls out of existence.
     ///
     /// So what is shown is the last message that actually asks something. The test is the question
-    /// mark, which is the same law the interviewer is held to in prose — one sentence, one question
-    /// mark — and this is the screen that law exists for. The fallback is still the last thing said:
+    /// mark, which is the same law the interviewer is held to in prose (one sentence, one question
+    /// mark) and this is the screen that law exists for. The fallback is still the last thing said:
     /// a turn that asks nothing at all is a defect and showing it is how anyone finds out.
     /// </remarks>
     private static string LastAsked(AgentResponse response)
@@ -882,7 +882,7 @@ public class InterviewService : IInterviewService
     /// </summary>
     /// <remarks>
     /// Both sections, because a boundary is written in either: the Instructions carry how the agent
-    /// goes about the subject and the Target carries whether the subject is its at all, and an edge
+    /// goes about the subject and the Target carries whether the subject is its at all; an edge
     /// contradicted by one is contradicted whichever of the two states it.
     /// <para>
     /// An imported agent whose prose this step rewrote becomes Revised: the migration report's whole
@@ -947,7 +947,7 @@ public class InterviewService : IInterviewService
 
         // An agent is about its intent from its first pass, not from the moment it is let in. Every
         // mid-interview check reading the pair — the findings, the recap, the colleague rules — was
-        // otherwise looking at an agent no intent could reach and reporting the very desk being
+        // otherwise looking at an agent no intent could reach and reporting the very agent being
         // written as unhandled. Only while it is blank: one out of the client's own configuration
         // arrives with an ID that already reaches it and Morgana matches the two case-insensitively.
         if (interviewState.OnAnEntry && string.IsNullOrWhiteSpace(interviewState.Agent.ID))
@@ -964,8 +964,8 @@ public class InterviewService : IInterviewService
 
         // The opening question of the whole interview is nobody's to phrase but the client's own:
         // there is nothing yet for a model to be reading back, so a model asked for it is either
-        // repeating the one sentence that fits or drifting off it. Fixed rather than composed —
-        // and the session still needs building above, since the client's first answer lands on it.
+        // repeating the one sentence that fits or drifting off it. Fixed rather than composed;
+        // the session still needs building above, since the client's first answer lands on it.
         if (interviewPass == InterviewStep.DomainMapper && !revisiting)
         {
             interviewState.Question = OpeningQuestion;
@@ -1002,7 +1002,7 @@ public class InterviewService : IInterviewService
     /// Every pass past the map runs once per entry and where it is standing is a fact the state
     /// machine holds: which entry of how many, which intent, what is already written on that agent
     /// and what this step is about to give it. All of it goes in the opening message, because a pass
-    /// that has to work it out either spends a tool call on it or guesses — and the client is owed a
+    /// that has to work it out either spends a tool call on it or guesses, while the client is owed a
     /// first sentence that names their agent and says what this stage is for, which is not something
     /// to be reconstructed from context.
     /// </remarks>
@@ -1047,16 +1047,16 @@ public class InterviewService : IInterviewService
     /// The whole of what one pass knows about the trade it is asking about: every pass is a fresh
     /// session and a step that opens knowing only the configuration asks a shopkeeper what a system
     /// ought to be able to check, because nothing on its side of the boundary says there is a shop.
-    /// The desk in hand comes last and nearest the question, since that is what this step is about.
+    /// The agent in hand comes last and nearest the question, since that is what this step is about.
     /// It is given as fact to build questions on, never as prose to copy into a section.
     /// </remarks>
     private string Known(InterviewState interviewState)
     {
         List<KnownFact> trade = [.. (draftStateService.Current?.Learned ?? [])];
-        List<KnownFact> desk = interviewState.OnAnEntry ? [.. interviewState.Agent.Known] : [];
+        List<KnownFact> agent = interviewState.OnAnEntry ? [.. interviewState.Agent.Known] : [];
         List<string> neighbours = Neighbours(interviewState);
 
-        if (trade.Count == 0 && desk.Count == 0 && neighbours.Count == 0)
+        if (trade.Count == 0 && agent.Count == 0 && neighbours.Count == 0)
             return string.Empty;
 
         string told = " What is known about their work — build your questions on it, never ask any of "
@@ -1065,22 +1065,22 @@ public class InterviewService : IInterviewService
         if (trade.Count > 0)
             told += "\nAbout their business: " + Facts(trade);
 
-        if (desk.Count > 0)
-            told += "\nAbout this desk: " + Facts(desk);
+        if (agent.Count > 0)
+            told += "\nAbout this agent: " + Facts(agent);
 
-        // The other desks arrive as subjects rather than as sentences: nine of them read whole would
+        // The other agents arrive as subjects rather than as sentences: nine of them read whole would
         // be forty sentences carried into every question, nearly all about counters this step will
         // never touch. What is listed is enough to know whether one of them bears on the question in
         // hand, which is the only moment the sentences themselves are worth fetching.
         if (neighbours.Count > 0)
-            told += "\nThe other desks of this domain and what is on record about each — call RecallDesk "
+            told += "\nThe other agents of this domain and what is on record about each — call RecallAgent "
                     + "with a name to read one, where what it keeps bears on the question you are about "
                     + "to ask: " + string.Join(" ", neighbours);
 
         // Said and read are not worth the same and the difference is stated once, at the foot of the
         // list: an agent that arrived in an upload carries finished prose and no memory of the
         // conversation behind it, so everything known about it is Alembic's own reading.
-        if (trade.Concat(desk).Any(fact => fact.Inferred))
+        if (trade.Concat(agent).Any(fact => fact.Inferred))
             told += "\nWhat is marked (read, not said) was taken off the configuration they uploaded and "
                     + "nobody has confirmed it. Treat it as a reading that may be wrong: let it be "
                     + "corrected inside a question you were going to ask anyway and never put it to them "
@@ -1097,14 +1097,14 @@ public class InterviewService : IInterviewService
             $"- {fact.Subject}: {fact.Fact}" + (fact.Inferred ? " (read, not said)" : string.Empty)));
 
     /// <summary>
-    /// What is known about every other desk of the domain, named one by one.
+    /// What is known about every other agent of the domain, named one by one.
     /// </summary>
     /// <remarks>
-    /// A desk is only itself next to the ones beside it: what the accounts counter does with a
+    /// An agent is only itself next to the ones beside it: what the accounts counter does with a
     /// delivery query is a fact about the accounts counter and about this one at the same time. A
-    /// step that saw only the desk in hand would ask about it as though the shop had one counter,
+    /// step that saw only the agent in hand would ask about it as though the shop had one counter,
     /// which is how the same ground ends up claimed twice and how a boundary gets drawn against
-    /// nothing. Both the written agents and the entries still ahead, since a desk nobody has opened
+    /// nothing. Both the written agents and the entries still ahead, since an agent nobody has opened
     /// yet is still on the map the client dictated.
     /// </remarks>
     private List<string> Neighbours(InterviewState interviewState)
@@ -1262,7 +1262,7 @@ public class InterviewService : IInterviewService
         MorganaToolAdapter toolAdapter = new MorganaToolAdapter(promptComposerService);
 
         // The delegate map is the one place a tool's name, its declaration and its implementation
-        // meet. AddTool validates the pair — parameter count, names, required/optional — and throws
+        // meet. AddTool validates the pair (parameter count, names, required/optional) and throws
         // on a mismatch, so a declaration that has drifted from its method fails here rather than
         // reaching the model as a schema nothing can satisfy.
         Dictionary<string, Delegate> implementations = new(StringComparer.Ordinal)
@@ -1289,7 +1289,7 @@ public class InterviewService : IInterviewService
             [nameof(InterviewTools.ShowWhatIsWritten)] = tools.ShowWhatIsWritten,
             [nameof(InterviewTools.NoteDomainFact)] = tools.NoteDomainFact,
             [nameof(InterviewTools.DropDomainFact)] = tools.DropDomainFact,
-            [nameof(InterviewTools.RecallDesk)] = tools.RecallDesk,
+            [nameof(InterviewTools.RecallAgent)] = tools.RecallAgent,
             [nameof(InterviewTools.SetTraits)] = tools.SetTraits,
             [nameof(InterviewTools.GetExistingIntents)] = tools.GetExistingIntents,
             [nameof(InterviewTools.GetDomainAgents)] = tools.GetDomainAgents,
@@ -1325,7 +1325,7 @@ public class InterviewService : IInterviewService
 
                 // Each one wrapped so the call and the sentence it is answered with are written
                 // down. A tool refusing what a pass asked of it says so to the model alone, which
-                // is the whole design — and left at that, a pass that told the client something was
+                // is the whole design. Left at that, a pass that told the client something was
                 // settled while its own tool had refused reads exactly like one that succeeded.
                 Tools = [.. (await toolAdapter.CreateAllFunctionsAsync())
                                               .Select(function => new LoggedTool(function, logger, interviewerId))]
@@ -1380,13 +1380,13 @@ public class InterviewService : IInterviewService
 
             string asked = LastAsked(response);
 
-            // A turn that spent itself entirely on tool calls is legitimate — reading findings or a
-            // composed prompt takes a round trip that has nothing to say to the client — and the
+            // A turn that spent itself entirely on tool calls is legitimate (reading findings or a
+            // composed prompt takes a round trip that has nothing to say to the client) and the
             // question already on the screen simply stands. Only the question text is gated on this:
             // Choice, Example and Traits are promoted from their Pending* counterparts regardless,
             // because a turn CAN legitimately call SetChoice (or SetExample, SetTraits) without also
-            // producing new question text — e.g. a validation round that decides the question already
-            // on screen now deserves a shortcut button — and gating all four on the same condition
+            // producing new question text (e.g. a validation round that decides the question already
+            // on screen now deserves a shortcut button) and gating all four on the same condition
             // silently dropped a button the model genuinely offered, with no way for it to reappear on
             // a later turn either, since PendingChoice is reset to null at the top of every exchange.
             if (asked.Length > 0)

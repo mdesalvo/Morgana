@@ -219,7 +219,7 @@ public sealed class MorganaHostedAgent : AIAgent
             IActorRef agentActor = await actorSystem.GetOrCreateAgentAsync(agentType, intent, hostedAgentSession.ConversationId);
 
             // The note and the fence around the question are one composition: what a colleague wrote is
-            // the only text on this turn authored outside this installation, and where it begins and
+            // the only text on this turn authored outside this installation. Where it begins and
             // ends is stated by the same layer that says what it may not claim.
             string declaredQuestion = await promptComposerService.ComposeConsultationRequestAsync(callerIntent, question);
 
@@ -228,8 +228,8 @@ public sealed class MorganaHostedAgent : AIAgent
             // ledger of its own — the difference is what isolates the answer's own cost.
             double dustBaseline = await dustLimitService.GetConsumedAsync(hostedAgentSession.ConversationId);
 
-            // Ask, where the pipeline's own convention is Tell. That convention exists for streaming —
-            // an actor pushing chunks to a channel as they come — and there is no channel here: a
+            // Ask, where the pipeline's own convention is Tell. That convention exists for streaming,
+            // an actor pushing chunks to a channel as they come. There is no channel here: a
             // colleague's answer is read whole, by a model, with a caller blocked on it. The timeout
             // is the pipeline's own, so a silent actor lands in the catch below as an answer instead
             // of hanging the user's turn.
@@ -256,7 +256,7 @@ public sealed class MorganaHostedAgent : AIAgent
         {
             logger.LogError(ex, "Hosted agent '{Intent}' failed to serve a request from '{CallerIntent}' on conversation '{ConversationId}'", intent, callerIntent, hostedAgentSession.ConversationId);
 
-            // Only a desk that went silent is reported as one. Anything else — an answer that would
+            // Only an agent that went silent is reported as one. Anything else — an answer that would
             // not serialize, an actor that could not be reached — told the asking model to expect a
             // slow colleague when what it had was a broken one, which is a different thing to decide
             // against. Either way the instruction is the same: this answer is not coming.

@@ -1,3 +1,6 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
 using PromptHarness.Infrastructure.Wiring;
 using Morgana.Contracts;
 using Xunit;
@@ -49,7 +52,7 @@ public sealed class DustTests
 
     /// <summary>
     /// Walks a conversation one cheap BillingAgent turn at a time, checking after every turn whether
-    /// <c>ConversationManagerActor</c>'s diagnostic log lines show the 70% warning, the 90% warning,
+    /// <c>ConversationManagerActor</c>'s diagnostic log lines show the 70% warning, the 90% warning
     /// and the exhaustion notice — in that order, each appearing exactly once, before the budget
     /// truly locks the conversation out. Stops the instant exhaustion is observed: one more turn
     /// after that would hit the controller's hard 429 (<c>IsOverBudgetAsync</c>), which is the
@@ -102,5 +105,47 @@ public sealed class DustTests
         Assert.True(seen70, $"70% dust warning never appeared within {MaxTurns} turns.");
         Assert.True(seen90, $"90% dust warning never appeared within {MaxTurns} turns.");
         Assert.True(seenExhausted, $"Dust exhaustion never appeared within {MaxTurns} turns.");
+    }
+
+    /// <summary>
+    /// A conversation whose budget is already spent is refused at the gate, whatever it asks for: a command is
+    /// told as its own outcome, a message as a notice. A resume then says the conversation is over. No model is
+    /// reached, since the spending is written on the record rather than run. It holds on a budget of zero too,
+    /// which is spent before anything is charged: run it with <c>Harness__DustBudgetPerConversation=0</c> and
+    /// this test's own name as the filter, since the walk above needs a budget to walk through.
+    /// </summary>
+    [Fact]
+    public async Task Spent_budget_refuses_commands_and_messages_at_the_gate()
+    {
+        Assert.SkipWhen(fixture.Options.DustBudgetPerConversation is null,
+            "Dust limiting is off: run with Harness__DustBudgetPerConversation set, in this class's own invocation.");
+
+        ChannelApiClient api = new ChannelApiClient(fixture);
+        string conversationId = ChannelApiClient.NewConversationId();
+        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing", fixture.Channel.CallbackUrl);
+        await api.QueryRecordAsync(conversationId,
+            $"UPDATE dust_budget SET dust_consumed = {fixture.Options.DustBudgetPerConversation!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)} WHERE id = 1;");
+
+        // A command asked of a spent conversation is refused as that command's outcome, carrying the reason a
+        // channel ends the conversation on
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendCommandAsync(conversationId, """{"name":"compact"}""")).StatusCode);
+        ChannelMessage commandRefusal = await fixture.Channel.ReceiveAsync(conversationId, TimeSpan.FromSeconds(15));
+        Assert.Equal("dust_budget_exhausted", commandRefusal.ErrorReason);
+        Assert.Equal("system", commandRefusal.MessageType);
+        Assert.True(commandRefusal.Progress is { Command: "compact", Finished: true }, "The refusal of a command was not told as that command's outcome.");
+
+        // A message is refused as a notice in the conversation, with no frame belonging to it
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendAsync(
+            "POST", "/api/morgana/conversation/{id}/message", conversationId, api.HarnessToken())).StatusCode);
+        ChannelMessage messageRefusal = await fixture.Channel.ReceiveAsync(conversationId, TimeSpan.FromSeconds(15));
+        Assert.Equal("dust_budget_exhausted", messageRefusal.ErrorReason);
+        Assert.Equal("error", messageRefusal.MessageType);
+        Assert.Null(messageRefusal.Progress);
+
+        // A channel coming back to the conversation learns at once that it is over, gauge at zero
+        HttpResponseMessage resumed = await api.SendAsync("POST", "/api/morgana/conversation/{id}/resume", conversationId, api.HarnessToken());
+        JsonElement body = await resumed.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0.0, body.GetProperty("dustLevel").GetDouble());
+        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("dustExhaustedMessage").GetString()), "A resume of a spent conversation did not say it is over.");
     }
 }

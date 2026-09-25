@@ -10,7 +10,7 @@ namespace PromptHarness.Tests;
 /// </summary>
 /// <remarks>
 /// <para><strong>Requires a second installation at boot</strong> — the instance under test carries a
-/// domain of one desk on this run and would find every other group's agents missing. Run it on its
+/// domain of one agent on this run and would find every other group's agents missing. Run it on its
 /// own:</para>
 /// <code>Harness__FederatedPeer=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"</code>
 ///
@@ -21,7 +21,7 @@ namespace PromptHarness.Tests;
 /// the card is written by a Morgana, read by a Morgana and the token one minted is proven by the
 /// other.</para>
 ///
-/// <para>Its one scenario asserts the mechanism and the datum, nothing around it. The desk doing the
+/// <para>Its one scenario asserts the mechanism and the datum, nothing around it. The agent doing the
 /// asking has no books and no tools, so a turn that states a stock level at all has been across the
 /// wire — which is why no assertion here has to reach into the other installation to see what
 /// happened there.</para>
@@ -38,15 +38,15 @@ public sealed class FederationTests
     /// full per-run transcript on the assertion message when it did not.
     /// </summary>
     [Fact]
-    public async Task A_desk_reaches_its_colleague_at_the_other_installation()
+    public async Task An_agent_reaches_its_colleague_at_the_other_installation()
     {
         // Without the second installation this run's instance is the ordinary one, whose domain has
-        // no desk declaring a colleague abroad: there is nothing here to measure rather than
+        // no agent declaring a colleague abroad: there is nothing here to measure rather than
         // something failing.
         Assert.SkipWhen(fixture.Peer is null,
             "This group needs the second installation: Harness__FederatedPeer=true.");
 
-        ScenarioOutcome outcome = await fixture.Runner.RunAsync("federation-consults-a-desk-at-another-installation");
+        ScenarioOutcome outcome = await fixture.Runner.RunAsync("federation-consults-an-agent-at-another-installation");
 
         Assert.True(outcome.Passed, outcome.Report());
     }

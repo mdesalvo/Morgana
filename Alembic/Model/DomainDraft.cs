@@ -103,7 +103,7 @@ public sealed class DomainDraft
     /// Takes the fallback intent out of the domain, wherever it came from.
     /// </summary>
     /// <remarks>
-    /// It is the complement of the domain rather than a part of it — what a request matching no desk
+    /// It is the complement of the domain rather than a part of it — what a request matching no agent
     /// is — so it belongs to Morgana's classifier and is described in that actor's own prompt. No
     /// interview writes it, no client edits it and nothing this workbench emits declares it. A
     /// configuration that arrived carrying one was written before that was true: it is dropped here
@@ -114,7 +114,7 @@ public sealed class DomainDraft
     {
         bool dropped = Intents.RemoveAll(IsFallback) > 0;
 
-        // The map of an interrupted sitting is a second place a domain declares its desks, and a
+        // The map of an interrupted sitting is a second place a domain declares its agents; a
         // sitting begun before this rule held can be resumed today carrying the fallback as an entry
         // the walk would open an agent on.
         if (Sitting is not null)
@@ -123,7 +123,7 @@ public sealed class DomainDraft
         return dropped;
     }
 
-    /// <summary>Whether this entry is the classifier's fallback rather than a desk of the domain.</summary>
+    /// <summary>Whether this entry is the classifier's fallback rather than an agent of the domain.</summary>
     private static bool IsFallback(IntentDraft intent) =>
         string.Equals(intent.Name, FallbackIntent, StringComparison.OrdinalIgnoreCase);
 }
@@ -198,7 +198,7 @@ public sealed class InterviewSitting
 /// <remarks>
 /// The prose travels with the edge because without it the edge is a defect. An agent whose
 /// Instructions say a subject belongs to another bench and stops there is being told, in the same
-/// prompt, that it may ask and that it may not — and the imperative sentence wins. So the tool that
+/// prompt, that it may ask and that it may not, where the imperative sentence wins. So the tool that
 /// declares an edge takes the asking agent's reconciled Instructions in the same call and the two
 /// land in the domain together or not at all.
 /// </remarks>
@@ -345,7 +345,7 @@ public sealed class AgentDraft
     public string SubType { get; set; } = "AGENT";
 
     /// <summary>
-    /// What the client has said about the work this desk does, in their own words: the picture of
+    /// What the client has said about the work this agent does, in their own words: the picture of
     /// their counter as the interview has painted it so far, step by step.
     /// </summary>
     /// <remarks>
@@ -371,12 +371,12 @@ public sealed class AgentDraft
     /// <remarks>
     /// The one section whose reader is another agent: it never enters this agent's own prompt, it is
     /// published on its A2A card and read by whoever holds a <c>consult_</c> function for it. Settled
-    /// by the <c>AgentTerritory</c> pass, once the toolkit stands: what this desk is characteristically
+    /// by the <c>AgentTerritory</c> pass, once the toolkit stands: what this agent is characteristically
     /// the one to be asked about is a competence of the client's own business, elicited like any
-    /// other, and a territory its tools do not cover is a promise another desk would hold it to.
+    /// other; a territory its tools do not cover is a promise another agent would hold it to.
     /// Every agent carries one, whether or not anybody consults it and whether or not this
     /// installation ever speaks to another: an unread one costs nothing and its absence leaves every
-    /// other desk answering "go to them" where a precise answer was there to be had.
+    /// other agent answering "go to them" where a precise answer was there to be had.
     /// </remarks>
     public string? ConsultMeFor { get; set; }
 
@@ -570,7 +570,7 @@ public sealed class AgentCodeFacts
     /// <remarks>
     /// A C# fact like <see cref="MCPServers"/> — <c>agents.json</c> carries no trace of it, so an
     /// imported domain arrives with none and the colleagues step is where they are settled. It is
-    /// nonetheless a domain question and not an infrastructural one: whether the accounts desk has
+    /// nonetheless a domain question and not an infrastructural one: whether the accounts agent has
     /// to ring the greenhouse is something only the client knows about their own work, which is why
     /// it is asked in the interview rather than ticked on the emit page beside the tier.
     /// <para>

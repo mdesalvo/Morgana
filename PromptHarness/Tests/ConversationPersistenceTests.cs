@@ -31,8 +31,8 @@ namespace PromptHarness.Tests;
 ///
 /// <para>The script walks the four ways a turn can end so the record left behind is the one a real
 /// conversation leaves: a phrase the guard refuses, a phrase too ambiguous to route, a phrase that
-/// reaches a desk and two the desk was waiting for. Morgana answers the first two herself, which is
-/// what puts her voice on record with no desk in the conversation at all.</para>
+/// reaches an agent and two the agent was waiting for. Morgana answers the first two herself, which is
+/// what puts her voice on record with no agent in the conversation at all.</para>
 ///
 /// <para><strong>Runs under <c>Harness__EnableGuardrail=true</c>, alone.</strong> The guard is off
 /// everywhere else and a refused turn cannot be staged without it. Nothing is mocked to avoid the
@@ -55,39 +55,39 @@ public sealed class ConversationPersistenceTests
             "This is garbage, you're all worthless and I hope your whole system rots.",
             TurnEnding.RefusedByTheGuard,
             MorganaKeepsIt: true,
-            DeskOnRecord: false,
-            "the guard refuses it, so no desk is ever reached and Morgana answers for the turn"),
+            AgentOnRecord: false,
+            "the guard refuses it, so no agent is ever reached and Morgana answers for the turn"),
         new ScriptedTurn(
             "What about my billing and my contract?",
             TurnEnding.HandedBackToChoose,
             MorganaKeepsIt: true,
-            DeskOnRecord: false,
+            AgentOnRecord: false,
             "it names two intents at once, so it is handed back for disambiguation before anyone is routed"),
         new ScriptedTurn(
             "Hi, I'd like to see my last 3 invoices",
-            TurnEnding.ServedByADesk,
+            TurnEnding.ServedByAnAgent,
             MorganaKeepsIt: true,
-            DeskOnRecord: true,
-            "it arrives with nobody serving the user, so Morgana keeps it and then hands the turn to a desk"),
+            AgentOnRecord: true,
+            "it arrives with nobody serving the user, so Morgana keeps it and then hands the turn to an agent"),
         new ScriptedTurn(
             "P994E",
-            TurnEnding.ServedByADesk,
+            TurnEnding.ServedByAnAgent,
             MorganaKeepsIt: false,
-            DeskOnRecord: true,
-            "the desk asked for it and is still serving the user, so its own session is the record of the exchange"),
+            AgentOnRecord: true,
+            "the agent asked for it and is still serving the user, so its own session is the record of the exchange"),
         new ScriptedTurn(
             "Which of those is the oldest?",
-            TurnEnding.ServedByADesk,
+            TurnEnding.ServedByAnAgent,
             MorganaKeepsIt: false,
-            DeskOnRecord: true,
-            "the desk is still in service, so a second follow-up is filed exactly where the first one was")
+            AgentOnRecord: true,
+            "the agent is still in service, so a second follow-up is filed exactly where the first one was")
     ];
 
-    /// <summary>The orchestrator's name in a row and beside a bubble, where a desk carries its own.</summary>
+    /// <summary>The orchestrator's name in a row and beside a bubble, where an agent carries its own.</summary>
     private const string OrchestratorName = "Morgana";
 
     /// <summary>
-    /// Marks the copy of a user's phrase a desk holds only so its model could read it. Spelled out
+    /// Marks the copy of a user's phrase an agent holds only so its model could read it. Spelled out
     /// rather than read from <c>Constants</c>: this literal is what a stored row is filtered on, so
     /// renaming it silently must be noticed here rather than asserted against itself.
     /// </summary>
@@ -126,7 +126,7 @@ public sealed class ConversationPersistenceTests
         DrivenConversation conversation = await ConversationAsync();
         IReadOnlyList<PersistedRow> afterGreeting = conversation.Steps[0].Rows;
 
-        // Morgana speaks first and no desk has been reached, so hers is the only row there can be:
+        // Morgana speaks first and no agent has been reached, so hers is the only row there can be:
         // a conversation whose opening nobody kept is one every channel has to invent an opening for
         // on a reload, which is what every channel used to do.
         Assert.True(afterGreeting.Count == 1,
@@ -146,7 +146,7 @@ public sealed class ConversationPersistenceTests
         DrivenConversation conversation = await ConversationAsync();
 
         // The record is only worth reading if the conversation that produced it is the one intended:
-        // a phrase the guard let through, or one that reached a desk instead of being handed back,
+        // a phrase the guard let through, or one that reached an agent instead of being handed back,
         // leaves a perfectly coherent record of a different conversation.
         for (int turn = 0; turn < Script.Length; turn++)
         {
@@ -169,9 +169,9 @@ public sealed class ConversationPersistenceTests
                         $"\"{Excerpt(scripted.Say)}\" was resolved by {observed.AgentName ?? "nobody"} instead of being handed back to the user to choose.{Environment.NewLine}{observed.Describe()}");
                     break;
 
-                case TurnEnding.ServedByADesk:
+                case TurnEnding.ServedByAnAgent:
                     Assert.True(observed.AgentName is not null,
-                        $"\"{Excerpt(scripted.Say)}\" reached no desk, so {scripted.Because} is not what happened.{Environment.NewLine}{observed.Describe()}");
+                        $"\"{Excerpt(scripted.Say)}\" reached no agent, so {scripted.Because} is not what happened.{Environment.NewLine}{observed.Describe()}");
                     break;
             }
         }
@@ -188,14 +188,14 @@ public sealed class ConversationPersistenceTests
             RecordStep step = conversation.Steps[turn + 1];
             IReadOnlyList<PersistedRow> before = conversation.Steps[turn].Rows;
 
-            string keeper = scripted.MorganaKeepsIt ? OrchestratorName : TheDesk(step.Rows).Author;
+            string keeper = scripted.MorganaKeepsIt ? OrchestratorName : TheAgent(step.Rows).Author;
             IReadOnlyList<string> kept = PhrasesGained(before, step.Rows, keeper);
 
             Assert.True(kept.Count == 1 && kept[0] == scripted.Say,
                 $"\"{Excerpt(scripted.Say)}\" is {keeper}'s to keep, because {scripted.Because}. "
                 + $"{keeper} took [{string.Join(" | ", kept.Select(Excerpt))}].{Environment.NewLine}{Describe(step.Rows)}");
 
-            // Nobody else took a copy of it to keep. A desk holding the phrase for its model to read
+            // Nobody else took a copy of it to keep. An agent holding the phrase for its model to read
             // is not keeping it, which is exactly the distinction the transcript is filtered on.
             foreach (PersistedRow row in step.Rows.Where(row => !row.Author.Equals(keeper, StringComparison.OrdinalIgnoreCase)))
                 Assert.False(PhrasesGained(before, step.Rows, row.Author).Contains(scripted.Say),
@@ -204,20 +204,20 @@ public sealed class ConversationPersistenceTests
     }
 
     [Fact]
-    public async Task A_turn_no_desk_ever_saw_is_answered_by_Morgana_and_kept_by_her()
+    public async Task A_turn_no_agent_ever_saw_is_answered_by_Morgana_and_kept_by_her()
     {
         DrivenConversation conversation = await ConversationAsync();
 
         for (int turn = 0; turn < Script.Length; turn++)
         {
             ScriptedTurn scripted = Script[turn];
-            if (scripted.DeskOnRecord)
+            if (scripted.AgentOnRecord)
                 continue;
 
             RecordStep step = conversation.Steps[turn + 1];
 
             // A refusal and a request to disambiguate both end the turn before anyone is routed, so
-            // the conversation still has one participant. A desk appearing here means the turn was
+            // the conversation still has one participant. An agent appearing here means the turn was
             // served rather than handed back, which the guard and classifier groups would see first.
             Assert.True(step.Rows.Count == 1,
                 $"\"{Excerpt(scripted.Say)}\" should have been answered by Morgana alone, because {scripted.Because}."
@@ -232,25 +232,25 @@ public sealed class ConversationPersistenceTests
     }
 
     [Fact]
-    public async Task A_desk_reads_the_phrase_that_routed_to_it_without_owning_it()
+    public async Task An_agent_reads_the_phrase_that_routed_to_it_without_owning_it()
     {
         DrivenConversation conversation = await ConversationAsync();
 
-        // The turn that first reaches a desk: Morgana had already filed its phrase at ingress, so
-        // the desk's own copy exists for its model alone. Unmarked, one sentence comes back twice.
-        int routing = Array.FindIndex(Script, scripted => scripted.MorganaKeepsIt && scripted.DeskOnRecord);
+        // The turn that first reaches an agent: Morgana had already filed its phrase at ingress, so
+        // the agent's own copy exists for its model alone. Unmarked, one sentence comes back twice.
+        int routing = Array.FindIndex(Script, scripted => scripted.MorganaKeepsIt && scripted.AgentOnRecord);
         RecordStep step = conversation.Steps[routing + 1];
-        PersistedRow desk = TheDesk(step.Rows);
+        PersistedRow agent = TheAgent(step.Rows);
 
-        Assert.True(desk.Messages.Any(message => message.Role == ChatRole.User
+        Assert.True(agent.Messages.Any(message => message.Role == ChatRole.User
                                                  && message.Text == Script[routing].Say
                                                  && message.AdditionalProperties?.ContainsKey(ContextOnlyMarker) == true),
-            $"The desk holds no copy of \"{Excerpt(Script[routing].Say)}\" marked as its model's to read."
+            $"The agent holds no copy of \"{Excerpt(Script[routing].Say)}\" marked as its model's to read."
             + $"{Environment.NewLine}{Describe(step.Rows)}");
     }
 
     [Fact]
-    public async Task Morgana_never_stands_as_the_desk_a_conversation_is_resumed_onto()
+    public async Task Morgana_never_stands_as_the_agent_a_conversation_is_resumed_onto()
     {
         DrivenConversation conversation = await ConversationAsync();
 
@@ -259,28 +259,28 @@ public sealed class ConversationPersistenceTests
         // who owns no session and cannot carry on.
         foreach (RecordStep step in conversation.Steps)
             Assert.False(RowOf(step.Rows, OrchestratorName).IsActive,
-                $"After \"{Excerpt(step.Delivered.Text)}\" Morgana's row stands active, as if she were a desk."
+                $"After \"{Excerpt(step.Delivered.Text)}\" Morgana's row stands active, as if she were an agent."
                 + $"{Environment.NewLine}{Describe(step.Rows)}");
     }
 
     [Fact]
-    public async Task The_conversation_settles_as_Morgana_and_the_one_desk_that_served_it()
+    public async Task The_conversation_settles_as_Morgana_and_the_one_agent_that_served_it()
     {
         DrivenConversation conversation = await ConversationAsync();
         IReadOnlyList<PersistedRow> settled = conversation.Steps[^1].Rows;
 
         // Five turns, four of which could have opened a row of their own: what a real conversation
-        // leaves behind is the orchestrator and the desks that actually answered, nobody else. A
+        // leaves behind is the orchestrator and the agents that actually answered, nobody else. A
         // consultation leaves no trace, so a colleague that was asked owns no row here either.
         Assert.True(settled.Count == 2,
             $"The conversation settled as {settled.Count} participants.{Environment.NewLine}{Describe(settled)}");
 
         RowOf(settled, OrchestratorName);
-        PersistedRow desk = TheDesk(settled);
+        PersistedRow agent = TheAgent(settled);
 
-        // The desk is left mid-exchange, which is what a returning client is told to carry on with.
-        Assert.True(desk.IsActive,
-            $"The desk that was still serving the user is not left active, so a resumed conversation would be reclassified from scratch.");
+        // The agent is left mid-exchange, which is what a returning client is told to carry on with.
+        Assert.True(agent.IsActive,
+            $"The agent that was still serving the user is not left active, so a resumed conversation would be reclassified from scratch.");
     }
 
     [Fact]
@@ -380,15 +380,15 @@ public sealed class ConversationPersistenceTests
         DrivenConversation conversation = await ConversationAsync();
         IReadOnlyList<MorganaChatMessage> history = await fixture.Channel.GetHistoryAsync(conversation.ConversationId);
 
-        // The greeting is Morgana speaking as herself, with no desk behind it to name.
+        // The greeting is Morgana speaking as herself, with no agent behind it to name.
         string greeting = conversation.Steps[0].Delivered.Text;
         Assert.True(history.Any(message => message.Text == greeting && message.AgentName == OrchestratorName),
             $"The greeting comes back attributed to {history.FirstOrDefault(message => message.Text == greeting)?.AgentName ?? "nobody"}.");
 
-        // A desk is named beside her, so a user sees one assistant with several competences rather
+        // An agent is named beside her, so a user sees one assistant with several competences rather
         // than a transcript that changes speaker halfway through.
         Assert.True(history.Any(message => message.AgentName.StartsWith($"{OrchestratorName} (", StringComparison.Ordinal)),
-            $"No line in the transcript names the desk that answered.{Environment.NewLine}{Describe(history)}");
+            $"No line in the transcript names the agent that answered.{Environment.NewLine}{Describe(history)}");
     }
 
     /// <summary>
@@ -491,7 +491,7 @@ public sealed class ConversationPersistenceTests
     {
         JsonElement row = JsonSerializer.Deserialize<JsonElement>(rowJson, AgentAbstractionsJsonUtilities.DefaultOptions);
 
-        // A desk's row is the session it resurrects itself from and Morgana's carries messages and
+        // An agent's row is the session it resurrects itself from and Morgana's carries messages and
         // nothing else, so the transcript is taken from the one nesting both shapes share.
         if (!row.TryGetProperty(RowStateBagProperty, out JsonElement stateBag)
             || !stateBag.TryGetProperty(RowHistoryStateKey, out JsonElement historyState)
@@ -522,7 +522,7 @@ public sealed class ConversationPersistenceTests
     }
 
     /// <summary>
-    /// The user's phrases one participant took on during a step, leaving out the copy a desk holds
+    /// The user's phrases one participant took on during a step, leaving out the copy an agent holds
     /// for its model: a marked copy is not a record of the phrase, it is the phrase being read.
     /// </summary>
     private static IReadOnlyList<string> PhrasesGained(
@@ -554,20 +554,20 @@ public sealed class ConversationPersistenceTests
     }
 
     /// <summary>
-    /// The one desk the script engages. Asserting it is alone is part of the point: a consultation
+    /// The one agent the script engages. Asserting it is alone is part of the point: a consultation
     /// leaves no trace, so a colleague that answered must own no row here.
     /// </summary>
-    private static PersistedRow TheDesk(IReadOnlyList<PersistedRow> rows)
+    private static PersistedRow TheAgent(IReadOnlyList<PersistedRow> rows)
     {
-        PersistedRow[] desks =
+        PersistedRow[] agents =
         [
             .. rows.Where(row => !row.Author.Equals(OrchestratorName, StringComparison.OrdinalIgnoreCase))
         ];
 
-        Assert.True(desks.Length == 1,
-            $"The script engages one desk and {desks.Length} rows are not Morgana's.{Environment.NewLine}{Describe(rows)}");
+        Assert.True(agents.Length == 1,
+            $"The script engages one agent and {agents.Length} rows are not Morgana's.{Environment.NewLine}{Describe(rows)}");
 
-        return desks[0];
+        return agents[0];
     }
 
     /// <summary>Everything one participant's row holds in a given voice, as plain text.</summary>
@@ -622,15 +622,15 @@ public sealed class ConversationPersistenceTests
         /// <summary>Two intents come out too close to separate, so the choice goes back to the user.</summary>
         HandedBackToChoose,
 
-        /// <summary>A desk takes the turn, whether it was routed one or was already serving the user.</summary>
-        ServedByADesk
+        /// <summary>An agent takes the turn, whether it was routed one or was already serving the user.</summary>
+        ServedByAnAgent
     }
 
     /// <summary>One turn of the conversation, with what the record must show of it before it is sent.</summary>
-    /// <param name="MorganaKeepsIt">Whether the phrase is the orchestrator's to file, which it is whenever no desk was serving the user when it arrived.</param>
-    /// <param name="DeskOnRecord">Whether a desk owns a row once the turn has been served.</param>
+    /// <param name="MorganaKeepsIt">Whether the phrase is the orchestrator's to file, which it is whenever no agent was serving the user when it arrived.</param>
+    /// <param name="AgentOnRecord">Whether an agent owns a row once the turn has been served.</param>
     /// <param name="Because">Why this turn belongs where it does, printed when it does not.</param>
-    private sealed record ScriptedTurn(string Say, TurnEnding Ending, bool MorganaKeepsIt, bool DeskOnRecord, string Because);
+    private sealed record ScriptedTurn(string Say, TurnEnding Ending, bool MorganaKeepsIt, bool AgentOnRecord, string Because);
 
     /// <summary>The conversation the group reads, as a photograph of the record after every exchange.</summary>
     /// <param name="Steps">The greeting first, then one entry per turn of the script.</param>

@@ -84,7 +84,7 @@ public class JWTAuthenticationService : IAuthenticationService
             AdmitIssuer(configuredChannel.Name, configuredChannel.SymmetricKey, config.Audience, isPartner: false);
 
         // A partner brings its key on the entry that also says how far it reaches, so being admitted
-        // here and being admitted at a desk are read from one declaration. Only the direction that
+        // here and being admitted at an agent are read from one declaration. Only the direction that
         // actually arrives is registered: a partner this installation only calls proves nothing here.
         foreach ((string issuer, Records.PartnerOptions partner) in ConfigurationAgentDirectoryService.ResolveAdmittedPartners(configuration))
             AdmitIssuer(issuer, partner.SymmetricKey, config.Audience, isPartner: true);
@@ -170,7 +170,7 @@ public class JWTAuthenticationService : IAuthenticationService
         }
 
         // One name declared twice leaves one of the two keys silently unusable. Which one survives
-        // depends on the order somebody happened to write them in — and a channel colliding with a
+        // depends on the order somebody happened to write them in. A channel colliding with a
         // partner would decide by that order which of the two doors the surviving key opens.
         if (alreadyDeclared.Contains(issuerName))
         {

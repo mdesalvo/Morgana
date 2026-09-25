@@ -81,7 +81,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         string poolKey = PoolKey(serverAttribute);
 
         // A server is connected once per pool key and shared: the handshake is the expensive part,
-        // and every agent declaring that same server wants the session already open.
+        // while every agent declaring that same server wants the session already open.
         if (mcpClients.TryGetValue(poolKey, out MCPClient? pooledMCPClient))
         {
             // A session the server has already ended serves nobody: it is replaced before being handed out

@@ -11,13 +11,13 @@ namespace Morgana.AI.Services;
 /// config) if none is found; a name claimed twice is refused rather than resolved.
 /// </summary>
 /// <remarks>
-/// Several plugins may each bring part of a domain — desks that belong to one organization without
+/// Several plugins may each bring part of a domain — agents that belong to one organization without
 /// belonging to one deliverable. What they may not do is disagree: two plugins declaring the same
-/// intent, or two prompts under one id, describe two different desks answering to one name and
+/// intent, or two prompts under one id, describe two different agents answering to one name and
 /// nothing downstream could tell which was meant.
 /// <para>What a domain cannot bring at all is the complement of itself. The catch-all is what a
-/// request matching no desk is, which is the classifier's business and is described in the
-/// classifier's own prompt: the name is reserved, and a domain declaring it is refused here rather
+/// request matching no agent is, which is the classifier's business and is described in the
+/// classifier's own prompt: the name is reserved. A domain declaring it is refused here rather
 /// than quietly corrected — the same way a partner is refused the name of this installation's own
 /// ring.</para>
 /// </remarks>
@@ -132,7 +132,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                         foreach (Records.IntentDefinition intent in config.Intents)
                         {
                             // The complement of the domain is not part of it: it is what a request
-                            // matching no desk is, the classifier's own word, described in the
+                            // matching no agent is, the classifier's own word, described in the
                             // classifier's own prompt. A domain that still declares it is one written
                             // before that was true, so the declaration is dropped rather than fought
                             // over — every reader downstream gets the framework's, exactly once.
@@ -145,7 +145,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                             }
 
                             // The orchestrator answers under this name and its words are filed under
-                            // it in the conversation record. A desk taking the name would take over
+                            // it in the conversation record. An agent taking the name would take over
                             // that record. It would also become indistinguishable from the
                             // orchestrator to everyone who tells the two apart by name.
                             if (string.Equals(intent.Name, Constants.Morgana, StringComparison.OrdinalIgnoreCase))
@@ -160,7 +160,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                             {
                                 throw new InvalidOperationException(
                                     $"The intent '{intent.Name}' is declared by two plugins, '{firstAssembly}' and '{declaringAssembly}'. "
-                                    + "One name is one desk: deploy one of them, or rename the intent in the other.");
+                                    + "One name is one agent: deploy one of them, or rename the intent in the other.");
                             }
 
                             declaringAssemblyByIntent[intent.Name] = declaringAssembly;
@@ -173,13 +173,13 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
 
                         foreach (Records.Prompt prompt in config.Agents)
                         {
-                            // Two prompts under one id would leave which desk answers to the order the
+                            // Two prompts under one id would leave which agent answers to the order the
                             // assemblies happened to load in.
                             if (declaringAssemblyByPrompt.TryGetValue(prompt.ID, out string? firstAssembly))
                             {
                                 throw new InvalidOperationException(
                                     $"The agent prompt '{prompt.ID}' is declared by two plugins, '{firstAssembly}' and '{declaringAssembly}'. "
-                                    + "One id is one desk: deploy one of them, or rename the prompt in the other.");
+                                    + "One id is one agent: deploy one of them, or rename the prompt in the other.");
                             }
 
                             declaringAssemblyByPrompt[prompt.ID] = declaringAssembly;
@@ -187,8 +187,8 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                         }
                     }
                 }
-                // The refusals above are verdicts on a domain that is readable and wrong — a reserved
-                // name, a name claimed twice — and each is meant to stop startup where it is stated.
+                // The refusals above are verdicts on a domain that is readable and wrong (a reserved
+                // name, a name claimed twice); each is meant to stop startup where it is stated.
                 // Swallowed here they would drop the whole domain instead. The operator would
                 // meet the consequence much later, as a prompt that cannot be found for an intent
                 // nobody refused: the wrong place to go looking.

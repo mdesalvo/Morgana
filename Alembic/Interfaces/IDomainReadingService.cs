@@ -26,6 +26,6 @@ public interface IDomainReadingService
     /// </summary>
     /// <param name="draft">The imported domain, changed in place: every agent gains what its own prose says about the work it does.</param>
     /// <param name="cancellationToken">Cancels the underlying completion.</param>
-    /// <returns>How many facts were written down, and what went wrong where nothing was.</returns>
+    /// <returns>How many facts were written down with what went wrong where nothing was.</returns>
     Task<DomainReading> ReadAsync(DomainDraft draft, CancellationToken cancellationToken = default);
 }

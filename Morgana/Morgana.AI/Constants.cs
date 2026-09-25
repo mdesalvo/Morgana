@@ -36,8 +36,8 @@ public static class Constants
     /// <summary>
     /// Name prefixes of the pipeline actors. An actor's path is <c>/user/{prefix}-{conversationId}</c>,
     /// built by <c>ActorSystemExtensions.GetOrCreateActorAsync</c>: the prefix is what makes a path
-    /// predictable, so an actor is reached by name from a later turn — or from a controller that
-    /// holds nothing but the conversation id — instead of a reference having to be kept alive.
+    /// predictable, so an actor is reached by name from a later turn (or from a controller that
+    /// holds nothing but the conversation id) instead of a reference having to be kept alive.
     /// </summary>
     public static class Actors
     {
@@ -124,8 +124,8 @@ public static class Constants
         public const string DisambiguationMessage = "DisambiguationMessage";
 
         /// <summary>
-        /// What Morgana says when a desk finishes and the conversation comes back to her. <c>{0}</c>
-        /// is that desk's display name. Authored here because it is Morgana speaking: every channel
+        /// What Morgana says when an agent finishes and the conversation comes back to her. <c>{0}</c>
+        /// is that agent's display name. Authored here because it is Morgana speaking: every channel
         /// used to carry its own copy and invent when to show it, from a history that never held it.
         /// </summary>
         public const string AgentExitMessage = "AgentExitMessage";
@@ -134,7 +134,7 @@ public static class Constants
         public const string UnrecognizedIntentError = "UnrecognizedIntentError";
 
         /// <summary>
-        /// What a request matching no modelled desk is. It belongs to the classifier and to no domain,
+        /// What a request matching no modelled agent is. It belongs to the classifier and to no domain,
         /// so it is authored beside the vocabulary it closes rather than in any plugin.
         /// </summary>
         public const string ComplementIntentDescription = "ComplementIntentDescription";
@@ -142,14 +142,14 @@ public static class Constants
 
     /// <summary>
     /// What kind of thing an outbound message is, declared on <c>ChannelMessage.MessageType</c> and
-    /// read by every channel to decide how to paint it. Two of them are conversation — somebody
-    /// said something to somebody — and the rest are notices about the conversation rather than
+    /// read by every channel to decide how to paint it. Two of them are conversation (somebody
+    /// said something to somebody); the rest are notices about the conversation rather than
     /// part of it: a channel shows those as banners that fade. Morgana keeps none of them on
     /// record, because a transcript is what was said.
     /// </summary>
     public static class MessageTypes
     {
-        /// <summary>An answer, from a desk or from Morgana herself.</summary>
+        /// <summary>An answer, from an agent or from Morgana herself.</summary>
         public const string Assistant = "assistant";
 
         /// <summary>Morgana opening a conversation or handing one back, styled apart from an answer.</summary>
@@ -158,8 +158,27 @@ public static class Constants
         /// <summary>A notice about the conversation carrying no reply, such as a budget running low.</summary>
         public const string SystemWarning = "system_warning";
 
+        /// <summary>
+        /// A command's own frame or outcome, never anything else: a channel keeps it out of the transcript
+        /// on this type alone, since a command is not a turn of the conversation.
+        /// </summary>
+        public const string System = "system";
+
         /// <summary>A notice that something stopped the turn, such as a budget that ran out.</summary>
         public const string Error = "error";
+    }
+
+    /// <summary>
+    /// Why Morgana refused to take a call, declared on <c>ChannelMessage.ErrorReason</c>. A channel reads it to
+    /// act on the refusal rather than merely paint it: a spent budget ends the conversation on its side too.
+    /// </summary>
+    public static class ErrorReasons
+    {
+        /// <summary>The conversation called too often in one of its windows; it may call again later.</summary>
+        public const string RateLimitExceeded = "rate_limit_exceeded";
+
+        /// <summary>The conversation's dust budget is spent: it will take no further turn or command.</summary>
+        public const string DustBudgetExhausted = "dust_budget_exhausted";
     }
 
     /// <summary>
@@ -290,7 +309,7 @@ public static class Constants
     public static class Intents
     {
         /// <summary>
-        /// The complement of whatever domain is deployed: what a request matching no modelled desk
+        /// The complement of whatever domain is deployed: what a request matching no modelled agent
         /// is. No agent handles it, it is never offered as a quick reply and never counts as a
         /// collision candidate. Routed all the same, so the router answers with its
         /// unrecognized-intent message rather than the pipeline stalling.
@@ -308,8 +327,8 @@ public static class Constants
     /// service registered under exactly that spelling or the conversation is refused at ingress.
     /// </summary>
     /// <remarks>
-    /// The set is deliberately open — <c>ChannelCoordinates.DeliveryMode</c> stays a free-form string
-    /// so a new transport needs no contract change — and these are the two this framework ships.
+    /// The set is deliberately open: <c>ChannelCoordinates.DeliveryMode</c> stays a free-form string
+    /// so a new transport needs no contract change. These are the two this framework ships.
     /// </remarks>
     public static class DeliveryModes
     {

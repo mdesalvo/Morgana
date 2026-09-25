@@ -1,7 +1,9 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
+using Morgana.Terminal;
 using Morgana.Terminal.Interfaces;
+using Morgana.Terminal.Messages;
 using Morgana.Terminal.Services;
 using Morgana.Contracts;
 using Spectre.Console;
@@ -40,6 +42,13 @@ public sealed class ConsoleUiService : ITerminalUi
 
     /// <summary>Color for error notices (dust exhausted / delivery error): red.</summary>
     private const string ErrorColor = "red";
+
+    /// <summary>
+    /// Colour of what a command reports, wherever it ran: neutral grey, so it reads apart from the
+    /// speakers (a command is not a turn in the conversation) and apart from a warning, which is
+    /// about the conversation rather than about work the user asked for.
+    /// </summary>
+    private const string CommandReportColor = "grey70";
 
     /// <summary>
     /// Fallback for <c>Rune:ReplyTimeoutSeconds</c> when absent or non-positive. Generous, because a turn
@@ -133,18 +142,24 @@ public sealed class ConsoleUiService : ITerminalUi
     /// — <c>volatile</c> guarantees the reference is always seen fresh across threads.</summary>
     private volatile string _dustSegment = string.Empty;
 
-    /// <summary>Set once the user types <c>/quit</c> or presses <see cref="ConsoleKey.Escape"/>.</summary>
+    /// <summary>Set once the user types <c>/exit</c> or presses <see cref="ConsoleKey.Escape"/>.</summary>
     private volatile bool exitRequested;
 
     /// <summary>When true, keystrokes (except Esc) are swallowed and the input line shows a thinking hint. Starts true: Rune always waits for Morgana's presentation before the first user turn.</summary>
     private volatile bool awaitingResponse = true;
 
     /// <summary>
+    /// The agent carrying the conversation, null while Morgana holds it herself. Told by the deliveries, kept
+    /// apart from the speaker the header shows: one decides what a palette may offer, the other what colour
+    /// a row is drawn in. A display choice must never decide which commands exist.
+    /// </summary>
+    private volatile string? agentCarryingConversation;
+
+    /// <summary>
     /// Latched true when Morgana delivers the terminal dust-exhaustion notice
-    /// (<c>ErrorReason == "dust_budget_exhausted"</c>). The conversation is spent and
-    /// — unlike Cauldron — Rune cannot start a fresh one in-process, so this is a
-    /// one-way door: input stays locked (only Esc works) and the prompt is replaced
-    /// by an honest "quit and relaunch" hint. Never cleared. Mutated only under
+    /// (<c>ErrorReason == "dust_budget_exhausted"</c>). The conversation is spent: only a command line
+    /// allowed on a spent conversation can be typed and the prompt names the two ways out, <c>/new</c>
+    /// and Esc. Cleared only when another conversation replaces this one. Mutated only under
     /// <see cref="renderLock"/>; volatile so <see cref="ReadKeysLoop"/> sees it
     /// without taking the lock on every polled keystroke.
     /// </summary>
@@ -153,8 +168,8 @@ public sealed class ConsoleUiService : ITerminalUi
     /// <summary>
     /// Scrollback offset in rows: how far above the live bottom the viewport is anchored.
     /// 0 = pinned to the newest content (the default live view). Only ever non-zero while the
-    /// conversation is at rest — <see cref="ReadKeysLoop"/> gates scrolling on
-    /// <c>!awaitingResponse</c>, so the window never moves under an in-flight turn — and it is
+    /// conversation is at rest (<see cref="ReadKeysLoop"/> gates scrolling on
+    /// <c>!awaitingResponse</c>, so the window never moves under an in-flight turn); it is
     /// reset to 0 whenever the user sends. Mutated/read only under <see cref="renderLock"/>; the
     /// upper bound is re-clamped against the live content height in <see cref="BuildBody"/>.
     /// </summary>
@@ -172,17 +187,91 @@ public sealed class ConsoleUiService : ITerminalUi
     /// <summary>Cell-width measurement this class wraps/truncates against, so a wide glyph never desyncs the row budget BuildBody relies on.</summary>
     private readonly TerminalCellService cells;
 
+    /// <summary>The dropdown of commands shown under the prompt while the line starts with a slash. Called only under <see cref="renderLock"/>.</summary>
+    private readonly CommandPaletteService commandPalette;
+
+    /// <summary>The Yes/No question a command that cannot be taken back must have answered first. Called only under <see cref="renderLock"/>.</summary>
+    private readonly CommandConfirmationService commandConfirmation;
+
+    /// <summary>The bar a running command reports itself through. Called only under <see cref="renderLock"/>.</summary>
+    private readonly CommandProgressService commandProgress;
+
+    /// <summary>The form asking for the values a command declares. Called only under <see cref="renderLock"/>.</summary>
+    private readonly CommandOptionPromptService commandOptionPrompt;
+
+    /// <summary>
+    /// True while a command is running, whether it works here or on Morgana. A command that opens no turn —
+    /// a long export, say — has nothing else telling the screen it is busy, which is what lets its progress
+    /// be drawn at all. Volatile: set by the task running the command, read while a frame is drawn.
+    /// </summary>
+    private volatile bool commandRunning;
+
+    /// <summary>The command running now, named by the hint that holds the prompt until its first frame. Under <see cref="renderLock"/>.</summary>
+    private string runningCommandName = string.Empty;
+
+    /// <summary>
+    /// What the last command came to, drawn above the prompt and kept out of the transcript: a command is not a
+    /// turn of the conversation. Null once the user writes in the prompt, starts a turn or runs another command.
+    /// Mutated only under <see cref="renderLock"/>, together with <see cref="commandOutcomeColor"/>.
+    /// </summary>
+    private string? commandOutcome;
+
+    /// <summary>The colour <see cref="commandOutcome"/> is drawn in: neutral for work done, orange for a refusal, red for a failure.</summary>
+    private string commandOutcomeColor = CommandReportColor;
+
+    /// <summary>
+    /// The last command run started, until its outcome is shown. Morgana's finished frame is accepted only when
+    /// it belongs to this run: a late outcome of an earlier run never covers the current one's, even of the same
+    /// command, while the true outcome of a run given up on still replaces the deadline's line. Under
+    /// <see cref="renderLock"/>.
+    /// </summary>
+    private CommandInvocation? invocationOwingOutcome;
+
+    /// <summary>
+    /// The name every line written by this side of the conversation is filed under: the channel itself, as
+    /// Morgana knows it. What the terminal notices is the channel speaking, never Morgana taking a turn,
+    /// so it must be told apart at a glance.
+    /// </summary>
+    private readonly string channelSpeaker;
+
+    /// <summary>Runs the command the palette resolved.</summary>
+    private readonly TerminalCommandRegistryService commandRegistry;
+
+    /// <summary>The conversation on screen: where typed turns go and which deliveries belong on screen. Set when the UI starts.</summary>
+    private TerminalSessionService session = null!;
+
+    /// <summary>The live display of the running UI, which the commands' requests repaint. Set once the display starts.</summary>
+    private LiveDisplayContext liveContext = null!;
+
+    /// <summary>Fires when the host stops, so a deadline armed by a command dies with the process rather than outliving the live display.</summary>
+    private CancellationToken uiStopping;
+
+    /// <summary>Called off when the user leaves, so a command still waiting on Morgana never holds the exit. Set once the display starts.</summary>
+    private CancellationTokenSource commandCancellation = new();
+
+    /// <summary>
+    /// Completes when deliveries may be drawn. Pending while another conversation is being opened, so its
+    /// presentation cannot land on the transcript about to be cleared; <see cref="DrainIncomingLoop"/> waits on it.
+    /// </summary>
+    private Task deliveriesReleased = Task.CompletedTask;
+
     /// <summary>Serializes mutations of <see cref="history"/>, <see cref="currentInput"/>, <see cref="currentSpeaker"/> and the paired <see cref="LiveDisplayContext.UpdateTarget"/>/<see cref="LiveDisplayContext.Refresh"/> calls. The resize callback runs on its own thread (SIGWINCH handler / polling task) and would otherwise race with <see cref="ReadKeysLoop"/> and <see cref="DrainIncomingLoop"/> over the shared list. Uses <see cref="System.Threading.Lock"/> (.NET 9+) instead of <c>object</c> so the compiler emits the optimised primitive and rejects misuse (e.g. passing the lock as an <c>object</c>).</summary>
     private readonly Lock renderLock = new();
 
-    /// <summary>Captures the injected resize watcher.</summary>
-    public ConsoleUiService(IConfiguration configuration, IViewportResizeWatcher viewportResizeWatcher, TerminalCellService cells)
+    /// <summary>Reads the reply deadline and the input cap. Captures the resize watcher, the cell measurement, the command palette and the command registry.</summary>
+    public ConsoleUiService(IConfiguration configuration, IViewportResizeWatcher viewportResizeWatcher, TerminalCellService cells, CommandPaletteService commandPalette, CommandConfirmationService commandConfirmation, CommandProgressService commandProgress, CommandOptionPromptService commandOptionPrompt, TerminalCommandRegistryService commandRegistry, ChannelProfile profile)
     {
         // A non-positive wait would declare every turn lost the instant it is sent, so it falls back too
         int replyTimeoutSeconds = configuration.GetValue<int?>("Rune:ReplyTimeoutSeconds") ?? DefaultReplyTimeoutSeconds;
         replyTimeout = TimeSpan.FromSeconds(replyTimeoutSeconds > 0 ? replyTimeoutSeconds : DefaultReplyTimeoutSeconds);
         this.viewportResizeWatcher = viewportResizeWatcher;
         this.cells = cells;
+        this.commandPalette = commandPalette;
+        this.commandConfirmation = commandConfirmation;
+        this.commandProgress = commandProgress;
+        this.commandOptionPrompt = commandOptionPrompt;
+        channelSpeaker = profile.ChannelName;
+        this.commandRegistry = commandRegistry;
 
         // Non-positive (or absent) falls back to 500 so a misconfiguration can't lock the prompt shut.
         maxInputLength = configuration.GetValue<int?>("Rune:MaxInputLength") ?? 500;
@@ -194,12 +283,11 @@ public sealed class ConsoleUiService : ITerminalUi
     public void EnqueueIncoming(ChannelMessage message) => incoming.Writer.TryWrite(message);
 
     /// <summary>
-    /// Starts the live terminal UI. Returns when the user types <c>/quit</c> or the cancellation
-    /// token fires. <paramref name="onSend"/> is invoked on each committed user input line.
+    /// Starts the live terminal UI. Returns when the user quits or the cancellation token fires.
+    /// Committed input lines go to the conversation <paramref name="terminalSession"/> names.
     /// </summary>
     public async Task RunAsync(
-        string convId,
-        Func<string, Task> onSend,
+        TerminalSessionService terminalSession,
         CancellationToken cancellationToken = default)
     {
         // Lock even here (pre-threading, zero contention) so all fields read by
@@ -208,7 +296,9 @@ public sealed class ConsoleUiService : ITerminalUi
         Layout layout;
         lock (renderLock)
         {
-            conversationId = convId;
+            // The session outlives any one conversation; the header shows the one open as the UI starts
+            session = terminalSession;
+            conversationId = terminalSession.ConversationId;
             layout = BuildLayout();
         }
 
@@ -222,7 +312,7 @@ public sealed class ConsoleUiService : ITerminalUi
         AnsiConsole.Cursor.Hide();
         try
         {
-            await RunLiveDisplayAsync(layout, onSend, cancellationToken);
+            await RunLiveDisplayAsync(layout, cancellationToken);
         }
         finally
         {
@@ -231,7 +321,7 @@ public sealed class ConsoleUiService : ITerminalUi
     }
 
     /// <summary>The actual Live(Layout) session — split out of <see cref="RunAsync"/> so the cursor hide/show wrap above reads as a single, obvious guard rather than being buried inside the lambda.</summary>
-    private async Task RunLiveDisplayAsync(Layout layout, Func<string, Task> onSend, CancellationToken cancellationToken)
+    private async Task RunLiveDisplayAsync(Layout layout, CancellationToken cancellationToken)
     {
         await AnsiConsole
             .Live(layout)
@@ -242,7 +332,7 @@ public sealed class ConsoleUiService : ITerminalUi
             {
                 // Subscribed inside StartAsync because the callback needs the live
                 // LiveDisplayContext to push UpdateTarget+Refresh; the `using`
-                // unsubscribes when the UI loop exits (normal quit, Esc, cancel,
+                // unsubscribes when the UI loop exits (normal quit, Esc, cancel
                 // or PTY death), so the SIGWINCH handler / polling task doesn't
                 // outlive the Live display.
                 using IDisposable resizeSubscription = viewportResizeWatcher.Subscribe(() =>
@@ -261,7 +351,13 @@ public sealed class ConsoleUiService : ITerminalUi
                 lock (renderLock)
                     ctx.Refresh();
 
-                Task readLoop = Task.Run(() => ReadKeysLoop(ctx, onSend, cancellationToken), cancellationToken);
+                uiStopping = cancellationToken;
+                liveContext = ctx;
+
+                // Commands die with the process as well as with the user leaving
+                commandCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+                Task readLoop = Task.Run(() => ReadKeysLoop(ctx, cancellationToken), cancellationToken);
                 Task drainLoop = Task.Run(() => DrainIncomingLoop(ctx, cancellationToken), cancellationToken);
                 await Task.WhenAny(readLoop, drainLoop);
             });
@@ -274,6 +370,25 @@ public sealed class ConsoleUiService : ITerminalUi
         {
             await foreach (ChannelMessage message in incoming.Reader.ReadAllAsync(cancellationToken))
             {
+                // A conversation being swapped in holds its deliveries until the screen has been cleared for it,
+                // then whatever the conversation left behind still queued is dropped
+                await Volatile.Read(ref deliveriesReleased);
+                if (!session.IsConversationOnScreen(message.ConversationId))
+                    continue;
+
+                // A frame of a command run on Morgana is chrome: the bar holds the prompt while the command
+                // works, then the finished frame's text becomes its outcome. Nothing of it reaches the transcript
+                if (message.Progress is { } progressFrame)
+                {
+                    HandleInboundProgress(ctx, message, progressFrame);
+                    continue;
+                }
+
+                // A command's outcome always travels on its finished frame: a command line naming no command
+                // belongs to nothing on screen and has no place in the transcript either
+                if (message.MessageType == "system")
+                    continue;
+
                 // Attribute the row to whoever authored it: a specialised agent keeps its
                 // own colour even on the farewell line that carries AgentCompleted=true.
                 // Sanitized once here — message.AgentName and message.Text both arrive over
@@ -292,6 +407,12 @@ public sealed class ConsoleUiService : ITerminalUi
                     // turn doesn't render under the outgoing agent's colour.
                     currentSpeaker = message.AgentCompleted || string.IsNullOrWhiteSpace(message.AgentName)
                         ? "Morgana"
+                        : messageSpeaker;
+
+                    // An agent that signalled completion has handed the conversation back, so nothing
+                    // addressed at the agent carrying it applies any more; a reply from Morgana says the same
+                    agentCarryingConversation = message.AgentCompleted || !IsSpecializedAgent(message.AgentName)
+                        ? null
                         : messageSpeaker;
 
                     // Refresh the header gauge from ANY metadata-bearing message. The main
@@ -315,24 +436,18 @@ public sealed class ConsoleUiService : ITerminalUi
 
                     // Terminal lockout. Morgana proactively pushes this at end of turn
                     // (same ErrorReason as the doomed-next-send path), so the user sees
-                    // it BEFORE wasting a keystroke. Morgana's text says "start a new
-                    // one to keep going" — true for Cauldron, NOT for Rune, which has no
-                    // in-process restart. So latch a one-way dead state: the red banner
-                    // line above stays as Morgana's canonical word and BuildInputRows
-                    // overrides the prompt with a Rune-honest "quit and relaunch" hint.
+                    // it BEFORE wasting a keystroke. The red banner line above stays as
+                    // Morgana's canonical word and BuildInputRows replaces the prompt with
+                    // the way to act on it here: /new for a fresh conversation or Esc to leave.
                     if (string.Equals(message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal))
-                    {
-                        conversationDead = true;
-                        currentInput = string.Empty; // discard any half-typed doomed line
-                        cursorPosition = 0;
-                    }
+                        MarkConversationSpent();
 
                     // Release the input gate: ReadKeysLoop was swallowing keystrokes until
                     // this first webhook delivery landed. (No-op once conversationDead:
                     // ReadKeysLoop keeps swallowing on the dead latch regardless.)
                     // Morgana has spoken, so the turn is no longer at risk of being declared lost.
                     CancelReplyWatchdog();
-                    awaitingResponse = false;
+                    ReleaseTurn();
                     ctx.UpdateTarget(BuildLayout());
                     ctx.Refresh();
                 }
@@ -349,8 +464,8 @@ public sealed class ConsoleUiService : ITerminalUi
         }
     }
 
-    /// <summary>Polls <see cref="Console.KeyAvailable"/> every 25 ms and dispatches keys: Enter commits (or exits on <c>/quit</c>), Backspace edits, Esc exits, printable chars append to the buffer.</summary>
-    private async Task ReadKeysLoop(LiveDisplayContext ctx, Func<string, Task> onSend, CancellationToken cancellationToken)
+    /// <summary>Polls <see cref="Console.KeyAvailable"/> every 25 ms and dispatches keys: on a command line the palette takes the arrows, Tab and Esc and Enter runs the command; otherwise Enter commits, Backspace edits, Esc exits, printable chars append to the buffer.</summary>
+    private async Task ReadKeysLoop(LiveDisplayContext ctx, CancellationToken cancellationToken)
     {
         while (!exitRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -376,7 +491,7 @@ public sealed class ConsoleUiService : ITerminalUi
             catch (OperationCanceledException)
             {
                 // Shutdown was asked for (Ctrl+C, SIGTERM, SIGHUP): close the delivery stream so the
-                // conversation loop returns as well. The exit flag stays untouched — nobody typed /quit.
+                // conversation loop returns as well. The exit flag stays untouched — nobody typed /exit.
                 incoming.Writer.TryComplete();
                 return;
             }
@@ -386,6 +501,21 @@ public sealed class ConsoleUiService : ITerminalUi
                 incoming.Writer.TryComplete();
                 return;
             }
+
+            // A command waiting on a Yes or a No owns the keyboard: until it is answered nothing else may be
+            // typed, run or exited, so the question cannot be walked away from by accident
+            if (TryHandleConfirmationKey(ctx, key))
+                continue;
+
+            // A form being filled in gives Esc back to the user as "drop this command", which is what the key
+            // means everywhere else a command surface is open; the rest of the line editing stays the prompt's
+            if (key.Key == ConsoleKey.Escape && TryCancelOptionPrompt(ctx))
+                continue;
+
+            // The palette owns the arrows, Tab and Esc while a command line is being typed, so it comes before
+            // the scrollback that would otherwise take the arrows and the exit Esc otherwise means
+            if (TryHandleCommandPaletteKey(ctx, key.Key))
+                continue;
 
             // Scrollback: review the finished conversation. Enabled only at rest — while a turn is
             // in flight (awaitingResponse) the keys are ignored, so the window never moves under an
@@ -398,7 +528,7 @@ public sealed class ConsoleUiService : ITerminalUi
             }
 
             // Swallow every keystroke that isn't an explicit exit while we're waiting for
-            // Morgana to speak — or forever once the conversation is dust-dead (a
+            // Morgana to speak; forever once the conversation is dust-dead (a
             // one-way latch: no point typing into a budget the backend will reject).
             // Esc is always honoured so the user can bail out even mid-turn or quit a
             // spent conversation; everything else (printable chars, Enter, Backspace)
@@ -406,8 +536,11 @@ public sealed class ConsoleUiService : ITerminalUi
             // Lock-free read is intentional: awaitingResponse and conversationDead are both
             // volatile, guaranteeing visibility. Taking renderLock here on every polled
             // keystroke would cause unnecessary contention with DrainIncomingLoop.
+            // A spent conversation still takes a command line, the only way out of it short of Esc.
+            // A running command holds the prompt as a turn does: a second one started meanwhile would race it
+            // for the widget and the outcome line
             // ReSharper disable InconsistentlySynchronizedField
-            if ((awaitingResponse || conversationDead) && key.Key != ConsoleKey.Escape)
+            if ((awaitingResponse || commandRunning || (conversationDead && !AcceptsKeyOnSpentConversation(key))) && key.Key != ConsoleKey.Escape)
             // ReSharper restore InconsistentlySynchronizedField
                 continue;
 
@@ -415,64 +548,68 @@ public sealed class ConsoleUiService : ITerminalUi
             {
                 case ConsoleKey.Enter:
                 {
-                    // Snapshot-and-clear before awaiting: any late keystroke during onSend
+                    // Snapshot-and-clear before awaiting: any late keystroke during the send
                     // must land on a fresh buffer, not reappend to the line we just sent.
                     // Length check is inside the lock — DrainIncomingLoop also writes
                     // currentInput (under lock), so the when-guard read would be a cross-thread
-                    // race if left outside.
+                    // race if left outside. The command is resolved against the line before it
+                    // is cleared, since the palette's highlight belongs to that line.
                     string toSend;
+                    CommandDescriptor? command = null;
+                    CommandInvocation? filledInvocation = null;
+                    bool wasFillingIn;
                     lock (renderLock)
                     {
                         toSend = currentInput;
+
+                        // A command being filled in owns the line: what was typed answers the option on screen
+                        // rather than opening a turn or a new command
+                        wasFillingIn = commandOptionPrompt.IsActive;
+                        if (wasFillingIn)
+                            filledInvocation = commandOptionPrompt.Accept(toSend);
+                        else if (CommandPaletteService.IsCommandLine(toSend))
+                            command = commandPalette.ResolveCommandToRun(toSend, ConversationState());
                         currentInput = string.Empty;
                         cursorPosition = 0;
+
+                        // The next question opens on that option's default, ready to be taken as it stands
+                        if (wasFillingIn && filledInvocation is null)
+                        {
+                            currentInput = commandOptionPrompt.CurrentOptionDefault;
+                            cursorPosition = currentInput.Length;
+                        }
                     }
+
+                    if (wasFillingIn)
+                    {
+                        // Either the form has everything it asked for, or it is still asking: both are drawn by it
+                        if (filledInvocation is { } readyInvocation)
+                            _ = RunFilledCommandAsync(ctx, readyInvocation);
+                        else
+                            RefreshLayout(ctx);
+                        break;
+                    }
+
                     if (toSend.Length == 0) break;
 
-                    // /quit is a client-only command: never round-trip it to Morgana.
-                    if (toSend.Equals("/quit", StringComparison.OrdinalIgnoreCase))
+                    // A command line never reaches Morgana as prose: it runs a command or is refused here
+                    // The command runs beside this loop, so Esc is still read while it waits on Morgana
+                    if (CommandPaletteService.IsCommandLine(toSend))
                     {
-                        exitRequested = true;
-                        incoming.Writer.TryComplete();
-                        return;
+                        _ = RunCommandLineAsync(ctx, toSend, command);
+                        break;
                     }
 
-                    // Optimistic echo: show "You: …" and flip to the thinking hint before
-                    // awaiting onSend so the UI feels responsive even on slow backends.
-                    lock (renderLock)
+                    // Prose on a spent conversation would only be refused by Morgana: a line edited out of
+                    // command mode is dropped with a notice saying why
+                    if (conversationDead)
                     {
-                        history.Add(new DisplayedMessage("You", toSend, UserColor));
-                        awaitingResponse = true;
-                        scrollOffset = 0; // jump back to the live bottom for the new turn
-                        ctx.UpdateTarget(BuildLayout());
-                        ctx.Refresh();
+                        ShowSystemNotice(ctx, "The conversation is spent: type /new to start a fresh one", WarningColor);
+                        break;
                     }
 
-                    try
-                    {
-                        await onSend(toSend);
-
-                        // Morgana took the message: from here only its delivery can reopen the prompt,
-                        // so give that delivery a deadline. A reply already landed means no turn to watch.
-                        lock (renderLock)
-                        {
-                            if (awaitingResponse)
-                                StartReplyWatchdog(ctx, cancellationToken);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        // Surface the failure in-UI (logging is silenced) and release the
-                        // gate so the user can retry without waiting for a webhook that
-                        // will never arrive.
-                        lock (renderLock)
-                        {
-                            history.Add(new DisplayedMessage("system", $"send failed: {ex.Message}", "red"));
-                            awaitingResponse = false;
-                            ctx.UpdateTarget(BuildLayout());
-                            ctx.Refresh();
-                        }
-                    }
+                    string line = toSend;
+                    await SubmitTurnAsync(ctx, line, () => session.SendUserTurnAsync(line));
                     break;
                 }
                 case ConsoleKey.Backspace:
@@ -485,6 +622,7 @@ public sealed class ConsoleUiService : ITerminalUi
                             int n = RuneLengthBefore(cursorPosition);
                             currentInput = currentInput.Remove(cursorPosition - n, n);
                             cursorPosition -= n;
+                            commandOutcome = null;
                             RefreshWhenInputSettles(ctx);
                         }
                     }
@@ -497,6 +635,7 @@ public sealed class ConsoleUiService : ITerminalUi
                         {
                             int n = RuneLengthAt(cursorPosition);
                             currentInput = currentInput.Remove(cursorPosition, n);
+                            commandOutcome = null;
                             RefreshWhenInputSettles(ctx);
                         }
                     }
@@ -522,10 +661,9 @@ public sealed class ConsoleUiService : ITerminalUi
                     }
                     break;
                 case ConsoleKey.Escape:
-                    // Unconditional exit — completes the channel so DrainIncomingLoop
+                    // Exit outside the palette — completes the channel so DrainIncomingLoop
                     // unblocks out of its await foreach and RunAsync can return.
-                    exitRequested = true;
-                    incoming.Writer.TryComplete();
+                    RequestExit();
                     return;
                 default:
                     // Skip control chars (arrows, F-keys, …); only printable glyphs feed
@@ -544,6 +682,9 @@ public sealed class ConsoleUiService : ITerminalUi
                                 // Insert AT the caret (not append) so typing mid-line splices in place.
                                 currentInput = currentInput.Insert(cursorPosition, key.KeyChar.ToString());
                                 cursorPosition++;
+
+                                // The user has moved on from the last command: its outcome makes room for what is typed
+                                commandOutcome = null;
                                 RefreshWhenInputSettles(ctx);
                             }
                         }
@@ -551,6 +692,560 @@ public sealed class ConsoleUiService : ITerminalUi
                     break;
             }
         }
+    }
+
+    /// <summary>Gives <paramref name="key"/> to the question a command is waiting on; false when no command is.</summary>
+    private bool TryHandleConfirmationKey(LiveDisplayContext ctx, ConsoleKeyInfo key)
+    {
+        CommandInvocation? questionedInvocation;
+        ConfirmationOutcome outcome;
+        lock (renderLock)
+        {
+            if (!commandConfirmation.IsPending)
+                return false;
+
+            // Which command the answer belongs to is only readable while the question is still open
+            questionedInvocation = commandConfirmation.PendingInvocation;
+            outcome = commandConfirmation.HandleKey(key);
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+
+        if (questionedInvocation is null)
+            return true;
+
+        switch (outcome)
+        {
+            case ConfirmationOutcome.Confirmed:
+                // The command runs beside this loop, so Esc is still read while it waits on Morgana
+                _ = RunCommandAsync(ctx, questionedInvocation, confirmed: true);
+                break;
+            case ConfirmationOutcome.Declined:
+                // A command that leaves no trace of having been asked for would read as a swallowed keystroke
+                ShowCommandOutcome(ctx, $"/{questionedInvocation.Command.Name} was not run", WarningColor);
+                break;
+        }
+        return true;
+    }
+
+    /// <summary>Drops the command being filled in, with whatever it had gathered; false when no form is open.</summary>
+    private bool TryCancelOptionPrompt(LiveDisplayContext ctx)
+    {
+        CommandDescriptor? abandoned;
+        lock (renderLock)
+        {
+            if (!commandOptionPrompt.IsActive)
+                return false;
+
+            // Named in the notice below, since the line that opened the form is long gone from the prompt
+            abandoned = commandOptionPrompt.PendingCommand;
+            commandOptionPrompt.Cancel();
+            currentInput = string.Empty;
+            cursorPosition = 0;
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+
+        ShowCommandOutcome(ctx, abandoned is null ? "command cancelled" : $"/{abandoned.Name} was not run", WarningColor);
+        return true;
+    }
+
+    /// <summary>Gives the arrows, Tab and Esc to the palette while a command line is typed at rest; false leaves the key to the loop.</summary>
+    private bool TryHandleCommandPaletteKey(LiveDisplayContext ctx, ConsoleKey key)
+    {
+        if (key is not (ConsoleKey.UpArrow or ConsoleKey.DownArrow or ConsoleKey.Tab or ConsoleKey.Escape))
+            return false;
+
+        lock (renderLock)
+        {
+            // No palette while Morgana is answering or outside a command line: the arrows scroll and Esc leaves.
+            // A form asking for a value is not a command line either, whatever the value happens to start with:
+            // a path opens with a slash and must not turn the prompt into a command picker
+            if (awaitingResponse || commandRunning || commandOptionPrompt.IsActive || !CommandPaletteService.IsCommandLine(currentInput))
+                return false;
+
+            switch (key)
+            {
+                // Up walks towards the best match, down away from it, wrapping at both ends
+                case ConsoleKey.UpArrow:
+                    commandPalette.MoveHighlight(currentInput, ConversationState(), -1);
+                    break;
+                case ConsoleKey.DownArrow:
+                    commandPalette.MoveHighlight(currentInput, ConversationState(), 1);
+                    break;
+                case ConsoleKey.Tab:
+                    // The caret follows to the end of the completed name, ready for Enter
+                    if (commandPalette.CompleteHighlightedCommand(currentInput, ConversationState()) is { } completed)
+                    {
+                        currentInput = completed;
+                        cursorPosition = completed.Length;
+                    }
+                    break;
+                case ConsoleKey.Escape:
+                    // Dismissing the palette drops the line with it; a second Esc, now outside it, leaves Rune
+                    currentInput = string.Empty;
+                    cursorPosition = 0;
+                    break;
+            }
+
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+            return true;
+        }
+    }
+
+    /// <summary>Tells whether a spent conversation lets <paramref name="key"/> through: a slash on an empty prompt, anything once a line is started.</summary>
+    private bool AcceptsKeyOnSpentConversation(ConsoleKeyInfo key)
+    {
+        // A line already started must stay editable and runnable, even if the caret wandered before its slash
+        lock (renderLock)
+            return currentInput.Length > 0 || key.KeyChar == '/';
+    }
+
+    /// <summary>Runs the command resolved from <paramref name="line"/>; a missing or failing one is explained above the prompt.</summary>
+    private async Task RunCommandLineAsync(LiveDisplayContext ctx, string line, CommandDescriptor? command)
+    {
+        if (command is null)
+        {
+            // On a spent conversation the likely mistake is reaching for a command that needs Morgana
+            ShowCommandOutcome(ctx, conversationDead
+                ? $"{line.Trim()} is not available on a spent conversation: type /new to start a fresh one"
+                : $"{line.Trim()} is not a command: pick one with ↑↓ or type the start of its name", WarningColor);
+            return;
+        }
+
+        // The values are read off the line the user typed, then judged by what the command says it takes:
+        // a line that cannot be read runs nothing, since the missing half would be guessed at
+        IReadOnlyDictionary<string, string> options = CommandLineParser.ParseOptions(line, out string? lineProblem);
+        if (lineProblem is { } malformedLine)
+        {
+            ShowCommandOutcome(ctx, malformedLine, WarningColor);
+            return;
+        }
+
+        // A command run without what it declares asks for it: the description it publishes is exactly the
+        // question to put on screen, so the user is walked through instead of being sent back to the line
+        if (CommandOptionPromptService.NeedsFillingIn(command, options))
+        {
+            lock (renderLock)
+            {
+                commandOptionPrompt.Begin(command, options);
+
+                // The first question opens on that option's default, which is what running it blind would use
+                currentInput = commandOptionPrompt.CurrentOptionDefault;
+                cursorPosition = currentInput.Length;
+                ctx.UpdateTarget(BuildLayout());
+                ctx.Refresh();
+            }
+            return;
+        }
+
+        if (command.DescribeOptionProblem(options) is { } problem)
+        {
+            ShowCommandOutcome(ctx, problem, WarningColor);
+            return;
+        }
+
+        CommandInvocation invocation = new(command, options);
+
+        // A command that cannot be taken back puts its question on the prompt; whether it ever runs is the answer's business
+        if (command.RequiresConfirmation)
+        {
+            AskForConfirmation(ctx, invocation);
+            return;
+        }
+
+        await RunCommandAsync(ctx, invocation, confirmed: false);
+    }
+
+    /// <summary>Runs what the form gathered, asking for confirmation first when the command wants one.</summary>
+    private async Task RunFilledCommandAsync(LiveDisplayContext ctx, CommandInvocation invocation)
+    {
+        if (invocation.Command.RequiresConfirmation)
+        {
+            AskForConfirmation(ctx, invocation);
+            return;
+        }
+
+        await RunCommandAsync(ctx, invocation, confirmed: false);
+    }
+
+    /// <summary>Repaints the screen for a change the caller has already made under the render lock.</summary>
+    private void RefreshLayout(LiveDisplayContext ctx)
+    {
+        lock (renderLock)
+        {
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+    }
+
+    /// <summary>Puts <paramref name="invocation"/>'s Yes/No question on the prompt, where it stays until it is answered.</summary>
+    private void AskForConfirmation(LiveDisplayContext ctx, CommandInvocation invocation)
+    {
+        lock (renderLock)
+        {
+            commandConfirmation.Ask(invocation);
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+    }
+
+    /// <summary>Tells whether <paramref name="frame"/> belongs to the run still owed an outcome.</summary>
+    private bool BelongsToRunOwingOutcome(CommandProgress frame) =>
+        invocationOwingOutcome is { } owed
+        && (frame.InvocationId is { } invocationId
+            ? string.Equals(invocationId, owed.Id, StringComparison.Ordinal)
+
+            // A Morgana that hands back no run id names only the command, which is then all there is to match on
+            : string.Equals(frame.Command, owed.Command.Name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Runs <paramref name="invocation"/>, carrying the <paramref name="confirmed"/> answer it asked for, while the prompt waits on it; a failure is explained above the prompt.</summary>
+    private async Task RunCommandAsync(LiveDisplayContext ctx, CommandInvocation invocation, bool confirmed)
+    {
+        lock (renderLock)
+        {
+            // One command at a time: a second one would race the first for the widget and the outcome line
+            if (commandRunning)
+                return;
+            commandRunning = true;
+            runningCommandName = invocation.Command.Name;
+            invocationOwingOutcome = invocation;
+
+            // The previous command's outcome gives way to the hint naming this one, as does a bar an earlier
+            // command left behind when its call was given up on
+            commandOutcome = null;
+            commandProgress.Clear();
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+
+        try
+        {
+            // The command decides what happens next through this UI: leave, report or swap the conversation
+            await commandRegistry.ExecuteCommandAsync(invocation, this, confirmed, commandCancellation.Token);
+        }
+        catch (OperationCanceledException) when (commandCancellation.IsCancellationRequested)
+        {
+            // Rune is shutting down: the command dies with it
+        }
+        catch (TimeoutException ex)
+        {
+            // The command's deadline already names the command and says it was called off. An outcome that
+            // landed just before it is the truth and stays: Morgana had finished the work
+            lock (renderLock)
+            {
+                if (ReferenceEquals(invocationOwingOutcome, invocation))
+                    ShowCommandOutcome(ctx, ex.Message, ErrorColor);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Logging is silenced under the live UI, so the outcome line is the only place the failure can surface
+            ShowCommandOutcome(ctx, $"/{invocation.Command.Name} failed: {ex.Message}", ErrorColor);
+        }
+        finally
+        {
+            // The command is over: whatever it was drawing goes with it, one that died halfway through included.
+            // Only /new leaves a turn open behind it, waiting on the fresh conversation's presentation
+            commandRunning = false;
+            lock (renderLock)
+            {
+                if (!awaitingResponse)
+                    commandProgress.Clear();
+
+                // The prompt comes back whatever the command left: the hint holding it goes. An outcome that
+                // landed while the command still ran is drawn only now. After the user left there is no screen
+                if (!exitRequested)
+                {
+                    ctx.UpdateTarget(BuildLayout());
+                    ctx.Refresh();
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// The conversation as the palette must judge it: whether the budget is spent and whether an agent is
+    /// carrying it. The agent is read off the speaker the header names, which goes back to Morgana the moment
+    /// one hands the conversation over. Read under <see cref="renderLock"/> by every caller.
+    /// </summary>
+    private TerminalConversationState ConversationState() =>
+        new(conversationDead, agentCarryingConversation is not null);
+
+    /// <summary>Opens a turn on the wire, from which the silence deadline is measured. Must be called under <see cref="renderLock"/>.</summary>
+    private void BeginTurn()
+    {
+        awaitingResponse = true;
+
+        // The conversation has moved on, so what the last command came to is no longer news
+        commandOutcome = null;
+    }
+
+    /// <summary>
+    /// Gives the prompt back at the end of a turn, however it ended: answered, failed or given up on. A bar
+    /// a command left standing belongs to work that is over, so it goes with the turn rather than sitting
+    /// where the caret is drawn — a command that dies without its closing frame cannot hold the screen.
+    /// Must be called under <see cref="renderLock"/>.
+    /// </summary>
+    private void ReleaseTurn()
+    {
+        awaitingResponse = false;
+        commandProgress.Clear();
+    }
+
+    /// <summary>Writes a system line into the transcript in <paramref name="color"/> and brings the view back to it.</summary>
+    private void ShowSystemNotice(LiveDisplayContext ctx, string text, string color)
+    {
+        lock (renderLock)
+        {
+            // A command still finishing after the user left must not draw over the shell the display gave back
+            if (exitRequested)
+                return;
+
+            history.Add(new DisplayedMessage(channelSpeaker, text, color));
+
+            // A notice scrolled out of sight would leave the user wondering why nothing happened
+            scrollOffset = 0;
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+    }
+
+    /// <inheritdoc />
+    public void RequestExit()
+    {
+        // The key loop stops on the flag; completing the queue releases the drain loop, so the live display returns.
+        // A command still waiting on Morgana is called off, so leaving never waits for it.
+        exitRequested = true;
+        commandCancellation.Cancel();
+        incoming.Writer.TryComplete();
+    }
+
+    /// <inheritdoc />
+    public void ShowProgress(CommandProgress frame)
+    {
+        lock (renderLock)
+        {
+            commandProgress.Show(frame);
+            liveContext.UpdateTarget(BuildLayout());
+            liveContext.Refresh();
+        }
+    }
+
+    /// <inheritdoc />
+    public void ShowCommandOutcome(string text, bool isFailure = false)
+    {
+        lock (renderLock)
+        {
+            // A command run here reports its own outcome: nothing is left owed to it from Morgana
+            invocationOwingOutcome = null;
+            ShowCommandOutcome(liveContext, text, isFailure ? ErrorColor : CommandReportColor);
+        }
+    }
+
+    /// <summary>
+    /// Takes a frame of a command run on Morgana: its bar while the command runs, then the finished frame's
+    /// text as the command's outcome.
+    /// </summary>
+    private void HandleInboundProgress(LiveDisplayContext ctx, ChannelMessage message, CommandProgress frame)
+    {
+        lock (renderLock)
+        {
+            // Only the command still owed an outcome is heard. Its bar only while it runs: a frame landing after
+            // the command returned would stand over the prompt with nothing left to take it down. Its outcome
+            // whenever it lands, since the drain may deliver it after the call returned or after its deadline
+            if (!BelongsToRunOwingOutcome(frame) || (!frame.Finished && !commandRunning))
+                return;
+
+            commandProgress.Show(frame);
+            if (frame.Finished)
+            {
+                SetCommandOutcome(message.Text, OutcomeColor(message));
+                invocationOwingOutcome = null;
+
+                // A budget found spent ends the conversation whatever asked for more of it, a command included
+                if (string.Equals(message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal))
+                    MarkConversationSpent();
+            }
+
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+    }
+
+    /// <summary>Latches the conversation as spent: the prompt takes only the ways out of it. Must be called under <see cref="renderLock"/>.</summary>
+    private void MarkConversationSpent()
+    {
+        conversationDead = true;
+        currentInput = string.Empty; // discard any half-typed doomed line
+        cursorPosition = 0;
+    }
+
+    /// <summary>
+    /// The colour of an outcome Morgana delivered: a refusal by the rate limit reads as a warning, a spent budget
+    /// as an error and anything else as the command's own report.
+    /// </summary>
+    private static string OutcomeColor(ChannelMessage message) => message.ErrorReason switch
+    {
+        "rate_limit_exceeded" => WarningColor,
+        "dust_budget_exhausted" => ErrorColor,
+        _ => CommandReportColor
+    };
+
+    /// <summary>Draws <paramref name="text"/> above the prompt in <paramref name="color"/> as the outcome of the command just run.</summary>
+    private void ShowCommandOutcome(LiveDisplayContext ctx, string text, string color)
+    {
+        lock (renderLock)
+        {
+            // A command still finishing after the user left must not draw over the shell the display gave back
+            if (exitRequested)
+                return;
+
+            SetCommandOutcome(text, color);
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+    }
+
+    /// <summary>Records what a command came to, cleaned of anything the terminal would obey. Must be called under <see cref="renderLock"/>.</summary>
+    private void SetCommandOutcome(string text, string color)
+    {
+        // Morgana's outcome arrives over the unauthenticated callback, so it is drawn only once it is plain text
+        commandOutcome = TerminalCellService.StripControlCharacters(text);
+        commandOutcomeColor = color;
+    }
+
+    /// <summary>Echoes <paramref name="echo"/> as the user's line, then sends the turn through <paramref name="dispatch"/> under the reply deadline.</summary>
+    private async Task SubmitTurnAsync(LiveDisplayContext ctx, string echo, Func<Task> dispatch)
+    {
+        lock (renderLock)
+        {
+            // Echo and thinking hint go up before the send, so a slow backend still feels answered
+            history.Add(new DisplayedMessage("You", echo, UserColor));
+            BeginTurn();
+            scrollOffset = 0; // jump back to the live bottom for the new turn
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+
+        try
+        {
+            await dispatch();
+
+            // Morgana took the turn: from here only its delivery can reopen the prompt,
+            // so give that delivery a deadline. A reply already landed means no turn to watch.
+            lock (renderLock)
+            {
+                if (awaitingResponse)
+                    StartReplyWatchdog(ctx, uiStopping);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Surface the failure in-UI (logging is silenced) and release the
+            // gate so the user can retry without waiting for a webhook that
+            // will never arrive. A send called off because the user left draws nothing.
+            lock (renderLock)
+            {
+                if (exitRequested)
+                    return;
+                history.Add(new DisplayedMessage(channelSpeaker, $"send failed: {ex.Message}", ErrorColor));
+                ReleaseTurn();
+                ctx.UpdateTarget(BuildLayout());
+                ctx.Refresh();
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task ReplaceConversationAsync(Func<CancellationToken, Task<string>> openConversation, CancellationToken cancellationToken)
+    {
+        LiveDisplayContext ctx = liveContext;
+
+        // The new conversation's presentation may land before its id is known here: it waits in the queue
+        // until the screen has been cleared for it, instead of joining the transcript about to be wiped
+        TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        Volatile.Write(ref deliveriesReleased, released.Task);
+        try
+        {
+            // The prompt waits while the conversation is opened, as it waits for a reply
+            lock (renderLock)
+            {
+                BeginTurn();
+                scrollOffset = 0;
+                ctx.UpdateTarget(BuildLayout());
+                ctx.Refresh();
+            }
+
+            string openedConversationId;
+            try
+            {
+                openedConversationId = await openConversation(cancellationToken);
+            }
+            catch
+            {
+                // The conversation on screen is still the one being talked to: the prompt comes back to it,
+                // unless the user left meanwhile and there is no screen any more
+                lock (renderLock)
+                {
+                    if (exitRequested)
+                        throw;
+                    ReleaseTurn();
+                    ctx.UpdateTarget(BuildLayout());
+                    ctx.Refresh();
+                }
+
+                // The command reports why, through the failure notice of RunCommandLineAsync
+                throw;
+            }
+
+            lock (renderLock)
+            {
+                // Opened just as the user left: the lifecycle ends whichever conversation the session names by then
+                if (exitRequested)
+                    return;
+                ResetScreenForConversation(openedConversationId);
+
+                // The fresh conversation's presentation is a reply like any other and gets the same deadline
+                BeginTurn();
+                StartReplyWatchdog(ctx, uiStopping);
+                ctx.UpdateTarget(BuildLayout());
+                ctx.Refresh();
+            }
+        }
+        finally
+        {
+            // Deliveries resume however the swap ended: the drain loop drops those of a conversation not on screen
+            released.TrySetResult();
+        }
+    }
+
+    /// <summary>Clears everything the previous conversation left on screen and names <paramref name="openedConversationId"/> in the header. Under <see cref="renderLock"/>.</summary>
+    private void ResetScreenForConversation(string openedConversationId)
+    {
+        // A deadline armed for the old conversation must not fire its notice on the new one
+        CancelReplyWatchdog();
+
+        // The transcript and its wrapped rows go together: the next frame must not draw rows of a gone history
+        history.Clear();
+        historyRows.Clear();
+        historyRowsMessageCount = 0;
+
+        // Header back to base Morgana; the gauge stays hidden until the new conversation reports its dust
+        currentSpeaker = "Morgana";
+        agentCarryingConversation = null;
+        conversationId = openedConversationId;
+        _dustSegment = string.Empty;
+
+        // A fresh budget: the spent latch of the old conversation is gone
+        conversationDead = false;
+
+        // The view and the prompt start clean, the /new line and any command outcome included
+        commandOutcome = null;
+        scrollOffset = 0;
+        currentInput = string.Empty;
+        cursorPosition = 0;
     }
 
     /// <summary>
@@ -592,10 +1287,10 @@ public sealed class ConsoleUiService : ITerminalUi
                     return;
 
                 history.Add(new DisplayedMessage(
-                    "system",
+                    channelSpeaker,
                     $"no answer from Morgana after {replyTimeout.TotalSeconds:0}s — the turn may be lost, ask again or press Esc to quit",
                     ErrorColor));
-                awaitingResponse = false;
+                ReleaseTurn();
                 ctx.UpdateTarget(BuildLayout());
                 ctx.Refresh();
             }
@@ -784,7 +1479,18 @@ public sealed class ConsoleUiService : ITerminalUi
         RenderNewHistoryRows(termWidth);
         List<IRenderable> contentRows = historyRows;
 
-        int contentHeight = Math.Max(0, bodyHeight - inputRows.Count);
+        // The command palette hangs under the prompt and takes only the rows the prompt leaves, so a short
+        // terminal loses palette rows before it loses the caret
+        // A form asking for a value keeps the rows under the prompt: a path starting with a slash would
+        // otherwise list every command underneath the question it is answering
+        List<Markup> paletteRows = awaitingResponse || commandOptionPrompt.IsActive
+            ? []
+            : commandPalette.RenderPalette(currentInput, ConversationState(), termWidth);
+        int paletteBudget = Math.Max(0, bodyHeight - inputRows.Count);
+        if (paletteRows.Count > paletteBudget)
+            paletteRows = paletteRows.GetRange(0, paletteBudget);
+
+        int contentHeight = Math.Max(0, bodyHeight - inputRows.Count - paletteRows.Count);
 
         // Anchor the window. scrollOffset counts rows up from the bottom; clamp it to the live
         // content so a resize or a shorter conversation can't strand the viewport off the end.
@@ -800,10 +1506,11 @@ public sealed class ConsoleUiService : ITerminalUi
         scrollHasAbove = scrollable && windowStart > 0;
         scrollHasBelow = scrollable && scrollOffset > 0;
 
-        List<IRenderable> rows = new(contentHeight + inputRows.Count);
+        List<IRenderable> rows = new(contentHeight + inputRows.Count + paletteRows.Count);
         for (int i = windowStart; i < windowEnd; i++)
             rows.Add(contentRows[i]);
         rows.AddRange(inputRows);
+        rows.AddRange(paletteRows);
         return new Rows(rows);
     }
 
@@ -874,7 +1581,10 @@ public sealed class ConsoleUiService : ITerminalUi
         // measures the resolved glyph correctly. Order: resolve first, then strip variation
         // selectors from the produced glyphs so the cell-width accounting stays exact.
         string text = cells.StripVariationSelectors(BlankRunRegex.Replace(Emoji.Replace(message.Text.Trim()), "\n\n"));
-        string fullText = $"{message.Who}: {text}";
+        // The channel's own notices are no speaker of the conversation, so they carry no dot. The dot is
+        // wrapped with the row it opens, so the cell budget of that row counts it
+        string? speakerMarkerColor = message.Who == channelSpeaker ? null : SpeakerColor(message.Who);
+        string fullText = speakerMarkerColor is null ? $"{message.Who}: {text}" : $"{SpeakerMarker}{message.Who}: {text}";
         bool first = true;
         foreach (string line in fullText.Split('\n'))
         {
@@ -884,18 +1594,27 @@ public sealed class ConsoleUiService : ITerminalUi
             // BuildBody's scrollback budget depends on.
             foreach (string chunk in cells.Wrap(line, termWidth))
             {
-                EmitMessageRow(rows, message, chunk, isFirstRowOfMessage: first);
+                EmitMessageRow(rows, message, chunk, isFirstRowOfMessage: first, speakerMarkerColor);
                 first = false;
             }
         }
         return rows;
     }
 
-    /// <summary>Renders a single pre-wrapped row of a message: bold "Who:" prefix on the very first row, same speaker colour without bold on every other row.</summary>
-    private static void EmitMessageRow(List<IRenderable> output, DisplayedMessage message, string chunk, bool isFirstRowOfMessage)
+    /// <summary>Renders a single pre-wrapped row of a message: the speaker's dot and a bold "Who:" prefix on the very first row, same speaker colour without bold on every other row.</summary>
+    private static void EmitMessageRow(List<IRenderable> output, DisplayedMessage message, string chunk, bool isFirstRowOfMessage, string? speakerMarkerColor)
     {
         if (isFirstRowOfMessage)
         {
+            // The dot takes the speaker's own colour even when the row wears a warning's: who spoke and what
+            // kind of line it is read apart. It is drawn ahead of the name and is no part of the message
+            string marker = string.Empty;
+            if (speakerMarkerColor is not null && chunk.StartsWith(SpeakerMarker, StringComparison.Ordinal))
+            {
+                marker = $"[{speakerMarkerColor}]●[/] ";
+                chunk = chunk[SpeakerMarker.Length..];
+            }
+
             // First row of the message — bold the "Who:" prefix, then the rest of the
             // row in the same colour but non-bold. If the speaker name itself wraps
             // past the colon, fall back to bolding the whole chunk so the message
@@ -905,11 +1624,11 @@ public sealed class ConsoleUiService : ITerminalUi
             {
                 string who = chunk[..colonIdx];
                 string rest = chunk[(colonIdx + 1)..];
-                output.Add(new Markup($"[bold {message.Color}]{Markup.Escape(who)}:[/][{message.Color}]{Markup.Escape(rest)}[/]"));
+                output.Add(new Markup($"{marker}[bold {message.Color}]{Markup.Escape(who)}:[/][{message.Color}]{Markup.Escape(rest)}[/]"));
             }
             else
             {
-                output.Add(new Markup($"[bold {message.Color}]{Markup.Escape(chunk)}[/]"));
+                output.Add(new Markup($"{marker}[bold {message.Color}]{Markup.Escape(chunk)}[/]"));
             }
         }
         else
@@ -933,12 +1652,33 @@ public sealed class ConsoleUiService : ITerminalUi
     /// </remarks>
     private List<IRenderable> BuildInputRows(int termWidth)
     {
-        // Terminal state supersedes everything. Morgana's banner already told the user
-        // the dust ran out; here we give the Rune-honest next step, because Morgana's
-        // "start a new one to keep going" is not (yet) actionable inside this CLI —
-        // the only way forward is to quit and relaunch the process.
-        if (conversationDead)
-            return ChunkStyledRows("✦ Conversation spent — press Esc to quit, then relaunch Rune to start fresh", termWidth, $"{ErrorColor} italic");
+        // A command waiting on an answer takes the prompt over entirely: until it is answered there is nothing
+        // else the user can do here, a spent conversation included
+        if (commandConfirmation.IsPending)
+            return [.. commandConfirmation.RenderQuestion(termWidth)];
+
+        // The form asks above the caret: the question and the value being typed have to be read together
+        List<IRenderable> optionPromptRows = [.. commandOptionPrompt.RenderPrompt(termWidth)];
+
+        // A command reporting its progress says more than the thinking hint it stands in for: it names the
+        // step being worked on, so the wait is accounted for rather than merely announced. It holds the
+        // prompt for as long as it runs — here or on Morgana — since a command is answered, never talked over
+        if ((awaitingResponse || commandRunning) && commandProgress.IsActive)
+            return [.. commandProgress.RenderProgress(termWidth)];
+
+        // A command that has not reported yet still holds the prompt and says so: a line typed now would be lost
+        if (commandRunning && !awaitingResponse)
+            return ChunkStyledRows($"/{runningCommandName} is running…", termWidth, $"{CommandReportColor} italic");
+
+        // What the last command came to sits above whatever the prompt is now, in place of the widget it follows
+        List<IRenderable> outcomeRows = commandOutcome is { } outcome
+            ? ChunkStyledRows(outcome, termWidth, commandOutcomeColor)
+            : [];
+
+        // Terminal state supersedes everything but a command line being typed, which is how the user gets
+        // out of it. Morgana's banner already told the user the dust ran out; here they learn the way on.
+        if (conversationDead && !CommandPaletteService.IsCommandLine(currentInput))
+            return [.. outcomeRows, .. ChunkStyledRows("✦ Conversation spent — type /new to start a fresh one or press Esc to quit", termWidth, $"{ErrorColor} italic")];
 
         if (awaitingResponse)
         {
@@ -962,9 +1702,14 @@ public sealed class ConsoleUiService : ITerminalUi
         ];
         int charOffset = 0;
         bool caretPlaced = false;
+
+        // A line naming a command exactly takes the match colour, as in Claude Code: Enter will run what is written
+        bool namesCommand = !commandOptionPrompt.IsActive && commandPalette.NamesCommandExactly(currentInput, ConversationState());
         foreach (System.Text.Rune rune in currentInput.EnumerateRunes())
         {
             string glyph = Markup.Escape(rune.ToString());
+            if (namesCommand)
+                glyph = $"[{commandPalette.MatchColor}]{glyph}[/]";
             if (!caretPlaced && cursorPosition >= charOffset && cursorPosition < charOffset + rune.Utf16SequenceLength)
             {
                 units.Add(($"[blink {UserColor} invert]{glyph}[/]", cells.RuneCells(rune)));
@@ -995,7 +1740,7 @@ public sealed class ConsoleUiService : ITerminalUi
         }
         if (sb.Length > 0)
             rows.Add(new Markup(sb.ToString()));
-        return FramePromptRows(rows, termWidth);
+        return FramePromptRows([.. outcomeRows, .. optionPromptRows, .. rows], termWidth);
     }
 
     /// <summary>Sandwiches the free-text input row between two full-width rules in the same grey as the header panel's border, so the caret isn't the only thing marking "you type here". Not used for the thinking hint or the dead-conversation notice — those already read as "not a normal turn" on their own.</summary>
@@ -1061,6 +1806,9 @@ public sealed class ConsoleUiService : ITerminalUi
         return sanitized.ToString();
     }
 
+    /// <summary>What opens the first row of a line the user or Morgana's side said, ahead of the speaker's name. Drawn only.</summary>
+    private const string SpeakerMarker = "● ";
+
     /// <summary>Maps a speaker name to its palette color: <c>You</c> → white, <c>Morgana</c> → emerald green, everything else (specialised agents) → light green.</summary>
     private static string SpeakerColor(string agentName)
     {
@@ -1075,7 +1823,7 @@ public sealed class ConsoleUiService : ITerminalUi
     /// Row color for an inbound message: advisory warnings (rate-limit, low-budget —
     /// <c>MessageType="system_warning"</c>) render orange, error notices (dust exhausted,
     /// delivery error — <c>MessageType="error"</c>) render red, everything else keeps the
-    /// speaker's palette color. Rune has no banner widget, so color is the only signal that
+    /// speaker's palette color. What a command reports never reaches the transcript. Rune has no banner widget, so color is the only signal that
     /// separates a diagnostic line from an ordinary turn.
     /// </summary>
     private static string RowColor(ChannelMessage message, string speaker)

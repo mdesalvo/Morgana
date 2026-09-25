@@ -11,8 +11,8 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// Checks the agent card a published agent serves — that it is reachable without credentials, that
-/// it states how to obtain them — and the gate behind it: which credentials that endpoint demands,
+/// Checks the agent card a published agent serves (that it is reachable without credentials, that
+/// it states how to obtain them) together with the gate behind it: which credentials that endpoint demands
 /// and how far the ones it accepts actually reach.
 /// </summary>
 /// <remarks>
@@ -136,7 +136,7 @@ public sealed class AgentCardTests
     public async Task Agent_endpoint_refuses_a_partner_not_admitted_to_it(string closedAgent)
     {
         // Proven to be a colleague and still turned away: this run declares its partner as admitted
-        // to one desk and every other desk of the same installation answers it exactly as it answers
+        // to one agent and every other agent of the same installation answers it exactly as it answers
         // a stranger. That is what lets an installation be opened to a customer, a
         // supplier or a marketplace one agent at a time, rather than whole or not at all.
         HttpResponseMessage response = await CallAgentAsync(

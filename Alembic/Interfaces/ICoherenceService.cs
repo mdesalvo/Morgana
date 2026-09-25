@@ -8,8 +8,8 @@ namespace Alembic.Interfaces;
 /// <remarks>
 /// <para>
 /// This is the half of reviewing a domain that <see cref="IDraftValidationService"/> explicitly
-/// cannot do. That one decides everything decidable by reading the Draft — a name that cannot be a
-/// C# identifier, an intent nothing routes to — and asks no model, because none would help. Whether
+/// cannot do. That one decides everything decidable by reading the Draft (a name that cannot be a
+/// C# identifier, an intent nothing routes to) and asks no model, because none would help. Whether
 /// two intent descriptions overlap enough to collide in the classifier is the opposite kind of
 /// question: it is about meaning, it has no mechanical answer and it is the single most expensive
 /// defect a multi-agent domain can carry.

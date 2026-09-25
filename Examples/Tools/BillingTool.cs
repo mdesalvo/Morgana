@@ -9,10 +9,10 @@ using Morgana.AI.Attributes;
 namespace Examples.Tools;
 
 /// <summary>
-/// The accounts desk of The Greenhouse &amp; Nursery: the invoices issued to a customer for plants
+/// The accounts agent of The Greenhouse &amp; Nursery: the invoices issued to a customer for plants
 /// bought from the catalog and for the Green Care Plan and the payments received against them.
 /// Reads the same shared database the greenhouse ledger writes (see <see cref="GreenhouseDatabaseHelper"/>),
-/// which is what lets a detail line point at the very order that produced it — and it only ever
+/// which is what lets a detail line point at the very order that produced it. It only ever
 /// reads: nothing here charges, credits or settles anything.
 /// </summary>
 [ProvidesToolForIntent("billing")]
@@ -84,7 +84,7 @@ public class BillingTool : MorganaTool
     /// <remarks>
     /// Deliberately NOT a gate. A code the books have never seen is served exactly like one they
     /// have and simply comes back empty: the nursery takes anyone at the counter and an accounts
-    /// desk that refuses to look before it has recognised you is a worse demo and a worse shop.
+    /// agent that refuses to look before it has recognised you is a worse demo and a worse shop.
     /// The name is a courtesy on the answer, never a permission to answer.
     /// </remarks>
     private static async Task<string?> FindCustomerNameAsync(SqliteConnection connection, string customerCode)
@@ -312,7 +312,7 @@ public class BillingTool : MorganaTool
                     : (int?)null
             },
             // Sku is read from the row but never surfaced: it is the greenhouse ledger's identifier
-            // for a plant and an accounts desk that hands it out starts being asked catalog
+            // for a plant and an accounts agent that hands it out starts being asked catalog
             // questions. OrderId is a different thing — a reference to what was billed, which is
             // exactly what an invoice line is for.
             lineItems = lines.Select(line => new

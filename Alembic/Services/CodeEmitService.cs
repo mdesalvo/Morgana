@@ -139,7 +139,7 @@ public class CodeEmitService : ICodeEmitService
     /// The signatures are the load-bearing part. They are generated from the same
     /// <c>ToolDefinition</c> that goes into <c>agents.json</c>, so the pair
     /// <c>MorganaToolAdapter.AddTool</c> validates at startup — parameter count, names,
-    /// required-versus-optional — is generated correct by construction. And because a partial method
+    /// required-versus-optional — is generated correct by construction. Because a partial method
     /// declared here and unimplemented in the other half does not compile, a tool added to the
     /// configuration cannot be silently forgotten in the code.
     /// </remarks>
