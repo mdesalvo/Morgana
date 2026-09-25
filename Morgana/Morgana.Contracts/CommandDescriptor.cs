@@ -28,11 +28,24 @@ public record CommandDescriptor(
     /// What is wrong with how this command declares itself, as a line naming the fault; null when nothing is.
     /// Every registry asks this at startup, so a declaration is judged by one rule wherever the command lives.
     /// </summary>
-    public string? DescribeDeclarationProblem() =>
+    public string? DescribeDeclarationProblem()
+    {
+        IReadOnlyList<CommandOption> declared = Options ?? [];
+
         // Options are matched ignoring case, so two spelled alike would hand the typed value to whichever came first
-        (Options ?? []).GroupBy(option => option.Name, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1) is { } clash
-            ? $"/{Name} declares the option '{clash.Key}' more than once"
-            : null;
+        if (declared.GroupBy(option => option.Name, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1) is { } clash)
+            return $"/{Name} declares the option '{clash.Key}' more than once";
+
+        // An empty list would refuse every value, leaving an option nobody can give
+        if (declared.FirstOrDefault(option => option.AllowedValues is { Count: 0 }) is { } closed)
+            return $"/{Name} declares no value the option '{closed.Name}' takes";
+
+        // A default is what the command runs on unasked, so one it would refuse makes every run without it fail
+        if (declared.FirstOrDefault(option => option.DefaultValue is { } fallback && !option.Allows(fallback)) is { } misfit)
+            return $"/{Name} defaults the option '{misfit.Name}' to '{misfit.DefaultValue}', which it does not take";
+
+        return null;
+    }
 
     /// <summary>
     /// What is wrong with <paramref name="options"/> for this command, as a line the user can read; null when
@@ -46,6 +59,15 @@ public record CommandDescriptor(
         if (options is not null && options.Keys.FirstOrDefault(
                 given => !declared.Any(option => string.Equals(option.Name, given, StringComparison.OrdinalIgnoreCase))) is { } unknown)
             return $"/{Name} takes no option named '{unknown}'";
+
+        // A value the command cannot use is the user's to correct, so it is refused with the values that would do.
+        // Every name given is a declared one by now, so each finds its option
+        foreach ((string given, string value) in options ?? new Dictionary<string, string>())
+        {
+            CommandOption option = declared.First(candidate => string.Equals(candidate.Name, given, StringComparison.OrdinalIgnoreCase));
+            if (!option.Allows(value))
+                return $"/{Name} takes {option.Name} as {option.DescribeAllowedValues()}, not '{value}'";
+        }
 
         // What the command cannot work without is asked for before anything happens, not discovered halfway
         // through. An option carrying a default is never missing: the default is what the command runs on

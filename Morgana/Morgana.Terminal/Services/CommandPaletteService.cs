@@ -239,13 +239,18 @@ public sealed class CommandPaletteService
     /// <summary>The name as the user types it, then the options it takes.</summary>
     private string CommandLabel(CommandDescriptor command)
     {
-        // Optional values are bracketed, required ones bare: the line doubles as the spelling to copy
+        // Optional values are bracketed, required ones bare: the line doubles as the spelling to copy. An
+        // option taking a few values names them, since the user could otherwise only guess
         string options = command.Options is { Count: > 0 } declared
-            ? " " + string.Join(' ', declared.Select(option => option.Required ? $"{option.Name}:<value>" : $"[{option.Name}:<value>]"))
+            ? " " + string.Join(' ', declared.Select(option => option.Required ? OptionSpelling(option) : $"[{OptionSpelling(option)}]"))
             : string.Empty;
 
         return SanitizeForTerminal($"/{command.Name}{options}");
     }
+
+    /// <summary>The option as it is written at the prompt: <c>format:text|json</c> when its values are declared, <c>path:&lt;value&gt;</c> otherwise.</summary>
+    private static string OptionSpelling(CommandOption option) =>
+        option.AllowedValues is { Count: > 0 } values ? $"{option.Name}:{string.Join('|', values)}" : $"{option.Name}:<value>";
 
     /// <summary>
     /// Prepares text published by Morgana for the terminal. It arrives from the network, so control characters

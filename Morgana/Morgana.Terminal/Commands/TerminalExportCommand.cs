@@ -45,7 +45,7 @@ public sealed class TerminalExportCommand : TerminalCommand
                 // Spelled as this machine spells one, separators included: the user edits a real path rather
                 // than translating an example written for somebody else's operating system
                 DefaultValue: DefaultFile()),
-            new CommandOption("format", "text or json; text when not said")
+            new CommandOption("format", "text for reading, json for tools", DefaultValue: "text", AllowedValues: ["text", "json"])
         ]);
 
     /// <summary>
@@ -68,12 +68,8 @@ public sealed class TerminalExportCommand : TerminalCommand
     /// <inheritdoc />
     public override async Task ExecuteAsync(ITerminalUi ui, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken)
     {
-        string format = options.GetValueOrDefault("format", "text").Trim().ToLowerInvariant();
-        if (format is not ("text" or "json"))
-        {
-            ui.ShowCommandOutcome($"/export cannot write '{format}': the formats are text and json", isFailure: true);
-            return;
-        }
+        // The value is one of the declared formats by now, spelled however the user typed it
+        string format = options["format"].Trim().ToLowerInvariant();
 
         // A long conversation takes a moment to come back over the wire, which is the first thing the user waits on
         ui.ShowProgress(new CommandProgress(Descriptor.Name, "reading the conversation", Completed: 0, Total: ProgressSteps));

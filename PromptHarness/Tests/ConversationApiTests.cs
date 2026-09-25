@@ -240,9 +240,10 @@ public sealed class ConversationApiTests
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
 
-        // The record as a version 5 host left it: the agent's row as it was, with no flag saying whether it
-        // was rewritten behind its agent
-        await api.QueryRecordAsync(conversationId, "ALTER TABLE morgana DROP COLUMN is_dirty; PRAGMA user_version = 5;");
+        // The record as a version 5 host left it: the agent's row as it was, with nothing saying whether it was
+        // rewritten behind its agent or how much of its agent's history it accounts for
+        await api.QueryRecordAsync(conversationId,
+            "ALTER TABLE morgana DROP COLUMN is_dirty; ALTER TABLE morgana DROP COLUMN agent_message_count; PRAGMA user_version = 5;");
         Assert.Equal(5L, await api.QueryRecordAsync(conversationId, "PRAGMA user_version;"));
 
         HttpResponseMessage response = await api.SendAsync("POST", "/api/morgana/conversation/{id}/resume", conversationId, api.HarnessToken());
@@ -253,12 +254,14 @@ public sealed class ConversationApiTests
         JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("billing", body.GetProperty("activeAgent").GetString());
 
-        // The step every write and every flag read takes first upgrades it in place: the flag exists, the row
-        // is clean since nothing rewrote it behind its agent and it is still the one the conversation is with
+        // The step every write and every flag read takes first upgrades it in place: the columns exist, the row
+        // is clean since nothing rewrote it behind its agent and it is still the one the conversation is with.
+        // How much history it accounts for stays unknown until its agent next reads or writes it
         await api.HostPersistenceService().EnsureDatabaseInitializedAsync(conversationId);
         Assert.Equal("billing", await api.HostPersistenceService().GetMostRecentActiveAgentAsync(conversationId));
         Assert.Equal(6L, await api.QueryRecordAsync(conversationId, "PRAGMA user_version;"));
         Assert.Equal(0L, await api.QueryRecordAsync(conversationId, "SELECT is_dirty FROM morgana WHERE agent_name = 'billing';"));
+        Assert.Equal(DBNull.Value, await api.QueryRecordAsync(conversationId, "SELECT agent_message_count FROM morgana WHERE agent_name = 'billing';"));
     }
 
     [Fact]

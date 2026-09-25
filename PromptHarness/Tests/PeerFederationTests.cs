@@ -271,7 +271,7 @@ public sealed class PeerFederationTests
     /// </summary>
     /// <remarks>
     /// The answer is discarded whatever it turns out to be: the stub answers no envelope this side
-    /// could read, and every assertion in this group is on what arrived at the peer.
+    /// could read, while every assertion in this group is on what arrived at the peer.
     /// </remarks>
     /// <param name="directory">Directory under test.</param>
     private static async Task ConsultAsync(ConfigurationAgentDirectoryService directory)

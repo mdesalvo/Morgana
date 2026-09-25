@@ -383,7 +383,7 @@ Per-conversation SQLite at `{StoragePath}/morgana-{conversationId}.db`, schema v
 
 | Table | Purpose |
 |---|---|
-| `morgana` | One row per participant, AES-256-CBC encrypted: each agent's `AgentSession`, plus Morgana's own, holding messages alone. `is_dirty` marks a row rewritten behind its agent, which reads it again at its next turn |
+| `morgana` | One row per participant, AES-256-CBC encrypted: each agent's `AgentSession`, plus Morgana's own, holding messages alone. `is_dirty` marks a row rewritten behind its agent, which reads it again at its next turn; a turn saved in between keeps the rewrite |
 | `rate_limit_log` | Sliding window |
 | `channel_metadata` | The persisted handshake |
 | `shared_context` | Cross-agent variables, first-write-wins |

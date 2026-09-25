@@ -24,12 +24,13 @@ public interface IConversationPersistenceService
     /// <param name="jsonSerializerOptions">JSON serialization options (optional, uses AgentAbstractionsJsonUtilities.DefaultOptions if null)</param>
     /// <returns>Task representing the async save operation</returns>
     /// <remarks>
-    /// <para><strong>Thread Safety:</strong></para>
-    /// <para>Implementations should handle concurrent saves to the same agentIdentifier appropriately,
-    /// typically using last-write-wins semantics or file locking mechanisms.</para>
+    /// <para><strong>Rewrites behind the agent:</strong></para>
+    /// <para>A row rewritten by <see cref="SaveParticipantMessagesAsync"/> since the agent last saved or read it
+    /// must keep that rewrite: implementations append only the messages the agent added since, write its
+    /// context state as it stands and leave the row dirty until <see cref="LoadAgentConversationAsync"/> reads it.</para>
     /// <para><strong>Error Handling:</strong></para>
-    /// <para>Implementations should throw meaningful exceptions for I/O errors, encryption failures,
-    /// or serialization errors to allow proper error handling by callers.</para>
+    /// <para>Implementations should throw meaningful exceptions for I/O errors, encryption failures and
+    /// serialization errors to allow proper error handling by callers.</para>
     /// </remarks>
     Task SaveAgentConversationAsync(
         string agentIdentifier,

@@ -25,7 +25,7 @@ public sealed class CommandOptionPromptService
     /// <summary>Style of the controls line.</summary>
     private const string HintStyle = "grey54 italic";
 
-    /// <summary>Style of the line saying a value cannot be left out, which is a refusal rather than a hint.</summary>
+    /// <summary>Style of the line saying why an answer was refused, which is a refusal rather than a hint.</summary>
     private const string RefusalStyle = "orange1";
 
     /// <summary>Measures and cuts every row to the width the UI's row budget counts on.</summary>
@@ -43,8 +43,8 @@ public sealed class CommandOptionPromptService
     /// <summary>What has been given so far, the values typed at the prompt included.</summary>
     private Dictionary<string, string> gatheredOptions = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>True once a required option was answered with nothing, which is said on screen until it is answered.</summary>
-    private bool lastAnswerWasEmpty;
+    /// <summary>Why the last answer was refused, said on screen until the question is answered; null when nothing was.</summary>
+    private string? refusedAnswerReason;
 
     /// <summary>Captures the cell measurement and the channel's theme.</summary>
     public CommandOptionPromptService(TerminalCellService cells, CommandTheme theme)
@@ -72,7 +72,7 @@ public sealed class CommandOptionPromptService
     {
         command = candidate;
         gatheredOptions = new Dictionary<string, string>(typedOptions, StringComparer.OrdinalIgnoreCase);
-        lastAnswerWasEmpty = false;
+        refusedAnswerReason = null;
 
         pendingOptions.Clear();
         foreach (CommandOption option in candidate.Options ?? [])
@@ -108,8 +108,9 @@ public sealed class CommandOptionPromptService
 
     /// <summary>
     /// Takes <paramref name="value"/> as the answer to the option being asked and moves to the next one.
-    /// An empty answer skips an optional value; on a required one it is refused, which leaves the same
-    /// question standing. The invocation comes back once nothing is left to ask; the form closes with it.
+    /// An empty answer skips an optional value; on a required one it is refused, as is a value the option
+    /// does not take, which leaves the same question standing. The invocation comes back once nothing is
+    /// left to ask; the form closes with it.
     /// </summary>
     public CommandInvocation? Accept(string value)
     {
@@ -118,9 +119,12 @@ public sealed class CommandOptionPromptService
 
         string answer = value.Trim();
 
-        // A command cannot be run without what it declares it needs, so the question stays where it is
-        lastAnswerWasEmpty = answer.Length == 0 && option.Required;
-        if (lastAnswerWasEmpty)
+        // A command cannot be run without what it declares it needs nor on a value it does not take, so the
+        // question stays where it is
+        refusedAnswerReason = answer.Length == 0
+            ? option.Required ? $"{option.Name} cannot be left out" : null
+            : option.Allows(answer) ? null : $"{option.Name} takes {option.DescribeAllowedValues()}";
+        if (refusedAnswerReason is not null)
             return null;
 
         // An empty answer to an optional value means the user does not want it: the command reads its own default
@@ -158,9 +162,9 @@ public sealed class CommandOptionPromptService
             new Markup($"[{DescriptionStyle}]{Markup.Escape(cells.Trunc(SanitizeForTerminal($"  {option.Description}"), width))}[/]")
         ];
 
-        // What was refused is said where it happened, so an unanswered Enter does not read as a dead key
-        if (lastAnswerWasEmpty)
-            rows.Add(new Markup($"[{RefusalStyle}]{Markup.Escape(cells.Trunc($"  {option.Name} cannot be left out", width))}[/]"));
+        // What was refused is said where it happened, so an Enter that did nothing does not read as a dead key
+        if (refusedAnswerReason is { } reason)
+            rows.Add(new Markup($"[{RefusalStyle}]{Markup.Escape(cells.Trunc($"  {reason}", width))}[/]"));
 
         // An optional value is skipped by answering nothing, which nothing on screen would otherwise suggest
         string controls = option.Required ? ControlsHint : $"{ControlsHint} · empty Enter skips it";

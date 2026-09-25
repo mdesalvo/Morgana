@@ -1,3 +1,5 @@
+using Microsoft.Extensions.AI;
+using Morgana.AI.Services;
 using Morgana.Contracts;
 using PromptHarness.Infrastructure.Engine;
 using PromptHarness.Infrastructure.Wiring;
@@ -78,5 +80,45 @@ public sealed class SummarizationTests
             // Nothing more arrived: every delivery the command made is in the list
         }
         Assert.DoesNotContain(delivered, message => message.Progress is { Finished: true });
+    }
+
+    /// <summary>
+    /// A fold written while the agent's turn is running survives the save that closes the turn: the agent appends
+    /// what it said on top of the fold instead of writing back the history the fold replaced. The fold here is
+    /// written straight to the record, the way a command reaching the conversation over REST would land it.
+    /// </summary>
+    [Fact]
+    public async Task Fold_written_during_a_turn_survives_the_turn()
+    {
+        SQLiteConversationPersistenceService record = new ChannelApiClient(fixture).HostPersistenceService();
+        (string conversationId, ChannelMessage _) = await fixture.Channel.StartConversationAsync(TimeSpan.FromSeconds(180));
+        await fixture.Channel.SendAsync(conversationId, "Vorrei vedere le mie fatture, il mio codice cliente è P994E", TimeSpan.FromSeconds(180));
+        int recordedBeforeTurn = (await record.LoadParticipantMessagesAsync(conversationId, "billing")).Count;
+
+        Task<ChannelMessage> reply = fixture.Channel.SendAsync(conversationId, "Quali risultano ancora da pagare?", TimeSpan.FromSeconds(180));
+
+        // The agent files the user's phrase before its model answers, which is the moment the turn is under way
+        IReadOnlyList<ChatMessage> recordedInTurn = [];
+        DateTime giveUpAt = DateTime.UtcNow.AddSeconds(60);
+        while (!reply.IsCompleted && DateTime.UtcNow < giveUpAt
+               && (recordedInTurn = await record.LoadParticipantMessagesAsync(conversationId, "billing")).Count <= recordedBeforeTurn)
+            await Task.Delay(50);
+        if (reply.IsCompleted)
+            Assert.Skip("The turn ended before a fold could land inside it, so nothing was proven.");
+
+        ChatMessage fold = new ChatMessage(ChatRole.Assistant, "Harness fold of everything said so far.");
+        Assert.True(await record.SaveParticipantMessagesAsync(conversationId, "billing", [fold], recordedInTurn.Count));
+        await reply;
+
+        // The fold opens the row and the turn's answer follows it; the agent reads it back at its next turn
+        IReadOnlyList<ChatMessage> afterTurn = await record.LoadParticipantMessagesAsync(conversationId, "billing");
+        Assert.Equal(fold.Text, afterTurn[0].Text);
+        Assert.Equal(ChatRole.Assistant, afterTurn[^1].Role);
+        Assert.True(afterTurn.Count > 1, "The turn that ran over the fold left nothing of its own on record.");
+        Assert.Equal(1L, await new ChannelApiClient(fixture).QueryRecordAsync(conversationId, "SELECT is_dirty FROM morgana WHERE agent_name = 'billing';"));
+
+        await fixture.Channel.SendAsync(conversationId, "Grazie, per ora è tutto", TimeSpan.FromSeconds(180));
+        Assert.Equal(fold.Text, (await record.LoadParticipantMessagesAsync(conversationId, "billing"))[0].Text);
+        Assert.Equal(0L, await new ChannelApiClient(fixture).QueryRecordAsync(conversationId, "SELECT is_dirty FROM morgana WHERE agent_name = 'billing';"));
     }
 }

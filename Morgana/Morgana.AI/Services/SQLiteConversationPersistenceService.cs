@@ -108,9 +108,8 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             JsonElement agentSessionJsonElement = await agent.SerializeSessionAsync(agentSession, jsonSerializerOptions);
             string agentSessionJsonString = JsonSerializer.Serialize(agentSessionJsonElement, jsonSerializerOptions);
 
-            // A session holds the whole conversation in clear — user text, tool arguments, results.
-            // It is a BLOB on disk for that reason and the key never leaves configuration.
-            byte[] encryptedAgentSessionJsonString = Encrypt(agentSessionJsonString);
+            // The history the agent holds in memory, read the way a row is read back
+            IReadOnlyList<ChatMessage> agentMessages = ReadRowMessages(agentSessionJsonString, agentName, conversationId, jsonSerializerOptions);
 
             // One database per conversation, so every agent of it writes to the same file and nothing
             // here has to filter by conversation.
@@ -122,17 +121,60 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             // pays one query rather than a schema script.
             await EnsureDatabaseInitializedAsync(sqliteConnection);
 
+            // Read and write are one step: a command may be rewriting this row while the agent's turn runs
             await using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
             try
             {
+                await using SqliteCommand readCommand = sqliteConnection.CreateCommand();
+                readCommand.Transaction = sqliteTransaction;
+                readCommand.CommandText = "SELECT agent_session, is_dirty, agent_message_count FROM morgana WHERE agent_identifier = @agent_identifier;";
+                readCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
+
+                string rowToWrite = agentSessionJsonString;
+                bool staysDirty = false;
+                await using (SqliteDataReader rowReader = await readCommand.ExecuteReaderAsync())
+                {
+                    if (await rowReader.ReadAsync() && rowReader.GetInt64(1) == 1)
+                    {
+                        // A row rewritten behind the agent holds a history its copy in memory never saw. Everything
+                        // the agent had recorded is already in it, folded or verbatim, so only what the agent said
+                        // since is appended; its own context state is written as it stands. The row stays dirty,
+                        // since the agent's memory is still the history the rewrite replaced.
+                        if (!rowReader.IsDBNull(2) && rowReader.GetInt32(2) is var recordedCount && recordedCount <= agentMessages.Count)
+                        {
+                            IReadOnlyList<ChatMessage> rewrittenMessages = ReadRowMessages(Decrypt((byte[])rowReader[0]), agentName, conversationId, jsonSerializerOptions);
+                            rowToWrite = ReplaceRowMessages(
+                                agentSessionJsonString, [.. rewrittenMessages, .. agentMessages.Skip(recordedCount)], agentName, conversationId, jsonSerializerOptions);
+                            staysDirty = true;
+
+                            logger.LogInformation(
+                                "Kept the rewrite of {AgentIdentifier}, appending the {Count} message(s) its agent wrote since",
+                                agentIdentifier, agentMessages.Count - recordedCount);
+                        }
+                        else
+                        {
+                            // Without knowing which of its messages the row already holds, the agent's own history
+                            // is the one that loses nothing it said
+                            logger.LogWarning(
+                                "The rewrite of {AgentIdentifier} cannot be matched to what its agent holds; the agent's history replaces it",
+                                agentIdentifier);
+                        }
+                    }
+                }
+
+                // A session holds the whole conversation in clear — user text, tool arguments, results.
+                // It is a BLOB on disk for that reason and the key never leaves configuration.
+                byte[] encryptedAgentSessionJsonString = Encrypt(rowToWrite);
+
                 await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
                 sqliteCommand.Transaction = sqliteTransaction;
                 sqliteCommand.CommandText =
 """
-INSERT INTO morgana (agent_identifier, agent_name, agent_session, creation_date, last_update, is_active)
-VALUES (@agent_identifier, @agent_name, @agent_session, @creation_date, @last_update, @is_active)
+INSERT INTO morgana (agent_identifier, agent_name, agent_session, creation_date, last_update, is_active, is_dirty, agent_message_count)
+VALUES (@agent_identifier, @agent_name, @agent_session, @creation_date, @last_update, @is_active, @is_dirty, @agent_message_count)
 ON CONFLICT(agent_identifier) DO UPDATE SET
-    agent_session = excluded.agent_session, last_update = @last_update, is_active = @is_active;
+    agent_session = excluded.agent_session, last_update = @last_update, is_active = @is_active,
+    is_dirty = @is_dirty, agent_message_count = @agent_message_count;
 """;
 
                 // Server time and the same instant for both columns: on an insert they are equal and
@@ -141,12 +183,16 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
 
                 // is_active is the completion flag inverted: a turn the agent did not close leaves the
                 // row active and that is what a resumed conversation reads to find its agent again.
+                // The row now accounts for every message the agent holds, which is what a later rewrite
+                // behind it has to know.
                 sqliteCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
                 sqliteCommand.Parameters.AddWithValue("@agent_name", agentName);
                 sqliteCommand.Parameters.AddWithValue("@agent_session", encryptedAgentSessionJsonString);
                 sqliteCommand.Parameters.AddWithValue("@creation_date", utcNow);
                 sqliteCommand.Parameters.AddWithValue("@last_update", utcNow);
                 sqliteCommand.Parameters.AddWithValue("@is_active", isCompleted ? 0 : 1);
+                sqliteCommand.Parameters.AddWithValue("@is_dirty", staysDirty ? 1 : 0);
+                sqliteCommand.Parameters.AddWithValue("@agent_message_count", agentMessages.Count);
 
                 await sqliteCommand.ExecuteNonQueryAsync();
                 await sqliteTransaction.CommitAsync();
@@ -206,19 +252,29 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             sqliteCommand.CommandText = "UPDATE morgana SET is_dirty = 0 WHERE agent_identifier = @agent_identifier RETURNING agent_session;";
             sqliteCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
 
-            await using SqliteDataReader sqliteDataReader = await sqliteCommand.ExecuteReaderAsync();
-
-            if (!await sqliteDataReader.ReadAsync())
+            byte[] agentSessionEncryptedJsonString;
+            await using (SqliteDataReader sqliteDataReader = await sqliteCommand.ExecuteReaderAsync())
             {
-                logger.LogInformation("Agent session {AgentIdentifier} not found in SQLite database, returning null", agentIdentifier);
-                return null;
+                if (!await sqliteDataReader.ReadAsync())
+                {
+                    logger.LogInformation("Agent session {AgentIdentifier} not found in SQLite database, returning null", agentIdentifier);
+                    return null;
+                }
+
+                agentSessionEncryptedJsonString = (byte[])sqliteDataReader["agent_session"];
             }
 
-            // Read encrypted blob
-            byte[] agentSessionEncryptedJsonString = (byte[])sqliteDataReader["agent_session"];
-
-            // Decrypt content
             string agentSessionJsonString = Decrypt(agentSessionEncryptedJsonString);
+
+            // The agent's memory is now exactly this row, which is what a rewrite landing before its next save
+            // has to be matched against. A rewrite never touches the count, so one landing in between is still
+            // measured against what was read here
+            await using SqliteCommand countCommand = sqliteConnection.CreateCommand();
+            countCommand.CommandText = "UPDATE morgana SET agent_message_count = @agent_message_count WHERE agent_identifier = @agent_identifier;";
+            countCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
+            countCommand.Parameters.AddWithValue("@agent_message_count",
+                ReadRowMessages(agentSessionJsonString, agentIdentifierParts[0], conversationId, jsonSerializerOptions).Count);
+            await countCommand.ExecuteNonQueryAsync();
 
             // Deserialize JSON to JsonElement
             JsonElement agentSessionJsonElement = JsonSerializer.Deserialize<JsonElement>(agentSessionJsonString, jsonSerializerOptions);
@@ -714,8 +770,8 @@ WHERE id = 1;
             string sqliteConnectionString = GetConnectionString(conversationId);
             string sqliteDbPath = GetDatabasePath(conversationId);
 
-            // No DB → no shared variables. The conversation may simply have not started yet,
-            // or the channel handshake may be the only thing that has run so far.
+            // No DB → no shared variables. The conversation may simply have not started yet;
+            // the channel handshake may also be the only thing that has run so far.
             if (!File.Exists(sqliteDbPath))
                 return [];
 
@@ -851,7 +907,8 @@ CREATE TABLE IF NOT EXISTS morgana (
     creation_date TEXT NOT NULL,
     last_update TEXT NOT NULL,
     is_active INTEGER NOT NULL DEFAULT 0,
-    is_dirty INTEGER NOT NULL DEFAULT 0
+    is_dirty INTEGER NOT NULL DEFAULT 0,
+    agent_message_count INTEGER NULL
 );
 
 CREATE TABLE IF NOT EXISTS rate_limit_log (
@@ -894,14 +951,20 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 """;
         await schemaCommand.ExecuteNonQueryAsync();
 
-        // v6 added is_dirty to a table an older database already holds, which the script above leaves as it
-        // was: the column is added there, every existing row clean, since none was rewritten behind its agent
-        await using SqliteCommand dirtyColumnCommand = connection.CreateCommand();
-        dirtyColumnCommand.CommandText = "SELECT COUNT(*) FROM pragma_table_info('morgana') WHERE name = 'is_dirty';";
-        if ((long)(await dirtyColumnCommand.ExecuteScalarAsync() ?? 0L) == 0)
+        // v6 added is_dirty and agent_message_count to a table an older database already holds, which the
+        // script above leaves as it was: the columns are added there, every existing row clean and its count
+        // unknown until its agent next reads or writes it, since none was rewritten behind its agent
+        foreach ((string column, string declaration) in (IEnumerable<(string, string)>)
+                 [("is_dirty", "INTEGER NOT NULL DEFAULT 0"), ("agent_message_count", "INTEGER NULL")])
         {
-            dirtyColumnCommand.CommandText = "ALTER TABLE morgana ADD COLUMN is_dirty INTEGER NOT NULL DEFAULT 0;";
-            await dirtyColumnCommand.ExecuteNonQueryAsync();
+            await using SqliteCommand columnCommand = connection.CreateCommand();
+            columnCommand.CommandText = "SELECT COUNT(*) FROM pragma_table_info('morgana') WHERE name = @column;";
+            columnCommand.Parameters.AddWithValue("@column", column);
+            if ((long)(await columnCommand.ExecuteScalarAsync() ?? 0L) == 0)
+            {
+                columnCommand.CommandText = $"ALTER TABLE morgana ADD COLUMN {column} {declaration};";
+                await columnCommand.ExecuteNonQueryAsync();
+            }
         }
 
         // Mark database as initialized (version 6)
