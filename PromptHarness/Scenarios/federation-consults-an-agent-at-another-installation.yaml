@@ -1,6 +1,6 @@
-id: federation-consults-a-desk-at-another-installation
+id: federation-consults-an-agent-at-another-installation
 description: >-
-  The whole loop, across two installations. The instance under test carries one desk and no books:
+  The whole loop, across two installations. The instance under test carries one agent and no books:
   DispatchAgent answers for deliveries and declares [ConsultsAgent("inventory", "annex")], so the
   greenhouse it needs is not merely another agent — it is another Morgana, in another process, that
   published a card this one read, demanded a token this one minted and admitted a caller under a name
@@ -16,7 +16,7 @@ runs: 2
 minPasses: 2
 
 turns:
-  # Squarely a question the dispatch desk cannot answer and cannot look up: the ledger it needs is
+  # Squarely a question the dispatch agent cannot answer and cannot look up: the ledger it needs is
   # kept at the other installation, by the colleague its attribute names.
   - say: "I want to send someone an aloe as a gift — do you have any at the annex?"
     expect:
