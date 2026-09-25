@@ -8,7 +8,8 @@ namespace Morgana.AI.Interfaces;
 /// published to the channels through <see cref="ICommandRegistryService"/>.
 /// Reliability contract: the outcome must reach the user through <see cref="IChannelService"/> as the
 /// command's finished frame, a <see cref="ChannelMessage"/> whose <see cref="CommandProgress.Finished"/>
-/// is set and whose text is the outcome: a channel matches it to the command it is waiting on by name.
+/// is set and whose text is the outcome. Every frame carries the invocation id the channel sent, which is
+/// how a channel matches it to the run it is waiting on.
 /// </summary>
 public interface ICommand
 {
@@ -19,11 +20,12 @@ public interface ICommand
     CommandDescriptor Descriptor { get; }
 
     /// <summary>Runs the command on a conversation already known to exist, whose caller has passed the rate and dust limits, with the <paramref name="options"/> the user wrote at the prompt, already checked against what the descriptor declares.</summary>
+    /// <param name="invocationId">The channel's name for this run, to be set on every <see cref="CommandProgress"/> the command sends; null when the channel sent none.</param>
     /// <param name="cancellationToken">
     /// Fires when the channel has stopped waiting, having already told the user the command was called off.
     /// A command cancelled before it writes leaves the record as it was and sends nothing to the channel: a
     /// late outcome would contradict what the user was shown. One whose write had already begun completes it
     /// and reports it, since that outcome is then the truth.
     /// </param>
-    Task ExecuteAsync(string conversationId, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken);
+    Task ExecuteAsync(string conversationId, string? invocationId, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken);
 }

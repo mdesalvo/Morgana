@@ -99,7 +99,7 @@ public sealed class TerminalCommandRegistryService
         // long as the command. The conversation is read now, not when the catalogue came, since /new may have
         // replaced it in between
         RefuseUnrunnable(morganaCommand, options, confirmed);
-        return morganaClientService.RunCommandAsync(session.ConversationId, morganaCommand.Name, options, confirmed, cancellationToken);
+        return morganaClientService.RunCommandAsync(session.ConversationId, morganaCommand.Name, invocation.Id, options, confirmed, cancellationToken);
     }
 
     /// <summary>Reads the commands Morgana publishes, keeping those the palette can offer.</summary>

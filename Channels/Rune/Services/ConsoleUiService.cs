@@ -220,11 +220,12 @@ public sealed class ConsoleUiService : ITerminalUi
     private string commandOutcomeColor = CommandReportColor;
 
     /// <summary>
-    /// The last command started, until its outcome is shown. Morgana's finished frame is accepted only when it
-    /// names this command: a late outcome of an earlier one never covers the current one's, while the true
-    /// outcome of a command given up on still replaces the deadline's line. Under <see cref="renderLock"/>.
+    /// The last command run started, until its outcome is shown. Morgana's finished frame is accepted only when
+    /// it belongs to this run: a late outcome of an earlier run never covers the current one's, even of the same
+    /// command, while the true outcome of a run given up on still replaces the deadline's line. Under
+    /// <see cref="renderLock"/>.
     /// </summary>
-    private string? commandOwingOutcome;
+    private CommandInvocation? invocationOwingOutcome;
 
     /// <summary>
     /// The name every line written by this side of the conversation is filed under: the channel itself, as
@@ -890,6 +891,15 @@ public sealed class ConsoleUiService : ITerminalUi
         }
     }
 
+    /// <summary>Tells whether <paramref name="frame"/> belongs to the run still owed an outcome.</summary>
+    private bool BelongsToRunOwingOutcome(CommandProgress frame) =>
+        invocationOwingOutcome is { } owed
+        && (frame.InvocationId is { } invocationId
+            ? string.Equals(invocationId, owed.Id, StringComparison.Ordinal)
+
+            // A Morgana that hands back no run id names only the command, which is then all there is to match on
+            : string.Equals(frame.Command, owed.Command.Name, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>Runs <paramref name="invocation"/>, carrying the <paramref name="confirmed"/> answer it asked for, while the prompt waits on it; a failure is explained above the prompt.</summary>
     private async Task RunCommandAsync(LiveDisplayContext ctx, CommandInvocation invocation, bool confirmed)
     {
@@ -900,7 +910,7 @@ public sealed class ConsoleUiService : ITerminalUi
                 return;
             commandRunning = true;
             runningCommandName = invocation.Command.Name;
-            commandOwingOutcome = invocation.Command.Name;
+            invocationOwingOutcome = invocation;
 
             // The previous command's outcome gives way to the hint naming this one, as does a bar an earlier
             // command left behind when its call was given up on
@@ -925,7 +935,7 @@ public sealed class ConsoleUiService : ITerminalUi
             // landed just before it is the truth and stays: Morgana had finished the work
             lock (renderLock)
             {
-                if (string.Equals(commandOwingOutcome, invocation.Command.Name, StringComparison.OrdinalIgnoreCase))
+                if (ReferenceEquals(invocationOwingOutcome, invocation))
                     ShowCommandOutcome(ctx, ex.Message, ErrorColor);
             }
         }
@@ -1029,7 +1039,7 @@ public sealed class ConsoleUiService : ITerminalUi
         lock (renderLock)
         {
             // A command run here reports its own outcome: nothing is left owed to it from Morgana
-            commandOwingOutcome = null;
+            invocationOwingOutcome = null;
             ShowCommandOutcome(liveContext, text, isFailure ? ErrorColor : CommandReportColor);
         }
     }
@@ -1045,14 +1055,14 @@ public sealed class ConsoleUiService : ITerminalUi
             // Only the command still owed an outcome is heard. Its bar only while it runs: a frame landing after
             // the command returned would stand over the prompt with nothing left to take it down. Its outcome
             // whenever it lands, since the drain may deliver it after the call returned or after its deadline
-            if (!string.Equals(frame.Command, commandOwingOutcome, StringComparison.OrdinalIgnoreCase) || (!frame.Finished && !commandRunning))
+            if (!BelongsToRunOwingOutcome(frame) || (!frame.Finished && !commandRunning))
                 return;
 
             commandProgress.Show(frame);
             if (frame.Finished)
             {
                 SetCommandOutcome(message.Text, OutcomeColor(message));
-                commandOwingOutcome = null;
+                invocationOwingOutcome = null;
 
                 // A budget found spent ends the conversation whatever asked for more of it, a command included
                 if (string.Equals(message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal))

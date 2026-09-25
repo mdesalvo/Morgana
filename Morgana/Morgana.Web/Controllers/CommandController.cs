@@ -48,7 +48,7 @@ public class CommandController(
         logger.LogInformation("Running command '{CommandName}' on conversation {ConversationId}", command.Descriptor.Name, conversationId);
         // A channel that left an option out gets the command's own default, exactly as a channel drawing
         // the form would have sent it: the values a command reads never depend on who called it
-        await command.ExecuteAsync(conversationId, command.Descriptor.ApplyDefaults(request.Options), cancellationToken);
+        await command.ExecuteAsync(conversationId, request.InvocationId, command.Descriptor.ApplyDefaults(request.Options), cancellationToken);
 
         return Accepted(new { conversationId, command = command.Descriptor.Name });
     }

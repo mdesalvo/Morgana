@@ -71,9 +71,9 @@ public sealed class ConversationLimitsFilter(
     /// </summary>
     private ChannelMessage RefusalOf(ActionExecutingContext context, string conversationId, string text, string messageType, string errorReason)
     {
-        // The frame carries the name the channel asked for, which is the name it waits on an outcome for
+        // The frame carries the name and the run the channel asked for, which is the run it waits on an outcome for
         CommandProgress? outcomeFrame = context.ActionArguments.Values.OfType<ExecuteCommandRequest>().FirstOrDefault() is { } commandRequest
-            ? new CommandProgress(commandRequest.Name, "refused", 0, 1, Finished: true)
+            ? new CommandProgress(commandRequest.Name, "refused", 0, 1, Finished: true, commandRequest.InvocationId)
             : null;
 
         return new ChannelMessage

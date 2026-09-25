@@ -121,11 +121,11 @@ public sealed class MorganaClientService
 
     /// <summary>
     /// Runs one of Morgana's published commands on the given conversation, returning once Morgana has finished
-    /// it; its progress and outcome arrive over the webhook. Morgana refuses a command asking to be confirmed
-    /// unless <paramref name="confirmed"/> carries the user's Yes.
+    /// it; its progress and outcome arrive over the webhook, each frame carrying <paramref name="invocationId"/>.
+    /// Morgana refuses a command asking to be confirmed unless <paramref name="confirmed"/> carries the user's Yes.
     /// </summary>
     /// <exception cref="TimeoutException">Thrown when the command outlives the channel's command deadline, which calls it off on Morgana too.</exception>
-    public async Task RunCommandAsync(string conversationId, string name, IReadOnlyDictionary<string, string>? options = null, bool confirmed = false, CancellationToken cancellationToken = default)
+    public async Task RunCommandAsync(string conversationId, string name, string invocationId, IReadOnlyDictionary<string, string>? options = null, bool confirmed = false, CancellationToken cancellationToken = default)
     {
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
 
@@ -140,7 +140,7 @@ public sealed class MorganaClientService
         {
             response = await httpClient.PostAsJsonAsync(
                 $"/api/morgana/conversation/{conversationId}/command",
-                new ExecuteCommandRequest(name, confirmed, options),
+                new ExecuteCommandRequest(name, confirmed, options, invocationId),
                 commandDeadline.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)

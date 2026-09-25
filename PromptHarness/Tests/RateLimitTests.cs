@@ -109,14 +109,15 @@ public sealed class RateLimitTests
 
         for (int call = 1; call <= callsPerMinute; call++)
             Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId)).StatusCode);
-        Assert.Equal(HttpStatusCode.TooManyRequests, (await SendCompactAsync(conversationId)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendCommandAsync(conversationId, """{"name":"compact","invocationId":"refused-run"}""")).StatusCode);
 
-        // The refusal is the command's outcome: its finished frame, naming it, so a channel draws it where the
+        // The refusal is the command's outcome: its finished frame, naming the run, so a channel draws it where the
         // command's outcome goes and keeps it out of the transcript. The reason still travels for the channel to act on
         ChannelMessage refusal = await ReceiveRefusalAsync(conversationId);
         Assert.Equal("system", refusal.MessageType);
         Assert.NotNull(refusal.Progress);
         Assert.Equal("compact", refusal.Progress.Command);
+        Assert.Equal("refused-run", refusal.Progress.InvocationId);
         Assert.True(refusal.Progress.Finished, "The refusal of a command did not close the command's widget.");
         Assert.False(string.IsNullOrWhiteSpace(refusal.Text), "The refusal of a command told the user nothing.");
     }

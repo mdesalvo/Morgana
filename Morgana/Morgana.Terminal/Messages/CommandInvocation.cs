@@ -11,4 +11,11 @@ namespace Morgana.Terminal.Messages;
 /// <param name="Options">The values written after the name, already checked against what the command declares.</param>
 public sealed record CommandInvocation(
     CommandDescriptor Command,
-    IReadOnlyDictionary<string, string> Options);
+    IReadOnlyDictionary<string, string> Options)
+{
+    /// <summary>
+    /// This run's own name, sent to Morgana with the request and handed back on every frame of it: the UI
+    /// takes an outcome only from the run it is waiting on, never from an earlier one of the same command.
+    /// </summary>
+    public string Id { get; } = Guid.NewGuid().ToString("N");
+}

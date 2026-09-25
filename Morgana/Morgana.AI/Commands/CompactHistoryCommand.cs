@@ -69,17 +69,17 @@ public sealed class CompactHistoryCommand : ICommand
         RequiresActiveAgent: true);
 
     /// <inheritdoc />
-    public async Task ExecuteAsync(string conversationId, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken)
+    public async Task ExecuteAsync(string conversationId, string? invocationId, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken)
     {
         // The first frame goes up before anything is looked up: from the user's side the prompt is already
         // held, so a silent wait here would be indistinguishable from a command that did not start
-        await SendProgressAsync(conversationId, "reading the conversation", completed: 0);
+        await SendProgressAsync(conversationId, invocationId, "reading the conversation", completed: 0);
 
         // The agent carrying the conversation is the one whose window a fold moves. It is there to be found:
         // the command declares it needs one, so a conversation Morgana is holding herself never gets here
         if (await persistenceService.GetMostRecentActiveAgentAsync(conversationId) is not { Length: > 0 } agent)
         {
-            await SendOutcomeAsync(conversationId, "There is nothing to compact: no agent is carrying this conversation right now.");
+            await SendOutcomeAsync(conversationId, invocationId, "There is nothing to compact: no agent is carrying this conversation right now.");
             return;
         }
 
@@ -91,13 +91,13 @@ public sealed class CompactHistoryCommand : ICommand
 
             // The second frame names the agent before the summarization call, which is the whole of the wait:
             // what the user watches advance is therefore attributed to whoever is being summarized
-            await SendProgressAsync(conversationId, $"summarizing what {agent} carries", completed: 1);
+            await SendProgressAsync(conversationId, invocationId, $"summarizing what {agent} carries", completed: 1);
 
             int foldedMessages = await FoldAgentHistoryAsync(conversationId, agent, cancellationToken);
 
             // An agent still holding a history short enough to read whole folds nothing, which is an answer in
             // itself: the user asked for a saving that turned out not to be needed, not for a failure
-            await SendOutcomeAsync(conversationId, foldedMessages == 0
+            await SendOutcomeAsync(conversationId, invocationId, foldedMessages == 0
                 ? $"Nothing needed compacting: {agent} still carries a history short enough to read whole."
                 : $"Compacted {foldedMessages} message{(foldedMessages == 1 ? string.Empty : "s")} of {agent}. Nothing was lost from the transcript.");
         }
@@ -114,7 +114,7 @@ public sealed class CompactHistoryCommand : ICommand
             // exactly as it was: the fold reaches the record in one write or not at all
             logger.LogError(ex, "Failed to compact the history of '{Agent}' in conversation {ConversationId}", agent, conversationId);
 
-            await SendOutcomeAsync(conversationId, $"Compacting {agent} did not go through: its history is untouched.");
+            await SendOutcomeAsync(conversationId, invocationId, $"Compacting {agent} did not go through: its history is untouched.");
         }
     }
 
@@ -191,8 +191,8 @@ public sealed class CompactHistoryCommand : ICommand
             conversationId);
     }
 
-    /// <summary>Pushes one progress frame, with the line that says the same thing where no widget is drawn.</summary>
-    private Task SendProgressAsync(string conversationId, string label, int completed) =>
+    /// <summary>Pushes one progress frame of the run <paramref name="invocationId"/> names, with the line that says the same thing where no widget is drawn.</summary>
+    private Task SendProgressAsync(string conversationId, string? invocationId, string label, int completed) =>
         channelService.SendMessageAsync(new ChannelMessage
         {
             ConversationId = conversationId,
@@ -201,20 +201,20 @@ public sealed class CompactHistoryCommand : ICommand
             AgentName = Constants.Morgana,
             FadingMessageDurationSeconds = 3,
             // The steps are the command's own: what it has already done, out of what it set out to do
-            Progress = new CommandProgress(Descriptor.Name, label, completed, ProgressSteps)
+            Progress = new CommandProgress(Descriptor.Name, label, completed, ProgressSteps, InvocationId: invocationId)
         });
 
     /// <summary>
     /// Sends the finished frame carrying the command's outcome, whatever the fold came to: the widget comes off
     /// the screen and the outcome takes its place in one delivery, so no bar is left standing on work nobody is doing.
     /// </summary>
-    private Task SendOutcomeAsync(string conversationId, string outcome) =>
+    private Task SendOutcomeAsync(string conversationId, string? invocationId, string outcome) =>
         channelService.SendMessageAsync(new ChannelMessage
         {
             ConversationId = conversationId,
             Text = outcome,
             MessageType = Constants.MessageTypes.System,
             AgentName = Constants.Morgana,
-            Progress = new CommandProgress(Descriptor.Name, "done", ProgressSteps, ProgressSteps, Finished: true)
+            Progress = new CommandProgress(Descriptor.Name, "done", ProgressSteps, ProgressSteps, Finished: true, invocationId)
         });
 }

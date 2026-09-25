@@ -15,11 +15,16 @@ namespace Morgana.Contracts;
 /// <param name="Total">Steps the command will take, counted before it starts: a command reporting at all is one that knows what it is about to do, which is what makes the bar a measure rather than a decoration.</param>
 /// <param name="Finished">
 /// True on the last frame, which takes the widget off the screen. Its message's text is the command's
-/// outcome: arriving on a frame that names the command, an outcome can never be taken for another one's.
+/// outcome: arriving on a frame that names the run, an outcome can never be taken for another one's.
+/// </param>
+/// <param name="InvocationId">
+/// The <see cref="ExecuteCommandRequest.InvocationId"/> of the run this frame belongs to, as the channel sent
+/// it; null when the channel sent none. A command run on the channel's own side reports none either.
 /// </param>
 public record CommandProgress(
     [property: JsonPropertyName("command")] string Command,
     [property: JsonPropertyName("label")] string Label,
     [property: JsonPropertyName("completed")] int Completed,
     [property: JsonPropertyName("total")] int Total,
-    [property: JsonPropertyName("finished")] bool Finished = false);
+    [property: JsonPropertyName("finished")] bool Finished = false,
+    [property: JsonPropertyName("invocationId")] string? InvocationId = null);

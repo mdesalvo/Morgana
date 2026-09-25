@@ -290,6 +290,26 @@ public sealed class ConversationApiTests
     }
 
     /// <summary>
+    /// The run a channel names on its request is the run every frame of it hands back, the outcome included: that
+    /// is what lets a channel tell this run's outcome from a late one of an earlier run of the same command.
+    /// </summary>
+    [Fact]
+    public async Task Command_outcome_names_the_run_the_channel_asked_for()
+    {
+        string conversationId = ChannelApiClient.NewConversationId();
+        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing", fixture.Channel.CallbackUrl);
+
+        HttpResponseMessage response = await api.SendCommandAsync(conversationId, """{"name":"compact","invocationId":"run-7"}""");
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+        // Every frame the run sent is on the channel by the time the call returns
+        List<ChannelMessage> frames = [];
+        while (frames.LastOrDefault()?.Progress is not { Finished: true })
+            frames.Add(await fixture.Channel.ReceiveAsync(conversationId, TimeSpan.FromSeconds(15)));
+        Assert.All(frames, frame => Assert.Equal("run-7", frame.Progress?.InvocationId));
+    }
+
+    /// <summary>
     /// A command declaring that it cannot be taken back is refused with 400 when the request carries no Yes. No
     /// command Morgana ships asks for one, so the gate is handed a registry holding such a command and judged
     /// on its own: the status is what a channel would read.
@@ -352,7 +372,7 @@ public sealed class ConversationApiTests
         public CommandDescriptor Descriptor { get; } = new("wipe", "Forget this conversation", RequiresConfirmation: true);
 
         /// <inheritdoc />
-        public Task ExecuteAsync(string conversationId, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken) =>
+        public Task ExecuteAsync(string conversationId, string? invocationId, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("The admission gate never runs a command.");
     }
 }
