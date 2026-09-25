@@ -36,8 +36,8 @@ public static class Constants
     /// <summary>
     /// Name prefixes of the pipeline actors. An actor's path is <c>/user/{prefix}-{conversationId}</c>,
     /// built by <c>ActorSystemExtensions.GetOrCreateActorAsync</c>: the prefix is what makes a path
-    /// predictable, so an actor is reached by name from a later turn — or from a controller that
-    /// holds nothing but the conversation id — instead of a reference having to be kept alive.
+    /// predictable, so an actor is reached by name from a later turn (or from a controller that
+    /// holds nothing but the conversation id) instead of a reference having to be kept alive.
     /// </summary>
     public static class Actors
     {
@@ -142,8 +142,8 @@ public static class Constants
 
     /// <summary>
     /// What kind of thing an outbound message is, declared on <c>ChannelMessage.MessageType</c> and
-    /// read by every channel to decide how to paint it. Two of them are conversation — somebody
-    /// said something to somebody — and the rest are notices about the conversation rather than
+    /// read by every channel to decide how to paint it. Two of them are conversation (somebody
+    /// said something to somebody); the rest are notices about the conversation rather than
     /// part of it: a channel shows those as banners that fade. Morgana keeps none of them on
     /// record, because a transcript is what was said.
     /// </summary>
@@ -327,8 +327,8 @@ public static class Constants
     /// service registered under exactly that spelling or the conversation is refused at ingress.
     /// </summary>
     /// <remarks>
-    /// The set is deliberately open — <c>ChannelCoordinates.DeliveryMode</c> stays a free-form string
-    /// so a new transport needs no contract change — and these are the two this framework ships.
+    /// The set is deliberately open: <c>ChannelCoordinates.DeliveryMode</c> stays a free-form string
+    /// so a new transport needs no contract change. These are the two this framework ships.
     /// </remarks>
     public static class DeliveryModes
     {

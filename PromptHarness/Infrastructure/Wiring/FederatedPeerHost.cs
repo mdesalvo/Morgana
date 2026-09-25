@@ -13,7 +13,7 @@ namespace PromptHarness.Infrastructure.Wiring;
 /// could not disagree about who their partners are, which is the whole of what this one is here to
 /// disagree about.</para>
 ///
-/// <para>It serves the example domain — the greenhouse the asking side has no books for — and is
+/// <para>It serves the example domain (the greenhouse the asking side has no books for) and is
 /// started from Morgana.Web's own output, where that plugin is already deployed beside the entry
 /// point. Nothing about it is special-cased: it is the shipped host, told who its partner is.</para>
 /// </remarks>
@@ -64,7 +64,7 @@ public sealed class FederatedPeerHost : IAsyncDisposable
 
         startInfo.ArgumentList.Add(ResolveEntryPoint());
 
-        // Everything the parent resolved is inherited — provider, keys, tiers — and only what makes
+        // Everything the parent resolved is inherited (provider, keys, tiers) while only what makes
         // this a second installation is written over it.
         foreach ((string key, string value) in environment)
             startInfo.Environment[key] = value;
@@ -87,7 +87,7 @@ public sealed class FederatedPeerHost : IAsyncDisposable
     /// <summary>Where the shipped host is deployed, recorded at build time by the harness project.</summary>
     /// <remarks>
     /// A child process needs the runtime configuration and dependency manifest generated in that
-    /// output, neither of which travels into this one — and the example plugin is already deployed
+    /// output, neither of which travels into this one. The example plugin is already deployed
     /// there, which is the domain this installation has to serve.
     /// </remarks>
     private static string ResolveEntryPoint()

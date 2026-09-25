@@ -11,9 +11,9 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// Checks the agent card a published agent serves — that it is reachable without credentials, that
-/// it states how to obtain them — and the gate behind it: which credentials that endpoint demands
-/// together with how far the ones it accepts actually reach.
+/// Checks the agent card a published agent serves (that it is reachable without credentials, that
+/// it states how to obtain them) together with the gate behind it: which credentials that endpoint demands
+/// and how far the ones it accepts actually reach.
 /// </summary>
 /// <remarks>
 /// The only group here that costs nothing and grades nothing: a card is a wire contract, not prose,

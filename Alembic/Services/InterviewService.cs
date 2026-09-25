@@ -202,7 +202,7 @@ public class InterviewService : IInterviewService
     /// Opens the interview, with the turn already claimed by whoever called.
     /// </summary>
     /// <remarks>
-    /// Answering when nothing is open starts it, and that is one gesture rather than two, so the
+    /// Answering when nothing is open starts it: one gesture rather than two, so the
     /// claim cannot be taken twice on the way through.
     /// </remarks>
     private async Task<InterviewState> StartCoreAsync(CancellationToken cancellationToken)
@@ -286,8 +286,8 @@ public class InterviewService : IInterviewService
         IntentDraft? intentDraft = draft.Intents.FirstOrDefault(i =>
             string.Equals(i.Name, agentID, StringComparison.OrdinalIgnoreCase));
 
-        // Both or neither. An agent whose intent is missing is a domain that would not start at all,
-        // and opening a section of it would have the client polishing something the classifier can
+        // Both or neither. An agent whose intent is missing is a domain that would not start at all;
+        // opening a section of it would have the client polishing something the classifier can
         // never reach. Review is where that is reported and repairing it is not this gesture's work.
         if (agentDraft is null || intentDraft is null)
             return false;
@@ -485,8 +485,8 @@ public class InterviewService : IInterviewService
         //
         // A loop rather than an if and it terminates: EnterPassAsync clears ReadyForReview, so it
         // takes a fresh confirmation from the new pass to go round again. A pass that genuinely
-        // settles the moment it opens is legal — a toolkit the client has already described in full
-        // — and would otherwise strand the interview one question short of moving.
+        // settles the moment it opens is legal (a toolkit the client has already described in full)
+        // and would otherwise strand the interview one question short of moving.
         //
         // The Return pass is where it stops, because what follows is the client's: letting the agent
         // into the domain is the one decision of the interview that is theirs.
@@ -733,16 +733,16 @@ public class InterviewService : IInterviewService
     /// What Alembic actually asked the client this turn: the last question, not everything it wrote.
     /// </summary>
     /// <remarks>
-    /// A run can hold several assistant messages — the model writes its question, calls a tool and
-    /// writes again — and <c>AgentResponse.Text</c> is all of them joined, so a question repeated
+    /// A run can hold several assistant messages (the model writes its question, calls a tool and
+    /// writes again) and <c>AgentResponse.Text</c> is all of them joined, so a question repeated
     /// after a tool call reached the screen twice over. The last message is not the answer either:
     /// the tail of a run is often the model narrating its own work ("I'll wait for their answer
     /// before setting the Target"), which leaves the client facing a box under a sentence that asks
     /// them nothing while the real question scrolls out of existence.
     ///
     /// So what is shown is the last message that actually asks something. The test is the question
-    /// mark, which is the same law the interviewer is held to in prose — one sentence, one question
-    /// mark — and this is the screen that law exists for. The fallback is still the last thing said:
+    /// mark, which is the same law the interviewer is held to in prose (one sentence, one question
+    /// mark) and this is the screen that law exists for. The fallback is still the last thing said:
     /// a turn that asks nothing at all is a defect and showing it is how anyone finds out.
     /// </remarks>
     private static string LastAsked(AgentResponse response)
@@ -882,7 +882,7 @@ public class InterviewService : IInterviewService
     /// </summary>
     /// <remarks>
     /// Both sections, because a boundary is written in either: the Instructions carry how the agent
-    /// goes about the subject and the Target carries whether the subject is its at all, and an edge
+    /// goes about the subject and the Target carries whether the subject is its at all; an edge
     /// contradicted by one is contradicted whichever of the two states it.
     /// <para>
     /// An imported agent whose prose this step rewrote becomes Revised: the migration report's whole
@@ -964,8 +964,8 @@ public class InterviewService : IInterviewService
 
         // The opening question of the whole interview is nobody's to phrase but the client's own:
         // there is nothing yet for a model to be reading back, so a model asked for it is either
-        // repeating the one sentence that fits or drifting off it. Fixed rather than composed —
-        // and the session still needs building above, since the client's first answer lands on it.
+        // repeating the one sentence that fits or drifting off it. Fixed rather than composed;
+        // the session still needs building above, since the client's first answer lands on it.
         if (interviewPass == InterviewStep.DomainMapper && !revisiting)
         {
             interviewState.Question = OpeningQuestion;
@@ -1002,7 +1002,7 @@ public class InterviewService : IInterviewService
     /// Every pass past the map runs once per entry and where it is standing is a fact the state
     /// machine holds: which entry of how many, which intent, what is already written on that agent
     /// and what this step is about to give it. All of it goes in the opening message, because a pass
-    /// that has to work it out either spends a tool call on it or guesses — and the client is owed a
+    /// that has to work it out either spends a tool call on it or guesses, while the client is owed a
     /// first sentence that names their agent and says what this stage is for, which is not something
     /// to be reconstructed from context.
     /// </remarks>
@@ -1262,7 +1262,7 @@ public class InterviewService : IInterviewService
         MorganaToolAdapter toolAdapter = new MorganaToolAdapter(promptComposerService);
 
         // The delegate map is the one place a tool's name, its declaration and its implementation
-        // meet. AddTool validates the pair — parameter count, names, required/optional — and throws
+        // meet. AddTool validates the pair (parameter count, names, required/optional) and throws
         // on a mismatch, so a declaration that has drifted from its method fails here rather than
         // reaching the model as a schema nothing can satisfy.
         Dictionary<string, Delegate> implementations = new(StringComparer.Ordinal)
@@ -1325,7 +1325,7 @@ public class InterviewService : IInterviewService
 
                 // Each one wrapped so the call and the sentence it is answered with are written
                 // down. A tool refusing what a pass asked of it says so to the model alone, which
-                // is the whole design — and left at that, a pass that told the client something was
+                // is the whole design. Left at that, a pass that told the client something was
                 // settled while its own tool had refused reads exactly like one that succeeded.
                 Tools = [.. (await toolAdapter.CreateAllFunctionsAsync())
                                               .Select(function => new LoggedTool(function, logger, interviewerId))]
@@ -1380,13 +1380,13 @@ public class InterviewService : IInterviewService
 
             string asked = LastAsked(response);
 
-            // A turn that spent itself entirely on tool calls is legitimate — reading findings or a
-            // composed prompt takes a round trip that has nothing to say to the client — and the
+            // A turn that spent itself entirely on tool calls is legitimate (reading findings or a
+            // composed prompt takes a round trip that has nothing to say to the client) and the
             // question already on the screen simply stands. Only the question text is gated on this:
             // Choice, Example and Traits are promoted from their Pending* counterparts regardless,
             // because a turn CAN legitimately call SetChoice (or SetExample, SetTraits) without also
-            // producing new question text — e.g. a validation round that decides the question already
-            // on screen now deserves a shortcut button — and gating all four on the same condition
+            // producing new question text (e.g. a validation round that decides the question already
+            // on screen now deserves a shortcut button) and gating all four on the same condition
             // silently dropped a button the model genuinely offered, with no way for it to reappear on
             // a later turn either, since PendingChoice is reset to null at the top of every exchange.
             if (asked.Length > 0)

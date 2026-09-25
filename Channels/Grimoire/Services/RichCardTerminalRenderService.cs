@@ -102,7 +102,7 @@ public sealed class RichCardTerminalRenderService
         foreach (CardComponent cardComponent in cardComponents)
         {
             List<CardLine> rendered = BuildComponent(cardComponent, baseColor, width);
-            // An unknown/empty component contributes nothing — and must NOT trigger a breather,
+            // An unknown/empty component contributes nothing and must NOT trigger a breather,
             // otherwise we'd leave a stray blank with no content beside it. So the `first` latch
             // only flips once something real has been emitted.
             if (rendered.Count == 0)

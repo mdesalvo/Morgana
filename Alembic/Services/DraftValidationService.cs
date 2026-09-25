@@ -274,7 +274,7 @@ public class DraftValidationService : IDraftValidationService
 
         // The card carries one sentence about this agent and a colleague weighing a question reads
         // that and nothing else. Two ways it comes out useless are decidable here: written as the
-        // operations the agent performs, which invites a caller to rule its question out, and left as
+        // operations the agent performs, which invites a caller to rule its question out; left as
         // the phrase the classifier routes on, which says which utterances land here rather than
         // what this agent answers for.
         string? territory = AgentRows.Plain(agent.ConsultMeFor);

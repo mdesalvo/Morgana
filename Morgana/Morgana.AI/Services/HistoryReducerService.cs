@@ -16,7 +16,7 @@ namespace Morgana.AI.Services;
 /// </summary>
 /// <remarks>
 /// Reduction folds the oldest stretch of a conversation into a summary and leaves recent messages
-/// verbatim. It changes only what the LLM sees — the stored transcript keeps everything — and the fold is
+/// verbatim. It changes only what the LLM sees (the stored transcript keeps everything) but the fold is
 /// one-way: what the summary drops, the model never gets back. One reducer per agent, on that agent's own
 /// tier client. No reducer at all when the section disables it and the agent runs on its full history.
 /// </remarks>

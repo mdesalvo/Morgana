@@ -427,7 +427,7 @@ public class MorganaAgent : MorganaActor
             agentSpan?.Dispose();
 
             // The exchange with a colleague is spent once it has been read. Clearing it here keeps
-            // it out of the caller's own session — see StripPeerConsultations — and is done after
+            // it out of the caller's own session (see StripPeerConsultations) and is done after
             // the span has been tagged, so telemetry still records that the colleague was consulted.
             StripPeerConsultations(aiAgentSession, historyBaseline);
 
@@ -677,7 +677,7 @@ public class MorganaAgent : MorganaActor
     /// </summary>
     /// <param name="session">Active agent session.</param>
     /// <param name="historyBaseline">Number of history messages present before the turn ran; everything past it belongs to this turn.</param>
-    /// <returns>Comma-separated tool names in call order — repetitions kept, since a repeated call is itself a signal — or an empty string when the turn called no tool.</returns>
+    /// <returns>Comma-separated tool names in call order, repetitions kept since a repeated call is itself a signal; empty when the turn called no tool.</returns>
     protected string GetToolsInvoked(AgentSession session, int historyBaseline)
         => string.Join(", ", aiChatHistoryProvider.GetMessages(session)
             .Skip(historyBaseline)

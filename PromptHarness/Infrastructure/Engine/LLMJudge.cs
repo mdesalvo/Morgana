@@ -22,8 +22,8 @@ public sealed record JudgeVerdict(bool Holds, string Reason);
 /// construction uses the cheapest configured tier. That keeps the suite's judging cost proportional
 /// to the deployment it is testing and adds no provider, key or dependency of its own.</para>
 ///
-/// <para>It is deliberately given exactly what a user would see — the text, the button labels and
-/// the card as rendered — and nothing else. Feeding it the tool trace would let it justify a verdict
+/// <para>It is deliberately given exactly what a user would see (the text, the button labels and
+/// the card as rendered) and nothing else. Feeding it the tool trace would let it justify a verdict
 /// from evidence the user never had, which is exactly the class of judgement the structural layer
 /// already owns; showing it less than the screen is the opposite error and convicts a response that
 /// answered on a card.</para>

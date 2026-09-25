@@ -170,7 +170,7 @@ public class JWTAuthenticationService : IAuthenticationService
         }
 
         // One name declared twice leaves one of the two keys silently unusable. Which one survives
-        // depends on the order somebody happened to write them in — and a channel colliding with a
+        // depends on the order somebody happened to write them in. A channel colliding with a
         // partner would decide by that order which of the two doors the surviving key opens.
         if (alreadyDeclared.Contains(issuerName))
         {

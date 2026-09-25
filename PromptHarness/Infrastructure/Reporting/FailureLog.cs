@@ -10,13 +10,13 @@ namespace PromptHarness.Infrastructure.Reporting;
 /// <remarks>
 /// <para><strong>Why this exists.</strong> Every run of this suite is billed and until now the only
 /// place a failure was legible was the assertion message on a terminal: the journey row records
-/// <em>that</em> a scenario went 2/5, never <em>why</em>. Lose the console — a closed window, a
-/// truncated pipe, a session that ends — and the money is spent with nothing left to diagnose from.
+/// <em>that</em> a scenario went 2/5, never <em>why</em>. Lose the console (a closed window, a
+/// truncated pipe, a session that ends) and the money is spent with nothing left to diagnose from.
 /// The transcript is the expensive part of a run; writing it to disk costs nothing.</para>
 ///
 /// <para><strong>The gate is the run, not the scenario</strong> and that distinction was learned
-/// the same way as the original lesson above. A scenario at 4/5 against a threshold of 4 *passes* —
-/// and under the first version of this class that verdict deleted the transcript of the one run
+/// the same way as the original lesson above. A scenario at 4/5 against a threshold of 4 *passes*;
+/// under the first version of this class that verdict deleted the transcript of the one run
 /// that failed inside it. That is precisely the transcript worth keeping: a scenario sitting on its
 /// threshold has no margin left, so its single failing run is the early warning for the phase after
 /// next. `behaviour-conversation-closure` did exactly this at A2.5.5 and the evidence went with it.
@@ -43,8 +43,8 @@ public static class FailureLog
             string directory = Path.Combine(HarnessWriter.ResolveDirectory(harnessDirectory), "failures");
             string path = Path.Combine(directory, $"{outcome.Scenario.Id}.log");
 
-            // Not outcome.Passed: a scenario can clear its threshold with a failing run inside it,
-            // and that run is the one worth reading. Delete only when there is nothing to report.
+            // Not outcome.Passed: a scenario can clear its threshold with a failing run inside it;
+            // that run is the one worth reading. Delete only when there is nothing to report.
             if (outcome.Passes == outcome.Runs.Count)
             {
                 File.Delete(path);

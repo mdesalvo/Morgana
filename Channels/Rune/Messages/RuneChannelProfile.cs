@@ -20,7 +20,7 @@ public static class RuneChannelProfile
 
     /// <summary>
     /// Reads the advertised cap and builds the profile. The default stays aggressive so the downgrade
-    /// runs on every turn, but can be raised — or set to null, meaning "no cap" — without recompiling.
+    /// runs on every turn, but can be raised or set to null, meaning "no cap", without recompiling.
     /// </summary>
     public static ChannelProfile Build(IConfiguration configuration) => new(
         ChannelName: "rune",

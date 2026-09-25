@@ -306,8 +306,8 @@ public class ConversationSupervisorActor : MorganaActor
         // GuardActor throwing, or it simply never answering in time.
         ReceiveAsync<Records.GuardCheckResponse>(async response => {
             // Cancels the guard-check window now that GuardActor actually answered — this
-            // handler is about to Become() into AwaitingClassification, AwaitingFollowUpResponse,
-            // or Idle on rejection and each of those arms (or clears) its own timeout
+            // handler is about to Become() into AwaitingClassification, AwaitingFollowUpResponse
+            // or Idle on rejection; each of those arms (or clears) its own timeout
             // independently. Clearing here just guarantees the guard check's own window never
             // carries over into whatever state runs next.
             Context.SetReceiveTimeout(null);
@@ -690,7 +690,7 @@ public class ConversationSupervisorActor : MorganaActor
         });
 
         // Renews the same window for work the user cannot see: a tool running, a colleague answering.
-        // The client is told nothing — there is nothing to show — and an agent that stops sending
+        // The client is told nothing, having nothing to show; an agent that stops sending
         // these is one that has genuinely stopped.
         Receive<Records.AgentStillWorking>(_ =>
             Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"]))));
@@ -1179,7 +1179,7 @@ public class ConversationSupervisorActor : MorganaActor
     }
 
     /// <summary>
-    /// Builds the display name shown to the client for a given intent: the bare persona,
+    /// Builds the display name shown to the client for a given intent: the bare persona
     /// or the persona qualified by the intent when one is available.
     /// </summary>
     private string GetAgentDisplayName(string? intent)

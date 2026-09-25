@@ -147,7 +147,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
             // stands: behind this door a request reaches an agent with none of the guard, classifier
             // and channel rate limit a user's own path goes through, so this count is the whole of
             // what bounds a partner. Admitted while unreadable it would not weaken a measure among
-            // several, it would remove the only one — and silently, every conversation so opened
+            // several, it would remove the only one. Silently, too: every conversation so opened
             // drawing a budget of its own.
             logger.LogError(ex, "Could not weigh the conversations '{Issuer}' has opened; it is turned away", issuer);
 

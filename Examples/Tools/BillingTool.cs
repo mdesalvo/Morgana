@@ -12,7 +12,7 @@ namespace Examples.Tools;
 /// The accounts agent of The Greenhouse &amp; Nursery: the invoices issued to a customer for plants
 /// bought from the catalog and for the Green Care Plan and the payments received against them.
 /// Reads the same shared database the greenhouse ledger writes (see <see cref="GreenhouseDatabaseHelper"/>),
-/// which is what lets a detail line point at the very order that produced it — and it only ever
+/// which is what lets a detail line point at the very order that produced it. It only ever
 /// reads: nothing here charges, credits or settles anything.
 /// </summary>
 [ProvidesToolForIntent("billing")]

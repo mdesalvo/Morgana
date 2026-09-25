@@ -1,7 +1,7 @@
 namespace Alembic.Model;
 
 /// <summary>
-/// How a declared colleague is named to a reader — the client, the model conducting the interview,
+/// How a declared colleague is named to a reader — the client, the model conducting the interview
 /// or the migration report.
 /// </summary>
 /// <remarks>

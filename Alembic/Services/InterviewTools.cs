@@ -192,8 +192,8 @@ public class InterviewTools
     /// Returns the domain map as it currently stands.
     /// </summary>
     /// <remarks>
-    /// Read back whole for the same reason the toolkit is: two descriptions overlap or they do not,
-    /// and that is only visible side by side. It is the one defect no prose downstream repairs — the
+    /// Read back whole for the same reason the toolkit is: two descriptions overlap or they do not;
+    /// that is only visible side by side. It is the one defect no prose downstream repairs — the
     /// user meets it as the wrong agent answering.
     /// </remarks>
     public string GetDomainMap()
@@ -264,7 +264,7 @@ public class InterviewTools
     /// the toolkit exists — Instructions speaks about the agent's tools, so nothing earlier may
     /// write it.
     /// <para>
-    /// The tightest shape of the five, and the one the client feels: what a tool does, needs and
+    /// The tightest shape of the five is the one the client feels: what a tool does, needs and
     /// refuses belongs to that tool's own description, so a section running long is one holding a
     /// line per tool — a second authority on each subject and, stated back on screen, a wall of
     /// text where a sentence was owed.
@@ -301,8 +301,8 @@ public class InterviewTools
     /// Opens a tool, or revises the description of one already open.
     /// </summary>
     /// <remarks>
-    /// Revising keeps the parameters. A tool's contract is settled in several turns — the name and
-    /// what it does come out of one answer, its inputs out of the next — and re-declaring it to
+    /// Revising keeps the parameters. A tool's contract is settled in several turns (the name and
+    /// what it does come out of one answer, its inputs out of the next), so re-declaring it to
     /// sharpen the description must not silently empty it.
     /// </remarks>
     public string DeclareTool(string name, string description)
@@ -535,7 +535,7 @@ public class InterviewTools
     /// Where what is found out is kept: with the agent in hand, or with the business.
     /// </summary>
     /// <remarks>
-    /// The map and the closing step both stand on the whole domain, and the closing step stands past
+    /// The map and the closing step both stand on the whole domain; the closing step stands past
     /// the end of the map holding an agent nobody will write to — so what is learned there is about
     /// the business or it is lost with that empty agent.
     /// </remarks>
@@ -620,7 +620,7 @@ public class InterviewTools
     /// Hands back what is on record about one of the other agents of this domain.
     /// </summary>
     /// <remarks>
-    /// A step opens holding what is known about its own agent and the business, and only the subjects
+    /// A step opens holding what is known about its own agent and the business, with only the subjects
     /// the other agents keep — a domain of nine agents read whole would be forty sentences carried into
     /// every question, most of them about counters this step will never touch. This is how the rest
     /// is reached, when a subject listed there turns out to bear on the question in hand: whether the
@@ -646,7 +646,7 @@ public class InterviewTools
             return $"There is no agent called '{named}' in this domain. The opening message lists them by name.";
 
         // What the map says about an agent nobody has opened yet is the whole of what is known about
-        // it, and it is worth more than a refusal: the routing sentence the client dictated is the
+        // it. It is worth more than a refusal: the routing sentence the client dictated is the
         // only account of that counter anybody has.
         if (agent is null || agent.Known.Count == 0)
             return string.IsNullOrWhiteSpace(entry?.Description)
@@ -699,7 +699,7 @@ public class InterviewTools
     /// The turn that asks whether a section is right is the one turn where the client is approving
     /// exact words, so those words stand apart from the sentence introducing them. Run into one
     /// paragraph the two become a single stretch of prose in which nothing marks where Alembic stops
-    /// speaking and the agent's own text begins — and an approval given to that approves nothing in
+    /// speaking and the agent's own text begins. An approval given to that approves nothing in
     /// particular, which is the whole of what this interview is for.
     /// </remarks>
     /// <param name="written">The section's prose exactly as it now stands, with nothing added around it.</param>
@@ -828,7 +828,7 @@ public class InterviewTools
     /// <para>
     /// Chained consultation is reported rather than refused: the framework denies a colleague its own
     /// peer functions while it is answering, so an edge whose far end asks a third agent is legal,
-    /// simply narrower than it looks — and the model is told exactly that, in the answer, so it can
+    /// simply narrower than it looks. The model is told exactly that, in the answer, so it can
     /// say it to the client instead of promising a reach the domain does not have.
     /// </para>
     /// </remarks>
@@ -872,8 +872,8 @@ public class InterviewTools
             ? null
             : Marked(InstructionsMarker, askedInstructions);
 
-        // The boundary is as often in the Target as in the Instructions — it is where a boundary
-        // belongs — and one left refusing the colleague's subject goes on being read every turn.
+        // The boundary is as often in the Target as in the Instructions, since that is where a boundary
+        // belongs; one left refusing the colleague's subject goes on being read every turn.
         edge.AskingTarget = string.IsNullOrWhiteSpace(askingTarget)
             ? null
             : Marked(TargetMarker, askingTarget);
@@ -990,7 +990,7 @@ public class InterviewTools
     /// </summary>
     /// <remarks>
     /// The last reading of a territory before it is published: a Morgana carries this card on the
-    /// A2A endpoint of every agent it holds, and a colleague weighing a question reads its
+    /// A2A endpoint of every agent it holds; a colleague weighing a question reads its
     /// description and nothing else. A sentence that reads as a list of functions, or one that never
     /// left the routing phrase the classifier uses, is visible here and nowhere else in the
     /// interview.
@@ -1007,8 +1007,8 @@ public class InterviewTools
     /// <remarks>
     /// The classifier reads this description against every other one, so it is the map's to write
     /// and the map writes it before any agent exists. Once an agent has stated the competence it is
-    /// the one to answer for, the same subject is known in sharper words than the map could reach,
-    /// and the routing that lands a user here can be said with them. Only this entry's own
+    /// the one to answer for, the same subject is known in sharper words than the map could reach;
+    /// the routing that lands a user here can be said with them. Only this entry's own
     /// description: every other one is settled and reading them back is what keeps this one distinct.
     /// </remarks>
     public string SetIntentDescription(string description)
@@ -1063,7 +1063,7 @@ public class InterviewTools
     /// Declares the pass settled.
     /// </summary>
     /// <remarks>
-    /// Believed only as far as the state machine can confirm it. Which fields are set is a fact,
+    /// Believed only as far as the state machine can confirm it. Which fields are set is a fact
     /// and facts are not a model's to assert.
     /// </remarks>
     public string SetPassCompleted()
@@ -1071,7 +1071,7 @@ public class InterviewTools
         // Correcting, every section is written already, so each pass could settle the moment it
         // opened and the client would be walked through an edit that asked them nothing at all —
         // which is how a client who came to change a voice reached the end with the voice they
-        // came to change. A pass may still settle on their first word, and the doctrine's own fast
+        // came to change. A pass may still settle on their first word; the doctrine's own fast
         // path stands: what it may not do is settle before they have said one.
         if (interviewState.Revision is not null && interviewState.Exchanges == interviewState.PassOpenedAt)
             return "Not completed: this section is reopened and the client has not said a word about it yet. "

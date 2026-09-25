@@ -136,7 +136,7 @@ public static class A2APublicationExtensions
                    app.Services.GetRequiredService<ILogger>()));
 
             // Asked for on the request rather than handed over here. The card projected a moment ago
-            // cannot yet name where this instance answers — Kestrel has bound nothing — and a document
+            // cannot yet name where this instance answers, since Kestrel has bound nothing; a document
             // completed later by mutating it would be read, by whoever asked in between, in whatever
             // state that pass had reached. Resolved per request there is no such moment.
             app.MapGet($"{agentPath}/{Constants.AgentToAgent.WellKnownAgentCardPath}",

@@ -266,8 +266,8 @@ public class ConversationManagerActor : MorganaActor
         // make the same answer arrive twice.
         DateTime answerTimestamp = response.RecordedTimestamp ?? DateTime.UtcNow;
 
-        // Two answers can now close one turn — an agent's own, then Morgana taking the conversation
-        // back — and a client discards anything dated no later than what it already has. Sharing an
+        // Two answers can now close one turn (an agent's own, then Morgana taking the conversation
+        // back) while a client discards anything dated no later than what it already has. Sharing an
         // instant with the answer it follows would make the second one vanish on the way out, with
         // no trace anywhere and no catch-up able to recover it. Only an answer dated here can be
         // nudged: one an agent recorded must keep the date its own session holds it under.

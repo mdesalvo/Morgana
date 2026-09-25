@@ -226,8 +226,8 @@ public class SQLiteRateLimitService : IRateLimitService
     /// <param name="transaction">The enclosing check-and-record transaction the counts are read in.</param>
     /// <param name="utcNow">Reference instant each window is measured back from.</param>
     /// <returns>
-    /// A denying <see cref="RateLimitResult"/> for the first window found over its cap — narrowest
-    /// first (minute, then hour, then day) — or <c>null</c> when every configured window has room.
+    /// A denying <see cref="RateLimitResult"/> for the first window found over its cap, narrowest
+    /// first (minute, then hour, then day); <c>null</c> when every configured window has room.
     /// </returns>
     private async Task<RateLimitResult?> CheckTimeWindowsAsync(
         SqliteConnection connection,

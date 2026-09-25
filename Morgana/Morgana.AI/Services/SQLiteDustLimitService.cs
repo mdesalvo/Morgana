@@ -204,8 +204,8 @@ public class SQLiteDustLimitService : IDustLimitService
     public async Task<double> GetConsumedSinceAsync(string conversationId, double baseline)
     {
         // Clamped here rather than at the call site: a ledger that appears to run backwards is this
-        // service's problem to absorb — a disabled limiter, a failed read, a database that vanished
-        // between the two — and never a negative cost handed to whoever asked what the work cost.
+        // service's problem to absorb (a disabled limiter, a failed read, a database that vanished
+        // between the two), never a negative cost handed to whoever asked what the work cost.
         double consumed = await GetConsumedAsync(conversationId);
         return consumed > baseline ? consumed - baseline : 0.0;
     }

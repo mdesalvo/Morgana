@@ -11,8 +11,8 @@ namespace PromptHarness.Infrastructure.Reporting;
 /// the pass rate and the token cost of a run.
 /// </summary>
 /// <remarks>
-/// <para><strong>Why a journey and not a snapshot.</strong> The point of the harness is comparison,
-/// and a file that is overwritten on every run answers "where is it now" while losing "where it came
+/// <para><strong>Why a journey and not a snapshot.</strong> The point of the harness is comparison;
+/// a file that is overwritten on every run answers "where is it now" while losing "where it came
 /// from". Here the movement is inside the file: <c>v0</c> is the original assessment and every
 /// phase after it shows what the revision bought or cost.</para>
 ///
@@ -25,8 +25,8 @@ namespace PromptHarness.Infrastructure.Reporting;
 /// by hand.</para>
 ///
 /// <para><strong>Not versioned.</strong> The directory is a local measurement log
-/// (<see cref="HarnessOptions.HarnessDirectory"/>), not a repository artefact: every run is billed,
-/// and reviewing token-count diffs as pull-request noise buys nothing. Comparison across phases
+/// (<see cref="HarnessOptions.HarnessDirectory"/>), not a repository artefact: every run is billed
+/// while reviewing token-count diffs as pull-request noise buys nothing. Comparison across phases
 /// still works — it just happens on whoever's disk is running the suite, not in git history.</para>
 /// </remarks>
 public static class HarnessWriter

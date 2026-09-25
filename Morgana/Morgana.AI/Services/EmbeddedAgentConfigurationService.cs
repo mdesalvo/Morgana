@@ -187,8 +187,8 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                         }
                     }
                 }
-                // The refusals above are verdicts on a domain that is readable and wrong — a reserved
-                // name, a name claimed twice — and each is meant to stop startup where it is stated.
+                // The refusals above are verdicts on a domain that is readable and wrong (a reserved
+                // name, a name claimed twice); each is meant to stop startup where it is stated.
                 // Swallowed here they would drop the whole domain instead. The operator would
                 // meet the consequence much later, as a prompt that cannot be found for an intent
                 // nobody refused: the wrong place to go looking.

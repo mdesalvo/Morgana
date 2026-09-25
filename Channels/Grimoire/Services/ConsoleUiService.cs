@@ -46,7 +46,7 @@ public sealed class ConsoleUiService : ITerminalUi
 
     /// <summary>
     /// Colour of what a command reports, wherever it ran: neutral grey, so it reads apart from the
-    /// speakers — a command is not a turn in the conversation — and apart from a warning, which is
+    /// speakers (a command is not a turn in the conversation) and apart from a warning, which is
     /// about the conversation rather than about work the user asked for.
     /// </summary>
     private const string CommandReportColor = "grey70";
@@ -216,8 +216,8 @@ public sealed class ConsoleUiService : ITerminalUi
     /// <summary>
     /// Scrollback offset in rows: how far above the live bottom the viewport is anchored.
     /// 0 = pinned to the newest content (the default live view). Only ever non-zero while the
-    /// conversation is at rest — <see cref="ReadKeysLoop"/> gates scrolling on
-    /// <c>!awaitingResponse</c>, so the window never moves under an in-flight stream — and it is
+    /// conversation is at rest (<see cref="ReadKeysLoop"/> gates scrolling on
+    /// <c>!awaitingResponse</c>, so the window never moves under an in-flight stream); it is
     /// reset to 0 whenever the user sends. Mutated/read only under <see cref="renderLock"/>; the
     /// upper bound is re-clamped against the live content height in <see cref="BuildBody"/>.
     /// </summary>
@@ -799,7 +799,7 @@ public sealed class ConsoleUiService : ITerminalUi
             }
 
             // Swallow every keystroke that isn't an explicit exit while we're waiting for
-            // Morgana to speak — or forever once the conversation is dust-dead (a
+            // Morgana to speak; forever once the conversation is dust-dead (a
             // one-way latch: no point typing into a budget the backend will reject).
             // Esc is always honoured so the user can bail out even mid-turn or quit a
             // spent conversation; everything else (printable chars, Enter, Backspace)
@@ -985,8 +985,8 @@ public sealed class ConsoleUiService : ITerminalUi
     /// <summary>
     /// Handles a keystroke while in quick-reply mode. Up/Left and Down/Right wrap the highlight
     /// (both axes accepted so the user needn't guess which the current layout wants); Enter leaves
-    /// QR mode, echoes the chosen option as a <c>"You: {Value}"</c> line — Cauldron sends the
-    /// <see cref="QuickReply.Value"/>, not the label — and sends it to the conversation on
+    /// QR mode, echoes the chosen option as a <c>"You: {Value}"</c> line (Cauldron sends the
+    /// <see cref="QuickReply.Value"/>, not the label) and sends it to the conversation on
     /// screen; any other key is ignored. All state mutation happens under
     /// <see cref="renderLock"/>; the send awaits outside it.
     /// </summary>

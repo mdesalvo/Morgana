@@ -13,7 +13,7 @@ namespace Alembic.Services;
 /// Default <see cref="IDomainReadingService"/>: one call over the uploaded domain, answered as JSON.
 /// </summary>
 /// <remarks>
-/// Once per upload rather than once per step, and over the whole domain rather than one agent at a
+/// Once per upload rather than once per step, over the whole domain rather than one agent at a
 /// time: what the shop does is one subject and an agent read on its own invites the same sentence
 /// being written about three of them. The interview then opens on any entry of it already knowing
 /// the trade, which is the whole point — the client may go straight to correcting the third agent

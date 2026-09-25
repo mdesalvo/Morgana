@@ -80,7 +80,7 @@ public sealed class ServedConsultationTests
     [Fact]
     public async Task What_an_answer_cost_travels_back_to_a_caller_that_declared_itself_an_agent()
     {
-        // The tokens a consultation burns are burned here, on the answering installation, and would
+        // The tokens a consultation burns are burned here, on the answering installation, where they would
         // otherwise be invisible to the budget that is supposed to say what a conversation cost.
         PeerEnvelope envelope = await ConsultAsync(
             MorganaHostFixture.ScopedPartnerName, fixture.ScopedPartnerKey, $"costed-{Guid.NewGuid():N}", CallerIntent);
@@ -107,7 +107,7 @@ public sealed class ServedConsultationTests
     {
         // A caller behind this door writes the name of the conversation it is served on, so a partner
         // rotating names would draw a fresh budget with every one. What is bounded is therefore how
-        // many exchanges may start, and this partner's entry allows exactly one an hour.
+        // many exchanges may start; this partner's entry allows exactly one an hour.
         PeerEnvelope admitted = await ConsultAsync(
             MorganaHostFixture.MeteredPartnerName, fixture.MeteredPartnerKey, $"first-{Guid.NewGuid():N}", CallerIntent);
 

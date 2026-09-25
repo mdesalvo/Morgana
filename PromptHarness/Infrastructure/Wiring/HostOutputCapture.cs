@@ -8,7 +8,7 @@ namespace PromptHarness.Infrastructure.Wiring;
 /// </summary>
 /// <remarks>
 /// <para>This is how the suite observes the <em>names</em> of the context variables an agent reads
-/// and writes. Those names are not — and must not become — span attributes: span attributes reach
+/// and writes. Those names are not span attributes and must never become them: span attributes reach
 /// every configured exporter and a variable name is exactly the place where a misbehaving model
 /// would leak user-supplied text. The log line, which already exists for diagnostics and stays
 /// inside the process, is the honest place to read them from.</para>

@@ -27,13 +27,13 @@ namespace PromptHarness.Tests;
 /// it only runs when this installation is the one asking.</para>
 ///
 /// <para>The partner is stood up here rather than being a second Morgana: what is under test is what
-/// <b>leaves</b> — the card this side accepts, the token it mints and the origin it attaches it to —
-/// and a real peer would answer those questions with its own behaviour instead of with the cases a
+/// <b>leaves</b> (the card this side accepts, the token it mints and the origin it attaches it to)
+/// while a real peer would answer those questions with its own behaviour instead of with the cases a
 /// deployment actually has to survive. A card naming a third host, one demanding a scheme nobody here
-/// can present, one demanding nothing: each is a document, and a document is what this group serves.</para>
+/// can present, one demanding nothing: each is a document, which is what this group serves.</para>
 ///
 /// <para>Assertions read the request the peer recorded rather than the answer this side received. A
-/// consultation's answer is the peer's word; the token on the way in is ours, and it is the only part
+/// consultation's answer is the peer's word; the token on the way in is ours. It is the only part
 /// a deployment is exposed by. So a run that ends in an exception because the stub answered no proper
 /// envelope still proves what it was asked to prove, which is why the calls below are made without
 /// expecting one.</para>

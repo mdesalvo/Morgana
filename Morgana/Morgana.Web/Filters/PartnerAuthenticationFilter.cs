@@ -44,7 +44,7 @@ public sealed class PartnerAuthenticationFilter(
             return Results.Unauthorized();
 
         // The same service the channels' gate calls, so a peer request is proven exactly as a channel's
-        // is — signature against that issuer's own key, audience and lifetime — and one gate cannot
+        // is (signature against that issuer's own key, audience and lifetime): one gate cannot
         // quietly grow weaker than the other.
         Records.AuthenticationResult authentication =
             await authenticationService.AuthenticateAsync(authorization[BearerPrefix.Length..]);

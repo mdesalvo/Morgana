@@ -114,7 +114,7 @@ public sealed class DomainDraft
     {
         bool dropped = Intents.RemoveAll(IsFallback) > 0;
 
-        // The map of an interrupted sitting is a second place a domain declares its agents, and a
+        // The map of an interrupted sitting is a second place a domain declares its agents; a
         // sitting begun before this rule held can be resumed today carrying the fallback as an entry
         // the walk would open an agent on.
         if (Sitting is not null)
@@ -198,7 +198,7 @@ public sealed class InterviewSitting
 /// <remarks>
 /// The prose travels with the edge because without it the edge is a defect. An agent whose
 /// Instructions say a subject belongs to another bench and stops there is being told, in the same
-/// prompt, that it may ask and that it may not — and the imperative sentence wins. So the tool that
+/// prompt, that it may ask and that it may not, where the imperative sentence wins. So the tool that
 /// declares an edge takes the asking agent's reconciled Instructions in the same call and the two
 /// land in the domain together or not at all.
 /// </remarks>
@@ -373,7 +373,7 @@ public sealed class AgentDraft
     /// published on its A2A card and read by whoever holds a <c>consult_</c> function for it. Settled
     /// by the <c>AgentTerritory</c> pass, once the toolkit stands: what this agent is characteristically
     /// the one to be asked about is a competence of the client's own business, elicited like any
-    /// other, and a territory its tools do not cover is a promise another agent would hold it to.
+    /// other; a territory its tools do not cover is a promise another agent would hold it to.
     /// Every agent carries one, whether or not anybody consults it and whether or not this
     /// installation ever speaks to another: an unread one costs nothing and its absence leaves every
     /// other agent answering "go to them" where a precise answer was there to be had.

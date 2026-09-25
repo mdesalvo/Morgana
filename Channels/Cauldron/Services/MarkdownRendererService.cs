@@ -12,7 +12,7 @@ namespace Cauldron.Services;
 public class MarkdownRendererService : IMarkdownRendererService
 {
     /// <summary>
-    /// The Markdown → HTML rules this instance renders with: emoji shortcodes, GFM pipe tables,
+    /// The Markdown → HTML rules this instance renders with: emoji shortcodes, GFM pipe tables
     /// and raw HTML tags disabled. Without that last part, a bare-looking tag typed in ordinary
     /// prose (e.g. "List&lt;string&gt;", "&lt;Component&gt;") would reach <see cref="sanitizer"/>
     /// as an unclosed HTML element, which silently swallows the rest of the message as that

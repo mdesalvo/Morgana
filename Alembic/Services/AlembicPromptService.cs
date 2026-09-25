@@ -88,7 +88,7 @@ public class AlembicPromptService : IAlembicPromptService
 
     // The primer closes on its own mark because two of its readers stand outside the fence: the
     // coherence pass and the one that applies its findings get the framework without Morgana's
-    // voice, and an unterminated block of world facts would run straight into their own prose.
+    // voice; an unterminated block of world facts would run straight into their own prose.
     private const string MorganaPrimerFooter = "-------- END OF WHAT SHE ALREADY DOES --------";
     private const string AlembicLayerHeader =
         "======== ALEMBIC ========\n" +

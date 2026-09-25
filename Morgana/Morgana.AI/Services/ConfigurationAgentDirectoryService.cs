@@ -573,8 +573,8 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
 
         // Behind the A2A door a caller names the conversation it is served on, so how many it may open
         // in an hour is the only bound on what it can spend. Nothing reads an absent declaration as
-        // licence to spend without limit — a deployment wanting no real bound switches the ceiling off,
-        // or writes a generous number and either way it is a sentence somebody wrote.
+        // licence to spend without limit — a deployment wanting no real bound switches the ceiling off
+        // or writes a generous number; either way it is a sentence somebody wrote.
         if (inboundPolicy.RateLimiting is null)
         {
             throw new InvalidOperationException(

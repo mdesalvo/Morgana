@@ -9,7 +9,7 @@ namespace Alembic.Model;
 /// The mapping pass runs once and the other four run once per intent it produced. That order is
 /// forced twice over. The intents are what a classifier weighs against each other, so they are
 /// designed together or they collide — an intent settled alone is a description nobody compared to
-/// anything. And within an agent, Instructions and Formatting speak about its tools, so they cannot
+/// anything. Within an agent, Instructions and Formatting speak about its tools, so they cannot
 /// be written before the toolkit exists.
 /// </remarks>
 public enum InterviewStep
@@ -58,7 +58,7 @@ public enum InterviewStep
     /// sections beyond the boundary sentence an edge contradicts.
     /// </summary>
     /// <remarks>
-    /// Last for the same reason the map is first, read the other way round: an edge is a relation,
+    /// Last for the same reason the map is first, read the other way round: an edge is a relation
     /// and a relation cannot be asked about while half its ends are still unwritten. It sits outside
     /// the lap because it is asked once over the whole domain, never once per entry.
     /// </remarks>
@@ -86,8 +86,8 @@ public sealed class InterviewState
     /// The question on the table: the last thing Alembic said to the client.
     /// </summary>
     /// <remarks>
-    /// One question, not a log. The conversation is the agent's — it runs in a live
-    /// <c>AgentSession</c> and is what the model reads back — and a second copy on this side would
+    /// One question, not a log. The conversation is the agent's (it runs in a live
+    /// <c>AgentSession</c> and is what the model reads back) and a second copy on this side would
     /// be a transcript nobody needs kept in step with one that already exists. What the screen
     /// needs is what is being asked right now.
     /// </remarks>
@@ -112,7 +112,7 @@ public sealed class InterviewState
     /// <remarks>
     /// What is being approved is these exact words, so they are drawn apart from the sentence
     /// introducing them: run together — 'I have written a fond and careful voice that follows…' —
-    /// the client cannot see where Alembic stops speaking and the agent's own prose starts, and an
+    /// the client cannot see where Alembic stops speaking and the agent's own prose starts; an
     /// approval given to that is an approval of nothing in particular. Cleared every exchange, like
     /// everything else that belongs to one question.
     /// </remarks>
@@ -158,8 +158,8 @@ public sealed class InterviewState
     /// Whether the question on the table is the first one this pass has asked.
     /// </summary>
     // Read by the sentence that places the step, which belongs to the question a step lands on and to
-    // no confirmation or follow-up after it, and by the house example, which belongs to the opening
-    // question of the mapping pass alone.
+    // no confirmation or follow-up after it. It is also read by the house example, which belongs to the
+    // opening question of the mapping pass alone.
     public bool PassJustOpened => Exchanges <= PassOpenedAt + 1;
 
     /// <summary>
@@ -256,8 +256,8 @@ public sealed class InterviewState
     /// <remarks>
     /// A cloud rather than buttons and the difference is not decoration: a button is one answer and
     /// these are picked several at a time, so the shape has to say 'take what fits' rather than
-    /// 'choose one'. It is the one question of the interview the client cannot dictate — nobody has
-    /// a ready sentence about how their own staff should sound — and recognition is what they can do
+    /// 'choose one'. It is the one question of the interview the client cannot dictate, since nobody has
+    /// a ready sentence about how their own staff should sound; recognition is what they can do
     /// instead. The words are the model's, written for this domain and this agent after reading
     /// Morgana's own voice, so none of them can contradict her.
     /// </remarks>
@@ -451,7 +451,7 @@ public sealed class InterviewState
     /// <remarks>
     /// Every agent owes one, edges or none: it is published on the agent's card and read by whoever
     /// holds a question this agent might settle, so an agent without one is finished for itself and
-    /// mute to everyone else — and nothing inside the domain can notice the silence.
+    /// mute to everyone else, where nothing inside the domain can notice the silence.
     /// </remarks>
     private List<string> MissingTerritory() =>
         string.IsNullOrWhiteSpace(Agent.ConsultMeFor) ? ["agentConsultMeFor"] : [];

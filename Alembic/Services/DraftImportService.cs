@@ -21,7 +21,7 @@ public class DraftImportService : IDraftImportService
     /// The key carrying an agent's toolkit, taken from Morgana's own glossary since the framework is
     /// the party that reads it back. Compared ordinally, on purpose: <c>Records.Prompt</c> looks it
     /// up in a plain <c>Dictionary&lt;string, object&gt;</c>, so a differently-cased key is invisible
-    /// to the framework — and must stay invisible here too, rather than being silently promoted into
+    /// to the framework and must stay invisible here too, rather than being silently promoted into
     /// a toolkit Morgana would never load.
     /// </summary>
     private const string ToolsPropertyName = Constants.PromptProperties.Tools;

@@ -6,8 +6,8 @@ namespace Alembic.Model;
 /// Projects Draft elements onto the framework's own record types.
 /// </summary>
 /// <remarks>
-/// One place, two callers with different purposes: the exporter serializes what comes out of here,
-/// and the recap hands it to <c>IPromptComposerService</c>. That they share this projection is the
+/// One place, two callers with different purposes: the exporter serializes what comes out of here
+/// while the recap hands it to <c>IPromptComposerService</c>. That they share this projection is the
 /// point — a recap composed from a slightly different <see cref="Records.Prompt"/> than the one
 /// that gets written would be a recap of a domain nobody is going to run.
 /// <para>

@@ -85,7 +85,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// </summary>
     /// <remarks>
     /// Separate from <see cref="ScopedPartnerName"/> because the count is per issuer: a ceiling worth
-    /// testing has to be met, and meeting it on the partner every other group calls would turn every
+    /// testing has to be met; meeting it on the partner every other group calls would turn every
     /// later consultation into a refusal.
     /// </remarks>
     public const string MeteredPartnerName = "harness-peer-metered";
@@ -211,7 +211,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         ApplyHostEnvironment();
 
         // Step 4b: on a federation run, the other installation goes up first. It inherits everything
-        // just published — provider, keys, tiers — and is told only what makes it somebody else: its
+        // just published (provider, keys, tiers) and is told only what makes it somebody else: its
         // own address and storage, the shipped domain instead of the one agent above and the partner
         // declaration admitting this instance to the agent it publishes.
         if (Options.FederatedPeer)
@@ -258,7 +258,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         judgeLoggerFactory?.Dispose();
 
         // The other installation is a process of its own, so unlike the host under test it really can
-        // be stopped from here — and has to be, along with the conversations it was asked to open.
+        // be stopped from here. It has to be, along with the conversations it was asked to open.
         if (Peer is not null)
             await Peer.DisposeAsync();
 
@@ -385,7 +385,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
         // The harness channel is declared here and nowhere else, appended past the last issuer the
         // host's own appsettings holds: an instrument's identity is not something a deployed
-        // installation should carry, and a name plus a per-run key is all the admission needs. The
+        // installation should carry, while a name plus a per-run key is all the admission needs. The
         // key is minted for this run alone, so these credentials are never durable enough to leak.
         // The ring this host's own agents sign under is coined at startup and configured nowhere,
         // so it is not written here.
@@ -412,7 +412,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             $"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__RateLimiting__MaxConversationsPerHour",
             ScopedPartnerConversationsPerHour.ToString());
 
-        // The same admission with a ceiling that can actually be met, and the sentence this deployment
+        // The same admission with a ceiling that can actually be met, with the sentence this deployment
         // turns a partner away with. One conversation an hour is the smallest bound that still lets the
         // first exchange be served, which is what makes the second one's refusal mean something.
         MeteredPartnerIndex = ScopedPartnerIndex + 1;
@@ -432,8 +432,8 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // Where a broken declaration may be written without landing on either of the two above.
         FreePartnerIndex = MeteredPartnerIndex + 1;
 
-        // On a federation run the instance under test knows one more partner — a whole other
-        // installation — and its own domain is replaced by the single agent that holds a colleague
+        // On a federation run the instance under test knows one more partner (a whole other
+        // installation) while its own domain is replaced by the single agent that holds a colleague
         // there. Off, none of this is written and the instance is the one every other group drives.
         if (Options.FederatedPeer)
             ApplyFederationEnvironment();
@@ -493,7 +493,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             "--contentRoot", AppContext.BaseDirectory,
 
             // Load-bearing. ApplicationName defaults to the entry assembly, which under a test
-            // runner is the runner itself — and MVC discovers controllers from the application
+            // runner is the runner itself, while MVC discovers controllers from the application
             // part named by it. Without this the host starts, serves and answers 404 to every
             // route, because it never found a controller.
             "--applicationName", hostAssembly.GetName().Name!
@@ -612,7 +612,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// </summary>
     /// <remarks>
     /// The domain is <em>replaced</em> rather than added to: loading the shipped one beside it would
-    /// give this instance a greenhouse of its own, and an agent that can answer from its own books
+    /// give this instance a greenhouse of its own. An agent that can answer from its own books
     /// proves nothing about a colleague across the wire. What is left is one agent whose only
     /// competence is having that colleague.
     /// </remarks>
@@ -645,7 +645,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// Tells the other installation who it is: the shipped domain, and one partner admitted to the
+    /// Tells the other installation who it is: the shipped domain with one partner admitted to the
     /// agent this instance has no books for.
     /// </summary>
     /// <remarks>
@@ -661,7 +661,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             ["Morgana__Plugins__Directories__0"] = "plugins",
 
             // The same slot, read from the other side of the relationship: this installation admits
-            // the caller instead of consulting it, and only at the agent it actually publishes.
+            // the caller instead of consulting it, only at the agent it actually publishes.
             [$"Morgana__AgentToAgent__Partners__{FederatedPartnerIndex}__Name"] = FederatedCallerName,
             [$"Morgana__AgentToAgent__Partners__{FederatedPartnerIndex}__SymmetricKey"] = FederationKey,
             [$"Morgana__AgentToAgent__Partners__{FederatedPartnerIndex}__Enabled"] = "true",

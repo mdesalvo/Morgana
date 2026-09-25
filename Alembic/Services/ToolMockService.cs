@@ -184,7 +184,7 @@ public class ToolMockService : IToolMockService
     /// </summary>
     /// <remarks>
     /// <c>CodeMocker</c>'s own prompt already tells the model this is a compile error and to write
-    /// no attribute at all — and an observed run still wrote one anyway (<c>CS0579</c>, a duplicate
+    /// no attribute at all; an observed run still wrote one anyway (<c>CS0579</c>, a duplicate
     /// attribute across the two partial declarations). Prose that has already failed once empirically
     /// is not made more reliable by restating it more emphatically; this is the deterministic backstop,
     /// the same reasoning as <see cref="StreamedCompletion.Unfenced"/> stripping a markdown fence the

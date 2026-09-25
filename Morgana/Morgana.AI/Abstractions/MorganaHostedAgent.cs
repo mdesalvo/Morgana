@@ -228,8 +228,8 @@ public sealed class MorganaHostedAgent : AIAgent
             // ledger of its own — the difference is what isolates the answer's own cost.
             double dustBaseline = await dustLimitService.GetConsumedAsync(hostedAgentSession.ConversationId);
 
-            // Ask, where the pipeline's own convention is Tell. That convention exists for streaming —
-            // an actor pushing chunks to a channel as they come — and there is no channel here: a
+            // Ask, where the pipeline's own convention is Tell. That convention exists for streaming,
+            // an actor pushing chunks to a channel as they come. There is no channel here: a
             // colleague's answer is read whole, by a model, with a caller blocked on it. The timeout
             // is the pipeline's own, so a silent actor lands in the catch below as an answer instead
             // of hanging the user's turn.

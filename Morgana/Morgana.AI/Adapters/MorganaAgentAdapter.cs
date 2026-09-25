@@ -432,7 +432,7 @@ public class MorganaAgentAdapter
         // Domain tools are declared in agents.json but their methods live in a
         // [ProvidesToolForIntent] MorganaTool subclass discovered by reflection. Missing
         // implementation is a WARNING, not fatal: the agent stays usable on its base (and
-        // any MCP) tools — degraded, not dead — and the ignored tools are named so the
+        // any MCP) tools, degraded but not dead, while the ignored tools are named so the
         // mismatch is diagnosable.
         Type? toolType = toolRegistryService?.FindToolTypeForIntent(intent);
         if (toolType == null)
