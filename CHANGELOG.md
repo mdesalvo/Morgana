@@ -7,18 +7,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [0.32.0] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: Terminal Command System
-Grimoire and Rune now take **commands**: type `/` at the prompt and a palette opens listing everything this installation offers, beside the channel's own `/new` and `/exit`. It filters as you type and Enter runs the highlighted one. A command is not prose: it never reaches any agents, so it costs no reasoning and interrupts nothing the conversation was doing.
+Grimoire and Rune now support **commands**: type `/` at the prompt and a palette opens listing everything this installation offers, beside the channel's own `/new` and `/exit`. It filters as you type and Enter runs the highlighted one. A command is not prose: it never reaches any agents, so it costs no reasoning and interrupts nothing the conversation was doing.
 
 ### ✨ Added
-- **Command palette in Grimoire and Rune**: every command this installation publishes, plus the channel's own, one keystroke from the prompt
-- **Confirmation on what cannot be undone**: a command declares that it must be confirmed; the user is asked before it runs
+- **Command palette for terminal channels**: every command this installation publishes, plus the channel's own, one keystroke from the prompt
+- **`Morgana.Terminal`** library to decouple terminal channels from the plumbing aspects they share (authentication, Morgana client, webhook dispatcher, terminal rendering), leaving each channel to declare only its own capability profile
 - **Turn marker in Grimoire and Rune**: a dot in the speaker's own colour opens every line of the conversation, so a long transcript reads as turns rather than a wall of text
 
 ### 🔄 Changed
-- Introduced **`Morgana.Terminal`** library to decouple Grimoire and Rune from the plumbing aspects they share (authentication, Morgana client, webhook dispatcher, terminal rendering), leaving each channel to declare only its own capability profile
 
 ### 🐛 Fixed
-- Morgana now remembers the whole conversation as it appears on screen: nothing disappears on a refresh any more, neither the message just sent nor anything already shown
+- Morgana now remembers the whole conversation as it appears on screen: **nothing disappears on a refresh any more**, neither the message just sent nor anything already shown
 
 ### 📦 Dependencies
 - Updated `Microsoft.Agents.AI` to 1.22.0
