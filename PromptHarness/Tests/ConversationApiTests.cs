@@ -2,6 +2,16 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging.Abstractions;
+using Morgana.AI.Interfaces;
+using Morgana.AI.Services;
+using Morgana.Contracts;
+using Morgana.Web.Filters;
 using PromptHarness.Infrastructure.Wiring;
 using Xunit;
 
@@ -278,4 +288,72 @@ public sealed class ConversationApiTests
         Assert.Equal(conversationId, body.GetProperty("conversationId").GetString());
         Assert.Equal("compact", body.GetProperty("command").GetString());
     }
+
+    /// <summary>
+    /// A command declaring that it cannot be taken back is refused with 400 when the request carries no Yes. No
+    /// command Morgana ships asks for one, so the gate is handed a registry holding such a command and judged
+    /// on its own: the status is what a channel would read.
+    /// </summary>
+    [Fact]
+    public async Task Command_needing_a_yes_is_refused_without_one()
+    {
+        (ActionExecutingContext context, bool ran) = await AdmitAsync(new ExecuteCommandRequest("wipe"));
+
+        Assert.False(ran);
+        BadRequestObjectResult refusal = Assert.IsType<BadRequestObjectResult>(context.Result);
+        Assert.Equal(400, refusal.StatusCode);
+        JsonElement body = JsonSerializer.SerializeToElement(refusal.Value);
+        Assert.Equal("Command requires confirmation", body.GetProperty("error").GetString());
+        Assert.Equal("wipe", body.GetProperty("name").GetString());
+    }
+
+    /// <summary>The same command carrying the Yes its channel obtained passes the gate untouched.</summary>
+    [Fact]
+    public async Task Command_needing_a_yes_is_admitted_with_one()
+    {
+        (ActionExecutingContext context, bool ran) = await AdmitAsync(new ExecuteCommandRequest("wipe", Confirmed: true));
+
+        Assert.True(ran);
+        Assert.Null(context.Result);
+    }
+
+    /// <summary>
+    /// Puts <paramref name="request"/> through the admission gate as the command route would, on a registry
+    /// holding only <see cref="IrreversibleCommand"/>; answers the context the gate left and whether it let
+    /// the request go on.
+    /// </summary>
+    private async Task<(ActionExecutingContext Context, bool Ran)> AdmitAsync(ExecuteCommandRequest request)
+    {
+        CommandAdmissionFilter gate = new CommandAdmissionFilter(
+            new CommandRegistryService([new IrreversibleCommand()]), api.HostPersistenceService(), NullLogger.Instance);
+
+        RouteData route = new RouteData();
+        route.Values["conversationId"] = ChannelApiClient.NewConversationId();
+        ActionExecutingContext context = new ActionExecutingContext(
+            new ActionContext(new DefaultHttpContext(), route, new ActionDescriptor()),
+            [],
+            new Dictionary<string, object?> { ["request"] = request },
+            controller: new object());
+
+        bool ran = false;
+        await gate.OnActionExecutionAsync(context, () =>
+        {
+            ran = true;
+            return Task.FromResult(new ActionExecutedContext(context, [], context.Controller));
+        });
+
+        return (context, ran);
+    }
+
+    /// <summary>A command that cannot be taken back, which is all the gate reads of it: it is never run.</summary>
+    private sealed class IrreversibleCommand : ICommand
+    {
+        /// <inheritdoc />
+        public CommandDescriptor Descriptor { get; } = new("wipe", "Forget this conversation", RequiresConfirmation: true);
+
+        /// <inheritdoc />
+        public Task ExecuteAsync(string conversationId, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("The admission gate never runs a command.");
+    }
 }
+
