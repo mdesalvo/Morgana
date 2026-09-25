@@ -158,7 +158,10 @@ public static class Constants
         /// <summary>A notice about the conversation carrying no reply, such as a budget running low.</summary>
         public const string SystemWarning = "system_warning";
 
-        /// <summary>A notice from outside the turn pipeline, such as a command saying what it did.</summary>
+        /// <summary>
+        /// A command's own frame or outcome, never anything else: a channel keeps it out of the transcript
+        /// on this type alone, since a command is not a turn of the conversation.
+        /// </summary>
         public const string System = "system";
 
         /// <summary>A notice that something stopped the turn, such as a budget that ran out.</summary>

@@ -38,7 +38,8 @@ public class CommandController(
     [TypeFilter<CommandAdmissionFilter>(Order = 2)]
     // A command fired by the user may spend tokens: it meets the limits a message meets
     [TypeFilter<ConversationLimitsFilter>(Order = 3)]
-    public async Task<IActionResult> ExecuteCommand(string conversationId, [FromBody] ExecuteCommandRequest request)
+    // The token is the request's own abort: a channel that stops waiting on a command stops the command too
+    public async Task<IActionResult> ExecuteCommand(string conversationId, [FromBody] ExecuteCommandRequest request, CancellationToken cancellationToken)
     {
         // Admitted by CommandAdmissionFilter, which resolved this same name
         ICommand command = commandRegistryService.ResolveCommand(request.Name)!;
@@ -47,7 +48,7 @@ public class CommandController(
         logger.LogInformation("Running command '{CommandName}' on conversation {ConversationId}", command.Descriptor.Name, conversationId);
         // A channel that left an option out gets the command's own default, exactly as a channel drawing
         // the form would have sent it: the values a command reads never depend on who called it
-        await command.ExecuteAsync(conversationId, command.Descriptor.ApplyDefaults(request.Options));
+        await command.ExecuteAsync(conversationId, command.Descriptor.ApplyDefaults(request.Options), cancellationToken);
 
         return Accepted(new { conversationId, command = command.Descriptor.Name });
     }

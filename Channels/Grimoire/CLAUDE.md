@@ -101,9 +101,10 @@ waits for the keystrokes to stop, so a pasted line costs one frame rather than o
 **Commands**: a leading `/` opens the shared palette (`Morgana.Terminal`): `/new`, `/exit` and
 whatever Morgana publishes. Esc dismisses it. The list filters as you type and Enter runs the
 highlighted candidate, as in Claude Code. It opens over pending quick replies too. A command declaring `RequiresConfirmation` takes
-the prompt over with a Yes/No question instead of running; Morgana refuses it without that answer. A command
-reporting progress draws its bar where the prompt is, replacing the frame before it; none of it is kept
-in the transcript.
+the prompt over with a Yes/No question instead of running; Morgana refuses it without that answer. **A command
+never enters the transcript**, neither its line nor its outcome: it holds the prompt while it runs, its progress
+bar and then its outcome are drawn above the prompt and the outcome goes at the next keystroke. One of Morgana's
+is called off after `Grimoire:CommandTimeoutSeconds`, which Morgana notices and stops without writing anything.
 
 A turn that goes silent for `Grimoire:ReplyTimeoutSeconds` releases the prompt with a red notice.
 The deadline measures **silence, not duration**: every chunk arms it again from zero and a
@@ -133,6 +134,7 @@ once: the two URLs must be absolute `http(s)`, the key must no longer be the shi
 | `Grimoire:Authentication:*` | `SymmetricKey` matching Morgana's entry for `Name=grimoire`, plus `Issuer` and `Audience` |
 | `Grimoire:LandingMessages` | The startup lines, cleared when the Live UI takes over. Mirrors Cauldron's |
 | `Grimoire:ReplyTimeoutSeconds` | How long a turn may go silent before the prompt comes back with a red notice (default 120). Every chunk restarts the count |
+| `Grimoire:CommandTimeoutSeconds` | How long the prompt waits on one of Morgana's commands before calling it off (default 120). The channel's own deadline: it never travels, Morgana only notices the call being dropped |
 | `Grimoire:StartupTimeoutSeconds` | How long to wait for Morgana's first delivery before entering the Live UI anyway (default 30). Raise it on providers with cold starts |
 | `Grimoire:StreamingResponse:*` | `TypewriterTickMilliseconds` (15), `TypewriterTickChars` (1) |
 

@@ -58,13 +58,14 @@ public sealed class MarkdownTerminalRenderService
     /// speaker's <paramref name="baseColor"/> as the prose colour, optionally seed the very
     /// first row with a bold <paramref name="speakerPrefix"/> (e.g. <c>"Morgana: "</c>) and
     /// wrap the result to single-row <see cref="Markup"/>s at <paramref name="width"/>.
-    /// Streaming callers pass a null prefix.
+    /// Streaming callers pass a null prefix. A <paramref name="speakerMarkerColor"/> puts a dot in that
+    /// colour ahead of the prefix, drawn only: it is no part of the message.
     /// </summary>
-    public List<Markup> RenderToRows(string markdown, string baseColor, string? speakerPrefix, int width)
+    public List<Markup> RenderToRows(string markdown, string baseColor, string? speakerPrefix, int width, string? speakerMarkerColor = null)
     {
         List<RenderedLine> lines = Render(markdown, baseColor);
         if (speakerPrefix is { Length: > 0 })
-            PrependSpeaker(lines, speakerPrefix, baseColor);
+            PrependSpeaker(lines, speakerPrefix, baseColor, speakerMarkerColor);
         return Wrap(lines, width);
     }
 
@@ -85,17 +86,25 @@ public sealed class MarkdownTerminalRenderService
         return lines;
     }
 
-    /// <summary>Prepends a bold speaker tag to the first renderable (non-rule) line, or inserts a new leading line if there is none.</summary>
-    internal static void PrependSpeaker(List<RenderedLine> lines, string speakerPrefix, string baseColor)
+    /// <summary>
+    /// Prepends a bold speaker tag, behind a dot in <paramref name="markerColor"/> when given, to the first
+    /// renderable (non-rule) line. A message with none gets a new leading line to carry it.
+    /// </summary>
+    internal static void PrependSpeaker(List<RenderedLine> lines, string speakerPrefix, string baseColor, string? markerColor = null)
     {
         StyledSpan prefix = new(TerminalCellService.StripControlCharacters(speakerPrefix), baseColor, "bold");
         int target = lines.FindIndex(l => !l.IsRule);
         if (target < 0)
         {
-            lines.Insert(0, new RenderedLine([prefix], false));
-            return;
+            target = 0;
+            lines.Insert(0, new RenderedLine([], false));
         }
         lines[target].Spans.Insert(0, prefix);
+
+        // The dot marks where a speaker starts in a long transcript, in the speaker's own colour even when
+        // the row wears a warning's: who spoke and what kind of line it is read apart
+        if (markerColor is not null)
+            lines[target].Spans.Insert(0, new StyledSpan("● ", markerColor, string.Empty));
     }
 
     // ---- block walking ----------------------------------------------------------------

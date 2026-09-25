@@ -4,7 +4,7 @@ using Spectre.Console;
 namespace Morgana.Terminal.Services;
 
 /// <summary>
-/// Terminal-safe text shared by every TTY renderer a channel owns (prose, and the rich card and
+/// Terminal-safe text shared by every TTY renderer a channel owns (prose, plus the rich card and
 /// quick reply of a channel that declares them): rune-safe wrap/truncate so a wide CJK glyph or an emoji-presentation sequence
 /// (resolved via <see cref="Emoji.Replace"/> upstream in each renderer) is measured in the columns
 /// the terminal actually draws, not in UTF-16 chars — keeping every renderer's "one row = exactly

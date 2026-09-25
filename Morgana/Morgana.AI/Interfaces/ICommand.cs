@@ -9,13 +9,6 @@ namespace Morgana.AI.Interfaces;
 /// Reliability contract: the outcome must reach the user as at least one <see cref="ChannelMessage"/>
 /// through <see cref="IChannelService"/>, since a channel holds its prompt until something lands.
 /// </summary>
-/// <remarks>
-/// Nothing a command says is kept: a transcript is what was said in the conversation, while a command is
-/// not a turn in it. Its outcome is shown on the channel that asked and leaves no trace, so a conversation read
-/// back later runs from one turn to the next as though no command had been run between them. Whatever a
-/// command writes on the record is therefore the work itself, never a report of it: <c>/compact</c> leaves a
-/// summary in an agent's history because that is how a fold is carried, not to tell anyone it happened.
-/// </remarks>
 public interface ICommand
 {
     /// <summary>
@@ -25,5 +18,11 @@ public interface ICommand
     CommandDescriptor Descriptor { get; }
 
     /// <summary>Runs the command on a conversation already known to exist, whose caller has passed the rate and dust limits, with the <paramref name="options"/> the user wrote at the prompt, already checked against what the descriptor declares.</summary>
-    Task ExecuteAsync(string conversationId, IReadOnlyDictionary<string, string> options);
+    /// <param name="cancellationToken">
+    /// Fires when the channel has stopped waiting, having already told the user the command was called off.
+    /// A command cancelled before it writes leaves the record as it was and sends nothing to the channel: a
+    /// late outcome would contradict what the user was shown. One whose write had already begun completes it
+    /// and reports it, since that outcome is then the truth.
+    /// </param>
+    Task ExecuteAsync(string conversationId, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken);
 }

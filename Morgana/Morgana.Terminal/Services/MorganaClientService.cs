@@ -12,6 +12,9 @@ namespace Morgana.Terminal.Services;
 /// </summary>
 public sealed class MorganaClientService
 {
+    /// <summary>Fallback for the channel's <c>CommandTimeoutSeconds</c> when absent or non-positive.</summary>
+    private const int DefaultCommandTimeoutSeconds = 120;
+
     /// <summary>Produces the named <c>Morgana</c> <see cref="HttpClient"/> with the JWT handler already wired in.</summary>
     private readonly IHttpClientFactory httpClientFactory;
 
@@ -21,6 +24,13 @@ public sealed class MorganaClientService
     /// <summary>Absolute URL Morgana POSTs inbound messages to; re-announced on every handshake.</summary>
     private readonly string callbackUrl;
 
+    /// <summary>
+    /// How long the prompt waits on one of Morgana's commands before it is called off. The channel's own
+    /// deadline, never sent: this side knows how long its prompt can be held, while Morgana only notices
+    /// the call being dropped. From the channel's <c>CommandTimeoutSeconds</c>.
+    /// </summary>
+    private readonly TimeSpan commandTimeout;
+
     /// <summary>Captures the callback URL (required).</summary>
     /// <exception cref="InvalidOperationException">Thrown when the channel's <c>CallbackURL</c> is missing.</exception>
     public MorganaClientService(IHttpClientFactory httpClientFactory, IConfiguration configuration, ChannelProfile profile)
@@ -29,6 +39,10 @@ public sealed class MorganaClientService
         this.profile = profile;
         callbackUrl = configuration[profile.SectionKey("CallbackURL")]
             ?? throw new InvalidOperationException($"{profile.SectionKey("CallbackURL")} is required for webhook-based delivery.");
+
+        // A non-positive wait would call every command off the instant it is sent, so it falls back too
+        int commandTimeoutSeconds = configuration.GetValue<int?>(profile.SectionKey("CommandTimeoutSeconds")) ?? DefaultCommandTimeoutSeconds;
+        commandTimeout = TimeSpan.FromSeconds(commandTimeoutSeconds > 0 ? commandTimeoutSeconds : DefaultCommandTimeoutSeconds);
     }
 
     /// <summary>
@@ -105,14 +119,36 @@ public sealed class MorganaClientService
         return history?.Messages ?? [];
     }
 
-    /// <summary>Runs one of Morgana's published commands on the given conversation; its outcome arrives over the webhook. Morgana refuses a command asking to be confirmed unless <paramref name="confirmed"/> carries the user's Yes.</summary>
+    /// <summary>
+    /// Runs one of Morgana's published commands on the given conversation, returning once Morgana has finished
+    /// it; its progress and outcome arrive over the webhook. Morgana refuses a command asking to be confirmed
+    /// unless <paramref name="confirmed"/> carries the user's Yes.
+    /// </summary>
+    /// <exception cref="TimeoutException">Thrown when the command outlives the channel's command deadline, which calls it off on Morgana too.</exception>
     public async Task RunCommandAsync(string conversationId, string name, IReadOnlyDictionary<string, string>? options = null, bool confirmed = false, CancellationToken cancellationToken = default)
     {
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
-        HttpResponseMessage response = await httpClient.PostAsJsonAsync(
-            $"/api/morgana/conversation/{conversationId}/command",
-            new ExecuteCommandRequest(name, confirmed, options),
-            cancellationToken);
+
+        // The command deadline alone decides how long this call may last: the client's own default would cut
+        // a command short of it and be reported as a transport failure
+        httpClient.Timeout = Timeout.InfiniteTimeSpan;
+        using CancellationTokenSource commandDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        commandDeadline.CancelAfter(commandTimeout);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await httpClient.PostAsJsonAsync(
+                $"/api/morgana/conversation/{conversationId}/command",
+                new ExecuteCommandRequest(name, confirmed, options),
+                commandDeadline.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Dropping the call is what tells Morgana to stop. A command called off that way writes nothing:
+            // the user reads the deadline as the outcome, since no other one will arrive
+            throw new TimeoutException($"/{name} did not finish within {commandTimeout.TotalSeconds:0}s and was called off");
+        }
 
         // A command meets the limits a message meets: Morgana explains a 429 over the webhook just the same
         if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)

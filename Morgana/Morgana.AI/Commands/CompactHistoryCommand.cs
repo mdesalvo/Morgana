@@ -70,7 +70,7 @@ public sealed class CompactHistoryCommand : ICommand
         RequiresActiveAgent: true);
 
     /// <inheritdoc />
-    public async Task ExecuteAsync(string conversationId, IReadOnlyDictionary<string, string> options)
+    public async Task ExecuteAsync(string conversationId, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken)
     {
         // The first frame goes up before anything is looked up: from the user's side the prompt is already
         // held, so a silent wait here would be indistinguishable from a command that did not start
@@ -85,13 +85,17 @@ public sealed class CompactHistoryCommand : ICommand
             return;
         }
 
-        // The second frame names the agent before the summarization call, which is the whole of the wait:
-        // what the user watches advance is therefore attributed to whoever is being summarized
-        await SendProgressAsync(conversationId, $"summarizing what {agent} carries", completed: 1);
-
         try
         {
-            int foldedMessages = await FoldAgentHistoryAsync(conversationId, agent);
+            // A channel that gave up during the lookup must not see a widget come back for a command it
+            // already reported as timed out
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // The second frame names the agent before the summarization call, which is the whole of the wait:
+            // what the user watches advance is therefore attributed to whoever is being summarized
+            await SendProgressAsync(conversationId, $"summarizing what {agent} carries", completed: 1);
+
+            int foldedMessages = await FoldAgentHistoryAsync(conversationId, agent, cancellationToken);
 
             // The widget comes off the screen before the outcome is written, so the conversation closes on
             // a line rather than on a bar left at its last step
@@ -103,9 +107,16 @@ public sealed class CompactHistoryCommand : ICommand
                 ? $"Nothing needed compacting: {agent} still carries a history short enough to read whole."
                 : $"Compacted {foldedMessages} message{(foldedMessages == 1 ? string.Empty : "s")} of {agent}. Nothing was lost from the transcript.");
         }
+        catch (Exception) when (cancellationToken.IsCancellationRequested)
+        {
+            // The channel has already told the user the command was called off and freed the prompt: any frame
+            // or line sent now would land as a late contradiction. Whatever a provider throws once the call is
+            // dropped is the same abandonment, so it is not reported as a failure either
+            logger.LogInformation("Compacting '{Agent}' in conversation {ConversationId} was abandoned by the channel; its history is untouched", agent, conversationId);
+        }
         catch (Exception ex)
         {
-            // A summarization call that fails, or a row that cannot be rewritten, leaves the agent's history
+            // A summarization call that fails or a row that cannot be rewritten leaves the agent's history
             // exactly as it was: the fold reaches the record in one write or not at all
             logger.LogError(ex, "Failed to compact the history of '{Agent}' in conversation {ConversationId}", agent, conversationId);
 
@@ -120,7 +131,7 @@ public sealed class CompactHistoryCommand : ICommand
     /// Folds everything but the recent window of <paramref name="agent"/>'s history and writes it back,
     /// answering how many messages the summary now stands for; zero when there was nothing behind that window.
     /// </summary>
-    private async Task<int> FoldAgentHistoryAsync(string conversationId, string agent)
+    private async Task<int> FoldAgentHistoryAsync(string conversationId, string agent, CancellationToken cancellationToken)
     {
         // The history is taken from the record, which is what an agent reads itself back from: the fold is
         // therefore performed on the same transcript the agent will carry into its next turn
@@ -141,11 +152,16 @@ public sealed class CompactHistoryCommand : ICommand
 
         // The summary is stamped onto the message it stands behind, inside the history just read: that mark
         // is what a later reduction reads to know where the agent's window opens. Every message stays
-        int foldedMessages = await reducer.CompactAsync(history, CancellationToken.None);
+        int foldedMessages = await reducer.CompactAsync(history, cancellationToken);
 
         // A fold that came to nothing leaves the row alone: rewriting it would date a record that did not change
         if (foldedMessages == 0)
             return 0;
+
+        // The last point the fold can be dropped: the summary lives only in the history read above and the
+        // call that composed it is already on the ledger, as spent tokens are. Past here the save is one
+        // transaction nothing interrupts, so a channel giving up during it is told what was written
+        cancellationToken.ThrowIfCancellationRequested();
 
         // The fold took a call to a model to compose, during which the agent may have served a turn. What it
         // wrote is kept; what this command read is what it speaks for. A row it can no longer speak for is

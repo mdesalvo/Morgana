@@ -14,8 +14,8 @@ public interface ITerminalUi
     void EnqueueIncoming(ChannelMessage message);
 
     /// <summary>
-    /// Where incremental chunks are queued. A channel that declares no streaming leaves this unset,
-    /// and the chunks it would never show are turned away at the webhook.
+    /// Where incremental chunks are queued. A channel that declares no streaming leaves this unset:
+    /// the chunks it would never show are then turned away at the webhook.
     /// </summary>
     Action<StreamChunkRequest>? ChunkSink => null;
 
@@ -29,11 +29,11 @@ public interface ITerminalUi
     void RequestExit();
 
     /// <summary>
-    /// Writes <paramref name="text"/> into the transcript as a line of the channel's own, which is how a command
-    /// that neither speaks to Morgana nor changes the screen reports what it did. <paramref name="isFailure"/>
-    /// marks what went wrong, so the two read apart at a glance.
+    /// Shows <paramref name="text"/> as the outcome of the command just run, above the prompt and never in the
+    /// transcript: a command is not a turn of the conversation. It stays until the user writes in the prompt or
+    /// runs another command. <paramref name="isFailure"/> marks what went wrong, so the two read apart at a glance.
     /// </summary>
-    void ShowNotice(string text, bool isFailure = false);
+    void ShowCommandOutcome(string text, bool isFailure = false);
 
     /// <summary>
     /// Shows how far a command running here has got, in the same widget a command run on Morgana reports
@@ -41,13 +41,6 @@ public interface ITerminalUi
     /// command returns, so a last frame marked finished is a courtesy rather than a duty.
     /// </summary>
     void ShowProgress(CommandProgress frame);
-
-    /// <summary>
-    /// Opens a turn the way a typed line does: <paramref name="echo"/> appears as the user's line, the prompt
-    /// waits for Morgana's reply under the channel's reply deadline and <paramref name="dispatch"/> sends the
-    /// request. A dispatch that fails is reported in the transcript and gives the prompt back.
-    /// </summary>
-    Task SubmitTurnAsync(string echo, Func<Task> dispatch);
 
     /// <summary>
     /// Puts a different conversation on screen. Deliveries are held while <paramref name="openConversation"/>

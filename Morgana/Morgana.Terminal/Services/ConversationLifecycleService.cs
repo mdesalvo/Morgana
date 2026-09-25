@@ -68,7 +68,7 @@ public sealed class ConversationLifecycleService
 
     /// <summary>
     /// Runs the conversation from handshake to end. Returns when the user quits or <paramref name="stopping"/>
-    /// fires, and at once when the conversation could not be opened.
+    /// fires; at once when the conversation could not be opened.
     /// Requires the webhook listener to be already accepting Morgana's deliveries.
     /// </summary>
     public async Task RunAsync(CancellationToken stopping)
@@ -115,7 +115,7 @@ public sealed class ConversationLifecycleService
             terminalUi.EnqueueIncoming(message);
         };
 
-        // A channel that renders no chunks leaves the sink unset, and the receiver turns them away
+        // A channel that renders no chunks leaves the sink unset: the receiver then turns them away
         webhookReceiverService.OnChunk = terminalUi.ChunkSink;
         return firstMessageArrived.Task;
     }

@@ -68,7 +68,7 @@ public sealed class TerminalCommandRegistryService
             .OrderBy(command => command.Name, StringComparer.OrdinalIgnoreCase)
     ];
 
-    /// <summary>Runs <paramref name="invocation"/>, here or on Morgana depending on whose command it is. A command declaring it must be confirmed runs on nothing less than a <paramref name="confirmed"/> the channel obtained from the user.</summary>
+    /// <summary>Runs <paramref name="invocation"/>, here or on Morgana depending on whose command it is, returning once it is over. A command declaring it must be confirmed runs on nothing less than a <paramref name="confirmed"/> the channel obtained from the user.</summary>
     /// <exception cref="InvalidOperationException">Thrown when no command answers to the name, when its options are not what it declares, or when one that must be confirmed was not.</exception>
     public Task ExecuteCommandAsync(CommandInvocation invocation, ITerminalUi ui, bool confirmed, CancellationToken cancellationToken)
     {
@@ -91,19 +91,12 @@ public sealed class TerminalCommandRegistryService
         if (morganaCommands.FirstOrDefault(descriptor => AnswersToName(descriptor, name)) is not { } morganaCommand)
             throw new InvalidOperationException($"No command answers to '{name}'.");
 
-        // Morgana's command is a turn: echoed as the user's line, answered as a reply. The conversation is read
-        // now, not when the catalogue came, since /new may have replaced it in between
+        // Morgana's command is no turn: nothing is echoed and no reply is awaited, since the call itself lasts as
+        // long as the command. The conversation is read now, not when the catalogue came, since /new may have
+        // replaced it in between
         RefuseUnrunnable(morganaCommand, options, confirmed);
-        return ui.SubmitTurnAsync(
-            EchoOf(morganaCommand, options),
-            () => morganaClientService.RunCommandAsync(session.ConversationId, morganaCommand.Name, options, confirmed, cancellationToken));
+        return morganaClientService.RunCommandAsync(session.ConversationId, morganaCommand.Name, options, confirmed, cancellationToken);
     }
-
-    /// <summary>The line a command puts in the transcript as the user's own: what they typed, spelled canonically.</summary>
-    private static string EchoOf(CommandDescriptor command, IReadOnlyDictionary<string, string> options) =>
-        options.Count == 0
-            ? $"/{command.Name}"
-            : $"/{command.Name} {string.Join(' ', options.Select(option => $"{option.Key}:{option.Value}"))}";
 
     /// <summary>Reads the commands Morgana publishes, keeping those the palette can offer.</summary>
     public async Task LoadMorganaCatalogAsync(CancellationToken cancellationToken)
@@ -116,8 +109,8 @@ public sealed class TerminalCommandRegistryService
         }
         catch (Exception)
         {
-            // The palette keeps the terminal's commands alone: the conversation must not fail over a catalogue,
-            // and logging is silenced under the live UI
+            // The palette keeps the terminal's commands alone: the conversation must not fail over a catalogue.
+            // Nothing is logged, since logging is silenced under the live UI
             return;
         }
 

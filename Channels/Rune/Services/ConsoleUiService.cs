@@ -156,19 +156,6 @@ public sealed class ConsoleUiService : ITerminalUi
     private volatile string? agentCarryingConversation;
 
     /// <summary>
-    /// When the turn on the wire opened. A command reporting its progress renews the silence deadline, which
-    /// is what keeps a working command from being declared lost; past this turn's ceiling it stops renewing,
-    /// so a command reporting for ever cannot hold the prompt for ever. Written under <see cref="renderLock"/>.
-    /// </summary>
-    private DateTime turnStartedAtUtc = DateTime.UtcNow;
-
-    /// <summary>
-    /// How long a turn may go on being renewed by what a command reports. Derived from the silence deadline
-    /// rather than configured: a turn worth several deadlines of reporting is a command nobody is waiting for.
-    /// </summary>
-    private readonly TimeSpan reportingCeiling;
-
-    /// <summary>
     /// Latched true when Morgana delivers the terminal dust-exhaustion notice
     /// (<c>ErrorReason == "dust_budget_exhausted"</c>). The conversation is spent: only a command line
     /// allowed on a spent conversation can be typed and the prompt names the two ways out, <c>/new</c>
@@ -219,10 +206,23 @@ public sealed class ConsoleUiService : ITerminalUi
     /// </summary>
     private volatile bool commandRunning;
 
+    /// <summary>The command running now, named by the hint that holds the prompt until its first frame. Under <see cref="renderLock"/>.</summary>
+    private string runningCommandName = string.Empty;
+
+    /// <summary>
+    /// What the last command came to, drawn above the prompt and kept out of the transcript: a command is not a
+    /// turn of the conversation. Null once the user writes in the prompt, starts a turn or runs another command.
+    /// Mutated only under <see cref="renderLock"/>, together with <see cref="commandOutcomeColor"/>.
+    /// </summary>
+    private string? commandOutcome;
+
+    /// <summary>The colour <see cref="commandOutcome"/> is drawn in: neutral for work done, orange for a refusal, red for a failure.</summary>
+    private string commandOutcomeColor = CommandReportColor;
+
     /// <summary>
     /// The name every line written by this side of the conversation is filed under: the channel itself, as
-    /// Morgana knows it. What a command reports or the terminal notices is the channel speaking, never
-    /// Morgana taking a turn, so it must be told apart at a glance.
+    /// Morgana knows it. What the terminal notices is the channel speaking, never Morgana taking a turn,
+    /// so it must be told apart at a glance.
     /// </summary>
     private readonly string channelSpeaker;
 
@@ -256,10 +256,6 @@ public sealed class ConsoleUiService : ITerminalUi
         // A non-positive wait would declare every turn lost the instant it is sent, so it falls back too
         int replyTimeoutSeconds = configuration.GetValue<int?>("Rune:ReplyTimeoutSeconds") ?? DefaultReplyTimeoutSeconds;
         replyTimeout = TimeSpan.FromSeconds(replyTimeoutSeconds > 0 ? replyTimeoutSeconds : DefaultReplyTimeoutSeconds);
-
-        // Five deadlines of a command reporting on itself: long enough for real work on a long conversation,
-        // short enough that a command reporting for ever gives the prompt back to the user the same day
-        reportingCeiling = replyTimeout * 5;
         this.viewportResizeWatcher = viewportResizeWatcher;
         this.cells = cells;
         this.commandPalette = commandPalette;
@@ -372,20 +368,18 @@ public sealed class ConsoleUiService : ITerminalUi
                 if (!session.IsConversationOnScreen(message.ConversationId))
                     continue;
 
-                // A frame of a running command is chrome: the bar stands in for the thinking hint while the
-                // command works, the turn stays in flight and nothing of it is kept in the transcript
+                // A frame of a running command is chrome: the bar holds the prompt while the command works
+                // and nothing of it is kept in the transcript
                 if (message.Progress is { } progressFrame)
                 {
                     lock (renderLock)
                     {
+                        // A frame landing after its command returned or was called off belongs to work nobody
+                        // waits on: drawn now, it would stand over the prompt with nothing left to take it down
+                        if (!commandRunning)
+                            continue;
+
                         commandProgress.Show(progressFrame);
-
-                        // A command reporting is Morgana working, so the silence the deadline measures starts
-                        // over — until the turn outlives its reporting ceiling, past which a command talking to
-                        // itself is left to the deadline like any other turn nobody answers
-                        if (awaitingResponse && DateTime.UtcNow - turnStartedAtUtc < reportingCeiling)
-                            StartReplyWatchdog(ctx, uiStopping);
-
                         ctx.UpdateTarget(BuildLayout());
                         ctx.Refresh();
                     }
@@ -404,10 +398,13 @@ public sealed class ConsoleUiService : ITerminalUi
 
                 lock (renderLock)
                 {
-                    // What a command reports is filed under the same name a command run here is filed under,
-                    // whichever side it ran on: the conversation was not taken a turn further by it
+                    // What a command run on Morgana reports is its outcome, drawn where a command run here draws
+                    // its own: the conversation was not taken a turn further by it, so the transcript does not hear of it
                     bool isCommandReport = string.Equals(message.MessageType, "system", StringComparison.OrdinalIgnoreCase);
-                    history.Add(new DisplayedMessage(isCommandReport ? channelSpeaker : messageSpeaker, SanitizeMessageText(message.Text), RowColor(message, messageSpeaker)));
+                    if (isCommandReport)
+                        SetCommandOutcome(message.Text, CommandReportColor);
+                    else
+                        history.Add(new DisplayedMessage(messageSpeaker, SanitizeMessageText(message.Text), RowColor(message, messageSpeaker)));
 
                     // Revert the sticky header to Morgana on completion so the next user
                     // turn doesn't render under the outgoing agent's colour. A command's report says nothing
@@ -551,8 +548,10 @@ public sealed class ConsoleUiService : ITerminalUi
             // volatile, guaranteeing visibility. Taking renderLock here on every polled
             // keystroke would cause unnecessary contention with DrainIncomingLoop.
             // A spent conversation still takes a command line, the only way out of it short of Esc.
+            // A running command holds the prompt as a turn does: a second one started meanwhile would race it
+            // for the widget and the outcome line
             // ReSharper disable InconsistentlySynchronizedField
-            if ((awaitingResponse || (conversationDead && !AcceptsKeyOnSpentConversation(key))) && key.Key != ConsoleKey.Escape)
+            if ((awaitingResponse || commandRunning || (conversationDead && !AcceptsKeyOnSpentConversation(key))) && key.Key != ConsoleKey.Escape)
             // ReSharper restore InconsistentlySynchronizedField
                 continue;
 
@@ -634,6 +633,7 @@ public sealed class ConsoleUiService : ITerminalUi
                             int n = RuneLengthBefore(cursorPosition);
                             currentInput = currentInput.Remove(cursorPosition - n, n);
                             cursorPosition -= n;
+                            commandOutcome = null;
                             RefreshWhenInputSettles(ctx);
                         }
                     }
@@ -646,6 +646,7 @@ public sealed class ConsoleUiService : ITerminalUi
                         {
                             int n = RuneLengthAt(cursorPosition);
                             currentInput = currentInput.Remove(cursorPosition, n);
+                            commandOutcome = null;
                             RefreshWhenInputSettles(ctx);
                         }
                     }
@@ -692,6 +693,9 @@ public sealed class ConsoleUiService : ITerminalUi
                                 // Insert AT the caret (not append) so typing mid-line splices in place.
                                 currentInput = currentInput.Insert(cursorPosition, key.KeyChar.ToString());
                                 cursorPosition++;
+
+                                // The user has moved on from the last command: its outcome makes room for what is typed
+                                commandOutcome = null;
                                 RefreshWhenInputSettles(ctx);
                             }
                         }
@@ -729,7 +733,7 @@ public sealed class ConsoleUiService : ITerminalUi
                 break;
             case ConfirmationOutcome.Declined:
                 // A command that leaves no trace of having been asked for would read as a swallowed keystroke
-                ShowSystemNotice(ctx, $"/{questionedInvocation.Command.Name} was not run", WarningColor);
+                ShowCommandOutcome(ctx, $"/{questionedInvocation.Command.Name} was not run", WarningColor);
                 break;
         }
         return true;
@@ -753,7 +757,7 @@ public sealed class ConsoleUiService : ITerminalUi
             ctx.Refresh();
         }
 
-        ShowSystemNotice(ctx, abandoned is null ? "command cancelled" : $"/{abandoned.Name} was not run", WarningColor);
+        ShowCommandOutcome(ctx, abandoned is null ? "command cancelled" : $"/{abandoned.Name} was not run", WarningColor);
         return true;
     }
 
@@ -768,7 +772,7 @@ public sealed class ConsoleUiService : ITerminalUi
             // No palette while Morgana is answering or outside a command line: the arrows scroll and Esc leaves.
             // A form asking for a value is not a command line either, whatever the value happens to start with:
             // a path opens with a slash and must not turn the prompt into a command picker
-            if (awaitingResponse || commandOptionPrompt.IsActive || !CommandPaletteService.IsCommandLine(currentInput))
+            if (awaitingResponse || commandRunning || commandOptionPrompt.IsActive || !CommandPaletteService.IsCommandLine(currentInput))
                 return false;
 
             switch (key)
@@ -809,13 +813,13 @@ public sealed class ConsoleUiService : ITerminalUi
             return currentInput.Length > 0 || key.KeyChar == '/';
     }
 
-    /// <summary>Runs the command resolved from <paramref name="line"/>; a missing or failing one is explained in the transcript.</summary>
+    /// <summary>Runs the command resolved from <paramref name="line"/>; a missing or failing one is explained above the prompt.</summary>
     private async Task RunCommandLineAsync(LiveDisplayContext ctx, string line, CommandDescriptor? command)
     {
         if (command is null)
         {
             // On a spent conversation the likely mistake is reaching for a command that needs Morgana
-            ShowSystemNotice(ctx, conversationDead
+            ShowCommandOutcome(ctx, conversationDead
                 ? $"{line.Trim()} is not available on a spent conversation: type /new to start a fresh one"
                 : $"{line.Trim()} is not a command: pick one with ↑↓ or type the start of its name", WarningColor);
             return;
@@ -826,7 +830,7 @@ public sealed class ConsoleUiService : ITerminalUi
         IReadOnlyDictionary<string, string> options = CommandLineParser.ParseOptions(line, out string? lineProblem);
         if (lineProblem is { } malformedLine)
         {
-            ShowSystemNotice(ctx, malformedLine, WarningColor);
+            ShowCommandOutcome(ctx, malformedLine, WarningColor);
             return;
         }
 
@@ -849,7 +853,7 @@ public sealed class ConsoleUiService : ITerminalUi
 
         if (command.DescribeOptionProblem(options) is { } problem)
         {
-            ShowSystemNotice(ctx, problem, WarningColor);
+            ShowCommandOutcome(ctx, problem, WarningColor);
             return;
         }
 
@@ -898,29 +902,46 @@ public sealed class ConsoleUiService : ITerminalUi
         }
     }
 
-    /// <summary>Runs <paramref name="invocation"/>, carrying the <paramref name="confirmed"/> answer it asked for; a failure is explained in the transcript.</summary>
+    /// <summary>Runs <paramref name="invocation"/>, carrying the <paramref name="confirmed"/> answer it asked for, while the prompt waits on it; a failure is explained above the prompt.</summary>
     private async Task RunCommandAsync(LiveDisplayContext ctx, CommandInvocation invocation, bool confirmed)
     {
-        commandRunning = true;
+        lock (renderLock)
+        {
+            // One command at a time: a second one would race the first for the widget and the outcome line
+            if (commandRunning)
+                return;
+            commandRunning = true;
+            runningCommandName = invocation.Command.Name;
+
+            // The previous command's outcome gives way to the hint naming this one
+            commandOutcome = null;
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+
         try
         {
-            // The command decides what happens next through this UI: leave, open a turn or swap the conversation
+            // The command decides what happens next through this UI: leave, report or swap the conversation
             await commandRegistry.ExecuteCommandAsync(invocation, this, confirmed, commandCancellation.Token);
         }
         catch (OperationCanceledException) when (commandCancellation.IsCancellationRequested)
         {
             // Rune is shutting down: the command dies with it
         }
+        catch (TimeoutException ex)
+        {
+            // The command's deadline already names the command and says it was called off
+            ShowCommandOutcome(ctx, ex.Message, ErrorColor);
+        }
         catch (Exception ex)
         {
-            // Logging is silenced under the live UI, so the transcript is the only place the failure can surface
-            ShowSystemNotice(ctx, $"/{invocation.Command.Name} failed: {ex.Message}", ErrorColor);
+            // Logging is silenced under the live UI, so the outcome line is the only place the failure can surface
+            ShowCommandOutcome(ctx, $"/{invocation.Command.Name} failed: {ex.Message}", ErrorColor);
         }
         finally
         {
-            // A command that worked here is over: whatever it was drawing goes with it, a command that died
-            // halfway through included. One that opened a turn on Morgana keeps its widget until that turn
-            // ends, which is what the arriving reply or the silence deadline settles
+            // The command is over: whatever it was drawing goes with it, one that died halfway through included.
+            // Only /new leaves a turn open behind it, waiting on the fresh conversation's presentation
             commandRunning = false;
             lock (renderLock)
             {
@@ -942,14 +963,13 @@ public sealed class ConsoleUiService : ITerminalUi
     private TerminalConversationState ConversationState() =>
         new(conversationDead, agentCarryingConversation is not null);
 
-    /// <summary>
-    /// Opens a turn on the wire: from here the silence deadline is measured, along with how long what a
-    /// command reports may keep renewing it. Must be called under <see cref="renderLock"/>.
-    /// </summary>
+    /// <summary>Opens a turn on the wire, from which the silence deadline is measured. Must be called under <see cref="renderLock"/>.</summary>
     private void BeginTurn()
     {
         awaitingResponse = true;
-        turnStartedAtUtc = DateTime.UtcNow;
+
+        // The conversation has moved on, so what the last command came to is no longer news
+        commandOutcome = null;
     }
 
     /// <summary>
@@ -1004,11 +1024,31 @@ public sealed class ConsoleUiService : ITerminalUi
     }
 
     /// <inheritdoc />
-    public void ShowNotice(string text, bool isFailure = false) =>
-        ShowSystemNotice(liveContext, text, isFailure ? ErrorColor : CommandReportColor);
+    public void ShowCommandOutcome(string text, bool isFailure = false) =>
+        ShowCommandOutcome(liveContext, text, isFailure ? ErrorColor : CommandReportColor);
 
-    /// <inheritdoc />
-    public Task SubmitTurnAsync(string echo, Func<Task> dispatch) => SubmitTurnAsync(liveContext, echo, dispatch);
+    /// <summary>Draws <paramref name="text"/> above the prompt in <paramref name="color"/> as the outcome of the command just run.</summary>
+    private void ShowCommandOutcome(LiveDisplayContext ctx, string text, string color)
+    {
+        lock (renderLock)
+        {
+            // A command still finishing after the user left must not draw over the shell the display gave back
+            if (exitRequested)
+                return;
+
+            SetCommandOutcome(text, color);
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+    }
+
+    /// <summary>Records what a command came to, cleaned of anything the terminal would obey. Must be called under <see cref="renderLock"/>.</summary>
+    private void SetCommandOutcome(string text, string color)
+    {
+        // Morgana's outcome arrives over the unauthenticated callback, so it is drawn only once it is plain text
+        commandOutcome = TerminalCellService.StripControlCharacters(text);
+        commandOutcomeColor = color;
+    }
 
     /// <summary>Echoes <paramref name="echo"/> as the user's line, then sends the turn through <paramref name="dispatch"/> under the reply deadline.</summary>
     private async Task SubmitTurnAsync(LiveDisplayContext ctx, string echo, Func<Task> dispatch)
@@ -1135,7 +1175,8 @@ public sealed class ConsoleUiService : ITerminalUi
         // A fresh budget: the spent latch of the old conversation is gone
         conversationDead = false;
 
-        // The view and the prompt start clean, the /new line included
+        // The view and the prompt start clean, the /new line and any command outcome included
+        commandOutcome = null;
         scrollOffset = 0;
         currentInput = string.Empty;
         cursorPosition = 0;
@@ -1474,7 +1515,10 @@ public sealed class ConsoleUiService : ITerminalUi
         // measures the resolved glyph correctly. Order: resolve first, then strip variation
         // selectors from the produced glyphs so the cell-width accounting stays exact.
         string text = cells.StripVariationSelectors(BlankRunRegex.Replace(Emoji.Replace(message.Text.Trim()), "\n\n"));
-        string fullText = $"{message.Who}: {text}";
+        // The channel's own notices are no speaker of the conversation, so they carry no dot. The dot is
+        // wrapped with the row it opens, so the cell budget of that row counts it
+        string? speakerMarkerColor = message.Who == channelSpeaker ? null : SpeakerColor(message.Who);
+        string fullText = speakerMarkerColor is null ? $"{message.Who}: {text}" : $"{SpeakerMarker}{message.Who}: {text}";
         bool first = true;
         foreach (string line in fullText.Split('\n'))
         {
@@ -1484,18 +1528,27 @@ public sealed class ConsoleUiService : ITerminalUi
             // BuildBody's scrollback budget depends on.
             foreach (string chunk in cells.Wrap(line, termWidth))
             {
-                EmitMessageRow(rows, message, chunk, isFirstRowOfMessage: first);
+                EmitMessageRow(rows, message, chunk, isFirstRowOfMessage: first, speakerMarkerColor);
                 first = false;
             }
         }
         return rows;
     }
 
-    /// <summary>Renders a single pre-wrapped row of a message: bold "Who:" prefix on the very first row, same speaker colour without bold on every other row.</summary>
-    private static void EmitMessageRow(List<IRenderable> output, DisplayedMessage message, string chunk, bool isFirstRowOfMessage)
+    /// <summary>Renders a single pre-wrapped row of a message: the speaker's dot and a bold "Who:" prefix on the very first row, same speaker colour without bold on every other row.</summary>
+    private static void EmitMessageRow(List<IRenderable> output, DisplayedMessage message, string chunk, bool isFirstRowOfMessage, string? speakerMarkerColor)
     {
         if (isFirstRowOfMessage)
         {
+            // The dot takes the speaker's own colour even when the row wears a warning's: who spoke and what
+            // kind of line it is read apart. It is drawn ahead of the name and is no part of the message
+            string marker = string.Empty;
+            if (speakerMarkerColor is not null && chunk.StartsWith(SpeakerMarker, StringComparison.Ordinal))
+            {
+                marker = $"[{speakerMarkerColor}]●[/] ";
+                chunk = chunk[SpeakerMarker.Length..];
+            }
+
             // First row of the message — bold the "Who:" prefix, then the rest of the
             // row in the same colour but non-bold. If the speaker name itself wraps
             // past the colon, fall back to bolding the whole chunk so the message
@@ -1505,11 +1558,11 @@ public sealed class ConsoleUiService : ITerminalUi
             {
                 string who = chunk[..colonIdx];
                 string rest = chunk[(colonIdx + 1)..];
-                output.Add(new Markup($"[bold {message.Color}]{Markup.Escape(who)}:[/][{message.Color}]{Markup.Escape(rest)}[/]"));
+                output.Add(new Markup($"{marker}[bold {message.Color}]{Markup.Escape(who)}:[/][{message.Color}]{Markup.Escape(rest)}[/]"));
             }
             else
             {
-                output.Add(new Markup($"[bold {message.Color}]{Markup.Escape(chunk)}[/]"));
+                output.Add(new Markup($"{marker}[bold {message.Color}]{Markup.Escape(chunk)}[/]"));
             }
         }
         else
@@ -1547,10 +1600,19 @@ public sealed class ConsoleUiService : ITerminalUi
         if ((awaitingResponse || commandRunning) && commandProgress.IsActive)
             return [.. commandProgress.RenderProgress(termWidth)];
 
+        // A command that has not reported yet still holds the prompt and says so: a line typed now would be lost
+        if (commandRunning && !awaitingResponse)
+            return ChunkStyledRows($"/{runningCommandName} is running…", termWidth, $"{CommandReportColor} italic");
+
+        // What the last command came to sits above whatever the prompt is now, in place of the widget it follows
+        List<IRenderable> outcomeRows = commandOutcome is { } outcome
+            ? ChunkStyledRows(outcome, termWidth, commandOutcomeColor)
+            : [];
+
         // Terminal state supersedes everything but a command line being typed, which is how the user gets
         // out of it. Morgana's banner already told the user the dust ran out; here they learn the way on.
         if (conversationDead && !CommandPaletteService.IsCommandLine(currentInput))
-            return ChunkStyledRows("✦ Conversation spent — type /new to start a fresh one or press Esc to quit", termWidth, $"{ErrorColor} italic");
+            return [.. outcomeRows, .. ChunkStyledRows("✦ Conversation spent — type /new to start a fresh one or press Esc to quit", termWidth, $"{ErrorColor} italic")];
 
         if (awaitingResponse)
         {
@@ -1612,7 +1674,7 @@ public sealed class ConsoleUiService : ITerminalUi
         }
         if (sb.Length > 0)
             rows.Add(new Markup(sb.ToString()));
-        return FramePromptRows([.. optionPromptRows, .. rows], termWidth);
+        return FramePromptRows([.. outcomeRows, .. optionPromptRows, .. rows], termWidth);
     }
 
     /// <summary>Sandwiches the free-text input row between two full-width rules in the same grey as the header panel's border, so the caret isn't the only thing marking "you type here". Not used for the thinking hint or the dead-conversation notice — those already read as "not a normal turn" on their own.</summary>
@@ -1678,6 +1740,9 @@ public sealed class ConsoleUiService : ITerminalUi
         return sanitized.ToString();
     }
 
+    /// <summary>What opens the first row of a line the user or Morgana's side said, ahead of the speaker's name. Drawn only.</summary>
+    private const string SpeakerMarker = "● ";
+
     /// <summary>Maps a speaker name to its palette color: <c>You</c> → white, <c>Morgana</c> → emerald green, everything else (specialised agents) → light green.</summary>
     private static string SpeakerColor(string agentName)
     {
@@ -1691,9 +1756,8 @@ public sealed class ConsoleUiService : ITerminalUi
     /// <summary>
     /// Row color for an inbound message: advisory warnings (rate-limit, low-budget —
     /// <c>MessageType="system_warning"</c>) render orange, error notices (dust exhausted,
-    /// delivery error — <c>MessageType="error"</c>) render red, what a command reports
-    /// (<c>MessageType="system"</c>) renders in its own neutral grey, everything else keeps the
-    /// speaker's palette color. Rune has no banner widget, so color is the only signal that
+    /// delivery error — <c>MessageType="error"</c>) render red, everything else keeps the
+    /// speaker's palette color. What a command reports never reaches the transcript. Rune has no banner widget, so color is the only signal that
     /// separates a diagnostic line from an ordinary turn.
     /// </summary>
     private static string RowColor(ChannelMessage message, string speaker)
@@ -1702,11 +1766,6 @@ public sealed class ConsoleUiService : ITerminalUi
             return ErrorColor;
         if (string.Equals(message.MessageType, "system_warning", StringComparison.OrdinalIgnoreCase))
             return WarningColor;
-
-        // What a command run on Morgana reports comes back as a system line: it is the outcome of work the
-        // user asked for, never Morgana taking a turn, so it must not wear her colour
-        if (string.Equals(message.MessageType, "system", StringComparison.OrdinalIgnoreCase))
-            return CommandReportColor;
         return SpeakerColor(speaker);
     }
 

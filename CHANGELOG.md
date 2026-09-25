@@ -1,8 +1,8 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
 ## [0.32.0] - UNDER DEVELOPMENT
@@ -12,9 +12,10 @@ Grimoire and Rune now take **commands**: type `/` at the prompt and a palette op
 ### ✨ Added
 - **Command palette in Grimoire and Rune**: every command this installation publishes, plus the channel's own, one keystroke from the prompt
 - **Confirmation on what cannot be undone**: a command declares that it must be confirmed; the user is asked before it runs
+- **Turn marker in Grimoire and Rune**: a dot in the speaker's own colour opens every line of the conversation, so a long transcript reads as turns rather than a wall of text
 
 ### 🔄 Changed
-- Introduced `Morgana.Terminal` library to decouple Grimoire and Rune from the plumbing aspects they share (authentication, Morgana client, webhook dispatcher, terminal rendering), leaving each channel to declare only its own capability profile
+- Introduced **`Morgana.Terminal`** library to decouple Grimoire and Rune from the plumbing aspects they share (authentication, Morgana client, webhook dispatcher, terminal rendering), leaving each channel to declare only its own capability profile
 
 ### 🐛 Fixed
 - Morgana now remembers the whole conversation as it appears on screen: nothing disappears on a refresh any more, neither the message just sent nor anything already shown
