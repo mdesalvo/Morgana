@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Morgana.Contracts;
 using PromptHarness.Infrastructure.Wiring;
 using Xunit;
 
@@ -100,12 +101,64 @@ public sealed class RateLimitTests
         Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
     }
 
-    /// <summary>A conversation on record with billing carrying it, so /compact is admitted and runs.</summary>
-    private async Task<string> SeedConversationWithAgentAsync()
+    [Fact]
+    public async Task Command_past_the_window_is_told_as_its_own_outcome()
+    {
+        int callsPerMinute = CallsPerMinute();
+        string conversationId = await SeedConversationWithAgentAsync(deliverToHarnessChannel: true);
+
+        for (int call = 1; call <= callsPerMinute; call++)
+            Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await SendCompactAsync(conversationId)).StatusCode);
+
+        // The refusal is the command's outcome: its finished frame, naming it, so a channel draws it where the
+        // command's outcome goes and keeps it out of the transcript. The reason still travels for the channel to act on
+        ChannelMessage refusal = await ReceiveRefusalAsync(conversationId);
+        Assert.Equal("system", refusal.MessageType);
+        Assert.NotNull(refusal.Progress);
+        Assert.Equal("compact", refusal.Progress.Command);
+        Assert.True(refusal.Progress.Finished, "The refusal of a command did not close the command's widget.");
+        Assert.False(string.IsNullOrWhiteSpace(refusal.Text), "The refusal of a command told the user nothing.");
+    }
+
+    [Fact]
+    public async Task Message_past_the_window_is_told_as_a_notice()
+    {
+        int callsPerMinute = CallsPerMinute();
+        string conversationId = await SeedConversationWithAgentAsync(deliverToHarnessChannel: true);
+
+        for (int call = 1; call <= callsPerMinute; call++)
+            Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendAsync(
+            "POST", "/api/morgana/conversation/{id}/message", conversationId, api.HarnessToken())).StatusCode);
+
+        // A refused message is a notice about the conversation, which a channel shows in it: no frame belongs to it
+        ChannelMessage refusal = await ReceiveRefusalAsync(conversationId);
+        Assert.Equal("system_warning", refusal.MessageType);
+        Assert.Null(refusal.Progress);
+    }
+
+    /// <summary>
+    /// A conversation on record with billing carrying it, so /compact is admitted and runs. Its deliveries reach
+    /// the harness channel only when <paramref name="deliverToHarnessChannel"/> asks for them to be read.
+    /// </summary>
+    private async Task<string> SeedConversationWithAgentAsync(bool deliverToHarnessChannel = false)
     {
         string conversationId = ChannelApiClient.NewConversationId();
-        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
+        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing",
+            deliverToHarnessChannel ? fixture.Channel.CallbackUrl : null);
         return conversationId;
+    }
+
+    /// <summary>The rate limit's refusal among what the conversation was told, past the outcomes of the commands that filled the window.</summary>
+    private async Task<ChannelMessage> ReceiveRefusalAsync(string conversationId)
+    {
+        while (true)
+        {
+            ChannelMessage delivered = await fixture.Channel.ReceiveAsync(conversationId, TimeSpan.FromSeconds(15));
+            if (delivered.ErrorReason == "rate_limit_exceeded")
+                return delivered;
+        }
     }
 
     /// <summary>One /compact on the conversation, the call every test here counts with.</summary>

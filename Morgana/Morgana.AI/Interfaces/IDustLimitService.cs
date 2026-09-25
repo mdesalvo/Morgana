@@ -39,8 +39,9 @@ public interface IDustLimitService
     Task<double> GetConsumedSinceAsync(string conversationId, double baseline);
 
     /// <summary>
-    /// Ratio of consumed dust to the configured budget (0.0 to &gt;1.0). 0.0 when the
-    /// conversation has no usage yet, when dust limiting is disabled, or on error.
+    /// Ratio of consumed dust to the configured budget (0.0 to &gt;1.0).
+    /// 0.0 when the conversation has no usage yet, when dust limiting is disabled or on error.
+    /// 1.0 on a budget of zero, which is spent before anything is charged.
     /// </summary>
     Task<double> GetUsageRatioAsync(string conversationId);
 

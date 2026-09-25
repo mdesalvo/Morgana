@@ -296,7 +296,7 @@ public static class Records
         /// <summary>Master toggle. When false the limiter is fully bypassed (fail open).</summary>
         public bool Enabled { get; set; }
 
-        /// <summary>Total dust a conversation may consume over its lifetime.</summary>
+        /// <summary>Total dust a conversation may consume over its lifetime. Zero is a valid budget: spent from the start, so no turn or command is ever admitted.</summary>
         public double BudgetPerConversation { get; set; }
 
         /// <summary>One-shot advisory shown when consumption crosses 70%.</summary>

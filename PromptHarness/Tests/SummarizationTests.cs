@@ -1,3 +1,4 @@
+using Morgana.Contracts;
 using PromptHarness.Infrastructure.Engine;
 using PromptHarness.Infrastructure.Wiring;
 using Xunit;
@@ -33,5 +34,49 @@ public sealed class SummarizationTests
         ScenarioOutcome outcome = await fixture.Runner.RunAsync(scenarioId);
 
         Assert.True(outcome.Passed, outcome.Report());
+    }
+
+    /// <summary>
+    /// A /compact the channel stopped waiting on writes nothing and tells nothing: the channel already told the
+    /// user it was called off. Two real turns give billing a history worth folding, then the call is dropped while
+    /// the summary is being composed. The agent's row is never rewritten and no outcome is delivered after it.
+    /// </summary>
+    [Fact]
+    public async Task Compact_the_channel_gave_up_on_writes_and_tells_nothing()
+    {
+        ChannelApiClient api = new ChannelApiClient(fixture);
+        (string conversationId, ChannelMessage _) = await fixture.Channel.StartConversationAsync(TimeSpan.FromSeconds(180));
+        await fixture.Channel.SendAsync(conversationId, "Vorrei vedere le mie fatture, il mio codice cliente è P994E", TimeSpan.FromSeconds(180));
+        await fixture.Channel.SendAsync(conversationId, "Quali risultano ancora da pagare?", TimeSpan.FromSeconds(180));
+
+        // Half a second reaches the summarization call, which no model answers that fast: the channel gives up
+        // on a command that is working, which is the case a deadline exists for
+        int logMark = fixture.Observer.Mark();
+        using CancellationTokenSource channelDeadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            api.SendCommandAsync(conversationId, """{"name":"compact"}""", channelDeadline.Token));
+
+        // Morgana notices the dropped call and stops, saying so in its log alone
+        DateTime giveUpAt = DateTime.UtcNow.AddSeconds(60);
+        while (!fixture.Output.Since(logMark).Any(line => line.Contains("was abandoned by the channel")) && DateTime.UtcNow < giveUpAt)
+            await Task.Delay(250);
+        IReadOnlyList<string> log = fixture.Output.Since(logMark);
+        Assert.True(log.Any(line => line.Contains("was abandoned by the channel")), "Morgana never noticed the channel had stopped waiting on /compact.");
+        Assert.False(log.Any(line => line.Contains("Rewrote the")), "/compact rewrote the agent's history after the channel had stopped waiting on it.");
+        Assert.Equal(0L, await api.QueryRecordAsync(conversationId, "SELECT is_dirty FROM morgana WHERE agent_name = 'billing';"));
+
+        // Frames sent before the call was dropped may still land; an outcome never does, since it would contradict
+        // what the channel already told the user
+        List<ChannelMessage> delivered = [];
+        try
+        {
+            while (true)
+                delivered.Add(await fixture.Channel.ReceiveAsync(conversationId, TimeSpan.FromSeconds(5)));
+        }
+        catch (TimeoutException)
+        {
+            // Nothing more arrived: every delivery the command made is in the list
+        }
+        Assert.DoesNotContain(delivered, message => message.Progress is { Finished: true });
     }
 }

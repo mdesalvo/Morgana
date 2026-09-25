@@ -5,7 +5,8 @@ namespace Morgana.AI.Services;
 
 /// <summary>
 /// Publishes every <see cref="ICommand"/> registered in DI, in registration order.
-/// Two commands claiming one name is fatal at startup, like every other registry's refusal.
+/// Two commands claiming one name or a command declaring one option twice is fatal at startup, like every
+/// other registry's refusal.
 /// </summary>
 public sealed class CommandRegistryService : ICommandRegistryService
 {
@@ -16,12 +17,16 @@ public sealed class CommandRegistryService : ICommandRegistryService
     private readonly IReadOnlyList<CommandDescriptor> catalog;
 
     /// <summary>Indexes the installed commands by name.</summary>
-    /// <exception cref="InvalidOperationException">Thrown when two commands answer to the same name.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when two commands answer to the same name or one declares itself wrongly.</exception>
     public CommandRegistryService(IEnumerable<ICommand> commands)
     {
         List<CommandDescriptor> descriptors = [];
         foreach (ICommand command in commands)
         {
+            // A declaration a channel could not run as written is refused before any channel is offered it
+            if (command.Descriptor.DescribeDeclarationProblem() is { } declarationProblem)
+                throw new InvalidOperationException($"{command.GetType().Name}: {declarationProblem}.");
+
             // A name resolved to two commands would leave the channel's request to whichever registered first
             string name = command.Descriptor.Name;
             if (!commandsByName.TryAdd(name, command))

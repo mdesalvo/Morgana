@@ -27,7 +27,7 @@ public sealed class TerminalCommandRegistryService
     private volatile IReadOnlyList<CommandDescriptor> morganaCommands = [];
 
     /// <summary>Discovers and builds the terminal's own commands.</summary>
-    /// <exception cref="InvalidOperationException">Thrown when two of them answer to the same name.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when two of them answer to the same name or one declares itself wrongly.</exception>
     public TerminalCommandRegistryService(IServiceProvider services, MorganaClientService morganaClientService, TerminalSessionService session)
     {
         this.morganaClientService = morganaClientService;
@@ -44,6 +44,10 @@ public sealed class TerminalCommandRegistryService
         {
             // Each command asks DI for what it needs, as a service would
             TerminalCommand command = (TerminalCommand)ActivatorUtilities.CreateInstance(services, commandType);
+
+            // A declaration the prompt could not run as written is refused by the rule Morgana applies to its own
+            if (command.Descriptor.DescribeDeclarationProblem() is { } declarationProblem)
+                throw new InvalidOperationException($"{commandType.Name}: {declarationProblem}.");
 
             // Two commands answering to one name would leave the palette guessing which one Enter runs
             if (discoveredCommands.Any(other => AnswersToName(other.Descriptor, command.Descriptor.Name)))

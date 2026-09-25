@@ -25,6 +25,16 @@ public record CommandDescriptor(
     bool RequiresActiveAgent = false)
 {
     /// <summary>
+    /// What is wrong with how this command declares itself, as a line naming the fault; null when nothing is.
+    /// Every registry asks this at startup, so a declaration is judged by one rule wherever the command lives.
+    /// </summary>
+    public string? DescribeDeclarationProblem() =>
+        // Options are matched ignoring case, so two spelled alike would hand the typed value to whichever came first
+        (Options ?? []).GroupBy(option => option.Name, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1) is { } clash
+            ? $"/{Name} declares the option '{clash.Key}' more than once"
+            : null;
+
+    /// <summary>
     /// What is wrong with <paramref name="options"/> for this command, as a line the user can read; null when
     /// nothing is. Both sides of the wire ask this, so an option is judged by one rule wherever it was typed.
     /// </summary>

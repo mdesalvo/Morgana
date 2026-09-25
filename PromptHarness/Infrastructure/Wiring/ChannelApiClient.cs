@@ -64,18 +64,21 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
             : await httpClient.PostAsJsonAsync(address, body);
     }
 
-    /// <summary>Posts a raw JSON body as the harness channel, so a malformed request reaches the gate as written.</summary>
-    public async Task<HttpResponseMessage> PostJsonAsync(string path, string json)
+    /// <summary>
+    /// Posts a raw JSON body as the harness channel, so a malformed request reaches the gate as written.
+    /// <paramref name="cancellationToken"/> gives the call up as a channel that stopped waiting would.
+    /// </summary>
+    public async Task<HttpResponseMessage> PostJsonAsync(string path, string json, CancellationToken cancellationToken = default)
     {
         using HttpClient httpClient = new HttpClient();
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", HarnessToken());
 
-        return await httpClient.PostAsync($"{fixture.BaseAddress}{path}", new StringContent(json, Encoding.UTF8, "application/json"));
+        return await httpClient.PostAsync($"{fixture.BaseAddress}{path}", new StringContent(json, Encoding.UTF8, "application/json"), cancellationToken);
     }
 
     /// <summary>Asks for a command on the conversation the route names, with the body written as given.</summary>
-    public Task<HttpResponseMessage> SendCommandAsync(string routeConversationId, string json) =>
-        PostJsonAsync($"/api/morgana/conversation/{routeConversationId}/command", json);
+    public Task<HttpResponseMessage> SendCommandAsync(string routeConversationId, string json, CancellationToken cancellationToken = default) =>
+        PostJsonAsync($"/api/morgana/conversation/{routeConversationId}/command", json, cancellationToken);
 
     /// <summary>
     /// Starts a conversation with a well-formed handshake as the harness channel. The callback points
@@ -91,21 +94,21 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
     /// handshake written by the host's own persistence service, plus, when asked, the agent carrying it.
     /// </summary>
     /// <param name="activeAgent">Intent of the agent left mid-exchange; null when none is.</param>
-    public async Task SeedConversationOnRecordAsync(string conversationId, string? activeAgent)
+    /// <param name="callbackUrl">
+    /// Where Morgana delivers what it tells the user, for a test that reads it; null leaves the deliveries to
+    /// nobody.
+    /// </param>
+    public async Task SeedConversationOnRecordAsync(string conversationId, string? activeAgent, string? callbackUrl = null)
     {
-        SQLiteConversationPersistenceService persistenceService = new SQLiteConversationPersistenceService(
-            Microsoft.Extensions.Options.Options.Create(new Records.ConversationPersistenceOptions
-            {
-                StoragePath = fixture.StoragePath,
-                EncryptionKey = fixture.Configuration["Morgana:ConversationPersistence:EncryptionKey"]!
-            }),
-            NullLogger.Instance);
+        SQLiteConversationPersistenceService persistenceService = HostPersistenceService();
 
         // A SignalR channel with nobody connected takes every push at once: whatever a command or a
-        // limit tells the user costs the call no redelivery wait
+        // limit tells the user costs the call no redelivery wait. A webhook is chosen only to be read
         await persistenceService.SaveChannelMetadataAsync(conversationId, new ChannelMetadata
         {
-            Coordinates = new ChannelCoordinates { ChannelName = "harness", DeliveryMode = "signalr" },
+            Coordinates = callbackUrl is null
+                ? new ChannelCoordinates { ChannelName = "harness", DeliveryMode = "signalr" }
+                : new ChannelCoordinates { ChannelName = "harness", DeliveryMode = "webhook", CallbackUrl = callbackUrl },
             Capabilities = new ChannelCapabilities(
                 SupportsRichCards: true, SupportsQuickReplies: true, SupportsStreaming: true, SupportsMarkdown: true, MaxMessageLength: null)
         });
@@ -128,6 +131,30 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
         command.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("O"));
         await command.ExecuteNonQueryAsync();
     }
+
+    /// <summary>
+    /// Runs <paramref name="sql"/> on the conversation's own database, answering the first value it reads: how a
+    /// test puts a record in a state no call reaches, or reads one no endpoint reports.
+    /// </summary>
+    public async Task<object?> QueryRecordAsync(string conversationId, string sql)
+    {
+        await using SqliteConnection connection = new SqliteConnection(
+            $"Data Source={Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.db")};Pooling=False");
+        await connection.OpenAsync();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = sql;
+        return await command.ExecuteScalarAsync();
+    }
+
+    /// <summary>The host's own persistence, on the run's storage and key: a record it writes is one the host reads as its own.</summary>
+    public SQLiteConversationPersistenceService HostPersistenceService() =>
+        new SQLiteConversationPersistenceService(
+            Microsoft.Extensions.Options.Options.Create(new Records.ConversationPersistenceOptions
+            {
+                StoragePath = fixture.StoragePath,
+                EncryptionKey = fixture.Configuration["Morgana:ConversationPersistence:EncryptionKey"]!
+            }),
+            NullLogger.Instance);
 
     /// <summary>Whether the host keeps a record of the conversation: its own database in the run's storage path.</summary>
     public bool ConversationIsOnRecord(string conversationId) =>
