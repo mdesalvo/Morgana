@@ -169,6 +169,19 @@ public static class Constants
     }
 
     /// <summary>
+    /// Why Morgana refused to take a call, declared on <c>ChannelMessage.ErrorReason</c>. A channel reads it to
+    /// act on the refusal rather than merely paint it: a spent budget ends the conversation on its side too.
+    /// </summary>
+    public static class ErrorReasons
+    {
+        /// <summary>The conversation called too often in one of its windows; it may call again later.</summary>
+        public const string RateLimitExceeded = "rate_limit_exceeded";
+
+        /// <summary>The conversation's dust budget is spent: it will take no further turn or command.</summary>
+        public const string DustBudgetExhausted = "dust_budget_exhausted";
+    }
+
+    /// <summary>
     /// The base tools whose names travel further than the tool loop: a stored function call is
     /// recognised by name when a conversation's history is replayed, long after the agent that made
     /// it is gone.

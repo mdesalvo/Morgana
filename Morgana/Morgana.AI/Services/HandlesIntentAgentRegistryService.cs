@@ -9,8 +9,8 @@ namespace Morgana.AI.Services;
 
 /// <summary>
 /// Discovers agents via [HandlesIntent] attribute with bidirectional validation.
-/// Scans assemblies for MorganaAgent classes; validates: intents in config have agents, agents in code have config,
-/// and every declared peer consultation names an existing colleague. Performs LLM tier validation; throws on any mismatch.
+/// Scans assemblies for MorganaAgent classes; validates that intents in config have agents, that agents in code have
+/// config and that every declared peer consultation names an existing colleague. Performs LLM tier validation; throws on any mismatch.
 /// </summary>
 public class HandlesIntentAgentRegistryService : IAgentRegistryService
 {
@@ -61,7 +61,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     }
 
     /// <summary>
-    /// Scans every loaded assembly for <see cref="MorganaAgent"/> subclasses declaring an intent,
+    /// Scans every loaded assembly for <see cref="MorganaAgent"/> subclasses declaring an intent
     /// and returns the intent-to-type map, without validating it.
     /// </summary>
     /// <returns>Intent to agent type, case-insensitive; agents without <c>[HandlesIntent]</c> are skipped.</returns>

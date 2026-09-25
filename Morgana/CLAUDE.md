@@ -220,7 +220,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `LLMClassifierService` | `IClassifierService` | LLM intent classification; falls back to `"other"` at confidence 0 |
 | `LLMGuardRailService` | `IGuardRailService` | LLM policy check. **Fails open** |
 | `LLMPresenterService` | `IPresenterService` | Welcome message and quick replies. Never throws |
-| `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or alias is fatal |
+| `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name is fatal |
 | `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json`, domain from `agents.json`. Throws if one ID is declared in both |
 | `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads: the fenced two-layer prompt, tool descriptions, the per-turn held-context declaration, the colleagues declaration, a colleague's question |

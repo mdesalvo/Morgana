@@ -731,7 +731,7 @@ public class ConversationSupervisorActor : MorganaActor
                 }
 
                 // Sends the agent's response back to the client, forwarding the classification's
-                // intent and metadata, the agent's completion flag, quick replies and rich card,
+                // intent and metadata, the agent's completion flag, quick replies, rich card
                 // and the timestamp the reply is recorded under.
                 ctx.OriginalSender.Tell(new Records.ConversationResponse(
                     response.Response,

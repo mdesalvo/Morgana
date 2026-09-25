@@ -63,7 +63,6 @@ public sealed class CompactHistoryCommand : ICommand
     public CommandDescriptor Descriptor { get; } = new(
         "compact",
         "Summarize what this agent has been told, so it carries less of it",
-        Aliases: ["summarize"],
 
         // What it folds is an agent's own history: offered while an agent is carrying the conversation, refused
         // otherwise, so it can never reach the welcome and the refusals Morgana writes in her own voice
@@ -80,8 +79,7 @@ public sealed class CompactHistoryCommand : ICommand
         // the command declares it needs one, so a conversation Morgana is holding herself never gets here
         if (await persistenceService.GetMostRecentActiveAgentAsync(conversationId) is not { Length: > 0 } agent)
         {
-            await ClearProgressAsync(conversationId);
-            await SendLineAsync(conversationId, "There is nothing to compact: no agent is carrying this conversation right now.");
+            await SendOutcomeAsync(conversationId, "There is nothing to compact: no agent is carrying this conversation right now.");
             return;
         }
 
@@ -97,13 +95,9 @@ public sealed class CompactHistoryCommand : ICommand
 
             int foldedMessages = await FoldAgentHistoryAsync(conversationId, agent, cancellationToken);
 
-            // The widget comes off the screen before the outcome is written, so the conversation closes on
-            // a line rather than on a bar left at its last step
-            await ClearProgressAsync(conversationId);
-
             // An agent still holding a history short enough to read whole folds nothing, which is an answer in
             // itself: the user asked for a saving that turned out not to be needed, not for a failure
-            await SendLineAsync(conversationId, foldedMessages == 0
+            await SendOutcomeAsync(conversationId, foldedMessages == 0
                 ? $"Nothing needed compacting: {agent} still carries a history short enough to read whole."
                 : $"Compacted {foldedMessages} message{(foldedMessages == 1 ? string.Empty : "s")} of {agent}. Nothing was lost from the transcript.");
         }
@@ -120,10 +114,7 @@ public sealed class CompactHistoryCommand : ICommand
             // exactly as it was: the fold reaches the record in one write or not at all
             logger.LogError(ex, "Failed to compact the history of '{Agent}' in conversation {ConversationId}", agent, conversationId);
 
-            // The widget belongs to a command that is no longer running, whatever happened to the fold: a bar
-            // left standing would hold the prompt on work nobody is doing
-            await ClearProgressAsync(conversationId);
-            await SendLineAsync(conversationId, $"Compacting {agent} did not go through: its history is untouched.");
+            await SendOutcomeAsync(conversationId, $"Compacting {agent} did not go through: its history is untouched.");
         }
     }
 
@@ -213,25 +204,17 @@ public sealed class CompactHistoryCommand : ICommand
             Progress = new CommandProgress(Descriptor.Name, label, completed, ProgressSteps)
         });
 
-    /// <summary>Takes the widget off the screen, whatever the fold behind it came to.</summary>
-    private Task ClearProgressAsync(string conversationId) =>
+    /// <summary>
+    /// Sends the finished frame carrying the command's outcome, whatever the fold came to: the widget comes off
+    /// the screen and the outcome takes its place in one delivery, so no bar is left standing on work nobody is doing.
+    /// </summary>
+    private Task SendOutcomeAsync(string conversationId, string outcome) =>
         channelService.SendMessageAsync(new ChannelMessage
         {
             ConversationId = conversationId,
-            Text = "Compacting: done",
+            Text = outcome,
             MessageType = Constants.MessageTypes.System,
             AgentName = Constants.Morgana,
-            FadingMessageDurationSeconds = 3,
             Progress = new CommandProgress(Descriptor.Name, "done", ProgressSteps, ProgressSteps, Finished: true)
-        });
-
-    /// <summary>Writes the command's own outcome into the conversation, which is where the user reads it.</summary>
-    private Task SendLineAsync(string conversationId, string text) =>
-        channelService.SendMessageAsync(new ChannelMessage
-        {
-            ConversationId = conversationId,
-            Text = text,
-            MessageType = Constants.MessageTypes.System,
-            AgentName = Constants.Morgana
         });
 }

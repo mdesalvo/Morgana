@@ -31,15 +31,7 @@ public sealed class ConversationLimitsFilter(
 
             // The user hears why over the channel; the 429 below is for the client, which does not show it
             string rateLimitViolation = GetRateLimitErrorMessage(rateLimitResult);
-            await channelService.SendMessageAsync(new ChannelMessage
-            {
-                ConversationId = conversationId,
-                Text = rateLimitViolation,
-                MessageType = "system_warning",
-                ErrorReason = "rate_limit_exceeded",
-                AgentName = "Morgana",
-                AgentCompleted = false
-            });
+            await channelService.SendMessageAsync(RefusalOf(context, conversationId, rateLimitViolation, Constants.MessageTypes.SystemWarning, Constants.ErrorReasons.RateLimitExceeded));
 
             // A window that reports no wait still gets a minute, so a client never retries in a tight loop
             context.HttpContext.Response.Headers.Append("Retry-After", rateLimitResult.RetryAfterSeconds?.ToString() ?? "60");
@@ -59,15 +51,7 @@ public sealed class ConversationLimitsFilter(
         {
             logger.LogWarning("Dust budget exhausted for conversation {ConversationId}", conversationId);
 
-            await channelService.SendMessageAsync(new ChannelMessage
-            {
-                ConversationId = conversationId,
-                Text = dustLimitingOptions.Value.ErrorMessage,
-                MessageType = "error",
-                ErrorReason = "dust_budget_exhausted",
-                AgentName = "Morgana",
-                AgentCompleted = false
-            });
+            await channelService.SendMessageAsync(RefusalOf(context, conversationId, dustLimitingOptions.Value.ErrorMessage, Constants.MessageTypes.Error, Constants.ErrorReasons.DustBudgetExhausted));
 
             context.Result = new ObjectResult(new
             {
@@ -78,6 +62,32 @@ public sealed class ConversationLimitsFilter(
         }
 
         await next();
+    }
+
+    /// <summary>
+    /// The message telling the user why the call was refused. A refused message is a notice in the conversation
+    /// of <paramref name="messageType"/>; a refused command is that command's outcome, delivered as its finished
+    /// frame, since a command leaves no line in the conversation.
+    /// </summary>
+    private ChannelMessage RefusalOf(ActionExecutingContext context, string conversationId, string text, string messageType, string errorReason)
+    {
+        // The frame carries the name the channel asked for, which is the name it waits on an outcome for
+        CommandProgress? outcomeFrame = context.ActionArguments.Values.OfType<ExecuteCommandRequest>().FirstOrDefault() is { } commandRequest
+            ? new CommandProgress(commandRequest.Name, "refused", 0, 1, Finished: true)
+            : null;
+
+        return new ChannelMessage
+        {
+            ConversationId = conversationId,
+            Text = text,
+            MessageType = outcomeFrame is null ? messageType : Constants.MessageTypes.System,
+
+            // Kept on a command's outcome too: a spent budget ends the conversation whatever asked for more of it
+            ErrorReason = errorReason,
+            AgentName = Constants.Morgana,
+            AgentCompleted = false,
+            Progress = outcomeFrame
+        };
     }
 
     /// <summary>The text authored under Morgana:RateLimiting for the violated window, {limit} filled in.</summary>

@@ -27,7 +27,7 @@ public sealed class TerminalCommandRegistryService
     private volatile IReadOnlyList<CommandDescriptor> morganaCommands = [];
 
     /// <summary>Discovers and builds the terminal's own commands.</summary>
-    /// <exception cref="InvalidOperationException">Thrown when two of them answer to the same name or alias.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when two of them answer to the same name.</exception>
     public TerminalCommandRegistryService(IServiceProvider services, MorganaClientService morganaClientService, TerminalSessionService session)
     {
         this.morganaClientService = morganaClientService;
@@ -46,8 +46,8 @@ public sealed class TerminalCommandRegistryService
             TerminalCommand command = (TerminalCommand)ActivatorUtilities.CreateInstance(services, commandType);
 
             // Two commands answering to one name would leave the palette guessing which one Enter runs
-            if (NameAndAliasesOf(command.Descriptor).FirstOrDefault(name => discoveredCommands.Any(other => AnswersToName(other.Descriptor, name))) is { } clashingName)
-                throw new InvalidOperationException($"Command name '{clashingName}' is claimed by two terminal commands.");
+            if (discoveredCommands.Any(other => AnswersToName(other.Descriptor, command.Descriptor.Name)))
+                throw new InvalidOperationException($"Command name '{command.Descriptor.Name}' is claimed by two terminal commands.");
             discoveredCommands.Add(command);
         }
 
@@ -120,7 +120,7 @@ public sealed class TerminalCommandRegistryService
                 // A name the user cannot type as one word could never be resolved from the prompt
                 .Where(descriptor => !string.IsNullOrWhiteSpace(descriptor.Name) && !descriptor.Name.Any(char.IsWhiteSpace))
                 // The terminal's own command keeps the name: typing it must do what the user knows it does
-                .Where(descriptor => !NameAndAliasesOf(descriptor).Any(name => terminalCommands.Any(command => AnswersToName(command.Descriptor, name))))
+                .Where(descriptor => !terminalCommands.Any(command => AnswersToName(command.Descriptor, descriptor.Name)))
         ];
     }
 
@@ -136,10 +136,7 @@ public sealed class TerminalCommandRegistryService
             throw new InvalidOperationException($"'{command.Name}' runs only on an explicit confirmation.");
     }
 
-    /// <summary>Tells whether <paramref name="name"/>, without slash, is the command's name or one of its aliases, ignoring case.</summary>
+    /// <summary>Tells whether <paramref name="name"/>, without slash, is the command's name, ignoring case.</summary>
     private static bool AnswersToName(CommandDescriptor descriptor, string name) =>
-        NameAndAliasesOf(descriptor).Any(candidate => string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase));
-
-    /// <summary>The name and every alias a command answers to.</summary>
-    private static IEnumerable<string> NameAndAliasesOf(CommandDescriptor descriptor) => [descriptor.Name, .. descriptor.Aliases ?? []];
+        string.Equals(descriptor.Name, name, StringComparison.OrdinalIgnoreCase);
 }

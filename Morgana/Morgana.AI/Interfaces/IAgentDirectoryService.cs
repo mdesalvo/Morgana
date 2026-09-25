@@ -4,7 +4,7 @@ using Microsoft.Agents.AI;
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
-/// Both halves of A2A discovery: the <see cref="AgentCard"/> an agent publishes for others to find,
+/// Both halves of A2A discovery: the <see cref="AgentCard"/> an agent publishes for others to find
 /// and the resolution of a card into a callable <see cref="AIAgent"/>.
 /// </summary>
 /// <remarks>

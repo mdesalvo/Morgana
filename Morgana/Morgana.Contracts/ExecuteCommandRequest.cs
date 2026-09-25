@@ -5,7 +5,7 @@ namespace Morgana.Contracts;
 /// (<c>POST /api/morgana/conversation/{id}/command</c>). Its outcome is delivered over the channel's
 /// own transport, as every reply is. The route names the conversation, the body only the command.
 /// </summary>
-/// <param name="Name">The command as <see cref="CommandDescriptor.Name"/> or one of its aliases names it, without slash</param>
+/// <param name="Name">The command as <see cref="CommandDescriptor.Name"/> names it, without slash</param>
 /// <param name="Confirmed">
 /// The channel's statement that the user answered Yes to the question a
 /// <see cref="CommandDescriptor.RequiresConfirmation"/> command asks. Left false for every other command,

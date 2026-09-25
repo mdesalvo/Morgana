@@ -425,7 +425,7 @@ public class ConversationManagerActor : MorganaActor
                 ConversationId = conversationId,
                 Text = dustLimitingOptions.ErrorMessage,
                 MessageType = Constants.MessageTypes.Error,
-                ErrorReason = "dust_budget_exhausted",
+                ErrorReason = Constants.ErrorReasons.DustBudgetExhausted,
                 AgentName = Constants.Morgana,
                 AgentCompleted = false,
                 ConversationMetadata = new ConversationMetadata(0.0)

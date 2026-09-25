@@ -18,8 +18,8 @@ namespace Morgana.AI.Interfaces;
 /// <para>This interface intentionally exposes no channel identity or capability budget:
 /// identity + capabilities belong to the <em>client</em> that announces itself at the
 /// conversation-start handshake, not to the transport that carries the bytes. Per-conversation
-/// metadata is published by <c>ConversationManagerActor</c> into the <c>IChannelMetadataStore</c>,
-/// and everything downstream (adapter, supervisor, presenter) consults the store keyed by
+/// metadata is published by <c>ConversationManagerActor</c> into the <c>IChannelMetadataStore</c>;
+/// everything downstream (adapter, supervisor, presenter) consults the store keyed by
 /// conversation id. A missing entry is always an error — there is no transport-level fallback.</para>
 ///
 /// <para><strong>Built-In implementation:</strong></para>

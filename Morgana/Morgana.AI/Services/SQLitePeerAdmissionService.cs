@@ -143,7 +143,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
         }
         catch (Exception ex)
         {
-            // The one limiter here that closes on its own failure, and it closes because of where it
+            // The one limiter here that closes on its own failure. It closes because of where it
             // stands: behind this door a request reaches an agent with none of the guard, classifier
             // and channel rate limit a user's own path goes through, so this count is the whole of
             // what bounds a partner. Admitted while unreadable it would not weaken a measure among

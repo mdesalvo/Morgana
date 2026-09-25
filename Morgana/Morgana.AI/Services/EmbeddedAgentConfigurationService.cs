@@ -17,7 +17,7 @@ namespace Morgana.AI.Services;
 /// nothing downstream could tell which was meant.
 /// <para>What a domain cannot bring at all is the complement of itself. The catch-all is what a
 /// request matching no agent is, which is the classifier's business and is described in the
-/// classifier's own prompt: the name is reserved, and a domain declaring it is refused here rather
+/// classifier's own prompt: the name is reserved. A domain declaring it is refused here rather
 /// than quietly corrected — the same way a partner is refused the name of this installation's own
 /// ring.</para>
 /// </remarks>

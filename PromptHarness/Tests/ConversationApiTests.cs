@@ -205,7 +205,6 @@ public sealed class ConversationApiTests
         // The one command the framework itself publishes, as a channel's palette reads it
         JsonElement compact = body.GetProperty("commands").EnumerateArray()
             .Single(command => command.GetProperty("name").GetString() == "compact");
-        Assert.Contains("summarize", compact.GetProperty("aliases").EnumerateArray().Select(alias => alias.GetString()));
         Assert.True(compact.GetProperty("requiresActiveAgent").GetBoolean());
         Assert.False(compact.GetProperty("requiresConfirmation").GetBoolean());
     }
@@ -235,17 +234,15 @@ public sealed class ConversationApiTests
         Assert.True(refusal.TryGetProperty("name", out _), $"The refusal of a command with {reason} does not name the command.");
     }
 
-    [Theory]
-    [InlineData("compact")]
-    [InlineData("summarize")]
-    public async Task Command_runs_on_the_agent_carrying_the_conversation(string name)
+    [Fact]
+    public async Task Command_runs_on_the_agent_carrying_the_conversation()
     {
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
 
-        HttpResponseMessage response = await api.SendCommandAsync(conversationId, $$"""{"name":"{{name}}"}""");
+        HttpResponseMessage response = await api.SendCommandAsync(conversationId, """{"name":"compact"}""");
 
-        // An alias runs the command it belongs to, and the acknowledgement names that command
+        // The command runs once it is admitted and the acknowledgement names it
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(conversationId, body.GetProperty("conversationId").GetString());

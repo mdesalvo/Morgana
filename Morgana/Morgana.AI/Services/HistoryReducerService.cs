@@ -268,8 +268,8 @@ public sealed class MorganaChatReducer : IChatReducer
                     continue;
                 }
 
-                // A message an earlier reduction stamped: it is the last one that reduction summarized,
-                // and what it carries stands for itself together with everything before it. This is why
+                // A message an earlier reduction stamped: it is the last one that reduction summarized.
+                // What it carries stands for itself together with everything before it. This is why
                 // the running summary travels inside the history rather than in a field of this class.
                 if (message.AdditionalProperties?.TryGetValue(SummaryKey, out string? storedSummary) == true)
                 {

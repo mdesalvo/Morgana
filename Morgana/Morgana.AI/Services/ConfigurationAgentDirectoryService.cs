@@ -181,7 +181,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// A card is projected while the endpoints are still being mapped, before the server has bound
     /// anything, so at that moment there is no address to put on it. Settled on whichever ask first
     /// finds one rather than by a pass over every card at startup: a pass has to run at a moment,
-    /// and every moment after the server begins listening is a moment a caller may already be
+    /// while every moment after the server begins listening is a moment a caller may already be
     /// reading. Asked for again, an address already settled costs a comparison.
     /// </remarks>
     /// <param name="card">Card being served, or <c>null</c> for an intent nobody configured.</param>

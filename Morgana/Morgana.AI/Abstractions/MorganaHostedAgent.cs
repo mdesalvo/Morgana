@@ -219,7 +219,7 @@ public sealed class MorganaHostedAgent : AIAgent
             IActorRef agentActor = await actorSystem.GetOrCreateAgentAsync(agentType, intent, hostedAgentSession.ConversationId);
 
             // The note and the fence around the question are one composition: what a colleague wrote is
-            // the only text on this turn authored outside this installation, and where it begins and
+            // the only text on this turn authored outside this installation. Where it begins and
             // ends is stated by the same layer that says what it may not claim.
             string declaredQuestion = await promptComposerService.ComposeConsultationRequestAsync(callerIntent, question);
 

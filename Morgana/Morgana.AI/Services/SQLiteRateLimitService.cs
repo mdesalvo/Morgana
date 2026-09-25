@@ -202,8 +202,8 @@ public class SQLiteRateLimitService : IRateLimitService
         SqliteTransaction transaction,
         DateTime now)
     {
-        // ISO-8601 with a fixed-width, zero-padded format: request_timestamp is stored as TEXT,
-        // and this specific format sorts correctly under a plain lexicographic "<"/">=" comparison
+        // ISO-8601 with a fixed-width, zero-padded format: request_timestamp is stored as TEXT.
+        // This specific format sorts correctly under a plain lexicographic "<"/">=" comparison
         // — the same trick every timestamp comparison in this file relies on.
         // A day back, which outlives the widest configured window: anything older cannot affect a count.
         DateTime cutoff = now.AddDays(-1);

@@ -77,7 +77,7 @@ public sealed class CommandPaletteService
         if (matchingCommands.Count == 0)
             return null;
 
-        // Only the name is rewritten, an alias included: values already written stay as they were typed, while
+        // Only the name is rewritten: values already written stay as they were typed, while
         // a command that takes them leaves the caret past a space, where the first one goes
         CommandDescriptor completed = matchingCommands[HighlightedIndexFor(input, matchingCommands.Count)];
         int optionsStart = input.IndexOf(' ');
@@ -101,13 +101,13 @@ public sealed class CommandPaletteService
     /// <summary>The colour of a match: the highlighted candidate and a typed line naming a command exactly, in the channel's primary.</summary>
     public string MatchColor => theme.PrimaryColor;
 
-    /// <summary>Tells whether <paramref name="input"/> names an available command exactly, by its name or an alias.</summary>
+    /// <summary>Tells whether <paramref name="input"/> names an available command exactly.</summary>
     public bool NamesCommandExactly(string input, TerminalConversationState state)
     {
         // The line is drawn in the match colour at this point, as Claude Code does: what was typed is a command in itself
         string typedCommandName = CommandLineParser.ParseName(input);
         return IsCommandLine(input) && registry.ListAvailableCommands(state)
-            .Any(command => NameAndAliasesOf(command).Any(name => string.Equals(name, typedCommandName, StringComparison.OrdinalIgnoreCase)));
+            .Any(command => string.Equals(command.Name, typedCommandName, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -176,8 +176,8 @@ public sealed class CommandPaletteService
     /// <summary>How well <paramref name="command"/> matches <paramref name="typedCommandName"/>, lower being better; -1 when it does not.</summary>
     private static int RankCommandAgainstTypedName(CommandDescriptor command, string typedCommandName)
     {
-        // Best: what was typed begins the name or an alias, as /e begins /exit through its alias esc
-        if (NameAndAliasesOf(command).Any(name => name.StartsWith(typedCommandName, StringComparison.OrdinalIgnoreCase)))
+        // Best: what was typed begins the name, as /e begins /exit
+        if (command.Name.StartsWith(typedCommandName, StringComparison.OrdinalIgnoreCase))
             return 0;
 
         // Then the name merely contains it, then the description does: the user who remembers what a command
@@ -188,7 +188,7 @@ public sealed class CommandPaletteService
     }
 
     /// <summary>
-    /// Draws one command: the caret when highlighted, the name with its aliases padded to <paramref name="labelWidth"/>,
+    /// Draws one command: the caret when highlighted, the name padded to <paramref name="labelWidth"/>,
     /// then as much of the description as the row holds. The whole row wears the match colour when <paramref name="highlighted"/>.
     /// </summary>
     private Markup RenderCommandRow(CommandDescriptor command, string typedCommandName, bool highlighted, int labelWidth, int width)
@@ -236,20 +236,15 @@ public sealed class CommandPaletteService
             row.Append('[').Append(style).Append(']').Append(Markup.Escape(text)).Append("[/]");
     }
 
-    /// <summary>The name and every alias a command answers to.</summary>
-    private static IEnumerable<string> NameAndAliasesOf(CommandDescriptor command) => [command.Name, .. command.Aliases ?? []];
-
-    /// <summary>The name as the user types it, the aliases that also reach it, then the options it takes.</summary>
+    /// <summary>The name as the user types it, then the options it takes.</summary>
     private string CommandLabel(CommandDescriptor command)
     {
-        string aliases = command.Aliases is { Count: > 0 } names ? $" ({string.Join(", ", names)})" : string.Empty;
-
         // Optional values are bracketed, required ones bare: the line doubles as the spelling to copy
         string options = command.Options is { Count: > 0 } declared
             ? " " + string.Join(' ', declared.Select(option => option.Required ? $"{option.Name}:<value>" : $"[{option.Name}:<value>]"))
             : string.Empty;
 
-        return SanitizeForTerminal($"/{command.Name}{aliases}{options}");
+        return SanitizeForTerminal($"/{command.Name}{options}");
     }
 
     /// <summary>

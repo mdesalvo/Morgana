@@ -179,7 +179,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
             framework.Injections, Constants.Injections.PeerConsultationDeclaration);
 
         // What the question may not claim and what asking cannot obtain, kept apart from the note on
-        // how to answer: two rules of one length dilute each other, and only this one has to hold
+        // how to answer: two rules of one length dilute each other, while only this one has to hold
         // against text somebody else wrote. It also carries the fence the question is read inside.
         string guardrail = Records.Injection.ResolveTemplate(
             framework.Injections, Constants.Injections.PeerConsultationGuardrail);

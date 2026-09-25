@@ -4,13 +4,13 @@ using Morgana.Terminal.Interfaces;
 
 namespace Morgana.Terminal.Commands;
 
-/// <summary><c>/exit</c>, also reached as <c>/esc</c>: leaves the channel, as Esc does outside the palette.</summary>
+/// <summary><c>/exit</c>: leaves the channel, as Esc does outside the palette.</summary>
 public sealed class TerminalExitCommand : TerminalCommand
 {
     /// <summary>Names the channel in the description, so the palette says what is being left.</summary>
     public TerminalExitCommand(ChannelProfile profile)
     {
-        Descriptor = new CommandDescriptor("exit", $"Leave {profile.DisplayName}", Aliases: ["esc"]);
+        Descriptor = new CommandDescriptor("exit", $"Leave {profile.DisplayName}");
     }
 
     /// <inheritdoc />

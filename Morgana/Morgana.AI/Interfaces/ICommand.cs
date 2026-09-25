@@ -6,14 +6,15 @@ namespace Morgana.AI.Interfaces;
 /// A command Morgana executes on a conversation's behalf when a channel asks for it by name, outside
 /// the turn pipeline: no guard, no classifier, no agent. Every implementation registered in DI is
 /// published to the channels through <see cref="ICommandRegistryService"/>.
-/// Reliability contract: the outcome must reach the user as at least one <see cref="ChannelMessage"/>
-/// through <see cref="IChannelService"/>, since a channel holds its prompt until something lands.
+/// Reliability contract: the outcome must reach the user through <see cref="IChannelService"/> as the
+/// command's finished frame, a <see cref="ChannelMessage"/> whose <see cref="CommandProgress.Finished"/>
+/// is set and whose text is the outcome: a channel matches it to the command it is waiting on by name.
 /// </summary>
 public interface ICommand
 {
     /// <summary>
-    /// How the command is published: its name, aliases and the line a palette shows. The name and
-    /// every alias must be unique across the installed commands: a clash fails startup.
+    /// How the command is published: its name and the line a palette shows. The name must be unique
+    /// across the installed commands: a clash fails startup.
     /// </summary>
     CommandDescriptor Descriptor { get; }
 

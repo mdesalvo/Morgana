@@ -220,6 +220,13 @@ public sealed class ConsoleUiService : ITerminalUi
     private string commandOutcomeColor = CommandReportColor;
 
     /// <summary>
+    /// The last command started, until its outcome is shown. Morgana's finished frame is accepted only when it
+    /// names this command: a late outcome of an earlier one never covers the current one's, while the true
+    /// outcome of a command given up on still replaces the deadline's line. Under <see cref="renderLock"/>.
+    /// </summary>
+    private string? commandOwingOutcome;
+
+    /// <summary>
     /// The name every line written by this side of the conversation is filed under: the channel itself, as
     /// Morgana knows it. What the terminal notices is the channel speaking, never Morgana taking a turn,
     /// so it must be told apart at a glance.
@@ -324,7 +331,7 @@ public sealed class ConsoleUiService : ITerminalUi
             {
                 // Subscribed inside StartAsync because the callback needs the live
                 // LiveDisplayContext to push UpdateTarget+Refresh; the `using`
-                // unsubscribes when the UI loop exits (normal quit, Esc, cancel,
+                // unsubscribes when the UI loop exits (normal quit, Esc, cancel
                 // or PTY death), so the SIGWINCH handler / polling task doesn't
                 // outlive the Live display.
                 using IDisposable resizeSubscription = viewportResizeWatcher.Subscribe(() =>
@@ -368,23 +375,18 @@ public sealed class ConsoleUiService : ITerminalUi
                 if (!session.IsConversationOnScreen(message.ConversationId))
                     continue;
 
-                // A frame of a running command is chrome: the bar holds the prompt while the command works
-                // and nothing of it is kept in the transcript
+                // A frame of a command run on Morgana is chrome: the bar holds the prompt while the command
+                // works, then the finished frame's text becomes its outcome. Nothing of it reaches the transcript
                 if (message.Progress is { } progressFrame)
                 {
-                    lock (renderLock)
-                    {
-                        // A frame landing after its command returned or was called off belongs to work nobody
-                        // waits on: drawn now, it would stand over the prompt with nothing left to take it down
-                        if (!commandRunning)
-                            continue;
-
-                        commandProgress.Show(progressFrame);
-                        ctx.UpdateTarget(BuildLayout());
-                        ctx.Refresh();
-                    }
+                    HandleInboundProgress(ctx, message, progressFrame);
                     continue;
                 }
+
+                // A command's outcome always travels on its finished frame: a command line naming no command
+                // belongs to nothing on screen and has no place in the transcript either
+                if (message.MessageType == "system")
+                    continue;
 
                 // Attribute the row to whoever authored it: a specialised agent keeps its
                 // own colour even on the farewell line that carries AgentCompleted=true.
@@ -398,29 +400,19 @@ public sealed class ConsoleUiService : ITerminalUi
 
                 lock (renderLock)
                 {
-                    // What a command run on Morgana reports is its outcome, drawn where a command run here draws
-                    // its own: the conversation was not taken a turn further by it, so the transcript does not hear of it
-                    bool isCommandReport = string.Equals(message.MessageType, "system", StringComparison.OrdinalIgnoreCase);
-                    if (isCommandReport)
-                        SetCommandOutcome(message.Text, CommandReportColor);
-                    else
-                        history.Add(new DisplayedMessage(messageSpeaker, SanitizeMessageText(message.Text), RowColor(message, messageSpeaker)));
+                    history.Add(new DisplayedMessage(messageSpeaker, SanitizeMessageText(message.Text), RowColor(message, messageSpeaker)));
 
                     // Revert the sticky header to Morgana on completion so the next user
-                    // turn doesn't render under the outgoing agent's colour. A command's report says nothing
-                    // about who is carrying the conversation, so the header is left where the last turn put it.
-                    if (!isCommandReport)
-                    {
-                        currentSpeaker = message.AgentCompleted || string.IsNullOrWhiteSpace(message.AgentName)
-                            ? "Morgana"
-                            : messageSpeaker;
+                    // turn doesn't render under the outgoing agent's colour.
+                    currentSpeaker = message.AgentCompleted || string.IsNullOrWhiteSpace(message.AgentName)
+                        ? "Morgana"
+                        : messageSpeaker;
 
-                        // An agent that signalled completion has handed the conversation back, so nothing
-                        // addressed at the agent carrying it applies any more; a reply from Morgana says the same
-                        agentCarryingConversation = message.AgentCompleted || !IsSpecializedAgent(message.AgentName)
-                            ? null
-                            : messageSpeaker;
-                    }
+                    // An agent that signalled completion has handed the conversation back, so nothing
+                    // addressed at the agent carrying it applies any more; a reply from Morgana says the same
+                    agentCarryingConversation = message.AgentCompleted || !IsSpecializedAgent(message.AgentName)
+                        ? null
+                        : messageSpeaker;
 
                     // Refresh the header gauge from ANY metadata-bearing message. The main
                     // assistant response carries the pre-delivery estimate; the trailing
@@ -447,11 +439,7 @@ public sealed class ConsoleUiService : ITerminalUi
                     // Morgana's canonical word and BuildInputRows replaces the prompt with
                     // the way to act on it here: /new for a fresh conversation or Esc to leave.
                     if (string.Equals(message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal))
-                    {
-                        conversationDead = true;
-                        currentInput = string.Empty; // discard any half-typed doomed line
-                        cursorPosition = 0;
-                    }
+                        MarkConversationSpent();
 
                     // Release the input gate: ReadKeysLoop was swallowing keystrokes until
                     // this first webhook delivery landed. (No-op once conversationDead:
@@ -912,9 +900,12 @@ public sealed class ConsoleUiService : ITerminalUi
                 return;
             commandRunning = true;
             runningCommandName = invocation.Command.Name;
+            commandOwingOutcome = invocation.Command.Name;
 
-            // The previous command's outcome gives way to the hint naming this one
+            // The previous command's outcome gives way to the hint naming this one, as does a bar an earlier
+            // command left behind when its call was given up on
             commandOutcome = null;
+            commandProgress.Clear();
             ctx.UpdateTarget(BuildLayout());
             ctx.Refresh();
         }
@@ -930,8 +921,13 @@ public sealed class ConsoleUiService : ITerminalUi
         }
         catch (TimeoutException ex)
         {
-            // The command's deadline already names the command and says it was called off
-            ShowCommandOutcome(ctx, ex.Message, ErrorColor);
+            // The command's deadline already names the command and says it was called off. An outcome that
+            // landed just before it is the truth and stays: Morgana had finished the work
+            lock (renderLock)
+            {
+                if (string.Equals(commandOwingOutcome, invocation.Command.Name, StringComparison.OrdinalIgnoreCase))
+                    ShowCommandOutcome(ctx, ex.Message, ErrorColor);
+            }
         }
         catch (Exception ex)
         {
@@ -945,9 +941,13 @@ public sealed class ConsoleUiService : ITerminalUi
             commandRunning = false;
             lock (renderLock)
             {
-                if (!awaitingResponse && commandProgress.IsActive)
-                {
+                if (!awaitingResponse)
                     commandProgress.Clear();
+
+                // The prompt comes back whatever the command left: the hint holding it goes. An outcome that
+                // landed while the command still ran is drawn only now. After the user left there is no screen
+                if (!exitRequested)
+                {
                     ctx.UpdateTarget(BuildLayout());
                     ctx.Refresh();
                 }
@@ -1024,8 +1024,64 @@ public sealed class ConsoleUiService : ITerminalUi
     }
 
     /// <inheritdoc />
-    public void ShowCommandOutcome(string text, bool isFailure = false) =>
-        ShowCommandOutcome(liveContext, text, isFailure ? ErrorColor : CommandReportColor);
+    public void ShowCommandOutcome(string text, bool isFailure = false)
+    {
+        lock (renderLock)
+        {
+            // A command run here reports its own outcome: nothing is left owed to it from Morgana
+            commandOwingOutcome = null;
+            ShowCommandOutcome(liveContext, text, isFailure ? ErrorColor : CommandReportColor);
+        }
+    }
+
+    /// <summary>
+    /// Takes a frame of a command run on Morgana: its bar while the command runs, then the finished frame's
+    /// text as the command's outcome.
+    /// </summary>
+    private void HandleInboundProgress(LiveDisplayContext ctx, ChannelMessage message, CommandProgress frame)
+    {
+        lock (renderLock)
+        {
+            // Only the command still owed an outcome is heard. Its bar only while it runs: a frame landing after
+            // the command returned would stand over the prompt with nothing left to take it down. Its outcome
+            // whenever it lands, since the drain may deliver it after the call returned or after its deadline
+            if (!string.Equals(frame.Command, commandOwingOutcome, StringComparison.OrdinalIgnoreCase) || (!frame.Finished && !commandRunning))
+                return;
+
+            commandProgress.Show(frame);
+            if (frame.Finished)
+            {
+                SetCommandOutcome(message.Text, OutcomeColor(message));
+                commandOwingOutcome = null;
+
+                // A budget found spent ends the conversation whatever asked for more of it, a command included
+                if (string.Equals(message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal))
+                    MarkConversationSpent();
+            }
+
+            ctx.UpdateTarget(BuildLayout());
+            ctx.Refresh();
+        }
+    }
+
+    /// <summary>Latches the conversation as spent: the prompt takes only the ways out of it. Must be called under <see cref="renderLock"/>.</summary>
+    private void MarkConversationSpent()
+    {
+        conversationDead = true;
+        currentInput = string.Empty; // discard any half-typed doomed line
+        cursorPosition = 0;
+    }
+
+    /// <summary>
+    /// The colour of an outcome Morgana delivered: a refusal by the rate limit reads as a warning, a spent budget
+    /// as an error and anything else as the command's own report.
+    /// </summary>
+    private static string OutcomeColor(ChannelMessage message) => message.ErrorReason switch
+    {
+        "rate_limit_exceeded" => WarningColor,
+        "dust_budget_exhausted" => ErrorColor,
+        _ => CommandReportColor
+    };
 
     /// <summary>Draws <paramref name="text"/> above the prompt in <paramref name="color"/> as the outcome of the command just run.</summary>
     private void ShowCommandOutcome(LiveDisplayContext ctx, string text, string color)
