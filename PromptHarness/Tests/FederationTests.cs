@@ -46,7 +46,7 @@ public sealed class FederationTests
         Assert.SkipWhen(fixture.Peer is null,
             "This group needs the second installation: Harness__FederatedPeer=true.");
 
-        ScenarioOutcome outcome = await fixture.Runner.RunAsync("federation-consults-a-agent-at-another-installation");
+        ScenarioOutcome outcome = await fixture.Runner.RunAsync("federation-consults-an-agent-at-another-installation");
 
         Assert.True(outcome.Passed, outcome.Report());
     }
