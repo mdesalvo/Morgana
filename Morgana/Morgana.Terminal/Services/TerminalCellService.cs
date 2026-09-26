@@ -61,6 +61,42 @@ public sealed class TerminalCellService
         return slices;
     }
 
+    /// <summary>Wraps prose at the spaces between words, so no row ends mid-word; only a word wider than the row is cut by cell.</summary>
+    public List<string> WrapWords(string text, int width)
+    {
+        width = Math.Max(1, width);
+        List<string> rows = [];
+        StringBuilder current = new();
+        int currentCells = 0;
+        foreach (string word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            int wordCells = word.GetCellWidth();
+
+            // The word joins the row when it fits after a space; otherwise the row is closed and the word opens the next
+            if (current.Length > 0 && currentCells + 1 + wordCells <= width)
+            {
+                current.Append(' ').Append(word);
+                currentCells += 1 + wordCells;
+                continue;
+            }
+
+            if (current.Length > 0)
+                rows.Add(current.ToString());
+            current.Clear();
+            currentCells = 0;
+
+            // A word no row can hold is cut by cell, its last slice left open for the words after it
+            List<string> slices = wordCells > width ? Wrap(word, width) : [word];
+            rows.AddRange(slices.Take(slices.Count - 1));
+            current.Append(slices[^1]);
+            currentCells = slices[^1].GetCellWidth();
+        }
+
+        if (current.Length > 0 || rows.Count == 0)
+            rows.Add(current.ToString());
+        return rows;
+    }
+
     /// <summary>Cuts text down to fit width terminal cells, tacking on an ellipsis when it actually had to cut something.</summary>
     public string Trunc(string text, int width)
     {

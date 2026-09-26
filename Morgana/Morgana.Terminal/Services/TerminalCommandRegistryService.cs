@@ -33,7 +33,7 @@ public sealed class TerminalCommandRegistryService
         this.morganaClientService = morganaClientService;
         this.session = session;
 
-        // The library brings /new and /exit; the channel's own assembly may add commands of its own
+        // The library brings the commands every TTY channel shares; the channel's own assembly may add commands of its own
         Assembly[] commandAssemblies = [.. new[] { typeof(TerminalCommand).Assembly, Assembly.GetEntryAssembly() }.OfType<Assembly>().Distinct()];
 
         // Only what a user can pick is discovered: public concrete commands, not the abstract base

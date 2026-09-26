@@ -1,5 +1,6 @@
 using Morgana.Contracts;
 using Morgana.Terminal.Services;
+using Spectre.Console;
 
 namespace Morgana.Terminal.Interfaces;
 
@@ -25,6 +26,9 @@ public interface ITerminalUi
     /// </summary>
     Task RunAsync(TerminalSessionService session, CancellationToken cancellationToken = default);
 
+    /// <summary>The commands the palette would offer now, judged on the conversation on screen, in the order it lists them.</summary>
+    IReadOnlyList<CommandDescriptor> AvailableCommands { get; }
+
     /// <summary>Ends the live UI once the running command returns, which ends the conversation and the process.</summary>
     void RequestExit();
 
@@ -34,6 +38,13 @@ public interface ITerminalUi
     /// runs another command. <paramref name="isFailure"/> marks what went wrong, so the two read apart at a glance.
     /// </summary>
     void ShowCommandOutcome(string text, bool isFailure = false);
+
+    /// <summary>
+    /// Opens a panel over the whole body until the user closes it with Esc or Enter; transcript and prompt, quick replies
+    /// included, then come back as they were. <paramref name="layOut"/> is asked again on every frame with the width the
+    /// terminal has then and must return rows of at most that many cells.
+    /// </summary>
+    void ShowPanel(Func<int, IReadOnlyList<Markup>> layOut);
 
     /// <summary>
     /// Shows how far a command running here has got, in the same widget a command run on Morgana reports

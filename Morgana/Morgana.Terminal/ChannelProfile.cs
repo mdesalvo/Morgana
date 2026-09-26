@@ -10,7 +10,14 @@ namespace Morgana.Terminal;
 /// <param name="ChannelName">The channel as Morgana knows it: the <c>channelName</c> of the handshake and the <c>iss</c> of the token, lowercase.</param>
 /// <param name="DisplayName">The channel as the terminal and the configuration file spell it, also the root of its settings section.</param>
 /// <param name="Capabilities">The expressive surface the channel declares; Morgana's adapter degrades every reply to fit it.</param>
-public sealed record ChannelProfile(string ChannelName, string DisplayName, ChannelCapabilities Capabilities)
+/// <param name="Introduction">What <c>/help</c> tells a newcomer first: what the channel is and how talking through it goes, as prose.</param>
+/// <param name="KeyBindings">The keys <c>/help</c> lists, each with what it does here, in the order a newcomer needs them.</param>
+public sealed record ChannelProfile(
+    string ChannelName,
+    string DisplayName,
+    ChannelCapabilities Capabilities,
+    string Introduction,
+    IReadOnlyList<(string Keys, string Action)> KeyBindings)
 {
     /// <summary>Reads a setting of this channel, addressing it under the channel's own root.</summary>
     public string SectionKey(string key) => $"{DisplayName}:{key}";

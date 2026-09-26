@@ -30,5 +30,16 @@ public static class RuneChannelProfile
             SupportsQuickReplies: false,
             SupportsStreaming: false,
             SupportsMarkdown: false,
-            MaxMessageLength: configuration.GetValue<int?>("Rune:MaxMessageLength") ?? DefaultMaxMessageLength));
+            MaxMessageLength: configuration.GetValue<int?>("Rune:MaxMessageLength") ?? DefaultMaxMessageLength),
+
+        // Rune offers no options to pick, so the newcomer is told to answer in words
+        Introduction: "Talk with Morgana in plain text: write what you need and press Enter. She answers herself "
+                      + "or hands you to the agent who knows the subject. Replies arrive whole and short: answer their questions in your own words.",
+        KeyBindings:
+        [
+            ("Enter", "send"),
+            ("↑↓ PgUp PgDn", "scroll back"),
+            ("←→", "move the caret"),
+            ("Esc", "leave")
+        ]);
 }

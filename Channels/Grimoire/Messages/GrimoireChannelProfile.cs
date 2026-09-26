@@ -22,5 +22,18 @@ public static class GrimoireChannelProfile
             SupportsQuickReplies: true,
             SupportsStreaming: true,
             SupportsMarkdown: true,
-            MaxMessageLength: null));
+            MaxMessageLength: null),
+
+        Introduction: "Talk with Morgana from your terminal: write what you need and press Enter. She answers herself "
+                      + "or hands you to the agent who knows the subject. Replies stream in as they are written.",
+
+        // Options a reply offers are Grimoire's alone, so picking one is the key a newcomer meets first
+        KeyBindings:
+        [
+            ("Enter", "send"),
+            ("↑↓ Enter", "pick an option"),
+            ("↑↓ PgUp PgDn", "scroll back"),
+            ("←→", "move the caret"),
+            ("Esc", "leave")
+        ]);
 }

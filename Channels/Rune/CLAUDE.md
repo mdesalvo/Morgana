@@ -90,7 +90,7 @@ rendering cannot share stdin with a first-class prompt. **Enter** commits,
 the window never moves under an arriving reply. Repainting waits for the keystrokes to stop, so a
 pasted line costs one frame rather than one per character.
 
-**Commands**: a leading `/` opens the shared palette (`Morgana.Terminal`): `/new`, `/exit` and
+**Commands**: a leading `/` opens the shared palette (`Morgana.Terminal`): `/help`, `/new`, `/export`, `/exit` and
 whatever Morgana publishes. Esc dismisses it. The list filters as you type and Enter runs the
 highlighted candidate, as in Claude Code. A command declaring `RequiresConfirmation` takes
 the prompt over with a Yes/No question instead of running; Morgana refuses it without that answer. **A command

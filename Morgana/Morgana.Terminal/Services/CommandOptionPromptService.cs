@@ -83,9 +83,6 @@ public sealed class CommandOptionPromptService
         }
     }
 
-    /// <summary>The command being filled in, null when the prompt is free.</summary>
-    public CommandDescriptor? PendingCommand => command;
-
     /// <summary>The option being asked for, null when nothing is.</summary>
     public CommandOption? CurrentOption => pendingOptions.Count > 0 ? pendingOptions.Peek() : null;
 

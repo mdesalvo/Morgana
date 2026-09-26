@@ -277,6 +277,13 @@ public sealed class ConsoleUiService : ITerminalUi
     private string commandOutcomeColor = CommandReportColor;
 
     /// <summary>
+    /// The panel a command opened over the whole body, laid out again at every frame for the width the terminal has
+    /// then; null when none is open. Transcript and prompt stay as they were underneath and come back when it closes.
+    /// Mutated only under <see cref="renderLock"/>.
+    /// </summary>
+    private Func<int, IReadOnlyList<Markup>>? commandPanel;
+
+    /// <summary>
     /// The last command run started, until its outcome is shown. Morgana's finished frame is accepted only when
     /// it belongs to this run: a late outcome of an earlier run never covers the current one's, even of the same
     /// command, while the true outcome of a run given up on still replaces the deadline's line. Under
@@ -538,6 +545,44 @@ public sealed class ConsoleUiService : ITerminalUi
         }
     }
 
+    /// <inheritdoc />
+    public void ShowPanel(Func<int, IReadOnlyList<Markup>> layOut)
+    {
+        lock (renderLock)
+        {
+            // A command run here reports its own outcome: nothing is left owed to it from Morgana
+            invocationOwingOutcome = null;
+
+            // A command still finishing after the user left must not draw over the shell the display gave back
+            if (exitRequested)
+                return;
+
+            commandPanel = layOut;
+            liveContext.UpdateTarget(BuildLayout());
+            liveContext.Refresh();
+        }
+    }
+
+    /// <summary>Closes the open panel on Esc or Enter and swallows every other key; false when no panel is open.</summary>
+    private bool TryHandlePanelKey(LiveDisplayContext ctx, ConsoleKey key)
+    {
+        lock (renderLock)
+        {
+            if (commandPanel is null)
+                return false;
+
+            // Esc here closes the panel rather than leaving the channel: the user is dismissing what they asked to see
+            if (key is ConsoleKey.Escape or ConsoleKey.Enter)
+            {
+                commandPanel = null;
+                ctx.UpdateTarget(BuildLayout());
+                ctx.Refresh();
+            }
+
+            return true;
+        }
+    }
+
     /// <summary>
     /// Takes a frame of a command run on Morgana: the bar holds the prompt for as long as the command reports,
     /// then the finished frame's text becomes the command's outcome. Nothing of it is kept in the transcript.
@@ -772,6 +817,10 @@ public sealed class ConsoleUiService : ITerminalUi
                 inbound.Writer.TryComplete();
                 return;
             }
+
+            // An open panel owns the keyboard until it is closed, so a key meant for it never reaches the prompt beneath
+            if (TryHandlePanelKey(ctx, key.Key))
+                continue;
 
             // A command waiting on a Yes or a No owns the keyboard: until it is answered nothing else may be
             // typed, run or exited, so the question cannot be walked away from by accident
@@ -1088,16 +1137,11 @@ public sealed class ConsoleUiService : ITerminalUi
         if (questionedInvocation is null)
             return true;
 
-        switch (outcome)
+        // A declined command leaves nothing behind: the prompt coming back is the answer the user just gave
+        if (outcome == ConfirmationOutcome.Confirmed)
         {
-            case ConfirmationOutcome.Confirmed:
-                // The command runs beside this loop, so Esc is still read while it waits on Morgana
-                _ = RunCommandAsync(ctx, questionedInvocation, confirmed: true);
-                break;
-            case ConfirmationOutcome.Declined:
-                // A command that leaves no trace of having been asked for would read as a swallowed keystroke
-                ShowCommandOutcome(ctx, $"/{questionedInvocation.Command.Name} was not run", WarningColor);
-                break;
+            // The command runs beside this loop, so Esc is still read while it waits on Morgana
+            _ = RunCommandAsync(ctx, questionedInvocation, confirmed: true);
         }
         return true;
     }
@@ -1105,14 +1149,12 @@ public sealed class ConsoleUiService : ITerminalUi
     /// <summary>Drops the command being filled in, with whatever it had gathered; false when no form is open.</summary>
     private bool TryCancelOptionPrompt(LiveDisplayContext ctx)
     {
-        CommandDescriptor? abandoned;
         lock (renderLock)
         {
             if (!commandOptionPrompt.IsActive)
                 return false;
 
-            // Named in the notice below, since the line that opened the form is long gone from the prompt
-            abandoned = commandOptionPrompt.PendingCommand;
+            // The form goes and the empty prompt comes back, which is all the user asked of Esc
             commandOptionPrompt.Cancel();
             currentInput = string.Empty;
             cursorPosition = 0;
@@ -1120,7 +1162,6 @@ public sealed class ConsoleUiService : ITerminalUi
             ctx.Refresh();
         }
 
-        ShowCommandOutcome(ctx, abandoned is null ? "command cancelled" : $"/{abandoned.Name} was not run", WarningColor);
         return true;
     }
 
@@ -1175,6 +1216,16 @@ public sealed class ConsoleUiService : ITerminalUi
     /// </summary>
     private TerminalConversationState ConversationState() =>
         new(conversationDead, agentCarryingConversation is not null);
+
+    /// <inheritdoc />
+    public IReadOnlyList<CommandDescriptor> AvailableCommands
+    {
+        get
+        {
+            lock (renderLock)
+                return commandRegistry.ListAvailableCommands(ConversationState());
+        }
+    }
 
     /// <summary>Tells whether a command line is being typed, which suspends the quick-reply picker while it lasts.</summary>
     private bool IsCommandLineOpen()
@@ -1871,6 +1922,10 @@ public sealed class ConsoleUiService : ITerminalUi
         (int termWidth, int termHeight) = ReadViewport();
         int bodyHeight = Math.Max(0, termHeight - 3 /* header panel */);
 
+        // An open panel is all the body shows, so it never mixes with the transcript or the prompt it covers
+        if (commandPanel is { } layOutPanel)
+            return BuildPanelBody(layOutPanel, termWidth, bodyHeight);
+
         List<IRenderable> inputRows = BuildInputRows(termWidth);
         if (inputRows.Count > bodyHeight && bodyHeight > 0)
         {
@@ -1916,6 +1971,19 @@ public sealed class ConsoleUiService : ITerminalUi
             rows.Add(i < historyRows.Count ? historyRows[i] : streamingRows[i - historyRows.Count]);
         rows.AddRange(inputRows);
         rows.AddRange(paletteRows);
+        return new Rows(rows);
+    }
+
+    /// <summary>The open panel as the body: its rows from the top, then the line telling how it closes, cut to the body's height.</summary>
+    private Rows BuildPanelBody(Func<int, IReadOnlyList<Markup>> layOutPanel, int termWidth, int bodyHeight)
+    {
+        // Nothing underneath can be scrolled while the panel covers it, so the header offers no arrows
+        scrollHasAbove = false;
+        scrollHasBelow = false;
+
+        // The closing line is kept whatever the height, since a panel nobody can see how to leave is a trap
+        Markup closingHint = new($"[grey54 italic]{Markup.Escape(cells.Trunc("Esc or Enter to close", termWidth))}[/]");
+        List<IRenderable> rows = [.. layOutPanel(termWidth).Take(Math.Max(0, bodyHeight - 1)), closingHint];
         return new Rows(rows);
     }
 
