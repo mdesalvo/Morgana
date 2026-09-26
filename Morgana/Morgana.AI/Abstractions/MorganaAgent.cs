@@ -597,6 +597,7 @@ public class MorganaAgent : MorganaActor
     /// <summary>
     /// Removes this turn's peer-consultation calls and their results, from the agent's own history.
     /// </summary>
+    /// <param name="session">The session whose history holds the turn just run.</param>
     /// <param name="historyBaseline">Messages present before the turn ran; earlier turns cleared themselves.</param>
     protected void StripPeerConsultations(AgentSession session, int historyBaseline)
     {
