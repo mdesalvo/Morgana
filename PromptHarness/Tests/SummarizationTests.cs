@@ -61,7 +61,7 @@ public sealed class SummarizationTests
         // Morgana notices the dropped call and stops, saying so in its log alone
         DateTime giveUpAt = DateTime.UtcNow.AddSeconds(60);
         while (!fixture.Output.Since(logMark).Any(line => line.Contains("was abandoned by the channel")) && DateTime.UtcNow < giveUpAt)
-            await Task.Delay(250);
+            await Task.Delay(250, TestContext.Current.CancellationToken);
         IReadOnlyList<string> log = fixture.Output.Since(logMark);
         Assert.True(log.Any(line => line.Contains("was abandoned by the channel")), "Morgana never noticed the channel had stopped waiting on /compact.");
         Assert.False(log.Any(line => line.Contains("Rewrote the")), "/compact rewrote the agent's history after the channel had stopped waiting on it.");
@@ -102,7 +102,7 @@ public sealed class SummarizationTests
         DateTime giveUpAt = DateTime.UtcNow.AddSeconds(60);
         while (!reply.IsCompleted && DateTime.UtcNow < giveUpAt
                && (recordedInTurn = await record.LoadParticipantMessagesAsync(conversationId, "billing")).Count <= recordedBeforeTurn)
-            await Task.Delay(50);
+            await Task.Delay(50, TestContext.Current.CancellationToken);
         if (reply.IsCompleted)
             Assert.Skip("The turn ended before a fold could land inside it, so nothing was proven.");
 

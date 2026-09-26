@@ -55,7 +55,7 @@ public sealed class RateLimitTests
         // The client learns when to come back and which window it hit; the user hears why over the channel
         Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
         Assert.True(refused.Headers.Contains("Retry-After"), "A 429 came back with no Retry-After header.");
-        JsonElement body = await refused.Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement body = await refused.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         Assert.Equal("Rate limit exceeded", body.GetProperty("error").GetString());
         Assert.Equal($"MaxMessagesPerMinute ({callsPerMinute})", body.GetProperty("violatedLimit").GetString());
     }
@@ -70,9 +70,9 @@ public sealed class RateLimitTests
         for (int call = 1; call <= callsPerMinute; call++)
         {
             Assert.Equal(HttpStatusCode.BadRequest, (await api.SendCommandAsync(
-                conversationId, """{"name":"transmogrify"}""")).StatusCode);
+                conversationId, """{"name":"transmogrify"}""", TestContext.Current.CancellationToken)).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await api.SendCommandAsync(
-                conversationId, """{"name":"compact","options":{"depth":"3"}}""")).StatusCode);
+                conversationId, """{"name":"compact","options":{"depth":"3"}}""", TestContext.Current.CancellationToken)).StatusCode);
         }
 
         // The whole window is still there for the requests the user actually made
@@ -109,7 +109,7 @@ public sealed class RateLimitTests
 
         for (int call = 1; call <= callsPerMinute; call++)
             Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId)).StatusCode);
-        Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendCommandAsync(conversationId, """{"name":"compact","invocationId":"refused-run"}""")).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendCommandAsync(conversationId, """{"name":"compact","invocationId":"refused-run"}""", TestContext.Current.CancellationToken)).StatusCode);
 
         // The refusal is the command's outcome: its finished frame, naming the run, so a channel draws it where the
         // command's outcome goes and keeps it out of the transcript. The reason still travels for the channel to act on
@@ -164,5 +164,5 @@ public sealed class RateLimitTests
 
     /// <summary>One /compact on the conversation, the call every test here counts with.</summary>
     private Task<HttpResponseMessage> SendCompactAsync(string conversationId) =>
-        api.SendCommandAsync(conversationId, """{"name":"compact"}""");
+        api.SendCommandAsync(conversationId, """{"name":"compact"}""", TestContext.Current.CancellationToken);
 }

@@ -128,7 +128,7 @@ public sealed class DustTests
 
         // A command asked of a spent conversation is refused as that command's outcome, carrying the reason a
         // channel ends the conversation on
-        Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendCommandAsync(conversationId, """{"name":"compact"}""")).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendCommandAsync(conversationId, """{"name":"compact"}""", TestContext.Current.CancellationToken)).StatusCode);
         ChannelMessage commandRefusal = await fixture.Channel.ReceiveAsync(conversationId, TimeSpan.FromSeconds(15));
         Assert.Equal("dust_budget_exhausted", commandRefusal.ErrorReason);
         Assert.Equal("system", commandRefusal.MessageType);
@@ -144,7 +144,7 @@ public sealed class DustTests
 
         // A channel coming back to the conversation learns at once that it is over, gauge at zero
         HttpResponseMessage resumed = await api.SendAsync("POST", "/api/morgana/conversation/{id}/resume", conversationId, api.HarnessToken());
-        JsonElement body = await resumed.Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement body = await resumed.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         Assert.Equal(0.0, body.GetProperty("dustLevel").GetDouble());
         Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("dustExhaustedMessage").GetString()), "A resume of a spent conversation did not say it is over.");
     }

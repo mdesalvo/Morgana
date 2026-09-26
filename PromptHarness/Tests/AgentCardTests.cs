@@ -44,11 +44,11 @@ public sealed class AgentCardTests
         // No Authorization header, deliberately: a caller that has to authenticate to learn how to
         // authenticate can never begin, so this endpoint staying open is the contract and not an
         // oversight. Fetched the way A2ACardResolver fetches it.
-        HttpResponseMessage response = await httpClient.GetAsync(CardAddress(intent));
+        HttpResponseMessage response = await httpClient.GetAsync(CardAddress(intent), TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        JsonElement card = await response.Content.ReadFromJsonAsync<JsonElement>();
+        JsonElement card = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
 
         Assert.False(string.IsNullOrWhiteSpace(card.GetProperty("name").GetString()));
         Assert.False(string.IsNullOrWhiteSpace(card.GetProperty("description").GetString()));
@@ -71,7 +71,7 @@ public sealed class AgentCardTests
     {
         using HttpClient httpClient = new HttpClient();
 
-        JsonElement card = await httpClient.GetFromJsonAsync<JsonElement>(CardAddress(intent));
+        JsonElement card = await httpClient.GetFromJsonAsync<JsonElement>(CardAddress(intent), TestContext.Current.CancellationToken);
 
         // The requirement names a scheme and the scheme must be one the card also defines: a
         // requirement pointing at nothing tells a caller it must authenticate and not how.
@@ -104,7 +104,8 @@ public sealed class AgentCardTests
         // discovery document never widens the surface it describes.
         HttpResponseMessage response = await httpClient.PostAsJsonAsync(
             $"{fixture.BaseAddress}/a2a/{intent}",
-            new { jsonrpc = "2.0", id = "1", method = "message/send" });
+            new { jsonrpc = "2.0", id = "1", method = "message/send" },
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -183,7 +184,8 @@ public sealed class AgentCardTests
 
         return await httpClient.PostAsJsonAsync(
             $"{fixture.BaseAddress}/a2a/{intent}",
-            new { jsonrpc = "2.0", id = "1", method = "message/send" });
+            new { jsonrpc = "2.0", id = "1", method = "message/send" },
+            TestContext.Current.CancellationToken);
     }
 
     /// <summary>Well-known address of one published agent's card on the host under test.</summary>
