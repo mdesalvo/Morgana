@@ -21,7 +21,6 @@ Grimoire and Rune now support **commands**: type `/` at the prompt and a palette
 
 ### 📦 Dependencies
 - Updated `Microsoft.Agents.AI` to 1.22.0
-- Updated `Microsoft.Extensions.AI` to 10.10.1
 
 ### 🚀 Future Enablement
 - **Agentic terminals**: every command you add is one more thing Grimoire and Rune can *do*, not merely talk about. Ask the agent what should be done, then do it on the same screen, one slash away. The machinery is in: the list is yours to grow
