@@ -78,14 +78,14 @@ public sealed class TerminalExportCommand : TerminalCommand
         if (messages.Count == 0)
         {
             // Writing an empty file over an existing export would lose the earlier one for nothing
-            ui.ShowCommandOutcome("/export found nothing on record for this conversation yet");
+            ui.ShowCommandOutcome("found nothing on record for this conversation yet");
             return;
         }
 
         // A path this machine cannot accept is the user's to fix, so it is said before the work is done
         if (DescribePathProblem(options["path"], out string path) is { } pathProblem)
         {
-            ui.ShowCommandOutcome($"/export cannot write there: {pathProblem}", isFailure: true);
+            ui.ShowCommandOutcome($"cannot write there: {pathProblem}", isFailure: true);
             return;
         }
 
@@ -103,11 +103,11 @@ public sealed class TerminalExportCommand : TerminalCommand
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
             // A path the machine refuses is the user's to fix, so it is reported as it was given
-            ui.ShowCommandOutcome($"/export could not write {path}: {ex.Message}", isFailure: true);
+            ui.ShowCommandOutcome($"could not write {path}: {ex.Message}", isFailure: true);
             return;
         }
 
-        ui.ShowCommandOutcome($"/export wrote {messages.Count} message{(messages.Count == 1 ? string.Empty : "s")} to {path}");
+        ui.ShowCommandOutcome($"wrote {messages.Count} message{(messages.Count == 1 ? string.Empty : "s")} to {path}");
     }
 
     /// <summary>The conversation with the field names the REST API uses, so an export reads back as what Morgana serves.</summary>

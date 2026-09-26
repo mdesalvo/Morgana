@@ -142,6 +142,9 @@ public sealed class ConsoleUiService : ITerminalUi
     /// — <c>volatile</c> guarantees the reference is always seen fresh across threads.</summary>
     private volatile string _dustSegment = string.Empty;
 
+    /// <summary>The dust level Morgana last reported, as the fraction behind <see cref="_dustSegment"/>; null while none was. Mutated only under <see cref="renderLock"/>.</summary>
+    private double? reportedDustLevel;
+
     /// <summary>Set once the user types <c>/exit</c> or presses <see cref="ConsoleKey.Escape"/>.</summary>
     private volatile bool exitRequested;
 
@@ -210,14 +213,14 @@ public sealed class ConsoleUiService : ITerminalUi
     private string runningCommandName = string.Empty;
 
     /// <summary>
-    /// What the last command came to, drawn above the prompt and kept out of the transcript: a command is not a
-    /// turn of the conversation. Null once the user writes in the prompt, starts a turn or runs another command.
-    /// Mutated only under <see cref="renderLock"/>, together with <see cref="commandOutcomeColor"/>.
+    /// Why the command line just typed ran nothing, drawn above the prompt and kept out of the transcript: it is about
+    /// the line, not the conversation. Null once the user writes in the prompt, starts a turn or runs another command.
+    /// Mutated only under <see cref="renderLock"/>, together with <see cref="promptNoticeColor"/>.
     /// </summary>
-    private string? commandOutcome;
+    private string? promptNotice;
 
-    /// <summary>The colour <see cref="commandOutcome"/> is drawn in: neutral for work done, orange for a refusal, red for a failure.</summary>
-    private string commandOutcomeColor = CommandReportColor;
+    /// <summary>The colour <see cref="promptNotice"/> is drawn in: orange for a line the user can fix.</summary>
+    private string promptNoticeColor = WarningColor;
 
     /// <summary>
     /// The panel a command opened over the whole body, laid out again at every frame for the width the terminal has
@@ -408,7 +411,7 @@ public sealed class ConsoleUiService : ITerminalUi
 
                 lock (renderLock)
                 {
-                    history.Add(new DisplayedMessage(messageSpeaker, SanitizeMessageText(message.Text), RowColor(message, messageSpeaker)));
+                    history.Add(new DisplayedMessage(messageSpeaker, SanitizeMessageText(message.Text), RowColor(message, messageSpeaker), message.MessageType));
 
                     // Revert the sticky header to Morgana on completion so the next user
                     // turn doesn't render under the outgoing agent's colour.
@@ -439,6 +442,7 @@ public sealed class ConsoleUiService : ITerminalUi
                         // Scale color with depletion: mirrors Cauldron DustMeter thresholds (>30% ok, >10% low, ≤10% critical).
                         string dustColor = level > 0.30 ? DustColor : level > 0.10 ? DustLowColor : DustCriticalColor;
                         _dustSegment = $"   [grey54]dust[/] [bold {dustColor}]{dustLevel}%[/]";
+            reportedDustLevel = level;
                     }
 
                     // Terminal lockout. Morgana proactively pushes this at end of turn
@@ -633,7 +637,7 @@ public sealed class ConsoleUiService : ITerminalUi
                             int n = RuneLengthBefore(cursorPosition);
                             currentInput = currentInput.Remove(cursorPosition - n, n);
                             cursorPosition -= n;
-                            commandOutcome = null;
+                            promptNotice = null;
                             RefreshWhenInputSettles(ctx);
                         }
                     }
@@ -646,7 +650,7 @@ public sealed class ConsoleUiService : ITerminalUi
                         {
                             int n = RuneLengthAt(cursorPosition);
                             currentInput = currentInput.Remove(cursorPosition, n);
-                            commandOutcome = null;
+                            promptNotice = null;
                             RefreshWhenInputSettles(ctx);
                         }
                     }
@@ -695,7 +699,7 @@ public sealed class ConsoleUiService : ITerminalUi
                                 cursorPosition++;
 
                                 // The user has moved on from the last command: its outcome makes room for what is typed
-                                commandOutcome = null;
+                                promptNotice = null;
                                 RefreshWhenInputSettles(ctx);
                             }
                         }
@@ -800,18 +804,27 @@ public sealed class ConsoleUiService : ITerminalUi
     /// <summary>Tells whether a spent conversation lets <paramref name="key"/> through: a slash on an empty prompt, anything once a line is started.</summary>
     private bool AcceptsKeyOnSpentConversation(ConsoleKeyInfo key)
     {
-        // A line already started must stay editable and runnable, even if the caret wandered before its slash
+        // A line already started must stay editable and runnable, even if the caret wandered before its slash; a form
+        // stays answerable even once its value has been cleared
         lock (renderLock)
-            return currentInput.Length > 0 || key.KeyChar == '/';
+            return commandOptionPrompt.IsActive || currentInput.Length > 0 || key.KeyChar == '/';
     }
 
-    /// <summary>Runs the command resolved from <paramref name="line"/>; a missing or failing one is explained above the prompt.</summary>
+    /// <summary>Tells whether a command is being written, as a line or as a form answering its options, which suspends quick replies and the spent-conversation prompt while it lasts.</summary>
+    private bool IsCommandLineOpen()
+    {
+        // A form's value is whatever the option takes, a word such as text included, so the form itself is what counts
+        lock (renderLock)
+            return commandOptionPrompt.IsActive || CommandPaletteService.IsCommandLine(currentInput);
+    }
+
+    /// <summary>Runs the command resolved from <paramref name="line"/>; a missing one or one given values it cannot take is explained above the prompt.</summary>
     private async Task RunCommandLineAsync(LiveDisplayContext ctx, string line, CommandDescriptor? command)
     {
         if (command is null)
         {
             // On a spent conversation the likely mistake is reaching for a command that needs Morgana
-            ShowCommandOutcome(ctx, conversationDead
+            ShowPromptNotice(ctx, conversationDead
                 ? $"{line.Trim()} is not available on a spent conversation: type /new to start a fresh one"
                 : $"{line.Trim()} is not a command: pick one with ↑↓ or type the start of its name", WarningColor);
             return;
@@ -822,7 +835,7 @@ public sealed class ConsoleUiService : ITerminalUi
         IReadOnlyDictionary<string, string> options = CommandLineParser.ParseOptions(line, out string? lineProblem);
         if (lineProblem is { } malformedLine)
         {
-            ShowCommandOutcome(ctx, malformedLine, WarningColor);
+            ShowPromptNotice(ctx, malformedLine, WarningColor);
             return;
         }
 
@@ -845,7 +858,7 @@ public sealed class ConsoleUiService : ITerminalUi
 
         if (command.DescribeOptionProblem(options) is { } problem)
         {
-            ShowCommandOutcome(ctx, problem, WarningColor);
+            ShowPromptNotice(ctx, problem, WarningColor);
             return;
         }
 
@@ -917,7 +930,7 @@ public sealed class ConsoleUiService : ITerminalUi
 
             // The previous command's outcome gives way to the hint naming this one, as does a bar an earlier
             // command left behind when its call was given up on
-            commandOutcome = null;
+            promptNotice = null;
             commandProgress.Clear();
             ctx.UpdateTarget(BuildLayout());
             ctx.Refresh();
@@ -934,18 +947,30 @@ public sealed class ConsoleUiService : ITerminalUi
         }
         catch (TimeoutException ex)
         {
-            // The command's deadline already names the command and says it was called off. An outcome that
+            // The panel's title names the command and the deadline's message says it was called off. An outcome that
             // landed just before it is the truth and stays: Morgana had finished the work
             lock (renderLock)
             {
-                if (ReferenceEquals(invocationOwingOutcome, invocation))
-                    ShowCommandOutcome(ctx, ex.Message, ErrorColor);
+                if (ReferenceEquals(invocationOwingOutcome, invocation) && !exitRequested)
+                {
+                    ShowOutcomePanel(invocation.Command.Name, ex.Message, ErrorColor);
+                    ctx.UpdateTarget(BuildLayout());
+                    ctx.Refresh();
+                }
             }
         }
         catch (Exception ex)
         {
-            // Logging is silenced under the live UI, so the outcome line is the only place the failure can surface
-            ShowCommandOutcome(ctx, $"/{invocation.Command.Name} failed: {ex.Message}", ErrorColor);
+            // Logging is silenced under the live UI, so the outcome panel is the only place the failure can surface
+            lock (renderLock)
+            {
+                if (!exitRequested)
+                {
+                    ShowOutcomePanel(invocation.Command.Name, $"failed: {ex.Message}", ErrorColor);
+                    ctx.UpdateTarget(BuildLayout());
+                    ctx.Refresh();
+                }
+            }
         }
         finally
         {
@@ -977,6 +1002,16 @@ public sealed class ConsoleUiService : ITerminalUi
         new(conversationDead, agentCarryingConversation is not null);
 
     /// <inheritdoc />
+    public TerminalSessionStatus Status
+    {
+        get
+        {
+            lock (renderLock)
+                return new TerminalSessionStatus(currentSpeaker, reportedDustLevel, conversationDead, history.Count(entry => entry.IsConversationMessage));
+        }
+    }
+
+    /// <inheritdoc />
     public IReadOnlyList<CommandDescriptor> AvailableCommands
     {
         get
@@ -992,7 +1027,7 @@ public sealed class ConsoleUiService : ITerminalUi
         awaitingResponse = true;
 
         // The conversation has moved on, so what the last command came to is no longer news
-        commandOutcome = null;
+        promptNotice = null;
     }
 
     /// <summary>
@@ -1016,7 +1051,7 @@ public sealed class ConsoleUiService : ITerminalUi
             if (exitRequested)
                 return;
 
-            history.Add(new DisplayedMessage(channelSpeaker, text, color));
+            history.Add(new DisplayedMessage(channelSpeaker, text, color, "system_warning"));
 
             // A notice scrolled out of sight would leave the user wondering why nothing happened
             scrollOffset = 0;
@@ -1053,7 +1088,14 @@ public sealed class ConsoleUiService : ITerminalUi
         {
             // A command run here reports its own outcome: nothing is left owed to it from Morgana
             invocationOwingOutcome = null;
-            ShowCommandOutcome(liveContext, text, isFailure ? ErrorColor : CommandReportColor);
+
+            // A command still finishing after the user left must not draw over the shell the display gave back
+            if (exitRequested)
+                return;
+
+            ShowOutcomePanel(runningCommandName, text, isFailure ? ErrorColor : CommandReportColor);
+            liveContext.UpdateTarget(BuildLayout());
+            liveContext.Refresh();
         }
     }
 
@@ -1112,7 +1154,7 @@ public sealed class ConsoleUiService : ITerminalUi
             commandProgress.Show(frame);
             if (frame.Finished)
             {
-                SetCommandOutcome(message.Text, OutcomeColor(message));
+                ShowOutcomePanel(frame.Command, message.Text, OutcomeColor(message));
                 invocationOwingOutcome = null;
 
                 // A budget found spent ends the conversation whatever asked for more of it, a command included
@@ -1144,8 +1186,8 @@ public sealed class ConsoleUiService : ITerminalUi
         _ => CommandReportColor
     };
 
-    /// <summary>Draws <paramref name="text"/> above the prompt in <paramref name="color"/> as the outcome of the command just run.</summary>
-    private void ShowCommandOutcome(LiveDisplayContext ctx, string text, string color)
+    /// <summary>Draws <paramref name="text"/> above the prompt in <paramref name="color"/> as the reason the command line ran nothing.</summary>
+    private void ShowPromptNotice(LiveDisplayContext ctx, string text, string color)
     {
         lock (renderLock)
         {
@@ -1153,18 +1195,31 @@ public sealed class ConsoleUiService : ITerminalUi
             if (exitRequested)
                 return;
 
-            SetCommandOutcome(text, color);
+            SetPromptNotice(text, color);
             ctx.UpdateTarget(BuildLayout());
             ctx.Refresh();
         }
     }
 
-    /// <summary>Records what a command came to, cleaned of anything the terminal would obey. Must be called under <see cref="renderLock"/>.</summary>
-    private void SetCommandOutcome(string text, string color)
+    /// <summary>
+    /// Opens the panel reporting what one of Morgana's commands came to: its name as the title, the outcome under it in
+    /// <paramref name="color"/>. An outcome landing after the deadline's replaces the deadline's. Must be called under <see cref="renderLock"/>.
+    /// </summary>
+    private void ShowOutcomePanel(string commandName, string text, string color)
     {
         // Morgana's outcome arrives over the unauthenticated callback, so it is drawn only once it is plain text
-        commandOutcome = TerminalCellService.StripControlCharacters(text);
-        commandOutcomeColor = color;
+        string outcome = TerminalCellService.StripControlCharacters(text);
+        string title = "/" + TerminalCellService.StripControlCharacters(commandName);
+        commandPanel = width =>
+            [cells.RenderPanelTitle(title, width, MorganaColor), .. cells.WrapWords(outcome, width).Select(row => new Markup($"[{color}]{Markup.Escape(row)}[/]"))];
+    }
+
+    /// <summary>Records why the command line ran nothing, cleaned of anything the terminal would obey. Must be called under <see cref="renderLock"/>.</summary>
+    private void SetPromptNotice(string text, string color)
+    {
+        // The notice quotes the line the user typed, pasted text included, so it is drawn only once it is plain text
+        promptNotice = TerminalCellService.StripControlCharacters(text);
+        promptNoticeColor = color;
     }
 
     /// <summary>Echoes <paramref name="echo"/> as the user's line, then sends the turn through <paramref name="dispatch"/> under the reply deadline.</summary>
@@ -1173,7 +1228,7 @@ public sealed class ConsoleUiService : ITerminalUi
         lock (renderLock)
         {
             // Echo and thinking hint go up before the send, so a slow backend still feels answered
-            history.Add(new DisplayedMessage("You", echo, UserColor));
+            history.Add(new DisplayedMessage("You", echo, UserColor, "user"));
             BeginTurn();
             scrollOffset = 0; // jump back to the live bottom for the new turn
             ctx.UpdateTarget(BuildLayout());
@@ -1201,7 +1256,7 @@ public sealed class ConsoleUiService : ITerminalUi
             {
                 if (exitRequested)
                     return;
-                history.Add(new DisplayedMessage(channelSpeaker, $"send failed: {ex.Message}", ErrorColor));
+                history.Add(new DisplayedMessage(channelSpeaker, $"send failed: {ex.Message}", ErrorColor, "error"));
                 ReleaseTurn();
                 ctx.UpdateTarget(BuildLayout());
                 ctx.Refresh();
@@ -1288,12 +1343,13 @@ public sealed class ConsoleUiService : ITerminalUi
         agentCarryingConversation = null;
         conversationId = openedConversationId;
         _dustSegment = string.Empty;
+        reportedDustLevel = null;
 
         // A fresh budget: the spent latch of the old conversation is gone
         conversationDead = false;
 
         // The view and the prompt start clean, the /new line and any command outcome included
-        commandOutcome = null;
+        promptNotice = null;
         scrollOffset = 0;
         currentInput = string.Empty;
         cursorPosition = 0;
@@ -1340,7 +1396,8 @@ public sealed class ConsoleUiService : ITerminalUi
                 history.Add(new DisplayedMessage(
                     channelSpeaker,
                     $"no answer from Morgana after {replyTimeout.TotalSeconds:0}s — the turn may be lost, ask again or press Esc to quit",
-                    ErrorColor));
+                    ErrorColor,
+                    "error"));
                 ReleaseTurn();
                 ctx.UpdateTarget(BuildLayout());
                 ctx.Refresh();
@@ -1738,14 +1795,14 @@ public sealed class ConsoleUiService : ITerminalUi
         if (commandRunning && !awaitingResponse)
             return ChunkStyledRows($"/{runningCommandName} is running…", termWidth, $"{CommandReportColor} italic");
 
-        // What the last command came to sits above whatever the prompt is now, in place of the widget it follows
-        List<IRenderable> outcomeRows = commandOutcome is { } outcome
-            ? ChunkStyledRows(outcome, termWidth, commandOutcomeColor)
+        // Why the last command line ran nothing sits above whatever the prompt is now, where it was typed
+        List<IRenderable> outcomeRows = promptNotice is { } notice
+            ? ChunkStyledRows(notice, termWidth, promptNoticeColor)
             : [];
 
         // Terminal state supersedes everything but a command line being typed, which is how the user gets
         // out of it. Morgana's banner already told the user the dust ran out; here they learn the way on.
-        if (conversationDead && !CommandPaletteService.IsCommandLine(currentInput))
+        if (conversationDead && !IsCommandLineOpen())
             return [.. outcomeRows, .. ChunkStyledRows("✦ Conversation spent — type /new to start a fresh one or press Esc to quit", termWidth, $"{ErrorColor} italic")];
 
         if (awaitingResponse)
@@ -1911,6 +1968,11 @@ public sealed class ConsoleUiService : ITerminalUi
     private static bool IsSpecializedAgent(string? agentName) =>
         agentName is not null && agentName.Contains('(') && agentName.Contains(')');
 
-    /// <summary>A single history row: speaker name, rendered text and the Spectre color token used for the name.</summary>
-    private record DisplayedMessage(string Who, string Text, string Color);
+    /// <summary>A single history row: speaker name, rendered text, the Spectre color token used for the name and its message type.</summary>
+    /// <param name="MessageType">The wire's <c>MessageType</c> for a delivery, <c>user</c> for the user's own line, <c>system_warning</c> or <c>error</c> for a notice drawn here.</param>
+    private record DisplayedMessage(string Who, string Text, string Color, string MessageType)
+    {
+        /// <summary>Tells a message of the conversation from a notice, which is what <c>/status</c> counts.</summary>
+        public bool IsConversationMessage => MessageType is "assistant" or "presentation" or "user";
+    }
 }

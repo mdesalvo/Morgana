@@ -97,6 +97,13 @@ public sealed class TerminalCellService
         return rows;
     }
 
+    /// <summary>The rule that opens a command's panel: its title on a line drawn across the whole row in <paramref name="color"/>.</summary>
+    public Markup RenderPanelTitle(string title, int width, string color)
+    {
+        string opening = $"── {title} ";
+        return new Markup($"[{color}]{Markup.Escape(Trunc(opening + new string('─', Math.Max(0, width - opening.GetCellWidth())), width))}[/]");
+    }
+
     /// <summary>Cuts text down to fit width terminal cells, tacking on an ellipsis when it actually had to cut something.</summary>
     public string Trunc(string text, int width)
     {

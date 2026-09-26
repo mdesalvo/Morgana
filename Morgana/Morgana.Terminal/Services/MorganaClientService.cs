@@ -6,7 +6,7 @@ namespace Morgana.Terminal.Services;
 
 /// <summary>
 /// Thin REST client wrapping the Morgana conversation lifecycle endpoints
-/// (<c>/api/morgana/conversation/start</c>, <c>.../message</c>, <c>.../command</c>, <c>.../end</c>) and the command catalogue.
+/// (<c>/api/morgana/conversation/start</c>, <c>.../message</c>, <c>.../command</c>, <c>.../end</c>), the command catalogue and the health check.
 /// Relies on <see cref="IHttpClientFactory"/>'s named <c>Morgana</c> client, which
 /// is wired with the per-issuer JWT <see cref="Handlers.MorganaAuthHandler"/>.
 /// </summary>
@@ -43,6 +43,33 @@ public sealed class MorganaClientService
         // A non-positive wait would call every command off the instant it is sent, so it falls back too
         int commandTimeoutSeconds = configuration.GetValue<int?>(profile.SectionKey("CommandTimeoutSeconds")) ?? DefaultCommandTimeoutSeconds;
         commandTimeout = TimeSpan.FromSeconds(commandTimeoutSeconds > 0 ? commandTimeoutSeconds : DefaultCommandTimeoutSeconds);
+    }
+
+    /// <summary>How long a health check waits before calling Morgana unreachable: long enough for a busy host, short enough to wait on.</summary>
+    private static readonly TimeSpan HealthCheckTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>The URL Morgana delivers this channel's replies to, as announced on every handshake.</summary>
+    public string CallbackUrl => callbackUrl;
+
+    /// <summary>Morgana's base address as this channel is configured to reach it.</summary>
+    public Uri? MorganaAddress => httpClientFactory.CreateClient("Morgana").BaseAddress;
+
+    /// <summary>Tells whether Morgana answers its health check as healthy; false when it is down, unreachable or too slow to answer.</summary>
+    public async Task<bool> IsMorganaHealthyAsync(CancellationToken cancellationToken = default)
+    {
+        HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
+        using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(HealthCheckTimeout);
+        try
+        {
+            using HttpResponseMessage response = await httpClient.GetAsync("/api/morgana/health", deadline.Token);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex) when (ex is HttpRequestException || (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
+        {
+            // A refused connection and a host that outlasts the deadline both mean the same thing to the user
+            return false;
+        }
     }
 
     /// <summary>
@@ -147,7 +174,7 @@ public sealed class MorganaClientService
         {
             // Dropping the call is what tells Morgana to stop. A command called off that way writes nothing:
             // the user reads the deadline as the outcome, since no other one will arrive
-            throw new TimeoutException($"/{name} did not finish within {commandTimeout.TotalSeconds:0}s and was called off");
+            throw new TimeoutException($"did not finish within {commandTimeout.TotalSeconds:0}s and was called off");
         }
 
         // A command meets the limits a message meets: Morgana explains a 429 over the webhook just the same

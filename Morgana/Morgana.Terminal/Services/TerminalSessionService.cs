@@ -22,6 +22,9 @@ public sealed class TerminalSessionService
         this.webhookReceiverService = webhookReceiverService;
     }
 
+    /// <summary>When the conversation on screen was opened, in local time; null before the first one opens.</summary>
+    public DateTimeOffset? OpenedAt { get; private set; }
+
     /// <summary>The conversation on screen.</summary>
     /// <exception cref="InvalidOperationException">Thrown before any conversation has been opened.</exception>
     public string ConversationId => conversationId ?? throw new InvalidOperationException("No conversation has been opened yet.");
@@ -51,6 +54,7 @@ public sealed class TerminalSessionService
             string openedConversationId = await morganaClientService.StartConversationAsync(candidateConversationId, cancellationToken);
             webhookReceiverService.ExpectedConversationId = openedConversationId;
             conversationId = openedConversationId;
+            OpenedAt = DateTimeOffset.Now;
             return openedConversationId;
         }
         catch

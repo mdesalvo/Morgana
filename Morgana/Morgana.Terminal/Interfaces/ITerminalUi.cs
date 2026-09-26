@@ -1,4 +1,5 @@
 using Morgana.Contracts;
+using Morgana.Terminal.Messages;
 using Morgana.Terminal.Services;
 using Spectre.Console;
 
@@ -29,13 +30,16 @@ public interface ITerminalUi
     /// <summary>The commands the palette would offer now, judged on the conversation on screen, in the order it lists them.</summary>
     IReadOnlyList<CommandDescriptor> AvailableCommands { get; }
 
+    /// <summary>The conversation on screen as the header shows it now.</summary>
+    TerminalSessionStatus Status { get; }
+
     /// <summary>Ends the live UI once the running command returns, which ends the conversation and the process.</summary>
     void RequestExit();
 
     /// <summary>
-    /// Shows <paramref name="text"/> as the outcome of the command just run, above the prompt and never in the
-    /// transcript: a command is not a turn of the conversation. It stays until the user writes in the prompt or
-    /// runs another command. <paramref name="isFailure"/> marks what went wrong, so the two read apart at a glance.
+    /// Opens the panel reporting what the command just run came to, titled with its name, as <see cref="ShowPanel"/> does:
+    /// never in the transcript, since a command is not a turn of the conversation. <paramref name="isFailure"/> marks
+    /// what went wrong, so the two read apart at a glance.
     /// </summary>
     void ShowCommandOutcome(string text, bool isFailure = false);
 

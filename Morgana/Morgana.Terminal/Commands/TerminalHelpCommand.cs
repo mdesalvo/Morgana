@@ -62,8 +62,7 @@ public sealed class TerminalHelpCommand : TerminalCommand
         List<Markup> rows = [];
 
         // The rule opens the block in the channel's colour, so the help reads apart from the transcript above it
-        string title = $"── {profile.DisplayName} help ";
-        rows.Add(new Markup($"[{theme.PrimaryColor}]{Markup.Escape(cells.Trunc(title + new string('─', Math.Max(0, width - title.GetCellWidth())), width))}[/]"));
+        rows.Add(cells.RenderPanelTitle($"{profile.DisplayName} help", width, theme.PrimaryColor));
 
         rows.AddRange(cells.WrapWords(profile.Introduction, width).Select(row => new Markup(Markup.Escape(row))));
         rows.AddRange(LayOutKeyBindings(width));
