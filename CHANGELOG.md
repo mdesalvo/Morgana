@@ -25,9 +25,6 @@ Grimoire and Rune now support **commands**: type `/` at the prompt and a palette
 ### 📦 Dependencies
 - Updated `Microsoft.Agents.AI` to 1.22.0
 
-### 🚀 Future Enablement
-- **Agentic terminals**: a command registered in Morgana appears in the Grimoire and Rune palettes with no change to either channel. Next: commands shipped by plugins and agents that know which ones exist
-
 
 ## [0.31.0] - 2026-09-20
 ### 🎯 Major Feature: Cross-Instance collaboration over A2A
