@@ -19,8 +19,10 @@ public interface ICommand
     /// </summary>
     CommandDescriptor Descriptor { get; }
 
-    /// <summary>Runs the command on a conversation already known to exist, whose caller has passed the rate and dust limits, with the <paramref name="options"/> the user wrote at the prompt, already checked against what the descriptor declares.</summary>
+    /// <summary>Runs the command on a conversation already known to exist, whose caller has passed the rate and dust limits.</summary>
+    /// <param name="conversationId">The conversation the command acts on, which is also where its frames are delivered.</param>
     /// <param name="invocationId">The channel's name for this run, to be set on every <see cref="CommandProgress"/> the command sends; null when the channel sent none.</param>
+    /// <param name="options">The values the user wrote at the prompt, already checked against what the descriptor declares.</param>
     /// <param name="cancellationToken">
     /// Fires when the channel has stopped waiting, having already told the user the command was called off.
     /// A command cancelled before it writes leaves the record as it was and sends nothing to the channel: a

@@ -98,8 +98,8 @@ public sealed class CompactHistoryCommand : ICommand
             // An agent still holding a history short enough to read whole folds nothing, which is an answer in
             // itself: the user asked for a saving that turned out not to be needed, not for a failure
             await SendOutcomeAsync(conversationId, invocationId, foldedMessages == 0
-                ? $"Nothing needed compacting: the context {agent}'s LLM rereads is still short enough to read whole."
-                : $"Compacted {foldedMessages} message{(foldedMessages == 1 ? string.Empty : "s")} of the context {agent}'s LLM rereads each turn into a summary. The summary is for the LLM alone: your transcript is unchanged.");
+                ? $"Nothing needed compacting: the context of {agent}'s LLM is still short enough to read whole."
+                : $"Compacted {foldedMessages} message{(foldedMessages == 1 ? string.Empty : "s")} into a summary for {agent}'s LLM. Your transcript is unchanged.");
         }
         catch (Exception) when (cancellationToken.IsCancellationRequested)
         {
