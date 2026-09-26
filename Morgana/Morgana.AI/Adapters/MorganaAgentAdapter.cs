@@ -503,9 +503,10 @@ public class MorganaAgentAdapter
             // concrete delegate type is unknowable at compile time.
             Delegate toolImplementation = Delegate.CreateDelegate(
                 System.Linq.Expressions.Expression.GetDelegateType(
-                    method.GetParameters().Select(p => p.ParameterType)
-                                          .Concat([method.ReturnType])
-                                          .ToArray()),
+                [
+                    .. method.GetParameters().Select(p => p.ParameterType),
+                    method.ReturnType
+                ]),
                 toolInstance,
                 method);
 

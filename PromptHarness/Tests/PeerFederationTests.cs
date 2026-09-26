@@ -68,7 +68,8 @@ public sealed class PeerFederationTests
         StubCard(peer, peerAddress, RequireBearer());
         StubConsultationEndpoint(peer);
 
-        await ConsultAsync(BuildDirectory(peerAddress));
+        using ConfigurationAgentDirectoryService directory = BuildDirectory(peerAddress);
+        await ConsultAsync(directory);
 
         // Neither claim is discoverable and neither is this installation's own: a partner files a
         // caller under a name of its choosing and validates an audience it agreed when it cut the key.
@@ -94,7 +95,8 @@ public sealed class PeerFederationTests
         StubCard(peer, thirdHostAddress, RequireBearer());
         StubConsultationEndpoint(thirdHost);
 
-        AIAgent? colleague = await ResolveAsync(BuildDirectory(peerAddress));
+        using ConfigurationAgentDirectoryService directory = BuildDirectory(peerAddress);
+        AIAgent? colleague = await ResolveAsync(directory);
 
         Assert.Null(colleague);
         Assert.Empty(thirdHost.LogEntries);
@@ -114,7 +116,8 @@ public sealed class PeerFederationTests
             },
             RequiredSchemeName: "oauth"));
 
-        Assert.Null(await ResolveAsync(BuildDirectory(peerAddress)));
+        using ConfigurationAgentDirectoryService directory = BuildDirectory(peerAddress);
+        Assert.Null(await ResolveAsync(directory));
     }
 
     [Fact]
@@ -127,7 +130,8 @@ public sealed class PeerFederationTests
         StubCard(peer, peerAddress, security: null);
         StubConsultationEndpoint(peer);
 
-        await ConsultAsync(BuildDirectory(peerAddress));
+        using ConfigurationAgentDirectoryService directory = BuildDirectory(peerAddress);
+        await ConsultAsync(directory);
 
         Assert.False(SingleConsultationRequest(peer).ContainsKey("Authorization"));
     }
@@ -141,7 +145,7 @@ public sealed class PeerFederationTests
 
         // A card describes an agent rather than a conversation. Read per conversation, a partner would
         // be answering the same question over and over while this side's own first turn waits on it.
-        ConfigurationAgentDirectoryService directory = BuildDirectory(peerAddress);
+        using ConfigurationAgentDirectoryService directory = BuildDirectory(peerAddress);
         await ResolveAsync(directory);
         await ResolveAsync(directory);
 

@@ -18,6 +18,8 @@ Grimoire and Rune now support **commands**: type `/` at the prompt and a palette
 
 ### 🐛 Fixed
 - Morgana now remembers the whole conversation as it appears on screen: **nothing disappears on a refresh any more**, neither the message just sent nor anything already shown
+- **Cauldron (1)**
+  - A page closed while waiting for a reply no longer stays in the server's memory until the reply timeout expires
 
 ### 📦 Dependencies
 - Updated `Microsoft.Agents.AI` to 1.22.0

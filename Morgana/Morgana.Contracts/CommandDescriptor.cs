@@ -71,7 +71,7 @@ public record CommandDescriptor(
 
         // What the command cannot work without is asked for before anything happens, not discovered halfway
         // through. An option carrying a default is never missing: the default is what the command runs on
-        if (declared.FirstOrDefault(option => option.Required && option.DefaultValue is null && !WasGiven(option, options)) is { } missing)
+        if (declared.FirstOrDefault(option => option is { Required: true, DefaultValue: null } && !WasGiven(option, options)) is { } missing)
             return $"/{Name} needs {missing.Name}: {missing.Description}";
 
         return null;
@@ -90,8 +90,8 @@ public record CommandDescriptor(
 
         foreach (CommandOption option in Options ?? [])
         {
-            if (option.DefaultValue is { } fallback && !effective.ContainsKey(option.Name))
-                effective[option.Name] = fallback;
+            if (option.DefaultValue is { } fallback)
+                effective.TryAdd(option.Name, fallback);
         }
 
         return effective;

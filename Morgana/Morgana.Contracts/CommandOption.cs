@@ -32,9 +32,9 @@ public record CommandOption(
 
     /// <summary>The allowed values as a user reads them, <c>text or json</c>; empty when any value is acceptable.</summary>
     public string DescribeAllowedValues() =>
-        AllowedValues is not { Count: > 0 } values
+        AllowedValues is not { Count: > 0 }
             ? string.Empty
-            : values.Count == 1
-                ? values[0]
-                : $"{string.Join(", ", values.Take(values.Count - 1))} or {values[^1]}";
+            : AllowedValues.Count == 1
+                ? AllowedValues[0]
+                : $"{string.Join(", ", AllowedValues.Take(AllowedValues.Count - 1))} or {AllowedValues[^1]}";
 }

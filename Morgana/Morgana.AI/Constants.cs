@@ -428,7 +428,7 @@ public static class Constants
     /// non-secret required value through either. A setting still holding one has not been
     /// configured and every reader treats it as absent rather than as a value.
     /// </summary>
-    public static class Overrides
+    public static class SecretOverrides
     {
         /// <summary>Stands in for a secret: an API key, a signing key.</summary>
         public const string Secure = "_SECURE_OVERRIDE_";

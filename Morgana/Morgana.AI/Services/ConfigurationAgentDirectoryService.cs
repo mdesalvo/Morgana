@@ -15,7 +15,7 @@ namespace Morgana.AI.Services;
 /// Default <see cref="IAgentDirectoryService"/>: projects each local agent's card from the domain
 /// configuration and resolves a colleague by fetching its published card over A2A.
 /// </summary>
-public class ConfigurationAgentDirectoryService : IAgentDirectoryService
+public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDisposable
 {
     /// <summary>Version stamped on every locally projected card, tracking the framework's own contract.</summary>
     private const string LocalCardVersion = "1.0";
@@ -82,6 +82,10 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// Holds projection to one agent at a time and holds it off entirely while every card is being
     /// given its published address.
     /// </summary>
+    /// <remarks>
+    /// Left out of <see cref="Dispose"/>: awaited only, it holds nothing to release, while a projection
+    /// still inside it at shutdown would fail on leaving it.
+    /// </remarks>
     private readonly SemaphoreSlim cardsLock = new(1, 1);
 
     /// <summary>
@@ -241,9 +245,8 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
             // live and this direction of it is open. Its name is typed twice by hand — on the attribute
             // in code, on the entry in configuration — so spacing is not allowed to part them.
             consultablePartner = ResolvePartners(configuration)
-                .FirstOrDefault(candidate => candidate.Enabled
-                                             && candidate.OutboundPolicy?.Enabled == true
-                                             && string.Equals(candidate.Name.Trim(), peer.Instance, StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(candidate => candidate is { Enabled: true, OutboundPolicy.Enabled: true }
+                                              && string.Equals(candidate.Name.Trim(), peer.Instance, StringComparison.OrdinalIgnoreCase));
 
             // Reachable only if configuration says where: unlike its own address, a partner's is declared.
             if (consultablePartner is null)
@@ -495,7 +498,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
             // The placeholder counts as absent, or an un-overridden deployment signs and proves with
             // the literal word — which fails at the first call rather than here.
             if (string.IsNullOrWhiteSpace(partner.SymmetricKey)
-                || string.Equals(partner.SymmetricKey.Trim(), Constants.Overrides.Secure, StringComparison.Ordinal))
+                || string.Equals(partner.SymmetricKey.Trim(), Constants.SecretOverrides.Secure, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
                     $"Partner '{partnerName}' carries no usable SymmetricKey. It is the one secret the two installations "
@@ -938,6 +941,16 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService
     /// </summary>
     private string ResolveAudience()
         => configuration["Morgana:Authentication:Audience"] ?? "morgana.ai";
+
+    /// <summary>Closes the connections held open to colleagues; called by the container when the host stops.</summary>
+    public void Dispose()
+    {
+        // Every client handed out borrowed this pool: a colleague agent outliving the host fails its next call
+        connectionPool.Dispose();
+
+        // Unsealed like every default service, so a derived directory's finalizer would find nothing left to release
+        GC.SuppressFinalize(this);
+    }
 
     /// <summary>
     /// One reading of a colleague's published card, with the moment it was taken.

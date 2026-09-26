@@ -63,18 +63,13 @@ public class MorganaController : ControllerBase
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpPost("conversation/start")]
-    public async Task<IActionResult> StartConversation([FromBody] StartConversationRequest request)
+    public async Task<IActionResult> StartConversationAsync([FromBody] StartConversationRequest request)
     {
         logger.LogInformation("Starting conversation {RequestConversationId}", request.ConversationId);
 
         // Morgana refuses to host a conversation for a channel that does not announce
         // its identity, its capability budget AND a delivery mode that matches a concrete
-        // transport registered in DI. The handshake is the only place where we learn who
-        // the peer is, what it can render and which transport will carry outbound messages,
-        // so any missing or unknown field here is rejected explicitly rather than silently
-        // defaulted. The finite set of valid deliveryMode values is owned by
-        // IChannelServiceFactory; consulting it at the gate lets us fail at the earliest
-        // honest point instead of surfacing the mismatch on the first outbound send.
+        // transport registered in DI.
         if (request.ChannelMetadata is null
             || request.ChannelMetadata.Coordinates is null
             || string.IsNullOrWhiteSpace(request.ChannelMetadata.Coordinates.ChannelName)
@@ -93,14 +88,13 @@ public class MorganaController : ControllerBase
 
         // Webhook-specific addressing gate: the push-style transport cannot route outbound
         // traffic without a reachable callback URL, so a handshake declaring deliveryMode=webhook
-        // without an absolute http(s) URL is rejected here — the same shape as the generic gate
-        // above, just narrower. The scheme is required too: on Unix a bare path such as "/hook"
-        // parses as an absolute file URI, which nothing can POST to. Other transports (signalr,
-        // future pull/duplex modes) leave CallbackUrl null; no requirement applies to them.
+        // without an absolute http(s) URL is rejected here.
+        // The scheme is required too: on Unix a bare path such as "/hook" parses as an absolute file URI,
+        // which nothing can POST to. Other transports (e.g: signalr) leave CallbackUrl null: no requirement applies to them.
         string normalisedDeliveryMode = request.ChannelMetadata.Coordinates.DeliveryMode.Trim().ToLowerInvariant();
         if (normalisedDeliveryMode == Constants.DeliveryModes.Webhook
              && !(Uri.TryCreate(request.ChannelMetadata.Coordinates.CallbackUrl, UriKind.Absolute, out Uri? callbackUri)
-                  && (callbackUri.Scheme == Uri.UriSchemeHttp || callbackUri.Scheme == Uri.UriSchemeHttps)))
+             && (callbackUri.Scheme == Uri.UriSchemeHttp || callbackUri.Scheme == Uri.UriSchemeHttps)))
         {
             logger.LogWarning(
                 "Start requested for conversation {ConversationId} with deliveryMode=webhook but missing or invalid callbackUrl; returning 400",
@@ -137,7 +131,7 @@ public class MorganaController : ControllerBase
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpPost("conversation/{conversationId}/end")]
-    public async Task<IActionResult> EndConversation(string conversationId)
+    public async Task<IActionResult> EndConversationAsync([FromRoute] string conversationId)
     {
         logger.LogInformation("Ending conversation {ConversationId}", conversationId);
 
@@ -164,7 +158,7 @@ public class MorganaController : ControllerBase
     [HttpPost("conversation/{conversationId}/resume")]
     // An unknown id (stale client storage, wiped deployment) is a 404: Cauldron falls back to starting anew
     [TypeFilter<KnownConversationFilter>(Order = 1)]
-    public async Task<IActionResult> ResumeConversation(string conversationId)
+    public async Task<IActionResult> ResumeConversationAsync([FromRoute] string conversationId)
     {
         logger.LogInformation("Resuming conversation {ConversationId}", conversationId);
 
@@ -181,13 +175,9 @@ public class MorganaController : ControllerBase
         double? dustLevel = await dustLimitService.GetRemainingLevelAsync(conversationId);
 
         // If the resumed conversation is already dust-dead, hand the client the
-        // canonical terminal message (the very same dustLimitingOptions.ErrorMessage
-        // the message endpoint emits on a doomed send and EmitDustExhaustionAsync
-        // emits at end of turn) so a page refresh can re-surface the lockout banner
-        // up front, instead of letting the user rediscover it by firing a message
-        // that is instantly rejected. dustLevel == 0.0 is exactly ratio >= 1.0,
-        // i.e. the same over-budget boundary IsOverBudgetAsync gates on. Null
-        // otherwise (including when dust limiting is disabled).
+        // canonical terminal message so that a page refresh can re-surface the
+        // lockout banner up front, instead of letting the user rediscover it by
+        // firing a message that is instantly rejected.
         string? dustExhaustedMessage = dustLevel is <= 0.0
             ? dustLimitingOptions.ErrorMessage
             : null;
@@ -211,7 +201,7 @@ public class MorganaController : ControllerBase
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpGet("conversation/{conversationId}/history")]
-    public async Task<IActionResult> GetConversationHistory(string conversationId)
+    public async Task<IActionResult> GetConversationHistoryAsync([FromRoute] string conversationId)
     {
         logger.LogInformation("Retrieving conversation history for {ConversationId}", conversationId);
 
@@ -238,7 +228,8 @@ public class MorganaController : ControllerBase
     /// Opens a morgana.turn OTel Activity and propagates its context into the actor system.
     /// The response will be delivered asynchronously via SignalR.
     /// </summary>
-    /// <param name="request">Request containing conversation ID and message text</param>
+    /// <param name="conversationId">Unique identifier of the conversation the message continues</param>
+    /// <param name="request">Request carrying the message text and its optional metadata</param>
     /// <returns>
     /// 202 Accepted immediately after message is queued.
     /// 404 Not Found if the conversation was never started.
@@ -248,7 +239,7 @@ public class MorganaController : ControllerBase
     // A message only continues a conversation that was started: it opens none
     [TypeFilter<KnownConversationFilter>(Order = 1)]
     [TypeFilter<ConversationLimitsFilter>(Order = 2)]
-    public async Task<IActionResult> SendMessage(string conversationId, [FromBody] SendMessageRequest request)
+    public async Task<IActionResult> SendMessageAsync([FromRoute] string conversationId, [FromBody] SendMessageRequest request)
     {
         logger.LogInformation("Sending message to conversation {ConversationId}", conversationId);
 

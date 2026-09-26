@@ -8,7 +8,7 @@ namespace Cauldron.Services;
 /// Manages conversation lifecycle: start, resume, clear.
 /// Coordinates between HTTP API, SignalR groups and local storage.
 /// </summary>
-public class ConversationLifecycleService : IConversationLifecycleService
+public class ConversationLifecycleService : IConversationLifecycleService, IDisposable
 {
     private readonly HttpClient _http;
     private readonly SignalRService _signalR;
@@ -496,5 +496,15 @@ public class ConversationLifecycleService : IConversationLifecycleService
         // dead conversation and fall through to here again.
         await _storage.ClearConversationIdAsync();
         return await StartConversationAsync();
+    }
+
+    /// <summary>Drops the deadline of a turn still in flight when the visitor's circuit closes.</summary>
+    public void Dispose()
+    {
+        // A page closed mid-turn would otherwise keep a deadline counting down for a screen that is gone
+        CancelReplyDeadline();
+
+        // Unsealed like every default service, so a derived service's finalizer would find nothing left to release
+        GC.SuppressFinalize(this);
     }
 }

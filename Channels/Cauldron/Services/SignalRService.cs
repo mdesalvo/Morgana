@@ -292,7 +292,7 @@ public class SignalRService : IAsyncDisposable
 
     /// <summary>
     /// Disposes the SignalR connection resources.
-    /// Called automatically when the service is disposed (application shutdown).
+    /// Called by the container when the visitor's circuit closes, after the page's own <see cref="StopAsync"/>.
     /// </summary>
     /// <returns>ValueTask representing the async dispose operation</returns>
     public async ValueTask DisposeAsync()
@@ -300,8 +300,13 @@ public class SignalRService : IAsyncDisposable
         startCancellation?.Cancel();
 
         if (hubConnection != null)
-        {
             await hubConnection.DisposeAsync();
-        }
+
+        // Still set only when the page never stopped the connection, the one path that would leave it undisposed
+        startCancellation?.Dispose();
+        startCancellation = null;
+
+        // Unsealed like every default service, so a derived service's finalizer would find nothing left to release
+        GC.SuppressFinalize(this);
     }
 }

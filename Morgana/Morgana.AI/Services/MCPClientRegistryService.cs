@@ -39,6 +39,10 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     /// server meets the ended session at about the same moment: the first one replaces the client and
     /// the others adopt the replacement instead of opening a session each.
     /// </summary>
+    /// <remarks>
+    /// Left out of <see cref="Dispose"/>: awaited only, a gate holds nothing to release, while a
+    /// replacement still inside one at shutdown would fail on leaving it.
+    /// </remarks>
     private readonly ConcurrentDictionary<string, SemaphoreSlim> reconnectGates;
 
     /// <summary>
@@ -348,6 +352,9 @@ public class MCPClientRegistryService : IMCPClientRegistryService
             DisconnectAllAsync().GetAwaiter().GetResult();
             disposed = true;
         }
+
+        // Unsealed like every default service, so a derived registry's finalizer would find nothing left to release
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -360,6 +367,9 @@ public class MCPClientRegistryService : IMCPClientRegistryService
             await DisconnectAllAsync();
             disposed = true;
         }
+
+        // Same reason as the synchronous path: the container disposes through whichever one its own shutdown takes
+        GC.SuppressFinalize(this);
     }
 
 }
