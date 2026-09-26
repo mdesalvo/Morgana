@@ -476,3 +476,7 @@ or environment variables.
 - Rich cards use polymorphic JSON with a `type` discriminator
 - Turn continuation is signalled out-of-band by a tool, never by a token inside the response text
 - Channel names are normalized to lowercase at ingress
+- **Invariant culture everywhere**: every host sets it as its first statement and library code
+  (`Morgana.AI`, `Morgana.Terminal`) still passes `CultureInfo.InvariantCulture` or
+  `StringComparison.Ordinal` wherever it formats, parses or compares. A build with
+  `-p:AnalysisModeGlobalization=All` reports no CA1304, CA1305, CA1310 or CA1311

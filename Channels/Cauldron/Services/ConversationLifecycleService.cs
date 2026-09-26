@@ -196,7 +196,7 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
                 }
                 else
                 {
-                    _chatStateService.CurrentAgentName = $"Morgana ({char.ToUpper(result.ActiveAgent[0]) + result.ActiveAgent[1..]})";
+                    _chatStateService.CurrentAgentName = $"Morgana ({char.ToUpperInvariant(result.ActiveAgent[0]) + result.ActiveAgent[1..]})";
                 }
 
                 await _signalR.JoinConversation(_chatStateService.ConversationId);

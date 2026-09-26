@@ -1,4 +1,5 @@
 ﻿using Microsoft.Data.Sqlite;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Morgana.AI.Interfaces;
@@ -102,7 +103,7 @@ public class SQLiteRateLimitService : IRateLimitService
                 // One instant for the whole check, so the three windows are measured from the same point
                 // and a request cannot fall inside one of them but outside another.
                 DateTime utcNow = DateTime.UtcNow;
-                string utcNowIso = utcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+                string utcNowIso = utcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
 
                 // Yesterday's requests can no longer breach any window, so they go before they are
                 // counted: the log stays bounded without a housekeeping pass of its own.
@@ -204,10 +205,11 @@ public class SQLiteRateLimitService : IRateLimitService
     {
         // ISO-8601 with a fixed-width, zero-padded format: request_timestamp is stored as TEXT.
         // This specific format sorts correctly under a plain lexicographic "<"/">=" comparison
-        // — the same trick every timestamp comparison in this file relies on.
+        // — the same trick every timestamp comparison in this file relies on. Invariant, because a
+        // host locale changes the separators or the calendar and old rows would stop comparing with new ones.
         // A day back, which outlives the widest configured window: anything older cannot affect a count.
         DateTime cutoff = now.AddDays(-1);
-        string cutoffIso = cutoff.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+        string cutoffIso = cutoff.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
 
         // Inside the caller's transaction, so a request denied further down un-deletes these rows too.
         await using SqliteCommand command = connection.CreateCommand();
@@ -297,7 +299,7 @@ public class SQLiteRateLimitService : IRateLimitService
         SqliteTransaction sqliteTransaction,
         DateTime cutoff)
     {
-        string cutoffIso = cutoff.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+        string cutoffIso = cutoff.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
 
         await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
         sqliteCommand.Transaction = sqliteTransaction;
@@ -305,7 +307,7 @@ public class SQLiteRateLimitService : IRateLimitService
         sqliteCommand.Parameters.AddWithValue("@cutoff", cutoffIso);
 
         object? result = await sqliteCommand.ExecuteScalarAsync();
-        return result != null ? Convert.ToInt32(result) : 0;
+        return result != null ? Convert.ToInt32(result, CultureInfo.InvariantCulture) : 0;
     }
 
     /// <summary>

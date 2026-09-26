@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Alembic.Interfaces;
 using Alembic.Model;
@@ -206,7 +207,7 @@ public class MigrationReportService : IMigrationReportService
             return sb.ToString();
         }
 
-        sb.AppendLine($"Against `{draft.Baseline.ImportedFrom}`, as uploaded.");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Against `{draft.Baseline.ImportedFrom}`, as uploaded.");
         sb.AppendLine();
 
         if (entries.Count == 0)
@@ -222,11 +223,11 @@ public class MigrationReportService : IMigrationReportService
 
         foreach (IGrouping<MigrationChange, MigrationEntry> group in entries.GroupBy(e => e.Change).OrderBy(g => g.Key))
         {
-            sb.AppendLine($"## {Heading(group.Key)}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"## {Heading(group.Key)}");
             sb.AppendLine();
 
             foreach (MigrationEntry entry in group)
-                sb.AppendLine($"- **`{entry.Where}`** ({entry.Kind.ToString().ToLowerInvariant()}) — {entry.Detail}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- **`{entry.Where}`** ({entry.Kind.ToString().ToLowerInvariant()}) — {entry.Detail}");
 
             sb.AppendLine();
         }

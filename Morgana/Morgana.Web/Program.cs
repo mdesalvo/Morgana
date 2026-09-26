@@ -1,3 +1,4 @@
+using System.Globalization;
 using Akka.Actor;
 using Akka.Actor.Setup;
 using Akka.DependencyInjection;
@@ -15,6 +16,19 @@ using Morgana.Web.Services;
 // ==============================================================================
 // MORGANA - AI CONVERSATION FRAMEWORK
 // ==============================================================================
+
+// ==============================================================================
+// SECTION 0: Culture
+// ==============================================================================
+// Invariant before anything else runs, so no thread this process starts inherits the host's locale:
+// what Morgana writes to disk, hands to a model or sends to a channel reads the same on a workstation
+// set to it-IT and in a container with no LANG at all. Morgana.AI states the culture explicitly
+// wherever it formats a contract; this closes everything else, plugins included.
+
+CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 

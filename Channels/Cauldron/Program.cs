@@ -1,7 +1,15 @@
+using System.Globalization;
 using Cauldron.Handlers;
 using Cauldron.Interfaces;
 using Cauldron.Services;
 using Microsoft.AspNetCore.SignalR.Client;
+
+// Invariant before anything else runs, so no thread or circuit inherits the host's locale: the page
+// reads the same on a workstation set to it-IT and in a container with no LANG at all.
+CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 

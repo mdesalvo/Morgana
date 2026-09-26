@@ -1,4 +1,5 @@
-﻿using System.Text;
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
@@ -448,20 +449,20 @@ public sealed class MorganaChatReducer : IChatReducer
                     // The call the agent made, arguments included. MEAI's own reducer drops the whole
                     // message here, which is why its summaries report that no tool ever ran.
                     case FunctionCallContent call:
-                        rendered.AppendLine($"[tool call] {call.Name}({Render(call.Arguments)})");
+                        rendered.AppendLine(CultureInfo.InvariantCulture, $"[tool call] {call.Name}({Render(call.Arguments)})");
                         break;
 
                     // What the tool answered, which is where identifiers are born: an order number the
                     // summarizer never sees is one the agent can no longer cite later in the conversation.
                     case FunctionResultContent result:
-                        rendered.AppendLine($"[tool result] {Render(result.Result)}");
+                        rendered.AppendLine(CultureInfo.InvariantCulture, $"[tool result] {Render(result.Result)}");
                         break;
 
                     // Named but not unpacked: these only have to be visible enough that the summarizer
                     // does not read their message as empty.
                     case InputRequestContent:
                     case InputResponseContent:
-                        rendered.AppendLine($"[{content.GetType().Name}]");
+                        rendered.AppendLine(CultureInfo.InvariantCulture, $"[{content.GetType().Name}]");
                         break;
 
                     // Everything else is deliberately skipped rather than guessed at.

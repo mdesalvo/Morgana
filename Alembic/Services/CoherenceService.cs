@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Alembic.Interfaces;
@@ -176,7 +177,7 @@ public class CoherenceService : ICoherenceService
             sb.AppendLine();
 
             foreach (ResolvedCoherenceFinding r in resolved)
-                sb.AppendLine($"- {r.Finding.Kind} ({r.Finding.Where}): {r.Finding.What} — addressed: {r.Resolution}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- {r.Finding.Kind} ({r.Finding.Where}): {r.Finding.What} — addressed: {r.Resolution}");
 
             sb.AppendLine();
         }
@@ -185,7 +186,7 @@ public class CoherenceService : ICoherenceService
         sb.AppendLine();
 
         foreach (IntentDraft intent in draft.Intents)
-            sb.AppendLine($"- {intent.Name}: {intent.Description}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"- {intent.Name}: {intent.Description}");
 
         sb.AppendLine();
         sb.AppendLine("# Agents");
@@ -201,7 +202,7 @@ public class CoherenceService : ICoherenceService
         foreach (AgentDraft agent in draft.Agents)
         {
             sb.AppendLine();
-            sb.AppendLine($"## {agent.ID}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"## {agent.ID}");
             sb.AppendLine();
 
             // ConsultMeFor rides with the four an agent reads about itself, though nobody but a
@@ -231,10 +232,10 @@ public class CoherenceService : ICoherenceService
 
             foreach (ToolDraft tool in agent.Tools)
             {
-                sb.AppendLine($"- {tool.Name}: {tool.Description}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- {tool.Name}: {tool.Description}");
 
                 foreach (ToolParameterDraft parameter in tool.Parameters)
-                    sb.AppendLine($"    {parameter.Name} [{parameter.Scope ?? "authored"}{(parameter.Shared ? ", shared" : "")}]: {parameter.Description}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"    {parameter.Name} [{parameter.Scope ?? "authored"}{(parameter.Shared ? ", shared" : "")}]: {parameter.Description}");
             }
         }
 

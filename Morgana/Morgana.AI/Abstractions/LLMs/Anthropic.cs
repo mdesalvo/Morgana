@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using Anthropic;
 using Anthropic.Core;
@@ -111,7 +112,7 @@ public class Anthropic : MorganaLLM
                 logger?.LogWarning(
                     "Anthropic refused a call with {Status} after {Elapsed:0.0}s and asks to wait {RetryAfter}s; the SDK will retry it",
                     (int)response.StatusCode, elapsed,
-                    response.Headers.RetryAfter?.Delta?.TotalSeconds.ToString("0") ?? "an unstated number of");
+                    response.Headers.RetryAfter?.Delta?.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) ?? "an unstated number of");
             else
                 logger?.LogInformation("Anthropic answered {Status} in {Elapsed:0.0}s", (int)response.StatusCode, elapsed);
 

@@ -15,6 +15,7 @@ Grimoire and Rune now support **commands**: type `/` at the prompt and a palette
 - **Turn marker in Grimoire and Rune**: a dot in the speaker's own colour opens every line of the conversation, so a long transcript reads as turns rather than a wall of text
 
 ### 🔄 Changed
+- **Invariant culture across the whole ecosystem**: Morgana, the channels, Alembic and the example plugin now format, parse and compare text the same way whatever the host's language settings, so dates, numbers and stored records no longer change shape between a local machine and a container
 
 ### 🐛 Fixed
 - Morgana now remembers the whole conversation as it appears on screen: **nothing disappears on a refresh any more**, neither the message just sent nor anything already shown

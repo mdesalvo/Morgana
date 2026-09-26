@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Akka.Actor;
 using Akka.Event;
 using Microsoft.Extensions.AI;
@@ -299,7 +300,7 @@ public class ConversationSupervisorActor : MorganaActor
         // handler below fires and FailOpen takes over — the same shared per-phase budget every
         // other Awaiting* state arms with its own call, not a guard-specific allowance.
         Context.SetReceiveTimeout(TimeSpan.FromSeconds(
-            Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"])));
+            Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
 
         // The compliant-or-not verdict actually arriving from GuardActor — the two handlers
         // below (Status.Failure, ReceiveTimeout) cover the other ways this round-trip can end:
@@ -496,7 +497,7 @@ public class ConversationSupervisorActor : MorganaActor
         // Same shared per-phase budget as AwaitingGuardCheck's timeout, this time bounding the
         // round-trip to ClassifierActor before ReceiveTimeout below hands off to FallbackToOther.
         Context.SetReceiveTimeout(TimeSpan.FromSeconds(
-            Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"])));
+            Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
 
         // The actual classification arriving from ClassifierActor — Status.Failure and
         // ReceiveTimeout below are the two ways it can fail to arrive at all, both routed
@@ -647,7 +648,7 @@ public class ConversationSupervisorActor : MorganaActor
         // Same shared per-phase budget again, now bounding the round-trip through RouterActor to
         // whichever domain agent it dispatches to — re-armed on every AgentStreamChunk below, so
         // it only fires if the agent goes fully silent for a whole window, not merely slow.
-        Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"])));
+        Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
 
         // Fires if neither RouterActor, nor the domain agent it dispatches to, answer in time.
         Receive<ReceiveTimeout>(_ =>
@@ -685,7 +686,7 @@ public class ConversationSupervisorActor : MorganaActor
             // streamed token-by-token keeps resetting its own deadline as long as it keeps
             // producing output, so only a genuinely stalled agent (no chunk, no final response,
             // for a full timeout window) trips ReceiveTimeout below — a slow-but-alive stream never does.
-            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"])));
+            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
             ctx.OriginalSender.Tell(chunk);
         });
 
@@ -693,7 +694,7 @@ public class ConversationSupervisorActor : MorganaActor
         // The client is told nothing, having nothing to show; an agent that stops sending
         // these is one that has genuinely stopped.
         Receive<Records.AgentStillWorking>(_ =>
-            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"]))));
+            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture))));
 
         // ActiveAgentResponse comes from RouterActor when it found and ran a real agent for the
         // classified intent; AgentResponse below is the OTHER possible reply, RouterActor's own
@@ -857,7 +858,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         // Same shared per-phase budget once more, now bounding the round-trip to the already-active
         // agent — re-armed on every AgentStreamChunk below, same reasoning as AwaitingAgentResponse.
-        Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"])));
+        Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
 
         // Fires if the already-active agent doesn't answer this follow-up in time.
         Receive<ReceiveTimeout>(_ =>
@@ -899,7 +900,7 @@ public class ConversationSupervisorActor : MorganaActor
         Receive<Records.AgentStreamChunk>(chunk =>
         {
             // Re-arms the timeout, same reasoning as AwaitingAgentResponse's identical handler above.
-            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"])));
+            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
 
             // Passes the chunk through unchanged to the client that sent the follow-up message.
             originalSender.Tell(chunk);
@@ -908,7 +909,7 @@ public class ConversationSupervisorActor : MorganaActor
         // Renews the window for text-less work, same reasoning as AwaitingAgentResponse's identical
         // handler above: the follow-up turn is where an active agent consults a colleague.
         Receive<Records.AgentStillWorking>(_ =>
-            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"]))));
+            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture))));
 
         // Handles the already-active agent's reply to this follow-up message.
         Receive<Records.AgentResponse>(response =>
@@ -1168,7 +1169,7 @@ public class ConversationSupervisorActor : MorganaActor
         // Undated on purpose: nobody recorded it, so it is filed as Morgana's and stamped after
         // the answer it follows.
         sender.Tell(new Records.ConversationResponse(
-            string.Format(farewellTemplate, departingAgentName),
+            string.Format(CultureInfo.InvariantCulture, farewellTemplate, departingAgentName),
             null,
             null,
             Constants.Morgana,
@@ -1189,7 +1190,7 @@ public class ConversationSupervisorActor : MorganaActor
             return Constants.Morgana;
 
         // Otherwise capitalizes the intent for display and qualifies the persona with it.
-        string capitalizedIntent = char.ToUpper(intent[0]) + intent[1..];
+        string capitalizedIntent = char.ToUpperInvariant(intent[0]) + intent[1..];
         return $"Morgana ({capitalizedIntent})";
     }
 
@@ -1212,7 +1213,7 @@ public class ConversationSupervisorActor : MorganaActor
             // A one-off lookup: nothing streams and the router asks nothing back of this supervisor.
             Records.RestoreAgentResponse response = await router.Ask<Records.RestoreAgentResponse>(
                 new Records.RestoreAgentRequest(persistedAgentIntent),
-                TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"])));
+                TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
 
             activeAgent = response.AgentRef;
             activeAgentIntent = response.AgentRef is null ? null : response.AgentIntent;

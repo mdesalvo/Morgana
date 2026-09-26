@@ -1,9 +1,17 @@
+using System.Globalization;
 using Alembic.Interfaces;
 using Alembic.Services;
 using Alembic.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
+
+// Invariant before anything else runs, so no thread or circuit inherits the host's locale: the
+// configuration and C# Alembic emits are the same bytes whichever machine it is deployed on.
+CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 

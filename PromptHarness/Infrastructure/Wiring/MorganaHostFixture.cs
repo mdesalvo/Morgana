@@ -345,7 +345,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // other group's conversation is ever refused for calling too often
         Environment.SetEnvironmentVariable("Morgana__RateLimiting__Enabled", Options.RateLimitPerMinute is null ? "false" : "true");
         if (Options.RateLimitPerMinute is { } rateLimitPerMinute)
-            Environment.SetEnvironmentVariable("Morgana__RateLimiting__MaxMessagesPerMinute", rateLimitPerMinute.ToString());
+            Environment.SetEnvironmentVariable("Morgana__RateLimiting__MaxMessagesPerMinute", rateLimitPerMinute.ToString(CultureInfo.InvariantCulture));
 
         // Unset by default (see HarnessOptions.DustBudgetPerConversation's own remarks): only
         // DustTests sets this, in its own filtered dotnet test invocation, so the rest of the suite
@@ -371,9 +371,9 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // SummarizationTests sets these, in its own filtered dotnet test invocation, so the rest of
         // the suite always runs against the inherited, unmodified reducer configuration.
         if (Options.SummarizationThreshold is { } summarizationThreshold)
-            Environment.SetEnvironmentVariable("Morgana__HistoryReducer__SummarizationThreshold", summarizationThreshold.ToString());
+            Environment.SetEnvironmentVariable("Morgana__HistoryReducer__SummarizationThreshold", summarizationThreshold.ToString(CultureInfo.InvariantCulture));
         if (Options.SummarizationTargetCount is { } summarizationTargetCount)
-            Environment.SetEnvironmentVariable("Morgana__HistoryReducer__SummarizationTargetCount", summarizationTargetCount.ToString());
+            Environment.SetEnvironmentVariable("Morgana__HistoryReducer__SummarizationTargetCount", summarizationTargetCount.ToString(CultureInfo.InvariantCulture));
 
         // Telemetry stays on as an ActivitySource — the in-process listener is what reads it — but
         // no exporter is wanted: OTLP would spam a collector that may not be listening. The
@@ -410,7 +410,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             $"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__RateLimiting__Enabled", "true");
         Environment.SetEnvironmentVariable(
             $"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__RateLimiting__MaxConversationsPerHour",
-            ScopedPartnerConversationsPerHour.ToString());
+            ScopedPartnerConversationsPerHour.ToString(CultureInfo.InvariantCulture));
 
         // The same admission with a ceiling that can actually be met, with the sentence this deployment
         // turns a partner away with. One conversation an hour is the smallest bound that still lets the
@@ -424,7 +424,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             $"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__InboundPolicy__RateLimiting__Enabled", "true");
         Environment.SetEnvironmentVariable(
             $"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__InboundPolicy__RateLimiting__MaxConversationsPerHour",
-            MeteredPartnerConversationsPerHour.ToString());
+            MeteredPartnerConversationsPerHour.ToString(CultureInfo.InvariantCulture));
         Environment.SetEnvironmentVariable(
             $"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__InboundPolicy__RateLimiting__ErrorMessagePerHour",
             MeteredPartnerRefusal);
@@ -670,7 +670,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             [$"Morgana__AgentToAgent__Partners__{FederatedPartnerIndex}__InboundPolicy__OnAgents__0"] = FederatedPeerAgent,
             [$"Morgana__AgentToAgent__Partners__{FederatedPartnerIndex}__InboundPolicy__RateLimiting__Enabled"] = "true",
             [$"Morgana__AgentToAgent__Partners__{FederatedPartnerIndex}__InboundPolicy__RateLimiting__MaxConversationsPerHour"] =
-                ScopedPartnerConversationsPerHour.ToString(),
+                ScopedPartnerConversationsPerHour.ToString(CultureInfo.InvariantCulture),
 
             // The two partners the instance under test declares for its own groups are admitted to
             // that same agent, which this installation does publish — they stay parked all the same,

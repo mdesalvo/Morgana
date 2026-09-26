@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -34,7 +35,7 @@ public sealed class ConversationLimitsFilter(
             await channelService.SendMessageAsync(RefusalOf(context, conversationId, rateLimitViolation, Constants.MessageTypes.SystemWarning, Constants.ErrorReasons.RateLimitExceeded));
 
             // A window that reports no wait still gets a minute, so a client never retries in a tight loop
-            context.HttpContext.Response.Headers.Append("Retry-After", rateLimitResult.RetryAfterSeconds?.ToString() ?? "60");
+            context.HttpContext.Response.Headers.Append("Retry-After", rateLimitResult.RetryAfterSeconds?.ToString(CultureInfo.InvariantCulture) ?? "60");
             context.Result = new ObjectResult(new
             {
                 error = "Rate limit exceeded",

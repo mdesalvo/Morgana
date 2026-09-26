@@ -1,3 +1,4 @@
+using System.Globalization;
 using Akka.Actor;
 using Akka.Event;
 using Microsoft.Extensions.Configuration;
@@ -66,7 +67,7 @@ public class MorganaActor : ReceiveActor
         actorLogger = Context.GetLogger();
 
         // Global timeout for all MorganaActor instances
-        SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"])));
+        SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
         Receive<ReceiveTimeout>(HandleReceiveTimeout);
     }
 

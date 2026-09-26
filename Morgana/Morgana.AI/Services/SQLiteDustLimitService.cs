@@ -1,4 +1,5 @@
 ﻿using Microsoft.Data.Sqlite;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Morgana.AI.Interfaces;
@@ -111,7 +112,8 @@ public class SQLiteDustLimitService : IDustLimitService
                     logCommand.Transaction = transaction;
                     logCommand.CommandText =
                         "INSERT INTO dust_usage_log (timestamp, dust_consumed, llm_role) VALUES (@ts, @dust, @role);";
-                    logCommand.Parameters.AddWithValue("@ts", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+                    // Stored as text: invariant, so the log reads the same whichever host wrote a row
+                    logCommand.Parameters.AddWithValue("@ts", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture));
                     logCommand.Parameters.AddWithValue("@dust", dust);
                     logCommand.Parameters.AddWithValue("@role", llmRole);
                     await logCommand.ExecuteNonQueryAsync();
@@ -345,7 +347,7 @@ public class SQLiteDustLimitService : IDustLimitService
         command.CommandText = "SELECT dust_consumed FROM dust_budget WHERE id = 1;";
         object? result = await command.ExecuteScalarAsync();
 
-        return result is null || result == DBNull.Value ? 0.0 : Convert.ToDouble(result);
+        return result is null || result == DBNull.Value ? 0.0 : Convert.ToDouble(result, CultureInfo.InvariantCulture);
     }
 
     /// <summary>

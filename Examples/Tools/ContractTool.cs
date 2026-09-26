@@ -324,8 +324,8 @@ public class ContractTool : MorganaTool
             planCode = DefaultPlanCode,
             planName = product.Name,
             status = "Active",
-            startDate = startDate.ToString("dd/MM/yyyy"),
-            endDate = endDate.ToString("dd/MM/yyyy"),
+            startDate = startDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+            endDate = endDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
             monthlyFee = product.MonthlyFee,
             visitDays,
             invoiceId,
@@ -383,8 +383,8 @@ public class ContractTool : MorganaTool
             },
             contractPeriod = new
             {
-                startDate = schedule.StartDate.ToString("dd/MM/yyyy"),
-                endDate = schedule.EndDate.ToString("dd/MM/yyyy"),
+                startDate = schedule.StartDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                endDate = schedule.EndDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
                 remainingDays = remainingDays > 0 ? remainingDays : 0,
                 remainingMonths = remainingDays > 0 ? remainingDays / 30 : 0
             },
@@ -410,7 +410,7 @@ public class ContractTool : MorganaTool
                 {
                     enabled = true,
                     noticeDays = 60,
-                    renewalDate = schedule.EndDate.ToString("dd/MM/yyyy")
+                    renewalDate = schedule.EndDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)
                 }
             },
             availableClauses = clauses.Select(clause => new
@@ -520,7 +520,7 @@ public class ContractTool : MorganaTool
                 recent.Add(new
                 {
                     visitId = reader.GetString(0),
-                    date = visitDate.ToString("dd/MM/yyyy"),
+                    date = visitDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
                     kind,
                     outcome,
                     outcomeIcon = outcome == "Completed" ? "\u2705" : "\u26A0\uFE0F",
@@ -546,7 +546,7 @@ public class ContractTool : MorganaTool
             },
             upcoming = NextVisitDates(schedule.VisitDays, today, 3).Select(date => new
             {
-                date = date.ToString("dd/MM/yyyy"),
+                date = date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
                 daysAway = (date - today).Days,
                 kind = "Included"
             }).ToList(),
@@ -624,7 +624,7 @@ public class ContractTool : MorganaTool
             noticePeriod = new
             {
                 requiredDays = product.NoticePeriodDays,
-                earliestEffectiveDate = earliestTerminationDate.ToString("dd/MM/yyyy")
+                earliestEffectiveDate = earliestTerminationDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)
             },
             fees = new
             {

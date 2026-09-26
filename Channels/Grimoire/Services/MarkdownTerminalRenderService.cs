@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Markdig;
 using Markdig.Syntax;
@@ -146,7 +147,7 @@ public sealed class MarkdownTerminalRenderService
     private static List<RenderedLine> RenderList(ListBlock list, string baseColor)
     {
         List<RenderedLine> output = [];
-        int ordinal = list.IsOrdered && int.TryParse(list.OrderedStart, out int start) ? start : 1;
+        int ordinal = list.IsOrdered && int.TryParse(list.OrderedStart, NumberStyles.Integer, CultureInfo.InvariantCulture, out int start) ? start : 1;
 
         foreach (Block item in list)
         {

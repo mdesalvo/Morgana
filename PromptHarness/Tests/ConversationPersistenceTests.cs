@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Security.Cryptography;
@@ -598,6 +599,7 @@ public sealed class ConversationPersistenceTests
 
             foreach (ChatMessage message in row.Messages)
                 description.Append(
+                    CultureInfo.InvariantCulture,
                     $"{Environment.NewLine}    {message.Role}"
                     + $"{(message.AdditionalProperties?.ContainsKey(ContextOnlyMarker) == true ? " (read only)" : string.Empty)}"
                     + $": {Excerpt(message.Text)}");

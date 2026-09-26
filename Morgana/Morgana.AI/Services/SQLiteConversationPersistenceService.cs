@@ -1,4 +1,5 @@
 ﻿using System.Security.Cryptography;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Agents.AI;
@@ -179,7 +180,8 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
 
                 // Server time and the same instant for both columns: on an insert they are equal and
                 // on the conflict path only last_update is written, so creation_date survives untouched.
-                string utcNow = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+                // Invariant like every timestamp here: the active agent is found by sorting last_update as text.
+                string utcNow = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
 
                 // is_active is the completion flag inverted: a turn the agent did not close leaves the
                 // row active and that is what a resumed conversation reads to find its agent again.
@@ -451,7 +453,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 writeCommand.Parameters.AddWithValue("@agent_identifier", orchestratorIdentifier);
                 writeCommand.Parameters.AddWithValue("@agent_name", Constants.Morgana);
                 writeCommand.Parameters.AddWithValue("@agent_session", encryptedRow);
-                writeCommand.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+                writeCommand.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture));
 
                 await writeCommand.ExecuteNonQueryAsync();
                 await sqliteTransaction.CommitAsync();
@@ -560,7 +562,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                     "UPDATE morgana SET agent_session = @agent_session, last_update = @now, is_dirty = 1 WHERE agent_identifier = @agent_identifier;";
                 writeCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
                 writeCommand.Parameters.AddWithValue("@agent_session", Encrypt(rewrittenRow));
-                writeCommand.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+                writeCommand.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture));
 
                 await writeCommand.ExecuteNonQueryAsync();
                 await sqliteTransaction.CommitAsync();
@@ -1451,7 +1453,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             ? "User"
             : string.IsNullOrEmpty(agentName) || agentName.Equals(Constants.Morgana, StringComparison.OrdinalIgnoreCase)
                 ? Constants.Morgana
-                : $"Morgana ({char.ToUpper(agentName[0])}{agentName[1..]})";
+                : $"Morgana ({char.ToUpperInvariant(agentName[0])}{agentName[1..]})";
 
         // The wire shape a channel renders. Nothing downstream reads the original message again, so
         // everything a transcript needs has been decided by this line.

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -9,6 +10,13 @@ using Morgana.Terminal.Handlers;
 using Morgana.Terminal.Interfaces;
 using Morgana.Terminal.Services;
 using Spectre.Console;
+
+// Invariant before anything else runs, so no thread inherits the host's locale: the terminal and
+// every export read the same on a workstation set to it-IT and in a container with no LANG at all.
+CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 

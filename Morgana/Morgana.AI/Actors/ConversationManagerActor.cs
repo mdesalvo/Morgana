@@ -1,3 +1,4 @@
+using System.Globalization;
 using Akka.Actor;
 using Akka.Event;
 using Microsoft.Extensions.AI;
@@ -381,7 +382,7 @@ public class ConversationManagerActor : MorganaActor
             // same way it does for MorganaChatReducer's reduction line, since the wire message this
             // emits is a second, out-of-band ChannelMessage the harness's single-message-per-turn
             // webhook receiver does not otherwise observe cleanly.
-            actorLogger.Info($"DUST WARNING ({(send90 ? 90 : 70)}%) for {conversationId}, remaining={remaining:F2}");
+            actorLogger.Info(string.Create(CultureInfo.InvariantCulture, $"DUST WARNING ({(send90 ? 90 : 70)}%) for {conversationId}, remaining={remaining:F2}"));
 
             // Use the identical `remaining` value from the main response's ConversationMetadata
             // so the warning text percentage and the gauge are always in sync.
@@ -446,7 +447,7 @@ public class ConversationManagerActor : MorganaActor
     private static string FormatDustMessage(string template, double remaining)
     {
         int percent = (int)(Math.Clamp(remaining, 0.0, 1.0) * 100);
-        return template.Replace("{percent}", percent.ToString());
+        return template.Replace("{percent}", percent.ToString(CultureInfo.InvariantCulture));
     }
 
     /// <summary>Logs actor startup; conversation setup itself only happens once CreateConversation arrives.</summary>

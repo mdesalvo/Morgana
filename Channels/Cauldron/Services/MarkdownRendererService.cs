@@ -69,7 +69,7 @@ public class MarkdownRendererService : IMarkdownRendererService
 
         // Markdig always wraps in a paragraph. Inside a card field that block-level wrapper
         // breaks the layout, so it is peeled off when it is the only one.
-        if (html.StartsWith("<p>") && html.EndsWith("</p>"))
+        if (html.StartsWith("<p>", StringComparison.Ordinal) && html.EndsWith("</p>", StringComparison.Ordinal))
             html = html[3..^4];
 
         return new MarkupString(html);

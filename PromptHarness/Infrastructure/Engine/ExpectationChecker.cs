@@ -111,7 +111,7 @@ public static partial class ExpectationChecker
 
         if (expect.ClassifierMinConfidence is { } minimumConfidence
             && (turn.ClassifierConfidence is not { } actualConfidence || actualConfidence < minimumConfidence))
-            failures.Add($"classifierMinConfidence: expected at least {minimumConfidence:F2}, got {turn.ClassifierConfidence?.ToString("F2") ?? "(none)"}");
+            failures.Add(string.Create(CultureInfo.InvariantCulture, $"classifierMinConfidence: expected at least {minimumConfidence:F2}, got {turn.ClassifierConfidence?.ToString("F2", CultureInfo.InvariantCulture) ?? "(none)"}"));
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -124,19 +125,19 @@ public sealed class TerminalExportCommand : TerminalCommand
     private static string RenderAsText(IReadOnlyList<MorganaChatMessage> messages)
     {
         StringBuilder transcript = new();
-        transcript.AppendLine($"# Conversation {messages[0].ConversationId}");
-        transcript.AppendLine($"# Exported {DateTime.Now:yyyy-MM-dd HH:mm}");
+        transcript.AppendLine(CultureInfo.InvariantCulture, $"# Conversation {messages[0].ConversationId}");
+        transcript.AppendLine(CultureInfo.InvariantCulture, $"# Exported {DateTime.Now:yyyy-MM-dd HH:mm}");
         transcript.AppendLine();
 
         foreach (MorganaChatMessage message in messages)
         {
-            transcript.AppendLine($"[{message.Timestamp:yyyy-MM-dd HH:mm:ss}] {message.AgentName}");
+            transcript.AppendLine(CultureInfo.InvariantCulture, $"[{message.Timestamp:yyyy-MM-dd HH:mm:ss}] {message.AgentName}");
             transcript.AppendLine(message.Text);
 
             // The options offered at that point are part of what was said: without them a branch in the
             // conversation reads as the user answering a question nobody asked
             if (message.QuickReplies is { Count: > 0 } quickReplies)
-                transcript.AppendLine($"    ({string.Join(" | ", quickReplies.Select(reply => reply.Label))})");
+                transcript.AppendLine(CultureInfo.InvariantCulture, $"    ({string.Join(" | ", quickReplies.Select(reply => reply.Label))})");
             transcript.AppendLine();
         }
 

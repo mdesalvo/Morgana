@@ -365,7 +365,7 @@ public sealed class TurnObserver : IDisposable
             long value => value,
             int value => value,
             double value => (long)value,
-            string text when long.TryParse(text, out long parsed) => parsed,
+            string text when long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out long parsed) => parsed,
             _ => 0
         };
 

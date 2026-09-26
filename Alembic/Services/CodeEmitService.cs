@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Alembic.Interfaces;
 using Alembic.Model;
@@ -92,13 +93,13 @@ public class CodeEmitService : ICodeEmitService
         sb.AppendLine("using Morgana.AI.Interfaces;");
         sb.AppendLine("using static Morgana.AI.Records;");
         sb.AppendLine();
-        sb.AppendLine($"namespace {ns}.Agents;");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"namespace {ns}.Agents;");
         sb.AppendLine();
-        sb.AppendLine($"[HandlesIntent(\"{intentName}\")]");
-        sb.AppendLine($"[RequiresLLMTier(LLMTier.{agent.Code.Tier ?? DefaultTier})]");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"[HandlesIntent(\"{intentName}\")]");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"[RequiresLLMTier(LLMTier.{agent.Code.Tier ?? DefaultTier})]");
 
         foreach (string server in agent.Code.MCPServers)
-            sb.AppendLine($"[UsesMCPServer(\"{server}\")]");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"[UsesMCPServer(\"{server}\")]");
 
         // One per colleague and each one becomes a consult_{intent} function in this agent's tool
         // list at assembly time. Startup refuses an intent no agent handles and refuses the agent's
@@ -111,9 +112,9 @@ public class CodeEmitService : ICodeEmitService
                 ? $"[ConsultsAgent(\"{colleague.Intent}\")]"
                 : $"[ConsultsAgent(\"{colleague.Intent}\", \"{colleague.Instance}\")]");
 
-        sb.AppendLine($"public partial class {agentClass} : MorganaAgent");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"public partial class {agentClass} : MorganaAgent");
         sb.AppendLine("{");
-        sb.AppendLine($"    public {agentClass}(");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"    public {agentClass}(");
         sb.AppendLine("        string conversationId,");
         sb.AppendLine("        ILLMService llmService,");
         sb.AppendLine("        IPromptResolverService promptResolverService,");
@@ -160,12 +161,12 @@ public class CodeEmitService : ICodeEmitService
         sb.AppendLine("using Morgana.AI.Abstractions;");
         sb.AppendLine("using Morgana.AI.Attributes;");
         sb.AppendLine();
-        sb.AppendLine($"namespace {ns}.Tools;");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"namespace {ns}.Tools;");
         sb.AppendLine();
-        sb.AppendLine($"[ProvidesToolForIntent(\"{intentName}\")]");
-        sb.AppendLine($"public partial class {toolClass} : MorganaTool");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"[ProvidesToolForIntent(\"{intentName}\")]");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"public partial class {toolClass} : MorganaTool");
         sb.AppendLine("{");
-        sb.AppendLine($"    public {toolClass}(ILogger toolLogger, Func<ToolContext> getToolContext)");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"    public {toolClass}(ILogger toolLogger, Func<ToolContext> getToolContext)");
         sb.AppendLine("        : base(toolLogger, getToolContext) { }");
 
         // A tool with no name failed ValidateTool as an error, so this loop's filter only ever
@@ -177,9 +178,9 @@ public class CodeEmitService : ICodeEmitService
             // The description becomes the XML doc the client's IDE shows over the partial method
             // they implement — the only place that description survives past agents.json.
             foreach (string line in Wrap(tool.Description))
-                sb.AppendLine($"    /// {line}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"    /// {line}");
 
-            sb.AppendLine($"    public partial Task<string> {tool.Name}({Signature(tool)});");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"    public partial Task<string> {tool.Name}({Signature(tool)});");
         }
 
         sb.AppendLine("}");

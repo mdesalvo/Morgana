@@ -53,10 +53,10 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
 
         // Start, message and command carry a body; the other endpoints take none. The command named is
         // the one the framework publishes, so the call is well-formed and only its credential is on trial.
-        object? body = path.EndsWith("/start")
+        object? body = path.EndsWith("/start", StringComparison.Ordinal)
             ? new { conversationId }
-            : path.EndsWith("/message") ? new { text = "Hello" }
-            : path.EndsWith("/command") ? new { name = "compact" }
+            : path.EndsWith("/message", StringComparison.Ordinal) ? new { text = "Hello" }
+            : path.EndsWith("/command", StringComparison.Ordinal) ? new { name = "compact" }
             : null;
 
         return body is null

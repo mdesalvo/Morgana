@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Alembic.Interfaces;
@@ -77,12 +78,12 @@ public class ToolMockService : IToolMockService
         request.AppendLine(signatures.Content);
         AppendArgumentContract(request, agent);
         request.AppendLine();
-        request.AppendLine($"The agent this toolkit belongs to exists for: {agent.Target}");
+        request.AppendLine(CultureInfo.InvariantCulture, $"The agent this toolkit belongs to exists for: {agent.Target}");
 
         if (!string.IsNullOrWhiteSpace(agent.Formatting))
         {
             request.AppendLine();
-            request.AppendLine($"It presents what these tools return like this, so return data that makes it possible: {agent.Formatting}");
+            request.AppendLine(CultureInfo.InvariantCulture, $"It presents what these tools return like this, so return data that makes it possible: {agent.Formatting}");
         }
 
         // The class the two halves share, named by the fact the emit already carries rather than
@@ -171,10 +172,10 @@ public class ToolMockService : IToolMockService
                 continue;
 
             request.AppendLine();
-            request.AppendLine($"{tool.Name} — what the model is told to pass and therefore what arrives:");
+            request.AppendLine(CultureInfo.InvariantCulture, $"{tool.Name} — what the model is told to pass and therefore what arrives:");
 
             foreach (ToolParameterDraft parameter in described)
-                request.AppendLine($"  {parameter.Name}: {parameter.Description}");
+                request.AppendLine(CultureInfo.InvariantCulture, $"  {parameter.Name}: {parameter.Description}");
         }
     }
 

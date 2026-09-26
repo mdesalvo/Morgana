@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Morgana.Contracts;
 
@@ -40,11 +41,11 @@ internal static class RichCardText
                     text.AppendLine(textBlock.Content);
                     break;
                 case KeyValueComponent keyValue:
-                    text.AppendLine($"{keyValue.Key}: {keyValue.Value}");
+                    text.AppendLine(CultureInfo.InvariantCulture, $"{keyValue.Key}: {keyValue.Value}");
                     break;
                 case ListComponent list:
                     foreach (string item in list.Items)
-                        text.AppendLine($"- {item}");
+                        text.AppendLine(CultureInfo.InvariantCulture, $"- {item}");
                     break;
                 case SectionComponent section:
                     text.AppendLine(section.Title);
@@ -54,7 +55,7 @@ internal static class RichCardText
                     break;
                 case GridComponent grid:
                     foreach (GridItem item in grid.Items)
-                        text.AppendLine($"{item.Key}: {item.Value}");
+                        text.AppendLine(CultureInfo.InvariantCulture, $"{item.Key}: {item.Value}");
                     break;
                 case BadgeComponent badge:
                     text.AppendLine(badge.Text);

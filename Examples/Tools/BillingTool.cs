@@ -221,12 +221,12 @@ public class BillingTool : MorganaTool
             {
                 invoiceId = invoice.InvoiceId,
                 period = PeriodLabel(invoice.PeriodStart, invoice.PeriodEnd),
-                issueDate = invoice.IssueDate.ToString("dd/MM/yyyy"),
-                dueDate = invoice.DueDate.ToString("dd/MM/yyyy"),
+                issueDate = invoice.IssueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                dueDate = invoice.DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
                 total = invoice.Total,
                 status = invoice.Status,
                 statusIcon = StatusIcon(invoice.Status),
-                paidDate = invoice.PaidDate?.ToString("dd/MM/yyyy"),
+                paidDate = invoice.PaidDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
                 daysOverdue = invoice.Status == "Pending"
                     ? Math.Max(0, -(invoice.DueDate - DateTime.UtcNow).Days)
                     : (int?)null
@@ -296,9 +296,9 @@ public class BillingTool : MorganaTool
             period = PeriodLabel(invoice.PeriodStart, invoice.PeriodEnd),
             dates = new
             {
-                issueDate = invoice.IssueDate.ToString("dd/MM/yyyy"),
-                dueDate = invoice.DueDate.ToString("dd/MM/yyyy"),
-                paidDate = invoice.PaidDate?.ToString("dd/MM/yyyy")
+                issueDate = invoice.IssueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                dueDate = invoice.DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                paidDate = invoice.PaidDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)
             },
             status = new
             {
@@ -324,14 +324,14 @@ public class BillingTool : MorganaTool
                 unit = line.Unit,
                 amount = line.Amount,
                 formattedQuantity = line.Quantity > 1
-                    ? $"{line.Quantity} {line.Unit} × €{line.UnitPrice:F2}"
+                    ? string.Create(CultureInfo.InvariantCulture, $"{line.Quantity} {line.Unit} × €{line.UnitPrice:F2}")
                     : null
             }).ToList(),
             amounts = new
             {
                 subtotal = invoice.Subtotal,
                 tax = invoice.Tax,
-                taxRate = $"{invoice.TaxRate * 100:0.##}%",
+                taxRate = string.Create(CultureInfo.InvariantCulture, $"{invoice.TaxRate * 100:0.##}%"),
                 total = invoice.Total
             },
             paymentMethod = PaymentMethod(invoice.PaymentType, invoice.PaymentLastFour)
@@ -387,13 +387,13 @@ public class BillingTool : MorganaTool
             hasOutstanding = true,
             totalDue,
             invoiceCount = unpaid.Count,
-            oldestDueDate = unpaid[0].DueDate.ToString("dd/MM/yyyy"),
+            oldestDueDate = unpaid[0].DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
             daysOverdue = worstDaysOverdue > 0 ? worstDaysOverdue : (int?)null,
             invoices = unpaid.Select(invoice => new
             {
                 invoiceId = invoice.InvoiceId,
                 period = PeriodLabel(invoice.PeriodStart, invoice.PeriodEnd),
-                dueDate = invoice.DueDate.ToString("dd/MM/yyyy"),
+                dueDate = invoice.DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
                 total = invoice.Total,
                 status = invoice.Status,
                 statusIcon = StatusIcon(invoice.Status),
@@ -462,7 +462,7 @@ public class BillingTool : MorganaTool
                 invoiceId = payment.InvoiceId,
                 period = PeriodLabel(payment.PeriodStart, payment.PeriodEnd),
                 amount = payment.Total,
-                paidDate = payment.PaidDate!.Value.ToString("dd/MM/yyyy"),
+                paidDate = payment.PaidDate!.Value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
                 paymentMethod = PaymentMethod(payment.PaymentType, payment.PaymentLastFour)
             }).ToList()
         };

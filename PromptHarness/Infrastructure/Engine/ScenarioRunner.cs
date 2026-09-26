@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Morgana.Contracts;
 using PromptHarness.Infrastructure.Reporting;
@@ -55,9 +56,9 @@ public sealed record ScenarioOutcome(ScenarioDefinition Scenario, int Required, 
     public string Report()
     {
         StringBuilder report = new StringBuilder();
-        report.AppendLine($"Scenario '{Scenario.Id}': {Passes}/{Runs.Count} runs passed, {Required} required.");
+        report.AppendLine(CultureInfo.InvariantCulture, $"Scenario '{Scenario.Id}': {Passes}/{Runs.Count} runs passed, {Required} required.");
         report.AppendLine(Scenario.Description);
-        report.AppendLine($"Tokens per run: {CallsPerRun:F1} LLM calls, in={InputTokensPerRun}, out={OutputTokensPerRun}, cacheRead={(Runs.Count == 0 ? 0 : TotalTokens.CacheReadTokens / Runs.Count)}");
+        report.AppendLine(CultureInfo.InvariantCulture, $"Tokens per run: {CallsPerRun:F1} LLM calls, in={InputTokensPerRun}, out={OutputTokensPerRun}, cacheRead={(Runs.Count == 0 ? 0 : TotalTokens.CacheReadTokens / Runs.Count)}");
 
         // Only the failing runs get a section — a scenario that cleared its threshold with, say,
         // 4/5 still has one failing run worth reading (see FailureLog's own reasoning for why),
@@ -65,9 +66,9 @@ public sealed record ScenarioOutcome(ScenarioDefinition Scenario, int Required, 
         foreach (RunOutcome run in Runs.Where(run => !run.Passed))
         {
             report.AppendLine();
-            report.AppendLine($"--- run {run.Index} ---");
+            report.AppendLine(CultureInfo.InvariantCulture, $"--- run {run.Index} ---");
             foreach (string failure in run.Failures)
-                report.AppendLine($"  ✗ {failure}");
+                report.AppendLine(CultureInfo.InvariantCulture, $"  ✗ {failure}");
 
             // The full per-turn transcript follows the failure list, so the reader sees not just
             // *what* was violated but the entire conversation that produced it.

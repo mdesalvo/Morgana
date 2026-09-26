@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Morgana.AI.Interfaces;
 
@@ -189,6 +190,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // that merely failed to find a name. Resolved while the colleague's own words are still out:
         // a question is answered, never read for placeholders of this layer to fill.
         string caller = string.Format(
+            CultureInfo.InvariantCulture,
             CallerQuotation, string.IsNullOrWhiteSpace(callerIntent) ? UnnamedCaller : callerIntent);
         string composed = $"{declaration}\n{guardrail}".Replace(Constants.Placeholders.ConsultationCaller, caller);
 
@@ -217,8 +219,9 @@ public class ConfigurationPromptComposerService : IPromptComposerService
 
         // Values and not merely names: an agent waking on a shared variable it never asked for has
         // nothing left to look up. The names-only variant relied on the model choosing to call
-        // GetContextVariable, which proved unreliable.
-        string pairs = string.Join(", ", heldVariables.Select(kvp => $"{kvp.Key}: {kvp.Value}"));
+        // GetContextVariable, which proved unreliable. A number or a date held here reaches the model in
+        // the same notation whichever host composed the turn.
+        string pairs = string.Join(", ", heldVariables.Select(kvp => string.Create(CultureInfo.InvariantCulture, $"{kvp.Key}: {kvp.Value}")));
         string resolvedDeclaration = declaration.Replace(Constants.Placeholders.HeldVariables, pairs);
 
         // Marked so the cache split lands above this tail. It changes every turn while the framework
@@ -248,7 +251,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
                      // read rather than how it was filed.
                      .OrderBy(p => p.Priority))
         {
-            sb.AppendLine($"{policy.Name}: {policy.Description}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"{policy.Name}: {policy.Description}");
         }
 
         sb.AppendLine(GlobalPoliciesFooter);

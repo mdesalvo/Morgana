@@ -284,7 +284,7 @@ internal static class GreenhouseDatabaseHelper
             maxLine.Transaction = transaction;
             maxLine.CommandText = "SELECT COALESCE(MAX(LineNumber), 0) FROM InvoiceLines WHERE InvoiceId = $invoiceId";
             maxLine.Parameters.AddWithValue("$invoiceId", invoiceId);
-            lineNumber = Convert.ToInt32(await maxLine.ExecuteScalarAsync()) + 1;
+            lineNumber = Convert.ToInt32(await maxLine.ExecuteScalarAsync(), CultureInfo.InvariantCulture) + 1;
         }
 
         await using (SqliteCommand insertLine = connection.CreateCommand())

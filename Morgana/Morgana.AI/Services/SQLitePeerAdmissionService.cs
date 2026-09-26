@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -115,7 +116,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
             countCommand.CommandText = "SELECT COUNT(*) FROM peer_conversation_log WHERE issuer = $issuer;";
             countCommand.Parameters.AddWithValue("$issuer", issuer);
 
-            long opened = Convert.ToInt64(await countCommand.ExecuteScalarAsync());
+            long opened = Convert.ToInt64(await countCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 
             // A refusal leaves no trace: counting it would push the system further past its limit on
             // every retry, so being turned away would lengthen the wait it caused.
@@ -197,10 +198,10 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
         await command.ExecuteNonQueryAsync();
     }
 
-    /// <summary>Renders an instant so that stored openings sort and compare as text.</summary>
+    /// <summary>Renders an instant so that stored openings sort and compare as text, with the same separators and calendar on every host.</summary>
     /// <param name="instant">Instant to render.</param>
     private static string ToIso(DateTime instant)
-        => instant.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+        => instant.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
 
     /// <summary>Where the ledger file sits, beside the conversations of this installation.</summary>
     private string ResolveDatabasePath()

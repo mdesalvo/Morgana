@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Runtime.CompilerServices;
 using PromptHarness.Infrastructure.Wiring;
 using Xunit;
 
@@ -11,3 +13,20 @@ using Xunit;
 //   2. Every turn is a live LLM call; running scenarios in parallel would multiply the burst rate
 //      against the provider without shortening the suite by much.
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
+
+/// <summary>Puts the whole suite on the invariant culture before any test or fixture code runs.</summary>
+internal static class HarnessCulture
+{
+    /// <summary>
+    /// Mirrors Morgana.Web's own first statement, which only runs once the fixture boots the host: a verdict,
+    /// a report or a seeded row must read the same on a workstation set to it-IT and on one with no LANG at all.
+    /// </summary>
+    [ModuleInitializer]
+    internal static void UseInvariantCulture()
+    {
+        CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+        CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+        CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
+        CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
+    }
+}

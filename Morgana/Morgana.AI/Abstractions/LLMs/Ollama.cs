@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -39,7 +40,7 @@ public class Ollama : MorganaLLM
             this.configuration.GetSection("Morgana:LLM:Ollama:Tiers").Get<Dictionary<Records.LLMTier, Records.TierDefinition>>() ?? [];
 
         Uri endpoint = new Uri(this.configuration["Morgana:LLM:Ollama:Endpoint"]!);
-        TimeSpan timeout = TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"]));
+        TimeSpan timeout = TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture));
 
         // Ollama's client binds its model at construction (unlike the SDK-based providers,
         // there is no single client + per-call model selection), so one OllamaApiClient per

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Examples.Data;
 using Microsoft.Data.Sqlite;
@@ -407,7 +408,7 @@ public class InventoryTool : MorganaTool
             readStock.Transaction = transaction;
             readStock.CommandText = "SELECT QuantityOnHand FROM Products WHERE Sku = $sku";
             readStock.Parameters.AddWithValue("$sku", order.Sku);
-            remainingStock = Convert.ToInt64(await readStock.ExecuteScalarAsync());
+            remainingStock = Convert.ToInt64(await readStock.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
         }
 
         // Bill it, in the same transaction: a Confirmed order with no invoice line is exactly the

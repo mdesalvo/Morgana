@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using A2A;
@@ -309,7 +310,7 @@ public class MorganaAgentAdapter
                 ChatHistoryProvider = chatHistoryProvider,
 
                 // Give the agent its identifiers
-                Id = $"{intentAttribute.Intent.ToLower()}-{conversationId}",
+                Id = $"{intentAttribute.Intent.ToLowerInvariant()}-{conversationId}",
                 Name = intentAttribute.Intent,
 
                 // Give the agent its instructions and tools
@@ -793,7 +794,7 @@ public class MorganaAgentAdapter
         {
             int rounds => rounds,
             JsonElement { ValueKind: JsonValueKind.Number } element => element.GetInt32(),
-            string text when int.TryParse(text, out int parsed) => parsed,
+            string text when int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed) => parsed,
             _ => 0
         };
 

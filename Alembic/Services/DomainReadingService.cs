@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -156,19 +157,19 @@ public class DomainReadingService : IDomainReadingService
             IntentDraft? intent = draft.Intents.FirstOrDefault(candidate =>
                 string.Equals(candidate.Name, agent.ID, StringComparison.OrdinalIgnoreCase));
 
-            described.AppendLine($"## {agent.ID}");
+            described.AppendLine(CultureInfo.InvariantCulture, $"## {agent.ID}");
 
             if (intent?.Description is { Length: > 0 } routes)
-                described.AppendLine($"- what lands here: {routes}");
+                described.AppendLine(CultureInfo.InvariantCulture, $"- what lands here: {routes}");
 
             if (AgentRows.Plain(agent.Target) is { Length: > 0 } target)
-                described.AppendLine($"- what it is for: {target}");
+                described.AppendLine(CultureInfo.InvariantCulture, $"- what it is for: {target}");
 
             if (AgentRows.Plain(agent.ConsultMeFor) is { Length: > 0 } territory)
-                described.AppendLine($"- what it is asked about: {territory}");
+                described.AppendLine(CultureInfo.InvariantCulture, $"- what it is asked about: {territory}");
 
             if (AgentRows.Plain(agent.Instructions) is { Length: > 0 } instructions)
-                described.AppendLine($"- how it goes about it: {instructions}");
+                described.AppendLine(CultureInfo.InvariantCulture, $"- how it goes about it: {instructions}");
 
             foreach (ToolDraft tool in agent.Tools)
                 described.AppendLine(

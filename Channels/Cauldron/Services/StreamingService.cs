@@ -1,3 +1,4 @@
+using System.Globalization;
 using Cauldron.Interfaces;
 using Cauldron.Messages;
 using Morgana.Contracts;
@@ -101,10 +102,10 @@ public class StreamingService : IStreamingService
 
                 // Typewriter pace, re-read per session so a config change needs no restart.
                 // Both fall back to their defaults on a missing, unparsable or non-positive value.
-                int.TryParse(_configuration["Cauldron:StreamingResponse:TypewriterTickMilliseconds"], out int tickMs);
+                int.TryParse(_configuration["Cauldron:StreamingResponse:TypewriterTickMilliseconds"], NumberStyles.Integer, CultureInfo.InvariantCulture, out int tickMs);
                 if (tickMs <= 0)
                     tickMs = 15;
-                int.TryParse(_configuration["Cauldron:StreamingResponse:TypewriterTickChars"], out int tickChars);
+                int.TryParse(_configuration["Cauldron:StreamingResponse:TypewriterTickChars"], NumberStyles.Integer, CultureInfo.InvariantCulture, out int tickChars);
                 if (tickChars <= 0)
                     tickChars = 1;
 

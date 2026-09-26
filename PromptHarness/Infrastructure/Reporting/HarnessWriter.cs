@@ -81,12 +81,12 @@ public static class HarnessWriter
     private static string Create(ScenarioOutcome outcome, string llmDescriptor, string row)
     {
         StringBuilder file = new StringBuilder();
-        file.AppendLine($"# {outcome.Scenario.Id}");
+        file.AppendLine(CultureInfo.InvariantCulture, $"# {outcome.Scenario.Id}");
         file.AppendLine();
         file.AppendLine(outcome.Scenario.Description.Trim());
         file.AppendLine();
-        file.AppendLine($"- turns per run: {outcome.Scenario.Turns.Count}");
-        file.AppendLine($"- llm: {llmDescriptor}");
+        file.AppendLine(CultureInfo.InvariantCulture, $"- turns per run: {outcome.Scenario.Turns.Count}");
+        file.AppendLine(CultureInfo.InvariantCulture, $"- llm: {llmDescriptor}");
         file.AppendLine();
         file.AppendLine("Per run, averaged — Morgana's own calls only, the judge excluded:");
         file.AppendLine();
