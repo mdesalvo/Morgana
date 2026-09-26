@@ -11,6 +11,8 @@
   <a href="https://hub.docker.com/r/mdesalvo/alembic"><img src="https://img.shields.io/docker/pulls/mdesalvo/alembic?logo=docker&logoColor=white&label=Alembic&color=9f7aea" alt="Alembic (Docker Pulls)"></a>
 </p>
 
+⭐ We appreciate your star, it helps!
+
 Morgana is a modern and flexible **conversational AI framework** designed to handle complex scenarios through a sophisticated **multi-agent, semantic-routing architecture**. Built on cutting-edge **.NET 10** and leveraging the actor model via **Akka.NET**, Morgana orchestrates specialized **AI agents** that collaborate to understand, classify and resolve customer inquiries with precision and context awareness.
 
 The system is powered by **Microsoft.Agents.AI**, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
