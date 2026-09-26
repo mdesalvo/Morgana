@@ -60,6 +60,7 @@ public class MorganaController : ControllerBase
     /// <param name="request">Request containing the conversation ID to start</param>
     /// <returns>
     /// 202 Accepted once the conversation exists on record: a message sent right after is served.
+    /// 409 Conflict if a conversation with that ID is already on record.
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpPost("conversation/start")]
@@ -102,6 +103,18 @@ public class MorganaController : ControllerBase
             return BadRequest(new
             {
                 error = "deliveryMode=webhook requires an absolute http(s) callbackUrl in channel coordinates.",
+                conversationId = request.ConversationId
+            });
+        }
+
+        // Start opens and never reopens: accepting a known id would rewrite its handshake, handing its
+        // replies to whoever named it. A genuine channel mints a fresh id per attempt and never meets this
+        if (conversationPersistenceService.ConversationExists(request.ConversationId))
+        {
+            logger.LogWarning("Start requested for conversation {ConversationId} already on record; returning 409", request.ConversationId);
+            return Conflict(new
+            {
+                error = "A conversation with this id already exists: start opens a new conversation with a fresh id.",
                 conversationId = request.ConversationId
             });
         }
