@@ -69,6 +69,7 @@ public class MorganaController : ControllerBase
     /// <param name="request">Request containing the conversation ID to start</param>
     /// <returns>
     /// 202 Accepted once the conversation exists on record, carrying its seal: a message sent right after is served.
+    /// 400 Bad Request if the ID is not a 32-digit GUID or the channel metadata is incomplete.
     /// 409 Conflict if a conversation with that ID is already on record.
     /// 500 Internal Server Error on failure.
     /// </returns>
@@ -76,6 +77,18 @@ public class MorganaController : ControllerBase
     public async Task<IActionResult> StartConversationAsync([FromBody] StartConversationRequest request)
     {
         logger.LogInformation("Starting conversation {RequestConversationId}", request.ConversationId);
+
+        // The id becomes an actor name and a database file name: a GUID in its 32-digit format is the one
+        // shape both take as is. Anything else (a space, a slash) would break Akka.NET only once the actors are raised.
+        if (!Guid.TryParseExact(request.ConversationId, "N", out _))
+        {
+            logger.LogWarning("Start requested for conversation {ConversationId} not named by a 32-digit GUID; returning 400", request.ConversationId);
+            return BadRequest(new
+            {
+                error = "The conversation id must be a GUID in its 32-digit format (no hyphens or braces).",
+                conversationId = request.ConversationId
+            });
+        }
 
         // Morgana refuses to host a conversation for a channel that does not announce
         // its identity, its capability budget AND a delivery mode that matches a concrete
