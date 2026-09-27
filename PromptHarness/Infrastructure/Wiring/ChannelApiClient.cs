@@ -39,13 +39,15 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
 
     /// <summary>
     /// Calls one endpoint for a conversation, with the body a channel would send there. A null token
-    /// sends no Authorization header at all.
+    /// sends no Authorization header at all, a null seal no seal header.
     /// </summary>
-    public async Task<HttpResponseMessage> SendAsync(string method, string path, string conversationId, string? token)
+    public async Task<HttpResponseMessage> SendAsync(string method, string path, string conversationId, string? token, string? seal = null)
     {
         using HttpClient httpClient = new HttpClient();
         if (token is not null)
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (seal is not null)
+            httpClient.DefaultRequestHeaders.Add(StartConversationResponse.SealHeader, seal);
 
         string address = $"{fixture.BaseAddress}{path.Replace("{id}", conversationId)}";
         if (method == "GET")
@@ -68,17 +70,20 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
     /// Posts a raw JSON body as the harness channel, so a malformed request reaches the gate as written.
     /// <paramref name="cancellationToken"/> gives the call up as a channel that stopped waiting would.
     /// </summary>
-    public async Task<HttpResponseMessage> PostJsonAsync(string path, string json, CancellationToken cancellationToken = default)
+    /// <param name="seal">The seal of the conversation the path names; null for start, which has none yet.</param>
+    public async Task<HttpResponseMessage> PostJsonAsync(string path, string json, string? seal = null, CancellationToken cancellationToken = default)
     {
         using HttpClient httpClient = new HttpClient();
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", HarnessToken());
+        if (seal is not null)
+            httpClient.DefaultRequestHeaders.Add(StartConversationResponse.SealHeader, seal);
 
         return await httpClient.PostAsync($"{fixture.BaseAddress}{path}", new StringContent(json, Encoding.UTF8, "application/json"), cancellationToken);
     }
 
-    /// <summary>Asks for a command on the conversation the route names, with the body written as given.</summary>
-    public Task<HttpResponseMessage> SendCommandAsync(string routeConversationId, string json, CancellationToken cancellationToken = default) =>
-        PostJsonAsync($"/api/morgana/conversation/{routeConversationId}/command", json, cancellationToken);
+    /// <summary>Asks for a command on the conversation the route names, under its seal, with the body written as given.</summary>
+    public Task<HttpResponseMessage> SendCommandAsync(string routeConversationId, string seal, string json, CancellationToken cancellationToken = default) =>
+        PostJsonAsync($"/api/morgana/conversation/{routeConversationId}/command", json, seal, cancellationToken);
 
     /// <summary>
     /// Starts a conversation with a well-formed handshake as the harness channel. The callback points
@@ -90,17 +95,27 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
                 .Replace("{id}", conversationId));
 
     /// <summary>
-    /// Puts a conversation on record without starting it, as a previous process would have left it: the
-    /// handshake written by the host's own persistence service, plus, when asked, the agent carrying it.
+    /// Puts a conversation on record without starting it, as a previous process would have left it: sealed
+    /// under the harness channel and the handshake written by the host's own services, plus, when asked, the
+    /// agent carrying it. Answers the seal, which every call on the conversation must carry.
     /// </summary>
     /// <param name="activeAgent">Intent of the agent left mid-exchange; null when none is.</param>
     /// <param name="callbackUrl">
     /// Where Morgana delivers what it tells the user, for a test that reads it; null leaves the deliveries to
     /// nobody.
     /// </param>
-    public async Task SeedConversationOnRecordAsync(string conversationId, string? activeAgent, string? callbackUrl = null)
+    /// <param name="sealingIssuer">The channel the conversation is sealed under, the harness unless a test needs another's.</param>
+    public async Task<string> SeedConversationOnRecordAsync(string conversationId, string? activeAgent, string? callbackUrl = null, string sealingIssuer = HarnessChannel.IssuerName)
     {
         SQLiteConversationPersistenceService persistenceService = HostPersistenceService();
+
+        // Sealed before the handshake is written, as start does: a conversation with a handshake takes no seal
+        string seal = await new SQLiteConversationSealService(
+                Microsoft.Extensions.Options.Options.Create(new Records.ConversationPersistenceOptions { StoragePath = fixture.StoragePath }),
+                persistenceService,
+                NullLogger<SQLiteConversationSealService>.Instance)
+            .SealAsync(conversationId, sealingIssuer)
+            ?? throw new InvalidOperationException($"Conversation {conversationId} was already on record.");
 
         // A SignalR channel with nobody connected takes every push at once: whatever a command or a
         // limit tells the user costs the call no redelivery wait. A webhook is chosen only to be read
@@ -114,7 +129,7 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
         });
 
         if (activeAgent is null)
-            return;
+            return seal;
 
         await using SqliteConnection connection = new SqliteConnection(
             $"Data Source={Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.db")}");
@@ -130,6 +145,7 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
         command.Parameters.AddWithValue("@name", activeAgent);
         command.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("O"));
         await command.ExecuteNonQueryAsync();
+        return seal;
     }
 
     /// <summary>

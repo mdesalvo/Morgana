@@ -228,12 +228,12 @@
                 try
                 {
                     // Check ProtectedLocalStorage for saved conversation ID
-                    string? savedConversationId = await ConversationLifecycleService.GetSavedConversationIdAsync();
+                    StoredConversation? storedConversation = await ConversationLifecycleService.GetStoredConversationAsync();
 
-                    // A saved id means a returning visitor. Resume falls back to a fresh
+                    // A saved conversation means a returning visitor. Resume falls back to a fresh
                     // conversation on its own if the id turns out to be stale.
-                    if (!string.IsNullOrEmpty(savedConversationId))
-                        await ConversationLifecycleService.ResumeConversationAsync(savedConversationId);
+                    if (storedConversation is not null)
+                        await ConversationLifecycleService.ResumeConversationAsync(storedConversation);
                     else
                         await ConversationLifecycleService.StartConversationAsync();
 

@@ -31,16 +31,17 @@ public class CommandController(
     /// <returns>
     /// 202 Accepted once the command has run.
     /// 400 Bad Request on an unknown name, options the command does not take, a missing confirmation or no agent to act on.
-    /// 404 Not Found if the conversation was never started.
+    /// 404 Not Found if the conversation was never started or the call does not carry its seal.
     /// 429 Too Many Requests on the same limits a message meets.
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpPost("conversation/{conversationId}/command")]
     [TypeFilter<KnownConversationFilter>(Order = 1)]
+    [TypeFilter<ConversationSealFilter>(Order = 2)]
     // Admitted before the limits, so a request the channel got wrong never costs the user
-    [TypeFilter<CommandAdmissionFilter>(Order = 2)]
+    [TypeFilter<CommandAdmissionFilter>(Order = 3)]
     // A command fired by the user may spend tokens: it meets the limits a message meets
-    [TypeFilter<ConversationLimitsFilter>(Order = 3)]
+    [TypeFilter<ConversationLimitsFilter>(Order = 4)]
     public async Task<IActionResult> ExecuteCommandAsync(
         [FromRoute] string conversationId,
         [FromBody] ExecuteCommandRequest request,

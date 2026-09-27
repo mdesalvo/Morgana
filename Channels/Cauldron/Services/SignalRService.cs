@@ -19,10 +19,11 @@ public class SignalRService : IAsyncDisposable
     private readonly ILogger logger;
 
     /// <summary>
-    /// The conversations this client means to be subscribed to. Group membership belongs to a
-    /// connection id and a reconnect mints a new one, so these are joined again on every reconnect.
+    /// The conversations this client means to be subscribed to, each with the seal Morgana asks for once it
+    /// is on record. Group membership belongs to a connection id and a reconnect mints a new one, so these
+    /// are joined again on every reconnect.
     /// </summary>
-    private readonly HashSet<string> joinedConversations = [];
+    private readonly Dictionary<string, string?> joinedConversations = [];
 
     /// <summary>
     /// Guards <see cref="joinedConversations"/>: joins and leaves come from the circuit, the
@@ -184,16 +185,17 @@ public class SignalRService : IAsyncDisposable
     /// conversation's messages. The subscription outlives reconnects until it is left.
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation to join</param>
+    /// <param name="seal">The conversation's seal; null only before its start, when there is none yet</param>
     /// <returns>Task representing the async join operation</returns>
-    public async Task JoinConversation(string conversationId)
+    public async Task JoinConversation(string conversationId, string? seal)
     {
         // Recorded even when the join below cannot go out: a reconnect in progress joins it then
         lock (joinedConversationsLock)
-            joinedConversations.Add(conversationId);
+            joinedConversations[conversationId] = seal;
 
         if (hubConnection?.State == HubConnectionState.Connected)
         {
-            await hubConnection.InvokeAsync("JoinConversation", conversationId);
+            await hubConnection.InvokeAsync("JoinConversation", conversationId, seal);
             logger.LogInformation("✅ Joined SignalR group: {ConversationId}", conversationId);
         }
         else
@@ -268,19 +270,19 @@ public class SignalRService : IAsyncDisposable
     /// </summary>
     private async Task RejoinConversationsAsync()
     {
-        string[] conversationIds;
+        KeyValuePair<string, string?>[] conversations;
         lock (joinedConversationsLock)
-            conversationIds = [.. joinedConversations];
+            conversations = [.. joinedConversations];
 
         // A stop racing the reconnect has already dropped the connection and its subscriptions
         if (hubConnection is not { } connection)
             return;
 
-        foreach (string conversationId in conversationIds)
+        foreach ((string conversationId, string? seal) in conversations)
         {
             try
             {
-                await connection.InvokeAsync("JoinConversation", conversationId);
+                await connection.InvokeAsync("JoinConversation", conversationId, seal);
                 logger.LogInformation("✅ Rejoined SignalR group after reconnect: {ConversationId}", conversationId);
             }
             catch (Exception ex)

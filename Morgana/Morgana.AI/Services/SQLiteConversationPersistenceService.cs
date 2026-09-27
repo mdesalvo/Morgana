@@ -892,13 +892,12 @@ WHERE id = 1;
         checkCommand.CommandText = "PRAGMA user_version;";
         long currentVersion = (long)(await checkCommand.ExecuteScalarAsync() ?? 0L);
 
-        if (currentVersion >= 6)
+        if (currentVersion >= 7)
             return; // Already initialized
 
         // Create schema. CREATE TABLE IF NOT EXISTS makes this safe to run on databases that
         // are already at an earlier version — existing tables are left intact and only the
-        // tables introduced by later versions (shared_context in v4; dust_budget +
-        // dust_usage_log in v5) are created.
+        // tables introduced by later versions.
         await using SqliteCommand schemaCommand = connection.CreateCommand();
         schemaCommand.CommandText =
 """
@@ -950,6 +949,13 @@ CREATE TABLE IF NOT EXISTS dust_usage_log (
     llm_role      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
+
+CREATE TABLE IF NOT EXISTS conversation_seal (
+    id        INTEGER PRIMARY KEY CHECK (id = 1),
+    seal_hash BLOB NOT NULL,
+    issuer    TEXT NOT NULL,
+    sealed_at TEXT NOT NULL
+);
 """;
         await schemaCommand.ExecuteNonQueryAsync();
 
@@ -969,13 +975,13 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             }
         }
 
-        // Mark database as initialized (version 6)
+        // Mark database as initialized (version 7)
         await using SqliteCommand versionCommand = connection.CreateCommand();
-        versionCommand.CommandText = "PRAGMA user_version = 6;";
+        versionCommand.CommandText = "PRAGMA user_version = 7;";
         await versionCommand.ExecuteNonQueryAsync();
 
         logger.LogInformation(
-            "Initialized database schema v6 for: {GetFileName}", Path.GetFileName(connection.DataSource));
+            "Initialized database schema v7 for: {GetFileName}", Path.GetFileName(connection.DataSource));
     }
 
     /// <summary>

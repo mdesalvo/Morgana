@@ -97,7 +97,7 @@ public sealed class ConversationLifecycleService
         finally
         {
             // Whichever conversation is on screen by now: /new may have replaced the one opened above
-            await morganaClientService.EndConversationAsync(session.ConversationId);
+            await morganaClientService.EndConversationAsync(session.ConversationId, session.ConversationSeal);
         }
     }
 

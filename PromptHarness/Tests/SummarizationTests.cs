@@ -56,7 +56,7 @@ public sealed class SummarizationTests
         int logMark = fixture.Observer.Mark();
         using CancellationTokenSource channelDeadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            api.SendCommandAsync(conversationId, """{"name":"compact"}""", channelDeadline.Token));
+            api.SendCommandAsync(conversationId, fixture.Channel.SealOf(conversationId), """{"name":"compact"}""", channelDeadline.Token));
 
         // Morgana notices the dropped call and stops, saying so in its log alone
         DateTime giveUpAt = DateTime.UtcNow.AddSeconds(60);

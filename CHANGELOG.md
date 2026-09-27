@@ -7,6 +7,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [0.33.0] - UNDER DEVELOPMENT
 ### ✨ Added
+- **Every conversation is sealed.** At start Morgana hands the channel a seal just once and keeps only its hash: from then on every call on the conversation, REST and SignalR alike, needs the seal and the channel that opened it. Knowing a conversation id is no longer enough to read it, write to it or follow it; without the seal Morgana answers as if the conversation did not exist. Conversations started before this version stay closed
 
 ### 🔄 Changed
 
