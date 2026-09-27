@@ -100,6 +100,27 @@ public sealed class MorganaClientService
         return parsed;
     }
 
+    /// <summary>
+    /// Asks Morgana for the state a client coming back to <paramref name="conversationId"/> redraws. Null when
+    /// Morgana answers 404, which says alike that no such conversation exists or that it is not this channel's
+    /// with this seal: the two are indistinguishable by design.
+    /// </summary>
+    public async Task<ResumeConversationResponse?> ResumeConversationAsync(string conversationId, string seal, CancellationToken cancellationToken = default)
+    {
+        HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
+
+        // The id is the one the user typed, so nothing in it may reach past its own path segment
+        using HttpRequestMessage request = BuildSealedRequest(HttpMethod.Post, $"/api/morgana/conversation/{Uri.EscapeDataString(conversationId)}/resume", seal);
+        HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return null;
+
+        // Fail-closed as start is: a 2xx without a body would put on screen a conversation nothing describes
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ResumeConversationResponse>(cancellationToken)
+            ?? throw new InvalidOperationException("Morgana resumed the conversation without describing it.");
+    }
+
     /// <summary>Sends a user message on the given conversation.</summary>
     public async Task SendMessageAsync(string conversationId, string seal, string text, CancellationToken cancellationToken = default)
     {

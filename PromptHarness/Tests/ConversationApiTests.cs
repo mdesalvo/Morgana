@@ -277,6 +277,23 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
+    public async Task Resume_hands_back_to_Morgana_a_conversation_left_with_an_agent_no_longer_served()
+    {
+        string conversationId = ChannelApiClient.NewConversationId();
+        string seal = await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "pippo");
+
+        HttpResponseMessage response = await api.SendAsync("POST", "/api/morgana/conversation/{id}/resume", conversationId,
+            api.HarnessToken(), seal);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+
+        // No installed agent answers to the intent, so the client is told Morgana holds the conversation
+        // and the record agrees: the turn left open is closed, not merely left unreported
+        Assert.Equal(JsonValueKind.Null, body.GetProperty("activeAgent").ValueKind);
+        Assert.Equal(0L, await api.QueryRecordAsync(conversationId, "SELECT is_active FROM morgana WHERE agent_name = 'pippo';"));
+    }
+
+    [Fact]
     public async Task End_can_be_called_twice()
     {
         string conversationId = ChannelApiClient.NewConversationId();

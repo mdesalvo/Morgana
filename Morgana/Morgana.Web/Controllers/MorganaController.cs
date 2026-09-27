@@ -30,6 +30,10 @@ public class MorganaController : ControllerBase
     private readonly IConversationPersistenceService conversationPersistenceService;
     private readonly IDustLimitService dustLimitService;
     private readonly IConversationSealService conversationSealService;
+
+    /// <summary>Tells whether the agent a resumed conversation was left talking to is one this installation still serves.</summary>
+    private readonly IAgentRegistryService agentRegistryService;
+
     private readonly Records.DustLimitingOptions dustLimitingOptions;
 
     /// <summary>
@@ -44,6 +48,7 @@ public class MorganaController : ControllerBase
         IConversationPersistenceService conversationPersistenceService,
         IDustLimitService dustLimitService,
         IConversationSealService conversationSealService,
+        IAgentRegistryService agentRegistryService,
         IOptions<Records.DustLimitingOptions> dustLimitingOptions)
     {
         this.actorSystem = actorSystem;
@@ -53,6 +58,7 @@ public class MorganaController : ControllerBase
         this.conversationPersistenceService = conversationPersistenceService;
         this.dustLimitService = dustLimitService;
         this.conversationSealService = conversationSealService;
+        this.agentRegistryService = agentRegistryService;
         this.dustLimitingOptions = dustLimitingOptions.Value;
     }
 
@@ -171,7 +177,9 @@ public class MorganaController : ControllerBase
 
     /// <summary>
     /// Resumes an existing conversation for a client coming back to it: reports what it needs to
-    /// redraw its state. Read-only: the conversation's actors come back with its next message.
+    /// redraw its state. The conversation's actors come back with its next message. The one write hands
+    /// the conversation back to Morgana when the agent it was left with is no longer installed, instead of
+    /// to an agent nobody can bring up.
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation to resume</param>
     /// <returns>
@@ -192,6 +200,16 @@ public class MorganaController : ControllerBase
         // only to be reported to the client.
         string? lastActiveAgent = await conversationPersistenceService
             .GetMostRecentActiveAgentAsync(conversationId);
+
+        // An agent removed since the conversation last spoke would be named in the channel's header and
+        // offered its commands, then never answer: its turn is closed and the conversation is Morgana's again
+        if (lastActiveAgent is not null && agentRegistryService.ResolveAgentFromIntent(lastActiveAgent) is null)
+        {
+            logger.LogWarning(
+                "Conversation {ConversationId} was left with agent '{AgentName}', which is no longer served: handing it back to Morgana", conversationId, lastActiveAgent);
+            await conversationPersistenceService.CloseAgentTurnAsync(conversationId, lastActiveAgent);
+            lastActiveAgent = null;
+        }
 
         logger.LogInformation(
             "Conversation resumed: {ConversationId} with active agent: {LastActiveAgent}", conversationId, lastActiveAgent);
@@ -246,8 +264,25 @@ public class MorganaController : ControllerBase
         // The gauge travels with the transcript: a client catching up on replies it missed
         // redraws it as the pushes it missed would have
         return Ok(new ConversationHistoryResponse(
-            chatMessages,
+            [.. chatMessages.Select(WithoutOffersNoLongerServed)],
             await dustLimitService.GetRemainingLevelAsync(conversationId)));
+    }
+
+    /// <summary>
+    /// Takes out of a message of Morgana's the quick replies leading to an agent no longer installed. Every
+    /// choice Morgana offers, her welcome and her disambiguation alike, is named after the intent it leads
+    /// to, so a conversation left on one of them since an agent was removed would offer a door to nobody.
+    /// </summary>
+    private MorganaChatMessage WithoutOffersNoLongerServed(MorganaChatMessage message)
+    {
+        if (message.QuickReplies is not { Count: > 0 } offers
+            || !string.Equals(message.AgentName, Constants.Morgana, StringComparison.Ordinal))
+            return message;
+
+        List<QuickReply> servedOffers = [.. offers.Where(offer => agentRegistryService.ResolveAgentFromIntent(offer.Id) is not null)];
+        return servedOffers.Count == offers.Count
+            ? message
+            : message with { QuickReplies = servedOffers.Count > 0 ? servedOffers : null };
     }
 
     /// <summary>

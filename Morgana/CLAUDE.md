@@ -152,7 +152,7 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
 |---|---|---|
 | `conversation/start` | POST | Validates `ChannelMetadata` (required), seals the conversation, settles it on record, then creates the manager actor. The seal is returned once |
 | `conversation/{id}/end` | POST | 404 if unknown or without its seal; stops the supervisor |
-| `conversation/{id}/resume` | POST | 404 if unknown or without its seal; read-only, reports the active agent and the dust level |
+| `conversation/{id}/resume` | POST | 404 if unknown or without its seal; reports the active agent and the dust level. Its one write hands the conversation back to Morgana when its agent is no longer installed |
 | `conversation/{id}/message` | POST | Auth, 404 if unknown or without its seal, then rate limit, then dust budget, then `UserMessage` |
 | `conversation/{id}/history` | GET | 404 if unknown or without its seal; `ConversationHistoryResponse` |
 | `conversation/{id}/command` | POST | Auth, 404 if unknown or without its seal, 400 for an unknown name or a missing confirmation, rate limit, dust budget, then runs it; the outcome arrives over the channel |

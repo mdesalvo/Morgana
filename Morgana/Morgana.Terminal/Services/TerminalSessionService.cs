@@ -4,7 +4,8 @@ namespace Morgana.Terminal.Services;
 
 /// <summary>
 /// Keeps track of the conversation on screen and keeps the webhook listening to it. Opening a conversation
-/// is its one mutation, shared by the lifecycle at startup and by any command that replaces the conversation.
+/// and resuming one are its only mutations, shared by the lifecycle at startup and by any command that
+/// replaces the conversation.
 /// </summary>
 public sealed class TerminalSessionService
 {
@@ -37,6 +38,20 @@ public sealed class TerminalSessionService
     /// <summary>The seal of the conversation on screen, handed over by Morgana at start and held only in memory.</summary>
     /// <exception cref="InvalidOperationException">Thrown before any conversation has been opened.</exception>
     public string ConversationSeal => CurrentConversation.Seal;
+
+    /// <summary>
+    /// The seal of the conversation on screen as the header shows it, its first and last group around an
+    /// ellipsis: enough to tell two conversations apart, never enough to resume one from a glance over a shoulder.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown before any conversation has been opened.</exception>
+    public string ConversationSealGlimpse
+    {
+        get
+        {
+            string seal = ConversationSeal;
+            return seal.Length > 8 ? $"{seal[..4]}…{seal[^4..]}" : seal;
+        }
+    }
 
     /// <summary>The conversation on screen with its seal, read together.</summary>
     private OpenedConversation CurrentConversation =>
@@ -79,6 +94,19 @@ public sealed class TerminalSessionService
             webhookReceiverService.ExpectedConversationId = previousConversationId;
             throw;
         }
+    }
+
+    /// <summary>
+    /// Makes a conversation Morgana has already resumed the one on screen; the previous one is not ended here.
+    /// No handshake goes out: the channel is the one on record, which the seal's binding to this channel's
+    /// issuer guarantees. <paramref name="openedAt"/> is when the conversation began, not when it came back.
+    /// </summary>
+    public void ResumeConversation(string conversationId, string seal, DateTimeOffset openedAt)
+    {
+        // The webhook listens to the resumed conversation first, so a reply Morgana is still redelivering to it lands
+        webhookReceiverService.ExpectedConversationId = conversationId;
+        openedConversation = new OpenedConversation(conversationId, seal);
+        OpenedAt = openedAt;
     }
 
     /// <summary>A conversation Morgana opened and the seal every call on it carries.</summary>

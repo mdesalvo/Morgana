@@ -336,6 +336,24 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
     }
 
     /// <inheritdoc/>
+    public async Task CloseAgentTurnAsync(string conversationId, string agentName)
+    {
+        if (!File.Exists(GetDatabasePath(conversationId)))
+            return;
+
+        await using SqliteConnection sqliteConnection = new SqliteConnection(GetConnectionString(conversationId));
+        await sqliteConnection.OpenAsync();
+
+        // last_update stays as it was: the turn is closed, nobody spoke in it
+        await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+        sqliteCommand.CommandText = "UPDATE morgana SET is_active = 0 WHERE agent_name = @agent_name;";
+        sqliteCommand.Parameters.AddWithValue("@agent_name", agentName);
+        int closedRows = await sqliteCommand.ExecuteNonQueryAsync();
+
+        logger.LogInformation("Closed the turn of '{AgentName}' in conversation {ConversationId} ({ClosedRows} row)", agentName, conversationId, closedRows);
+    }
+
+    /// <inheritdoc/>
     public async Task<MorganaChatMessage[]> GetConversationHistoryAsync(
         string conversationId,
         JsonSerializerOptions? jsonSerializerOptions = null)
@@ -406,10 +424,16 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
     /// <inheritdoc/>
     public async Task AppendOrchestratorMessagesAsync(
         string conversationId,
-        IReadOnlyList<ChatMessage> messages)
+        IReadOnlyList<ChatMessage> messages,
+        IReadOnlyList<QuickReply>? quickReplies = null)
     {
         if (messages.Count == 0)
             return;
+
+        // The choices travel inside the message they were offered with, in the shape an agent's own are
+        // recorded in, so the history reads both alike and never mistakes them for a line of their own
+        if (quickReplies is { Count: > 0 })
+            messages = [.. messages.SkipLast(1), WithQuickRepliesOffered(messages[^1], quickReplies)];
 
         string orchestratorIdentifier = $"{Constants.Morgana}-{conversationId}";
 
@@ -473,6 +497,21 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             logger.LogError(ex, "Failed to append orchestrator messages to conversation {ConversationId}", conversationId);
             throw;
         }
+    }
+
+    /// <summary>A copy of <paramref name="message"/> carrying the choices it offered, as the SetQuickReplies call an agent would have made.</summary>
+    private static ChatMessage WithQuickRepliesOffered(ChatMessage message, IReadOnlyList<QuickReply> quickReplies)
+    {
+        ChatMessage offering = message.Clone();
+        offering.Contents =
+        [
+            .. message.Contents,
+            new FunctionCallContent(
+                $"{Constants.Morgana}-{Guid.NewGuid():N}",
+                Constants.Tools.SetQuickReplies,
+                new Dictionary<string, object?> { ["quickReplies"] = JsonSerializer.SerializeToElement(quickReplies) })
+        ];
+        return offering;
     }
 
     /// <inheritdoc/>
@@ -1255,8 +1294,11 @@ CREATE TABLE IF NOT EXISTS conversation_seal (
             // Decide whether this assistant message is the user-facing one for its turn. The
             // marker is set by MorganaAgent at end-of-turn on the last assistant message that
             // actually carries text — see MorganaAgent.ExecuteAgentAsync.
+            // Morgana has no tool loop and no scratchpad: every line on her row is one the user was sent,
+            // choices included when she offered some
             bool isUserFacing = chatMessage.Role == ChatRole.Assistant
-                             && chatMessage.AdditionalProperties?.ContainsKey(Constants.MessageProperties.UserFacing) == true;
+                             && (chatMessage.AdditionalProperties?.ContainsKey(Constants.MessageProperties.UserFacing) == true
+                                 || string.Equals(agentName, Constants.Morgana, StringComparison.Ordinal));
 
             // Tool-call messages are normally skipped — their widgets attach to a later,
             // text-bearing assistant message. Exception: the user-facing message itself, when a
@@ -1295,10 +1337,16 @@ CREATE TABLE IF NOT EXISTS conversation_seal (
         // Mark the last emitted message (the one actually rendered in the UI) as the last
         // history message, so trailing quick replies/rich cards on it stay interactive after
         // a resume/refresh instead of being frozen because the raw session tail was empty.
+        // An agent whose turn is closed is waiting on no answer, so what it offered stays frozen.
+        // Morgana speaks from a row that is never active; her offers are always live.
         if (historyMessages.Count > 0)
         {
             int lastIndex = historyMessages.Count - 1;
-            historyMessages[lastIndex] = historyMessages[lastIndex] with { IsLastHistoryMessage = true };
+            MorganaChatMessage lastMessage = historyMessages[lastIndex];
+            bool offersStillPending = lastMessage.Type == ChatMessageType.User
+                || !lastMessage.AgentCompleted
+                || string.Equals(lastMessage.AgentName, Constants.Morgana, StringComparison.Ordinal);
+            historyMessages[lastIndex] = lastMessage with { IsLastHistoryMessage = offersStillPending };
         }
 
         logger.LogInformation(

@@ -69,12 +69,13 @@ public sealed class TerminalStatusCommand : TerminalCommand
         // Read once the check is over, so the panel describes one moment of the session
         TerminalSessionStatus status = ui.Status;
         string conversationId = session.ConversationId;
+        string conversationSeal = session.ConversationSeal;
         DateTimeOffset? openedAt = session.OpenedAt;
-        ui.ShowPanel(width => LayOut(Math.Max(1, width), morganaHealthy, status, conversationId, openedAt));
+        ui.ShowPanel(width => LayOut(Math.Max(1, width), morganaHealthy, status, conversationId, conversationSeal, openedAt));
     }
 
     /// <summary>The status as rows of at most <paramref name="width"/> cells: a titled rule, then one field per concern.</summary>
-    private List<Markup> LayOut(int width, bool morganaHealthy, TerminalSessionStatus status, string conversationId, DateTimeOffset? openedAt)
+    private List<Markup> LayOut(int width, bool morganaHealthy, TerminalSessionStatus status, string conversationId, string conversationSeal, DateTimeOffset? openedAt)
     {
         List<Markup> rows = [];
 
@@ -97,6 +98,13 @@ public sealed class TerminalStatusCommand : TerminalCommand
         [
             (conversationId, "default"),
             (openedAt is { } opened ? $"opened {opened:HH:mm} · {messages}" : messages, DescriptionStyle)
+        ]);
+
+        // The one place the seal is shown whole: with the id above, it is what /resume asks for
+        AddField(rows, width, "Seal",
+        [
+            (conversationSeal, "default"),
+            ($"/resume id:{conversationId} seal:{conversationSeal} picks this conversation up again", DescriptionStyle)
         ]);
 
         AddField(rows, width, "Talking to", [(status.Speaker, "default")]);

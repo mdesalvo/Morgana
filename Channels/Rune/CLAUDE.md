@@ -90,8 +90,8 @@ rendering cannot share stdin with a first-class prompt. **Enter** commits,
 the window never moves under an arriving reply. Repainting waits for the keystrokes to stop, so a
 pasted line costs one frame rather than one per character.
 
-**Commands**: a leading `/` opens the shared palette (`Morgana.Terminal`): `/help`, `/status`, `/new`, `/export`, `/exit` and
-whatever Morgana publishes. Esc dismisses it. The list filters as you type and Enter runs the
+**Commands**: a leading `/` opens the shared palette (`Morgana.Terminal`): `/help`, `/status`, `/new`, `/resume`, `/export`,
+`/exit` and whatever Morgana publishes. Esc dismisses it. The list filters as you type and Enter runs the
 highlighted candidate, as in Claude Code. A command declaring `RequiresConfirmation` takes
 the prompt over with a Yes/No question instead of running; Morgana refuses it without that answer. **A command
 never enters the transcript**, neither its line nor its outcome: it holds the prompt while it runs, its progress
@@ -109,9 +109,12 @@ Morgana never answered at all.
 
 ### Resume
 
-**There is none.** Every process start begins a fresh conversation. A future Rune picking up a
-conversation id from a store would announce nothing again: the handshake is settled on Morgana's
-record at start and read back from there, by a resume and by a Morgana that restarted meanwhile alike.
+Every process start begins a fresh conversation. `/resume id:… seal:…` puts an earlier one back on
+screen and carries it on: the id and the seal `/status` shows in full, the header only as a glimpse.
+Morgana admits it only with that seal and only from the channel that opened it, so a conversation
+begun on another channel is refused like an unknown one. Nothing is announced again: the handshake
+stays the one on record. The record is drawn as
+it stands, text alone: a conversation opened by Rune was written for Rune.
 
 ## Key configuration
 
