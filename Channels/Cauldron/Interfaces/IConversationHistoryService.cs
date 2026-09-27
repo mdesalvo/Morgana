@@ -11,9 +11,10 @@ public interface IConversationHistoryService
     /// Retrieves the complete conversation history for a given conversation ID.
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation to retrieve</param>
+    /// <param name="seal">The conversation's seal, without which Morgana answers as if it did not exist</param>
     /// <returns>
     /// ConversationHistoryResponse with messages array if successful; otherwise, null.
-    /// Returns null on 404 (conversation not found) or network errors.
+    /// Returns null on 404 (conversation not found or not sealed with that seal) or network errors.
     /// </returns>
-    Task<ConversationHistoryResponse?> GetHistoryAsync(string conversationId);
+    Task<ConversationHistoryResponse?> GetHistoryAsync(string conversationId, string seal);
 }

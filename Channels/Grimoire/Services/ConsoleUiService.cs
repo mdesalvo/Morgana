@@ -168,6 +168,9 @@ public sealed class ConsoleUiService : ITerminalUi
     /// <summary>Current conversation id, displayed (truncated) in the header.</summary>
     private string conversationId = string.Empty;
 
+    /// <summary>The seal of the conversation on screen, elided as the header shows it beside the id.</summary>
+    private string conversationSealGlimpse = string.Empty;
+
     /// <summary>Pre-rendered Spectre markup segment for the dust gauge, or <see cref="string.Empty"/>
     /// when dust limiting is disabled (Morgana never sent metadata). Computed eagerly under
     /// <see cref="renderLock"/> so <see cref="BuildHeader"/> can read it without taking the lock
@@ -405,6 +408,7 @@ public sealed class ConsoleUiService : ITerminalUi
             // The session outlives any one conversation; the header shows the one open as the UI starts
             session = terminalSession;
             conversationId = terminalSession.ConversationId;
+            conversationSealGlimpse = terminalSession.ConversationSealGlimpse;
             layout = BuildLayout();
         }
 
@@ -744,16 +748,7 @@ public sealed class ConsoleUiService : ITerminalUi
         // budget) snaps the gauge to the truthful post-send number without any code
         // change here. Spectre's diffing makes an unchanged segment an invisible no-op.
         if (message.ConversationMetadata?.DustLevel is { } level)
-        {
-            // Truncate toward zero, don't round: a sub-1% residual reads as 0% — that
-            // swallowed fraction is the slack that funds per-channel presentation
-            // messages and the let-it-finish turn.
-            int dustLevel = Math.Clamp((int)(level * 100), 0, 100);
-            // Scale color with depletion: mirrors Cauldron DustMeter thresholds (>30% ok, >10% low, ≤10% critical).
-            string dustColor = level > 0.30 ? DustColor : level > 0.10 ? DustLowColor : DustCriticalColor;
-            _dustSegment = $"   [grey54]dust[/] [bold {dustColor}]{dustLevel}%[/]";
-            reportedDustLevel = level;
-        }
+            ShowDustLevel(level);
 
         // Terminal lockout. Morgana proactively pushes this at end of turn
         // (same ErrorReason as the doomed-next-send path), so the user sees
@@ -782,6 +777,19 @@ public sealed class ConsoleUiService : ITerminalUi
         ReleaseTurn();
         ctx.UpdateTarget(BuildLayout());
         ctx.Refresh();
+    }
+
+    /// <summary>Sets the header's dust gauge to <paramref name="level"/>, the remaining fraction of the budget. Must be called under <see cref="renderLock"/>.</summary>
+    private void ShowDustLevel(double level)
+    {
+        // Truncate toward zero, don't round: a sub-1% residual reads as 0% — that
+        // swallowed fraction is the slack that funds per-channel presentation
+        // messages and the let-it-finish turn.
+        int dustLevel = Math.Clamp((int)(level * 100), 0, 100);
+        // Scale color with depletion: mirrors Cauldron DustMeter thresholds (>30% ok, >10% low, ≤10% critical).
+        string dustColor = level > 0.30 ? DustColor : level > 0.10 ? DustLowColor : DustCriticalColor;
+        _dustSegment = $"   [grey54]dust[/] [bold {dustColor}]{dustLevel}%[/]";
+        reportedDustLevel = level;
     }
 
     /// <summary>Polls <see cref="Console.KeyAvailable"/> every 25 ms and dispatches keys: in quick-reply mode the arrows move the highlight and Enter sends the choice; on a command line the palette takes the arrows, Tab and Esc and Enter runs the command; otherwise Enter commits, Backspace edits, Esc exits, printable chars append to the buffer.</summary>
@@ -1618,7 +1626,7 @@ public sealed class ConsoleUiService : ITerminalUi
     }
 
     /// <inheritdoc />
-    public async Task ReplaceConversationAsync(Func<CancellationToken, Task<string>> openConversation, CancellationToken cancellationToken)
+    public async Task ReplaceConversationAsync(Func<CancellationToken, Task<ConversationOnScreen>> openConversation, CancellationToken cancellationToken)
     {
         LiveDisplayContext ctx = liveContext;
 
@@ -1637,10 +1645,10 @@ public sealed class ConsoleUiService : ITerminalUi
                 ctx.Refresh();
             }
 
-            string openedConversationId;
+            ConversationOnScreen openedConversation;
             try
             {
-                openedConversationId = await openConversation(cancellationToken);
+                openedConversation = await openConversation(cancellationToken);
             }
             catch
             {
@@ -1664,11 +1672,20 @@ public sealed class ConsoleUiService : ITerminalUi
                 // Opened just as the user left: the lifecycle ends whichever conversation the session names by then
                 if (exitRequested)
                     return;
-                ResetScreenForConversation(openedConversationId);
+                ResetScreenForConversation(openedConversation.ConversationId);
 
-                // The fresh conversation's presentation is a reply like any other and gets the same deadline
-                BeginTurn();
-                StartReplyWatchdog(ctx);
+                // A resumed conversation has nothing more on its way: its record is the screen and the prompt is the user's
+                if (openedConversation.Resumed is { } resumed)
+                {
+                    RestoreConversation(openedConversation, resumed);
+                    ReleaseTurn();
+                }
+                else
+                {
+                    // The fresh conversation's presentation is a reply like any other and gets the same deadline
+                    BeginTurn();
+                    StartReplyWatchdog(ctx);
+                }
                 ctx.UpdateTarget(BuildLayout());
                 ctx.Refresh();
             }
@@ -1702,6 +1719,7 @@ public sealed class ConsoleUiService : ITerminalUi
         currentSpeaker = "Morgana";
         agentCarryingConversation = null;
         conversationId = openedConversationId;
+        conversationSealGlimpse = session.ConversationSealGlimpse;
         _dustSegment = string.Empty;
         reportedDustLevel = null;
 
@@ -1716,6 +1734,51 @@ public sealed class ConsoleUiService : ITerminalUi
         scrollOffset = 0;
         currentInput = string.Empty;
         cursorPosition = 0;
+    }
+
+    /// <summary>
+    /// Draws a resumed conversation as it stands on Morgana's record: every message through the rows a live
+    /// delivery takes, then the speaker, gauge and spent state Morgana reported. The last message's quick
+    /// replies are still the pending choice when Morgana says so, as Cauldron offers them after a refresh.
+    /// Under <see cref="renderLock"/>.
+    /// </summary>
+    private void RestoreConversation(ConversationOnScreen conversation, ResumeConversationResponse resumed)
+    {
+        foreach (MorganaChatMessage message in conversation.Transcript)
+        {
+            if (message.Type == ChatMessageType.User)
+            {
+                history.Add(new DisplayedMessage("You", message.Text, UserColor, "user"));
+                continue;
+            }
+
+            // Cleaned as a delivered name is, since the row prefix prints it as it stands
+            string messageSpeaker = string.IsNullOrWhiteSpace(message.AgentName)
+                ? "Morgana"
+                : TerminalCellService.StripControlCharacters(message.AgentName);
+            history.Add(new DisplayedMessage(messageSpeaker, message.Text, SpeakerColor(messageSpeaker), "assistant", message.RichCard));
+        }
+
+        currentSpeaker = conversation.Speaker;
+        agentCarryingConversation = IsSpecializedAgent(currentSpeaker) ? currentSpeaker : null;
+        if (resumed.DustLevel is { } level)
+            ShowDustLevel(level);
+
+        // A conversation already spent says so up front, in Morgana's own words, as it did when the budget ran out
+        if (resumed.DustExhaustedMessage is { Length: > 0 } exhausted)
+        {
+            history.Add(new DisplayedMessage("Morgana", exhausted, ErrorColor, "error"));
+            MarkConversationSpent();
+            return;
+        }
+
+        // Morgana marks whether the last message still waits on a choice: one from an agent whose turn is closed does not
+        if (conversation.Transcript is [.., { Type: ChatMessageType.Assistant, IsLastHistoryMessage: true, QuickReplies: { Count: > 0 } pending }])
+        {
+            activeQuickReplies = pending;
+            quickReplyIndex = 0;
+            quickReplyActive = true;
+        }
     }
 
     /// <summary>
@@ -1900,6 +1963,11 @@ public sealed class ConsoleUiService : ITerminalUi
         // terminals without forcing the panel to wrap.
         string shortId = conversationId.Length > 12 ? conversationId[..12] + "…" : conversationId;
 
+        // The seal only as a glimpse: whole, it would hand the conversation to anyone who reads the screen
+        string sealSegment = conversationSealGlimpse.Length > 0
+            ? $"   [grey54]seal[/] [bold {MorganaColor}]{Markup.Escape(conversationSealGlimpse)}[/]"
+            : string.Empty;
+
         // Magic-dust gauge: pre-rendered under renderLock when metadata arrives; empty
         // string means dust limiting is disabled (gauge hidden). Rebuilt by BuildLayout on
         // every resize via the existing IViewportResizeWatcher callback, so it stays
@@ -1937,7 +2005,7 @@ public sealed class ConsoleUiService : ITerminalUi
         Markup content = new(
             $"[bold {speakerColor}]{Markup.Escape(currentSpeaker)}[/]   " +
             $"[grey54]conv[/] [bold {MorganaColor}]{Markup.Escape(shortId)}[/]" +
-            dustSegment + scrollSegment + countSegment);
+            sealSegment + dustSegment + scrollSegment + countSegment);
 
         return new Panel(Align.Center(content, VerticalAlignment.Middle))
         {

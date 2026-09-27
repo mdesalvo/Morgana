@@ -75,7 +75,7 @@ public sealed class TerminalExportCommand : TerminalCommand
         // A long conversation takes a moment to come back over the wire, which is the first thing the user waits on
         ui.ShowProgress(new CommandProgress(Descriptor.Name, "reading the conversation", Completed: 0, Total: ProgressSteps));
 
-        IReadOnlyList<MorganaChatMessage> messages = await morganaClientService.GetHistoryAsync(session.ConversationId, cancellationToken);
+        IReadOnlyList<MorganaChatMessage> messages = await morganaClientService.GetHistoryAsync(session.ConversationId, session.ConversationSeal, cancellationToken);
         if (messages.Count == 0)
         {
             // Writing an empty file over an existing export would lose the earlier one for nothing

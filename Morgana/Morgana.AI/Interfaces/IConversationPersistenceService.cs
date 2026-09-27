@@ -73,6 +73,13 @@ public interface IConversationPersistenceService
     Task<string?> GetMostRecentActiveAgentAsync(string conversationId);
 
     /// <summary>
+    /// Closes on the record the turn <paramref name="agentName"/> left open, as the agent itself would on
+    /// completing: the conversation is Morgana's again and its history no longer offers the agent's widgets.
+    /// Nothing is written to its session. A conversation or an agent with no row is left as it is.
+    /// </summary>
+    Task CloseAgentTurnAsync(string conversationId, string agentName);
+
+    /// <summary>
     /// Retrieves the complete conversation history across all agents for a given conversation.
     /// Decrypts, deserializes and chronologically orders messages from all participating agents.
     /// </summary>
@@ -105,6 +112,10 @@ public interface IConversationPersistenceService
     /// </summary>
     /// <param name="conversationId">Conversation whose orchestrator side is being appended to.</param>
     /// <param name="messages">Messages to append, in the order they were spoken. An empty sequence writes nothing.</param>
+    /// <param name="quickReplies">
+    /// The choices Morgana offered with the last of <paramref name="messages"/>, which reached the user as much
+    /// as its text did: kept with it, so a history read back offers them again. Null when she offered none.
+    /// </param>
     /// <remarks>
     /// <para>Deliberately not addressable by author: this reaches one row and only that row. An agent's
     /// row carries a live agent session that the agent resurrects itself from, so messages appended to
@@ -117,7 +128,8 @@ public interface IConversationPersistenceService
     /// </remarks>
     Task AppendOrchestratorMessagesAsync(
         string conversationId,
-        IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> messages);
+        IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> messages,
+        IReadOnlyList<QuickReply>? quickReplies = null);
 
     /// <summary>
     /// Reads the messages an agent's row holds, as they were written, for work done on the record rather

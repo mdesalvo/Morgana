@@ -240,6 +240,10 @@ builder.Services.Configure<Records.DustLimitingOptions>(
     builder.Configuration.GetSection("Morgana:DustLimiting"));
 builder.Services.AddSingleton<IDustLimitService, SQLiteDustLimitService>();
 
+// The seal Morgana hands a channel at start: without it a conversation id opens nothing. It shares the
+// per-conversation SQLite database and fails closed, unlike the two limiters above.
+builder.Services.AddSingleton<IConversationSealService, SQLiteConversationSealService>();
+
 // ==============================================================================
 // SECTION 7.4: Authentication
 // ==============================================================================

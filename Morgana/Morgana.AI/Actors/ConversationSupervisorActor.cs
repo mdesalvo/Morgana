@@ -263,7 +263,8 @@ public class ConversationSupervisorActor : MorganaActor
             DateTime presentationTimestamp = DateTime.UtcNow;
             await conversationPersistenceService.AppendOrchestratorMessagesAsync(
                 conversationId,
-                [new ChatMessage(ChatRole.Assistant, ctx.Message) { CreatedAt = presentationTimestamp }]);
+                [new ChatMessage(ChatRole.Assistant, ctx.Message) { CreatedAt = presentationTimestamp }],
+                quickReplies);
 
             await channelService.SendMessageAsync(new ChannelMessage
             {

@@ -45,12 +45,12 @@ public sealed class RateLimitTests
     public async Task Command_past_the_window_is_answered_429()
     {
         int callsPerMinute = CallsPerMinute();
-        string conversationId = await SeedConversationWithAgentAsync();
+        (string conversationId, string seal) = await SeedConversationWithAgentAsync();
 
         for (int call = 1; call <= callsPerMinute; call++)
-            Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId)).StatusCode);
+            Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId, seal)).StatusCode);
 
-        HttpResponseMessage refused = await SendCompactAsync(conversationId);
+        HttpResponseMessage refused = await SendCompactAsync(conversationId, seal);
 
         // The client learns when to come back and which window it hit; the user hears why over the channel
         Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
@@ -64,21 +64,21 @@ public sealed class RateLimitTests
     public async Task Command_refused_before_running_costs_the_user_nothing()
     {
         int callsPerMinute = CallsPerMinute();
-        string conversationId = await SeedConversationWithAgentAsync();
+        (string conversationId, string seal) = await SeedConversationWithAgentAsync();
 
         // Twice the window of requests the channel got wrong: admission turns each away ahead of the limit
         for (int call = 1; call <= callsPerMinute; call++)
         {
             Assert.Equal(HttpStatusCode.BadRequest, (await api.SendCommandAsync(
-                conversationId, """{"name":"transmogrify"}""", TestContext.Current.CancellationToken)).StatusCode);
+                conversationId, seal, """{"name":"transmogrify"}""", TestContext.Current.CancellationToken)).StatusCode);
             Assert.Equal(HttpStatusCode.BadRequest, (await api.SendCommandAsync(
-                conversationId, """{"name":"compact","options":{"depth":"3"}}""", TestContext.Current.CancellationToken)).StatusCode);
+                conversationId, seal, """{"name":"compact","options":{"depth":"3"}}""", TestContext.Current.CancellationToken)).StatusCode);
         }
 
         // The whole window is still there for the requests the user actually made
         for (int call = 1; call <= callsPerMinute; call++)
         {
-            HttpResponseMessage response = await SendCompactAsync(conversationId);
+            HttpResponseMessage response = await SendCompactAsync(conversationId, seal);
             Assert.True(response.StatusCode == HttpStatusCode.Accepted,
                 $"Command {call} of {callsPerMinute} was answered {(int)response.StatusCode}: refused requests were counted against the window.");
         }
@@ -88,15 +88,15 @@ public sealed class RateLimitTests
     public async Task Message_meets_the_window_commands_filled()
     {
         int callsPerMinute = CallsPerMinute();
-        string conversationId = await SeedConversationWithAgentAsync();
+        (string conversationId, string seal) = await SeedConversationWithAgentAsync();
 
         for (int call = 1; call <= callsPerMinute; call++)
-            Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId)).StatusCode);
+            Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId, seal)).StatusCode);
 
         // One window per conversation, whatever the call: a command spent it, so the message is refused
         // at the gate and no turn is ever run
         HttpResponseMessage refused = await api.SendAsync(
-            "POST", "/api/morgana/conversation/{id}/message", conversationId, api.HarnessToken());
+            "POST", "/api/morgana/conversation/{id}/message", conversationId, api.HarnessToken(), seal);
 
         Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
     }
@@ -105,11 +105,11 @@ public sealed class RateLimitTests
     public async Task Command_past_the_window_is_told_as_its_own_outcome()
     {
         int callsPerMinute = CallsPerMinute();
-        string conversationId = await SeedConversationWithAgentAsync(deliverToHarnessChannel: true);
+        (string conversationId, string seal) = await SeedConversationWithAgentAsync(deliverToHarnessChannel: true);
 
         for (int call = 1; call <= callsPerMinute; call++)
-            Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId)).StatusCode);
-        Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendCommandAsync(conversationId, """{"name":"compact","invocationId":"refused-run"}""", TestContext.Current.CancellationToken)).StatusCode);
+            Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId, seal)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendCommandAsync(conversationId, seal, """{"name":"compact","invocationId":"refused-run"}""", TestContext.Current.CancellationToken)).StatusCode);
 
         // The refusal is the command's outcome: its finished frame, naming the run, so a channel draws it where the
         // command's outcome goes and keeps it out of the transcript. The reason still travels for the channel to act on
@@ -126,12 +126,12 @@ public sealed class RateLimitTests
     public async Task Message_past_the_window_is_told_as_a_notice()
     {
         int callsPerMinute = CallsPerMinute();
-        string conversationId = await SeedConversationWithAgentAsync(deliverToHarnessChannel: true);
+        (string conversationId, string seal) = await SeedConversationWithAgentAsync(deliverToHarnessChannel: true);
 
         for (int call = 1; call <= callsPerMinute; call++)
-            Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId)).StatusCode);
+            Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId, seal)).StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendAsync(
-            "POST", "/api/morgana/conversation/{id}/message", conversationId, api.HarnessToken())).StatusCode);
+            "POST", "/api/morgana/conversation/{id}/message", conversationId, api.HarnessToken(), seal)).StatusCode);
 
         // A refused message is a notice about the conversation, which a channel shows in it: no frame belongs to it
         ChannelMessage refusal = await ReceiveRefusalAsync(conversationId);
@@ -140,15 +140,15 @@ public sealed class RateLimitTests
     }
 
     /// <summary>
-    /// A conversation on record with billing carrying it, so /compact is admitted and runs. Its deliveries reach
-    /// the harness channel only when <paramref name="deliverToHarnessChannel"/> asks for them to be read.
+    /// A conversation on record with billing carrying it, so /compact is admitted and runs, answered with its seal.
+    /// Its deliveries reach the harness channel only when <paramref name="deliverToHarnessChannel"/> asks for them to be read.
     /// </summary>
-    private async Task<string> SeedConversationWithAgentAsync(bool deliverToHarnessChannel = false)
+    private async Task<(string ConversationId, string Seal)> SeedConversationWithAgentAsync(bool deliverToHarnessChannel = false)
     {
         string conversationId = ChannelApiClient.NewConversationId();
-        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing",
+        string seal = await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing",
             deliverToHarnessChannel ? fixture.Channel.CallbackUrl : null);
-        return conversationId;
+        return (conversationId, seal);
     }
 
     /// <summary>The rate limit's refusal among what the conversation was told, past the outcomes of the commands that filled the window.</summary>
@@ -163,6 +163,6 @@ public sealed class RateLimitTests
     }
 
     /// <summary>One /compact on the conversation, the call every test here counts with.</summary>
-    private Task<HttpResponseMessage> SendCompactAsync(string conversationId) =>
-        api.SendCommandAsync(conversationId, """{"name":"compact"}""", TestContext.Current.CancellationToken);
+    private Task<HttpResponseMessage> SendCompactAsync(string conversationId, string seal) =>
+        api.SendCommandAsync(conversationId, seal, """{"name":"compact"}""", TestContext.Current.CancellationToken);
 }

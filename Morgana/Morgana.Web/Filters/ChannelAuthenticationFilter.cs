@@ -19,6 +19,9 @@ public sealed class ChannelAuthenticationFilter(
     /// <summary>Where the authenticated caller is left for the action, which sends the message under it.</summary>
     public const string CallerIdItemKey = "morgana.channel.caller_id";
 
+    /// <summary>Where the proven issuer is left for the seal gate and for start, which seals the conversation under it.</summary>
+    public const string IssuerItemKey = "morgana.channel.issuer";
+
     /// <inheritdoc />
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
@@ -55,5 +58,6 @@ public sealed class ChannelAuthenticationFilter(
 
         // The identity a message is sent under comes from the proven token, never from anything the body claims
         context.HttpContext.Items[CallerIdItemKey] = authResult.CallerId;
+        context.HttpContext.Items[IssuerItemKey] = authResult.Issuer;
     }
 }

@@ -10,9 +10,16 @@ namespace Morgana.Contracts;
 /// </remarks>
 /// <param name="ConversationId">Conversation id, echoed from the request.</param>
 /// <param name="Message">Informational status line; carries no control semantics.</param>
+/// <param name="Seal">The conversation's seal, handed over here once and never again: Morgana keeps only its
+/// hash. Every later call on the conversation carries it in <see cref="SealHeader"/>.</param>
 public record StartConversationResponse(
     string ConversationId,
-    string Message);
+    string Message,
+    string Seal)
+{
+    /// <summary>Header carrying the seal on every call to an existing conversation: never the path or the body, which get logged.</summary>
+    public const string SealHeader = "X-Morgana-Conversation-Seal";
+}
 
 /// <summary>
 /// Response body of <c>POST /api/morgana/conversation/{id}/resume</c> (202 Accepted).

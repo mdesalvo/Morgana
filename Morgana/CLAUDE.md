@@ -112,7 +112,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Extensions/A2APublicationExtensions.cs` | `AddMorganaA2A` / `MapMorganaA2AAsync` — the one feature whose halves must straddle `builder.Build()` |
 | `Controllers/MorganaController.cs` | REST at `api/morgana`: the conversation |
 | `Controllers/CommandController.cs` | REST at `api/morgana`: the command catalogue and its execution. Reaches no actor |
-| `Filters/ChannelAuthenticationFilter.cs` · `KnownConversationFilter.cs` · `CommandAdmissionFilter.cs` · `ConversationLimitsFilter.cs` | The REST gates as MVC filters. Their `Order` on each action is the gate order |
+| `Filters/ChannelAuthenticationFilter.cs` · `KnownConversationFilter.cs` · `ConversationSealFilter.cs` · `CommandAdmissionFilter.cs` · `ConversationLimitsFilter.cs` | The REST gates as MVC filters. Their `Order` on each action is the gate order |
 | `Hubs/MorganaHub.cs` | SignalR at `/morganaHub` |
 | `Filters/PartnerAuthenticationFilter.cs` | The partners' auth gate on the A2A JSON-RPC endpoints: the channels' token validation, narrowed to the partners admitted to each agent, fail-closed. The card endpoint stays open by design |
 | `Services/PluginLoaderService.cs` | Scans `plugins/` for `MorganaAgent` subclasses |
@@ -150,12 +150,12 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `conversation/start` | POST | Validates `ChannelMetadata` (required), settles it on record, then creates the manager actor |
-| `conversation/{id}/end` | POST | Stops the supervisor |
-| `conversation/{id}/resume` | POST | 404 if unknown; read-only, reports the active agent and the dust level |
-| `conversation/{id}/message` | POST | Auth, 404 if unknown, then rate limit, then dust budget, then `UserMessage` |
-| `conversation/{id}/history` | GET | `ConversationHistoryResponse` |
-| `conversation/{id}/command` | POST | Auth, 404 if unknown, 400 for an unknown name or a missing confirmation, rate limit, dust budget, then runs it; the outcome arrives over the channel |
+| `conversation/start` | POST | Validates `ChannelMetadata` (required), seals the conversation, settles it on record, then creates the manager actor. The seal is returned once |
+| `conversation/{id}/end` | POST | 404 if unknown or without its seal; stops the supervisor |
+| `conversation/{id}/resume` | POST | 404 if unknown or without its seal; reports the active agent and the dust level. Its one write hands the conversation back to Morgana when its agent is no longer installed |
+| `conversation/{id}/message` | POST | Auth, 404 if unknown or without its seal, then rate limit, then dust budget, then `UserMessage` |
+| `conversation/{id}/history` | GET | 404 if unknown or without its seal; `ConversationHistoryResponse` |
+| `conversation/{id}/command` | POST | Auth, 404 if unknown or without its seal, 400 for an unknown name or a missing confirmation, rate limit, dust budget, then runs it; the outcome arrives over the channel |
 | `commands` | GET | `CommandCatalogResponse`: every `ICommand` registered in DI. The framework publishes `/compact` |
 | `health` | GET | Actor system liveness |
 
@@ -233,6 +233,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `SQLiteConversationPersistenceService` | `IConversationPersistenceService` | Per-conversation SQLite: encrypted session BLOBs, the shared-context registry |
 | `SQLiteRateLimitService` | `IRateLimitService` | Sliding window per minute, hour and day. **Fails open** |
 | `SQLiteDustLimitService` | `IDustLimitService` | Owns **every** dust question asked anywhere — no caller does the arithmetic itself. Thresholds 70%, 90%, lockout. **Fails open** |
+| `SQLiteConversationSealService` | `IConversationSealService` | The seal handed to the channel at start, kept as a hash and bound to its issuer; REST and the hub admit nothing without it. **Fails closed** |
 | `SQLitePeerAdmissionService` | `IPeerAdmissionService` | Conversations a partner may open per hour. The one ledger that is not a conversation's (`morgana-peers.db`). **Fails closed** |
 | `JWTAuthenticationService` | `IAuthenticationService` | HMAC-SHA256, issuer whitelist, audience, lifetime |
 | `HistoryReducerService` | *(factory)* | Builds `MorganaChatReducer` from config; `null` means "hand the LLM everything" |
@@ -379,7 +380,7 @@ LLM-guided rewrite, then a Markdig template fallback. Never throws.
 ## Persistence
 
 Per-conversation SQLite at `{StoragePath}/morgana-{conversationId}.db`, schema version in
-`PRAGMA user_version` (currently 6), idempotent initialization.
+`PRAGMA user_version` (currently 7), idempotent initialization.
 
 | Table | Purpose |
 |---|---|
@@ -388,6 +389,7 @@ Per-conversation SQLite at `{StoragePath}/morgana-{conversationId}.db`, schema v
 | `channel_metadata` | The persisted handshake |
 | `shared_context` | Cross-agent variables, first-write-wins |
 | `dust_budget` · `dust_usage_log` | Lifetime budget, per-charge attribution |
+| `conversation_seal` | The seal's hash and the issuer it was handed to |
 
 **A user's phrase is Morgana's when no agent is active and the active agent's otherwise; an answer
 belongs to whoever wrote it.** So the phrase is saved at ingress, before the guard. The copy the

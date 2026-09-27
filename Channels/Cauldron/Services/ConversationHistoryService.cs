@@ -22,14 +22,15 @@ public class ConversationHistoryService : IConversationHistoryService
     }
 
     /// <inheritdoc/>
-    public async Task<ConversationHistoryResponse?> GetHistoryAsync(string conversationId)
+    public async Task<ConversationHistoryResponse?> GetHistoryAsync(string conversationId, string seal)
     {
         try
         {
             _logger.LogInformation("Retrieving history for conversation {ConversationId}", conversationId);
 
-            HttpResponseMessage response = await _httpClient.GetAsync(
-                $"/api/morgana/conversation/{conversationId}/history");
+            using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, $"/api/morgana/conversation/{conversationId}/history");
+            request.Headers.Add(StartConversationResponse.SealHeader, seal);
+            HttpResponseMessage response = await _httpClient.SendAsync(request);
 
             if (response.IsSuccessStatusCode)
             {

@@ -29,6 +29,11 @@ public class MorganaController : ControllerBase
     private readonly IChannelMetadataStore channelMetadataStore;
     private readonly IConversationPersistenceService conversationPersistenceService;
     private readonly IDustLimitService dustLimitService;
+    private readonly IConversationSealService conversationSealService;
+
+    /// <summary>Tells whether the agent a resumed conversation was left talking to is one this installation still serves.</summary>
+    private readonly IAgentRegistryService agentRegistryService;
+
     private readonly Records.DustLimitingOptions dustLimitingOptions;
 
     /// <summary>
@@ -42,6 +47,8 @@ public class MorganaController : ControllerBase
         IChannelMetadataStore channelMetadataStore,
         IConversationPersistenceService conversationPersistenceService,
         IDustLimitService dustLimitService,
+        IConversationSealService conversationSealService,
+        IAgentRegistryService agentRegistryService,
         IOptions<Records.DustLimitingOptions> dustLimitingOptions)
     {
         this.actorSystem = actorSystem;
@@ -50,6 +57,8 @@ public class MorganaController : ControllerBase
         this.channelMetadataStore = channelMetadataStore;
         this.conversationPersistenceService = conversationPersistenceService;
         this.dustLimitService = dustLimitService;
+        this.conversationSealService = conversationSealService;
+        this.agentRegistryService = agentRegistryService;
         this.dustLimitingOptions = dustLimitingOptions.Value;
     }
 
@@ -59,7 +68,7 @@ public class MorganaController : ControllerBase
     /// </summary>
     /// <param name="request">Request containing the conversation ID to start</param>
     /// <returns>
-    /// 202 Accepted once the conversation exists on record: a message sent right after is served.
+    /// 202 Accepted once the conversation exists on record, carrying its seal: a message sent right after is served.
     /// 409 Conflict if a conversation with that ID is already on record.
     /// 500 Internal Server Error on failure.
     /// </returns>
@@ -108,8 +117,10 @@ public class MorganaController : ControllerBase
         }
 
         // Start opens and never reopens: accepting a known id would rewrite its handshake, handing its
-        // replies to whoever named it. A genuine channel mints a fresh id per attempt and never meets this
-        if (conversationPersistenceService.ConversationExists(request.ConversationId))
+        // replies to whoever named it. A genuine channel mints a fresh id per attempt and never meets this.
+        // Sealed before the handshake is settled, so no conversation is ever on record without its seal.
+        string issuer = HttpContext.Items[ChannelAuthenticationFilter.IssuerItemKey] as string ?? string.Empty;
+        if (await conversationSealService.SealAsync(request.ConversationId, issuer) is not { } seal)
         {
             logger.LogWarning("Start requested for conversation {ConversationId} already on record; returning 409", request.ConversationId);
             return Conflict(new
@@ -130,9 +141,11 @@ public class MorganaController : ControllerBase
 
         logger.LogInformation("Conversation creation queued: {RequestConversationId}", request.ConversationId);
 
+        // The one time the seal leaves Morgana: only its hash is kept
         return Accepted(new StartConversationResponse(
             ConversationId: request.ConversationId,
-            Message: "Conversation creation started"));
+            Message: "Conversation creation started",
+            Seal: seal));
     }
 
     /// <summary>
@@ -141,9 +154,13 @@ public class MorganaController : ControllerBase
     /// <param name="conversationId">Unique identifier of the conversation to end</param>
     /// <returns>
     /// 200 OK on successful termination.
+    /// 404 Not Found if the conversation was never started or the call does not carry its seal.
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpPost("conversation/{conversationId}/end")]
+    // Only a conversation on record has actors to stop: an unknown id would have them created just to end them
+    [TypeFilter<KnownConversationFilter>(Order = 1)]
+    [TypeFilter<ConversationSealFilter>(Order = 2)]
     public async Task<IActionResult> EndConversationAsync([FromRoute] string conversationId)
     {
         logger.LogInformation("Ending conversation {ConversationId}", conversationId);
@@ -160,17 +177,20 @@ public class MorganaController : ControllerBase
 
     /// <summary>
     /// Resumes an existing conversation for a client coming back to it: reports what it needs to
-    /// redraw its state. Read-only: the conversation's actors come back with its next message.
+    /// redraw its state. The conversation's actors come back with its next message. The one write hands
+    /// the conversation back to Morgana when the agent it was left with is no longer installed, instead of
+    /// to an agent nobody can bring up.
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation to resume</param>
     /// <returns>
     /// 202 Accepted with conversation details and the active agent on record.
-    /// 404 Not Found if the conversation was never started.
+    /// 404 Not Found if the conversation was never started or the call does not carry its seal.
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpPost("conversation/{conversationId}/resume")]
     // An unknown id (stale client storage, wiped deployment) is a 404: Cauldron falls back to starting anew
     [TypeFilter<KnownConversationFilter>(Order = 1)]
+    [TypeFilter<ConversationSealFilter>(Order = 2)]
     public async Task<IActionResult> ResumeConversationAsync([FromRoute] string conversationId)
     {
         logger.LogInformation("Resuming conversation {ConversationId}", conversationId);
@@ -180,6 +200,16 @@ public class MorganaController : ControllerBase
         // only to be reported to the client.
         string? lastActiveAgent = await conversationPersistenceService
             .GetMostRecentActiveAgentAsync(conversationId);
+
+        // An agent removed since the conversation last spoke would be named in the channel's header and
+        // offered its commands, then never answer: its turn is closed and the conversation is Morgana's again
+        if (lastActiveAgent is not null && agentRegistryService.ResolveAgentFromIntent(lastActiveAgent) is null)
+        {
+            logger.LogWarning(
+                "Conversation {ConversationId} was left with agent '{AgentName}', which is no longer served: handing it back to Morgana", conversationId, lastActiveAgent);
+            await conversationPersistenceService.CloseAgentTurnAsync(conversationId, lastActiveAgent);
+            lastActiveAgent = null;
+        }
 
         logger.LogInformation(
             "Conversation resumed: {ConversationId} with active agent: {LastActiveAgent}", conversationId, lastActiveAgent);
@@ -210,10 +240,12 @@ public class MorganaController : ControllerBase
     /// <param name="conversationId">Unique identifier of the conversation</param>
     /// <returns>
     /// 200 OK with a ConversationHistoryResponse wrapping the MorganaChatMessage array on success.
-    /// 404 Not Found if conversation doesn't exist.
+    /// 404 Not Found if conversation doesn't exist or the call does not carry its seal.
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpGet("conversation/{conversationId}/history")]
+    [TypeFilter<KnownConversationFilter>(Order = 1)]
+    [TypeFilter<ConversationSealFilter>(Order = 2)]
     public async Task<IActionResult> GetConversationHistoryAsync([FromRoute] string conversationId)
     {
         logger.LogInformation("Retrieving conversation history for {ConversationId}", conversationId);
@@ -232,8 +264,25 @@ public class MorganaController : ControllerBase
         // The gauge travels with the transcript: a client catching up on replies it missed
         // redraws it as the pushes it missed would have
         return Ok(new ConversationHistoryResponse(
-            chatMessages,
+            [.. chatMessages.Select(WithoutOffersNoLongerServed)],
             await dustLimitService.GetRemainingLevelAsync(conversationId)));
+    }
+
+    /// <summary>
+    /// Takes out of a message of Morgana's the quick replies leading to an agent no longer installed. Every
+    /// choice Morgana offers, her welcome and her disambiguation alike, is named after the intent it leads
+    /// to, so a conversation left on one of them since an agent was removed would offer a door to nobody.
+    /// </summary>
+    private MorganaChatMessage WithoutOffersNoLongerServed(MorganaChatMessage message)
+    {
+        if (message.QuickReplies is not { Count: > 0 } offers
+            || !string.Equals(message.AgentName, Constants.Morgana, StringComparison.Ordinal))
+            return message;
+
+        List<QuickReply> servedOffers = [.. offers.Where(offer => agentRegistryService.ResolveAgentFromIntent(offer.Id) is not null)];
+        return servedOffers.Count == offers.Count
+            ? message
+            : message with { QuickReplies = servedOffers.Count > 0 ? servedOffers : null };
     }
 
     /// <summary>
@@ -245,13 +294,14 @@ public class MorganaController : ControllerBase
     /// <param name="request">Request carrying the message text and its optional metadata</param>
     /// <returns>
     /// 202 Accepted immediately after message is queued.
-    /// 404 Not Found if the conversation was never started.
+    /// 404 Not Found if the conversation was never started or the call does not carry its seal.
     /// 500 Internal Server Error on failure to queue message.
     /// </returns>
     [HttpPost("conversation/{conversationId}/message")]
     // A message only continues a conversation that was started: it opens none
     [TypeFilter<KnownConversationFilter>(Order = 1)]
-    [TypeFilter<ConversationLimitsFilter>(Order = 2)]
+    [TypeFilter<ConversationSealFilter>(Order = 2)]
+    [TypeFilter<ConversationLimitsFilter>(Order = 3)]
     public async Task<IActionResult> SendMessageAsync([FromRoute] string conversationId, [FromBody] SendMessageRequest request)
     {
         logger.LogInformation("Sending message to conversation {ConversationId}", conversationId);

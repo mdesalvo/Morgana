@@ -9,6 +9,7 @@ namespace Morgana.Terminal.Services;
 /// (<c>/api/morgana/conversation/start</c>, <c>.../message</c>, <c>.../command</c>, <c>.../end</c>), the command catalogue and the health check.
 /// Relies on <see cref="IHttpClientFactory"/>'s named <c>Morgana</c> client, which
 /// is wired with the per-issuer JWT <see cref="Handlers.MorganaAuthHandler"/>.
+/// Every call on an existing conversation carries its seal, without which Morgana answers 404.
 /// </summary>
 public sealed class MorganaClientService
 {
@@ -78,7 +79,8 @@ public sealed class MorganaClientService
     /// </summary>
     /// <param name="candidateConversationId">The id proposed to Morgana; the server is source of truth, so the channel uses the one returned.</param>
     /// <param name="cancellationToken">Abandons the handshake when the process is stopping.</param>
-    public async Task<string> StartConversationAsync(string candidateConversationId, CancellationToken cancellationToken = default)
+    /// <returns>The conversation Morgana opened, with the seal it hands over this once.</returns>
+    public async Task<StartConversationResponse> StartConversationAsync(string candidateConversationId, CancellationToken cancellationToken = default)
     {
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
 
@@ -90,22 +92,42 @@ public sealed class MorganaClientService
             "/api/morgana/conversation/start", body, cancellationToken);
         response.EnsureSuccessStatusCode();
 
-        // Fail-closed: a 2xx with an empty/missing id means the contract is broken —
-        // refuse to run rather than leak an undefined conversation into the webhook loop.
+        // Fail-closed: a 2xx with an empty/missing id or seal means the contract is broken —
+        // refuse to run rather than leak a conversation that no later call could reach.
         StartConversationResponse? parsed = await response.Content.ReadFromJsonAsync<StartConversationResponse>(cancellationToken);
-        if (parsed is null || string.IsNullOrWhiteSpace(parsed.ConversationId))
-            throw new InvalidOperationException("Morgana did not return a conversation id.");
-        return parsed.ConversationId;
+        if (parsed is null || string.IsNullOrWhiteSpace(parsed.ConversationId) || string.IsNullOrWhiteSpace(parsed.Seal))
+            throw new InvalidOperationException("Morgana did not return a conversation id and its seal.");
+        return parsed;
+    }
+
+    /// <summary>
+    /// Asks Morgana for the state a client coming back to <paramref name="conversationId"/> redraws. Null when
+    /// Morgana answers 404, which says alike that no such conversation exists or that it is not this channel's
+    /// with this seal: the two are indistinguishable by design.
+    /// </summary>
+    public async Task<ResumeConversationResponse?> ResumeConversationAsync(string conversationId, string seal, CancellationToken cancellationToken = default)
+    {
+        HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
+
+        // The id is the one the user typed, so nothing in it may reach past its own path segment
+        using HttpRequestMessage request = BuildSealedRequest(HttpMethod.Post, $"/api/morgana/conversation/{Uri.EscapeDataString(conversationId)}/resume", seal);
+        HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return null;
+
+        // Fail-closed as start is: a 2xx without a body would put on screen a conversation nothing describes
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ResumeConversationResponse>(cancellationToken)
+            ?? throw new InvalidOperationException("Morgana resumed the conversation without describing it.");
     }
 
     /// <summary>Sends a user message on the given conversation.</summary>
-    public async Task SendMessageAsync(string conversationId, string text, CancellationToken cancellationToken = default)
+    public async Task SendMessageAsync(string conversationId, string seal, string text, CancellationToken cancellationToken = default)
     {
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
-        HttpResponseMessage response = await httpClient.PostAsJsonAsync(
-            $"/api/morgana/conversation/{conversationId}/message",
-            new SendMessageRequest(text),
-            cancellationToken);
+        using HttpRequestMessage request = BuildSealedRequest(HttpMethod.Post, $"/api/morgana/conversation/{conversationId}/message", seal);
+        request.Content = JsonContent.Create(new SendMessageRequest(text));
+        HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
 
         // 429 (rate-limit OR dust exhaustion) is not a transport failure: before returning
         // it the backend has already pushed a user-facing explanatory ChannelMessage over
@@ -132,10 +154,11 @@ public sealed class MorganaClientService
     }
 
     /// <summary>Reads the conversation as Morgana has it on record, in chronological order; empty when it holds nothing yet.</summary>
-    public async Task<IReadOnlyList<MorganaChatMessage>> GetHistoryAsync(string conversationId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<MorganaChatMessage>> GetHistoryAsync(string conversationId, string seal, CancellationToken cancellationToken = default)
     {
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
-        HttpResponseMessage response = await httpClient.GetAsync($"/api/morgana/conversation/{conversationId}/history", cancellationToken);
+        using HttpRequestMessage request = BuildSealedRequest(HttpMethod.Get, $"/api/morgana/conversation/{conversationId}/history", seal);
+        HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);
 
         // A conversation nobody has spoken in yet is reported as absent, which is not a failure to report upwards
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -152,7 +175,7 @@ public sealed class MorganaClientService
     /// Morgana refuses a command asking to be confirmed unless <paramref name="confirmed"/> carries the user's Yes.
     /// </summary>
     /// <exception cref="TimeoutException">Thrown when the command outlives the channel's command deadline, which calls it off on Morgana too.</exception>
-    public async Task RunCommandAsync(string conversationId, string name, string invocationId, IReadOnlyDictionary<string, string>? options = null, bool confirmed = false, CancellationToken cancellationToken = default)
+    public async Task RunCommandAsync(string conversationId, string seal, string name, string invocationId, IReadOnlyDictionary<string, string>? options = null, bool confirmed = false, CancellationToken cancellationToken = default)
     {
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
 
@@ -165,10 +188,9 @@ public sealed class MorganaClientService
         HttpResponseMessage response;
         try
         {
-            response = await httpClient.PostAsJsonAsync(
-                $"/api/morgana/conversation/{conversationId}/command",
-                new ExecuteCommandRequest(name, confirmed, options, invocationId),
-                commandDeadline.Token);
+            using HttpRequestMessage request = BuildSealedRequest(HttpMethod.Post, $"/api/morgana/conversation/{conversationId}/command", seal);
+            request.Content = JsonContent.Create(new ExecuteCommandRequest(name, confirmed, options, invocationId));
+            response = await httpClient.SendAsync(request, commandDeadline.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -185,17 +207,25 @@ public sealed class MorganaClientService
     }
 
     /// <summary>Terminates the conversation server-side; best-effort (swallows errors on shutdown).</summary>
-    public async Task EndConversationAsync(string conversationId, CancellationToken cancellationToken = default)
+    public async Task EndConversationAsync(string conversationId, string seal, CancellationToken cancellationToken = default)
     {
         try
         {
             HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
-            await httpClient.PostAsync($"/api/morgana/conversation/{conversationId}/end",
-                content: null, cancellationToken);
+            using HttpRequestMessage request = BuildSealedRequest(HttpMethod.Post, $"/api/morgana/conversation/{conversationId}/end", seal);
+            await httpClient.SendAsync(request, cancellationToken);
         }
         catch
         {
             // Best-effort on shutdown — if Morgana is already gone or unreachable, we don't care.
         }
+    }
+
+    /// <summary>A request on an existing conversation, carrying the seal in the one place Morgana reads it and no log records.</summary>
+    private static HttpRequestMessage BuildSealedRequest(HttpMethod method, string path, string seal)
+    {
+        HttpRequestMessage request = new HttpRequestMessage(method, path);
+        request.Headers.Add(StartConversationResponse.SealHeader, seal);
+        return request;
     }
 }
