@@ -15,7 +15,7 @@ At start Morgana hands the channel the seal just once and keeps only its hash: f
 **Knowing a conversation ID is no longer enough to read it, write to it or follow it**; without the seal Morgana answers as if the conversation did not exist. Conversations started before this version stay closed  (because they didn't born with the protection of seal).
 
 ### ✨ Added
-- **`/resume` command**: Grimoire and Rune take back a conversation opened earlier, given its ID and seal
+- **`/resume` command**: Grimoire and Rune take back a conversation opened earlier, **given its ID and seal**
 - **Conversation seal**: handed to the channel once at start, it is required by every later call on the conversation
 
 ### 🔄 Changed
