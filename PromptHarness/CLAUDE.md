@@ -31,7 +31,7 @@ project: every build setting lives in the `.csproj`, so it carries unchanged acr
 
 ## Commands
 
-Sixteen test classes. **Never combine filters**: six groups carry a process-wide boot knob the
+Seventeen test classes. **Never combine filters**: six groups carry a process-wide boot knob the
 others must not see and two of those five share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
@@ -52,6 +52,7 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ConsultingTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~BehaviourTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ActorTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ServedConsultationTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~DegradedHistoryTests"
 
 # boot-flagged — one knob each, never together
 Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
@@ -91,6 +92,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `ServedConsultationTests` | — | This installation answering a partner: which conversation, what it cost, how many exchanges are admitted |
 | `SummarizationTests` | — | The reducer's own prompt, unreachable at the default 21-message trigger |
 | `DustTests` | — | The budget thresholds, crossed in order. Evidence-driven rather than turn-pinned: how many turns it takes is a real token measurement |
+| `DegradedHistoryTests` | — | What a channel too poor for rich answers reads back on its return: each answer in the words it was delivered in, never the rich record it could not show. One live turn under Rune's profile; the oracle is the delivery itself, so nothing depends on wording and no judge runs |
 | `RateLimitTests` | none | The REST gate's rate limit: the 429 past the window, refused commands left uncounted, one window shared by messages and commands. No model is reached |
 | `ConversationPersistenceTests` | — | Who owns each line of a conversation, how it is dated and in what order it is read back. The record is photographed after every exchange rather than at the end, because a transcript that reads correctly can still have been written by the wrong participant. Asserts nothing about wording: the oracle is what the channel was pushed and what the channel said. Shares the guard's knob, since a refused turn is one of the five it stages |
 | `AgentCardTests` · `StartupValidationTests` · `PeerFederationTests` · `ConversationApiTests` | none | Wire contracts and boot refusals, asserted deterministically. **Every literal is spelled out in the test** rather than read from `Constants`: a test comparing a constant against itself asserts that a constant equals a constant, while the point is to notice a published document changing shape under whoever consumes it |

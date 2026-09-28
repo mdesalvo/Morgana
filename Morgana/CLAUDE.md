@@ -380,7 +380,7 @@ LLM-guided rewrite, then a Markdig template fallback. Never throws.
 ## Persistence
 
 Per-conversation SQLite at `{StoragePath}/morgana-{conversationId}.db`, schema version in
-`PRAGMA user_version` (currently 7), idempotent initialization.
+`PRAGMA user_version` (currently 8), idempotent initialization.
 
 | Table | Purpose |
 |---|---|
@@ -390,6 +390,7 @@ Per-conversation SQLite at `{StoragePath}/morgana-{conversationId}.db`, schema v
 | `shared_context` | Cross-agent variables, first-write-wins |
 | `dust_budget` · `dust_usage_log` | Lifetime budget, per-charge attribution |
 | `conversation_seal` | The seal's hash and the issuer it was handed to |
+| `degraded_message` | The text a message was delivered in once degraded for its channel, which the history gives back instead of degrading the record again |
 
 **A user's phrase is Morgana's when no agent is active and the active agent's otherwise; an answer
 belongs to whoever wrote it.** So the phrase is saved at ingress, before the guard. The copy the
@@ -398,7 +399,8 @@ banners, the typing indicator. Morgana has a row without being an agent — see
 `IConversationPersistenceService`, which alone knows how a row encodes its messages.
 
 History retrieval decrypts each row, applies a user-facing filter, merges chronologically and
-extracts quick replies and rich cards from the stored function calls.
+extracts quick replies and rich cards from the stored function calls. An answer the channel cannot
+show as written comes back in the words it was delivered in. Failing those it is degraded by rule, never by a model.
 
 ## Authentication
 

@@ -360,7 +360,7 @@ public static partial class ExpectationChecker
     /// rather than by calling into <c>MorganaChannelAdapter</c>'s own private detector — the harness
     /// judges the delivered text on its own terms, keeping the black-box boundary structural.
     /// </summary>
-    private static bool ContainsMarkdownSyntax(string text)
+    internal static bool ContainsMarkdownSyntax(string text)
     {
         MarkdownDocument document = Markdown.Parse(text);
         foreach (MarkdownObject node in document.Descendants())

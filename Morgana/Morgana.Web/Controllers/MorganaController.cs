@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Morgana.AI;
 using Morgana.AI.Actors;
+using Morgana.AI.Adapters;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
 using Morgana.Contracts;
@@ -277,8 +278,63 @@ public class MorganaController : ControllerBase
         // The gauge travels with the transcript: a client catching up on replies it missed
         // redraws it as the pushes it missed would have
         return Ok(new ConversationHistoryResponse(
-            [.. chatMessages.Select(WithoutOffersNoLongerServed)],
+            await AsTheChannelShowsAsync(conversationId, [.. chatMessages.Select(WithoutOffersNoLongerServed)]),
             await dustLimitService.GetRemainingLevelAsync(conversationId)));
+    }
+
+    /// <summary>Degrades every answer the conversation's channel cannot show as written, never reaching a model.</summary>
+    private async Task<MorganaChatMessage[]> AsTheChannelShowsAsync(string conversationId, MorganaChatMessage[] chatMessages)
+    {
+        // What the conversation's channel declared it can show at its handshake: every answer is measured against it
+        ChannelCapabilities channelCapabilities = (await channelMetadataStore.GetChannelMetadataAsync(conversationId)).Capabilities;
+
+        // Read at the first answer that does not fit, so a channel showing everything as written never opens it
+        IReadOnlyDictionary<(string AgentDisplayName, DateTime MessageTimestamp), string>? degradedMessages = null;
+
+        // One line for each line of the record and in its order: only how a line reads may change, never which lines there are
+        MorganaChatMessage[] shownMessages = new MorganaChatMessage[chatMessages.Length];
+        for (int index = 0; index < chatMessages.Length; index++)
+        {
+            MorganaChatMessage chatMessage = chatMessages[index];
+
+            // The answer as its author wrote it, card and buttons included: exactly what its delivery handed the adapter
+            ChannelMessage asWritten = new ChannelMessage
+            {
+                ConversationId = conversationId,
+                Text = chatMessage.Text,
+                Timestamp = chatMessage.Timestamp,
+                QuickReplies = chatMessage.QuickReplies,
+                RichCard = chatMessage.RichCard
+            };
+
+            // What the user typed is shown back as typed, as it was on the screen that sent it. An answer the
+            // channel shows as written was delivered as written too
+            if (chatMessage.Type == ChatMessageType.User || MorganaChannelAdapter.FitsWithin(asWritten, channelCapabilities))
+            {
+                shownMessages[index] = chatMessage;
+                continue;
+            }
+
+            // The record keeps each answer as its author wrote it, which this channel never showed: the words its
+            // delivery degraded it to were kept under its speaker and the instant it is dated with, as its push carried both.
+            // Given back as they were, a return costs no dust and reads the same. One delivered before its words
+            // could be kept is degraded by rule instead, as is one whose keeping failed
+            degradedMessages ??= await conversationPersistenceService.LoadDegradedMessagesAsync(conversationId);
+            string shownText = degradedMessages.TryGetValue((chatMessage.AgentName, chatMessage.Timestamp), out string? deliveredText)
+                ? deliveredText
+                : MorganaChannelAdapter.DegradeWithoutModel(asWritten, channelCapabilities).Text;
+
+            // The degraded words stand in for the author's. A card or buttons stay only where the channel draws
+            // them: elsewhere the degraded words already read them out
+            shownMessages[index] = chatMessage with
+            {
+                Text = shownText,
+                QuickReplies = channelCapabilities.SupportsQuickReplies ? chatMessage.QuickReplies : null,
+                RichCard = channelCapabilities.SupportsRichCards ? chatMessage.RichCard : null
+            };
+        }
+
+        return shownMessages;
     }
 
     /// <summary>
@@ -288,11 +344,15 @@ public class MorganaController : ControllerBase
     /// </summary>
     private MorganaChatMessage WithoutOffersNoLongerServed(MorganaChatMessage message)
     {
+        // Only Morgana's choices lead to an intent: an agent's buttons are answers within its own competence
         if (message.QuickReplies is not { Count: > 0 } offers
             || !string.Equals(message.AgentName, Constants.Morgana, StringComparison.Ordinal))
             return message;
 
+        // A choice survives only while an installed agent still answers the intent it is named after
         List<QuickReply> servedOffers = [.. offers.Where(offer => agentRegistryService.ResolveAgentFromIntent(offer.Id) is not null)];
+
+        // Every choice still served leaves the message untouched; one left with none offers no buttons at all
         return servedOffers.Count == offers.Count
             ? message
             : message with { QuickReplies = servedOffers.Count > 0 ? servedOffers : null };
@@ -327,6 +387,8 @@ public class MorganaController : ControllerBase
         IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
             Constants.Actors.Manager, conversationId);
 
+        // The phrase enters the turn pipeline through the conversation's manager. Its answer reaches the user
+        // over the channel, never in this response, which only acknowledges that the turn is under way
         manager.Tell(new Records.UserMessage(
             conversationId,
             request.Text,

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Markdig;
@@ -12,7 +13,7 @@ namespace Morgana.AI.Adapters;
 /// <summary>
 /// Adapts fully-featured ChannelMessage to target channel capabilities. Three-path strategy: short-circuit hot path
 /// if message fits; LLM rewrite via ChannelDowngrade prompt for semantic plain rendering; template fallback (markdown
-/// strip, inline quick replies, drop rich cards) if LLM fails. Never throws; best-effort with semantic fidelity.
+/// strip, rich card flattened to text, inline quick replies) if LLM fails. Never throws; best-effort with semantic fidelity.
 /// </summary>
 public class MorganaChannelAdapter
 {
@@ -148,22 +149,26 @@ public class MorganaChannelAdapter
         }
 
         // ── Template fallback ─────────────────────────────────────────────────────
-        return BuildTemplateFallback(channelMessage, channelCapabilities);
+        return DegradeWithoutModel(channelMessage, channelCapabilities);
     }
 
     // ── Short-circuit predicate ───────────────────────────────────────────────────
 
-    private static bool FitsWithin(ChannelMessage channelMessage, ChannelCapabilities channelCapabilities)
+    /// <summary>True when the channel can show the message exactly as it is, so it needs no degrading.</summary>
+    public static bool FitsWithin(ChannelMessage channelMessage, ChannelCapabilities channelCapabilities)
     {
+        // A card or buttons the channel has no widget for would reach a screen that silently leaves them out
         if (channelMessage.RichCard != null && !channelCapabilities.SupportsRichCards)
             return false;
 
         if (channelMessage.QuickReplies is { Count: > 0 } && !channelCapabilities.SupportsQuickReplies)
             return false;
 
+        // Markdown on a channel that prints text verbatim shows up as literal asterisks and hashes
         if (!channelCapabilities.SupportsMarkdown && ContainsMarkdown(channelMessage.Text))
             return false;
 
+        // The budget counts everything the message would draw, its card and buttons as well as its text
         if (channelCapabilities.MaxMessageLength is { } max && EstimateVisualCost(channelMessage) > max)
             return false;
 
@@ -202,36 +207,48 @@ public class MorganaChannelAdapter
 
     // ── Template fallback ─────────────────────────────────────────────────────────
 
-    private static ChannelMessage BuildTemplateFallback(
+    /// <summary>Degrades the message to the channel's capabilities by rule alone, spending no dust; one that already fits is returned as it is.</summary>
+    public static ChannelMessage DegradeWithoutModel(
         ChannelMessage channelMessage,
         ChannelCapabilities channelCapabilities)
     {
-        // When the channel cannot carry a rich card, we deliberately drop it here:
-        // title + subtitle in isolation (without the component payload) would look alien
-        // next to the narrative text. The happy path's LLM rewrite is the only place
-        // capable of transcoding a card into prose — if we're in the template fallback,
-        // the LLM call already failed and an honestly incomplete message beats a message
-        // with orphaned metadata.
-        StringBuilder sb = new StringBuilder();
-        sb.Append(channelMessage.Text);
+        // A history replays every answer through here, most of which the channel shows as written
+        if (FitsWithin(channelMessage, channelCapabilities))
+            return channelMessage;
 
-        if (channelMessage.QuickReplies is { Count: > 0 } && !channelCapabilities.SupportsQuickReplies)
+        // The answer's own words come first: whatever the channel cannot draw is read out after them
+        StringBuilder degradedText = new StringBuilder();
+        degradedText.Append(channelMessage.Text);
+
+        // A card the channel cannot draw is read out under the answer, one line per piece of text: it routinely
+        // carries the very figures the answer speaks of, which would otherwise vanish without a trace
+        if (channelMessage.RichCard is { } richCard && !channelCapabilities.SupportsRichCards)
         {
-            if (sb.Length > 0)
-                sb.AppendLine().AppendLine();
-            // Inline quick replies as plain prose for channels that have no button widget.
-            // The "Options: A / B / C" format keeps them scannable without any markdown.
-            sb.Append("Options: ");
-            sb.Append(string.Join(" / ", channelMessage.QuickReplies.Select(r => r.Label)));
+            if (degradedText.Length > 0)
+                degradedText.AppendLine().AppendLine();
+            AppendRichCardLines(richCard.Title, richCard.Subtitle, richCard.Components, degradedText);
         }
 
-        string text = sb.ToString();
+        // Buttons the channel cannot draw become one closing line naming each choice, so the user still knows
+        // what may be answered: "Options: A / B / C" reads as a list without any markdown
+        if (channelMessage.QuickReplies is { Count: > 0 } && !channelCapabilities.SupportsQuickReplies)
+        {
+            if (degradedText.Length > 0)
+                degradedText.AppendLine().AppendLine();
+            degradedText.Append("Options: ");
+            degradedText.Append(string.Join(" / ", channelMessage.QuickReplies.Select(quickReply => quickReply.Label)));
+        }
 
+        string text = degradedText.ToString();
+
+        // A channel without markdown would print its syntax as literal asterisks and hashes
         if (!channelCapabilities.SupportsMarkdown)
             text = StripMarkdown(text);
 
+        // Last, so the budget is measured on everything the answer became: its card and choices included
         text = EnforceLengthBudget(text, channelCapabilities);
 
+        // Everything but what the channel cannot draw travels unchanged: who spoke, when and in which frame
         return new ChannelMessage
         {
             ConversationId = channelMessage.ConversationId,
@@ -250,6 +267,58 @@ public class MorganaChannelAdapter
             // matches the outcome to the command it is waiting on
             Progress = channelMessage.Progress
         };
+    }
+
+    /// <summary>Appends every piece of text a card or one of its sections puts on screen: one line each, sections recursed into.</summary>
+    private static void AppendRichCardLines(string title, string? subtitle, IEnumerable<CardComponent> components, StringBuilder cardText)
+    {
+        // The heading opens the block as it tops the card, so the lines under it read as what it announces
+        cardText.AppendLine(title);
+        if (!string.IsNullOrWhiteSpace(subtitle))
+            cardText.AppendLine(subtitle);
+
+        // In the order the card draws its components, which is the order its author meant them read in
+        foreach (CardComponent component in components)
+        {
+            switch (component)
+            {
+                case TextBlockComponent textBlock:
+                    cardText.AppendLine(textBlock.Content);
+                    break;
+
+                // A pair keeps its label beside its figure, which alone would be a number with no meaning
+                case KeyValueComponent keyValue:
+                    cardText.AppendLine(CultureInfo.InvariantCulture, $"{keyValue.Key}: {keyValue.Value}");
+                    break;
+
+                // A bullet no markdown parser reads as a list, so stripping the markdown later leaves the items in place
+                case ListComponent list:
+                    foreach (string item in list.Items)
+                        cardText.AppendLine(CultureInfo.InvariantCulture, $"• {item}");
+                    break;
+
+                // A section is a card within the card: its heading then its own components
+                case SectionComponent section:
+                    AppendRichCardLines(section.Title, section.Subtitle, section.Components, cardText);
+                    break;
+
+                // A grid's cells are pairs laid out side by side: in text they follow one another
+                case GridComponent grid:
+                    foreach (GridItem item in grid.Items)
+                        cardText.AppendLine(CultureInfo.InvariantCulture, $"{item.Key}: {item.Value}");
+                    break;
+
+                // A badge's colour carries no meaning its text does not already state
+                case BadgeComponent badge:
+                    cardText.AppendLine(badge.Text);
+                    break;
+
+                // An image says in text only what its caption or its alternative text say; a divider says nothing
+                case ImageComponent image when (image.Caption ?? image.Alt) is { Length: > 0 } imageText:
+                    cardText.AppendLine(imageText);
+                    break;
+            }
+        }
     }
 
     // Walks Markdig parse tree, collects literal text, preserves block structure as line breaks.

@@ -359,15 +359,16 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
-    public async Task Record_left_at_schema_5_is_brought_up_to_7()
+    public async Task Record_left_at_schema_5_is_brought_up_to_8()
     {
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
 
         // The record as a version 5 host left it: the agent's row as it was, with nothing saying whether it was
-        // rewritten behind its agent or how much of its agent's history it accounts for. Nor is it sealed
+        // rewritten behind its agent or how much of its agent's history it accounts for. Nor is it sealed and no
+        // answer of it was ever kept in the words a poor channel was shown
         await api.QueryRecordAsync(conversationId,
-            "ALTER TABLE morgana DROP COLUMN is_dirty; ALTER TABLE morgana DROP COLUMN agent_message_count; DROP TABLE conversation_seal; PRAGMA user_version = 5;");
+            "ALTER TABLE morgana DROP COLUMN is_dirty; ALTER TABLE morgana DROP COLUMN agent_message_count; DROP TABLE conversation_seal; DROP TABLE degraded_message; PRAGMA user_version = 5;");
         Assert.Equal(5L, await api.QueryRecordAsync(conversationId, "PRAGMA user_version;"));
 
         // The step every write and every flag read takes first upgrades it in place: the columns exist, the row
@@ -375,8 +376,9 @@ public sealed class ConversationApiTests
         // How much history it accounts for stays unknown until its agent next reads or writes it
         await api.HostPersistenceService().EnsureDatabaseInitializedAsync(conversationId);
         Assert.Equal("billing", await api.HostPersistenceService().GetMostRecentActiveAgentAsync(conversationId));
-        Assert.Equal(7L, await api.QueryRecordAsync(conversationId, "PRAGMA user_version;"));
+        Assert.Equal(8L, await api.QueryRecordAsync(conversationId, "PRAGMA user_version;"));
         Assert.Equal(0L, await api.QueryRecordAsync(conversationId, "SELECT COUNT(*) FROM conversation_seal;"));
+        Assert.Equal(0L, await api.QueryRecordAsync(conversationId, "SELECT COUNT(*) FROM degraded_message;"));
         Assert.Equal(0L, await api.QueryRecordAsync(conversationId, "SELECT is_dirty FROM morgana WHERE agent_name = 'billing';"));
         Assert.Equal(DBNull.Value, await api.QueryRecordAsync(conversationId, "SELECT agent_message_count FROM morgana WHERE agent_name = 'billing';"));
     }

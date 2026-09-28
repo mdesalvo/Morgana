@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Morgana.AI.Adapters;
 using Morgana.AI.Interfaces;
 using Morgana.Contracts;
@@ -31,17 +32,29 @@ public class AdaptingChannelService : IChannelService
     /// </summary>
     private readonly MorganaChannelAdapter channelAdapter;
 
+    /// <summary>Keeps the words a degraded answer was delivered in, which the conversation's history shows again on this channel.</summary>
+    private readonly IConversationPersistenceService conversationPersistenceService;
+
+    /// <summary>Records an adapted answer that could not be kept: the delivery itself has already succeeded.</summary>
+    private readonly ILogger logger;
+
     /// <param name="channelServiceFactory">Resolves the concrete transport for a conversation's <c>deliveryMode</c>.</param>
     /// <param name="channelMetadataStore">Leaf singleton holding the per-conversation handshake; injected rather than folded in, to keep the DI graph acyclic.</param>
     /// <param name="channelAdapter">Capability-driven degradation applied to every outbound <see cref="ChannelMessage"/>.</param>
+    /// <param name="conversationPersistenceService">Keeps each degraded answer as it was delivered.</param>
+    /// <param name="logger">Records an adapted answer that could not be kept.</param>
     public AdaptingChannelService(
         IChannelServiceFactory channelServiceFactory,
         IChannelMetadataStore channelMetadataStore,
-        MorganaChannelAdapter channelAdapter)
+        MorganaChannelAdapter channelAdapter,
+        IConversationPersistenceService conversationPersistenceService,
+        ILogger<AdaptingChannelService> logger)
     {
         this.channelServiceFactory = channelServiceFactory;
         this.channelMetadataStore = channelMetadataStore;
         this.channelAdapter = channelAdapter;
+        this.conversationPersistenceService = conversationPersistenceService;
+        this.logger = logger;
     }
 
     /// <inheritdoc/>
@@ -63,6 +76,28 @@ public class AdaptingChannelService : IChannelService
         // Puts the message on the channel — SignalR to the conversation's group, webhook to its
         // callback — already within the budget that channel declared.
         await concreteChannelService.SendMessageAsync(adaptedChannelMessage);
+
+        // An answer the channel could not show as written is kept in the words it was shown in, so the history
+        // gives the same words back on a return instead of paying to degrade it again. Only an answer is on
+        // record under its timestamp: a warning or a command's frame has no line there to stand for
+        if (!ReferenceEquals(adaptedChannelMessage, channelMessage)
+            && string.Equals(channelMessage.MessageType, Constants.MessageTypes.Assistant, StringComparison.Ordinal))
+            await KeepDegradedMessageAsync(adaptedChannelMessage);
+    }
+
+    /// <summary>Keeps the delivered words of a degraded answer; a failure costs a later return its fidelity, never this delivery.</summary>
+    private async Task KeepDegradedMessageAsync(ChannelMessage adaptedChannelMessage)
+    {
+        try
+        {
+            await conversationPersistenceService.SaveDegradedMessageAsync(
+                adaptedChannelMessage.ConversationId, adaptedChannelMessage.AgentName, adaptedChannelMessage.Timestamp, adaptedChannelMessage.Text);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "The degraded answer dated {AnswerTimestamp:O} of conversation {ConversationId} could not be kept",
+                adaptedChannelMessage.Timestamp, adaptedChannelMessage.ConversationId);
+        }
     }
 
     /// <inheritdoc/>

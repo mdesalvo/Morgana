@@ -69,7 +69,9 @@ builder.Services.AddSingleton<AdaptingChannelService>(sp =>
     new AdaptingChannelService(
         sp.GetRequiredService<IChannelServiceFactory>(),
         sp.GetRequiredService<IChannelMetadataStore>(),
-        sp.GetRequiredService<MorganaChannelAdapter>()));
+        sp.GetRequiredService<MorganaChannelAdapter>(),
+        sp.GetRequiredService<IConversationPersistenceService>(),
+        sp.GetRequiredService<ILogger<AdaptingChannelService>>()));
 builder.Services.AddSingleton<IChannelService>(sp => sp.GetRequiredService<AdaptingChannelService>());
 
 // ==============================================================================
