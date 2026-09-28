@@ -10,9 +10,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 Grimoire and Rune can now pick up a conversation opened earlier, as Cauldron already could: `/resume id:… seal:…` redraws the transcript on screen and the conversation carries on from where it was left.
 The header shows a glimpse of the current conversation's seal and `/status` shows it whole, so it can be noted down for later use.
 ### 🎯 Major Feature: Sealed Conversations
-Resuming from any channel makes a conversation ID worth guarding, so every conversation is now protected by a **seal**.
+Resuming from any channel makes a conversation ID worth guarding, so **every conversation is now protected by a seal**.
 At start Morgana hands the channel the seal just once and keeps only its hash: from then on every call on the conversation, REST and SignalR alike, needs the seal and the channel that opened it.
-**Knowing a conversation ID is no longer enough to read it, write to it or follow it**; without the seal Morgana answers as if the conversation did not exist. Conversations started before this version stay closed.
+**Knowing a conversation ID is no longer enough to read it, write to it or follow it**; without the seal Morgana answers as if the conversation did not exist. Conversations started before this version stay closed  (because they didn't born with the protection of seal).
 
 ### ✨ Added
 - **`/resume` command**: Grimoire and Rune take back a conversation opened earlier, given its ID and seal
