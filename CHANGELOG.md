@@ -20,6 +20,7 @@ At start Morgana hands the channel the seal just once and keeps only its hash: f
 
 ### 🔄 Changed
 - Starting a conversation under an ID that is not a GUID in its 32-digit format is now refused
+- Retries and timeouts are now uniform across every LLM provider: until now only Anthropic bounded them, while the others had no settings at all
 
 ### 🐛 Fixed
 - A conversation left with an agent no longer installed should be handed back to Morgana on resume
