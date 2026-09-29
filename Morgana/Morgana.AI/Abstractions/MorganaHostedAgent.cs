@@ -14,11 +14,6 @@ namespace Morgana.AI.Abstractions;
 /// The <see cref="AIAgent"/> under which one Morgana intent is published over A2A: it owns no model
 /// and no session and carries an inbound request to the actor serving that intent.
 /// </summary>
-/// <remarks>
-/// The seam between two ownership models — A2A hosting expects one long-lived agent per name, while
-/// Morgana's agents are per-conversation actors — reconciled by the A2A <c>contextId</c>. Registered
-/// once per intent as a singleton, so it holds no per-conversation state of its own.
-/// </remarks>
 public sealed class MorganaHostedAgent : AIAgent
 {
     /// <summary>
