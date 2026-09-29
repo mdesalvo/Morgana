@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -40,7 +39,11 @@ public class Ollama : MorganaLLM
             this.configuration.GetSection("Morgana:LLM:Ollama:Tiers").Get<Dictionary<Records.LLMTier, Records.TierDefinition>>() ?? [];
 
         Uri endpoint = new Uri(this.configuration["Morgana:LLM:Ollama:Endpoint"]!);
-        TimeSpan timeout = TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture));
+
+        // A local server neither throttles nor sheds load, so nothing here is retried: the timeout
+        // bounds the one attempt a call gets. It is generous because a local model on modest
+        // hardware can take minutes to answer a long prompt.
+        TimeSpan timeout = TimeSpan.FromSeconds(this.configuration.GetValue("Morgana:LLM:Ollama:TimeoutSeconds", 180));
 
         // Ollama's client binds its model at construction (unlike the SDK-based providers,
         // there is no single client + per-call model selection), so one OllamaApiClient per
@@ -48,10 +51,10 @@ public class Ollama : MorganaLLM
         // fixed but the model differs and OllamaApiClient does not expose overriding it later.
         foreach ((Records.LLMTier tier, Records.TierDefinition tierDefinition) in tiers)
         {
-            IChatClient tierClient = WrapWithTelemetry(
-                new OllamaApiClient(
-                    new HttpClient { BaseAddress = endpoint, Timeout = timeout },
-                    tierDefinition.Options.ModelId));
+            HttpClient httpClient = CreateAttemptLoggingHttpClient(timeout);
+            httpClient.BaseAddress = endpoint;
+
+            IChatClient tierClient = WrapWithTelemetry(new OllamaApiClient(httpClient, tierDefinition.Options.ModelId));
             RegisterTierClient(tier, tierDefinition.Options.ModelId, tierClient, tierDefinition.MagicDust, tierDefinition.Options.ToChatOptions());
         }
 

@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Net;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -241,6 +244,17 @@ public class MorganaLLM : ILLMService
     }
 
     /// <summary>
+    /// The HTTP client every provider hands its SDK, running each attempt on the wire through the <see cref="AttemptLogger"/>.
+    /// </summary>
+    /// <param name="timeout">Bound on one call through this client. Infinite when the SDK bounds each attempt itself.</param>
+    protected HttpClient CreateAttemptLoggingHttpClient(TimeSpan timeout) =>
+        new HttpClient(
+            new AttemptLogger(loggerFactory?.CreateLogger(GetType()), GetType().Name) { InnerHandler = new SocketsHttpHandler() })
+            {
+                Timeout = timeout
+            };
+
+    /// <summary>
     /// Performs a completion with an explicit system prompt and user message.
     /// Primary method for actors performing stateless LLM operations (classification, guard checks).
     /// </summary>
@@ -306,6 +320,71 @@ public class MorganaLLM : ILLMService
             // Return user-friendly error message from Morgana prompt
             List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>(Constants.PromptProperties.ErrorAnswers);
             return errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "LLMServiceError", StringComparison.OrdinalIgnoreCase))!.Content;
+        }
+    }
+
+    /// <summary>
+    /// Writes down every call a provider actually puts on the wire, including the ones its SDK retries by itself.
+    /// </summary>
+    /// <remarks>
+    /// The telemetry wrapper measures a completion end to end, so a call throttled three times and answered
+    /// on the fourth reads there as one slow call. This handler sits under the SDK's retry loop, on the HTTP
+    /// transport itself, so each attempt passes through it once: a refusal carrying a retry-after is recorded
+    /// as a refusal and an attempt cut by its timeout as a cut. A wait nobody asked for stops looking like a
+    /// model taking its time. It observes and never alters: the SDK alone decides whether to try again.
+    /// </remarks>
+    /// <param name="logger">Categorised under the concrete provider. Null in test paths, where nothing is written.</param>
+    /// <param name="providerName">The provider named in every line, so a log mixing hosts still says who refused.</param>
+    private sealed class AttemptLogger(ILogger? logger, string providerName) : DelegatingHandler
+    {
+        /// <summary>
+        /// Forwards one attempt unchanged and logs how it ended: answered, refused or never answered.
+        /// </summary>
+        /// <remarks>
+        /// A success is logged too, at Information: the count of lines per call is what tells one attempt
+        /// from several. The elapsed time of each is what tells a slow model from a throttled one.
+        /// </remarks>
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            // Measures this attempt alone, never the call: the backoff between two attempts belongs to the SDK
+            // and shows up as the gap between their lines.
+            long startedAt = Stopwatch.GetTimestamp();
+
+            HttpResponseMessage response;
+            try
+            {
+                // The attempt reaches the provider exactly as the SDK built it, with the SDK's own
+                // cancellation, which carries the per-attempt timeout: nothing here reshapes the call.
+                response = await base.SendAsync(request, cancellationToken);
+            }
+            // An attempt cut by the provider's per-attempt timeout or lost to the network returns nothing to
+            // log below, yet it is exactly the silent wait this record exists for. The exception goes on
+            // untouched, since it is what the SDK reads to decide on a retry.
+            catch (Exception exception) when (exception is OperationCanceledException or HttpRequestException)
+            {
+                logger?.LogWarning(
+                    "{Provider} gave no answer after {Elapsed:0.0}s ({Reason}); the client retries it if it has attempts left",
+                    providerName, Stopwatch.GetElapsedTime(startedAt).TotalSeconds, exception.GetType().Name);
+                throw;
+            }
+
+            double elapsed = Stopwatch.GetElapsedTime(startedAt).TotalSeconds;
+
+            // 429 and 5xx are the refusals the SDKs retry on their own, so they are the ones worth a warning.
+            // The retry-after the provider asked for is logged beside the elapsed time, since it is the wait
+            // the next attempt is about to add. Any other status, a 4xx included, ends the call and is left to
+            // the caller that receives it.
+            if (response.StatusCode is HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError)
+                logger?.LogWarning(
+                    "{Provider} refused a call with {Status} after {Elapsed:0.0}s and asks to wait {RetryAfter}s; the client retries it if it has attempts left",
+                    providerName, (int)response.StatusCode, elapsed,
+                    response.Headers.RetryAfter?.Delta?.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) ?? "an unstated number of");
+            else
+                logger?.LogInformation("{Provider} answered {Status} in {Elapsed:0.0}s", providerName, (int)response.StatusCode, elapsed);
+
+            return response;
         }
     }
 }

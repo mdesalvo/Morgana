@@ -1,4 +1,5 @@
 using System.ClientModel;
+using System.ClientModel.Primitives;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -32,8 +33,17 @@ public class OpenAI : MorganaLLM
         IPromptResolverService promptResolverService,
         ILoggerFactory? loggerFactory = null) : base(configuration, promptResolverService, loggerFactory)
     {
+        // Throttling is bounded and made visible as it is for Anthropic: a retry ceiling read from
+        // configuration, a timeout on each attempt and every attempt written down. Left to its
+        // defaults the SDK would retry just as often, only with nobody seeing it happen.
         OpenAIClient openaiClient = new OpenAIClient(
-            new ApiKeyCredential(this.configuration["Morgana:LLM:OpenAI:ApiKey"]!));
+            new ApiKeyCredential(this.configuration["Morgana:LLM:OpenAI:ApiKey"]!),
+            new OpenAIClientOptions
+            {
+                RetryPolicy = new ClientRetryPolicy(this.configuration.GetValue("Morgana:LLM:OpenAI:MaxRetries", 3)),
+                NetworkTimeout = TimeSpan.FromSeconds(this.configuration.GetValue("Morgana:LLM:OpenAI:TimeoutSeconds", 120)),
+                Transport = new HttpClientPipelineTransport(CreateAttemptLoggingHttpClient(Timeout.InfiniteTimeSpan))
+            });
 
         // Binds the tiers declared in configuration so they're available at runtime for
         // matching against each agent's declared tier (see Records.TierDefinition remarks
