@@ -380,7 +380,7 @@ LLM-guided rewrite, then a Markdig template fallback. Never throws.
 ## Persistence
 
 Per-conversation SQLite at `{StoragePath}/morgana-{conversationId}.db`, schema version in
-`PRAGMA user_version` (currently 8), idempotent initialization.
+`PRAGMA user_version` (currently 7), idempotent initialization.
 
 | Table | Purpose |
 |---|---|

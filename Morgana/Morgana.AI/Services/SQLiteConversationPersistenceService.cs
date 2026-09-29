@@ -979,7 +979,7 @@ VALUES (@agent_name, @message_ticks, @degraded_text);
         checkCommand.CommandText = "PRAGMA user_version;";
         long currentVersion = (long)(await checkCommand.ExecuteScalarAsync() ?? 0L);
 
-        if (currentVersion >= 8)
+        if (currentVersion >= 7)
             return; // Already initialized
 
         // Create schema. CREATE TABLE IF NOT EXISTS makes this safe to run on databases that
@@ -1069,13 +1069,13 @@ CREATE TABLE IF NOT EXISTS degraded_message (
             }
         }
 
-        // Mark database as initialized (version 8)
+        // Mark database as initialized
         await using SqliteCommand versionCommand = connection.CreateCommand();
-        versionCommand.CommandText = "PRAGMA user_version = 8;";
+        versionCommand.CommandText = "PRAGMA user_version = 7;";
         await versionCommand.ExecuteNonQueryAsync();
 
         logger.LogInformation(
-            "Initialized database schema v8 for: {GetFileName}", Path.GetFileName(connection.DataSource));
+            "Initialized database schema v7 for: {GetFileName}", Path.GetFileName(connection.DataSource));
     }
 
     /// <summary>

@@ -376,7 +376,7 @@ public sealed class ConversationApiTests
         // How much history it accounts for stays unknown until its agent next reads or writes it
         await api.HostPersistenceService().EnsureDatabaseInitializedAsync(conversationId);
         Assert.Equal("billing", await api.HostPersistenceService().GetMostRecentActiveAgentAsync(conversationId));
-        Assert.Equal(8L, await api.QueryRecordAsync(conversationId, "PRAGMA user_version;"));
+        Assert.Equal(7L, await api.QueryRecordAsync(conversationId, "PRAGMA user_version;"));
         Assert.Equal(0L, await api.QueryRecordAsync(conversationId, "SELECT COUNT(*) FROM conversation_seal;"));
         Assert.Equal(0L, await api.QueryRecordAsync(conversationId, "SELECT COUNT(*) FROM degraded_message;"));
         Assert.Equal(0L, await api.QueryRecordAsync(conversationId, "SELECT is_dirty FROM morgana WHERE agent_name = 'billing';"));
