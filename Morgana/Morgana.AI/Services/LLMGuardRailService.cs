@@ -186,12 +186,13 @@ public partial class LLMGuardRailService : IGuardRailService
 
         try
         {
-            // The result alone, handed to the inspector as the object of a stateless judgment on the
-            // cheapest tier: what the conversation was about has no bearing on whether it speaks to the model.
+            // The tool's name comes ahead of its result because the inspector judges whether the result is
+            // what such a tool exists to return. The conversation stays out: a stateless judgment on the
+            // cheapest tier, which no earlier turn can argue with.
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
                 toolGuardSystemPrompt,
-                toolResult);
+                $"Tool: {toolName}\n\nResult:\n{toolResult}");
 
             Records.GuardCheckResponse? llmResult = JsonSerializer.Deserialize<Records.GuardCheckResponse>(
                 response, Records.DefaultJsonSerializerOptions);
