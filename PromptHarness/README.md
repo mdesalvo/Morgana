@@ -94,7 +94,7 @@ On top of that it overrides, per run:
 | `ConversationPersistence:StoragePath` → temp dir | throwaway SQLite databases, deleted on teardown |
 | `OpenTelemetry:Exporters[*]:Enabled` → false | the in-process listener needs no collector |
 | `RateLimiting:Enabled`, `DustLimiting:Enabled` → false | a repeated-run suite would throttle itself |
-| `ActorSystem:EnableGuardrail` → `Harness:EnableGuardrail` | off by default: no scenario asserts moderation and every guarded turn is an extra LLM call |
+| `ActorSystem:EnableUserGuardrail` → `Harness:EnableUserGuardrail` | off by default: no scenario asserts moderation and every guarded turn is an extra LLM call |
 | `Authentication:Issuers[harness]` → appended | name and key both declared per run, the key minted fresh and never written to disk: an instrument's channel identity is not something a deployed installation should carry in its own configuration |
 | `AgentToAgent:Partners[harness-peer]` → appended | a partner admitted to `inventory` and to no other agent, declared per run rather than shipped: it exists to be turned away, which is the only way `AgentCardTests` can observe that the A2A gate is shut *selectively* and not merely shut. Its key, its reach and its ceiling are one entry |
 
@@ -121,7 +121,7 @@ dotnet test … --filter "FullyQualifiedName~ContextHandlingTests"
 dotnet test … --filter "FullyQualifiedName~BehaviourTests"
 
 # the guard group — requires the boot-time guardrail flag, off by default
-Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
+Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
 
 # the rest of the actors group — classifier, channel adaptation, presentation
 dotnet test … --filter "FullyQualifiedName~ActorTests"

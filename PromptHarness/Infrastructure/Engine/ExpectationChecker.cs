@@ -99,7 +99,7 @@ public static partial class ExpectationChecker
     private static void CheckGuard(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
         if (expect.GuardCompliant is { } expectedCompliant && turn.GuardCompliant != expectedCompliant)
-            failures.Add($"guardCompliant: expected {expectedCompliant}, got {turn.GuardCompliant?.ToString() ?? "(no guard span — is Harness:EnableGuardrail on?)"}");
+            failures.Add($"guardCompliant: expected {expectedCompliant}, got {turn.GuardCompliant?.ToString() ?? "(no guard span — is Harness:EnableUserGuardrail on?)"}");
     }
 
     /// <summary>Intent and confidence of the <c>morgana.classifier</c> span.</summary>

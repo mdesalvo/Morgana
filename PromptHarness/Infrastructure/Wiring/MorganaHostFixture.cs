@@ -33,7 +33,7 @@ namespace PromptHarness.Infrastructure.Wiring;
 /// <para><strong>What the harness overrides</strong> on top of that inherited configuration:
 /// a throwaway SQLite storage path, telemetry exporters off (the in-process listener needs none),
 /// rate and dust limiting off (they would throttle a repeated-run suite), the guard rail per
-/// <c>Harness:EnableGuardrail</c> and a freshly-minted symmetric key for the <c>harness</c> issuer — so
+/// <c>Harness:EnableUserGuardrail</c> and a freshly-minted symmetric key for the <c>harness</c> issuer — so
 /// the channel's credentials live for the duration of one run and never touch disk.</para>
 /// </remarks>
 public sealed class MorganaHostFixture : IAsyncLifetime
@@ -339,7 +339,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // default: naming it here is what lets a run that swaps the domain leave it out, since an
         // installation reads the first agents.json it finds and holds exactly one domain.
         Environment.SetEnvironmentVariable("Morgana__Plugins__Directories__0", "domain-plugins");
-        Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableGuardrail", Options.EnableGuardrail ? "true" : "false");
+        Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableUserGuardrail", Options.EnableUserGuardrail ? "true" : "false");
 
         // Unset by default: only RateLimitTests sets it, in its own filtered dotnet test invocation, so no
         // other group's conversation is ever refused for calling too often

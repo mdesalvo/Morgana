@@ -55,12 +55,12 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ServedConsultation
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~DegradedHistoryTests"
 
 # boot-flagged — one knob each, never together
-Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
+Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
 Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~SummarizationTests"
 Harness__DustBudgetPerConversation=15 dotnet test … --filter "FullyQualifiedName~DustTests"
 Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateLimitTests"    # deterministic, skipped without the knob
 Harness__FederatedPeer=true dotnet test … --filter "FullyQualifiedName~FederationTests"
-Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~ConversationPersistenceTests"
+Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~ConversationPersistenceTests"
 
 # one scenario — the id is a Theory argument, so match DisplayName, never the FQN
 dotnet test PromptHarness.csproj --filter "DisplayName~behaviour-rich-card"
@@ -128,7 +128,7 @@ instructions read together — **fix the text, never lower the threshold**).
 The harness owns **no `Morgana:` configuration and no secrets**. It shares `Morgana.Web`'s
 `UserSecretsId`, resolves that project's settings plus the shared store and republishes the result
 to the host as environment variables. On top it overrides, per run: a throwaway storage path;
-exporters off; rate and dust limiting off; the guard rail per `Harness:EnableGuardrail`; a random key
+exporters off; rate and dust limiting off; the guard rail per `Harness:EnableUserGuardrail`; a random key
 for the `harness` issuer; one partner appended, admitted to a single agent.
 
 The repository must carry the `harness` entry under `Morgana:Authentication:Issuers` or the fixture

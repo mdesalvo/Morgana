@@ -13,10 +13,10 @@ namespace PromptHarness.Infrastructure;
 public sealed class HarnessOptions
 {
     /// <summary>
-    /// Whether the guard rail stays enabled on the instance under test. Off by default: no scenario
+    /// Whether the guard on the user's messages stays enabled on the instance under test. Off by default: no scenario
     /// asserts moderation behaviour and every guarded turn costs one extra LLM round trip.
     /// </summary>
-    public bool EnableGuardrail { get; init; }
+    public bool EnableUserGuardrail { get; init; }
 
     /// <summary>Seconds to wait for the host to answer <c>GET /api/morgana/health</c> before giving up.</summary>
     public int StartupTimeoutSeconds { get; init; } = 180;
@@ -59,7 +59,7 @@ public sealed class HarnessOptions
     /// (12, summing with <see cref="SummarizationTargetCount"/>'s default of 8 to a 21-message
     /// trigger) is far above what any scripted scenario reaches — deliberately unset here, so every
     /// class except <c>SummarizationTests</c> runs against the inherited, unmodified value. Lowering
-    /// it is process-wide for the whole shared host, exactly like <see cref="EnableGuardrail"/>: run
+    /// it is process-wide for the whole shared host, exactly like <see cref="EnableUserGuardrail"/>: run
     /// it in its own filtered <c>dotnet test</c> invocation, never alongside the rest of the suite.
     /// </summary>
     public int? SummarizationThreshold { get; init; }
