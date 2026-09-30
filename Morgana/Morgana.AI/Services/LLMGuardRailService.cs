@@ -305,7 +305,23 @@ public partial class LLMGuardRailService : IGuardRailService
             switch (element.ValueKind)
             {
                 case JsonValueKind.String:
-                    texts.Add(element.GetString() ?? "");
+                    string text = element.GetString() ?? "";
+                    texts.Add(text);
+
+                    // An MCP server hands its JSON back as the text of a content block, so a string may
+                    // carry a document of its own whose escapes are still closed: it is read one level down.
+                    if (text.TrimStart() is ['{' or '[', ..])
+                    {
+                        try
+                        {
+                            using JsonDocument nestedDocument = JsonDocument.Parse(text);
+                            CollectStrings(nestedDocument.RootElement, texts);
+                        }
+                        catch (JsonException)
+                        {
+                            // Text that merely opens with a bracket is already collected as it stands.
+                        }
+                    }
                     break;
 
                 case JsonValueKind.Array:
