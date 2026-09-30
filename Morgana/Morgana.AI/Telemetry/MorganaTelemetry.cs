@@ -118,6 +118,9 @@ public static class MorganaTelemetry
     /// <summary>Activity wrapping the guard's check of one tool result, nested under the agent that called the tool.</summary>
     public const string ToolGuardActivity = "morgana.toolguard";
 
+    /// <summary>Activity wrapping the guard's check of one question a partner puts to an agent here.</summary>
+    public const string PeerGuardActivity = "morgana.peerguard";
+
     // ==============================================================================
     // ATTRIBUTE NAMES — CONVERSATION
     // ==============================================================================
@@ -237,6 +240,19 @@ public static class MorganaTelemetry
 
     /// <summary>Whether the result reached the model; false means it was quarantined.</summary>
     public const string ToolGuardCompliant = "toolguard.compliant";
+
+    // ==============================================================================
+    // ATTRIBUTE NAMES — PEER GUARD
+    // ==============================================================================
+
+    /// <summary>Partner that asked, as its token declared it. The question itself never reaches the span.</summary>
+    public const string PeerGuardCaller = "peerguard.caller";
+
+    /// <summary>Intent of the agent the question was put to.</summary>
+    public const string PeerGuardTarget = "peerguard.target";
+
+    /// <summary>Whether the question reached the agent; false means the partner was answered with a refusal.</summary>
+    public const string PeerGuardCompliant = "peerguard.compliant";
 
     // ==============================================================================
     // EVENT NAMES

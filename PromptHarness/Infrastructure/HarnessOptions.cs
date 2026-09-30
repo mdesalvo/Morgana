@@ -30,6 +30,15 @@ public sealed class HarnessOptions
     /// </remarks>
     public bool EnableToolGuardrail { get; init; }
 
+    /// <summary>
+    /// Whether the guard on partners' questions stays enabled on the instance under test, which is what
+    /// <c>PeerGuardTests</c> needs. Off by default: <c>ServedConsultationTests</c> asks as a partner too and
+    /// with the guard on would measure the guard instead of the agent's own prose. Process-wide, so run it
+    /// on its own:
+    /// <c>Harness__EnablePeerGuardrail=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PeerGuardTests"</c>
+    /// </summary>
+    public bool EnablePeerGuardrail { get; init; }
+
     /// <summary>Seconds to wait for the host to answer <c>GET /api/morgana/health</c> before giving up.</summary>
     public int StartupTimeoutSeconds { get; init; } = 180;
 

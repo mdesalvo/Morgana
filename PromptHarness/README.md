@@ -95,6 +95,7 @@ On top of that it overrides, per run:
 | `OpenTelemetry:Exporters[*]:Enabled` → false | the in-process listener needs no collector |
 | `RateLimiting:Enabled`, `DustLimiting:Enabled` → false | a repeated-run suite would throttle itself |
 | `ActorSystem:EnableUserGuardrail` → `Harness:EnableUserGuardrail` | off by default: no scenario asserts moderation and every guarded turn is an extra LLM call |
+| `ActorSystem:EnablePeerGuardrail` → `Harness:EnablePeerGuardrail` | off by default: the groups asking as a partner measure the agent's own answer, which the guard would stand in for; only `PeerGuardTests` sets it |
 | `ActorSystem:EnableToolGuardrail` → `Harness:EnableToolGuardrail` | off by default: on, it also replaces the domain with `PoisonedPlugin` and stands up its poisoned MCP server and partner on port 5199, so only `ToolGuardTests` sets it |
 | `Authentication:Issuers[harness]` → appended | name and key both declared per run, the key minted fresh and never written to disk: an instrument's channel identity is not something a deployed installation should carry in its own configuration |
 | `AgentToAgent:Partners[harness-peer]` → appended | a partner admitted to `inventory` and to no other agent, declared per run rather than shipped: it exists to be turned away, which is the only way `AgentCardTests` can observe that the A2A gate is shut *selectively* and not merely shut. Its key, its reach and its ceiling are one entry |
@@ -126,6 +127,9 @@ Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~G
 
 # the tool-guard group — swaps the domain for the poisoned one, never alongside anything else
 Harness__EnableToolGuardrail=true dotnet test … --filter "FullyQualifiedName~ToolGuardTests"
+
+# the peer-guard group — screens partners' questions, off by default
+Harness__EnablePeerGuardrail=true dotnet test … --filter "FullyQualifiedName~PeerGuardTests"
 
 # the rest of the actors group — classifier, channel adaptation, presentation
 dotnet test … --filter "FullyQualifiedName~ActorTests"

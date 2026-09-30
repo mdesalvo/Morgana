@@ -356,6 +356,10 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // for each result of the example domain's MCP agent.
         Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableToolGuardrail", Options.EnableToolGuardrail ? "true" : "false");
 
+        // Off unless the run is the peer-guard one: the groups asking as a partner measure the agent's
+        // own answer, which a guard in front of it would stand in for.
+        Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnablePeerGuardrail", Options.EnablePeerGuardrail ? "true" : "false");
+
         // Unset by default: only RateLimitTests sets it, in its own filtered dotnet test invocation, so no
         // other group's conversation is ever refused for calling too often
         Environment.SetEnvironmentVariable("Morgana__RateLimiting__Enabled", Options.RateLimitPerMinute is null ? "false" : "true");

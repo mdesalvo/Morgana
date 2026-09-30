@@ -29,6 +29,9 @@ public static class Constants
         /// <summary>The guard rail's check for instructions smuggled into an external tool's result.</summary>
         public const string ToolGuard = "ToolGuard";
 
+        /// <summary>The guard rail's check for hijacking in a question a partner puts to an agent here.</summary>
+        public const string PeerGuard = "PeerGuard";
+
         /// <summary>The welcome message and its quick replies.</summary>
         public const string Presentation = "Presentation";
 

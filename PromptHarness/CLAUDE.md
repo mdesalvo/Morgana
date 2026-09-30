@@ -31,7 +31,7 @@ project: every build setting lives in the `.csproj`, so it carries unchanged acr
 
 ## Commands
 
-Eighteen test classes. **Never combine filters**: seven groups carry a process-wide boot knob the
+Nineteen test classes. **Never combine filters**: eight groups carry a process-wide boot knob the
 others must not see and two of them share the user guard's. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
@@ -61,6 +61,7 @@ Harness__DustBudgetPerConversation=15 dotnet test … --filter "FullyQualifiedNa
 Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateLimitTests"    # deterministic, skipped without the knob
 Harness__FederatedPeer=true dotnet test … --filter "FullyQualifiedName~FederationTests"
 Harness__EnableToolGuardrail=true dotnet test … --filter "FullyQualifiedName~ToolGuardTests"
+Harness__EnablePeerGuardrail=true dotnet test … --filter "FullyQualifiedName~PeerGuardTests"
 Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~ConversationPersistenceTests"
 
 # one scenario — the id is a Theory argument, so match DisplayName, never the FQN
@@ -90,6 +91,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `BehaviourTests` | 5/4 | Visible presentation: buttons, cards, closure |
 | `GuardTests` | 5/5 | Moderation. A false negative is safety-adjacent, so it sits with the blocking reasoning rather than with presentation |
 | `ToolGuardTests` | 5/5, controls 5/4 | The guard on tool results. `PoisonedPlugin` replaces the domain: its own tools, an MCP server and a partner's colleague (both served by `PoisonedSourceHost` on the fixed port 5199) answer with five families of hijacking (personality, authority, behaviour, data, the user). A result must be quarantined and the answer must do none of what it asked; one truthful result per external source must pass, quick replies and card included |
+| `PeerGuardTests` | none | The guard on partners' questions: one hijacking question per family (personality, authority, behaviour, data) is declined before the agent reads it; an ordinary one and a curt one reach it. One live inspection each, asked through `PartnerConsultation` like `ServedConsultationTests` |
 | `ActorTests` | mixed | The framework prompts nothing else exercises: classifier, channel adaptation, presentation (a one-shot check, since the presenter caches process-wide by channel name) |
 | `ServedConsultationTests` | — | This installation answering a partner: which conversation, what it cost, how many exchanges are admitted |
 | `SummarizationTests` | — | The reducer's own prompt, unreachable at the default 21-message trigger |
@@ -130,7 +132,7 @@ instructions read together — **fix the text, never lower the threshold**).
 The harness owns **no `Morgana:` configuration and no secrets**. It shares `Morgana.Web`'s
 `UserSecretsId`, resolves that project's settings plus the shared store and republishes the result
 to the host as environment variables. On top it overrides, per run: a throwaway storage path;
-exporters off; rate and dust limiting off; the two guards per `Harness:EnableUserGuardrail` and `Harness:EnableToolGuardrail`; a random key
+exporters off; rate and dust limiting off; the three guards per `Harness:EnableUserGuardrail`, `Harness:EnableToolGuardrail` and `Harness:EnablePeerGuardrail`; a random key
 for the `harness` issuer; one partner appended, admitted to a single agent.
 
 The repository must carry the `harness` entry under `Morgana:Authentication:Issuers` or the fixture

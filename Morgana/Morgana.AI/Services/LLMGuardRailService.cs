@@ -10,7 +10,7 @@ namespace Morgana.AI.Services;
 /// <summary>
 /// Default <see cref="IGuardRailService"/> implementation. Delegates to <see cref="ILLMService"/>
 /// with the Guard system prompt for detection of spam, phishing, violence, profanity and other
-/// policy violations. Screens tool results for text forging Morgana's own prompt.
+/// policy violations. Screens tool results and partners' questions for prompt injection.
 /// </summary>
 public partial class LLMGuardRailService : IGuardRailService
 {
@@ -37,8 +37,13 @@ public partial class LLMGuardRailService : IGuardRailService
     private readonly string toolGuardSystemPrompt;
 
     /// <summary>
-    /// The labels heading the sections of Morgana's own prompt, <c>[TARGET]</c> among them. A tool
-    /// result carrying one is forging a layer the model was told to obey.
+    /// Pre-computed PeerGuard system prompt, read before every question a partner puts to an agent here.
+    /// </summary>
+    private readonly string peerGuardSystemPrompt;
+
+    /// <summary>
+    /// The labels heading the sections of Morgana's own prompt, <c>[TARGET]</c> among them. A text from
+    /// outside carrying one is forging a layer the model was told to obey.
     /// </summary>
     private readonly string[] promptLayerLabels;
 
@@ -57,19 +62,14 @@ public partial class LLMGuardRailService : IGuardRailService
         this.llmService = llmService;
         this.logger = logger;
 
-        // Built once here, not per-call: unlike LLMClassifierService/EmbeddedAgentConfigurationService
-        // this isn't deferred behind a Lazy<> — the Guard prompt is needed on essentially every
-        // turn (guard check gates every user message), so eager beats lazy for the common case.
-        Records.Prompt guardPrompt =
-            promptResolverService.ResolveAsync(Constants.Prompts.Guard).GetAwaiter().GetResult();
-
-        // What the Guard reads before every user message. No placeholder to splice, unlike the
-        // classifier's: what is admissible is a policy of the framework, not of a domain.
+        Records.Prompt guardPrompt = promptResolverService.ResolveAsync(Constants.Prompts.Guard).GetAwaiter().GetResult();
         guardSystemPrompt = $"{guardPrompt.Target}\n{guardPrompt.Instructions}\n{guardPrompt.Formatting}";
 
-        Records.Prompt toolGuardPrompt =
-            promptResolverService.ResolveAsync(Constants.Prompts.ToolGuard).GetAwaiter().GetResult();
+        Records.Prompt toolGuardPrompt = promptResolverService.ResolveAsync(Constants.Prompts.ToolGuard).GetAwaiter().GetResult();
         toolGuardSystemPrompt = $"{toolGuardPrompt.Target}\n{toolGuardPrompt.Instructions}\n{toolGuardPrompt.Formatting}";
+
+        Records.Prompt peerGuardPrompt = promptResolverService.ResolveAsync(Constants.Prompts.PeerGuard).GetAwaiter().GetResult();
+        peerGuardSystemPrompt = $"{peerGuardPrompt.Target}\n{peerGuardPrompt.Instructions}\n{peerGuardPrompt.Formatting}";
 
         // The labels are read from the framework prompt that carries them rather than listed here, so
         // a template added to morgana.json is recognised as forged the day it is written.
@@ -184,50 +184,95 @@ public partial class LLMGuardRailService : IGuardRailService
         if (!externalSource)
             return new Records.GuardRailResult(Compliant: true, Violation: null);
 
+        // The tool's name comes ahead of its result because the inspector judges whether the result is
+        // what such a tool exists to return. One call per external result, not one per turn: its own
+        // line in the ledger shows what screening the tools costs next to what the user's guard does.
+        return await InspectAsync(
+            conversationId,
+            toolGuardSystemPrompt,
+            $"Tool: {toolName}\n\nResult:\n{toolResult}",
+            $"{Constants.Morgana} ({Constants.Prompts.ToolGuard})",
+            $"result of tool {toolName}");
+    }
+
+    /// <inheritdoc/>
+    public async Task<Records.GuardRailResult> CheckPeerQuestionAsync(string conversationId, string agentTerritory, string question)
+    {
+        // A forged prompt label or a role line is a forgery whoever wrote it, so the free check tool
+        // results pass comes first here too.
+        string? forgery = FindPromptForgery(question);
+        if (forgery is not null)
+        {
+            logger.LogWarning(
+                "LLMGuardRailService: question from a partner refused for conversation {ConversationId} — {Forgery}",
+                conversationId, forgery);
+
+            return new Records.GuardRailResult(Compliant: false, Violation: forgery);
+        }
+
+        // A partner is outside this installation by definition, so every question is read in depth. What
+        // the agent answers for comes ahead of it: a question passes only when it asks within that.
+        return await InspectAsync(
+            conversationId,
+            peerGuardSystemPrompt,
+            $"Agent answers for: {agentTerritory}\n\nQuestion:\n{question}",
+            $"{Constants.Morgana} ({Constants.Prompts.PeerGuard})",
+            "question from a partner");
+    }
+
+    /// <summary>
+    /// Has an inspector prompt judge one text that came from outside this installation, failing open
+    /// on everything but the provider's own refusal.
+    /// </summary>
+    /// <param name="conversationId">Conversation the inspection is correlated with and charged to.</param>
+    /// <param name="systemPrompt">The inspector's prompt, answering in the Guard's own JSON shape.</param>
+    /// <param name="userPrompt">What the inspector reads: the text, headed by what it is judged against.</param>
+    /// <param name="dustRole">Role the inspection is charged under in the dust ledger.</param>
+    /// <param name="subject">What is being judged, as the log names it.</param>
+    private async Task<Records.GuardRailResult> InspectAsync(
+        string conversationId,
+        string systemPrompt,
+        string userPrompt,
+        string dustRole,
+        string subject)
+    {
         try
         {
-            // The tool's name comes ahead of its result because the inspector judges whether the result is
-            // what such a tool exists to return. The conversation stays out: a stateless judgment on the
-            // cheapest tier, which no earlier turn can argue with.
-            string response = await llmService.CompleteWithSystemPromptAsync(
-                conversationId,
-                toolGuardSystemPrompt,
-                $"Tool: {toolName}\n\nResult:\n{toolResult}",
-
-                // One call per external result, not one per turn: its own line in the ledger shows what
-                // screening the tools costs next to what the user's guard does.
-                $"{Constants.Morgana} ({Constants.Prompts.ToolGuard})");
+            // A stateless judgment on the cheapest tier: the conversation stays out, so no earlier turn
+            // can argue with it.
+            string response = await llmService.CompleteWithSystemPromptAsync(conversationId, systemPrompt, userPrompt, dustRole);
 
             Records.GuardCheckResponse? llmResult = JsonSerializer.Deserialize<Records.GuardCheckResponse>(
                 response, Records.DefaultJsonSerializerOptions);
 
-            // An unreadable verdict admits the result, as for the user's message: the tool loop must not
-            // lose a datum to a model that answered badly.
+            // An unreadable verdict admits the text, as for the user's message: nobody should lose a
+            // datum or a question to a model that answered badly.
             if (llmResult is null || llmResult.Compliant)
                 return new Records.GuardRailResult(Compliant: true, Violation: null);
 
             logger.LogWarning(
-                "LLMGuardRailService: result of tool {ToolName} quarantined for conversation {ConversationId} — {Violation}",
-                toolName, conversationId, llmResult.Violation);
+                "LLMGuardRailService: {Subject} refused for conversation {ConversationId} — {Violation}",
+                subject, conversationId, llmResult.Violation);
 
             return new Records.GuardRailResult(Compliant: false, Violation: llmResult.Violation);
         }
         catch (Exception ex) when (IsProviderContentFilter(ex))
         {
-            // The provider's own shield caught the result before the inspector could read it: a verdict
-            // of its own, never a failure to fail open on.
+            // The provider's own shield caught the text before the inspector could read it: a verdict of
+            // its own, never a failure to fail open on.
             logger.LogWarning(ex,
-                "LLMGuardRailService: provider-level content filter rejected the result of tool {ToolName} for conversation {ConversationId}",
-                toolName, conversationId);
+                "LLMGuardRailService: provider-level content filter rejected the {Subject} for conversation {ConversationId}",
+                subject, conversationId);
 
             return new Records.GuardRailResult(Compliant: false, Violation: "rejected by the provider's content filter");
         }
         catch (Exception ex)
         {
-            // Fail open: a transient LLM error must not starve the agent of its tool's answer.
+            // Fail open: a transient LLM error must not starve an agent of its tool's answer or a partner
+            // of the answer it asked for.
             logger.LogError(ex,
-                "LLMGuardRailService: inspection of tool {ToolName} failed for conversation {ConversationId} — failing open",
-                toolName, conversationId);
+                "LLMGuardRailService: inspection of the {Subject} failed for conversation {ConversationId} — failing open",
+                subject, conversationId);
 
             return new Records.GuardRailResult(Compliant: true, Violation: null);
         }

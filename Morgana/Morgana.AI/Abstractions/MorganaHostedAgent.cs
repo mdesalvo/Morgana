@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Akka.Actor;
@@ -7,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.SessionStores;
+using Morgana.AI.Telemetry;
 
 namespace Morgana.AI.Abstractions;
 
@@ -69,6 +71,12 @@ public sealed class MorganaHostedAgent : AIAgent
     /// </summary>
     private readonly IConversationPersistenceService persistenceService;
 
+    /// <summary>
+    /// Screens a partner's question before any agent here reads it, or <c>null</c> when this
+    /// installation serves partners unscreened.
+    /// </summary>
+    private readonly IGuardRailService? peerGuardRailService;
+
     /// <summary>Logger for inbound-request diagnostics.</summary>
     private readonly ILogger logger;
 
@@ -88,6 +96,7 @@ public sealed class MorganaHostedAgent : AIAgent
     /// <param name="dustLimitService">Ledger consulted for what the served turn cost.</param>
     /// <param name="peerAdmissionService">Weighs a system opening a conversation it has not opened before.</param>
     /// <param name="persistenceService">Owner of the conversation's storage, opened before the turn runs.</param>
+    /// <param name="peerGuardRailService">Screens a partner's question before the agent reads it; <c>null</c> when the peer guard is switched off.</param>
     /// <param name="logger">Records requests that name no conversation, no agent, or that go unanswered.</param>
     public MorganaHostedAgent(
         string intent,
@@ -99,6 +108,7 @@ public sealed class MorganaHostedAgent : AIAgent
         IDustLimitService dustLimitService,
         IPeerAdmissionService peerAdmissionService,
         IConversationPersistenceService persistenceService,
+        IGuardRailService? peerGuardRailService,
         ILogger logger)
     {
         this.intent = intent;
@@ -110,6 +120,7 @@ public sealed class MorganaHostedAgent : AIAgent
         this.dustLimitService = dustLimitService;
         this.peerAdmissionService = peerAdmissionService;
         this.persistenceService = persistenceService;
+        this.peerGuardRailService = peerGuardRailService;
         this.logger = logger;
     }
 
@@ -203,6 +214,27 @@ public sealed class MorganaHostedAgent : AIAgent
                     intent, callerIntent, hostedAgentSession.ConversationId);
 
                 return BuildAgentResponseFromMessage($"The agent for '{intent}' has no budget left on this conversation. Proceed without it.");
+            }
+
+            // A partner's question reaches an agent with none of the guard a user's message passes, so it
+            // is screened here, once admitted and budgeted. A colleague of this installation answers from
+            // the same ring and is not. Refused, the partner reads a plain answer and no agent is troubled.
+            if (peerGuardRailService is not null
+                && hostedAgentSession.CallerIssuer is { } partnerIssuer
+                && !string.Equals(partnerIssuer, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase))
+            {
+                using Activity? peerGuardSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.PeerGuardActivity);
+                peerGuardSpan?.SetTag(MorganaTelemetry.ConversationId, hostedAgentSession.ConversationId);
+                peerGuardSpan?.SetTag(MorganaTelemetry.PeerGuardCaller, partnerIssuer);
+                peerGuardSpan?.SetTag(MorganaTelemetry.PeerGuardTarget, intent);
+
+                Records.GuardRailResult verdict =
+                    await peerGuardRailService.CheckPeerQuestionAsync(hostedAgentSession.ConversationId, description, question);
+
+                peerGuardSpan?.SetTag(MorganaTelemetry.PeerGuardCompliant, verdict.Compliant);
+
+                if (!verdict.Compliant)
+                    return BuildAgentResponseFromMessage($"The agent for '{intent}' declined this question: it was judged hostile to it. Proceed without it.");
             }
 
             // Resolve the actor system

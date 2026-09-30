@@ -17,7 +17,7 @@ public class DraftValidationService : IDraftValidationService
     /// becoming permanently unreachable in silence.
     /// </summary>
     private static readonly string[] FrameworkPromptIds =
-        ["Morgana", "Classifier", "Guard", "ToolGuard", "Presentation", "ChannelAdapter"];
+        ["Morgana", "Classifier", "Guard", "ToolGuard", "PeerGuard", "Presentation", "ChannelAdapter"];
 
     /// <summary>
     /// The base tools every agent receives from <c>morgana.json</c>. A domain tool sharing one of

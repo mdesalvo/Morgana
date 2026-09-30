@@ -50,6 +50,10 @@ public static class A2APublicationExtensions
         // because an issuer spans every conversation it opens.
         builder.Services.AddSingleton<IPeerAdmissionService, SQLitePeerAdmissionService>();
 
+        // Whether a partner's question is screened before an agent here reads it. Off, the hosted agents
+        // are handed no guard at all rather than one they are told to skip.
+        bool peerGuardrailEnabled = builder.Configuration.GetValue("Morgana:ActorSystem:EnablePeerGuardrail", true);
+
         foreach (string publishedIntent in publishedIntents)
         {
             builder.Services
@@ -67,6 +71,7 @@ public static class A2APublicationExtensions
                         serviceProvider.GetRequiredService<IDustLimitService>(),
                         serviceProvider.GetRequiredService<IPeerAdmissionService>(),
                         serviceProvider.GetRequiredService<IConversationPersistenceService>(),
+                        peerGuardrailEnabled ? serviceProvider.GetRequiredService<IGuardRailService>() : null,
                         serviceProvider.GetRequiredService<ILogger>()))
 
                 // The session store is where a request's A2A context id becomes a Morgana conversation.

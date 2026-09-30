@@ -102,7 +102,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Telemetry/` | `MorganaTelemetry`, holding its own span and attribute glossary |
 | `Records.cs` | Every immutable record: actor messages, configuration, DTOs |
 | `Constants.cs` | The glossary: **every literal that is a contract between two parties who cannot see each other**, `PromptProperties` included. Deliberately absent: log text, prompt prose, `IConfiguration` keys. The test is a *resolver*, not a mention |
-| `morgana.json` | Framework prompts: Morgana, Classifier, Guard, ToolGuard, Presentation, ChannelAdapter |
+| `morgana.json` | Framework prompts: Morgana, Classifier, Guard, ToolGuard, PeerGuard, Presentation, ChannelAdapter |
 
 ### Morgana.Web
 
@@ -218,7 +218,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | Service | Interface | Purpose |
 |---|---|---|
 | `LLMClassifierService` | `IClassifierService` | LLM intent classification; falls back to `"other"` at confidence 0 |
-| `LLMGuardRailService` | `IGuardRailService` | LLM policy check on the user's message; a deterministic check on every tool result but the base tools' and local colleagues', plus `ToolGuard` on an external one. **Fails open** |
+| `LLMGuardRailService` | `IGuardRailService` | LLM policy check on the user's message; a deterministic check on every tool result but the base tools' and local colleagues', plus `ToolGuard` on an external one; `PeerGuard` on a partner's question. **Fails open** |
 | `LLMPresenterService` | `IPresenterService` | Welcome message and quick replies. Never throws |
 | `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
 | `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
@@ -346,7 +346,8 @@ is weighed at all — which is where an agent activated mid-conversation would o
 
 The other framework prompts: **Classifier** (JSON `{intents:[{intent,confidence}]}`, ranked; owns the
 `other` complement, which no domain declares), **Guard** (`{compliant, violation}`), **ToolGuard**
-(the same shape, on an external tool's result), **Presentation**, **ChannelAdapter**.
+(the same shape, on an external tool's result), **PeerGuard** (the same shape, on a partner's
+question), **Presentation**, **ChannelAdapter**.
 
 ## Channel Abstraction
 
@@ -447,7 +448,7 @@ fault reaches a user as a conversation that never answers, on a host that passed
 |---|---|
 | `Morgana:LLM:Provider` · `:{Provider}` | Provider choice, credentials, the `Tiers` map |
 | `Morgana:AgentToAgent` | `Enabled`, `MaxRoundsPerTurn`, `PublicUrl` (declared only where a binding cannot answer for the address), `Partners[]`. Consultation waits are one **ladder** derived from `ActorSystem:TimeoutSeconds`, stated once in `Records.PeerConsultationWaits` |
-| `Morgana:ActorSystem` | `TimeoutSeconds`, `EnableUserGuardrail`, `EnableToolGuardrail`, `IntentCollisionThreshold` |
+| `Morgana:ActorSystem` | `TimeoutSeconds`, `EnableUserGuardrail`, `EnableToolGuardrail`, `EnablePeerGuardrail`, `IntentCollisionThreshold` |
 | `Morgana:AdaptiveMessaging` | `EnableStreamingResponse`, `RichFeaturesMinLength` |
 | `Morgana:ConversationPersistence` | `StoragePath`, `EncryptionKey` (AES-256, base64, 32 bytes) |
 | `Morgana:RateLimiting` · `:DustLimiting` | Limits and their authored error messages. `MagicDust` pricing lives per tier |
@@ -477,7 +478,7 @@ or environment variables.
 - Actor messages are immutable records in `Records.cs`; every cross-party literal is a `Constants` member
 - Actors use `Tell`, never `Ask` (streaming) and `Become()` for FSM transitions
 - Tool method names match the JSON `Name` exactly
-- Prompts resolve by ID: the six framework ids or an intent name
+- Prompts resolve by ID: the seven framework ids or an intent name
 - Rich cards use polymorphic JSON with a `type` discriminator
 - Turn continuation is signalled out-of-band by a tool, never by a token inside the response text
 - Channel names are normalized to lowercase at ingress
