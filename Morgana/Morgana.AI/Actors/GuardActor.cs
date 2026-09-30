@@ -52,7 +52,7 @@ public class GuardActor : MorganaActor
             // permitting its eventual switch-off.
             Records.GuardRailResult result =
                 configuration.GetValue("Morgana:ActorSystem:EnableUserGuardrail", true)
-                    ? await guardRailService.CheckAsync(req.ConversationId, req.Message)
+                    ? await guardRailService.CheckUserMessageAsync(req.ConversationId, req.Message)
                     : new Records.GuardRailResult(true, null);
 
             actorLogger.Info(

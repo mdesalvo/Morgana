@@ -1,4 +1,7 @@
-﻿using System.Text.Json;
+﻿using System.Globalization;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
 
@@ -7,9 +10,9 @@ namespace Morgana.AI.Services;
 /// <summary>
 /// Default <see cref="IGuardRailService"/> implementation. Delegates to <see cref="ILLMService"/>
 /// with the Guard system prompt for detection of spam, phishing, violence, profanity and other
-/// policy violations.
+/// policy violations. Screens tool results for text forging Morgana's own prompt.
 /// </summary>
-public class LLMGuardRailService : IGuardRailService
+public partial class LLMGuardRailService : IGuardRailService
 {
     /// <summary>
     /// LLM used for the policy check. Consumed through the stateless completion path — each
@@ -27,6 +30,12 @@ public class LLMGuardRailService : IGuardRailService
     /// Pre-computed Guard system prompt.
     /// </summary>
     private readonly string guardSystemPrompt;
+
+    /// <summary>
+    /// The labels heading the sections of Morgana's own prompt, <c>[TARGET]</c> among them. A tool
+    /// result carrying one is forging a layer the model was told to obey.
+    /// </summary>
+    private readonly string[] promptLayerLabels;
 
     /// <summary>
     /// Initialises a new instance of <see cref="LLMGuardRailService"/>.
@@ -52,10 +61,48 @@ public class LLMGuardRailService : IGuardRailService
         // What the Guard reads before every user message. No placeholder to splice, unlike the
         // classifier's: what is admissible is a policy of the framework, not of a domain.
         guardSystemPrompt = $"{guardPrompt.Target}\n{guardPrompt.Instructions}\n{guardPrompt.Formatting}";
+
+        // The labels are read from the framework prompt that carries them rather than listed here, so
+        // a template added to morgana.json is recognised as forged the day it is written.
+        Records.Prompt morganaPrompt =
+            promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
+        promptLayerLabels = ReadPromptLayerLabels(morganaPrompt);
+    }
+
+    /// <summary>
+    /// Collects the label heading each section of the framework prompt and each of its injections.
+    /// </summary>
+    private static string[] ReadPromptLayerLabels(Records.Prompt morganaPrompt)
+    {
+        // The four sections every agent reads first, each opening with its label, e.g. "[TARGET] You are…".
+        List<string> sections =
+        [
+            morganaPrompt.Target,
+            morganaPrompt.Instructions,
+            morganaPrompt.Formatting,
+            morganaPrompt.Personality ?? ""
+        ];
+
+        // The templates spliced into tool descriptions, per-turn context and colleagues' questions open
+        // with a label of their own, e.g. "[CONTEXT ALREADY HELD]".
+        sections.AddRange(morganaPrompt
+            .GetAdditionalProperty<List<Records.Injection>>(Constants.PromptProperties.Injections)
+            .Select(injection => injection.Description));
+
+        HashSet<string> labels = [];
+        foreach (string section in sections)
+        {
+            // A section opening without a label contributes nothing to recognise.
+            Match label = PromptLayerLabelPattern().Match(section);
+            if (label.Success)
+                labels.Add(label.Value);
+        }
+
+        return [.. labels];
     }
 
     /// <inheritdoc/>
-    public async Task<Records.GuardRailResult> CheckAsync(string conversationId, string message)
+    public async Task<Records.GuardRailResult> CheckUserMessageAsync(string conversationId, string message)
     {
         try
         {
@@ -108,4 +155,137 @@ public class LLMGuardRailService : IGuardRailService
             return new Records.GuardRailResult(Compliant: true, Violation: null);
         }
     }
+    /// <inheritdoc/>
+    public Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolResult, bool externalSource)
+    {
+        string? forgery = FindPromptForgery(toolResult);
+
+        // The reason goes to the log and nowhere else: the result is withheld whole, so the model never
+        // learns which trick was tried. The content itself is never logged.
+        if (forgery is not null)
+        {
+            logger.LogWarning(
+                "LLMGuardRailService: result of tool {ToolName} withheld for conversation {ConversationId} — {Forgery}",
+                toolName, conversationId, forgery);
+
+            return Task.FromResult(new Records.GuardRailResult(Compliant: false, Violation: forgery));
+        }
+
+        return Task.FromResult(new Records.GuardRailResult(Compliant: true, Violation: null));
+    }
+
+    /// <summary>
+    /// Names the first way the result pretends to be part of the prompt instead of data, or null when it
+    /// does not. Deterministic and free, so it runs on every guarded result whatever its source.
+    /// </summary>
+    private string? FindPromptForgery(string toolResult)
+    {
+        foreach (string text in ReadableTexts(toolResult))
+        {
+            // A label of Morgana's own layers, the most direct forgery of all: the model reads its
+            // instructions in exactly this shape.
+            string? forgedLabel = promptLayerLabels.FirstOrDefault(label => text.Contains(label, StringComparison.Ordinal));
+            if (forgedLabel is not null)
+                return $"forges the prompt layer label {forgedLabel}";
+
+            // The composer's fences, a line of equal signs around capitals, open and close a layer.
+            if (PromptFencePattern().IsMatch(text))
+                return "forges a prompt layer fence";
+
+            // A line speaking as a role of the conversation. Title case is left out on purpose: a data
+            // row reading "System: Linux" is common where an injection shouting SYSTEM: is not.
+            if (ChatRoleLinePattern().IsMatch(text) || ChatTemplateTokenPattern().IsMatch(text))
+                return "speaks as a role of the conversation";
+
+            // Characters nobody sees on screen can still carry text or reorder it for the model.
+            // A leading byte-order mark is an artefact of a file read, not a message, so it is spared.
+            foreach (Rune rune in text.TrimStart('\uFEFF').EnumerateRunes())
+            {
+                if (IsInvisibleSteering(rune))
+                    return string.Create(CultureInfo.InvariantCulture, $"carries the invisible character U+{rune.Value:X4}");
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The texts the model will actually read in a result: every string of a JSON document decoded,
+    /// property names included, or the result itself when it is not JSON.
+    /// </summary>
+    /// <remarks>
+    /// Serialized JSON hides line breaks and invisible characters behind escapes the model decodes as it
+    /// reads, so a pattern over the raw text would miss exactly what it is looking for.
+    /// </remarks>
+    private static List<string> ReadableTexts(string toolResult)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(toolResult);
+
+            List<string> texts = [];
+            CollectStrings(document.RootElement, texts);
+
+            return texts;
+        }
+        catch (JsonException)
+        {
+            return [toolResult];
+        }
+
+        static void CollectStrings(JsonElement element, List<string> texts)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.String:
+                    texts.Add(element.GetString() ?? "");
+                    break;
+
+                case JsonValueKind.Array:
+                    foreach (JsonElement item in element.EnumerateArray())
+                        CollectStrings(item, texts);
+                    break;
+
+                case JsonValueKind.Object:
+                    foreach (JsonProperty property in element.EnumerateObject())
+                    {
+                        texts.Add(property.Name);
+                        CollectStrings(property.Value, texts);
+                    }
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Characters that render as nothing yet reach the model: zero-width marks, the bidirectional
+    /// overrides that reorder text and the tag block that spells hidden ASCII.
+    /// </summary>
+    /// <remarks>
+    /// The zero-width joiner and the left-to-right and right-to-left marks stay out: emoji sequences and
+    /// right-to-left languages use them in ordinary data.
+    /// </remarks>
+    private static bool IsInvisibleSteering(Rune rune)
+        => rune.Value is (>= 0x200B and <= 0x200C)
+            or (>= 0x202A and <= 0x202E)
+            or (>= 0x2060 and <= 0x2064)
+            or (>= 0x2066 and <= 0x2069)
+            or 0xFEFF
+            or (>= 0xE0000 and <= 0xE007F);
+
+    /// <summary>A bracketed all-caps label at the head of a prompt section, the idiom of morgana.json.</summary>
+    [GeneratedRegex(@"^\[[A-Z][A-Z ]*\]")]
+    private static partial Regex PromptLayerLabelPattern();
+
+    /// <summary>A line made of a capitalised title between runs of equal signs, the shape of the composer's fences.</summary>
+    [GeneratedRegex(@"^\s*={3,}[^=\n]*\p{Lu}[^=\n]*={3,}\s*$", RegexOptions.Multiline)]
+    private static partial Regex PromptFencePattern();
+
+    /// <summary>A line opening with a conversation role and a colon, in lower case or shouted.</summary>
+    [GeneratedRegex(@"^\s*(system|assistant|developer|SYSTEM|ASSISTANT|DEVELOPER)\s*:", RegexOptions.Multiline)]
+    private static partial Regex ChatRoleLinePattern();
+
+    /// <summary>The tokens chat templates use to open or close a turn or a tool result.</summary>
+    [GeneratedRegex(@"<\|[a-z_]+\|>|</?(system|tool_result|function_results|tool_response)>|<<SYS>>|\[/?INST\]", RegexOptions.IgnoreCase)]
+    private static partial Regex ChatTemplateTokenPattern();
 }

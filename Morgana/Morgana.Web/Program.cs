@@ -142,7 +142,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IAgentRegistryService: Maps intents to agent types for routing
 // - IAgentDirectoryService: Describes agents to one another as A2A cards, for peer consultation
 // - IHostAddressService: Reports where this instance is reached — what Kestrel bound, or the public address a proxied deployment declares
-// - IGuardRailService: Checks user messages for content safety and compliance
+// - IGuardRailService: Checks user messages for content safety and tool results for injected instructions
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
 // - ICommandRegistryService: Publishes the commands channels may run on a conversation (every ICommand registered here)

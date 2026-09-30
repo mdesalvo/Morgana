@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using A2A;
@@ -71,6 +71,12 @@ public class MorganaAgentAdapter
     protected readonly IAgentDirectoryService agentDirectoryService;
 
     /// <summary>
+    /// Screens every tool result the agent's model is about to read, keeping text addressed to the
+    /// assistant out of the tool loop and out of the session that would replay it at every turn.
+    /// </summary>
+    protected readonly IGuardRailService guardRailService;
+
+    /// <summary>
     /// Application configuration, read for the peer-consultation budget and timeout.
     /// </summary>
     protected readonly IConfiguration configuration;
@@ -114,6 +120,7 @@ public class MorganaAgentAdapter
     /// <param name="chatReducerService">Service for reducing context window sent to LLM</param>
     /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
     /// <param name="agentDirectoryService">Supplies the card of each declared colleague and resolves it into a callable agent</param>
+    /// <param name="guardRailService">Screens tool results before the agent's model reads them</param>
     /// <param name="configuration">Application configuration, read for the peer-consultation budget and timeout</param>
     /// <param name="logger">Logger instance for diagnostics</param>
     public MorganaAgentAdapter(
@@ -125,6 +132,7 @@ public class MorganaAgentAdapter
         HistoryReducerService chatReducerService,
         IDustLimitService dustLimitService,
         IAgentDirectoryService agentDirectoryService,
+        IGuardRailService guardRailService,
         IConfiguration configuration,
         ILogger logger)
     {
@@ -136,6 +144,7 @@ public class MorganaAgentAdapter
         this.chatReducerService = chatReducerService;
         this.dustLimitService = dustLimitService;
         this.agentDirectoryService = agentDirectoryService;
+        this.guardRailService = guardRailService;
         this.configuration = configuration;
         this.logger = logger;
 
@@ -328,6 +337,11 @@ public class MorganaAgentAdapter
                     Tools = [.. await morganaToolAdapter.CreateAllFunctionsAsync(), .. mcpTools, .. peerAgents]
                 }
             });
+
+        // 9b) Every tool result passes the guard before the model reads it. Switched off, the agent is
+        //     exactly the one assembled above, with nothing mounted in front of its tools.
+        if (ToolGuardrailEnabled)
+            aiAgent = GuardToolResults(aiAgent, agentType, conversationId, mcpTools);
 
         // 10) Return all three: the caller (MorganaAgent subclass) keeps the provider and
         //     history-provider handles to drive context/history across turns — the agent
@@ -525,6 +539,74 @@ public class MorganaAgentAdapter
     /// </remarks>
     private bool PeerConsultationEnabled
         => configuration.GetValue("Morgana:AgentToAgent:Enabled", true);
+
+    /// <summary>
+    /// True when tool results are screened before the agent's model reads them.
+    /// </summary>
+    private bool ToolGuardrailEnabled
+        => configuration.GetValue("Morgana:ActorSystem:EnableToolGuardrail", true);
+
+    /// <summary>
+    /// Mounts the guard on the tool results of the agent, replacing a result it refuses with a fact
+    /// saying it was withheld.
+    /// </summary>
+    /// <param name="agent">The assembled agent, whose function-invoking loop the guard joins.</param>
+    /// <param name="agentType">Agent whose <c>[ConsultsAgent]</c> declarations tell local colleagues from partners.</param>
+    /// <param name="conversationId">Conversation the checks are correlated with and charged to.</param>
+    /// <param name="mcpTools">Tools discovered from the agent's MCP servers.</param>
+    private AIAgent GuardToolResults(AIAgent agent, Type agentType, string conversationId, IEnumerable<AIFunction> mcpTools)
+    {
+        ConsultsAgentAttribute[] colleagues = [.. agentType.GetCustomAttributes<ConsultsAgentAttribute>()];
+
+        // Never screened: the base tools hand back values that already crossed the user's guard and a
+        // colleague of this installation answers from the same ring.
+        HashSet<string> unguardedToolNames =
+        [
+            .. morganaTools.Select(tool => tool.Name),
+            .. colleagues.Where(colleague => colleague.Instance is null)
+                .Select(colleague => ToFunctionName(new Records.PeerReference(colleague.Intent, null)))
+        ];
+
+        // Screened in depth: an MCP server and a partner's agent speak for systems nobody here vouches
+        // for. Whatever falls in neither set is a plugin tool, trusted code over data users may have written.
+        HashSet<string> externalToolNames =
+        [
+            .. mcpTools.Select(tool => tool.Name),
+            .. colleagues.Where(colleague => colleague.Instance is not null)
+                .Select(colleague => ToFunctionName(new Records.PeerReference(colleague.Intent, colleague.Instance)))
+        ];
+
+        return new AIAgentBuilder(agent)
+            .Use(async (_, invocation, next, cancellationToken) =>
+            {
+                // The tool always runs: what the guard judges is what it returned.
+                object? result = await next(invocation, cancellationToken);
+
+                string toolName = invocation.Function.Name;
+                if (unguardedToolNames.Contains(toolName))
+                    return result;
+
+                // Judged in the text the model would read: a structured result is serialized the way
+                // the tool loop serializes it for the provider.
+                string resultText = result as string ?? JsonSerializer.Serialize(result, AIJsonUtilities.DefaultOptions);
+
+                Records.GuardRailResult verdict = await guardRailService.CheckToolResultAsync(
+                    conversationId, toolName, resultText, externalToolNames.Contains(toolName));
+
+                // A refused result is replaced by a fact, never an instruction: the model treats it as a
+                // tool that did not deliver the datum and the session keeps the envelope, not the injection.
+                return verdict.Compliant
+                    ? result
+                    : string.Format(CultureInfo.InvariantCulture, WithheldToolResult, toolName);
+            })
+            .Build();
+    }
+
+    /// <summary>
+    /// What the model reads in place of a result the guard refused. Placeholder: the tool's name.
+    /// </summary>
+    private const string WithheldToolResult =
+        "The result of {0} was withheld: it contained text addressed to the assistant rather than data.";
 
     /// <summary>
     /// Composes the agent's two-layer instructions and closes them with the colleagues it holds.
