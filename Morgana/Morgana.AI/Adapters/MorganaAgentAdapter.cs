@@ -605,6 +605,8 @@ public class MorganaAgentAdapter
                     conversationId, toolName, resultText, externalSource);
 
                 toolGuardSpan?.SetTag(MorganaTelemetry.ToolGuardCompliant, verdict.Compliant);
+                toolGuardSpan?.SetTag(MorganaTelemetry.ToolGuardSource, verdict.Source.ToString());
+                RecordToolVerdict(verdict, toolGuardSpan, toolName, externalSource);
 
                 // A refused result is replaced by Morgana's own word on it, saying how to go on without it:
                 // the model never reads the injection and neither does the session that would replay it.
@@ -613,6 +615,26 @@ public class MorganaAgentAdapter
                     : await promptComposerService.ComposeQuarantinedResultAsync(toolName);
             })
             .Build();
+    }
+
+    /// <summary>
+    /// Leaves the evidence of one verdict on a tool result: why it was quarantined on the span, how
+    /// often results are quarantined or admitted unjudged on the counters.
+    /// </summary>
+    private static void RecordToolVerdict(Records.GuardRailResult verdict, Activity? toolGuardSpan, string toolName, bool externalSource)
+    {
+        if (!verdict.Compliant)
+        {
+            toolGuardSpan?.SetTag(MorganaTelemetry.ToolGuardViolation, verdict.Violation);
+            MorganaTelemetry.ToolQuarantineCounter.Add(1,
+                new KeyValuePair<string, object?>(MorganaTelemetry.ToolGuardTool, toolName),
+                new KeyValuePair<string, object?>(MorganaTelemetry.ToolGuardExternal, externalSource),
+                new KeyValuePair<string, object?>(MorganaTelemetry.ToolGuardSource, verdict.Source.ToString()));
+        }
+        else if (verdict.Source == Records.GuardVerdictSource.FailOpen)
+        {
+            MorganaTelemetry.GuardFailOpenCounter.Add(1, new KeyValuePair<string, object?>(MorganaTelemetry.GuardKind, "tool"));
+        }
     }
 
     /// <summary>

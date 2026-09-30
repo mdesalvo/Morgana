@@ -554,17 +554,43 @@ public static class Records
     /// </summary>
     /// <param name="Compliant">True if message passes policy checks, false if violation detected</param>
     /// <param name="Violation">Description of policy violation if Compliant is false</param>
+    /// <param name="Source">Which layer decided, carried from GuardActor to the supervisor's span; never read from the model's JSON.</param>
     public record GuardCheckResponse(
         [property: JsonPropertyName("compliant")] bool Compliant,
-        [property: JsonPropertyName("violation")] string? Violation);
+        [property: JsonPropertyName("violation")] string? Violation,
+        [property: JsonIgnore] GuardVerdictSource Source = GuardVerdictSource.Inspector);
 
     /// <summary>
     /// IGuardRailService result: Compliant (true=passes all checks, false=violated). Violation: human-readable
     /// description of violated rule. Public contract, intentionally decoupled from GuardCheckResponse (internal LLM wire-format DTO).
     /// </summary>
+    /// <param name="Source">
+    /// Which layer decided. Required on every verdict: a text admitted because nobody could judge it
+    /// must never read like one judged clean.
+    /// </param>
     public record GuardRailResult(
         bool Compliant,
-        string? Violation);
+        string? Violation,
+        GuardVerdictSource Source);
+
+    /// <summary>Which layer of a guard decided a verdict, as every guard span and counter reports it.</summary>
+    public enum GuardVerdictSource
+    {
+        /// <summary>The deterministic check found a forgery before any model was asked.</summary>
+        Prefilter,
+
+        /// <summary>A model read the text and judged it.</summary>
+        Inspector,
+
+        /// <summary>The provider's own content filter refused the text before the model could judge it.</summary>
+        ProviderFilter,
+
+        /// <summary>Nobody could judge the text and it was let through: an admission, never a clean verdict.</summary>
+        FailOpen,
+
+        /// <summary>The guard is switched off, so the text was never judged.</summary>
+        Disabled
+    }
     
     /// <summary>
     /// Sent by an agent back to the supervisor when the LLM provider rejects the request

@@ -69,6 +69,21 @@ public static class MorganaTelemetry
     public static readonly Counter<long> GuardRejectionCounter =
         MorganaMeter.CreateCounter<long>("morgana.guard.rejections", description: "Number of messages rejected by content moderation");
 
+    /// <summary>
+    /// Counts texts a guard let through because nobody could judge them, tagged with the guard. The
+    /// one number that says a guard is present on paper and absent in fact.
+    /// </summary>
+    public static readonly Counter<long> GuardFailOpenCounter =
+        MorganaMeter.CreateCounter<long>("morgana.guard.fail_open", description: "Number of texts a guard admitted unjudged");
+
+    /// <summary>Counts tool results put in quarantine, tagged with the tool, its source and the layer that decided.</summary>
+    public static readonly Counter<long> ToolQuarantineCounter =
+        MorganaMeter.CreateCounter<long>("morgana.toolguard.quarantines", description: "Number of tool results put in quarantine");
+
+    /// <summary>Counts partners' questions declined, tagged with the partner, the agent asked and the layer that decided.</summary>
+    public static readonly Counter<long> PeerDeclineCounter =
+        MorganaMeter.CreateCounter<long>("morgana.peerguard.declines", description: "Number of partners' questions declined");
+
     /// <summary>End-to-end turn duration in milliseconds (from UserMessage to response).</summary>
     public static readonly Histogram<double> TurnDuration =
         MorganaMeter.CreateHistogram<double>("morgana.turn.duration", "ms", "End-to-end turn duration");
@@ -148,6 +163,12 @@ public static class MorganaTelemetry
 
     /// <summary>Description of the policy violation when guard.compliant is false.</summary>
     public const string GuardViolation = "guard.violation";
+
+    /// <summary>Which layer decided the verdict (see <see cref="Records.GuardVerdictSource"/>): a clean verdict and an unjudged admission never read alike.</summary>
+    public const string GuardSource = "guard.source";
+
+    /// <summary>Which guard a fail-open count belongs to: <c>user</c>, <c>tool</c> or <c>peer</c>.</summary>
+    public const string GuardKind = "guard.kind";
 
     // ==============================================================================
     // ATTRIBUTE NAMES — CLASSIFIER
@@ -241,6 +262,12 @@ public static class MorganaTelemetry
     /// <summary>Whether the result reached the model; false means it was quarantined.</summary>
     public const string ToolGuardCompliant = "toolguard.compliant";
 
+    /// <summary>Which layer decided the verdict on the result.</summary>
+    public const string ToolGuardSource = "toolguard.source";
+
+    /// <summary>Why the result was quarantined: a category or a clinical sentence, never a quote of the result.</summary>
+    public const string ToolGuardViolation = "toolguard.violation";
+
     // ==============================================================================
     // ATTRIBUTE NAMES — PEER GUARD
     // ==============================================================================
@@ -253,6 +280,12 @@ public static class MorganaTelemetry
 
     /// <summary>Whether the question reached the agent; false means the partner was answered with a refusal.</summary>
     public const string PeerGuardCompliant = "peerguard.compliant";
+
+    /// <summary>Which layer decided the verdict on the question.</summary>
+    public const string PeerGuardSource = "peerguard.source";
+
+    /// <summary>Why the question was declined: a category or a clinical sentence, never a quote of the question.</summary>
+    public const string PeerGuardViolation = "peerguard.violation";
 
     // ==============================================================================
     // EVENT NAMES

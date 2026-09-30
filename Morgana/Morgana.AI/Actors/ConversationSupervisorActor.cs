@@ -316,6 +316,12 @@ public class ConversationSupervisorActor : MorganaActor
 
             // Close and dispose the guard span by tracking compliance and the eventually reported violation
             guardSpan?.SetTag(MorganaTelemetry.GuardCompliant, response.Compliant);
+            guardSpan?.SetTag(MorganaTelemetry.GuardSource, response.Source.ToString());
+
+            // An admission nobody judged is counted apart, so a guard failing on every turn shows up
+            // as a number rather than as a string of clean verdicts.
+            if (response.Source == Records.GuardVerdictSource.FailOpen)
+                MorganaTelemetry.GuardFailOpenCounter.Add(1, new KeyValuePair<string, object?>(MorganaTelemetry.GuardKind, "user"));
             if (!response.Compliant && response.Violation != null)
                 guardSpan?.SetTag(MorganaTelemetry.GuardViolation, response.Violation);
             if (guardSpan is not null)
@@ -439,6 +445,8 @@ public class ConversationSupervisorActor : MorganaActor
             // Marks the guard span as errored and disposes it — same shape as the compliant
             // path's span, but tagged as a failure instead of a compliance verdict.
             guardSpan?.SetStatus(ActivityStatusCode.Error, description);
+            guardSpan?.SetTag(MorganaTelemetry.GuardSource, nameof(Records.GuardVerdictSource.FailOpen));
+            MorganaTelemetry.GuardFailOpenCounter.Add(1, new KeyValuePair<string, object?>(MorganaTelemetry.GuardKind, "user"));
             if (cause != null)
                 guardSpan?.AddException(cause);
             guardSpan?.Dispose();

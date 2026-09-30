@@ -138,8 +138,8 @@ public partial class LLMGuardRailService : IGuardRailService
             // answered badly would silence a legitimate turn, so the doubt is spent in their favour —
             // the same choice the general catch below makes.
             return llmResult != null
-                ? new Records.GuardRailResult(llmResult.Compliant, llmResult.Violation)
-                : new Records.GuardRailResult(Compliant: true, Violation: null);
+                ? new Records.GuardRailResult(llmResult.Compliant, llmResult.Violation, Records.GuardVerdictSource.Inspector)
+                : new Records.GuardRailResult(Compliant: true, Violation: null, Records.GuardVerdictSource.FailOpen);
         }
         catch (Exception ex) when (IsProviderContentFilter(ex))
         {
@@ -151,7 +151,8 @@ public partial class LLMGuardRailService : IGuardRailService
 
             return new Records.GuardRailResult(
                 Compliant: false,
-                Violation: "That is a path closed to you and no phrasing will reopen it.");
+                Violation: "That is a path closed to you and no phrasing will reopen it.",
+                Records.GuardVerdictSource.ProviderFilter);
         }
         catch (Exception ex)
         {
@@ -160,7 +161,7 @@ public partial class LLMGuardRailService : IGuardRailService
                 "LLMGuardRailService: LLM policy check failed for conversation {ConversationId} — failing open",
                 conversationId);
 
-            return new Records.GuardRailResult(Compliant: true, Violation: null);
+            return new Records.GuardRailResult(Compliant: true, Violation: null, Records.GuardVerdictSource.FailOpen);
         }
     }
     /// <inheritdoc/>
@@ -176,13 +177,13 @@ public partial class LLMGuardRailService : IGuardRailService
                 "LLMGuardRailService: result of tool {ToolName} quarantined for conversation {ConversationId} — {Forgery}",
                 toolName, conversationId, forgery);
 
-            return new Records.GuardRailResult(Compliant: false, Violation: forgery);
+            return new Records.GuardRailResult(Compliant: false, Violation: forgery, Records.GuardVerdictSource.Prefilter);
         }
 
         // A plugin's own tool runs trusted code: the free check above is all it pays for. Only a result
         // nobody here vouches for is worth a model's reading.
         if (!externalSource)
-            return new Records.GuardRailResult(Compliant: true, Violation: null);
+            return new Records.GuardRailResult(Compliant: true, Violation: null, Records.GuardVerdictSource.Prefilter);
 
         // The tool's name comes ahead of its result because the inspector judges whether the result is
         // what such a tool exists to return. One call per external result, not one per turn: its own
@@ -207,7 +208,7 @@ public partial class LLMGuardRailService : IGuardRailService
                 "LLMGuardRailService: question from a partner refused for conversation {ConversationId} — {Forgery}",
                 conversationId, forgery);
 
-            return new Records.GuardRailResult(Compliant: false, Violation: forgery);
+            return new Records.GuardRailResult(Compliant: false, Violation: forgery, Records.GuardVerdictSource.Prefilter);
         }
 
         // A partner is outside this installation by definition, so every question is read in depth. What
@@ -246,15 +247,18 @@ public partial class LLMGuardRailService : IGuardRailService
                 response, Records.DefaultJsonSerializerOptions);
 
             // An unreadable verdict admits the text, as for the user's message: nobody should lose a
-            // datum or a question to a model that answered badly.
-            if (llmResult is null || llmResult.Compliant)
-                return new Records.GuardRailResult(Compliant: true, Violation: null);
+            // datum or a question to a model that answered badly. Reported as what it is, an admission.
+            if (llmResult is null)
+                return new Records.GuardRailResult(Compliant: true, Violation: null, Records.GuardVerdictSource.FailOpen);
+
+            if (llmResult.Compliant)
+                return new Records.GuardRailResult(Compliant: true, Violation: null, Records.GuardVerdictSource.Inspector);
 
             logger.LogWarning(
                 "LLMGuardRailService: {Subject} refused for conversation {ConversationId} — {Violation}",
                 subject, conversationId, llmResult.Violation);
 
-            return new Records.GuardRailResult(Compliant: false, Violation: llmResult.Violation);
+            return new Records.GuardRailResult(Compliant: false, Violation: llmResult.Violation, Records.GuardVerdictSource.Inspector);
         }
         catch (Exception ex) when (IsProviderContentFilter(ex))
         {
@@ -264,7 +268,7 @@ public partial class LLMGuardRailService : IGuardRailService
                 "LLMGuardRailService: provider-level content filter rejected the {Subject} for conversation {ConversationId}",
                 subject, conversationId);
 
-            return new Records.GuardRailResult(Compliant: false, Violation: "rejected by the provider's content filter");
+            return new Records.GuardRailResult(Compliant: false, Violation: "rejected by the provider's content filter", Records.GuardVerdictSource.ProviderFilter);
         }
         catch (Exception ex)
         {
@@ -274,7 +278,7 @@ public partial class LLMGuardRailService : IGuardRailService
                 "LLMGuardRailService: inspection of the {Subject} failed for conversation {ConversationId} — failing open",
                 subject, conversationId);
 
-            return new Records.GuardRailResult(Compliant: true, Violation: null);
+            return new Records.GuardRailResult(Compliant: true, Violation: null, Records.GuardVerdictSource.FailOpen);
         }
     }
 

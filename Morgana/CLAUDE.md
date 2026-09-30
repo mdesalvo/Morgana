@@ -422,6 +422,10 @@ Spans `morgana.turn`, `morgana.guard`, `morgana.classifier`, `morgana.router`, `
 an `ActivityLink`. Metric `morgana.dust.consumed` tagged by role, beside MEAI's `gen_ai.usage.*`.
 Exporters configured under `Morgana:OpenTelemetry:Exporters`.
 
+Every guard verdict states **which layer decided** (`Records.GuardVerdictSource`) on its span
+(`morgana.guard`, `morgana.toolguard` under the agent, `morgana.peerguard`), so an admission nobody
+judged never reads like a clean verdict; `morgana.guard.fail_open` counts those admissions.
+
 ## Startup Validation
 
 Nine checks, each fatal, all guarding one failure shape: **a topology that validates cleanly and then

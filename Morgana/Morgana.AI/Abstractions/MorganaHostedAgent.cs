@@ -232,9 +232,22 @@ public sealed class MorganaHostedAgent : AIAgent
                     await peerGuardRailService.CheckPeerQuestionAsync(hostedAgentSession.ConversationId, description, question);
 
                 peerGuardSpan?.SetTag(MorganaTelemetry.PeerGuardCompliant, verdict.Compliant);
+                peerGuardSpan?.SetTag(MorganaTelemetry.PeerGuardSource, verdict.Source.ToString());
+
+                // A question admitted because nobody could judge it is counted apart from one judged clean.
+                if (verdict.Compliant && verdict.Source == Records.GuardVerdictSource.FailOpen)
+                    MorganaTelemetry.GuardFailOpenCounter.Add(1, new KeyValuePair<string, object?>(MorganaTelemetry.GuardKind, "peer"));
 
                 if (!verdict.Compliant)
+                {
+                    peerGuardSpan?.SetTag(MorganaTelemetry.PeerGuardViolation, verdict.Violation);
+                    MorganaTelemetry.PeerDeclineCounter.Add(1,
+                        new KeyValuePair<string, object?>(MorganaTelemetry.PeerGuardCaller, partnerIssuer),
+                        new KeyValuePair<string, object?>(MorganaTelemetry.PeerGuardTarget, intent),
+                        new KeyValuePair<string, object?>(MorganaTelemetry.PeerGuardSource, verdict.Source.ToString()));
+
                     return BuildAgentResponseFromMessage($"The agent for '{intent}' declined this question: it was judged hostile to it. Proceed without it.");
+                }
             }
 
             // Resolve the actor system
