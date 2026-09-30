@@ -73,12 +73,6 @@ public static class Constants
         /// so this name is resolved on every composition rather than only edited in the prompt.
         /// </summary>
         public const string PeerConsultation = "PeerConsultation";
-
-        /// <summary>
-        /// P9 — what an agent does with a result the tool guard quarantined. Rendered only while that guard
-        /// is on, since an agent whose results are never quarantined has nothing to read it about.
-        /// </summary>
-        public const string QuarantinedToolResults = "QuarantinedToolResults";
     }
 
     /// <summary>
@@ -102,6 +96,9 @@ public static class Constants
 
         /// <summary>Spliced into a peer-capable agent's own instructions, naming the colleagues it holds.</summary>
         public const string ColleaguesDeclaration = "ColleaguesDeclaration";
+
+        /// <summary>Read by the agent in place of a tool result the guard put in quarantine, saying how to go on without it.</summary>
+        public const string QuarantinedToolResult = "QuarantinedToolResult";
     }
 
     /// <summary>
@@ -285,6 +282,9 @@ public static class Constants
 
         /// <summary>In <see cref="Injections.PeerConsultationGuardrail"/> — the colleague's question, inside the fence that marks it as data.</summary>
         public const string ConsultationQuestion = "((question))";
+
+        /// <summary>In <see cref="Injections.QuarantinedToolResult"/> — the function whose result was quarantined.</summary>
+        public const string QuarantinedTool = "((tool))";
 
         /// <summary>In <see cref="Injections.ColleaguesDeclaration"/> — one line per colleague: function name and territory.</summary>
         public const string Colleagues = "((colleagues))";

@@ -320,19 +320,19 @@ prompt**: it is the one section whose reader is another agent and it travels out
 The `Morgana` prompt's `AdditionalProperties` carry two sibling arrays and **which of the two an
 entry is follows from the array it lives in**, never from a field inside it:
 
-- **`GlobalPolicies`** — P0-P9, rendered into every agent's prompt in `Priority` order:
+- **`GlobalPolicies`** — P0-P8, rendered into every agent's prompt in `Priority` order:
   ContextHandling, QuickReplyDoctrine, TurnContinuation, SessionContinuation, ToolUsage,
-  ToolGrounding, MandatoryTextualResponse, RichCardUsage, PeerConsultation, QuarantinedToolResults.
-  `QuickReplyDoctrine` (P1) is the master rule the other quick-reply policies instantiate. The last
-  two are the **conditionally rendered** ones, placed last so they name the policies they lean on
-  instead of forward-referencing them: `PeerConsultation` (P8) only inside the A2A topology,
-  `QuarantinedToolResults` (P9) only while the tool guard is on.
+  ToolGrounding, MandatoryTextualResponse, RichCardUsage, PeerConsultation. `QuickReplyDoctrine` (P1)
+  is the master rule the other quick-reply policies instantiate. `PeerConsultation` (P8) is the
+  **only conditionally rendered** one — an agent outside the A2A topology never pays for it — and
+  sits last so it names the policies it suspends instead of forward-referencing them.
 - **`Injections`** — templates, not rules: prose with a single splice site each, never rendered among
   the policies where they would instruct against nothing. No `Priority`: each is fetched by name.
   `ToolDescriptionContextGuidance` (into a tool's own description), `HeldContextDeclaration` (per
   turn, the variables the session holds — the one entry carrying a *fact* rather than a rule),
   `ColleaguesDeclaration` (closing a peer-capable agent's instructions),
-  `PeerConsultationDeclaration` and `PeerConsultationGuardrail` (in front of a colleague's question).
+  `PeerConsultationDeclaration` and `PeerConsultationGuardrail` (in front of a colleague's question),
+  `QuarantinedToolResult` (in place of a tool result the guard quarantined, paid only when one is).
 
 Every injection opens with a **bracketed all-caps label at the head of its first line** — the idiom
 the prompt layers already use for `[TARGET]`. A template arrives spliced into somebody else's text,

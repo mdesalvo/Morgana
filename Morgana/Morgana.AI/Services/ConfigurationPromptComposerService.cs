@@ -72,7 +72,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
-    public async Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false, bool toolResultsGuarded = false)
+    public async Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false)
     {
         // Both halves are used below: the prompt's four sections become the framework block, its
         // policies the fenced list of rules inside it.
@@ -87,7 +87,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         sb.AppendLine();
         sb.AppendLine(framework.Prompt.Personality);
         sb.AppendLine();
-        sb.AppendLine(FormatGlobalPolicies(framework.Policies, peerCapable, toolResultsGuarded));
+        sb.AppendLine(FormatGlobalPolicies(framework.Policies, peerCapable));
         sb.AppendLine();
         sb.AppendLine(framework.Prompt.Instructions);
         sb.AppendLine();
@@ -169,6 +169,18 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
+    public async Task<string> ComposeQuarantinedResultAsync(string toolName)
+    {
+        FrameworkLayer framework = await frameworkLayer.Value;
+
+        // Read at the one moment it applies, in place of the result: a quarantine is rare, so a rule
+        // carried in every agent's prompt would be paid on every turn for an event almost none of them sees.
+        string template = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.QuarantinedToolResult);
+
+        return template.Replace(Constants.Placeholders.QuarantinedTool, toolName);
+    }
+
+    /// <inheritdoc />
     public async Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question)
     {
         FrameworkLayer framework = await frameworkLayer.Value;
@@ -234,8 +246,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// </summary>
     /// <param name="policies">The framework prompt's own policy list.</param>
     /// <param name="peerCapable">Admits the peer-consultation policy, skipped for every other agent.</param>
-    /// <param name="toolResultsGuarded">Admits the policy on quarantined tool results, skipped while the tool guard is off.</param>
-    private static string FormatGlobalPolicies(List<Records.GlobalPolicy> policies, bool peerCapable, bool toolResultsGuarded)
+    private static string FormatGlobalPolicies(List<Records.GlobalPolicy> policies, bool peerCapable)
     {
         StringBuilder sb = new StringBuilder();
 
@@ -246,11 +257,6 @@ public class ConfigurationPromptComposerService : IPromptComposerService
                      // never asked by a colleague, so it would carry this on every turn of its life.
                      .Where(p => peerCapable || !string.Equals(
                          p.Name, Constants.Policies.PeerConsultation,
-                         StringComparison.OrdinalIgnoreCase))
-
-                     // Likewise a rule about quarantined results, for an agent none of whose results can be quarantined.
-                     .Where(p => toolResultsGuarded || !string.Equals(
-                         p.Name, Constants.Policies.QuarantinedToolResults,
                          StringComparison.OrdinalIgnoreCase))
 
                      // The model reads top to bottom, so a policy's Priority states where it must be

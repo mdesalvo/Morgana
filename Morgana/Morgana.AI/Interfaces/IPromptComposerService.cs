@@ -28,12 +28,8 @@ public interface IPromptComposerService
     /// peer-consultation policy into the rendered rules. False leaves an agent outside the topology
     /// reading exactly the prompt it read before peer consultation existed.
     /// </param>
-    /// <param name="toolResultsGuarded">
-    /// True when the agent's tool results pass the tool guard, which is what admits the policy on
-    /// quarantined results. False leaves it out: no result of such an agent is ever quarantined.
-    /// </param>
     /// <returns>The composed instructions, ready for <c>ChatOptions.Instructions</c>.</returns>
-    Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false, bool toolResultsGuarded = false);
+    Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false);
 
     /// <summary>
     /// Produces the description a tool presents to the model. When the tool declares
@@ -76,6 +72,13 @@ public interface IPromptComposerService
     /// <param name="question">What the colleague asked, in its own words.</param>
     /// <returns>The composed turn, falling back to the bare question where no template is declared.</returns>
     Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question);
+
+    /// <summary>
+    /// Produces what the agent reads in place of a tool result the guard put in quarantine: the fact,
+    /// then how to carry the turn on without it.
+    /// </summary>
+    /// <param name="toolName">Function whose result was quarantined, as the agent's tool list names it.</param>
+    Task<string> ComposeQuarantinedResultAsync(string toolName);
 
     /// <summary>
     /// Produces the per-turn declaration handing the session's currently-held context variables
