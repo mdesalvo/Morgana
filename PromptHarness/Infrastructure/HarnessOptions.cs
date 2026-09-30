@@ -18,6 +18,18 @@ public sealed class HarnessOptions
     /// </summary>
     public bool EnableUserGuardrail { get; init; }
 
+    /// <summary>
+    /// Whether this run screens tool results and drives the poisoned domain whose every source answers
+    /// with prompt injection, which is what <c>ToolGuardTests</c> needs and nothing else does.
+    /// </summary>
+    /// <remarks>
+    /// Off by default and process-wide when on, like <see cref="FederatedPeer"/>: it replaces the whole
+    /// domain of the instance under test, so every other group would find its own agents missing. Run it
+    /// on its own:
+    /// <c>Harness__EnableToolGuardrail=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ToolGuardTests"</c>
+    /// </remarks>
+    public bool EnableToolGuardrail { get; init; }
+
     /// <summary>Seconds to wait for the host to answer <c>GET /api/morgana/health</c> before giving up.</summary>
     public int StartupTimeoutSeconds { get; init; } = 180;
 

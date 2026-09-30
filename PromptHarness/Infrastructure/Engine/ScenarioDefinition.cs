@@ -177,6 +177,18 @@ public sealed class ExpectSpec
     /// <summary>Expected <c>guard.compliant</c> verdict from the <c>morgana.guard</c> span.</summary>
     public bool? GuardCompliant { get; init; }
 
+    /// <summary>
+    /// Tools whose result the guard must have withheld on this turn, read from the
+    /// <c>morgana.toolguard</c> spans. Requires a run under <c>Harness:EnableToolGuardrail=true</c>.
+    /// </summary>
+    public List<string>? ToolsWithheld { get; init; }
+
+    /// <summary>
+    /// Tools whose result must have been screened and let through on this turn: the other half of the
+    /// guard's contract, since a guard withholding everything would pass every other scenario.
+    /// </summary>
+    public List<string>? ToolsAdmitted { get; init; }
+
     /// <summary>Expected intent from the <c>morgana.classifier</c> span.</summary>
     public string? ClassifierIntent { get; init; }
 

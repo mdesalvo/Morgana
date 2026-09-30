@@ -1,0 +1,16 @@
+id: toolguard-partner-clean
+description: >-
+  The partner nursery tells the truth and answers with options and a card: the inspector lets the
+  result through, since its shape is never what is judged. The answer carries it. Requires
+  Harness:EnableToolGuardrail=true — run via ToolGuardTests.
+runs: 5
+minPasses: 4
+
+turns:
+  - say: "Does the Hedgerow nursery have yew for a hedge?"
+    expect:
+      agent: AlmanacAgent
+      toolsAdmitted: [consult_hedgerow_hedging]
+      textNotEmpty: true
+    judge:
+      - "The response says the Hedgerow nursery has yew plants in stock."

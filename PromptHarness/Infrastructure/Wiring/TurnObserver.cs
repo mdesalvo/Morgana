@@ -93,6 +93,9 @@ public sealed class TurnObserver : IDisposable
     /// <summary>Consultation spans per conversation — several may close within one turn.</summary>
     private readonly ConcurrentDictionary<string, List<ConsultationObservation>> consultationSpans = new ConcurrentDictionary<string, List<ConsultationObservation>>();
 
+    /// <summary>Tool results the guard screened, per conversation — one turn may screen several.</summary>
+    private readonly ConcurrentDictionary<string, List<ToolGuardObservation>> toolGuardSpans = new ConcurrentDictionary<string, List<ToolGuardObservation>>();
+
     /// <summary>Closed <c>morgana.classifier</c> spans, per conversation, in completion order.</summary>
     private readonly ConcurrentDictionary<string, List<ClassifierSpan>> classifierSpans = new ConcurrentDictionary<string, List<ClassifierSpan>>();
 
@@ -141,9 +144,8 @@ public sealed class TurnObserver : IDisposable
         lock (llmGate)
             llmMark = llmSpans.Count;
 
-        // Five independent marks — log line count, agent/guard/classifier span counts for this
-        // conversation and global LLM-span count — each a watermark that CompleteTurnAsync will
-        // read everything *past* to isolate what happened during this one turn specifically.
+        // One watermark per signal — the log, each span kind of this conversation and the global
+        // LLM-span count — which CompleteTurnAsync reads everything *past* to isolate this one turn.
         return new TurnScope(
             conversationId,
             output.Mark(),
@@ -151,7 +153,8 @@ public sealed class TurnObserver : IDisposable
             guardSpans.TryGetValue(conversationId, out List<GuardSpan>? guards) ? guards.Count : 0,
             classifierSpans.TryGetValue(conversationId, out List<ClassifierSpan>? classifiers) ? classifiers.Count : 0,
             llmMark,
-            consultationSpans.TryGetValue(conversationId, out List<ConsultationObservation>? consultations) ? consultations.Count : 0);
+            consultationSpans.TryGetValue(conversationId, out List<ConsultationObservation>? consultations) ? consultations.Count : 0,
+            toolGuardSpans.TryGetValue(conversationId, out List<ToolGuardObservation>? screened) ? screened.Count : 0);
     }
 
     /// <summary>
@@ -233,6 +236,12 @@ public sealed class TurnObserver : IDisposable
                 ? [.. served.Skip(scope.ConsultationSpanCount)]
                 : [];
 
+        // Every result screened during the turn: which of them the guard withheld is the whole question.
+        IReadOnlyList<ToolGuardObservation> screened =
+            toolGuardSpans.TryGetValue(scope.ConversationId, out List<ToolGuardObservation>? guarded) && guarded.Count > scope.ToolGuardSpanCount
+                ? [.. guarded.Skip(scope.ToolGuardSpanCount)]
+                : [];
+
         // LLM spans are process-wide, not per-conversation (see the field's own remarks on why),
         // so isolating this turn's usage means skipping every span that existed before BeginTurn's
         // mark and summing whatever landed after — sound only because the suite runs serially.
@@ -254,7 +263,8 @@ public sealed class TurnObserver : IDisposable
             classifier?.Intent,
             classifier?.Confidence,
             consulted,
-            conversationLogMark is { } mark ? output.Since(mark) : []);
+            conversationLogMark is { } mark ? output.Since(mark) : [],
+            screened);
     }
 
     /// <inheritdoc />
@@ -314,6 +324,13 @@ public sealed class TurnObserver : IDisposable
                     activity.GetTagItem(MorganaTelemetry.ConsultationAwaitingReply) as bool?,
                     activity.GetTagItem(MorganaTelemetry.ConsultationQuestion) as string,
                     activity.GetTagItem(MorganaTelemetry.ConsultationAnswer) as string));
+                break;
+
+            case MorganaTelemetry.ToolGuardActivity:
+                Append(toolGuardSpans, conversationId, new ToolGuardObservation(
+                    activity.GetTagItem(MorganaTelemetry.ToolGuardTool) as string,
+                    activity.GetTagItem(MorganaTelemetry.ToolGuardExternal) as bool?,
+                    activity.GetTagItem(MorganaTelemetry.ToolGuardCompliant) as bool?));
                 break;
 
             case MorganaTelemetry.GuardActivity:
@@ -422,4 +439,5 @@ public sealed record TokenUsage(
 /// <param name="ConsultationSpanCount">Consultation spans already recorded for the conversation.</param>
 /// <param name="ClassifierSpanCount">Classifier spans already recorded for the conversation.</param>
 /// <param name="LlmSpanCount">LLM spans already recorded, process-wide.</param>
-public sealed record TurnScope(string ConversationId, int LogMark, int SpanCount, int GuardSpanCount, int ClassifierSpanCount, int LlmSpanCount, int ConsultationSpanCount);
+/// <param name="ToolGuardSpanCount">Screened tool results already recorded for the conversation.</param>
+public sealed record TurnScope(string ConversationId, int LogMark, int SpanCount, int GuardSpanCount, int ClassifierSpanCount, int LlmSpanCount, int ConsultationSpanCount, int ToolGuardSpanCount);

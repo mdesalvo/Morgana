@@ -54,6 +54,14 @@ public sealed record ConsultationObservation(
     string? Answer);
 
 /// <summary>
+/// One tool result the guard screened during a turn, read from the <c>morgana.toolguard</c> span.
+/// </summary>
+/// <param name="Tool">Function whose result was screened.</param>
+/// <param name="External">Whether the result came from outside the installation and was read by the inspector.</param>
+/// <param name="Compliant">Whether the result reached the model; false means it was withheld.</param>
+public sealed record ToolGuardObservation(string? Tool, bool? External, bool? Compliant);
+
+/// <summary>
 /// Everything the harness observed about one turn: what the user said, what the channel received
 /// and the two structural signals read from inside the process.
 /// </summary>
@@ -78,6 +86,7 @@ public sealed record ConsultationObservation(
 /// checking "has this happened by now" against the whole conversation is the only way to assert on it
 /// without pinning to a turn index that variance can invalidate. See <c>ExpectationChecker.CheckDust</c>.
 /// </param>
+/// <param name="ToolGuards">Tool results the guard screened during the turn, in the order they closed; empty when the tool guard is off.</param>
 public sealed record TurnResult(
     string ConversationId,
     string UserMessage,
@@ -92,8 +101,12 @@ public sealed record TurnResult(
     string? ClassifierIntent = null,
     double? ClassifierConfidence = null,
     IReadOnlyList<ConsultationObservation>? Consultations = null,
-    IReadOnlyList<string>? CumulativeLogLines = null)
+    IReadOnlyList<string>? CumulativeLogLines = null,
+    IReadOnlyList<ToolGuardObservation>? ToolGuards = null)
 {
+    /// <summary>Tool results screened during the turn, never null.</summary>
+    public IReadOnlyList<ToolGuardObservation> Screened => ToolGuards ?? [];
+
     /// <summary>Consultations served during the turn, never null.</summary>
     public IReadOnlyList<ConsultationObservation> Consulted => Consultations ?? [];
 
@@ -123,7 +136,7 @@ public sealed record TurnResult(
             {(GuardCompliant is null ? "" : $"guard: compliant={GuardCompliant} | violation={GuardViolation ?? "(none)"}\n            ")}{(ClassifierIntent is null ? "" : $"classifier: intent={ClassifierIntent} | confidence={ClassifierConfidence?.ToString("F2", CultureInfo.InvariantCulture) ?? "(unknown)"}\n            ")}agent: {AgentName ?? "(no agent span)"} | completed={Message.AgentCompleted} | quickReplies={QuickReplies.Count} | richCard={(Message.RichCard is null ? "absent" : "present")}
             tools: {(ToolsInvoked.Count == 0 ? "(none)" : string.Join(", ", ToolsInvoked))}
             {(Consultations is not { Count: > 0 } ? "" : string.Join("\n            ", Consultations.Select(c => $"consulted {c.Target}: tools={(c.ToolsInvoked.Count == 0 ? "(none)" : string.Join("/", c.ToolsInvoked))} | awaitingReply={c.AwaitingReply}\n              asked: {c.Question}\n              replied: {c.Answer}")) + "\n            ")}
-            tokens: {Tokens}
+            {(ToolGuards is not { Count: > 0 } ? "" : "screened: " + string.Join(", ", ToolGuards.Select(g => $"{g.Tool}={(g.Compliant == false ? "withheld" : "admitted")}{(g.External == true ? " (external)" : "")}")) + "\n            ")}tokens: {Tokens}
             context: {(ContextAccesses.Count == 0 ? "(none)" : string.Join(", ", ContextAccesses.Select(a => $"{a.Operation}:{a.VariableName}")))}
             text: {Text}
             """;

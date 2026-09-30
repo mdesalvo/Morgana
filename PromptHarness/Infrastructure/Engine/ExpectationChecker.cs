@@ -56,6 +56,7 @@ public static partial class ExpectationChecker
         CheckContext(expect, turn, failures);
         CheckText(expect, turn, failures);
         CheckGuard(expect, turn, failures);
+        CheckToolGuard(expect, turn, failures);
         CheckClassifier(expect, turn, failures);
         CheckSummarization(expect, turn, failures);
         CheckHistory(expect, history, failures);
@@ -100,6 +101,41 @@ public static partial class ExpectationChecker
     {
         if (expect.GuardCompliant is { } expectedCompliant && turn.GuardCompliant != expectedCompliant)
             failures.Add($"guardCompliant: expected {expectedCompliant}, got {turn.GuardCompliant?.ToString() ?? "(no guard span — is Harness:EnableUserGuardrail on?)"}");
+    }
+
+    /// <summary>Verdicts of the <c>morgana.toolguard</c> spans on the tools the scenario names.</summary>
+    private static void CheckToolGuard(ExpectSpec expect, TurnResult turn, List<string> failures)
+    {
+        foreach (string tool in expect.ToolsWithheld ?? [])
+        {
+            // One withheld result is enough: the injected text never reached the model on that call.
+            if (!turn.Screened.Any(screened => IsVerdictOn(screened, tool, compliant: false)))
+                failures.Add($"toolsWithheld: '{tool}' was not withheld ({DescribeScreening(turn, tool)})");
+        }
+
+        foreach (string tool in expect.ToolsAdmitted ?? [])
+        {
+            // Every screening of the tool must have let it through: a clean result refused even once
+            // left the agent without data it needed.
+            List<ToolGuardObservation> screenings = [.. turn.Screened.Where(screened => string.Equals(screened.Tool, tool, StringComparison.OrdinalIgnoreCase))];
+            if (screenings.Count == 0 || screenings.Any(screened => screened.Compliant != true))
+                failures.Add($"toolsAdmitted: '{tool}' was not admitted ({DescribeScreening(turn, tool)})");
+        }
+
+        static bool IsVerdictOn(ToolGuardObservation screened, string tool, bool compliant)
+            => string.Equals(screened.Tool, tool, StringComparison.OrdinalIgnoreCase) && screened.Compliant == compliant;
+
+        // What the spans did say about the tool, or why none may have been seen at all.
+        static string DescribeScreening(TurnResult turn, string tool)
+        {
+            string[] verdicts = [.. turn.Screened
+                .Where(screened => string.Equals(screened.Tool, tool, StringComparison.OrdinalIgnoreCase))
+                .Select(screened => screened.Compliant == false ? "withheld" : "admitted")];
+
+            return verdicts.Length > 0
+                ? $"screened: {string.Join(", ", verdicts)}"
+                : "never screened: was it called? Is Harness:EnableToolGuardrail on?";
+        }
     }
 
     /// <summary>Intent and confidence of the <c>morgana.classifier</c> span.</summary>
