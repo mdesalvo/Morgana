@@ -26,6 +26,7 @@ At start Morgana hands the channel the seal just once and keeps only its hash: f
 - A conversation left with an agent no longer installed should be handed back to Morgana on resume
 
 ### 📦 Dependencies
+- Updated `OllamaSharp` to 5.5.0
 
 ### 🚀 Future Enablement
 
