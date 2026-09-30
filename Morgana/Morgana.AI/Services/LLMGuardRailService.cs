@@ -168,12 +168,12 @@ public partial class LLMGuardRailService : IGuardRailService
     {
         string? forgery = FindPromptForgery(toolResult);
 
-        // The reason goes to the log and nowhere else: the result is withheld whole, so the model never
+        // The reason goes to the log and nowhere else: the result is quarantined whole, so the model never
         // learns which trick was tried. The content itself is never logged.
         if (forgery is not null)
         {
             logger.LogWarning(
-                "LLMGuardRailService: result of tool {ToolName} withheld for conversation {ConversationId} — {Forgery}",
+                "LLMGuardRailService: result of tool {ToolName} quarantined for conversation {ConversationId} — {Forgery}",
                 toolName, conversationId, forgery);
 
             return new Records.GuardRailResult(Compliant: false, Violation: forgery);
@@ -207,7 +207,7 @@ public partial class LLMGuardRailService : IGuardRailService
                 return new Records.GuardRailResult(Compliant: true, Violation: null);
 
             logger.LogWarning(
-                "LLMGuardRailService: result of tool {ToolName} withheld for conversation {ConversationId} — {Violation}",
+                "LLMGuardRailService: result of tool {ToolName} quarantined for conversation {ConversationId} — {Violation}",
                 toolName, conversationId, llmResult.Violation);
 
             return new Records.GuardRailResult(Compliant: false, Violation: llmResult.Violation);

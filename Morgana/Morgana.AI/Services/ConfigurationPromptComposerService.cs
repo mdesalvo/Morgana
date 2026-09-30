@@ -72,7 +72,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
-    public async Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false)
+    public async Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false, bool toolResultsGuarded = false)
     {
         // Both halves are used below: the prompt's four sections become the framework block, its
         // policies the fenced list of rules inside it.
@@ -87,7 +87,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         sb.AppendLine();
         sb.AppendLine(framework.Prompt.Personality);
         sb.AppendLine();
-        sb.AppendLine(FormatGlobalPolicies(framework.Policies, peerCapable));
+        sb.AppendLine(FormatGlobalPolicies(framework.Policies, peerCapable, toolResultsGuarded));
         sb.AppendLine();
         sb.AppendLine(framework.Prompt.Instructions);
         sb.AppendLine();
@@ -234,7 +234,8 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// </summary>
     /// <param name="policies">The framework prompt's own policy list.</param>
     /// <param name="peerCapable">Admits the peer-consultation policy, skipped for every other agent.</param>
-    private static string FormatGlobalPolicies(List<Records.GlobalPolicy> policies, bool peerCapable)
+    /// <param name="toolResultsGuarded">Admits the policy on quarantined tool results, skipped while the tool guard is off.</param>
+    private static string FormatGlobalPolicies(List<Records.GlobalPolicy> policies, bool peerCapable, bool toolResultsGuarded)
     {
         StringBuilder sb = new StringBuilder();
 
@@ -245,6 +246,11 @@ public class ConfigurationPromptComposerService : IPromptComposerService
                      // never asked by a colleague, so it would carry this on every turn of its life.
                      .Where(p => peerCapable || !string.Equals(
                          p.Name, Constants.Policies.PeerConsultation,
+                         StringComparison.OrdinalIgnoreCase))
+
+                     // Likewise a rule about quarantined results, for an agent none of whose results can be quarantined.
+                     .Where(p => toolResultsGuarded || !string.Equals(
+                         p.Name, Constants.Policies.QuarantinedToolResults,
                          StringComparison.OrdinalIgnoreCase))
 
                      // The model reads top to bottom, so a policy's Priority states where it must be

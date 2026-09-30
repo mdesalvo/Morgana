@@ -106,11 +106,11 @@ public static partial class ExpectationChecker
     /// <summary>Verdicts of the <c>morgana.toolguard</c> spans on the tools the scenario names.</summary>
     private static void CheckToolGuard(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
-        foreach (string tool in expect.ToolsWithheld ?? [])
+        foreach (string tool in expect.ToolsQuarantined ?? [])
         {
-            // One withheld result is enough: the injected text never reached the model on that call.
+            // One quarantined result is enough: the injected text never reached the model on that call.
             if (!turn.Screened.Any(screened => IsVerdictOn(screened, tool, compliant: false)))
-                failures.Add($"toolsWithheld: '{tool}' was not withheld ({DescribeScreening(turn, tool)})");
+                failures.Add($"toolsQuarantined: '{tool}' was not quarantined ({DescribeScreening(turn, tool)})");
         }
 
         foreach (string tool in expect.ToolsAdmitted ?? [])
@@ -130,7 +130,7 @@ public static partial class ExpectationChecker
         {
             string[] verdicts = [.. turn.Screened
                 .Where(screened => string.Equals(screened.Tool, tool, StringComparison.OrdinalIgnoreCase))
-                .Select(screened => screened.Compliant == false ? "withheld" : "admitted")];
+                .Select(screened => screened.Compliant == false ? "quarantined" : "admitted")];
 
             return verdicts.Length > 0
                 ? $"screened: {string.Join(", ", verdicts)}"

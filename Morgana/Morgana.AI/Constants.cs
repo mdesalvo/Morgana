@@ -73,6 +73,12 @@ public static class Constants
         /// so this name is resolved on every composition rather than only edited in the prompt.
         /// </summary>
         public const string PeerConsultation = "PeerConsultation";
+
+        /// <summary>
+        /// P9 — what an agent does with a result the tool guard quarantined. Rendered only while that guard
+        /// is on, since an agent whose results are never quarantined has nothing to read it about.
+        /// </summary>
+        public const string QuarantinedToolResults = "QuarantinedToolResults";
     }
 
     /// <summary>

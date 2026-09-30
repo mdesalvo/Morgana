@@ -235,7 +235,7 @@ public static class MorganaTelemetry
     /// <summary>Whether the result came from outside this installation and was read by the ToolGuard inspector.</summary>
     public const string ToolGuardExternal = "toolguard.external";
 
-    /// <summary>Whether the result reached the model; false means it was withheld.</summary>
+    /// <summary>Whether the result reached the model; false means it was quarantined.</summary>
     public const string ToolGuardCompliant = "toolguard.compliant";
 
     // ==============================================================================

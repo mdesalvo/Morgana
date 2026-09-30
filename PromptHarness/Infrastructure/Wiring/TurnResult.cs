@@ -58,7 +58,7 @@ public sealed record ConsultationObservation(
 /// </summary>
 /// <param name="Tool">Function whose result was screened.</param>
 /// <param name="External">Whether the result came from outside the installation and was read by the inspector.</param>
-/// <param name="Compliant">Whether the result reached the model; false means it was withheld.</param>
+/// <param name="Compliant">Whether the result reached the model; false means it was quarantined.</param>
 public sealed record ToolGuardObservation(string? Tool, bool? External, bool? Compliant);
 
 /// <summary>
@@ -136,7 +136,7 @@ public sealed record TurnResult(
             {(GuardCompliant is null ? "" : $"guard: compliant={GuardCompliant} | violation={GuardViolation ?? "(none)"}\n            ")}{(ClassifierIntent is null ? "" : $"classifier: intent={ClassifierIntent} | confidence={ClassifierConfidence?.ToString("F2", CultureInfo.InvariantCulture) ?? "(unknown)"}\n            ")}agent: {AgentName ?? "(no agent span)"} | completed={Message.AgentCompleted} | quickReplies={QuickReplies.Count} | richCard={(Message.RichCard is null ? "absent" : "present")}
             tools: {(ToolsInvoked.Count == 0 ? "(none)" : string.Join(", ", ToolsInvoked))}
             {(Consultations is not { Count: > 0 } ? "" : string.Join("\n            ", Consultations.Select(c => $"consulted {c.Target}: tools={(c.ToolsInvoked.Count == 0 ? "(none)" : string.Join("/", c.ToolsInvoked))} | awaitingReply={c.AwaitingReply}\n              asked: {c.Question}\n              replied: {c.Answer}")) + "\n            ")}
-            {(ToolGuards is not { Count: > 0 } ? "" : "screened: " + string.Join(", ", ToolGuards.Select(g => $"{g.Tool}={(g.Compliant == false ? "withheld" : "admitted")}{(g.External == true ? " (external)" : "")}")) + "\n            ")}tokens: {Tokens}
+            {(ToolGuards is not { Count: > 0 } ? "" : "screened: " + string.Join(", ", ToolGuards.Select(g => $"{g.Tool}={(g.Compliant == false ? "quarantined" : "admitted")}{(g.External == true ? " (external)" : "")}")) + "\n            ")}tokens: {Tokens}
             context: {(ContextAccesses.Count == 0 ? "(none)" : string.Join(", ", ContextAccesses.Select(a => $"{a.Operation}:{a.VariableName}")))}
             text: {Text}
             """;

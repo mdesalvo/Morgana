@@ -335,6 +335,9 @@ public class MorganaAgentAdapter
                         // nobody still reads the peer-consultation rules, because with the ring raised
                         // whole a colleague's question can land on it at any turn.
                         PeerConsultationEnabled,
+
+                        // The agent is told what a quarantined result means exactly when one can reach it.
+                        ToolGuardrailEnabled,
                         peerTerritories),
                     Tools = [.. await morganaToolAdapter.CreateAllFunctionsAsync(), .. mcpTools, .. peerAgents]
                 }
@@ -550,7 +553,7 @@ public class MorganaAgentAdapter
 
     /// <summary>
     /// Mounts the guard on the tool results of the agent, replacing a result it refuses with a fact
-    /// saying it was withheld.
+    /// saying it was quarantined.
     /// </summary>
     /// <param name="agent">The assembled agent, whose function-invoking loop the guard joins.</param>
     /// <param name="agentType">Agent whose <c>[ConsultsAgent]</c> declarations tell local colleagues from partners.</param>
@@ -610,7 +613,7 @@ public class MorganaAgentAdapter
                 // tool that did not deliver the datum and the session keeps the envelope, not the injection.
                 return verdict.Compliant
                     ? result
-                    : string.Format(CultureInfo.InvariantCulture, WithheldToolResult, toolName);
+                    : string.Format(CultureInfo.InvariantCulture, QuarantinedToolResult, toolName);
             })
             .Build();
     }
@@ -618,8 +621,8 @@ public class MorganaAgentAdapter
     /// <summary>
     /// What the model reads in place of a result the guard refused. Placeholder: the tool's name.
     /// </summary>
-    private const string WithheldToolResult =
-        "The result of {0} was withheld: it contained text addressed to the assistant rather than data.";
+    private const string QuarantinedToolResult =
+        "The result of {0} was quarantined: that source was judged hostile to the assistant, answering with text meant to steer it rather than data.";
 
     /// <summary>
     /// Composes the agent's two-layer instructions and closes them with the colleagues it holds.
@@ -632,13 +635,15 @@ public class MorganaAgentAdapter
     /// </remarks>
     /// <param name="agentPrompt">The agent's own domain prompt.</param>
     /// <param name="peerCapable">Whether this agent sits inside the A2A topology at either end.</param>
+    /// <param name="toolResultsGuarded">Whether the agent's tool results pass the tool guard.</param>
     /// <param name="peerTerritories">Function name → the colleague's own statement of what falls to it.</param>
     private async Task<string> ComposeInstructionsWithColleaguesAsync(
         Records.Prompt agentPrompt,
         bool peerCapable,
+        bool toolResultsGuarded,
         IReadOnlyDictionary<string, string> peerTerritories)
     {
-        string instructions = await promptComposerService.ComposeAgentInstructionsAsync(agentPrompt, peerCapable);
+        string instructions = await promptComposerService.ComposeAgentInstructionsAsync(agentPrompt, peerCapable, toolResultsGuarded);
         string? colleagues = await promptComposerService.ComposeColleaguesDeclarationAsync(peerTerritories);
 
         return colleagues is null ? instructions : $"{instructions}\n{colleagues}\n";

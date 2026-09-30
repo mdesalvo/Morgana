@@ -236,7 +236,7 @@ public sealed class TurnObserver : IDisposable
                 ? [.. served.Skip(scope.ConsultationSpanCount)]
                 : [];
 
-        // Every result screened during the turn: which of them the guard withheld is the whole question.
+        // Every result screened during the turn: which of them the guard quarantined is the whole question.
         IReadOnlyList<ToolGuardObservation> screened =
             toolGuardSpans.TryGetValue(scope.ConversationId, out List<ToolGuardObservation>? guarded) && guarded.Count > scope.ToolGuardSpanCount
                 ? [.. guarded.Skip(scope.ToolGuardSpanCount)]

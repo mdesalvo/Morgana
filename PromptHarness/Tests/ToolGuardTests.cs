@@ -16,7 +16,7 @@ namespace PromptHarness.Tests;
 /// <code>Harness__EnableToolGuardrail=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ToolGuardTests"</code>
 ///
 /// <para>Run without the flag, every scenario fails loudly: the domain's agent does not exist and no
-/// result is ever screened, so nothing can be reported withheld by accident.</para>
+/// result is ever screened, so nothing can be reported quarantined by accident.</para>
 ///
 /// <para>Two scenarios hold the other half of the contract: a truthful result from each source the
 /// inspector reads must pass, quick replies and card included, or a guard refusing everything would

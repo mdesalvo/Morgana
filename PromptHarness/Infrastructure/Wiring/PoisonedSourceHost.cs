@@ -26,7 +26,7 @@ namespace PromptHarness.Infrastructure.Wiring;
 /// <remarks>
 /// <para>Served from inside the test process on the real protocol stacks, so what reaches the
 /// instance under test is exactly what a hostile server elsewhere would send. Every answer is a fixed
-/// text: the injection must not depend on a model, or a withheld result would prove nothing.</para>
+/// text: the injection must not depend on a model, or a quarantined result would prove nothing.</para>
 ///
 /// <para>The address is fixed because <c>PoisonedPlugin</c> names the MCP server on an attribute,
 /// whose argument cannot come from configuration.</para>

@@ -28,8 +28,12 @@ public interface IPromptComposerService
     /// peer-consultation policy into the rendered rules. False leaves an agent outside the topology
     /// reading exactly the prompt it read before peer consultation existed.
     /// </param>
+    /// <param name="toolResultsGuarded">
+    /// True when the agent's tool results pass the tool guard, which is what admits the policy on
+    /// quarantined results. False leaves it out: no result of such an agent is ever quarantined.
+    /// </param>
     /// <returns>The composed instructions, ready for <c>ChatOptions.Instructions</c>.</returns>
-    Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false);
+    Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false, bool toolResultsGuarded = false);
 
     /// <summary>
     /// Produces the description a tool presents to the model. When the tool declares
