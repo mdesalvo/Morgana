@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
@@ -13,6 +14,7 @@ using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 using Morgana.AI.Services;
+using Morgana.AI.Telemetry;
 
 namespace Morgana.AI.Adapters;
 
@@ -590,8 +592,19 @@ public class MorganaAgentAdapter
                 // the tool loop serializes it for the provider.
                 string resultText = result as string ?? JsonSerializer.Serialize(result, AIJsonUtilities.DefaultOptions);
 
+                bool externalSource = externalToolNames.Contains(toolName);
+
+                // The check runs between the chunk announcing the call and the one carrying its result,
+                // both renewing the supervisor's budget on silence: the tool and its check share one gap.
+                using Activity? toolGuardSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.ToolGuardActivity);
+                toolGuardSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+                toolGuardSpan?.SetTag(MorganaTelemetry.ToolGuardTool, toolName);
+                toolGuardSpan?.SetTag(MorganaTelemetry.ToolGuardExternal, externalSource);
+
                 Records.GuardRailResult verdict = await guardRailService.CheckToolResultAsync(
-                    conversationId, toolName, resultText, externalToolNames.Contains(toolName));
+                    conversationId, toolName, resultText, externalSource);
+
+                toolGuardSpan?.SetTag(MorganaTelemetry.ToolGuardCompliant, verdict.Compliant);
 
                 // A refused result is replaced by a fact, never an instruction: the model treats it as a
                 // tool that did not deliver the datum and the session keeps the envelope, not the injection.

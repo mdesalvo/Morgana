@@ -23,6 +23,7 @@ namespace Morgana.AI.Telemetry;
 ///   ├── Activity: morgana.router     ← agent selection marker (new requests only)
 ///   └── Activity: morgana.agent      ← agent execution (includes streaming)
 ///       event: "first_chunk"         ← TTFT marker
+///       └── Activity: morgana.toolguard ← one per screened tool result
 /// </code>
 ///
 /// <para><strong>Context Propagation:</strong></para>
@@ -114,6 +115,9 @@ public static class MorganaTelemetry
     /// <summary>Activity wrapping one agent answering a colleague, nested under the asking agent's own activity.</summary>
     public const string ConsultationActivity = "morgana.consultation";
 
+    /// <summary>Activity wrapping the guard's check of one tool result, nested under the agent that called the tool.</summary>
+    public const string ToolGuardActivity = "morgana.toolguard";
+
     // ==============================================================================
     // ATTRIBUTE NAMES — CONVERSATION
     // ==============================================================================
@@ -121,8 +125,8 @@ public static class MorganaTelemetry
     /// <summary>Unique identifier of the conversation. Maps to conversationId.</summary>
     public const string ConversationId = "conversation.id";
 
-    /// <summary>Role that consumed dust on a charge: "Morgana" (framework actors) or
-    /// "Morgana (Intent/Tier)" (domain agents). Tag on <see cref="DustConsumed"/>.</summary>
+    /// <summary>Role that consumed dust on a charge: "Morgana" (framework actors), "Morgana (ToolGuard)"
+    /// (the inspection of external tool results) or "Morgana (Intent/Tier)" (domain agents). Tag on <see cref="DustConsumed"/>.</summary>
     public const string DustLlmRole = "dust.llm_role";
 
     // ==============================================================================
@@ -220,6 +224,19 @@ public static class MorganaTelemetry
 
     /// <summary>What the colleague answered, whole, for the same reason.</summary>
     public const string ConsultationAnswer = "consultation.answer";
+
+    // ==============================================================================
+    // ATTRIBUTE NAMES — TOOL GUARD
+    // ==============================================================================
+
+    /// <summary>Function whose result was screened. Its arguments and its result never reach the span.</summary>
+    public const string ToolGuardTool = "toolguard.tool";
+
+    /// <summary>Whether the result came from outside this installation and was read by the ToolGuard inspector.</summary>
+    public const string ToolGuardExternal = "toolguard.external";
+
+    /// <summary>Whether the result reached the model; false means it was withheld.</summary>
+    public const string ToolGuardCompliant = "toolguard.compliant";
 
     // ==============================================================================
     // EVENT NAMES

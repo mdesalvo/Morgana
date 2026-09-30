@@ -26,6 +26,7 @@ public interface ILLMService
     /// <param name="conversationId">Unique identifier of the conversation (used for logging, not history)</param>
     /// <param name="systemPrompt">System prompt defining LLM behavior and role</param>
     /// <param name="userPrompt">User message to process</param>
+    /// <param name="dustRole">Role the call is charged under in the dust ledger; null charges the bare framework role</param>
     /// <returns>LLM response text (typically JSON for structured operations)</returns>
     /// <remarks>
     /// <para><strong>Stateless vs Stateful:</strong></para>
@@ -35,7 +36,7 @@ public interface ILLMService
     /// <para>Most actors using this method expect JSON responses. The system prompt should instruct
     /// the LLM to respond only with JSON (no markdown, no preamble) for reliable parsing.</para>
     /// </remarks>
-    Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt);
+    Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt, string? dustRole = null);
 
     /// <summary>
     /// Gets the Microsoft.Extensions.AI IChatClient configured for a specific <see cref="Records.LLMTier"/>.

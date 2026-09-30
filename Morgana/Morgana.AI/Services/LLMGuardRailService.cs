@@ -192,7 +192,11 @@ public partial class LLMGuardRailService : IGuardRailService
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
                 toolGuardSystemPrompt,
-                $"Tool: {toolName}\n\nResult:\n{toolResult}");
+                $"Tool: {toolName}\n\nResult:\n{toolResult}",
+
+                // One call per external result, not one per turn: its own line in the ledger shows what
+                // screening the tools costs next to what the user's guard does.
+                $"{Constants.Morgana} ({Constants.Prompts.ToolGuard})");
 
             Records.GuardCheckResponse? llmResult = JsonSerializer.Deserialize<Records.GuardCheckResponse>(
                 response, Records.DefaultJsonSerializerOptions);

@@ -102,7 +102,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Telemetry/` | `MorganaTelemetry`, holding its own span and attribute glossary |
 | `Records.cs` | Every immutable record: actor messages, configuration, DTOs |
 | `Constants.cs` | The glossary: **every literal that is a contract between two parties who cannot see each other**, `PromptProperties` included. Deliberately absent: log text, prompt prose, `IConfiguration` keys. The test is a *resolver*, not a mention |
-| `morgana.json` | Framework prompts: Morgana, Classifier, Guard, Presentation, ChannelAdapter |
+| `morgana.json` | Framework prompts: Morgana, Classifier, Guard, ToolGuard, Presentation, ChannelAdapter |
 
 ### Morgana.Web
 
@@ -218,7 +218,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | Service | Interface | Purpose |
 |---|---|---|
 | `LLMClassifierService` | `IClassifierService` | LLM intent classification; falls back to `"other"` at confidence 0 |
-| `LLMGuardRailService` | `IGuardRailService` | LLM policy check. **Fails open** |
+| `LLMGuardRailService` | `IGuardRailService` | LLM policy check on the user's message; a deterministic check on every tool result but the base tools' and local colleagues', plus `ToolGuard` on an external one. **Fails open** |
 | `LLMPresenterService` | `IPresenterService` | Welcome message and quick replies. Never throws |
 | `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
 | `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
@@ -344,8 +344,8 @@ invoking the tool, a tool description when it weighs the tool, the per-turn inje
 is weighed at all — which is where an agent activated mid-conversation would otherwise fail.
 
 The other framework prompts: **Classifier** (JSON `{intents:[{intent,confidence}]}`, ranked; owns the
-`other` complement, which no domain declares), **Guard** (`{compliant, violation}`),
-**Presentation**, **ChannelAdapter**.
+`other` complement, which no domain declares), **Guard** (`{compliant, violation}`), **ToolGuard**
+(the same shape, on an external tool's result), **Presentation**, **ChannelAdapter**.
 
 ## Channel Abstraction
 

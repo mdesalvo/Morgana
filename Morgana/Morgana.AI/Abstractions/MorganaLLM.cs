@@ -261,11 +261,12 @@ public class MorganaLLM : ILLMService
     /// <param name="conversationId">Unique identifier of the conversation (used for logging)</param>
     /// <param name="systemPrompt">System prompt defining LLM behavior</param>
     /// <param name="userPrompt">User message to process</param>
+    /// <param name="dustRole">Role the call is charged under in the dust ledger; null charges the bare framework role</param>
     /// <returns>
     /// LLM response text with markdown code fences removed.
     /// On error, returns user-friendly error message from Morgana prompt configuration.
     /// </returns>
-    public async Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt)
+    public async Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt, string? dustRole = null)
     {
         try
         {
@@ -280,9 +281,10 @@ public class MorganaLLM : ILLMService
             // frameworkChatClient at all.
             //
             // Framework-actor calls are metered under the bare framework role, which is what tells a
-            // reader of the ledger that a charge belongs to the pipeline rather than to any agent.
+            // reader of the ledger that a charge belongs to the pipeline rather than to any agent. A
+            // caller whose spend is worth reading apart, like the inspection of tool results, names its own.
             IChatClient client = dustLimitService is not null && dustPricing is not null
-                ? new DustAccountingChatClient(frameworkChatClient, dustLimitService, dustPricing, Constants.Morgana)
+                ? new DustAccountingChatClient(frameworkChatClient, dustLimitService, dustPricing, dustRole ?? Constants.Morgana)
                 : frameworkChatClient;
 
             // These two messages are the entire request: no history, no session, no tools and nothing
