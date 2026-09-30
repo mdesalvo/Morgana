@@ -476,7 +476,7 @@ or environment variables.
 - Actor messages are immutable records in `Records.cs`; every cross-party literal is a `Constants` member
 - Actors use `Tell`, never `Ask` (streaming) and `Become()` for FSM transitions
 - Tool method names match the JSON `Name` exactly
-- Prompts resolve by ID: the five framework ids or an intent name
+- Prompts resolve by ID: the six framework ids or an intent name
 - Rich cards use polymorphic JSON with a `type` discriminator
 - Turn continuation is signalled out-of-band by a tool, never by a token inside the response text
 - Channel names are normalized to lowercase at ingress

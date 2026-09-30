@@ -32,6 +32,11 @@ public partial class LLMGuardRailService : IGuardRailService
     private readonly string guardSystemPrompt;
 
     /// <summary>
+    /// Pre-computed ToolGuard system prompt, read before the result of every external tool.
+    /// </summary>
+    private readonly string toolGuardSystemPrompt;
+
+    /// <summary>
     /// The labels heading the sections of Morgana's own prompt, <c>[TARGET]</c> among them. A tool
     /// result carrying one is forging a layer the model was told to obey.
     /// </summary>
@@ -61,6 +66,10 @@ public partial class LLMGuardRailService : IGuardRailService
         // What the Guard reads before every user message. No placeholder to splice, unlike the
         // classifier's: what is admissible is a policy of the framework, not of a domain.
         guardSystemPrompt = $"{guardPrompt.Target}\n{guardPrompt.Instructions}\n{guardPrompt.Formatting}";
+
+        Records.Prompt toolGuardPrompt =
+            promptResolverService.ResolveAsync(Constants.Prompts.ToolGuard).GetAwaiter().GetResult();
+        toolGuardSystemPrompt = $"{toolGuardPrompt.Target}\n{toolGuardPrompt.Instructions}\n{toolGuardPrompt.Formatting}";
 
         // The labels are read from the framework prompt that carries them rather than listed here, so
         // a template added to morgana.json is recognised as forged the day it is written.
@@ -132,8 +141,7 @@ public partial class LLMGuardRailService : IGuardRailService
                 ? new Records.GuardRailResult(llmResult.Compliant, llmResult.Violation)
                 : new Records.GuardRailResult(Compliant: true, Violation: null);
         }
-        catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } cre
-                                     && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
+        catch (Exception ex) when (IsProviderContentFilter(ex))
         {
             // The provider's own content filter (e.g. Azure Prompt Shields) blocked the prompt before
             // any judgment could run — a genuine violation signal, never fail-open.
@@ -156,7 +164,7 @@ public partial class LLMGuardRailService : IGuardRailService
         }
     }
     /// <inheritdoc/>
-    public Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolResult, bool externalSource)
+    public async Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolResult, bool externalSource)
     {
         string? forgery = FindPromptForgery(toolResult);
 
@@ -168,11 +176,65 @@ public partial class LLMGuardRailService : IGuardRailService
                 "LLMGuardRailService: result of tool {ToolName} withheld for conversation {ConversationId} — {Forgery}",
                 toolName, conversationId, forgery);
 
-            return Task.FromResult(new Records.GuardRailResult(Compliant: false, Violation: forgery));
+            return new Records.GuardRailResult(Compliant: false, Violation: forgery);
         }
 
-        return Task.FromResult(new Records.GuardRailResult(Compliant: true, Violation: null));
+        // A plugin's own tool runs trusted code: the free check above is all it pays for. Only a result
+        // nobody here vouches for is worth a model's reading.
+        if (!externalSource)
+            return new Records.GuardRailResult(Compliant: true, Violation: null);
+
+        try
+        {
+            // The result alone, handed to the inspector as the object of a stateless judgment on the
+            // cheapest tier: what the conversation was about has no bearing on whether it speaks to the model.
+            string response = await llmService.CompleteWithSystemPromptAsync(
+                conversationId,
+                toolGuardSystemPrompt,
+                toolResult);
+
+            Records.GuardCheckResponse? llmResult = JsonSerializer.Deserialize<Records.GuardCheckResponse>(
+                response, Records.DefaultJsonSerializerOptions);
+
+            // An unreadable verdict admits the result, as for the user's message: the tool loop must not
+            // lose a datum to a model that answered badly.
+            if (llmResult is null || llmResult.Compliant)
+                return new Records.GuardRailResult(Compliant: true, Violation: null);
+
+            logger.LogWarning(
+                "LLMGuardRailService: result of tool {ToolName} withheld for conversation {ConversationId} — {Violation}",
+                toolName, conversationId, llmResult.Violation);
+
+            return new Records.GuardRailResult(Compliant: false, Violation: llmResult.Violation);
+        }
+        catch (Exception ex) when (IsProviderContentFilter(ex))
+        {
+            // The provider's own shield caught the result before the inspector could read it: a verdict
+            // of its own, never a failure to fail open on.
+            logger.LogWarning(ex,
+                "LLMGuardRailService: provider-level content filter rejected the result of tool {ToolName} for conversation {ConversationId}",
+                toolName, conversationId);
+
+            return new Records.GuardRailResult(Compliant: false, Violation: "rejected by the provider's content filter");
+        }
+        catch (Exception ex)
+        {
+            // Fail open: a transient LLM error must not starve the agent of its tool's answer.
+            logger.LogError(ex,
+                "LLMGuardRailService: inspection of tool {ToolName} failed for conversation {ConversationId} — failing open",
+                toolName, conversationId);
+
+            return new Records.GuardRailResult(Compliant: true, Violation: null);
+        }
     }
+
+    /// <summary>
+    /// True when the provider's own content filter (e.g. Azure Prompt Shields) refused the text before
+    /// the model could judge it.
+    /// </summary>
+    private static bool IsProviderContentFilter(Exception exception)
+        => exception is System.ClientModel.ClientResultException { Status: 400 } providerRejection
+           && providerRejection.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Names the first way the result pretends to be part of the prompt instead of data, or null when it

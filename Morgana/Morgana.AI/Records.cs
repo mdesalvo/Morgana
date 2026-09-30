@@ -961,7 +961,7 @@ public static class Records
     /// Complete prompt definition (Target, Instructions, Personality, Formatting) with metadata and structured properties.
     /// Loaded from morgana.json (framework) or agents.json (domain, intent-keyed).
     /// </summary>
-    /// <param name="ID">Prompt identifier: framework="Morgana"/"Classifier"/"Guard"/"Presentation", domain=intent name</param>
+    /// <param name="ID">Prompt identifier: framework="Morgana"/"Classifier"/"Guard"/"ToolGuard"/"Presentation", domain=intent name</param>
     /// <param name="Type">Prompt type category (e.g., "SYSTEM", "INTENT")</param>
     /// <param name="SubType">Prompt subtype (e.g., "AGENT", "ACTOR", "PRESENTATION")</param>
     /// <param name="Target">Core prompt text: role definition, capabilities statement, operational boundaries</param>

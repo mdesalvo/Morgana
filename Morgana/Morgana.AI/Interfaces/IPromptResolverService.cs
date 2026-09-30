@@ -16,7 +16,7 @@ public interface IPromptResolverService
 
     /// <summary>
     /// Resolves a specific prompt by exact ID from framework or domain sources. Framework prompts: "Morgana", "Classifier",
-    /// "Guard", "Presentation". Domain prompts: intent names (agents.json). Domain overrides framework on ID collision.
+    /// "Guard", "ToolGuard", "Presentation". Domain prompts: intent names (agents.json). Domain overrides framework on ID collision.
     /// Throws InvalidOperationException if ID not found (fail-fast). Resolved prompts include content, instructions, personality, tools.
     /// </summary>
     Task<Records.Prompt> ResolveAsync(string promptID);

@@ -26,6 +26,9 @@ public static class Constants
         /// <summary>The guard rail's compliance-check prompt.</summary>
         public const string Guard = "Guard";
 
+        /// <summary>The guard rail's check for instructions smuggled into an external tool's result.</summary>
+        public const string ToolGuard = "ToolGuard";
+
         /// <summary>The welcome message and its quick replies.</summary>
         public const string Presentation = "Presentation";
 

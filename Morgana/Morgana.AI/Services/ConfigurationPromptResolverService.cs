@@ -51,7 +51,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     }
 
     /// <summary>Resolves a prompt by ID (case-insensitive) from merged framework + domain sources.</summary>
-    /// <param name="promptID">Framework ID (Morgana, Classifier, Guard, Presentation) or a domain intent name.</param>
+    /// <param name="promptID">Framework ID (Morgana, Classifier, Guard, ToolGuard, Presentation) or a domain intent name.</param>
     /// <exception cref="KeyNotFoundException">ID not found in morgana.json or agents.json.</exception>
     public async Task<Records.Prompt> ResolveAsync(string promptID)
     {
@@ -72,7 +72,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     /// Loads framework prompts from morgana.json, embedded as a resource in this very assembly.
     /// Called once (via the Lazy&lt;&gt; above), the first time any prompt is resolved.
     /// </summary>
-    /// <returns>Array of framework prompts (Morgana, Classifier, Guard, Presentation)</returns>
+    /// <returns>Array of framework prompts (Morgana, Classifier, Guard, ToolGuard, Presentation)</returns>
     /// <exception cref="FileNotFoundException">morgana.json is not embedded in this assembly.</exception>
     private static Records.Prompt[] LoadMorganaPrompts()
     {
