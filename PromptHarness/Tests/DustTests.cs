@@ -17,7 +17,7 @@ namespace PromptHarness.Tests;
 /// summarization reducer, dust limiting is process-wide for the single assembly-shared host, so
 /// lowering it would silently start throttling every other class's conversations too. Run this class
 /// on its own:</para>
-/// <code>Harness__DustBudgetPerConversation=15 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~DustTests"</code>
+/// <code>Harness__DustBudgetPerConversation=15 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.DustTests"</code>
 ///
 /// <para>The number just needs to be small enough that <see cref="MaxTurns"/> is enough room to
 /// exhaust it and large enough that a single turn's own charge cannot jump straight past 90% into

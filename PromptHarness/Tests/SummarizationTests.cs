@@ -16,7 +16,7 @@ namespace PromptHarness.Tests;
 /// <para><strong>Requires a lowered trigger at boot</strong> — like the guard rail, the reducer's
 /// configuration is process-wide for the single assembly-shared host, so lowering it would silently
 /// change every other class's few-turn conversations too. Run this class on its own:</para>
-/// <code>Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~SummarizationTests"</code>
+/// <code>Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.SummarizationTests"</code>
 ///
 /// <para>At 4+4 the trigger is 8 messages — comfortably below the ~16 the scripted scenario's first
 /// two turns accumulate, so the reduction fires at the start of the third turn, after the material

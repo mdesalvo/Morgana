@@ -12,7 +12,7 @@ namespace PromptHarness.Tests;
 /// <para><strong>Requires <c>Harness:EnableUserGuardrail=true</c></strong> — the guard rail is a
 /// whole-process boot flag (<c>MorganaHostFixture.ApplyHostEnvironment</c>), set once before the
 /// single assembly-wide host starts, with no per-scenario override. Run this class on its own:</para>
-/// <code>Harness__EnableUserGuardrail=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~GuardTests"</code>
+/// <code>Harness__EnableUserGuardrail=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.GuardTests"</code>
 ///
 /// <para>Running it with the flag left off does <em>not</em> silently skip: per <c>GuardActor</c>,
 /// a disabled guard rail short-circuits to <c>GuardRailResult(true, null)</c> without ever calling

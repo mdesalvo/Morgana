@@ -220,7 +220,7 @@ public sealed class ScenarioRunner
                 // either way and judging costs a live LLM call.
                 if (structural.Count == 0)
                 {
-                    IReadOnlyList<string> judged = await judge.EvaluateAsync(turnDefinition, turn);
+                    IReadOnlyList<string> judged = await judge.EvaluateAsync(turnDefinition, turn, scenario.Evidence == true);
                     failures.AddRange(judged.Select(failure => $"turn {transcript.Count}: {failure}"));
                 }
             }

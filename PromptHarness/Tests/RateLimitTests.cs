@@ -14,7 +14,7 @@ namespace PromptHarness.Tests;
 /// <remarks>
 /// <para><strong>Requires the limit switched on at boot</strong>, process-wide like the dust budget.
 /// Run this class on its own:</para>
-/// <code>Harness__RateLimitPerMinute=3 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~RateLimitTests"</code>
+/// <code>Harness__RateLimitPerMinute=3 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.RateLimitTests"</code>
 /// <para>No model is reached: the window is filled with <c>/compact</c> on a conversation seeded with an
 /// agent holding no history, which answers without summarizing. Every message sent is one the gate
 /// refuses. Every status and field is spelled out literally, as in <see cref="ConversationApiTests"/>.</para>

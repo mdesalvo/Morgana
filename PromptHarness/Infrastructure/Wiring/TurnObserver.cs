@@ -96,6 +96,12 @@ public sealed class TurnObserver : IDisposable
     /// <summary>Tool results the guard screened, per conversation — one turn may screen several.</summary>
     private readonly ConcurrentDictionary<string, List<ToolGuardObservation>> toolGuardSpans = new ConcurrentDictionary<string, List<ToolGuardObservation>>();
 
+    /// <summary>
+    /// Partners' questions the peer guard judged, per conversation. Read by conversation rather than by
+    /// turn: a partner's exchange runs on no turn of the harness's own channel.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, List<PeerGuardObservation>> peerGuardSpans = new ConcurrentDictionary<string, List<PeerGuardObservation>>();
+
     /// <summary>Closed <c>morgana.classifier</c> spans, per conversation, in completion order.</summary>
     private readonly ConcurrentDictionary<string, List<ClassifierSpan>> classifierSpans = new ConcurrentDictionary<string, List<ClassifierSpan>>();
 
@@ -264,7 +270,22 @@ public sealed class TurnObserver : IDisposable
             classifier?.Confidence,
             consulted,
             conversationLogMark is { } mark ? output.Since(mark) : [],
-            screened);
+            screened,
+            guard?.Source);
+    }
+
+    /// <summary>
+    /// Every verdict the peer guard reached on the conversation a partner's exchange is served on, in
+    /// the order the spans closed.
+    /// </summary>
+    /// <param name="conversationId">The conversation as this installation names it, the partner's issuer included.</param>
+    public IReadOnlyList<PeerGuardObservation> PeerGuardVerdicts(string conversationId)
+    {
+        if (!peerGuardSpans.TryGetValue(conversationId, out List<PeerGuardObservation>? verdicts))
+            return [];
+
+        lock (verdicts)
+            return [.. verdicts];
     }
 
     /// <inheritdoc />
@@ -330,13 +351,25 @@ public sealed class TurnObserver : IDisposable
                 Append(toolGuardSpans, conversationId, new ToolGuardObservation(
                     activity.GetTagItem(MorganaTelemetry.ToolGuardTool) as string,
                     activity.GetTagItem(MorganaTelemetry.ToolGuardExternal) as bool?,
-                    activity.GetTagItem(MorganaTelemetry.ToolGuardCompliant) as bool?));
+                    activity.GetTagItem(MorganaTelemetry.ToolGuardCompliant) as bool?,
+                    activity.GetTagItem(MorganaTelemetry.ToolGuardSource) as string,
+                    activity.GetTagItem(MorganaTelemetry.ToolGuardViolation) as string));
+                break;
+
+            case MorganaTelemetry.PeerGuardActivity:
+                Append(peerGuardSpans, conversationId, new PeerGuardObservation(
+                    activity.GetTagItem(MorganaTelemetry.PeerGuardCaller) as string,
+                    activity.GetTagItem(MorganaTelemetry.PeerGuardTarget) as string,
+                    activity.GetTagItem(MorganaTelemetry.PeerGuardCompliant) as bool?,
+                    activity.GetTagItem(MorganaTelemetry.PeerGuardSource) as string,
+                    activity.GetTagItem(MorganaTelemetry.PeerGuardViolation) as string));
                 break;
 
             case MorganaTelemetry.GuardActivity:
                 Append(guardSpans, conversationId, new GuardSpan(
                     activity.GetTagItem(MorganaTelemetry.GuardCompliant) as bool?,
-                    activity.GetTagItem(MorganaTelemetry.GuardViolation) as string));
+                    activity.GetTagItem(MorganaTelemetry.GuardViolation) as string,
+                    activity.GetTagItem(MorganaTelemetry.GuardSource) as string));
                 break;
 
             case MorganaTelemetry.ClassifierActivity:
@@ -390,7 +423,7 @@ public sealed class TurnObserver : IDisposable
     private sealed record AgentSpan(string? AgentName, IReadOnlyList<string> ToolsInvoked);
 
     /// <summary>What a closed <c>morgana.guard</c> span contributes to a turn result.</summary>
-    private sealed record GuardSpan(bool? Compliant, string? Violation);
+    private sealed record GuardSpan(bool? Compliant, string? Violation, string? Source);
 
     /// <summary>What a closed <c>morgana.classifier</c> span contributes to a turn result.</summary>
     private sealed record ClassifierSpan(string? Intent, double? Confidence);

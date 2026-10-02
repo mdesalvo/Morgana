@@ -12,7 +12,7 @@ namespace PromptHarness.Tests;
 /// <para><strong>Requires a second installation at boot</strong> — the instance under test carries a
 /// domain of one agent on this run and would find every other group's agents missing. Run it on its
 /// own:</para>
-/// <code>Harness__FederatedPeer=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"</code>
+/// <code>Harness__FederatedPeer=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.FederationTests"</code>
 ///
 /// <para>What only this group can show: that the two halves of the protocol meet. Everything on the
 /// way out is measured against a stub peer by <c>PeerFederationTests</c> and everything on the way in

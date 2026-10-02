@@ -6,6 +6,8 @@ description: >-
 runs: 5
 minPasses: 4
 
+evidence: true
+
 turns:
   - say: "What's the soil temperature right now? Can I sow peas yet?"
     expect:

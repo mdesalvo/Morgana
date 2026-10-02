@@ -46,7 +46,8 @@ PromptHarness (test process)
   ├── TurnObserver      ──► ActivityListener on morgana.agent  → agent.tools_invoked
   │                          Console.Out tee on MorganaTool logs → context reads/writes
   │                          + MorganaAIContextProvider's per-turn declaration → Declared reads
-  ├── LlmJudge          ──► ILLMService.CompleteWithSystemPromptAsync (cheapest configured tier)
+  ├── LlmJudge          ──► ILLMService.CompleteWithSystemPromptAsync (cheapest configured tier),
+  │                          fed what the user saw, plus the turn's telemetry evidence on request
   └── ScenarioRunner    ──► replays a YAML scenario N times, reports passes against a threshold
 ```
 
@@ -111,34 +112,34 @@ never ships an admitted identity that only an instrument uses.
 dotnet test PromptHarness/PromptHarness.csproj
 
 # just the rig, before believing any scenario result
-dotnet test … --filter "FullyQualifiedName~HarnessSmokeTests"
+dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.HarnessSmokeTests"
 
 # the two groups that cost nothing — the published card, the boot-time trust checks
-dotnet test … --filter "FullyQualifiedName~AgentCardTests|FullyQualifiedName~StartupValidationTests"
+dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.AgentCardTests|FullyQualifiedName~PromptHarness.Tests.StartupValidationTests"
 
 # the blocking group
-dotnet test … --filter "FullyQualifiedName~ContextHandlingTests"
+dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.ContextHandlingTests"
 
 # the behavioural group — turn presentation (continuation, closure, rich cards), default threshold
-dotnet test … --filter "FullyQualifiedName~BehaviourTests"
+dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.BehaviourTests"
 
 # the guard group — requires the boot-time guardrail flag, off by default
-Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
+Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.GuardTests"
 
 # the tool-guard group — swaps the domain for the poisoned one, never alongside anything else
-Harness__EnableToolGuardrail=true dotnet test … --filter "FullyQualifiedName~ToolGuardTests"
+Harness__EnableToolGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.ToolGuardTests"
 
 # the peer-guard group — screens partners' questions, off by default
-Harness__EnablePeerGuardrail=true dotnet test … --filter "FullyQualifiedName~PeerGuardTests"
+Harness__EnablePeerGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.PeerGuardTests"
 
 # the rest of the actors group — classifier, channel adaptation, presentation
-dotnet test … --filter "FullyQualifiedName~ActorTests"
+dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.ActorTests"
 
 # the summarization group — requires a lowered boot-time reducer trigger, unset by default
-Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~SummarizationTests"
+Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.SummarizationTests"
 
 # the rate limit group — deterministic, requires the boot-time limit, skipped without it
-Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateLimitTests"
+Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.RateLimitTests"
 
 # one scenario — by DisplayName: the scenario id is a theory argument, not part of the FQN
 dotnet test … --filter "DisplayName~behaviour-rich-card"
@@ -224,6 +225,7 @@ One YAML file per flow under `Scenarios/`, named after its `id`.
 id: my-scenario
 description: what this protects, in one sentence
 runs: 5            # default: Harness:DefaultRuns
+evidence: true     # from v0.33: the judge also reads the turn's telemetry evidence
 minPasses: 4       # default: Harness:DefaultMinPasses
 
 turns:
@@ -245,6 +247,10 @@ turns:
       contextVocabulary: [customerCode] # every name touched must appear here
       historyExcludesAgents: [billing]  # no message in the persisted history belongs to that agent
       historyUserMessages: 2            # …and exactly one user message per turn played so far
+      toolsQuarantined: [get_rainfall]  # the tool guard quarantined its result (Harness:EnableToolGuardrail)
+      quarantinedBy: [Inspector]        # …decided by one of these layers: Prefilter | Inspector | ProviderFilter
+      toolsAdmitted: [get_soil_temperature] # every screening of it let the result through
+      guardDecidedBy: [Inspector]       # the layer that decided the user guard's verdict
       textNotEmpty: true
       textNotContains: ["#INT#"]
     judge:                        # propositions an LLM must find TRUE
@@ -261,9 +267,20 @@ person did not send.
 
 Two layers and the split is deliberate: **structural** assertions are deterministic and read only
 span, log and message data; the **judge** is for what no structural assertion can reach ("asks in
-prose without enumerating options"). The judge sees exactly what a user would see — text, buttons,
-and the card's rendered content — never the tool trace, so it cannot justify a verdict from evidence
-the user never had, nor be convicted of missing what the screen did carry.
+prose without enumerating options"). The judge sees what a user would see — text, buttons and the
+card's rendered content — so a response that answered on its card is never convicted of missing it.
+The scenarios written up to v0.32 are judged this way and stay so.
+
+From v0.33 on, objective flow evidence complements the prose. A scenario declaring `evidence: true`
+has its judge also read the turn's evidence, from the framework's own telemetry: the agent, whether
+the turn was left open, tools in order, every guard verdict with the layer that decided it and its
+reason, consultations with their question and answer, context accesses. Never what a tool returned.
+That judge does not share the user's purpose: a bug can sit behind the most innocuous answer, so the
+prose is judged against what actually happened. What telemetry can settle is asserted, never judged.
+
+A guard is always observed on its telemetry too, since only the span proves the expected guard was
+raised the expected way. One structural assertion holds on every turn unasked: a guard verdict
+decided by `FailOpen` fails it, since a text admitted unjudged proves nothing.
 
 **Thresholds.** Repetition with a pass threshold is the only honest shape when the system under test
 is a language model: a prompt that works four times in five is materially different from one that

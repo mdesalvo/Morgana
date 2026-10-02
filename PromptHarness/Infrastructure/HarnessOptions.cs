@@ -26,7 +26,7 @@ public sealed class HarnessOptions
     /// Off by default and process-wide when on, like <see cref="FederatedPeer"/>: it replaces the whole
     /// domain of the instance under test, so every other group would find its own agents missing. Run it
     /// on its own:
-    /// <c>Harness__EnableToolGuardrail=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ToolGuardTests"</c>
+    /// <c>Harness__EnableToolGuardrail=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ToolGuardTests"</c>
     /// </remarks>
     public bool EnableToolGuardrail { get; init; }
 
@@ -35,7 +35,7 @@ public sealed class HarnessOptions
     /// <c>PeerGuardTests</c> needs. Off by default: <c>ServedConsultationTests</c> asks as a partner too and
     /// with the guard on would measure the guard instead of the agent's own prose. Process-wide, so run it
     /// on its own:
-    /// <c>Harness__EnablePeerGuardrail=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PeerGuardTests"</c>
+    /// <c>Harness__EnablePeerGuardrail=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.PeerGuardTests"</c>
     /// </summary>
     public bool EnablePeerGuardrail { get; init; }
 
@@ -114,7 +114,7 @@ public sealed class HarnessOptions
     /// Off by default and process-wide when on, exactly like the guard rail and the dust budget: it
     /// replaces the whole domain of the instance under test with the one agent that holds a colleague
     /// abroad, so every other group would find its own agents missing. Run it on its own:
-    /// <c>Harness__FederatedPeer=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"</c>
+    /// <c>Harness__FederatedPeer=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.FederationTests"</c>
     /// </remarks>
     public bool FederatedPeer { get; init; }
 

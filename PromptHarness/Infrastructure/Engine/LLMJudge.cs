@@ -27,6 +27,11 @@ public sealed record JudgeVerdict(bool Holds, string Reason);
 /// from evidence the user never had, which is exactly the class of judgement the structural layer
 /// already owns; showing it less than the screen is the opposite error and convicts a response that
 /// answered on a card.</para>
+///
+/// <para>A scenario written from v0.33 on may ask for more with <c>evidence: true</c>: beside the
+/// screen the judge then reads the turn's evidence, what happened behind the scenes as the framework's
+/// own telemetry recorded it. That judge does not share the user's purpose, since a bug can sit behind
+/// the most innocuous answer. Scenarios that do not ask are judged exactly as before.</para>
 /// </remarks>
 public sealed class LLMJudge
 {
@@ -39,6 +44,37 @@ public sealed class LLMJudge
 
         Rules:
         - Judge only what the response actually says. Do not infer intent, do not be charitable.
+        - If the proposition is only partially true, it is false.
+        - The response may be in any language; judge its meaning, not its language.
+
+        Respond with JSON only, no prose, no code fences:
+        {"holds": true|false, "reason": "<one short sentence>"}
+        """;
+
+    /// <summary>
+    /// Instruction for a scenario that asked for the turn's evidence: the same output shape and bias,
+    /// with the evidence declared ground truth for what happened behind the scenes.
+    /// </summary>
+    private const string EvidenceSystemPrompt =
+        """
+        You are a strict evaluator in a non-regression suite for a conversational AI.
+        You are given what the assistant showed the user, the EVIDENCE of what happened behind the
+        scenes on that turn and a proposition. Decide whether the proposition is TRUE.
+
+        The evidence is read from the system's own telemetry and is ground truth: which tools were
+        called and in what order, what the guards decided about each result and which layer decided,
+        what colleagues were asked and answered, whether the turn was left open awaiting the user.
+        It never carries what a tool returned. A result a guard quarantined never reached the
+        assistant: for the assistant and the user alike, that information was not available.
+
+        Rules:
+        - Judge what the response actually says, against what the evidence says happened. Do not infer
+          intent, do not be charitable.
+        - A proposition about what happened behind the scenes is decided on the evidence.
+        - A response that reads well but is contradicted by the evidence gets no benefit of the doubt.
+        - The response owes the user no account of what happened behind the scenes and speaks in the
+          user's terms. It is contradicted only by a claim the evidence disproves, never by what it
+          leaves out nor by an outcome told without its technical cause.
         - If the proposition is only partially true, it is false.
         - The response may be in any language; judge its meaning, not its language.
 
@@ -87,8 +123,12 @@ public sealed class LLMJudge
     /// Judges every proposition of a turn and returns one failure message per verdict that did not
     /// come out as the scenario requires.
     /// </summary>
-    public async Task<IReadOnlyList<string>> EvaluateAsync(TurnDefinition turnDefinition, TurnResult turn)
-        => await EvaluateAsync(turnDefinition.Judge, turnDefinition.JudgeNot, turn.Text, turn.QuickReplies, turn.Message.RichCard);
+    /// <param name="turnDefinition">The turn's propositions.</param>
+    /// <param name="turn">What the turn delivered and what was observed behind it.</param>
+    /// <param name="withEvidence">Whether the scenario asked for the turn's evidence beside the screen.</param>
+    public async Task<IReadOnlyList<string>> EvaluateAsync(TurnDefinition turnDefinition, TurnResult turn, bool withEvidence = false)
+        => await EvaluateAsync(turnDefinition.Judge, turnDefinition.JudgeNot, turn.Text, turn.QuickReplies, turn.Message.RichCard,
+            withEvidence ? turn.Evidence() : null);
 
     /// <summary>
     /// Judges propositions about a bare <see cref="ChannelMessage"/> that never went through a
@@ -96,18 +136,19 @@ public sealed class LLMJudge
     /// <c>ScenarioRunner</c> turn ever ran to produce one.
     /// </summary>
     public async Task<IReadOnlyList<string>> EvaluateAsync(IReadOnlyList<string>? judge, IReadOnlyList<string>? judgeNot, ChannelMessage message)
-        => await EvaluateAsync(judge, judgeNot, message.Text ?? string.Empty, message.QuickReplies ?? [], message.RichCard);
+        => await EvaluateAsync(judge, judgeNot, message.Text ?? string.Empty, message.QuickReplies ?? [], message.RichCard, evidence: null);
 
     /// <summary>Judges every proposition against the same three user-visible facets, whatever produced them.</summary>
+    /// <param name="evidence">The turn's evidence when the scenario asked for it, otherwise <c>null</c>.</param>
     private async Task<IReadOnlyList<string>> EvaluateAsync(
-        IReadOnlyList<string>? judge, IReadOnlyList<string>? judgeNot, string text, IReadOnlyList<QuickReply> quickReplies, RichCard? richCard)
+        IReadOnlyList<string>? judge, IReadOnlyList<string>? judgeNot, string text, IReadOnlyList<QuickReply> quickReplies, RichCard? richCard, string? evidence)
     {
         List<string> failures = [];
 
         // "judge:" propositions must all hold — a failure is any one the judge found false.
         foreach (string proposition in judge ?? [])
         {
-            JudgeVerdict verdict = await EvaluateAsync(proposition, text, quickReplies, richCard);
+            JudgeVerdict verdict = await EvaluateAsync(proposition, text, quickReplies, richCard, evidence);
             if (!verdict.Holds)
                 failures.Add($"judge: \"{proposition}\" did not hold — {verdict.Reason}");
         }
@@ -116,7 +157,7 @@ public sealed class LLMJudge
         // here it's the judge finding TRUE that produces a failure message.
         foreach (string proposition in judgeNot ?? [])
         {
-            JudgeVerdict verdict = await EvaluateAsync(proposition, text, quickReplies, richCard);
+            JudgeVerdict verdict = await EvaluateAsync(proposition, text, quickReplies, richCard, evidence);
             if (verdict.Holds)
                 failures.Add($"judgeNot: \"{proposition}\" held but must not — {verdict.Reason}");
         }
@@ -133,7 +174,7 @@ public sealed class LLMJudge
         [TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(6)];
 
     /// <summary>Judges a single proposition, retrying twice, with waits, before giving up.</summary>
-    private async Task<JudgeVerdict> EvaluateAsync(string proposition, string text, IReadOnlyList<QuickReply> quickReplies, RichCard? richCard)
+    private async Task<JudgeVerdict> EvaluateAsync(string proposition, string text, IReadOnlyList<QuickReply> quickReplies, RichCard? richCard, string? evidence)
     {
         // Exactly what a user would see: text, button labels and the card's own rendered content —
         // never the tool trace, the context accesses, or anything else only the structural layer is
@@ -146,7 +187,7 @@ public sealed class LLMJudge
 
              QUICK REPLY BUTTONS SHOWN: {(quickReplies.Count == 0 ? "none" : string.Join(" | ", quickReplies.Select(reply => reply.Label)))}
              RICH CARD SHOWN: {(richCard is null ? "no" : $"yes and it reads:\n{RichCardText.Flatten(richCard)}")}
-
+             {(evidence is null ? "" : $"\nEVIDENCE:\n{evidence}\n")}
              PROPOSITION:
              {proposition}
              """;
@@ -161,8 +202,10 @@ public sealed class LLMJudge
         {
             try
             {
+                // A scenario that asked for the evidence is judged under the instruction that declares it
+                // ground truth; every other one under the instruction it was calibrated against.
                 string answer = await llmService.CompleteWithSystemPromptAsync(
-                    $"harness-judge-{Guid.NewGuid():N}", SystemPrompt, userPrompt);
+                    $"harness-judge-{Guid.NewGuid():N}", evidence is null ? SystemPrompt : EvidenceSystemPrompt, userPrompt);
 
                 return Parse(answer);
             }
