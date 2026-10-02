@@ -8,7 +8,8 @@ collaborate to understand, classify and resolve customer inquiries with precisio
 The system is powered by **Microsoft.Agents.AI**, enabling seamless integration with Large Language
 Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
 
-The source, the issue tracker and the releases live in the [repository](https://github.com/mdesalvo/Morgana).
+The source, the issue tracker and the releases live in the
+[repository](https://github.com/mdesalvo/Morgana).
 
 <div class="tiles">
   <a class="tile" href="Morgana-Handbook.html">
