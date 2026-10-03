@@ -6,9 +6,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 
 ## [0.33.0] - UNDER DEVELOPMENT
-### 🎯 Major Feature: Guard on Tool Results and A2A questions
-What a tool returns can be turned against Morgana: a plugin tool, an MCP server or a partner's agent over A2A may answer with text meant to steer the agent instead of data. **Every tool result is now screened before the agent reads it**: a deterministic check on all of them and an LLM inspection on those coming from outside (MCP servers and partners).
-It stops five families of hijacking: of personality, of authority, of behaviour, of data and of the user. A result found hostile is **quarantined**: it never reaches the agent, which does without it, invents nothing in its place and tells the user plainly it cannot give that information.
+### 🎯 Major Feature: Guard on Tool Results and A2A Questions
+What a tool returns can be turned against Morgana: a plugin tool, an MCP server, a partner's agent over A2A: all of these may answer with text meant to steer the agent instead of data. **Every tool result is now screened before the agent reads it**: a deterministic check on all of them and an LLM inspection on those coming from outside (MCP servers and partners).
+**It stops five families of hijacking**: of personality, of authority, of behaviour, of data and of the user. A result found hostile is **quarantined**: it never reaches the agent, which does without it, invents nothing in its place and tells the user plainly it cannot give that information.
 ### 🎯 Major Feature: Conversation Resume for Terminal Channels
 Grimoire and Rune can now pick up a conversation opened earlier, as Cauldron already could: `/resume id:… seal:…` redraws the transcript on screen and the conversation carries on from where it was left.
 The header shows a glimpse of the current conversation's seal and `/status` shows it whole, so it can be noted down for later recovery.
@@ -34,8 +34,8 @@ At start Morgana hands the channel the seal just once and keeps only its hash: f
 - Updated `OllamaSharp` to 5.5.0
 
 ### 🚀 Future Enablement
-- **Third-party sources without blind trust**: what partners and MCP servers answer is screened before any agent believes it, the precondition for a federation of Morgana open to peers nobody can check in advance
-- **Trust measured per source**: every quarantine is traced with its source and the layer that decided it, so how often a server or a partner tries to steer Morgana becomes a number per source. The natural basis for demoting or cutting off one that keeps trying
+- **Third-party sources without blind trust**: what partners and MCP servers answer is screened before any agent believes it, the precondition for a **federation of Morgana** (v0.31) open to peers nobody can check in advance
+- **Trust measured per source**: every quarantine is traced with its source and the layer that decided it, so how often a server or a partner tries to steer Morgana becomes a number per source. The natural basis for demoting or cutting off ones that keep trying
 - **A conversation that follows its owner**: the seal already proves who may take a conversation back, independent of where it was opened. Once Morgana knows who the user is, the same conversation can move from Cauldron to a terminal and back
 
 
