@@ -7,7 +7,6 @@ description: >-
 runs: 5
 minPasses: 5
 
-evidence: true
 
 turns:
   - say: "Does the Hedgerow nursery have hawthorn for a new hedge?"

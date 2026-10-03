@@ -50,7 +50,11 @@ public sealed class ActorTests
         try
         {
             IReadOnlyList<string> failures = await fixture.Judge.EvaluateAsync(
-                judge: ["The message introduces itself as Morgana and invites the user to say what they need."],
+                judge:
+                [
+                    "The message introduces itself as Morgana.",
+                    "The message offers to help the user."
+                ],
                 judgeNot: ["The message asks for personal or account information before the user has said anything."],
                 message: presentation);
 

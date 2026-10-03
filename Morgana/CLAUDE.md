@@ -320,12 +320,14 @@ prompt**: it is the one section whose reader is another agent and it travels out
 The `Morgana` prompt's `AdditionalProperties` carry two sibling arrays and **which of the two an
 entry is follows from the array it lives in**, never from a field inside it:
 
-- **`GlobalPolicies`** — P0-P8, rendered into every agent's prompt in `Priority` order:
+- **`GlobalPolicies`** — P0-P8, rendered into every agent's prompt in `Priority` order, each under
+  its rank: the policies header declares the rank a **precedence** — a lower number is never
+  overridden, postponed or reordered by a higher one:
   ContextHandling, QuickReplyDoctrine, TurnContinuation, SessionContinuation, ToolUsage,
   ToolGrounding, MandatoryTextualResponse, RichCardUsage, PeerConsultation. `QuickReplyDoctrine` (P1)
   is the master rule the other quick-reply policies instantiate. `PeerConsultation` (P8) is the
-  **only conditionally rendered** one — an agent outside the A2A topology never pays for it — and
-  sits last so it names the policies it suspends instead of forward-referencing them.
+  **only conditionally rendered** one — an agent outside the A2A topology never pays for it. It
+  sits last so it names the policies it builds on instead of forward-referencing them.
 - **`Injections`** — templates, not rules: prose with a single splice site each, never rendered among
   the policies where they would instruct against nothing. No `Priority`: each is fetched by name.
   `ToolDescriptionContextGuidance` (into a tool's own description), `HeldContextDeclaration` (per
@@ -418,7 +420,8 @@ partner, then `OutboundPolicy.Enabled`, then `InboundPolicy.Enabled`.
 ## Observability
 
 Spans `morgana.turn`, `morgana.guard`, `morgana.classifier`, `morgana.router`, `morgana.agent`, with
-`agent.tools_invoked` carrying tool names and **never** arguments. HTTP Activity context arrives as
+`agent.tools_invoked` carrying tool names and **never** arguments. A tool listed there may still have refused its
+input: `morgana.presentation` says whether `SetQuickReplies` or `SetRichCard` stored what it was sent. HTTP Activity context arrives as
 an `ActivityLink`. Metric `morgana.dust.consumed` tagged by role, beside MEAI's `gen_ai.usage.*`.
 Exporters configured under `Morgana:OpenTelemetry:Exporters`.
 

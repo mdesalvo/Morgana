@@ -47,7 +47,7 @@ PromptHarness (test process)
   │                          Console.Out tee on MorganaTool logs → context reads/writes
   │                          + MorganaAIContextProvider's per-turn declaration → Declared reads
   ├── LlmJudge          ──► ILLMService.CompleteWithSystemPromptAsync (cheapest configured tier),
-  │                          fed what the user saw, plus the turn's telemetry evidence on request
+  │                          fed exactly what the user saw
   └── ScenarioRunner    ──► replays a YAML scenario N times, reports passes against a threshold
 ```
 
@@ -79,7 +79,7 @@ The harness channel declares the **full** capability profile with no length budg
 `MorganaChannelAdapter` short-circuits and most scenarios measure undegraded output. One scenario
 opts into a degraded profile instead (`ScenarioDefinition.DegradedChannel`, mirroring Rune's "poor
 but honest" capabilities under a distinct channel name) specifically to exercise the adapter's
-rewrite path — see `channeladapter-degrades-invoice-card` and `GuardTests`/`ActorTests` below.
+rewrite path — see `channeladapter-degrades-invoice-card` and `UserGuardTests`/`ActorTests` below.
 
 ## Configuration and secrets
 
@@ -124,7 +124,7 @@ dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.ContextHandling
 dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.BehaviourTests"
 
 # the guard group — requires the boot-time guardrail flag, off by default
-Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.GuardTests"
+Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.UserGuardTests"
 
 # the tool-guard group — swaps the domain for the poisoned one, never alongside anything else
 Harness__EnableToolGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.ToolGuardTests"
@@ -170,7 +170,7 @@ otherwise would mean measuring a configuration nobody runs. With the example plu
 |---|---|---|
 | `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand` | Billing, Contract | `Efficiency` |
 | `context-closed-vocabulary-monkeys` | Monkeys | `Efficiency` |
-| `classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
+| `classifier-routes-unambiguous-billing-request`, `userguard-rejects-abusive-message`, `userguard-allows-good-faith-difficult-topic`, `channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
 | `behaviour-rich-card`, `context-no-invented-writes`, `classifier-routes-catalog-request-to-inventory` | Inventory | **`Performance`** |
 | `classifier-disambiguates-colliding-billing-contract` | *(none — diverted before routing)* | `Efficiency` (classifier only) |
 
@@ -225,7 +225,6 @@ One YAML file per flow under `Scenarios/`, named after its `id`.
 id: my-scenario
 description: what this protects, in one sentence
 runs: 5            # default: Harness:DefaultRuns
-evidence: true     # from v0.33: the judge also reads the turn's telemetry evidence
 minPasses: 4       # default: Harness:DefaultMinPasses
 
 turns:
@@ -269,14 +268,8 @@ Two layers and the split is deliberate: **structural** assertions are determinis
 span, log and message data; the **judge** is for what no structural assertion can reach ("asks in
 prose without enumerating options"). The judge sees what a user would see — text, buttons and the
 card's rendered content — so a response that answered on its card is never convicted of missing it.
-The scenarios written up to v0.32 are judged this way and stay so.
-
-From v0.33 on, objective flow evidence complements the prose. A scenario declaring `evidence: true`
-has its judge also read the turn's evidence, from the framework's own telemetry: the agent, whether
-the turn was left open, tools in order, every guard verdict with the layer that decided it and its
-reason, consultations with their question and answer, context accesses. Never what a tool returned.
-That judge does not share the user's purpose: a bug can sit behind the most innocuous answer, so the
-prose is judged against what actually happened. What telemetry can settle is asserted, never judged.
+What happened behind the scenes is asserted on telemetry, never judged: a judge handed the trace
+looks there for what only the screen carries and convicts a correct answer.
 
 A guard is always observed on its telemetry too, since only the span proves the expected guard was
 raised the expected way. One structural assertion holds on every turn unasked: a guard verdict

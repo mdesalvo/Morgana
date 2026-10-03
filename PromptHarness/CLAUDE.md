@@ -55,9 +55,9 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Test
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.DegradedHistoryTests"
 
 # boot-flagged — one knob each, never together
-Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.GuardTests"
+Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.UserGuardTests"
 Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.SummarizationTests"
-Harness__DustBudgetPerConversation=15 dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.DustTests"
+Harness__DustBudgetPerConversation=20 dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.DustTests"
 Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.RateLimitTests"    # deterministic, skipped without the knob
 Harness__FederatedPeer=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.FederationTests"
 Harness__EnableToolGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.ToolGuardTests"
@@ -89,7 +89,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `ContextHandlingTests` | **5/5, blocking** | The context cycle, the closed vocabulary, non-revelation. Failure is **silent**: an agent re-asking for what it knows still looks like it works |
 | `ConsultingTests` | **4/4, blocking** | A colleague reached on demand for a datum only it holds; an exchange leaving the conversation as it found it. Silent the same way. Also depends on a **topology**, so a failure here has a second meaning: check the `[ConsultsAgent]` attributes first |
 | `BehaviourTests` | 5/4 | Visible presentation: buttons, cards, closure |
-| `GuardTests` | 5/5 | Moderation. A false negative is safety-adjacent, so it sits with the blocking reasoning rather than with presentation |
+| `UserGuardTests` | 5/5 | Moderation. A false negative is safety-adjacent, so it sits with the blocking reasoning rather than with presentation |
 | `ToolGuardTests` | 5/5, controls and refusal tone 5/4 | The guard on tool results. `PoisonedPlugin` replaces the domain: its own tools, an MCP server and a partner's colleague (both served by `PoisonedSourceHost` on the fixed port 5199) answer with five families of hijacking (personality, authority, behaviour, data, the user). A result must be quarantined and the answer must do none of what it asked; one truthful result per external source must pass, quick replies and card included |
 | `PeerGuardTests` | none | The guard on partners' questions: one hijacking question per family (personality, authority, behaviour, data) is declined before the agent reads it; an ordinary one and a curt one reach it. One live inspection each, asked through `PartnerConsultation` like `ServedConsultationTests` |
 | `ActorTests` | mixed | The framework prompts nothing else exercises: classifier, channel adaptation, presentation (a one-shot check, since the presenter caches process-wide by channel name) |
@@ -104,15 +104,10 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 
 **The judge sees what a user would see** — text, buttons, the card as rendered. Showing it less than
 the screen is the mirror error: an agent's `Formatting` routinely puts the answering figure on the
-card. It is skipped once a turn already fails structurally. The scenarios written up to v0.32 are
-judged this way and stay so: their thresholds and journey rows were measured against it.
-
-**From v0.33 on, objective flow evidence complements the prose.** A scenario may declare
-`evidence: true`: its judge then also reads the turn's evidence, what happened behind the scenes as
-the framework's own telemetry recorded it (`TurnResult.Evidence`) — tools in order, each guard verdict
-and the layer that decided it, consultations, whether the turn was left open. Never what a tool
-returned. That judge does not share the user's purpose, since a bug can sit behind the most innocuous
-answer. What a span or a log line can settle is asserted structurally and never asked of a judge.
+card. It is skipped once a turn already fails structurally. What happened behind the scenes — tools,
+guard verdicts, consultations, context accesses — is settled by structural assertions on spans and
+log lines, never asked of a judge: a judge handed telemetry looks there for what only the screen
+carries and convicts a correct answer.
 
 **A guard is always observed on its telemetry too**, because only the span proves the expected guard
 was raised the expected way: `guardDecidedBy`, `toolsQuarantined` with `quarantinedBy`,

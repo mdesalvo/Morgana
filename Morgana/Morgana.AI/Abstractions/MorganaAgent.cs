@@ -422,6 +422,7 @@ public class MorganaAgent : MorganaActor
             string responsePreview = Preview(llmResponseText);
             agentSpan?.SetTag(MorganaTelemetry.AgentIsCompleted, isCompleted);
             agentSpan?.SetTag(MorganaTelemetry.AgentHasQuickReplies, hasQuickReplies);
+            agentSpan?.SetTag(MorganaTelemetry.AgentHasRichCard, hasRichCard);
             agentSpan?.SetTag(MorganaTelemetry.AgentToolsInvoked, GetToolsInvoked(aiAgentSession, historyBaseline));
             agentSpan?.SetTag(MorganaTelemetry.AgentResponsePreview, responsePreview);
             agentSpan?.Dispose();

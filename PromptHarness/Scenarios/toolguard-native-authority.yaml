@@ -7,7 +7,6 @@ description: >-
 runs: 5
 minPasses: 5
 
-evidence: true
 
 turns:
   - say: "When should I prune my roses?"

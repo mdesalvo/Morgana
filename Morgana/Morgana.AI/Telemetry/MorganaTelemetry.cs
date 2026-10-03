@@ -136,6 +136,9 @@ public static class MorganaTelemetry
     /// <summary>Activity wrapping the guard's check of one question a partner puts to an agent here.</summary>
     public const string PeerGuardActivity = "morgana.peerguard";
 
+    /// <summary>Activity wrapping one quick-reply or rich-card emission, accepted or refused by its tool, nested under the agent.</summary>
+    public const string PresentationActivity = "morgana.presentation";
+
     // ==============================================================================
     // ATTRIBUTE NAMES — CONVERSATION
     // ==============================================================================
@@ -212,6 +215,9 @@ public static class MorganaTelemetry
     /// <summary>True if the agent returned quick replies to the user.</summary>
     public const string AgentHasQuickReplies = "agent.has_quick_replies";
 
+    /// <summary>True if the agent returned a rich card to the user.</summary>
+    public const string AgentHasRichCard = "agent.has_rich_card";
+
     /// <summary>
     /// Comma-separated names of the tools invoked during this turn, in call order (names only,
     /// never arguments — span attributes reach every configured exporter).
@@ -286,6 +292,31 @@ public static class MorganaTelemetry
 
     /// <summary>Why the question was declined: a category or a clinical sentence, never a quote of the question.</summary>
     public const string PeerGuardViolation = "peerguard.violation";
+
+    // ==============================================================================
+    // ATTRIBUTE NAMES — PRESENTATION
+    // ==============================================================================
+
+    /// <summary>Presentation tool the model called: SetQuickReplies or SetRichCard. Its payload never reaches the span.</summary>
+    public const string PresentationTool = "presentation.tool";
+
+    /// <summary>Whether the tool stored what the model sent; false means the user will not see it.</summary>
+    public const string PresentationAccepted = "presentation.accepted";
+
+    /// <summary>Why the tool refused the payload, as one of the rejection values below; absent when accepted.</summary>
+    public const string PresentationRejection = "presentation.rejection";
+
+    /// <summary>Rejection value: nothing to present was sent.</summary>
+    public const string PresentationRejectionEmpty = "empty";
+
+    /// <summary>Rejection value: the rich card is not JSON a strict parser reads.</summary>
+    public const string PresentationRejectionInvalidJson = "invalid_json";
+
+    /// <summary>Rejection value: the rich card nests deeper than the channels draw.</summary>
+    public const string PresentationRejectionExcessiveDepth = "excessive_depth";
+
+    /// <summary>Rejection value: the rich card carries more components than the channels draw.</summary>
+    public const string PresentationRejectionTooManyComponents = "too_many_components";
 
     // ==============================================================================
     // EVENT NAMES

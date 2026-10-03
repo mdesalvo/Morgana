@@ -96,6 +96,9 @@ public sealed class TurnObserver : IDisposable
     /// <summary>Tool results the guard screened, per conversation — one turn may screen several.</summary>
     private readonly ConcurrentDictionary<string, List<ToolGuardObservation>> toolGuardSpans = new ConcurrentDictionary<string, List<ToolGuardObservation>>();
 
+    /// <summary>Calls to the presentation tools, per conversation — one turn may set both quick replies and a card.</summary>
+    private readonly ConcurrentDictionary<string, List<PresentationObservation>> presentationSpans = new ConcurrentDictionary<string, List<PresentationObservation>>();
+
     /// <summary>
     /// Partners' questions the peer guard judged, per conversation. Read by conversation rather than by
     /// turn: a partner's exchange runs on no turn of the harness's own channel.
@@ -160,7 +163,8 @@ public sealed class TurnObserver : IDisposable
             classifierSpans.TryGetValue(conversationId, out List<ClassifierSpan>? classifiers) ? classifiers.Count : 0,
             llmMark,
             consultationSpans.TryGetValue(conversationId, out List<ConsultationObservation>? consultations) ? consultations.Count : 0,
-            toolGuardSpans.TryGetValue(conversationId, out List<ToolGuardObservation>? screened) ? screened.Count : 0);
+            toolGuardSpans.TryGetValue(conversationId, out List<ToolGuardObservation>? screened) ? screened.Count : 0,
+            presentationSpans.TryGetValue(conversationId, out List<PresentationObservation>? presented) ? presented.Count : 0);
     }
 
     /// <summary>
@@ -248,6 +252,12 @@ public sealed class TurnObserver : IDisposable
                 ? [.. guarded.Skip(scope.ToolGuardSpanCount)]
                 : [];
 
+        // Every presentation call of the turn: a call listed among the tools may still have been refused.
+        IReadOnlyList<PresentationObservation> presentations =
+            presentationSpans.TryGetValue(scope.ConversationId, out List<PresentationObservation>? presented) && presented.Count > scope.PresentationSpanCount
+                ? [.. presented.Skip(scope.PresentationSpanCount)]
+                : [];
+
         // LLM spans are process-wide, not per-conversation (see the field's own remarks on why),
         // so isolating this turn's usage means skipping every span that existed before BeginTurn's
         // mark and summing whatever landed after — sound only because the suite runs serially.
@@ -271,7 +281,8 @@ public sealed class TurnObserver : IDisposable
             consulted,
             conversationLogMark is { } mark ? output.Since(mark) : [],
             screened,
-            guard?.Source);
+            guard?.Source,
+            presentations);
     }
 
     /// <summary>
@@ -354,6 +365,13 @@ public sealed class TurnObserver : IDisposable
                     activity.GetTagItem(MorganaTelemetry.ToolGuardCompliant) as bool?,
                     activity.GetTagItem(MorganaTelemetry.ToolGuardSource) as string,
                     activity.GetTagItem(MorganaTelemetry.ToolGuardViolation) as string));
+                break;
+
+            case MorganaTelemetry.PresentationActivity:
+                Append(presentationSpans, conversationId, new PresentationObservation(
+                    activity.GetTagItem(MorganaTelemetry.PresentationTool) as string,
+                    activity.GetTagItem(MorganaTelemetry.PresentationAccepted) as bool?,
+                    activity.GetTagItem(MorganaTelemetry.PresentationRejection) as string));
                 break;
 
             case MorganaTelemetry.PeerGuardActivity:
@@ -473,4 +491,5 @@ public sealed record TokenUsage(
 /// <param name="ClassifierSpanCount">Classifier spans already recorded for the conversation.</param>
 /// <param name="LlmSpanCount">LLM spans already recorded, process-wide.</param>
 /// <param name="ToolGuardSpanCount">Screened tool results already recorded for the conversation.</param>
-public sealed record TurnScope(string ConversationId, int LogMark, int SpanCount, int GuardSpanCount, int ClassifierSpanCount, int LlmSpanCount, int ConsultationSpanCount, int ToolGuardSpanCount);
+/// <param name="PresentationSpanCount">Presentation tool calls already recorded for the conversation.</param>
+public sealed record TurnScope(string ConversationId, int LogMark, int SpanCount, int GuardSpanCount, int ClassifierSpanCount, int LlmSpanCount, int ConsultationSpanCount, int ToolGuardSpanCount, int PresentationSpanCount);

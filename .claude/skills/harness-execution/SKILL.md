@@ -32,7 +32,7 @@ Activated when the user says things like:
 2. **Ask the target scope** with `AskUserQuestion`, multi-select. **Enumerate `PromptHarness/Tests/`
    first and offer what is actually there** — the class list below is a description of a moving
    directory, not a contract, and a `--filter` naming a class that no longer exists runs zero tests
-   and exits 0: a green nobody asked for. Fifteen classes at the time of writing, in four families:
+   and exits 0: a green nobody asked for. Seventeen classes at the time of writing, in four families:
 
    *Deterministic — no model, no cost. Run them first: they are the cheapest way to learn the
    topology under test is sane before any billed turn.*
@@ -40,6 +40,7 @@ Activated when the user says things like:
    - Agent card (`AgentCardTests` — the published card and how far the gate behind it reaches)
    - Peer federation (`PeerFederationTests` — the outbound half: which cards this side accepts, what it signs, where a credential may go)
    - Conversation API (`ConversationApiTests` — who the channel API lets in, what a start must announce, how an unknown conversation is answered. The conversations it needs on record are synthesised into the run's storage; its one model call is the presentation of its single real start)
+   - Degraded history (`DegradedHistoryTests` — what a channel too poor for rich answers reads back on return: the answer it was pushed against the one the history gives back. One real turn under Rune's profile, no judge, no threshold, no knob)
 
    *Blocking — a silent failure mode, which is why these two are the ones a revision stops on.*
    - Context (`ContextHandlingTests` — the context cycle, the closed vocabulary, cross-agent)
@@ -52,17 +53,18 @@ Activated when the user says things like:
 
    *Boot-flagged — each needs a process-wide knob the other groups must NOT carry, so each is its own
    invocation. This is the whole reason filters are never combined.*
-   - Guard (`GuardTests` — `Harness__EnableUserGuardrail=true`)
+   - User guard (`UserGuardTests` — `Harness__EnableUserGuardrail=true`)
    - Conversation persistence (`ConversationPersistenceTests` — `Harness__EnableUserGuardrail=true`, the same knob as the guard group but its own invocation: it stages one refused turn among the five it drives and follows the database after each one)
    - Summarizer (`SummarizationTests` — `Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4`)
-   - Dust (`DustTests` — `Harness__DustBudgetPerConversation=15`; 3 and 8 both let one turn jump past 90% straight into exhaustion, which reads as "90% never appeared")
+   - Dust (`DustTests` — `Harness__DustBudgetPerConversation=20`; 3, 8 and 15 have each let one turn jump past 90% straight into exhaustion, which reads as "90% never appeared")
    - Peer guard (`PeerGuardTests` — `Harness__EnablePeerGuardrail=true`: one hijacking question per family must be declined before the agent reads it, an ordinary and a curt one must reach it)
    - Tool guard (`ToolGuardTests` — `Harness__EnableToolGuardrail=true`, which **replaces the whole domain** with `PoisonedPlugin` and stands up the poisoned MCP server and partner nursery on the fixed port 5199. Never shares an invocation, for the federation run's reason)
    - Federation (`FederationTests` — `Harness__FederatedPeer=true`, which stands a **second Morgana** up and **replaces the whole domain** of the instance under test with one toolless agent. Every other group would find its own agents missing, so this one never shares an invocation with anything)
+   - Rate limit (`RateLimitTests` — `Harness__RateLimitPerMinute=3`: which calls the REST gate counts and how it refuses the one past the window. Reaches no model — the window is filled with `/compact` on a seeded agent with no history)
 
    Plus `HarnessSmokeTests`, which is not a choice: step 4 runs it regardless.
 
-   `AskUserQuestion` takes at most four options, so fourteen checkboxes do not fit: ask by **family**
+   `AskUserQuestion` takes at most four options, so sixteen checkboxes do not fit: ask by **family**
    — the four above, multi-select — and let a user wanting a single class say so through "Other".
    A user who has already said "everything" has answered this question; do not ask it again.
 
@@ -100,7 +102,7 @@ Activated when the user says things like:
 
 5. **Run each selected group** with `Harness__DefaultRuns=N Harness__DefaultMinPasses=M` plus its
    own extra flags, **one `dotnet test` invocation per group, strictly one at a time**. Filters are
-   never combined, because four groups carry a boot-time knob the others must not see. And the
+   never combined, because every boot-flagged group carries a knob the others must not see. The
    invocations are never parallelised either, for a second reason: they share one csproj, so two
    concurrent runs fight over the same `bin`/`obj`.
    ```
@@ -109,6 +111,7 @@ Activated when the user says things like:
    dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.AgentCardTests"
    dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.PeerFederationTests"
    dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ConversationApiTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.DegradedHistoryTests"
 
    # Blocking
    Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ContextHandlingTests"
@@ -122,13 +125,14 @@ Activated when the user says things like:
    Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ServedConsultationTests"
 
    # Boot-flagged — one knob each, never together
-   Harness__EnableUserGuardrail=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.GuardTests"
+   Harness__EnableUserGuardrail=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.UserGuardTests"
    Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.SummarizationTests"
-   Harness__DustBudgetPerConversation=15 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.DustTests"
+   Harness__DustBudgetPerConversation=20 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.DustTests"
    Harness__EnableToolGuardrail=true dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ToolGuardTests"
    Harness__EnablePeerGuardrail=true dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.PeerGuardTests"
    Harness__FederatedPeer=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.FederationTests"
    Harness__EnableUserGuardrail=true dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ConversationPersistenceTests"
+   Harness__RateLimitPerMinute=3 dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.RateLimitTests"
    ```
 
    **Read the test count in every summary line, not only the pass/fail verdict.** A filter matching

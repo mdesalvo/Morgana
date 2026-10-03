@@ -17,14 +17,14 @@ namespace PromptHarness.Tests;
 /// summarization reducer, dust limiting is process-wide for the single assembly-shared host, so
 /// lowering it would silently start throttling every other class's conversations too. Run this class
 /// on its own:</para>
-/// <code>Harness__DustBudgetPerConversation=15 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.DustTests"</code>
+/// <code>Harness__DustBudgetPerConversation=20 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.DustTests"</code>
 ///
 /// <para>The number just needs to be small enough that <see cref="MaxTurns"/> is enough room to
 /// exhaust it and large enough that a single turn's own charge cannot jump straight past 90% into
 /// exhaustion in one shot — <c>EmitDustWarningsIfNeededAsync</c> / <c>EmitDustExhaustionAsync</c> are
 /// mutually exclusive per turn (whichever the post-send gauge calls for), so a turn crossing both at
-/// once logs only the exhaustion line and this test would see 90% "never appeared". Budgets of 3 and
-/// 8 both hit exactly that on live runs; 15 comfortably didn't.</para>
+/// once logs only the exhaustion line and this test would see 90% "never appeared". Budgets of 3, 8
+/// and 15 have each hit exactly that on live runs; 20 has not.</para>
 ///
 /// <para><strong>Evidence-driven, not turn-pinned.</strong> Earlier attempts at a scripted YAML
 /// scenario asserting a threshold on a specific turn number kept breaking across reruns: how many

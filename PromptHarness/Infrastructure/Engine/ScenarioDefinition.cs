@@ -28,13 +28,6 @@ public sealed class ScenarioDefinition
     /// </summary>
     public int? MinPasses { get; init; }
 
-    /// <summary>
-    /// Whether the judge reads the turn's evidence beside the screen: what happened behind the scenes,
-    /// from the framework's own telemetry. Scenarios written up to v0.32 leave it unset and are judged
-    /// exactly as they were calibrated; a scenario written from v0.33 on asks for it.
-    /// </summary>
-    public bool? Evidence { get; init; }
-
     /// <summary>The turns, in order.</summary>
     public List<TurnDefinition> Turns { get; init; } = [];
 

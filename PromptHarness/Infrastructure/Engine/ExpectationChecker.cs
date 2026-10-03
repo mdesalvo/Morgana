@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Markdig;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
+using Morgana.AI;
 using Morgana.Contracts;
 using PromptHarness.Infrastructure.Wiring;
 
@@ -223,7 +224,7 @@ public static partial class ExpectationChecker
                     break;
 
                 case "any" when quickReplies.Count == 0:
-                    failures.Add("quickReplies: expected at least one, got none");
+                    failures.Add($"quickReplies: expected at least one, got none ({turn.MissingPresentationCause(Constants.Tools.SetQuickReplies)})");
                     break;
 
                 case "count":
@@ -290,7 +291,7 @@ public static partial class ExpectationChecker
                 break;
 
             case "present" when !present:
-                failures.Add("richCard: expected present, got none");
+                failures.Add($"richCard: expected present, got none ({turn.MissingPresentationCause(Constants.Tools.SetRichCard)})");
                 break;
         }
     }

@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Providers;
+using Morgana.AI.Telemetry;
 using Morgana.Contracts;
 
 namespace Morgana.AI.Abstractions;
@@ -149,17 +151,20 @@ public class MorganaTool
     /// <returns>Confirmation message for the LLM.</returns>
     public async Task<object> SetQuickReplies(List<QuickReply> quickReplies)
     {
+        ToolContext ctx = getToolContext();
+
         // Validate input — empty list is a no-op
         if (quickReplies == null || quickReplies.Count == 0)
         {
             toolLogger.LogWarning("SetQuickReplies called with no quick replies");
+            RecordPresentation(ctx.ConversationId, Constants.Tools.SetQuickReplies, MorganaTelemetry.PresentationRejectionEmpty);
             return "Warning: No quick replies were set (empty data).";
         }
 
         // Store serialized quick replies in ephemeral context; agents retrieve them via ExecuteAgentAsync before sending response
-        ToolContext ctx = getToolContext();
         await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.QuickReplies,
             JsonSerializer.Serialize(quickReplies, Records.DefaultJsonSerializerOptions));
+        RecordPresentation(ctx.ConversationId, Constants.Tools.SetQuickReplies, rejection: null);
 
         toolLogger.LogInformation("LLM set {Count} quick reply buttons via SetQuickReplies tool", quickReplies.Count);
 
@@ -188,6 +193,8 @@ public class MorganaTool
     /// </remarks>
     public async Task<object> SetRichCard(string richCard)
     {
+        ToolContext ctx = getToolContext();
+
         try
         {
             // Parse JSON string into strongly-typed RichCard structure; gracefully reject invalid JSON
@@ -196,6 +203,7 @@ public class MorganaTool
             if (parsedRichCard == null)
             {
                 toolLogger.LogWarning("SetRichCard called with invalid JSON structure");
+                RecordPresentation(ctx.ConversationId, Constants.Tools.SetRichCard, MorganaTelemetry.PresentationRejectionInvalidJson);
                 return "Error: Rich card JSON structure is invalid.";
             }
 
@@ -204,6 +212,7 @@ public class MorganaTool
             if (depth > 3)
             {
                 toolLogger.LogWarning("SetRichCard called with excessive nesting depth: {Depth} (max 3)", depth);
+                RecordPresentation(ctx.ConversationId, Constants.Tools.SetRichCard, MorganaTelemetry.PresentationRejectionExcessiveDepth);
                 return $"Error: Rich card exceeds maximum nesting depth of 3 (found: {depth}). Please simplify the card structure.";
             }
 
@@ -212,12 +221,13 @@ public class MorganaTool
             if (totalComponents > 50)
             {
                 toolLogger.LogWarning("SetRichCard called with too many components: {TotalComponents} (max 50)", totalComponents);
+                RecordPresentation(ctx.ConversationId, Constants.Tools.SetRichCard, MorganaTelemetry.PresentationRejectionTooManyComponents);
                 return $"Error: Rich card has too many components: {totalComponents} (max 50). Please create a more focused card.";
             }
 
             // Store original JSON string (not the parsed object) in ephemeral context; agents retrieve it via ExecuteAgentAsync
-            ToolContext ctx = getToolContext();
             await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.RichCard, richCard);
+            RecordPresentation(ctx.ConversationId, Constants.Tools.SetRichCard, rejection: null);
 
             toolLogger.LogInformation(
                 "LLM set rich card '{Title}' with {TotalComponents} components (depth: {Depth}) via SetRichCard tool",
@@ -229,8 +239,23 @@ public class MorganaTool
         {
             // JSON parsing failed; return error message the LLM can act on
             toolLogger.LogError(ex, "Failed to parse rich card JSON in SetRichCard");
+            RecordPresentation(ctx.ConversationId, Constants.Tools.SetRichCard, MorganaTelemetry.PresentationRejectionInvalidJson);
             return "Error: Rich card JSON format is invalid. Please check the structure and try again.";
         }
+    }
+
+    /// <summary>
+    /// Leaves on the trace whether a presentation tool stored what the model sent: a call that appears
+    /// among the agent's tools can still have been refused, in which case the user sees nothing of it.
+    /// </summary>
+    /// <param name="rejection">One of the <c>PresentationRejection*</c> values, or <c>null</c> when the payload was stored.</param>
+    private static void RecordPresentation(string conversationId, string tool, string? rejection)
+    {
+        using Activity? presentationSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.PresentationActivity);
+        presentationSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+        presentationSpan?.SetTag(MorganaTelemetry.PresentationTool, tool);
+        presentationSpan?.SetTag(MorganaTelemetry.PresentationAccepted, rejection is null);
+        presentationSpan?.SetTag(MorganaTelemetry.PresentationRejection, rejection);
     }
 
     /// <summary>

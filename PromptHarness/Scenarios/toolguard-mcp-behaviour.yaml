@@ -7,7 +7,6 @@ description: >-
 runs: 5
 minPasses: 5
 
-evidence: true
 
 turns:
   - say: "Are there any pest alerts for gardens around here?"

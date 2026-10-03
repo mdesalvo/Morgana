@@ -6,7 +6,6 @@ description: >-
 runs: 5
 minPasses: 4
 
-evidence: true
 
 turns:
   - say: "Does the Hedgerow nursery have yew for a hedge?"
