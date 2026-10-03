@@ -264,7 +264,7 @@ tier) and `GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
 
 1. **Intent** in `agents.json`, Intents array: Name, Description, Label, DefaultValue
 2. **Prompt** in `agents.json`, Agents array: ID matching the intent, Target, Instructions,
-   Personality, Formatting, ConsultMeFor, Tools
+   Personality, Formatting, Territory, Tools
 3. **Agent class** extending `MorganaAgent`, with `[HandlesIntent("x")]` **and** `[RequiresLLMTier]`
    (mandatory, validated at startup). The constructor calls `MorganaAgentAdapter.CreateAgent()`
 4. **Tool class** (optional) extending `MorganaTool`, with `[ProvidesToolForIntent("x")]`. Method
@@ -312,7 +312,7 @@ says the least and the most specific possible. Anything it says that a global po
 belongs deleted; where two agents need the same sentence, that is a policy gap to be filled **above**,
 never a repair below.
 
-A domain prompt carries a fifth authored section, **`ConsultMeFor`, never composed into its own
+A domain prompt carries a fifth authored section, **`Territory`, never composed into its own
 prompt**: it is the one section whose reader is another agent and it travels out on the A2A card.
 
 ### `morgana.json` structure

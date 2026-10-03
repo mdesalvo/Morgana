@@ -673,7 +673,7 @@ public class MorganaAgentAdapter
     /// <param name="conversationId">Conversation the consultations are scoped to, carried as the A2A context id</param>
     /// <param name="sessionAccessor">Hands back the asking agent's live session, which the guards read at invocation</param>
     /// <param name="contextProvider">Context store of the asking agent, holding the per-turn consultation budget</param>
-    /// <param name="peerTerritories">Filled with function name → the colleague's own ConsultMeFor, for the declaration spliced into this agent's instructions</param>
+    /// <param name="peerTerritories">Filled with function name → the colleague's own Territory, for the declaration spliced into this agent's instructions</param>
     /// <returns>One AIFunction per resolvable colleague, empty if none is declared</returns>
     private async Task<List<AIFunction>> RegisterPeerAgentsAsync(
         Type agentType,
@@ -806,7 +806,7 @@ public class MorganaAgentAdapter
 
             // The colleague becomes one more callable function in this agent's tool list, bound to the
             // session created above so every call of it belongs to the same A2A exchange. It is offered
-            // under its own ConsultMeFor and nothing else: an inventory of its tools would invite the
+            // under its own Territory and nothing else: an inventory of its tools would invite the
             // caller to rule out a question the colleague has never seen.
             AIFunction peerFunction = guardedPeerAgent.AsAIFunction(
                 new AIFunctionFactoryOptions

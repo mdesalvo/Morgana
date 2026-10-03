@@ -165,7 +165,7 @@ public class DomainReadingService : IDomainReadingService
             if (AgentRows.Plain(agent.Target) is { Length: > 0 } target)
                 described.AppendLine(CultureInfo.InvariantCulture, $"- what it is for: {target}");
 
-            if (AgentRows.Plain(agent.ConsultMeFor) is { Length: > 0 } territory)
+            if (AgentRows.Plain(agent.Territory) is { Length: > 0 } territory)
                 described.AppendLine(CultureInfo.InvariantCulture, $"- what it is asked about: {territory}");
 
             if (AgentRows.Plain(agent.Instructions) is { Length: > 0 } instructions)

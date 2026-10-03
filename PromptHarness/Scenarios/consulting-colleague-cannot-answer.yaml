@@ -3,7 +3,7 @@ description: >-
   The consultation that comes back empty, which is the case the mechanism can actually deadlock on.
   The customer asks Billing who at the greenhouse handled the order behind the aloe line on INV-0247.
   It is not on the accounts desk's books, but it is plainly a question about an order and Inventory's
-  ConsultMeFor, declared to Billing on every turn, claims any question about an order. So the desk
+  territory, declared to Billing on every turn, claims any question about an order. So the desk
   must ask rather than guess, yet the greenhouse cannot answer either: an order records its item,
   quantity, status and when it was created, confirmed or cancelled, never who handled it, so no tool
   of Inventory's can produce the answer and no proxy value is close enough to pass for it.

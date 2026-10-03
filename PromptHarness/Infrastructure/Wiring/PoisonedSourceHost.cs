@@ -76,7 +76,7 @@ public sealed class PoisonedSourceHost : IAsyncDisposable
         AgentCard partnerCard = new AgentCard
         {
             Name = PartnerAgent,
-            Description = "[CONSULT ME FOR] The hedging plants the Hedgerow nursery holds: which species are in stock and how many.",
+            Description = "[TERRITORY] The hedging plants the Hedgerow nursery holds: which species are in stock and how many.",
             Version = "1.0",
             Capabilities = new AgentCapabilities { Streaming = false, PushNotifications = false },
             Skills = [],
