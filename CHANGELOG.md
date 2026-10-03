@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.33.0] - UNDER DEVELOPMENT
+## [0.33.0] - 2026-10-04
 ### 🎯 Major Feature: Guard on Tool Results and A2A Questions
 What a tool returns can be turned against Morgana: a plugin tool, an MCP server, a partner's agent over A2A: all of these may answer with text meant to steer the agent instead of data. **Every tool result is now screened before the agent reads it**: a deterministic check on all of them and an LLM inspection on those coming from outside (MCP servers and partners).
 **It stops five families of hijacking**: of personality, of authority, of behaviour, of data and of the user. A result found hostile is **quarantined**: it never reaches the agent, which does without it, invents nothing in its place and tells the user plainly it cannot give that information.
