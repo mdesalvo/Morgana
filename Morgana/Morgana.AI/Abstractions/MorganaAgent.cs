@@ -433,17 +433,30 @@ public class MorganaAgent : MorganaActor
             StripPeerConsultations(aiAgentSession, historyBaseline);
 
             // Tag this turn's user-facing assistant message — the LAST assistant message that
-            // actually carries text content.
+            // actually carries text content. Sought within this turn only: a turn that wrote no text
+            // must neither overwrite an earlier turn's recorded text nor borrow its timestamp, which
+            // the channel would take for a reply it already has.
             ChatMessage? finalAssistantMessage = aiChatHistoryProvider
                 .GetMessages(aiAgentSession)
+                .Skip(historyBaseline)
                 .LastOrDefault(m => m.Role == ChatRole.Assistant
                                      && m.Contents.OfType<TextContent>().Any(t => !string.IsNullOrWhiteSpace(t.Text)));
-            if (finalAssistantMessage is not null)
+
+            // A turn without a word for the user has failed, however cleanly the model closed it: prose
+            // always introduces whatever a card or a quick reply offers. Recorded as an answer, so a resumed
+            // conversation shows what the live one did instead of a phrase still waiting for its reply.
+            if (finalAssistantMessage is null)
             {
-                finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
-                finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.UserFacing] = true;
-                finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnText] = llmResponseText;
+                agentLogger.LogWarning("Agent '{AgentIntent}' closed its turn with nothing for the user: answering with the generic error", AgentIntent);
+
+                finalAssistantMessage = AppendErrorAnswer(aiAgentSession, await ResolveGenericErrorAsync());
+                llmResponseText = finalAssistantMessage.Text;
             }
+
+            // Finalize the assistant message with additional metadata
+            finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
+            finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.UserFacing] = true;
+            finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnText] = llmResponseText;
 
             // Written last, so what lands in the database is the history already stripped of the
             // consultations and already carrying the user-facing marks the history endpoint reads
@@ -455,7 +468,7 @@ public class MorganaAgent : MorganaActor
 
             // Dated as the history keeps it, so a client catching up recognises the reply it was pushed
             senderRef.Tell(new Records.AgentResponse(
-                llmResponseText, isCompleted, quickReplies, richCard, finalAssistantMessage?.CreatedAt?.UtcDateTime));
+                llmResponseText, isCompleted, quickReplies, richCard, finalAssistantMessage.CreatedAt?.UtcDateTime));
         }
         catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } cre
                                      && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
@@ -588,11 +601,52 @@ public class MorganaAgent : MorganaActor
     {
         agentLogger.LogError(failure.Failure.Cause, "Agent execution failed in {Name}", GetType().Name);
 
+        // The one answer a failed turn gives, whatever broke: what failed is for the log, not for the user
+        string genericError = await ResolveGenericErrorAsync();
+
+        // No session yet: the turn failed before reaching the history, so there is nothing to close
+        if (aiAgentSession is null)
+        {
+            failure.OriginalSender.Tell(new Records.AgentResponse(genericError, true, null));
+            return;
+        }
+
+        // The error takes the place of the reply the turn never wrote, so the phrase is answered in
+        // the history exactly as on screen and a resume no longer waits for it
+        ChatMessage errorAnswer = AppendErrorAnswer(aiAgentSession, genericError);
+
+        // Closed as completed, matching the reply below: the conversation returns to Morgana
+        await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted: true);
+
+        // Dated as the history keeps the error, so a client catching up recognises the reply it was pushed
+        failure.OriginalSender.Tell(new Records.AgentResponse(genericError, true, null, null, errorAnswer.CreatedAt?.UtcDateTime));
+    }
+
+    /// <summary>
+    /// The GenericError answer Morgana's prompt configures, the reply of a turn that failed.
+    /// </summary>
+    private async Task<string> ResolveGenericErrorAsync()
+    {
         Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
         List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>(Constants.PromptProperties.ErrorAnswers);
         Records.ErrorAnswer? genericError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "GenericError", StringComparison.OrdinalIgnoreCase));
 
-        failure.OriginalSender.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred.", true, null));
+        return genericError?.Content ?? "An internal error occurred.";
+    }
+
+    /// <summary>
+    /// Closes the turn in the agent's history with an error answer, marked as the reply the user read.
+    /// </summary>
+    /// <returns>The appended message, dated now.</returns>
+    private ChatMessage AppendErrorAnswer(AgentSession session, string errorText)
+    {
+        ChatMessage errorAnswer = new ChatMessage(ChatRole.Assistant, errorText) { CreatedAt = DateTimeOffset.UtcNow };
+
+        // The history endpoint shows this agent's marked messages alone, so an unmarked answer would vanish on resume
+        errorAnswer.AdditionalProperties = new AdditionalPropertiesDictionary { [Constants.MessageProperties.UserFacing] = true };
+
+        aiChatHistoryProvider.AppendMessage(session, errorAnswer);
+        return errorAnswer;
     }
 
     /// <summary>

@@ -434,13 +434,18 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
 
             // Morgana saves a phrase the moment it arrives, so a history ending on the visitor's
             // own words means that turn is still being worked on — typically a reload during it.
-            bool isTurnInFlight = history.Messages.Last().Type == ChatMessageType.User;
-
-            // The composer stays shut and the wait resumes where the reload cut it. This also
-            // recovers a reply pushed into the gap before this client rejoined its group: the
-            // deadline asks the history first and gives up only on a turn with nothing there.
-            if (isTurnInFlight)
+            MorganaChatMessage lastMessage = history.Messages.Last();
+            if (lastMessage.Type == ChatMessageType.User)
             {
+                // A phrase silent for the whole timeout already is a lost turn, given up on at once: the history
+                // just read is what the deadline would ask. Otherwise the composer stays shut and the wait resumes,
+                // the deadline still recovering a reply pushed in the gap before this client rejoined its group
+                if (DateTime.UtcNow - lastMessage.Timestamp >= _replyTimeout)
+                {
+                    AbandonTurn();
+                    return true;
+                }
+
                 _chatStateService.IsSending = true;
                 _chatStateService.AddTypingIndicator();
                 NoteReplyActivity();
@@ -460,13 +465,6 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
     /// <summary>
     /// Projects a history message from the wire contract onto the mutable UI model.
     /// </summary>
-    /// <remarks>
-    /// The two models are deliberately distinct: <see cref="MorganaChatMessage"/> is what Morgana
-    /// persisted, <see cref="ChatMessage"/> carries UI-only state the server knows nothing about
-    /// (typing indicator, streaming flag, selected quick reply). Mapping the message type through
-    /// an exhaustive switch means a new value added server-side surfaces here rather than being
-    /// silently coerced into the wrong UI styling.
-    /// </remarks>
     private static ChatMessage MapToChatMessage(MorganaChatMessage message) =>
         new()
         {
