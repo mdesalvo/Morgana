@@ -29,7 +29,7 @@ public partial class LLMGuardRailService : IGuardRailService
     /// <summary>
     /// Pre-computed Guard system prompt.
     /// </summary>
-    private readonly string guardSystemPrompt;
+    private readonly string userGuardSystemPrompt;
 
     /// <summary>
     /// Pre-computed ToolGuard system prompt, read before the result of every external tool.
@@ -42,8 +42,9 @@ public partial class LLMGuardRailService : IGuardRailService
     private readonly string peerGuardSystemPrompt;
 
     /// <summary>
-    /// The labels heading the sections of Morgana's own prompt, <c>[TARGET]</c> among them. A text from
-    /// outside carrying one is forging a layer the model was told to obey.
+    /// The labels heading the sections of every prompt an agent reads, Morgana's and each domain's,
+    /// <c>[TARGET]</c> and <c>[TERRITORY]</c> among them. A text from outside carrying one is forging a
+    /// layer the model was told to obey.
     /// </summary>
     private readonly string[] promptLayerLabels;
 
@@ -53,17 +54,19 @@ public partial class LLMGuardRailService : IGuardRailService
     /// </summary>
     /// <param name="llmService">LLM service used for the async policy check.</param>
     /// <param name="promptResolverService">Prompt resolver used to load Guard configuration.</param>
+    /// <param name="agentConfigurationService">Every domain prompt installed, whose section labels are forgeable too.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
     public LLMGuardRailService(
         ILLMService llmService,
         IPromptResolverService promptResolverService,
+        IAgentConfigurationService agentConfigurationService,
         ILogger logger)
     {
         this.llmService = llmService;
         this.logger = logger;
 
         Records.Prompt guardPrompt = promptResolverService.ResolveAsync(Constants.Prompts.Guard).GetAwaiter().GetResult();
-        guardSystemPrompt = $"{guardPrompt.Target}\n{guardPrompt.Instructions}\n{guardPrompt.Formatting}";
+        userGuardSystemPrompt = $"{guardPrompt.Target}\n{guardPrompt.Instructions}\n{guardPrompt.Formatting}";
 
         Records.Prompt toolGuardPrompt = promptResolverService.ResolveAsync(Constants.Prompts.ToolGuard).GetAwaiter().GetResult();
         toolGuardSystemPrompt = $"{toolGuardPrompt.Target}\n{toolGuardPrompt.Instructions}\n{toolGuardPrompt.Formatting}";
@@ -71,17 +74,16 @@ public partial class LLMGuardRailService : IGuardRailService
         Records.Prompt peerGuardPrompt = promptResolverService.ResolveAsync(Constants.Prompts.PeerGuard).GetAwaiter().GetResult();
         peerGuardSystemPrompt = $"{peerGuardPrompt.Target}\n{peerGuardPrompt.Instructions}\n{peerGuardPrompt.Formatting}";
 
-        // The labels are read from the framework prompt that carries them rather than listed here, so
-        // a template added to morgana.json is recognised as forged the day it is written.
-        Records.Prompt morganaPrompt =
-            promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
-        promptLayerLabels = ReadPromptLayerLabels(morganaPrompt);
+        Records.Prompt morganaPrompt = promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
+        List<Records.Prompt> domainPrompts = agentConfigurationService.GetAgentPromptsAsync().GetAwaiter().GetResult();
+        promptLayerLabels = ReadPromptLayerLabels(morganaPrompt, domainPrompts);
     }
 
     /// <summary>
-    /// Collects the label heading each section of the framework prompt and each of its injections.
+    /// Collects the label heading each section of the framework prompt, each of its injections and
+    /// each section of every domain prompt.
     /// </summary>
-    private static string[] ReadPromptLayerLabels(Records.Prompt morganaPrompt)
+    private static string[] ReadPromptLayerLabels(Records.Prompt morganaPrompt, List<Records.Prompt> domainPrompts)
     {
         // The four sections every agent reads first, each opening with its label, e.g. "[TARGET] You are…".
         List<string> sections =
@@ -97,6 +99,17 @@ public partial class LLMGuardRailService : IGuardRailService
         sections.AddRange(morganaPrompt
             .GetAdditionalProperty<List<Records.Injection>>(Constants.PromptProperties.Injections)
             .Select(injection => injection.Description));
+
+        // Every agent's own sections, its territory included: a colleague's territory reaches the
+        // asking agent's prompt under its label, as one line of the colleagues it may consult.
+        sections.AddRange(domainPrompts.SelectMany(domainPrompt => new[]
+        {
+            domainPrompt.Target,
+            domainPrompt.Instructions,
+            domainPrompt.Formatting,
+            domainPrompt.Personality ?? "",
+            domainPrompt.Territory ?? ""
+        }));
 
         HashSet<string> labels = [];
         foreach (string section in sections)
@@ -119,7 +132,7 @@ public partial class LLMGuardRailService : IGuardRailService
             // and the whole pipeline, so nothing downstream runs until it has answered.
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
-                guardSystemPrompt,
+                userGuardSystemPrompt,
                 message);
 
             // The verdict, in the shape the Guard prompt's Formatting section asked for. Nothing here

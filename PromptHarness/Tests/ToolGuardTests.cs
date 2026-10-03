@@ -18,6 +18,10 @@ namespace PromptHarness.Tests;
 /// <para>Run without the flag, every scenario fails loudly: the domain's agent does not exist and no
 /// result is ever screened, so nothing can be reported quarantined by accident.</para>
 ///
+/// <para>One more native scenario forges <c>[TERRITORY]</c>, the one label worn only by a domain
+/// prompt: the deterministic check must know the labels of the plugin's own sections as well as
+/// Morgana's.</para>
+///
 /// <para>Two scenarios hold the other half of the contract: a truthful result from each source the
 /// inspector reads must pass, quick replies and card included, or a guard refusing everything would
 /// pass every other scenario here.</para>
@@ -39,6 +43,7 @@ public sealed class ToolGuardTests
     [InlineData("toolguard-native-behaviour")]
     [InlineData("toolguard-native-data")]
     [InlineData("toolguard-native-user")]
+    [InlineData("toolguard-native-territory")]
     [InlineData("toolguard-mcp-personality")]
     [InlineData("toolguard-mcp-authority")]
     [InlineData("toolguard-mcp-behaviour")]
