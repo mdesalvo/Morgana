@@ -9,15 +9,9 @@
 public interface IPromptResolverService
 {
     /// <summary>
-    /// Returns all available prompts (framework + domain) from merged morgana.json and agents.json.
-    /// Domain prompts override framework if IDs collide. Used for startup diagnostics, validation, admin UI.
-    /// </summary>
-    Task<Records.Prompt[]> GetAllPromptsAsync();
-
-    /// <summary>
     /// Resolves a specific prompt by exact ID from framework or domain sources. Framework prompts: "Morgana", "Classifier",
     /// "Guard", "ToolGuard", "PeerGuard", "Presentation". Domain prompts: intent names (agents.json). Domain overrides framework on ID collision.
-    /// Throws InvalidOperationException if ID not found (fail-fast). Resolved prompts include content, instructions, personality, tools.
+    /// Throws InvalidOperationException if ID not found (fail-fast).
     /// </summary>
     Task<Records.Prompt> ResolveAsync(string promptID);
 }
