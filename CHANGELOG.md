@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.0.0-preview.33] - UNDER DEVELOPMENT
+### ✨ Added
+
+### 🔄 Changed
+
+### 🐛 Fixed
+
+### 📦 Dependencies
+
+### 🚀 Future Enablement
+
+
 ## [0.32.0] - 2026-09-26
 ### 🎯 Major Feature: Terminal Command System
 Grimoire and Rune now support **commands**: type `/` at the prompt and a palette opens listing everything this installation offers, beside the channel's own `/new` and `/exit`. It filters as you type and Enter runs the highlighted one. A command is not prose: it never reaches any agents, so it costs no reasoning and interrupts nothing the conversation was doing.

@@ -1,5 +1,6 @@
 using Alembic.Interfaces;
 using Alembic.Model;
+using System.Reflection;
 
 namespace Alembic.Services;
 
@@ -87,7 +88,11 @@ public class SolutionEmitService : ISolutionEmitService
     /// </summary>
     private static string PackageVersion(Type typeFromThatPackage)
     {
-        Version? version = typeFromThatPackage.Assembly.GetName().Version;
-        return version is null ? "*" : $"{version.Major}.{version.Minor}.{version.Build}";
+        // The informational version is the package's own, preview suffix included: the numeric
+        // assembly version would pin 1.0.0, which no preview package satisfies. The SDK appends the
+        // source revision after a '+', which is no part of a package version.
+        string? informationalVersion = typeFromThatPackage.Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        return string.IsNullOrEmpty(informationalVersion) ? "*" : informationalVersion.Split('+')[0];
     }
 }
