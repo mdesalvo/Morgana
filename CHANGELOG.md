@@ -26,10 +26,12 @@ At start Morgana hands the channel the seal just once and keeps only its hash: f
 ### 🔄 Changed
 - Starting a conversation under an ID that is not a GUID in its 32-digit format is now refused
 - Retries and timeouts are now uniform across every LLM provider: until now only Anthropic bounded them, while the others had no settings at all
+- An agent stays in service until it hands the conversation back: `SetTurnContinuation` tool is replaced by `SetTurnEnding`, Morgana takes the conversation back only when the agent calls it
 
 ### 🐛 Fixed
 - A conversation left with an agent no longer installed should be handed back to Morgana on resume
 - A chat no longer stays stuck on the typing indicator when an agent fails or answers nothing: an error message arrives and survives a refresh
+- On recent Anthropic models (Sonnet 5.5 onwards) an agent could lose its answer: text written before a closing tool call came back empty, leaving the user with no reply or a truncated one
 
 ### 📦 Dependencies
 - Updated `OllamaSharp` to 5.5.0
