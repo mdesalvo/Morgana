@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Morgana.AI;
 using Morgana.AI.Actors;
-using Morgana.AI.Adapters;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
 using Morgana.Contracts;
@@ -30,11 +29,6 @@ public class MorganaController : ControllerBase
     private readonly IChannelMetadataStore channelMetadataStore;
     private readonly IConversationPersistenceService conversationPersistenceService;
     private readonly IDustLimitService dustLimitService;
-    private readonly IConversationSealService conversationSealService;
-
-    /// <summary>Tells whether the agent a resumed conversation was left talking to is one this installation still serves.</summary>
-    private readonly IAgentRegistryService agentRegistryService;
-
     private readonly Records.DustLimitingOptions dustLimitingOptions;
 
     /// <summary>
@@ -48,8 +42,6 @@ public class MorganaController : ControllerBase
         IChannelMetadataStore channelMetadataStore,
         IConversationPersistenceService conversationPersistenceService,
         IDustLimitService dustLimitService,
-        IConversationSealService conversationSealService,
-        IAgentRegistryService agentRegistryService,
         IOptions<Records.DustLimitingOptions> dustLimitingOptions)
     {
         this.actorSystem = actorSystem;
@@ -58,8 +50,6 @@ public class MorganaController : ControllerBase
         this.channelMetadataStore = channelMetadataStore;
         this.conversationPersistenceService = conversationPersistenceService;
         this.dustLimitService = dustLimitService;
-        this.conversationSealService = conversationSealService;
-        this.agentRegistryService = agentRegistryService;
         this.dustLimitingOptions = dustLimitingOptions.Value;
     }
 
@@ -69,8 +59,7 @@ public class MorganaController : ControllerBase
     /// </summary>
     /// <param name="request">Request containing the conversation ID to start</param>
     /// <returns>
-    /// 202 Accepted once the conversation exists on record, carrying its seal: a message sent right after is served.
-    /// 400 Bad Request if the ID is not a 32-digit GUID or the channel metadata is incomplete.
+    /// 202 Accepted once the conversation exists on record: a message sent right after is served.
     /// 409 Conflict if a conversation with that ID is already on record.
     /// 500 Internal Server Error on failure.
     /// </returns>
@@ -78,18 +67,6 @@ public class MorganaController : ControllerBase
     public async Task<IActionResult> StartConversationAsync([FromBody] StartConversationRequest request)
     {
         logger.LogInformation("Starting conversation {RequestConversationId}", request.ConversationId);
-
-        // The id becomes an actor name and a database file name: a GUID in its 32-digit format is the one
-        // shape both take as is. Anything else (a space, a slash) would break Akka.NET only once the actors are raised.
-        if (!Guid.TryParseExact(request.ConversationId, "N", out _))
-        {
-            logger.LogWarning("Start requested for conversation {ConversationId} not named by a 32-digit GUID; returning 400", request.ConversationId);
-            return BadRequest(new
-            {
-                error = "The conversation id must be a GUID in its 32-digit format (no hyphens or braces).",
-                conversationId = request.ConversationId
-            });
-        }
 
         // Morgana refuses to host a conversation for a channel that does not announce
         // its identity, its capability budget AND a delivery mode that matches a concrete
@@ -131,10 +108,8 @@ public class MorganaController : ControllerBase
         }
 
         // Start opens and never reopens: accepting a known id would rewrite its handshake, handing its
-        // replies to whoever named it. A genuine channel mints a fresh id per attempt and never meets this.
-        // Sealed before the handshake is settled, so no conversation is ever on record without its seal.
-        string issuer = HttpContext.Items[ChannelAuthenticationFilter.IssuerItemKey] as string ?? string.Empty;
-        if (await conversationSealService.SealAsync(request.ConversationId, issuer) is not { } seal)
+        // replies to whoever named it. A genuine channel mints a fresh id per attempt and never meets this
+        if (conversationPersistenceService.ConversationExists(request.ConversationId))
         {
             logger.LogWarning("Start requested for conversation {ConversationId} already on record; returning 409", request.ConversationId);
             return Conflict(new
@@ -155,11 +130,9 @@ public class MorganaController : ControllerBase
 
         logger.LogInformation("Conversation creation queued: {RequestConversationId}", request.ConversationId);
 
-        // The one time the seal leaves Morgana: only its hash is kept
         return Accepted(new StartConversationResponse(
             ConversationId: request.ConversationId,
-            Message: "Conversation creation started",
-            Seal: seal));
+            Message: "Conversation creation started"));
     }
 
     /// <summary>
@@ -168,13 +141,9 @@ public class MorganaController : ControllerBase
     /// <param name="conversationId">Unique identifier of the conversation to end</param>
     /// <returns>
     /// 200 OK on successful termination.
-    /// 404 Not Found if the conversation was never started or the call does not carry its seal.
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpPost("conversation/{conversationId}/end")]
-    // Only a conversation on record has actors to stop: an unknown id would have them created just to end them
-    [TypeFilter<KnownConversationFilter>(Order = 1)]
-    [TypeFilter<ConversationSealFilter>(Order = 2)]
     public async Task<IActionResult> EndConversationAsync([FromRoute] string conversationId)
     {
         logger.LogInformation("Ending conversation {ConversationId}", conversationId);
@@ -191,20 +160,17 @@ public class MorganaController : ControllerBase
 
     /// <summary>
     /// Resumes an existing conversation for a client coming back to it: reports what it needs to
-    /// redraw its state. The conversation's actors come back with its next message. The one write hands
-    /// the conversation back to Morgana when the agent it was left with is no longer installed, instead of
-    /// to an agent nobody can bring up.
+    /// redraw its state. Read-only: the conversation's actors come back with its next message.
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation to resume</param>
     /// <returns>
     /// 202 Accepted with conversation details and the active agent on record.
-    /// 404 Not Found if the conversation was never started or the call does not carry its seal.
+    /// 404 Not Found if the conversation was never started.
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpPost("conversation/{conversationId}/resume")]
     // An unknown id (stale client storage, wiped deployment) is a 404: Cauldron falls back to starting anew
     [TypeFilter<KnownConversationFilter>(Order = 1)]
-    [TypeFilter<ConversationSealFilter>(Order = 2)]
     public async Task<IActionResult> ResumeConversationAsync([FromRoute] string conversationId)
     {
         logger.LogInformation("Resuming conversation {ConversationId}", conversationId);
@@ -214,16 +180,6 @@ public class MorganaController : ControllerBase
         // only to be reported to the client.
         string? lastActiveAgent = await conversationPersistenceService
             .GetMostRecentActiveAgentAsync(conversationId);
-
-        // An agent removed since the conversation last spoke would be named in the channel's header and
-        // offered its commands, then never answer: its turn is closed and the conversation is Morgana's again
-        if (lastActiveAgent is not null && agentRegistryService.ResolveAgentFromIntent(lastActiveAgent) is null)
-        {
-            logger.LogWarning(
-                "Conversation {ConversationId} was left with agent '{AgentName}', which is no longer served: handing it back to Morgana", conversationId, lastActiveAgent);
-            await conversationPersistenceService.CloseAgentTurnAsync(conversationId, lastActiveAgent);
-            lastActiveAgent = null;
-        }
 
         logger.LogInformation(
             "Conversation resumed: {ConversationId} with active agent: {LastActiveAgent}", conversationId, lastActiveAgent);
@@ -254,12 +210,10 @@ public class MorganaController : ControllerBase
     /// <param name="conversationId">Unique identifier of the conversation</param>
     /// <returns>
     /// 200 OK with a ConversationHistoryResponse wrapping the MorganaChatMessage array on success.
-    /// 404 Not Found if conversation doesn't exist or the call does not carry its seal.
+    /// 404 Not Found if conversation doesn't exist.
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpGet("conversation/{conversationId}/history")]
-    [TypeFilter<KnownConversationFilter>(Order = 1)]
-    [TypeFilter<ConversationSealFilter>(Order = 2)]
     public async Task<IActionResult> GetConversationHistoryAsync([FromRoute] string conversationId)
     {
         logger.LogInformation("Retrieving conversation history for {ConversationId}", conversationId);
@@ -278,84 +232,8 @@ public class MorganaController : ControllerBase
         // The gauge travels with the transcript: a client catching up on replies it missed
         // redraws it as the pushes it missed would have
         return Ok(new ConversationHistoryResponse(
-            await AsTheChannelShowsAsync(conversationId, [.. chatMessages.Select(WithoutOffersNoLongerServed)]),
+            chatMessages,
             await dustLimitService.GetRemainingLevelAsync(conversationId)));
-    }
-
-    /// <summary>Degrades every answer the conversation's channel cannot show as written, never reaching a model.</summary>
-    private async Task<MorganaChatMessage[]> AsTheChannelShowsAsync(string conversationId, MorganaChatMessage[] chatMessages)
-    {
-        // What the conversation's channel declared it can show at its handshake: every answer is measured against it
-        ChannelCapabilities channelCapabilities = (await channelMetadataStore.GetChannelMetadataAsync(conversationId)).Capabilities;
-
-        // Read at the first answer that does not fit, so a channel showing everything as written never opens it
-        IReadOnlyDictionary<(string AgentDisplayName, DateTime MessageTimestamp), string>? degradedMessages = null;
-
-        // One line for each line of the record and in its order: only how a line reads may change, never which lines there are
-        MorganaChatMessage[] shownMessages = new MorganaChatMessage[chatMessages.Length];
-        for (int index = 0; index < chatMessages.Length; index++)
-        {
-            MorganaChatMessage chatMessage = chatMessages[index];
-
-            // The answer as its author wrote it, card and buttons included: exactly what its delivery handed the adapter
-            ChannelMessage asWritten = new ChannelMessage
-            {
-                ConversationId = conversationId,
-                Text = chatMessage.Text,
-                Timestamp = chatMessage.Timestamp,
-                QuickReplies = chatMessage.QuickReplies,
-                RichCard = chatMessage.RichCard
-            };
-
-            // What the user typed is shown back as typed, as it was on the screen that sent it. An answer the
-            // channel shows as written was delivered as written too
-            if (chatMessage.Type == ChatMessageType.User || MorganaChannelAdapter.FitsWithin(asWritten, channelCapabilities))
-            {
-                shownMessages[index] = chatMessage;
-                continue;
-            }
-
-            // The record keeps each answer as its author wrote it, which this channel never showed: the words its
-            // delivery degraded it to were kept under its speaker and the instant it is dated with, as its push carried both.
-            // Given back as they were, a return costs no dust and reads the same. One delivered before its words
-            // could be kept is degraded by rule instead, as is one whose keeping failed
-            degradedMessages ??= await conversationPersistenceService.LoadDegradedMessagesAsync(conversationId);
-            string shownText = degradedMessages.TryGetValue((chatMessage.AgentName, chatMessage.Timestamp), out string? deliveredText)
-                ? deliveredText
-                : MorganaChannelAdapter.DegradeWithoutModel(asWritten, channelCapabilities).Text;
-
-            // The degraded words stand in for the author's. A card or buttons stay only where the channel draws
-            // them: elsewhere the degraded words already read them out
-            shownMessages[index] = chatMessage with
-            {
-                Text = shownText,
-                QuickReplies = channelCapabilities.SupportsQuickReplies ? chatMessage.QuickReplies : null,
-                RichCard = channelCapabilities.SupportsRichCards ? chatMessage.RichCard : null
-            };
-        }
-
-        return shownMessages;
-    }
-
-    /// <summary>
-    /// Takes out of a message of Morgana's the quick replies leading to an agent no longer installed. Every
-    /// choice Morgana offers, her welcome and her disambiguation alike, is named after the intent it leads
-    /// to, so a conversation left on one of them since an agent was removed would offer a door to nobody.
-    /// </summary>
-    private MorganaChatMessage WithoutOffersNoLongerServed(MorganaChatMessage message)
-    {
-        // Only Morgana's choices lead to an intent: an agent's buttons are answers within its own competence
-        if (message.QuickReplies is not { Count: > 0 } offers
-            || !string.Equals(message.AgentName, Constants.Morgana, StringComparison.Ordinal))
-            return message;
-
-        // A choice survives only while an installed agent still answers the intent it is named after
-        List<QuickReply> servedOffers = [.. offers.Where(offer => agentRegistryService.ResolveAgentFromIntent(offer.Id) is not null)];
-
-        // Every choice still served leaves the message untouched; one left with none offers no buttons at all
-        return servedOffers.Count == offers.Count
-            ? message
-            : message with { QuickReplies = servedOffers.Count > 0 ? servedOffers : null };
     }
 
     /// <summary>
@@ -367,14 +245,13 @@ public class MorganaController : ControllerBase
     /// <param name="request">Request carrying the message text and its optional metadata</param>
     /// <returns>
     /// 202 Accepted immediately after message is queued.
-    /// 404 Not Found if the conversation was never started or the call does not carry its seal.
+    /// 404 Not Found if the conversation was never started.
     /// 500 Internal Server Error on failure to queue message.
     /// </returns>
     [HttpPost("conversation/{conversationId}/message")]
     // A message only continues a conversation that was started: it opens none
     [TypeFilter<KnownConversationFilter>(Order = 1)]
-    [TypeFilter<ConversationSealFilter>(Order = 2)]
-    [TypeFilter<ConversationLimitsFilter>(Order = 3)]
+    [TypeFilter<ConversationLimitsFilter>(Order = 2)]
     public async Task<IActionResult> SendMessageAsync([FromRoute] string conversationId, [FromBody] SendMessageRequest request)
     {
         logger.LogInformation("Sending message to conversation {ConversationId}", conversationId);
@@ -387,8 +264,6 @@ public class MorganaController : ControllerBase
         IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
             Constants.Actors.Manager, conversationId);
 
-        // The phrase enters the turn pipeline through the conversation's manager. Its answer reaches the user
-        // over the channel, never in this response, which only acknowledges that the turn is under way
         manager.Tell(new Records.UserMessage(
             conversationId,
             request.Text,

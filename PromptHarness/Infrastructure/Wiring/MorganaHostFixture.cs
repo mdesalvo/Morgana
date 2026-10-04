@@ -33,7 +33,7 @@ namespace PromptHarness.Infrastructure.Wiring;
 /// <para><strong>What the harness overrides</strong> on top of that inherited configuration:
 /// a throwaway SQLite storage path, telemetry exporters off (the in-process listener needs none),
 /// rate and dust limiting off (they would throttle a repeated-run suite), the guard rail per
-/// <c>Harness:EnableUserGuardrail</c> and a freshly-minted symmetric key for the <c>harness</c> issuer — so
+/// <c>Harness:EnableGuardrail</c> and a freshly-minted symmetric key for the <c>harness</c> issuer — so
 /// the channel's credentials live for the duration of one run and never touch disk.</para>
 /// </remarks>
 public sealed class MorganaHostFixture : IAsyncLifetime
@@ -136,9 +136,6 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <summary>The one secret the two installations of a federation run share.</summary>
     public string FederationKey { get; private set; } = string.Empty;
 
-    /// <summary>The weather service and the partner nursery of a tool-guard run, or <c>null</c> when the run stands none up.</summary>
-    public PoisonedSourceHost? PoisonedSources { get; private set; }
-
     /// <summary>Port the other installation binds, reserved beside this instance's own.</summary>
     private int federatedPeerPort;
 
@@ -220,11 +217,6 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         if (Options.FederatedPeer)
             Peer = await FederatedPeerHost.StartAsync(federatedPeerPort, BuildFederatedPeerEnvironment(), Options.StartupTimeoutSeconds);
 
-        // Step 4c: on a tool-guard run, the poisoned sources go up before the instance that reads them,
-        // so its first agent finds its weather service and its colleague answering.
-        if (Options.EnableToolGuardrail)
-            PoisonedSources = await PoisonedSourceHost.StartAsync();
-
         // The tee must be in place before the host constructs its logging stack, because the
         // console logger latches Console.Out once, when its provider is created.
         Output = HostOutputCapture.Install(Options.EchoHostOutput);
@@ -269,9 +261,6 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // be stopped from here. It has to be, along with the conversations it was asked to open.
         if (Peer is not null)
             await Peer.DisposeAsync();
-
-        if (PoisonedSources is not null)
-            await PoisonedSources.DisposeAsync();
 
         // The host runs on a background thread and stops with the test process; there is no
         // lifetime handle to signal from here. Only the throwaway databases are ours to clean up.
@@ -350,15 +339,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // default: naming it here is what lets a run that swaps the domain leave it out, since an
         // installation reads the first agents.json it finds and holds exactly one domain.
         Environment.SetEnvironmentVariable("Morgana__Plugins__Directories__0", "domain-plugins");
-        Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableUserGuardrail", Options.EnableUserGuardrail ? "true" : "false");
-
-        // Off unless the run is the tool-guard one: every other group would otherwise pay an inspection
-        // for each result of the example domain's MCP agent.
-        Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableToolGuardrail", Options.EnableToolGuardrail ? "true" : "false");
-
-        // Off unless the run is the peer-guard one: the groups asking as a partner measure the agent's
-        // own answer, which a guard in front of it would stand in for.
-        Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnablePeerGuardrail", Options.EnablePeerGuardrail ? "true" : "false");
+        Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableGuardrail", Options.EnableGuardrail ? "true" : "false");
 
         // Unset by default: only RateLimitTests sets it, in its own filtered dotnet test invocation, so no
         // other group's conversation is ever refused for calling too often
@@ -401,10 +382,6 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         int exporterIndex = 0;
         foreach (IConfigurationSection _ in Configuration.GetSection("Morgana:OpenTelemetry:Exporters").GetChildren())
             Environment.SetEnvironmentVariable($"Morgana__OpenTelemetry__Exporters__{exporterIndex++}__Enabled", "false");
-
-        // With no exporter the spans never leave this process, so they may carry what the model
-        // emitted on each call: the one record of a turn's backstage a failure report can show.
-        Environment.SetEnvironmentVariable("Morgana__OpenTelemetry__EnableSensitiveData", "true");
 
         // The harness channel is declared here and nowhere else, appended past the last issuer the
         // host's own appsettings holds: an instrument's identity is not something a deployed
@@ -460,11 +437,6 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // there. Off, none of this is written and the instance is the one every other group drives.
         if (Options.FederatedPeer)
             ApplyFederationEnvironment();
-
-        // On a tool-guard run the domain is the poisoned one and the partner nursery it consults is
-        // declared. Off, none of this is written.
-        if (Options.EnableToolGuardrail)
-            ApplyPoisonedDomainEnvironment();
 
 
         // Framework categories at Information, everything else quiet: the tool log lines the turn
@@ -670,33 +642,6 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
         // Past the entry just written, so a doomed-boot case still lands on a slot nobody declared.
         FreePartnerIndex = FederatedPartnerIndex + 1;
-    }
-
-    /// <summary>
-    /// Tells the instance under test that its one domain is the poisoned almanac and where the partner
-    /// nursery it consults answers.
-    /// </summary>
-    private void ApplyPoisonedDomainEnvironment()
-    {
-        // Replaced and not added to, for the reason the federation run gives: one installation, one domain.
-        Environment.SetEnvironmentVariable("Morgana__Plugins__Directories__0", "poisoned-plugins");
-
-        // The partner the plugin's own attribute names, reached bare since its card demands nothing. The
-        // key and the issuer are there because a declared partner must carry them, not to be checked.
-        int poisonedPartnerIndex = FreePartnerIndex;
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{poisonedPartnerIndex}__Name", PoisonedSourceHost.PartnerName);
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{poisonedPartnerIndex}__Url", PoisonedSourceHost.Address);
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{poisonedPartnerIndex}__SymmetricKey", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{poisonedPartnerIndex}__Enabled", "true");
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{poisonedPartnerIndex}__OutboundPolicy__Enabled", "true");
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{poisonedPartnerIndex}__OutboundPolicy__Issuer", FederatedCallerName);
-
-        // Admitted to an agent this domain does not publish, which startup refuses: parked, as on the
-        // federation run.
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__Enabled", "false");
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__Enabled", "false");
-
-        FreePartnerIndex = poisonedPartnerIndex + 1;
     }
 
     /// <summary>

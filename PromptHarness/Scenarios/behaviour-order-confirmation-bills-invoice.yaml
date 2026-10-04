@@ -2,13 +2,12 @@ id: behaviour-order-confirmation-bills-invoice
 description: >-
   Confirming an order is dispositive twice over: it decrements stock AND bills the customer through
   the shared backoffice path (GreenhouseDatabaseHelper.BillCustomerAsync), atomically with the
-  confirmation itself. Guards that InventoryAgent actually tells the customer the order is confirmed
-  and billed, rather than treating ConfirmOrder as a stock-only event. The order is a two-line cart (2 x ORC-200, 1 x LAV-300), so the confirmation commits and
-  bills several lines at once; the seed holds 15 orchids and 30 lavender bundles, enough for five
-  replays within one harness session. A single CreatePurchaseOrder is asserted: two plants named in
-  one breath are one cart, never one order per plant. The seal word CANNOT be scripted as the random
-  value a real conversation would receive — the harness DSL has no way to capture a value the model
-  invents in one turn and replay it in a later turn's fixed text — so InventoryTool.GenerateSealWord() is pinned for the run to
+  confirmation itself. Guards that InventoryAgent actually tells the customer this happened and
+  points them back to Morgana for the invoice, rather than treating ConfirmOrder as a stock-only
+  event. Uses SEED-400 (500 units seeded) so five replays never run the SKU out of stock within one
+  harness session. The seal word CANNOT be scripted as the random value a real conversation would
+  receive — the harness DSL has no way to capture a value the model invents in one turn and replay
+  it in a later turn's fixed text — so InventoryTool.GenerateSealWord() is pinned for the run to
   Harness:DeterministicSealWord (appsettings.Harness.json, default "534LW03D"); see both members'
   own remarks. Depends on that default staying "534LW03D" — if it is ever overridden, this
   scenario's say: text needs the same literal.
@@ -19,12 +18,22 @@ description: >-
   the agent asking "Shall I proceed?" every single run rather than treating the front-loaded seal
   word as sufficient. That is correct behaviour, not a bug — the scenario is written to match it.
 
+  The invoice judgeNot was reworded after a live run: 'a specific invoice total, amount or line item'
+  fired on the remaining stock and the invoiceId that this agent's own Formatting REQUIRES on the
+  Confirmed card, so the judge and the prose were asking for opposite things. What the rule protects
+  is that the greenhouse never reads the invoice out — its money, not its existence. That rule now
+  covers more ground than when it was written and deliberately so: the judge reads the card's
+  rendered content along with the text, so an agent that keeps its prose clean and puts the invoice's
+  total on a card no longer slips past. The wording holds unchanged under the wider view — the
+  Confirmed card this Formatting prescribes carries orderId, remaining stock and invoiceId. None
+  of those is a total, a tax or a charge line.
+
 turns:
-  - say: "Hi, I'd like to order 2 moon orchids together with a lavender bundle, my customer code is T780C"
+  - say: "Hi, I'd like to order 1 pack of the wildflower seed mix, my customer code is T780C"
     expect:
       agent: InventoryAgent
       agentCompleted: false
-      toolsCalledOnce: [CreatePurchaseOrder]
+      toolsCalled: [CreatePurchaseOrder]
       toolsNotCalled: [ConfirmOrder]
       textNotEmpty: true
       # Structural, not judged: the seal word is customarily delivered inside the order's own rich
@@ -46,15 +55,22 @@ turns:
       toolsNotCalled: [ConfirmOrder]
       textNotEmpty: true
     judge:
-      - "The response asks the customer for a final go-ahead before the order becomes binding."
+      - "The response says that confirming is binding: the stock will be committed, or the order cannot easily be undone afterwards."
+      - "The response asks the customer for a final go-ahead."
     judgeNot:
-      - "Read in full, the response tells the customer this order has already been confirmed or billed."
+      - "The response claims the order is already confirmed or billed."
 
   - say: "Yes, proceed"
     expect:
       agent: InventoryAgent
       toolsCalled: [ConfirmOrder]
       textNotEmpty: true
-      textNotContains: ["invoiceId", "InvoiceLines"]
+      textNotContains: ["#INT#", "invoiceId", "InvoiceLines"]
     judge:
-      - "The response says the order is confirmed and billed to the customer."
+      - "The response confirms the order is now settled or binding."
+      - "The response says the purchase has been billed to the customer."
+      - "The response tells the customer that invoice can be seen if they wish."
+    judgeNot:
+      # Judged against everything the customer sees, card included. Naming the invoice is allowed and
+      # required; reading its money out is what this forbids, wherever it would be rendered.
+      - "The response gives the invoice's own total, its tax, or a line on it."

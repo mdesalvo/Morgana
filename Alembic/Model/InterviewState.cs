@@ -36,7 +36,7 @@ public enum InterviewStep
     AgentToolkit,
 
     /// <summary>
-    /// What this agent is characteristically the one to be asked about: its territory and nothing
+    /// What this agent is characteristically the one to be asked about: its ConsultMeFor and nothing
     /// else. After the toolkit, because a territory an agent's own tools do not cover is a promise
     /// another agent would hold it to.
     /// </summary>
@@ -350,7 +350,7 @@ public sealed class InterviewState
         ["intentLabel"] = Intent.Label,
         ["intentDefaultValue"] = Intent.DefaultValue,
         ["agentTarget"] = Agent.Target,
-        ["agentTerritory"] = Agent.Territory,
+        ["agentConsultMeFor"] = Agent.ConsultMeFor,
         ["agentPersonality"] = Agent.Personality,
         ["agentInstructions"] = Agent.Instructions,
         ["agentFormatting"] = Agent.Formatting,
@@ -454,7 +454,7 @@ public sealed class InterviewState
     /// mute to everyone else, where nothing inside the domain can notice the silence.
     /// </remarks>
     private List<string> MissingTerritory() =>
-        string.IsNullOrWhiteSpace(Agent.Territory) ? ["agentTerritory"] : [];
+        string.IsNullOrWhiteSpace(Agent.ConsultMeFor) ? ["agentConsultMeFor"] : [];
 
     /// <summary>
     /// How the agent sounds.

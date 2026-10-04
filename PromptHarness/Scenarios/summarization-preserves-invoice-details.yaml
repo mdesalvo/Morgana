@@ -32,4 +32,4 @@ turns:
     judge:
       - "The response states the invoice amount as 130 (in any currency formatting, e.g. €130, 130.00, 130 euro)."
     judgeNot:
-      - "The response says it no longer has this information or asks the user to repeat the amount."
+      - "The response says it no longer has this information, asks the user to repeat the amount, or offers to look it up again instead of just answering."

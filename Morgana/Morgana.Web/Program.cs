@@ -69,9 +69,7 @@ builder.Services.AddSingleton<AdaptingChannelService>(sp =>
     new AdaptingChannelService(
         sp.GetRequiredService<IChannelServiceFactory>(),
         sp.GetRequiredService<IChannelMetadataStore>(),
-        sp.GetRequiredService<MorganaChannelAdapter>(),
-        sp.GetRequiredService<IConversationPersistenceService>(),
-        sp.GetRequiredService<ILogger<AdaptingChannelService>>()));
+        sp.GetRequiredService<MorganaChannelAdapter>()));
 builder.Services.AddSingleton<IChannelService>(sp => sp.GetRequiredService<AdaptingChannelService>());
 
 // ==============================================================================
@@ -142,7 +140,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IAgentRegistryService: Maps intents to agent types for routing
 // - IAgentDirectoryService: Describes agents to one another as A2A cards, for peer consultation
 // - IHostAddressService: Reports where this instance is reached — what Kestrel bound, or the public address a proxied deployment declares
-// - IGuardRailService: Checks user messages for content safety and tool results for injected instructions
+// - IGuardRailService: Checks user messages for content safety and compliance
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
 // - ICommandRegistryService: Publishes the commands channels may run on a conversation (every ICommand registered here)
@@ -241,10 +239,6 @@ builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
 builder.Services.Configure<Records.DustLimitingOptions>(
     builder.Configuration.GetSection("Morgana:DustLimiting"));
 builder.Services.AddSingleton<IDustLimitService, SQLiteDustLimitService>();
-
-// The seal Morgana hands a channel at start: without it a conversation id opens nothing. It shares the
-// per-conversation SQLite database and fails closed, unlike the two limiters above.
-builder.Services.AddSingleton<IConversationSealService, SQLiteConversationSealService>();
 
 // ==============================================================================
 // SECTION 7.4: Authentication

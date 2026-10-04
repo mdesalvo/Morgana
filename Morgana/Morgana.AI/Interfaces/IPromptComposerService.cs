@@ -43,7 +43,7 @@ public interface IPromptComposerService
 
     /// <summary>
     /// Produces the description under which a colleague is offered as a callable function: the
-    /// colleague's own statement of what falls to it (its <c>Territory</c>, carried on the card as
+    /// colleague's own statement of what falls to it (its <c>ConsultMeFor</c>, carried on the card as
     /// its description), with nothing of the framework's added to it.
     /// </summary>
     /// <returns>The description to expose on the generated <c>AIFunction</c>.</returns>
@@ -72,13 +72,6 @@ public interface IPromptComposerService
     /// <param name="question">What the colleague asked, in its own words.</param>
     /// <returns>The composed turn, falling back to the bare question where no template is declared.</returns>
     Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question);
-
-    /// <summary>
-    /// Produces what the agent reads in place of a tool result the guard put in quarantine: the fact,
-    /// then how to carry the turn on without it.
-    /// </summary>
-    /// <param name="toolName">Function whose result was quarantined, as the agent's tool list names it.</param>
-    Task<string> ComposeQuarantinedResultAsync(string toolName);
 
     /// <summary>
     /// Produces the per-turn declaration handing the session's currently-held context variables

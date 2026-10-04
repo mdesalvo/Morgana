@@ -1,18 +1,17 @@
 id: consulting-colleague-cannot-answer
 description: >-
   The consultation that comes back empty, which is the case the mechanism can actually deadlock on.
-  The customer asks Billing who at the greenhouse handled the order behind the aloe line on INV-0247.
-  It is not on the accounts desk's books, but it is plainly a question about an order and Inventory's
-  territory, declared to Billing on every turn, claims any question about an order. So the desk
-  must ask rather than guess, yet the greenhouse cannot answer either: an order records its item,
-  quantity, status and when it was created, confirmed or cancelled, never who handled it, so no tool
-  of Inventory's can produce the answer and no proxy value is close enough to pass for it.
+  The customer asks Billing which courier shipped the aloe line on INV-0247. It is not on the
+  accounts desk's books, so the desk asks the greenhouse — and it is not on the greenhouse's either:
+  Inventory keeps a catalog, stock and an order lifecycle (created/confirmed/cancelled) and carries
+  no shipping information of any kind, so no tool of its own can produce the answer and no proxy
+  value is close enough to pass for it.
   What the turn measures is the way out. Structurally: the colleague is asked exactly ONCE — the
   invocation list keeps repetitions on purpose, so a second consult_inventory in the same turn is an
   agent that went round again on an answer it did not like, which is the loop this scenario exists
   to catch — and the turn still delivers text, so the impasse resolves inside the turn rather than
   burning the AgentToAgent:MaxRoundsPerTurn safety net or leaving the customer with nothing.
-  By judgement: exactly one proposition, that the answer, read in full, says who handled the order is not recorded or cannot be told. Deliberately
+  By judgement: exactly one proposition, that the desk says plainly it cannot tell them. Deliberately
   nothing about what it must avoid saying — that a colleague was asked, that another desk exists —
   because a judge handed a prohibition on this turn, where the agent genuinely has bad news to
   deliver and has to explain itself, is being invited to convict.
@@ -29,7 +28,7 @@ turns:
       contextWrites: [customerCode]
       textNotEmpty: true
 
-  - say: "That aloe line on it — who at the greenhouse handled that order?"
+  - say: "That aloe line on it — which courier shipped it?"
     expect:
       agent: BillingAgent
       # Once and no more: this is the whole anti-loop assertion and it holds whether the colleague
@@ -39,4 +38,4 @@ turns:
       # satisfy every other assertion here and still be the failure the scenario is about.
       textNotEmpty: true
     judge:
-      - "Read in full, the response tells the customer that who handled that order is not recorded or cannot be told."
+      - "The response says it cannot tell the customer which courier shipped that line."

@@ -336,24 +336,6 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
     }
 
     /// <inheritdoc/>
-    public async Task CloseAgentTurnAsync(string conversationId, string agentName)
-    {
-        if (!File.Exists(GetDatabasePath(conversationId)))
-            return;
-
-        await using SqliteConnection sqliteConnection = new SqliteConnection(GetConnectionString(conversationId));
-        await sqliteConnection.OpenAsync();
-
-        // last_update stays as it was: the turn is closed, nobody spoke in it
-        await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
-        sqliteCommand.CommandText = "UPDATE morgana SET is_active = 0 WHERE agent_name = @agent_name;";
-        sqliteCommand.Parameters.AddWithValue("@agent_name", agentName);
-        int closedRows = await sqliteCommand.ExecuteNonQueryAsync();
-
-        logger.LogInformation("Closed the turn of '{AgentName}' in conversation {ConversationId} ({ClosedRows} row)", agentName, conversationId, closedRows);
-    }
-
-    /// <inheritdoc/>
     public async Task<MorganaChatMessage[]> GetConversationHistoryAsync(
         string conversationId,
         JsonSerializerOptions? jsonSerializerOptions = null)
@@ -424,16 +406,10 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
     /// <inheritdoc/>
     public async Task AppendOrchestratorMessagesAsync(
         string conversationId,
-        IReadOnlyList<ChatMessage> messages,
-        IReadOnlyList<QuickReply>? quickReplies = null)
+        IReadOnlyList<ChatMessage> messages)
     {
         if (messages.Count == 0)
             return;
-
-        // The choices travel inside the message they were offered with, in the shape an agent's own are
-        // recorded in, so the history reads both alike and never mistakes them for a line of their own
-        if (quickReplies is { Count: > 0 })
-            messages = [.. messages.SkipLast(1), WithQuickRepliesOffered(messages[^1], quickReplies)];
 
         string orchestratorIdentifier = $"{Constants.Morgana}-{conversationId}";
 
@@ -497,21 +473,6 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             logger.LogError(ex, "Failed to append orchestrator messages to conversation {ConversationId}", conversationId);
             throw;
         }
-    }
-
-    /// <summary>A copy of <paramref name="message"/> carrying the choices it offered, as the SetQuickReplies call an agent would have made.</summary>
-    private static ChatMessage WithQuickRepliesOffered(ChatMessage message, IReadOnlyList<QuickReply> quickReplies)
-    {
-        ChatMessage offering = message.Clone();
-        offering.Contents =
-        [
-            .. message.Contents,
-            new FunctionCallContent(
-                $"{Constants.Morgana}-{Guid.NewGuid():N}",
-                Constants.Tools.SetQuickReplies,
-                new Dictionary<string, object?> { ["quickReplies"] = JsonSerializer.SerializeToElement(quickReplies) })
-        ];
-        return offering;
     }
 
     /// <inheritdoc/>
@@ -753,54 +714,6 @@ WHERE id = 1;
     }
 
     /// <inheritdoc/>
-    public async Task SaveDegradedMessageAsync(string conversationId, string agentDisplayName, DateTime messageTimestamp, string degradedText)
-    {
-        // A record older than this table, still being answered on, gains it with its first degraded answer
-        await using SqliteConnection sqliteConnection = new SqliteConnection(GetConnectionString(conversationId));
-        await sqliteConnection.OpenAsync();
-        await EnsureDatabaseInitializedAsync(sqliteConnection);
-
-        // Filed under the row holding the rich message and the exact instant that row holds it under, so the
-        // two are found from one another. Encrypted like that row, since it is the same message in other words.
-        // A message delivered again keeps the words it was first shown in
-        await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
-        sqliteCommand.CommandText =
-"""
-INSERT OR IGNORE INTO degraded_message (agent_name, message_ticks, degraded_text)
-VALUES (@agent_name, @message_ticks, @degraded_text);
-""";
-        sqliteCommand.Parameters.AddWithValue("@agent_name", AgentNameOf(agentDisplayName));
-        sqliteCommand.Parameters.AddWithValue("@message_ticks", messageTimestamp.Ticks);
-        sqliteCommand.Parameters.AddWithValue("@degraded_text", Encrypt(degradedText));
-        await sqliteCommand.ExecuteNonQueryAsync();
-    }
-
-    /// <inheritdoc/>
-    public async Task<IReadOnlyDictionary<(string AgentDisplayName, DateTime MessageTimestamp), string>> LoadDegradedMessagesAsync(string conversationId)
-    {
-        // Asking about a conversation that has no record must not create its database
-        Dictionary<(string AgentDisplayName, DateTime MessageTimestamp), string> degradedTexts = [];
-        if (!File.Exists(GetDatabasePath(conversationId)))
-            return degradedTexts;
-
-        await using SqliteConnection sqliteConnection = new SqliteConnection(GetConnectionString(conversationId));
-        await sqliteConnection.OpenAsync();
-
-        // A record older than this table is brought up to it and simply holds no degraded message
-        await EnsureDatabaseInitializedAsync(sqliteConnection);
-
-        await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
-        sqliteCommand.CommandText = "SELECT agent_name, message_ticks, degraded_text FROM degraded_message;";
-        await using SqliteDataReader reader = await sqliteCommand.ExecuteReaderAsync();
-
-        // Keyed by the name and the instant a history line carries, so each line finds its delivered words by its own
-        while (await reader.ReadAsync())
-            degradedTexts[(DisplayNameOf(reader.GetString(0)), new DateTime(reader.GetInt64(1), DateTimeKind.Utc))] = Decrypt(reader.GetFieldValue<byte[]>(2));
-
-        return degradedTexts;
-    }
-
-    /// <inheritdoc/>
     public async Task UpsertSharedVariableAsync(string conversationId, string variableName, object variableValue, string sourceAgentIntent)
     {
         try
@@ -979,12 +892,13 @@ VALUES (@agent_name, @message_ticks, @degraded_text);
         checkCommand.CommandText = "PRAGMA user_version;";
         long currentVersion = (long)(await checkCommand.ExecuteScalarAsync() ?? 0L);
 
-        if (currentVersion >= 7)
+        if (currentVersion >= 6)
             return; // Already initialized
 
         // Create schema. CREATE TABLE IF NOT EXISTS makes this safe to run on databases that
         // are already at an earlier version — existing tables are left intact and only the
-        // tables introduced by later versions.
+        // tables introduced by later versions (shared_context in v4; dust_budget +
+        // dust_usage_log in v5) are created.
         await using SqliteCommand schemaCommand = connection.CreateCommand();
         schemaCommand.CommandText =
 """
@@ -1036,20 +950,6 @@ CREATE TABLE IF NOT EXISTS dust_usage_log (
     llm_role      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
-
-CREATE TABLE IF NOT EXISTS conversation_seal (
-    id        INTEGER PRIMARY KEY CHECK (id = 1),
-    seal_hash BLOB NOT NULL,
-    issuer    TEXT NOT NULL,
-    sealed_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS degraded_message (
-    agent_name     TEXT    NOT NULL,
-    message_ticks  INTEGER NOT NULL,
-    degraded_text  BLOB    NOT NULL,
-    PRIMARY KEY (agent_name, message_ticks)
-);
 """;
         await schemaCommand.ExecuteNonQueryAsync();
 
@@ -1069,13 +969,13 @@ CREATE TABLE IF NOT EXISTS degraded_message (
             }
         }
 
-        // Mark database as initialized
+        // Mark database as initialized (version 6)
         await using SqliteCommand versionCommand = connection.CreateCommand();
-        versionCommand.CommandText = "PRAGMA user_version = 7;";
+        versionCommand.CommandText = "PRAGMA user_version = 6;";
         await versionCommand.ExecuteNonQueryAsync();
 
         logger.LogInformation(
-            "Initialized database schema v7 for: {GetFileName}", Path.GetFileName(connection.DataSource));
+            "Initialized database schema v6 for: {GetFileName}", Path.GetFileName(connection.DataSource));
     }
 
     /// <summary>
@@ -1349,11 +1249,8 @@ CREATE TABLE IF NOT EXISTS degraded_message (
             // Decide whether this assistant message is the user-facing one for its turn. The
             // marker is set by MorganaAgent at end-of-turn on the last assistant message that
             // actually carries text — see MorganaAgent.ExecuteAgentAsync.
-            // Morgana has no tool loop and no scratchpad: every line on her row is one the user was sent,
-            // choices included when she offered some
             bool isUserFacing = chatMessage.Role == ChatRole.Assistant
-                             && (chatMessage.AdditionalProperties?.ContainsKey(Constants.MessageProperties.UserFacing) == true
-                                 || string.Equals(agentName, Constants.Morgana, StringComparison.Ordinal));
+                             && chatMessage.AdditionalProperties?.ContainsKey(Constants.MessageProperties.UserFacing) == true;
 
             // Tool-call messages are normally skipped — their widgets attach to a later,
             // text-bearing assistant message. Exception: the user-facing message itself, when a
@@ -1392,16 +1289,10 @@ CREATE TABLE IF NOT EXISTS degraded_message (
         // Mark the last emitted message (the one actually rendered in the UI) as the last
         // history message, so trailing quick replies/rich cards on it stay interactive after
         // a resume/refresh instead of being frozen because the raw session tail was empty.
-        // An agent whose turn is closed is waiting on no answer, so what it offered stays frozen.
-        // Morgana speaks from a row that is never active; her offers are always live.
         if (historyMessages.Count > 0)
         {
             int lastIndex = historyMessages.Count - 1;
-            MorganaChatMessage lastMessage = historyMessages[lastIndex];
-            bool offersStillPending = lastMessage.Type == ChatMessageType.User
-                || !lastMessage.AgentCompleted
-                || string.Equals(lastMessage.AgentName, Constants.Morgana, StringComparison.Ordinal);
-            historyMessages[lastIndex] = lastMessage with { IsLastHistoryMessage = offersStillPending };
+            historyMessages[lastIndex] = historyMessages[lastIndex] with { IsLastHistoryMessage = true };
         }
 
         logger.LogInformation(
@@ -1558,7 +1449,11 @@ CREATE TABLE IF NOT EXISTS degraded_message (
 
         // The name a channel prints beside the bubble. The pipeline speaking in its own voice is plain
         // "Morgana"; an agent is named beside it, so a user sees one assistant with several competences.
-        string displayAgentName = chatMessage.Role == ChatRole.User ? "User" : DisplayNameOf(agentName);
+        string displayAgentName = chatMessage.Role == ChatRole.User
+            ? "User"
+            : string.IsNullOrEmpty(agentName) || agentName.Equals(Constants.Morgana, StringComparison.OrdinalIgnoreCase)
+                ? Constants.Morgana
+                : $"Morgana ({char.ToUpperInvariant(agentName[0])}{agentName[1..]})";
 
         // The wire shape a channel renders. Nothing downstream reads the original message again, so
         // everything a transcript needs has been decided by this line.
@@ -1574,25 +1469,6 @@ CREATE TABLE IF NOT EXISTS degraded_message (
             IsLastHistoryMessage = isLastHistoryMessage,
             RichCard = richCard
         };
-    }
-
-    /// <summary>The name a channel prints beside a message of the row <paramref name="agentName"/>: "Morgana", or "Morgana (Billing)" for an agent.</summary>
-    private static string DisplayNameOf(string agentName) =>
-        string.IsNullOrEmpty(agentName) || agentName.Equals(Constants.Morgana, StringComparison.OrdinalIgnoreCase)
-            ? Constants.Morgana
-            : $"Morgana ({char.ToUpperInvariant(agentName[0])}{agentName[1..]})";
-
-    /// <summary>The row a message printed under <paramref name="displayName"/> belongs to: the exact inverse of <see cref="DisplayNameOf"/>.</summary>
-    private static string AgentNameOf(string displayName)
-    {
-        // Only an agent's name is qualified: whatever Morgana says herself is on her own row
-        const string agentNamePrefix = "Morgana (";
-        if (!displayName.StartsWith(agentNamePrefix, StringComparison.Ordinal) || !displayName.EndsWith(')'))
-            return Constants.Morgana;
-
-        // The intent between the brackets, with the one letter the display raised lowered back
-        string intent = displayName[agentNamePrefix.Length..^1];
-        return intent.Length == 0 ? Constants.Morgana : char.ToLowerInvariant(intent[0]) + intent[1..];
     }
 
     #endregion

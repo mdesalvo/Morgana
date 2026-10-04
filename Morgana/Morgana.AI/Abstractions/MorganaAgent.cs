@@ -385,9 +385,9 @@ public class MorganaAgent : MorganaActor
             string llmResponseText = fullResponse.ToString().Trim();
 
             #region LLM tools
-            // TurnEnding
-            bool wantsEnding = GetTurnEndingFromContext(aiAgentSession);
-            aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnEnding);
+            // TurnContinuation
+            bool wantsContinuation = GetTurnContinuationFromContext(aiAgentSession);
+            aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnContinuation);
 
             // QuickReplies
             List<QuickReply>? quickReplies = GetQuickRepliesFromContext(aiAgentSession);
@@ -408,13 +408,12 @@ public class MorganaAgent : MorganaActor
             }
             #endregion
 
-            // The agent stays in service unless it hands the conversation back. A turn offering buttons
-            // or a card awaits the answer to them whatever it declared.
-            bool isCompleted = wantsEnding && !hasQuickReplies && !hasRichCard;
+            // Determine turn continuation strategy, depending on LLM output
+            bool isCompleted = !wantsContinuation && !hasQuickReplies && !hasRichCard;
 
             agentLogger.LogInformation(
                 "Agent response analysis:" +
-                $"WantsEnding={wantsEnding}," +
+                $"WantsContinuation={wantsContinuation}," +
                 $"HasQuickReplies={hasQuickReplies}," +
                 $"HasRichCard={hasRichCard}," +
                 $"IsCompleted={isCompleted}");
@@ -423,7 +422,6 @@ public class MorganaAgent : MorganaActor
             string responsePreview = Preview(llmResponseText);
             agentSpan?.SetTag(MorganaTelemetry.AgentIsCompleted, isCompleted);
             agentSpan?.SetTag(MorganaTelemetry.AgentHasQuickReplies, hasQuickReplies);
-            agentSpan?.SetTag(MorganaTelemetry.AgentHasRichCard, hasRichCard);
             agentSpan?.SetTag(MorganaTelemetry.AgentToolsInvoked, GetToolsInvoked(aiAgentSession, historyBaseline));
             agentSpan?.SetTag(MorganaTelemetry.AgentResponsePreview, responsePreview);
             agentSpan?.Dispose();
@@ -434,41 +432,17 @@ public class MorganaAgent : MorganaActor
             StripPeerConsultations(aiAgentSession, historyBaseline);
 
             // Tag this turn's user-facing assistant message — the LAST assistant message that
-            // actually carries text content. Sought within this turn only: a turn that wrote no text
-            // must neither overwrite an earlier turn's recorded text nor borrow its timestamp, which
-            // the channel would take for a reply it already has.
+            // actually carries text content.
             ChatMessage? finalAssistantMessage = aiChatHistoryProvider
                 .GetMessages(aiAgentSession)
-                .Skip(historyBaseline)
                 .LastOrDefault(m => m.Role == ChatRole.Assistant
                                      && m.Contents.OfType<TextContent>().Any(t => !string.IsNullOrWhiteSpace(t.Text)));
-
-            // A hand-back with no words is a complete turn: the conversation returns to Morgana, whose own
-            // farewell is what the user reads next, so nothing of the agent's is recorded or delivered.
-            if (finalAssistantMessage is null && isCompleted)
+            if (finalAssistantMessage is not null)
             {
-                agentLogger.LogInformation("Agent '{AgentIntent}' handed the conversation back without a word for the user", AgentIntent);
-
-                await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted);
-                senderRef.Tell(new Records.AgentResponse(string.Empty, IsCompleted: true));
-                return;
+                finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
+                finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.UserFacing] = true;
+                finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnText] = llmResponseText;
             }
-
-            // A turn without a word for the user has failed, however cleanly the model closed it: prose
-            // always introduces whatever a card or a quick reply offers. Recorded as an answer, so a resumed
-            // conversation shows what the live one did instead of a phrase still waiting for its reply.
-            if (finalAssistantMessage is null)
-            {
-                agentLogger.LogWarning("Agent '{AgentIntent}' closed its turn with nothing for the user: answering with the generic error", AgentIntent);
-
-                finalAssistantMessage = AppendErrorAnswer(aiAgentSession, await ResolveGenericErrorAsync());
-                llmResponseText = finalAssistantMessage.Text;
-            }
-
-            // Finalize the assistant message with additional metadata
-            finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
-            finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.UserFacing] = true;
-            finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnText] = llmResponseText;
 
             // Written last, so what lands in the database is the history already stripped of the
             // consultations and already carrying the user-facing marks the history endpoint reads
@@ -480,7 +454,7 @@ public class MorganaAgent : MorganaActor
 
             // Dated as the history keeps it, so a client catching up recognises the reply it was pushed
             senderRef.Tell(new Records.AgentResponse(
-                llmResponseText, isCompleted, quickReplies, richCard, finalAssistantMessage.CreatedAt?.UtcDateTime));
+                llmResponseText, isCompleted, quickReplies, richCard, finalAssistantMessage?.CreatedAt?.UtcDateTime));
         }
         catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } cre
                                      && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
@@ -508,7 +482,7 @@ public class MorganaAgent : MorganaActor
             {
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.RichCard);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.QuickReplies);
-                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnEnding);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnContinuation);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ConsultationRounds);
             }
         }
@@ -567,16 +541,14 @@ public class MorganaAgent : MorganaActor
 
             // The colleague's presentation decisions are handed over as data rather than drained:
             // the asking agent reads the options it was offered and may come back having chosen one.
-            // Options are the only way an answer awaits a reply: a colleague answers one question on
-            // a session made for it, so its staying in service has nobody to wait for.
+            bool awaitsReply = GetTurnContinuationFromContext(consultationSession);
             List<QuickReply>? quickReplies = GetQuickRepliesFromContext(consultationSession);
-            bool awaitsReply = quickReplies?.Count > 0;
             RichCard? richCard = GetRichCardFromContext(consultationSession);
 
             // A baseline of 0 where a user turn passes its own: this session was created for the
             // exchange and holds nothing else, so every tool call in it belongs to this answer and
             // there is no earlier history to skip past.
-            consultationSpan?.SetTag(MorganaTelemetry.ConsultationAwaitingReply, awaitsReply);
+            consultationSpan?.SetTag(MorganaTelemetry.ConsultationAwaitingReply, awaitsReply || quickReplies?.Count > 0);
             consultationSpan?.SetTag(MorganaTelemetry.AgentToolsInvoked, GetToolsInvoked(consultationSession, 0));
             consultationSpan?.SetTag(MorganaTelemetry.ConsultationAnswer, response.Text);
             consultationSpan?.Dispose();
@@ -587,7 +559,7 @@ public class MorganaAgent : MorganaActor
 
             senderRef.Tell(new Records.PeerConsultationResponse(
                 response.Text.Trim(),
-                awaitsReply,
+                awaitsReply || quickReplies?.Count > 0,
                 quickReplies,
                 richCard));
         }
@@ -615,52 +587,11 @@ public class MorganaAgent : MorganaActor
     {
         agentLogger.LogError(failure.Failure.Cause, "Agent execution failed in {Name}", GetType().Name);
 
-        // The one answer a failed turn gives, whatever broke: what failed is for the log, not for the user
-        string genericError = await ResolveGenericErrorAsync();
-
-        // No session yet: the turn failed before reaching the history, so there is nothing to close
-        if (aiAgentSession is null)
-        {
-            failure.OriginalSender.Tell(new Records.AgentResponse(genericError, true, null));
-            return;
-        }
-
-        // The error takes the place of the reply the turn never wrote, so the phrase is answered in
-        // the history exactly as on screen and a resume no longer waits for it
-        ChatMessage errorAnswer = AppendErrorAnswer(aiAgentSession, genericError);
-
-        // Closed as completed, matching the reply below: the conversation returns to Morgana
-        await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted: true);
-
-        // Dated as the history keeps the error, so a client catching up recognises the reply it was pushed
-        failure.OriginalSender.Tell(new Records.AgentResponse(genericError, true, null, null, errorAnswer.CreatedAt?.UtcDateTime));
-    }
-
-    /// <summary>
-    /// The GenericError answer Morgana's prompt configures, the reply of a turn that failed.
-    /// </summary>
-    private async Task<string> ResolveGenericErrorAsync()
-    {
         Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
         List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>(Constants.PromptProperties.ErrorAnswers);
         Records.ErrorAnswer? genericError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "GenericError", StringComparison.OrdinalIgnoreCase));
 
-        return genericError?.Content ?? "An internal error occurred.";
-    }
-
-    /// <summary>
-    /// Closes the turn in the agent's history with an error answer, marked as the reply the user read.
-    /// </summary>
-    /// <returns>The appended message, dated now.</returns>
-    private ChatMessage AppendErrorAnswer(AgentSession session, string errorText)
-    {
-        ChatMessage errorAnswer = new ChatMessage(ChatRole.Assistant, errorText) { CreatedAt = DateTimeOffset.UtcNow };
-
-        // The history endpoint shows this agent's marked messages alone, so an unmarked answer would vanish on resume
-        errorAnswer.AdditionalProperties = new AdditionalPropertiesDictionary { [Constants.MessageProperties.UserFacing] = true };
-
-        aiChatHistoryProvider.AppendMessage(session, errorAnswer);
-        return errorAnswer;
+        failure.OriginalSender.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred.", true, null));
     }
 
     /// <summary>
@@ -755,18 +686,18 @@ public class MorganaAgent : MorganaActor
             .Select(c => c.Name));
 
     /// <summary>
-    /// Reads the <c>turn_ending</c> context variable, set by the <c>SetTurnEnding</c> base tool when
-    /// the agent hands the conversation back to Morgana.
+    /// Reads the <c>turn_continuation</c> context variable, set by the <c>SetTurnContinuation</c>
+    /// base tool when the agent declares it is staying in service awaiting the user's next turn.
     /// </summary>
     /// <param name="session">Active agent session.</param>
-    /// <returns><c>true</c> if the agent handed the conversation back on this turn; <c>false</c> if it
-    /// made no such declaration and so stays in service.</returns>
-    protected bool GetTurnEndingFromContext(AgentSession session)
+    /// <returns><c>true</c> if the agent declared continuation on this turn; <c>false</c> if it
+    /// declared completion or made no declaration at all.</returns>
+    protected bool GetTurnContinuationFromContext(AgentSession session)
     {
-        object? ctxTurnEnding = aiContextProvider.GetVariable(session, Constants.ContextKeys.TurnEnding);
-        return ctxTurnEnding switch
+        object? ctxTurnContinuation = aiContextProvider.GetVariable(session, Constants.ContextKeys.TurnContinuation);
+        return ctxTurnContinuation switch
         {
-            bool ending => ending,
+            bool continuation => continuation,
             JsonElement { ValueKind: JsonValueKind.True } => true,
             JsonElement { ValueKind: JsonValueKind.False } => false,
             JsonElement { ValueKind: JsonValueKind.String } element => bool.TryParse(element.GetString(), out bool parsed) && parsed,

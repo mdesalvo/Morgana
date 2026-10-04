@@ -263,8 +263,7 @@ public class ConversationSupervisorActor : MorganaActor
             DateTime presentationTimestamp = DateTime.UtcNow;
             await conversationPersistenceService.AppendOrchestratorMessagesAsync(
                 conversationId,
-                [new ChatMessage(ChatRole.Assistant, ctx.Message) { CreatedAt = presentationTimestamp }],
-                quickReplies);
+                [new ChatMessage(ChatRole.Assistant, ctx.Message) { CreatedAt = presentationTimestamp }]);
 
             await channelService.SendMessageAsync(new ChannelMessage
             {
@@ -316,12 +315,6 @@ public class ConversationSupervisorActor : MorganaActor
 
             // Close and dispose the guard span by tracking compliance and the eventually reported violation
             guardSpan?.SetTag(MorganaTelemetry.GuardCompliant, response.Compliant);
-            guardSpan?.SetTag(MorganaTelemetry.GuardSource, response.Source.ToString());
-
-            // An admission nobody judged is counted apart, so a guard failing on every turn shows up
-            // as a number rather than as a string of clean verdicts.
-            if (response.Source == Records.GuardVerdictSource.FailOpen)
-                MorganaTelemetry.GuardFailOpenCounter.Add(1, new KeyValuePair<string, object?>(MorganaTelemetry.GuardKind, "user"));
             if (!response.Compliant && response.Violation != null)
                 guardSpan?.SetTag(MorganaTelemetry.GuardViolation, response.Violation);
             if (guardSpan is not null)
@@ -445,8 +438,6 @@ public class ConversationSupervisorActor : MorganaActor
             // Marks the guard span as errored and disposes it — same shape as the compliant
             // path's span, but tagged as a failure instead of a compliance verdict.
             guardSpan?.SetStatus(ActivityStatusCode.Error, description);
-            guardSpan?.SetTag(MorganaTelemetry.GuardSource, nameof(Records.GuardVerdictSource.FailOpen));
-            MorganaTelemetry.GuardFailOpenCounter.Add(1, new KeyValuePair<string, object?>(MorganaTelemetry.GuardKind, "user"));
             if (cause != null)
                 guardSpan?.AddException(cause);
             guardSpan?.Dispose();
@@ -742,21 +733,16 @@ public class ConversationSupervisorActor : MorganaActor
 
                 // Sends the agent's response back to the client, forwarding the classification's
                 // intent and metadata, the agent's completion flag, quick replies, rich card
-                // and the timestamp the reply is recorded under. An agent that handed the
-                // conversation back without a word has nothing to deliver: Morgana's farewell below
-                // is the whole answer.
-                if (response.Response.Length > 0)
-                {
-                    ctx.OriginalSender.Tell(new Records.ConversationResponse(
-                        response.Response,
-                        ctx.Classification?.Intent,
-                        ctx.Classification?.Metadata,
-                        agentName,
-                        response.IsCompleted,
-                        response.QuickReplies,
-                        response.RecordedTimestamp,
-                        response.RichCard));
-                }
+                // and the timestamp the reply is recorded under.
+                ctx.OriginalSender.Tell(new Records.ConversationResponse(
+                    response.Response,
+                    ctx.Classification?.Intent,
+                    ctx.Classification?.Metadata,
+                    agentName,
+                    response.IsCompleted,
+                    response.QuickReplies,
+                    response.RecordedTimestamp,
+                    response.RichCard));
 
                 // The agent has finished: Morgana takes the conversation back and says so, behind
                 // the answer above rather than in place of it.
@@ -953,20 +939,16 @@ public class ConversationSupervisorActor : MorganaActor
 
                 // Sends the agent's response back to the client. Unlike AwaitingAgentResponse's
                 // equivalent Tell, Intent/Metadata are hardcoded null: this state has neither to
-                // forward (see the comment above currentIntent). A hand-back without a word is
-                // answered by Morgana's farewell alone, as in AwaitingAgentResponse.
-                if (response.Response.Length > 0)
-                {
-                    originalSender.Tell(new Records.ConversationResponse(
-                        response.Response,
-                        null,
-                        null,
-                        agentName,
-                        response.IsCompleted,
-                        response.QuickReplies,
-                        response.RecordedTimestamp,
-                        response.RichCard));
-                }
+                // forward (see the comment above currentIntent).
+                originalSender.Tell(new Records.ConversationResponse(
+                    response.Response,
+                    null,
+                    null,
+                    agentName,
+                    response.IsCompleted,
+                    response.QuickReplies,
+                    response.RecordedTimestamp,
+                    response.RichCard));
 
                 // The agent has finished: Morgana takes the conversation back and says so, behind
                 // the answer above rather than in place of it.

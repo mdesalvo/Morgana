@@ -46,8 +46,7 @@ PromptHarness (test process)
   ├── TurnObserver      ──► ActivityListener on morgana.agent  → agent.tools_invoked
   │                          Console.Out tee on MorganaTool logs → context reads/writes
   │                          + MorganaAIContextProvider's per-turn declaration → Declared reads
-  ├── LlmJudge          ──► ILLMService.CompleteWithSystemPromptAsync (cheapest configured tier),
-  │                          fed exactly what the user saw
+  ├── LlmJudge          ──► ILLMService.CompleteWithSystemPromptAsync (cheapest configured tier)
   └── ScenarioRunner    ──► replays a YAML scenario N times, reports passes against a threshold
 ```
 
@@ -79,7 +78,7 @@ The harness channel declares the **full** capability profile with no length budg
 `MorganaChannelAdapter` short-circuits and most scenarios measure undegraded output. One scenario
 opts into a degraded profile instead (`ScenarioDefinition.DegradedChannel`, mirroring Rune's "poor
 but honest" capabilities under a distinct channel name) specifically to exercise the adapter's
-rewrite path — see `channeladapter-degrades-invoice-card` and `UserGuardTests`/`ActorTests` below.
+rewrite path — see `channeladapter-degrades-invoice-card` and `GuardTests`/`ActorTests` below.
 
 ## Configuration and secrets
 
@@ -95,9 +94,7 @@ On top of that it overrides, per run:
 | `ConversationPersistence:StoragePath` → temp dir | throwaway SQLite databases, deleted on teardown |
 | `OpenTelemetry:Exporters[*]:Enabled` → false | the in-process listener needs no collector |
 | `RateLimiting:Enabled`, `DustLimiting:Enabled` → false | a repeated-run suite would throttle itself |
-| `ActorSystem:EnableUserGuardrail` → `Harness:EnableUserGuardrail` | off by default: no scenario asserts moderation and every guarded turn is an extra LLM call |
-| `ActorSystem:EnablePeerGuardrail` → `Harness:EnablePeerGuardrail` | off by default: the groups asking as a partner measure the agent's own answer, which the guard would stand in for; only `PeerGuardTests` sets it |
-| `ActorSystem:EnableToolGuardrail` → `Harness:EnableToolGuardrail` | off by default: on, it also replaces the domain with `PoisonedPlugin` and stands up its poisoned MCP server and partner on port 5199, so only `ToolGuardTests` sets it |
+| `ActorSystem:EnableGuardrail` → `Harness:EnableGuardrail` | off by default: no scenario asserts moderation and every guarded turn is an extra LLM call |
 | `Authentication:Issuers[harness]` → appended | name and key both declared per run, the key minted fresh and never written to disk: an instrument's channel identity is not something a deployed installation should carry in its own configuration |
 | `AgentToAgent:Partners[harness-peer]` → appended | a partner admitted to `inventory` and to no other agent, declared per run rather than shipped: it exists to be turned away, which is the only way `AgentCardTests` can observe that the A2A gate is shut *selectively* and not merely shut. Its key, its reach and its ceiling are one entry |
 
@@ -112,34 +109,28 @@ never ships an admitted identity that only an instrument uses.
 dotnet test PromptHarness/PromptHarness.csproj
 
 # just the rig, before believing any scenario result
-dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.HarnessSmokeTests"
+dotnet test … --filter "FullyQualifiedName~HarnessSmokeTests"
 
 # the two groups that cost nothing — the published card, the boot-time trust checks
-dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.AgentCardTests|FullyQualifiedName~PromptHarness.Tests.StartupValidationTests"
+dotnet test … --filter "FullyQualifiedName~AgentCardTests|FullyQualifiedName~StartupValidationTests"
 
 # the blocking group
-dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.ContextHandlingTests"
+dotnet test … --filter "FullyQualifiedName~ContextHandlingTests"
 
 # the behavioural group — turn presentation (continuation, closure, rich cards), default threshold
-dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.BehaviourTests"
+dotnet test … --filter "FullyQualifiedName~BehaviourTests"
 
 # the guard group — requires the boot-time guardrail flag, off by default
-Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.UserGuardTests"
-
-# the tool-guard group — swaps the domain for the poisoned one, never alongside anything else
-Harness__EnableToolGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.ToolGuardTests"
-
-# the peer-guard group — screens partners' questions, off by default
-Harness__EnablePeerGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.PeerGuardTests"
+Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
 
 # the rest of the actors group — classifier, channel adaptation, presentation
-dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.ActorTests"
+dotnet test … --filter "FullyQualifiedName~ActorTests"
 
 # the summarization group — requires a lowered boot-time reducer trigger, unset by default
-Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.SummarizationTests"
+Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~SummarizationTests"
 
 # the rate limit group — deterministic, requires the boot-time limit, skipped without it
-Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.RateLimitTests"
+Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateLimitTests"
 
 # one scenario — by DisplayName: the scenario id is a theory argument, not part of the FQN
 dotnet test … --filter "DisplayName~behaviour-rich-card"
@@ -170,7 +161,7 @@ otherwise would mean measuring a configuration nobody runs. With the example plu
 |---|---|---|
 | `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand` | Billing, Contract | `Efficiency` |
 | `context-closed-vocabulary-monkeys` | Monkeys | `Efficiency` |
-| `classifier-routes-unambiguous-billing-request`, `userguard-rejects-abusive-message`, `userguard-allows-good-faith-difficult-topic`, `channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
+| `classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
 | `behaviour-rich-card`, `context-no-invented-writes`, `classifier-routes-catalog-request-to-inventory` | Inventory | **`Performance`** |
 | `classifier-disambiguates-colliding-billing-contract` | *(none — diverted before routing)* | `Efficiency` (classifier only) |
 
@@ -246,12 +237,8 @@ turns:
       contextVocabulary: [customerCode] # every name touched must appear here
       historyExcludesAgents: [billing]  # no message in the persisted history belongs to that agent
       historyUserMessages: 2            # …and exactly one user message per turn played so far
-      toolsQuarantined: [get_rainfall]  # the tool guard quarantined its result (Harness:EnableToolGuardrail)
-      quarantinedBy: [Inspector]        # …decided by one of these layers: Prefilter | Inspector | ProviderFilter
-      toolsAdmitted: [get_soil_temperature] # every screening of it let the result through
-      guardDecidedBy: [Inspector]       # the layer that decided the user guard's verdict
       textNotEmpty: true
-      textNotContains: ["context variable"] # no listed fragment appears in the text
+      textNotContains: ["#INT#"]
     judge:                        # propositions an LLM must find TRUE
       - "The response asks the user for an identifier."
     judgeNot:                     # …and FALSE
@@ -266,14 +253,9 @@ person did not send.
 
 Two layers and the split is deliberate: **structural** assertions are deterministic and read only
 span, log and message data; the **judge** is for what no structural assertion can reach ("asks in
-prose without enumerating options"). The judge sees what a user would see — text, buttons and the
-card's rendered content — so a response that answered on its card is never convicted of missing it.
-What happened behind the scenes is asserted on telemetry, never judged: a judge handed the trace
-looks there for what only the screen carries and convicts a correct answer.
-
-A guard is always observed on its telemetry too, since only the span proves the expected guard was
-raised the expected way. One structural assertion holds on every turn unasked: a guard verdict
-decided by `FailOpen` fails it, since a text admitted unjudged proves nothing.
+prose without enumerating options"). The judge sees exactly what a user would see — text, buttons,
+and the card's rendered content — never the tool trace, so it cannot justify a verdict from evidence
+the user never had, nor be convicted of missing what the screen did carry.
 
 **Thresholds.** Repetition with a pass threshold is the only honest shape when the system under test
 is a language model: a prompt that works four times in five is materially different from one that

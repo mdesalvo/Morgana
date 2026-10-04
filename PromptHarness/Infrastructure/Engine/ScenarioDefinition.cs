@@ -177,32 +177,6 @@ public sealed class ExpectSpec
     /// <summary>Expected <c>guard.compliant</c> verdict from the <c>morgana.guard</c> span.</summary>
     public bool? GuardCompliant { get; init; }
 
-    /// <summary>
-    /// The layers any of which may have decided the user guard's verdict, read from <c>guard.source</c>:
-    /// the only proof the expected guard was raised the expected way, since a message admitted by a
-    /// guard that failed open looks compliant too.
-    /// </summary>
-    public List<string>? GuardDecidedBy { get; init; }
-
-    /// <summary>
-    /// Tools whose result the guard must have quarantined on this turn, read from the
-    /// <c>morgana.toolguard</c> spans. Requires a run under <c>Harness:EnableToolGuardrail=true</c>.
-    /// </summary>
-    public List<string>? ToolsQuarantined { get; init; }
-
-    /// <summary>
-    /// The layers any of which must have decided a quarantine of each tool named in <see cref="ToolsQuarantined"/>:
-    /// <c>Prefilter</c>, <c>Inspector</c> or <c>ProviderFilter</c>. A scenario built to exercise the
-    /// inspector's prose proves nothing about it when the free check stopped the payload first.
-    /// </summary>
-    public List<string>? QuarantinedBy { get; init; }
-
-    /// <summary>
-    /// Tools whose result must have been screened and let through on this turn: the other half of the
-    /// guard's contract, since a guard quarantining everything would pass every other scenario.
-    /// </summary>
-    public List<string>? ToolsAdmitted { get; init; }
-
     /// <summary>Expected intent from the <c>morgana.classifier</c> span.</summary>
     public string? ClassifierIntent { get; init; }
 

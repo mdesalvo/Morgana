@@ -98,8 +98,8 @@ rendering cannot share stdin with a first-class prompt. **Enter** commits,
 **Backspace** and **Delete** remove around the caret, **←/→** move it, **Esc** exits. Repainting
 waits for the keystrokes to stop, so a pasted line costs one frame rather than one per character.
 
-**Commands**: a leading `/` opens the shared palette (`Morgana.Terminal`): `/help`, `/status`, `/new`, `/resume`, `/export`,
-`/exit` and whatever Morgana publishes. Esc dismisses it. The list filters as you type and Enter runs the
+**Commands**: a leading `/` opens the shared palette (`Morgana.Terminal`): `/help`, `/status`, `/new`, `/export`, `/exit` and
+whatever Morgana publishes. Esc dismisses it. The list filters as you type and Enter runs the
 highlighted candidate, as in Claude Code. It opens over pending quick replies too. A command declaring `RequiresConfirmation` takes
 the prompt over with a Yes/No question instead of running; Morgana refuses it without that answer. **A command
 never enters the transcript**, neither its line nor its outcome: it holds the prompt while it runs, its progress
@@ -117,11 +117,9 @@ minute (`WebhookChannelService`). The deadline is left for the turn Morgana neve
 
 ### Resume
 
-Every process start begins a fresh conversation. `/resume id:… seal:…` puts an earlier one back on
-screen and carries it on: the id and the seal `/status` shows in full, the header only as a glimpse.
-Morgana admits it only with that seal and only from the channel that opened it, so a conversation
-begun on another channel is refused like an unknown one. Nothing is announced again: the handshake
-stays the one on record.
+**There is none.** Every process start begins a fresh conversation. A future Grimoire picking up a
+conversation id from a store would announce nothing again: the handshake is settled on Morgana's
+record at start and read back from there, by a resume and by a Morgana that restarted meanwhile alike.
 
 ## Startup
 

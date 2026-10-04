@@ -31,38 +31,35 @@ project: every build setting lives in the `.csproj`, so it carries unchanged acr
 
 ## Commands
 
-Nineteen test classes. **Never combine filters**: eight groups carry a process-wide boot knob the
-others must not see and two of them share the user guard's. Never parallelise invocations either — they share one `bin`/`obj`.
+Sixteen test classes. **Never combine filters**: six groups carry a process-wide boot knob the
+others must not see and two of those five share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
 # the rig, before believing any scenario result
-dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.HarnessSmokeTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~HarnessSmokeTests"
 
 # deterministic — no model, no cost
-dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.StartupValidationTests"
-dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.AgentCardTests"
-dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.PeerFederationTests"
-dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ConversationApiTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~StartupValidationTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~AgentCardTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PeerFederationTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ConversationApiTests"
 
 # blocking
-dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ContextHandlingTests"
-dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ConsultingTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ContextHandlingTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ConsultingTests"
 
 # behavioural
-dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.BehaviourTests"
-dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ActorTests"
-dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ServedConsultationTests"
-dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.DegradedHistoryTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~BehaviourTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ActorTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ServedConsultationTests"
 
 # boot-flagged — one knob each, never together
-Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.UserGuardTests"
-Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.SummarizationTests"
-Harness__DustBudgetPerConversation=20 dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.DustTests"
-Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.RateLimitTests"    # deterministic, skipped without the knob
-Harness__FederatedPeer=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.FederationTests"
-Harness__EnableToolGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.ToolGuardTests"
-Harness__EnablePeerGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.PeerGuardTests"
-Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.ConversationPersistenceTests"
+Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
+Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~SummarizationTests"
+Harness__DustBudgetPerConversation=15 dotnet test … --filter "FullyQualifiedName~DustTests"
+Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateLimitTests"    # deterministic, skipped without the knob
+Harness__FederatedPeer=true dotnet test … --filter "FullyQualifiedName~FederationTests"
+Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~ConversationPersistenceTests"
 
 # one scenario — the id is a Theory argument, so match DisplayName, never the FQN
 dotnet test PromptHarness.csproj --filter "DisplayName~behaviour-rich-card"
@@ -89,39 +86,26 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `ContextHandlingTests` | **5/5, blocking** | The context cycle, the closed vocabulary, non-revelation. Failure is **silent**: an agent re-asking for what it knows still looks like it works |
 | `ConsultingTests` | **4/4, blocking** | A colleague reached on demand for a datum only it holds; an exchange leaving the conversation as it found it. Silent the same way. Also depends on a **topology**, so a failure here has a second meaning: check the `[ConsultsAgent]` attributes first |
 | `BehaviourTests` | 5/4 | Visible presentation: buttons, cards, closure |
-| `UserGuardTests` | 5/5 | Moderation. A false negative is safety-adjacent, so it sits with the blocking reasoning rather than with presentation |
-| `ToolGuardTests` | 5/5, controls and refusal tone 5/4 | The guard on tool results. `PoisonedPlugin` replaces the domain: its own tools, an MCP server and a partner's colleague (both served by `PoisonedSourceHost` on the fixed port 5199) answer with five families of hijacking (personality, authority, behaviour, data, the user). A result must be quarantined and the answer must do none of what it asked; one truthful result per external source must pass, quick replies and card included |
-| `PeerGuardTests` | none | The guard on partners' questions: one hijacking question per family (personality, authority, behaviour, data) is declined before the agent reads it; an ordinary one and a curt one reach it. One live inspection each, asked through `PartnerConsultation` like `ServedConsultationTests` |
+| `GuardTests` | 5/5 | Moderation. A false negative is safety-adjacent, so it sits with the blocking reasoning rather than with presentation |
 | `ActorTests` | mixed | The framework prompts nothing else exercises: classifier, channel adaptation, presentation (a one-shot check, since the presenter caches process-wide by channel name) |
 | `ServedConsultationTests` | — | This installation answering a partner: which conversation, what it cost, how many exchanges are admitted |
 | `SummarizationTests` | — | The reducer's own prompt, unreachable at the default 21-message trigger |
 | `DustTests` | — | The budget thresholds, crossed in order. Evidence-driven rather than turn-pinned: how many turns it takes is a real token measurement |
-| `DegradedHistoryTests` | — | What a channel too poor for rich answers reads back on its return: each answer in the words it was delivered in, never the rich record it could not show. One live turn under Rune's profile; the oracle is the delivery itself, so nothing depends on wording and no judge runs |
 | `RateLimitTests` | none | The REST gate's rate limit: the 429 past the window, refused commands left uncounted, one window shared by messages and commands. No model is reached |
 | `ConversationPersistenceTests` | — | Who owns each line of a conversation, how it is dated and in what order it is read back. The record is photographed after every exchange rather than at the end, because a transcript that reads correctly can still have been written by the wrong participant. Asserts nothing about wording: the oracle is what the channel was pushed and what the channel said. Shares the guard's knob, since a refused turn is one of the five it stages |
 | `AgentCardTests` · `StartupValidationTests` · `PeerFederationTests` · `ConversationApiTests` | none | Wire contracts and boot refusals, asserted deterministically. **Every literal is spelled out in the test** rather than read from `Constants`: a test comparing a constant against itself asserts that a constant equals a constant, while the point is to notice a published document changing shape under whoever consumes it |
 | `FederationTests` | — | Two Morganas, one consulting the other — the only test where the card is written by a Morgana, read by a Morgana and the token one mints is proven by the other |
 
-**The judge sees what a user would see** — text, buttons, the card as rendered. Showing it less than
-the screen is the mirror error: an agent's `Formatting` routinely puts the answering figure on the
-card. It is skipped once a turn already fails structurally. What happened behind the scenes — tools,
-guard verdicts, consultations, context accesses — is settled by structural assertions on spans and
-log lines, never asked of a judge: a judge handed telemetry looks there for what only the screen
-carries and convicts a correct answer.
-
-**A guard is always observed on its telemetry too**, because only the span proves the expected guard
-was raised the expected way: `guardDecidedBy`, `toolsQuarantined` with `quarantinedBy`,
-`toolsAdmitted` and the peer guard's span read by `PeerGuardTests`. One assertion holds on every turn
-whatever the scenario declares: a guard verdict decided by `FailOpen` fails the turn, since a text
-admitted unjudged proves nothing.
+**The judge sees exactly what a user would see** — text, buttons, the card as rendered — never the
+tool trace, so it cannot justify a verdict on evidence the user never had. Showing it less than the
+screen is the mirror error: an agent's `Formatting` routinely puts the answering figure on the card,
+so a judge reading half the screen convicts a response that answered. It is skipped once a turn
+already fails structurally.
 
 **One proposition, one act.** A list of synonyms for one act is fine; a conjunction of two claims is
 not — neither is a comparative. A proposition needing a carve-out to be fair was written wrong:
 fix the act, never coach the judge. This holds for `judgeNot` above all — a broad prohibition puts
 the judge on a hunt, a model on a hunt finds something and every false red spends the suite's trust.
-
-**A 5/5 scenario judges no wording or mood.** Its propositions name only what must never happen;
-how something is phrased admits nuance and belongs in its own scenario at 5/4.
 
 ## The journey
 
@@ -142,7 +126,7 @@ instructions read together — **fix the text, never lower the threshold**).
 The harness owns **no `Morgana:` configuration and no secrets**. It shares `Morgana.Web`'s
 `UserSecretsId`, resolves that project's settings plus the shared store and republishes the result
 to the host as environment variables. On top it overrides, per run: a throwaway storage path;
-exporters off; rate and dust limiting off; the three guards per `Harness:EnableUserGuardrail`, `Harness:EnableToolGuardrail` and `Harness:EnablePeerGuardrail`; a random key
+exporters off; rate and dust limiting off; the guard rail per `Harness:EnableGuardrail`; a random key
 for the `harness` issuer; one partner appended, admitted to a single agent.
 
 The repository must carry the `harness` entry under `Morgana:Authentication:Issuers` or the fixture

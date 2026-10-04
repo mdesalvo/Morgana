@@ -18,7 +18,7 @@
     <LangVersion>latest</LangVersion>
 
     <!-- Version Information -->
-    <Version>0.33.0</Version>
+    <Version>0.32.0</Version>
     <AssemblyVersion>$(Version)</AssemblyVersion>
     <FileVersion>$(Version)</FileVersion>
 
@@ -74,22 +74,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The poisoned domain of the tool-guard run, kept out of this project for the same reason. -->
-    <Compile Remove="PoisonedPlugin\**" />
-    <None Remove="PoisonedPlugin\**" />
-    <EmbeddedResource Remove="PoisonedPlugin\**" />
-    <Content Remove="PoisonedPlugin\**" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="xunit.v3" Version="3.*" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.*" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.*" />
     <PackageReference Include="YamlDotNet" Version="18.*" />
     <PackageReference Include="WireMock.Net" Version="2.*" />
-
-    <!-- The weather service of the tool-guard run is an MCP server the harness stands up itself. -->
-    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -109,12 +98,6 @@
       domain of the asking instance and no other group ever sees the intent it declares.
     -->
     <ProjectReference Include="FederationPlugin\FederationPlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
-
-    <!--
-      The poisoned domain, deployed into a directory of its own like the federation one: the
-      tool-guard run loads it INSTEAD of the shipped domain, so no other group ever meets its agent.
-    -->
-    <ProjectReference Include="PoisonedPlugin\PoisonedPlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -165,20 +148,6 @@
     </MSBuild>
     <MakeDir Directories="$(OutDir)federation-plugins" Condition="!Exists('$(OutDir)federation-plugins')" />
     <Copy SourceFiles="@(FederationPluginAssembly)" DestinationFolder="$(OutDir)federation-plugins" SkipUnchangedFiles="true" />
-  </Target>
-
-  <!--
-    The poisoned domain lands in a directory of its own, never in plugins/: the tool-guard run points
-    the instance under test at this one alone.
-  -->
-  <Target Name="CopyPoisonedPluginToHarness" AfterTargets="Build">
-    <MSBuild Projects="PoisonedPlugin\PoisonedPlugin.csproj"
-             Targets="GetTargetPath"
-             Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="PoisonedPluginAssembly" />
-    </MSBuild>
-    <MakeDir Directories="$(OutDir)poisoned-plugins" Condition="!Exists('$(OutDir)poisoned-plugins')" />
-    <Copy SourceFiles="@(PoisonedPluginAssembly)" DestinationFolder="$(OutDir)poisoned-plugins" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

@@ -67,7 +67,7 @@ public static class DraftProjection
             agent.Language,
             agent.Version,
             additionalProperties,
-            agent.Territory);
+            agent.ConsultMeFor);
     }
 
     /// <summary>

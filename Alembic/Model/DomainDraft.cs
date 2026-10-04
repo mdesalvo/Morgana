@@ -210,7 +210,7 @@ public sealed class ConsultationDraft
     /// <summary>The intent of the colleague it may put a question to.</summary>
     /// <remarks>
     /// Always an agent of this domain. A colleague published by an instance is outside everything this
-    /// interview can see — its intent cannot be checked, its <c>Territory</c> cannot be read and
+    /// interview can see — its intent cannot be checked, its <c>ConsultMeFor</c> cannot be read and
     /// its prose is not ours to reconcile — so it is declared on the emit page, where the hand on the
     /// keyboard is a developer's and not the domain author's.
     /// </remarks>
@@ -378,7 +378,7 @@ public sealed class AgentDraft
     /// installation ever speaks to another: an unread one costs nothing and its absence leaves every
     /// other agent answering "go to them" where a precise answer was there to be had.
     /// </remarks>
-    public string? Territory { get; set; }
+    public string? ConsultMeFor { get; set; }
 
     /// <summary>
     /// Domain-specific behavioural rules. Written after the toolkit, because they speak about it.

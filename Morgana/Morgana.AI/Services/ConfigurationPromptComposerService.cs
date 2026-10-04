@@ -16,12 +16,8 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     // fixed in code and morgana.json carries no override point for them. An implementation
     // replacing this service replaces them wholesale, which is the intended unit of substitution:
     // the fences and the layering they express are one design, not a set of independent knobs.
-    // The ranking is stated here because a list of rules all called critical reads as a list of
-    // equals: the model then follows whichever is most salient or nearest. The order the
-    // Priority field encodes is lost on the way in.
     private const string GlobalPoliciesHeader =
-        "=== CRITICAL RULES — binding, without exception, in order of rank ===\n" +
-        "Every rule is ranked by its number, P0 first. The ranking binds like the rules themselves: a rule never overrides, postpones or reorders a rule with a lower number and applies only where those leave room. When two rules seem to conflict, obey the lower number.";
+        "=== CRITICAL RULES — binding, without exception ===";
     private const string GlobalPoliciesFooter =
         "=== END OF CRITICAL RULES ===";
     private const string FrameworkLayerHeader =
@@ -173,18 +169,6 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
-    public async Task<string> ComposeQuarantinedResultAsync(string toolName)
-    {
-        FrameworkLayer framework = await frameworkLayer.Value;
-
-        // Read at the one moment it applies, in place of the result: a quarantine is rare, so a rule
-        // carried in every agent's prompt would be paid on every turn for an event almost none of them sees.
-        string template = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.QuarantinedToolResult);
-
-        return template.Replace(Constants.Placeholders.QuarantinedTool, toolName);
-    }
-
-    /// <inheritdoc />
     public async Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question)
     {
         FrameworkLayer framework = await frameworkLayer.Value;
@@ -267,9 +251,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
                      // read rather than how it was filed.
                      .OrderBy(p => p.Priority))
         {
-            // The rank is printed on the rule itself, which is what the header's precedence clause
-            // resolves a conflict against.
-            sb.AppendLine(CultureInfo.InvariantCulture, $"P{policy.Priority} {policy.Name}: {policy.Description}");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"{policy.Name}: {policy.Description}");
         }
 
         sb.AppendLine(GlobalPoliciesFooter);

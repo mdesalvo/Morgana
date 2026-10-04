@@ -51,16 +51,16 @@ public class GuardActor : MorganaActor
             // The guardrail strategy lives behind this one call, which is controlled by a feature flag
             // permitting its eventual switch-off.
             Records.GuardRailResult result =
-                configuration.GetValue("Morgana:ActorSystem:EnableUserGuardrail", true)
-                    ? await guardRailService.CheckUserMessageAsync(req.ConversationId, req.Message)
-                    : new Records.GuardRailResult(true, null, Records.GuardVerdictSource.Disabled);
+                configuration.GetValue("Morgana:ActorSystem:EnableGuardrail", true)
+                    ? await guardRailService.CheckAsync(req.ConversationId, req.Message)
+                    : new Records.GuardRailResult(true, null);
 
             actorLogger.Info(
                 "Guard check complete for conversation {0}: compliant={1}",
                 req.ConversationId, result.Compliant);
 
             // Gives the supervisor the response of the message checking
-            originalSender.Tell(new Records.GuardCheckResponse(result.Compliant, result.Violation, result.Source));
+            originalSender.Tell(new Records.GuardCheckResponse(result.Compliant, result.Violation));
         }
         catch (Exception ex)
         {

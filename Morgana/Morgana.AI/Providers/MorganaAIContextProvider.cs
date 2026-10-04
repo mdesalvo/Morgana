@@ -22,7 +22,7 @@ public class MorganaAIContextProvider : AIContextProvider
     /// </summary>
     private static readonly ImmutableHashSet<string> EphemeralVariableNames =
         [
-            Constants.ContextKeys.TurnEnding,
+            Constants.ContextKeys.TurnContinuation,
             Constants.ContextKeys.QuickReplies,
             Constants.ContextKeys.RichCard,
             Constants.ContextKeys.ServingConsultation,

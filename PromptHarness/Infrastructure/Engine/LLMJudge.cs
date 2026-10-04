@@ -87,8 +87,6 @@ public sealed class LLMJudge
     /// Judges every proposition of a turn and returns one failure message per verdict that did not
     /// come out as the scenario requires.
     /// </summary>
-    /// <param name="turnDefinition">The turn's propositions.</param>
-    /// <param name="turn">What the turn delivered and what was observed behind it.</param>
     public async Task<IReadOnlyList<string>> EvaluateAsync(TurnDefinition turnDefinition, TurnResult turn)
         => await EvaluateAsync(turnDefinition.Judge, turnDefinition.JudgeNot, turn.Text, turn.QuickReplies, turn.Message.RichCard);
 
@@ -148,6 +146,7 @@ public sealed class LLMJudge
 
              QUICK REPLY BUTTONS SHOWN: {(quickReplies.Count == 0 ? "none" : string.Join(" | ", quickReplies.Select(reply => reply.Label)))}
              RICH CARD SHOWN: {(richCard is null ? "no" : $"yes and it reads:\n{RichCardText.Flatten(richCard)}")}
+
              PROPOSITION:
              {proposition}
              """;

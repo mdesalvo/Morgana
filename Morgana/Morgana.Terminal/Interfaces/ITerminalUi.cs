@@ -59,10 +59,9 @@ public interface ITerminalUi
 
     /// <summary>
     /// Puts a different conversation on screen. Deliveries are held while <paramref name="openConversation"/>
-    /// runs; once it returns, the transcript, speaker, gauge and spent state start over from what it brings.
-    /// A fresh conversation leaves the prompt waiting for its first delivery. A resumed one is drawn from its
-    /// record through the paths a live delivery takes, then the prompt is given back at once. If it throws, the
-    /// screen is left as it was and the exception propagates.
+    /// runs; once it returns the new id, the transcript, speaker, gauge and spent state start over and the prompt
+    /// waits for the new conversation's first delivery. If it throws, the screen is left as it was and the
+    /// exception propagates.
     /// </summary>
-    Task ReplaceConversationAsync(Func<CancellationToken, Task<ConversationOnScreen>> openConversation, CancellationToken cancellationToken);
+    Task ReplaceConversationAsync(Func<CancellationToken, Task<string>> openConversation, CancellationToken cancellationToken);
 }

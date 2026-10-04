@@ -82,9 +82,6 @@ public sealed class HarnessChannel : IAsyncDisposable
     /// <summary>Inbound queue per conversation, fed by the webhook endpoint.</summary>
     private readonly ConcurrentDictionary<string, Channel<ChannelMessage>> inbox = new ConcurrentDictionary<string, Channel<ChannelMessage>>();
 
-    /// <summary>The seal Morgana handed over at each conversation's start, carried on every later call on it.</summary>
-    private readonly ConcurrentDictionary<string, string> seals = new ConcurrentDictionary<string, string>();
-
     /// <summary>Streaming chunks per conversation; collected for diagnostics, never asserted on.</summary>
     private readonly ConcurrentDictionary<string, List<string>> chunks = new ConcurrentDictionary<string, List<string>>();
 
@@ -211,8 +208,6 @@ public sealed class HarnessChannel : IAsyncDisposable
 
         using HttpResponseMessage response = await httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
-        StartConversationResponse? started = await response.Content.ReadFromJsonAsync<StartConversationResponse>();
-        seals[conversationId] = started?.Seal ?? throw new InvalidOperationException($"Morgana started {conversationId} without a seal.");
 
         // Every conversation opens with an unsolicited presentation message, pushed over the same
         // webhook a reply would use. Draining it here means the caller's first SendAsync genuinely
@@ -222,26 +217,16 @@ public sealed class HarnessChannel : IAsyncDisposable
         return (conversationId, presentation);
     }
 
-    /// <summary>How a message Morgana speaks herself is signed, spelled out: it is read off the wire, not shared code.</summary>
-    private const string MorganaAgentName = "Morgana";
-
     /// <summary>Sends a user turn and waits for the message Morgana delivers in response.</summary>
     public async Task<ChannelMessage> SendAsync(string conversationId, string text, TimeSpan timeout)
     {
-        using HttpRequestMessage request = Sealed(HttpMethod.Post, $"/api/morgana/conversation/{conversationId}/message", conversationId);
+        using HttpRequestMessage request = Authorized(HttpMethod.Post, $"/api/morgana/conversation/{conversationId}/message");
         request.Content = JsonContent.Create(new SendMessageRequest(text));
 
         using HttpResponseMessage response = await httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
         ChannelMessage primary = await ReceiveAsync(conversationId, timeout);
-
-        // An agent that finished hands the conversation back to Morgana, who says so in a message of
-        // her own right behind its answer. It belongs to this turn: left queued, the next turn would
-        // read it as its own reply.
-        if (primary.AgentCompleted && !string.Equals(primary.AgentName, MorganaAgentName, StringComparison.Ordinal))
-            await ReceiveAsync(conversationId, timeout);
-
         if (drainTrailingSideMessages)
             await DiscardTrailingSideMessageAsync(conversationId);
 
@@ -287,7 +272,7 @@ public sealed class HarnessChannel : IAsyncDisposable
     /// </remarks>
     public async Task<IReadOnlyList<MorganaChatMessage>> GetHistoryAsync(string conversationId)
     {
-        using HttpRequestMessage request = Sealed(HttpMethod.Get, $"/api/morgana/conversation/{conversationId}/history", conversationId);
+        using HttpRequestMessage request = Authorized(HttpMethod.Get, $"/api/morgana/conversation/{conversationId}/history");
 
         using HttpResponseMessage response = await httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
@@ -304,7 +289,7 @@ public sealed class HarnessChannel : IAsyncDisposable
         {
             // Response is neither awaited for content nor checked for success — this call is a
             // courtesy notification to the host, not something a scenario's outcome depends on.
-            using HttpRequestMessage request = Sealed(HttpMethod.Post, $"/api/morgana/conversation/{conversationId}/end", conversationId);
+            using HttpRequestMessage request = Authorized(HttpMethod.Post, $"/api/morgana/conversation/{conversationId}/end");
             using HttpResponseMessage response = await httpClient.SendAsync(request);
         }
         catch (HttpRequestException)
@@ -317,13 +302,8 @@ public sealed class HarnessChannel : IAsyncDisposable
             // needs its queues released, or they leak for the lifetime of the whole test assembly.
             inbox.TryRemove(conversationId, out _);
             chunks.TryRemove(conversationId, out _);
-            seals.TryRemove(conversationId, out _);
         }
     }
-
-    /// <summary>The seal of a conversation this channel started, for a test calling its API directly.</summary>
-    /// <exception cref="KeyNotFoundException">Thrown for a conversation this channel did not start or already ended.</exception>
-    public string SealOf(string conversationId) => seals[conversationId];
 
     /// <summary>Streaming chunks received so far for a conversation, for failure diagnostics.</summary>
     public IReadOnlyList<string> ChunksFor(string conversationId)
@@ -368,18 +348,6 @@ public sealed class HarnessChannel : IAsyncDisposable
     {
         HttpRequestMessage request = new HttpRequestMessage(method, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken());
-
-        return request;
-    }
-
-    /// <summary>Builds an authorized request on a conversation this channel started, carrying its seal.</summary>
-    private HttpRequestMessage Sealed(HttpMethod method, string path, string conversationId)
-    {
-        HttpRequestMessage request = Authorized(method, path);
-
-        // A conversation this channel never started goes out unsealed and Morgana answers it as unknown
-        if (seals.TryGetValue(conversationId, out string? seal))
-            request.Headers.Add(StartConversationResponse.SealHeader, seal);
 
         return request;
     }

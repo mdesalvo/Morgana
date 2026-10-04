@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Morgana.AI;
 using Morgana.AI.Telemetry;
@@ -94,27 +93,16 @@ public sealed class TurnObserver : IDisposable
     /// <summary>Consultation spans per conversation — several may close within one turn.</summary>
     private readonly ConcurrentDictionary<string, List<ConsultationObservation>> consultationSpans = new ConcurrentDictionary<string, List<ConsultationObservation>>();
 
-    /// <summary>Tool results the guard screened, per conversation — one turn may screen several.</summary>
-    private readonly ConcurrentDictionary<string, List<ToolGuardObservation>> toolGuardSpans = new ConcurrentDictionary<string, List<ToolGuardObservation>>();
-
-    /// <summary>Calls to the presentation tools, per conversation — one turn may set both quick replies and a card.</summary>
-    private readonly ConcurrentDictionary<string, List<PresentationObservation>> presentationSpans = new ConcurrentDictionary<string, List<PresentationObservation>>();
-
-    /// <summary>
-    /// Partners' questions the peer guard judged, per conversation. Read by conversation rather than by
-    /// turn: a partner's exchange runs on no turn of the harness's own channel.
-    /// </summary>
-    private readonly ConcurrentDictionary<string, List<PeerGuardObservation>> peerGuardSpans = new ConcurrentDictionary<string, List<PeerGuardObservation>>();
-
     /// <summary>Closed <c>morgana.classifier</c> spans, per conversation, in completion order.</summary>
     private readonly ConcurrentDictionary<string, List<ClassifierSpan>> classifierSpans = new ConcurrentDictionary<string, List<ClassifierSpan>>();
 
     /// <summary>
-    /// Every closed LLM span, in completion order. Not keyed by conversation: the MEAI spans carry
-    /// <c>gen_ai.*</c> attributes and no conversation id, so they are attributed to a turn by
-    /// position in this list — sound for the same reason the log correlation is and no more.
+    /// Token usage of every closed LLM span, in completion order. Not keyed by conversation: the
+    /// MEAI spans carry <c>gen_ai.*</c> attributes and no conversation id, so they are attributed
+    /// to a turn by position in this list — sound for the same reason the log correlation is and
+    /// no more.
     /// </summary>
-    private readonly List<LlmCallObservation> llmSpans = [];
+    private readonly List<TokenUsage> llmSpans = [];
 
     /// <summary>Guards <see cref="llmSpans"/>.</summary>
     private readonly Lock llmGate = new Lock();
@@ -153,8 +141,9 @@ public sealed class TurnObserver : IDisposable
         lock (llmGate)
             llmMark = llmSpans.Count;
 
-        // One watermark per signal — the log, each span kind of this conversation and the global
-        // LLM-span count — which CompleteTurnAsync reads everything *past* to isolate this one turn.
+        // Five independent marks — log line count, agent/guard/classifier span counts for this
+        // conversation and global LLM-span count — each a watermark that CompleteTurnAsync will
+        // read everything *past* to isolate what happened during this one turn specifically.
         return new TurnScope(
             conversationId,
             output.Mark(),
@@ -162,9 +151,7 @@ public sealed class TurnObserver : IDisposable
             guardSpans.TryGetValue(conversationId, out List<GuardSpan>? guards) ? guards.Count : 0,
             classifierSpans.TryGetValue(conversationId, out List<ClassifierSpan>? classifiers) ? classifiers.Count : 0,
             llmMark,
-            consultationSpans.TryGetValue(conversationId, out List<ConsultationObservation>? consultations) ? consultations.Count : 0,
-            toolGuardSpans.TryGetValue(conversationId, out List<ToolGuardObservation>? screened) ? screened.Count : 0,
-            presentationSpans.TryGetValue(conversationId, out List<PresentationObservation>? presented) ? presented.Count : 0);
+            consultationSpans.TryGetValue(conversationId, out List<ConsultationObservation>? consultations) ? consultations.Count : 0);
     }
 
     /// <summary>
@@ -246,23 +233,12 @@ public sealed class TurnObserver : IDisposable
                 ? [.. served.Skip(scope.ConsultationSpanCount)]
                 : [];
 
-        // Every result screened during the turn: which of them the guard quarantined is the whole question.
-        IReadOnlyList<ToolGuardObservation> screened =
-            toolGuardSpans.TryGetValue(scope.ConversationId, out List<ToolGuardObservation>? guarded) && guarded.Count > scope.ToolGuardSpanCount
-                ? [.. guarded.Skip(scope.ToolGuardSpanCount)]
-                : [];
-
-        // Every presentation call of the turn: a call listed among the tools may still have been refused.
-        IReadOnlyList<PresentationObservation> presentations =
-            presentationSpans.TryGetValue(scope.ConversationId, out List<PresentationObservation>? presented) && presented.Count > scope.PresentationSpanCount
-                ? [.. presented.Skip(scope.PresentationSpanCount)]
-                : [];
-
         // LLM spans are process-wide, not per-conversation (see the field's own remarks on why),
         // so isolating this turn's usage means skipping every span that existed before BeginTurn's
         // mark and summing whatever landed after — sound only because the suite runs serially.
-        IReadOnlyList<LlmCallObservation> calls = LlmCallsSince(scope);
-        TokenUsage usage = calls.Where(call => call.IsModelCall).Aggregate(TokenUsage.Zero, (total, next) => total + next.Usage);
+        TokenUsage usage;
+        lock (llmGate)
+            usage = llmSpans.Skip(scope.LlmSpanCount).Aggregate(TokenUsage.Zero, (total, next) => total + next);
 
         return new TurnResult(
             scope.ConversationId,
@@ -278,39 +254,7 @@ public sealed class TurnObserver : IDisposable
             classifier?.Intent,
             classifier?.Confidence,
             consulted,
-            conversationLogMark is { } mark ? output.Since(mark) : [],
-            screened,
-            guard?.Source,
-            presentations,
-            calls);
-    }
-
-    /// <summary>
-    /// What a turn that never completed did before it was abandoned — every model call and host log
-    /// line since its scope was opened. A timeout is the failure whose cause is invisible from the
-    /// channel, so its report must carry the same evidence a completed turn's does.
-    /// </summary>
-    public string BackstageSince(TurnScope scope)
-        => TurnResult.RenderBackstage(LlmCallsSince(scope), output.Since(scope.LogMark));
-
-    private IReadOnlyList<LlmCallObservation> LlmCallsSince(TurnScope scope)
-    {
-        lock (llmGate)
-            return [.. llmSpans.Skip(scope.LlmSpanCount)];
-    }
-
-    /// <summary>
-    /// Every verdict the peer guard reached on the conversation a partner's exchange is served on, in
-    /// the order the spans closed.
-    /// </summary>
-    /// <param name="conversationId">The conversation as this installation names it, the partner's issuer included.</param>
-    public IReadOnlyList<PeerGuardObservation> PeerGuardVerdicts(string conversationId)
-    {
-        if (!peerGuardSpans.TryGetValue(conversationId, out List<PeerGuardObservation>? verdicts))
-            return [];
-
-        lock (verdicts)
-            return [.. verdicts];
+            conversationLogMark is { } mark ? output.Since(mark) : []);
     }
 
     /// <inheritdoc />
@@ -334,18 +278,8 @@ public sealed class TurnObserver : IDisposable
                 ReadTokenTag(activity, "gen_ai.usage.cache_write.input_tokens"),
                 Calls: 1);
 
-            // What the model emitted reaches the span only because the fixture turns sensitive data
-            // on for this in-process host: it is what tells a model that stopped without a word
-            // from one whose words were lost on the way to the user.
-            LlmCallObservation call = new LlmCallObservation(
-                activity.OperationName,
-                usage,
-                activity.GetTagItem("gen_ai.response.model") as string ?? activity.GetTagItem("gen_ai.request.model") as string,
-                ReadFinishReasons(activity.GetTagItem("gen_ai.response.finish_reasons")),
-                DescribeModelOutput(activity.GetTagItem("gen_ai.output.messages") as string));
-
             lock (llmGate)
-                llmSpans.Add(call);
+                llmSpans.Add(usage);
 
             return;
         }
@@ -382,36 +316,10 @@ public sealed class TurnObserver : IDisposable
                     activity.GetTagItem(MorganaTelemetry.ConsultationAnswer) as string));
                 break;
 
-            case MorganaTelemetry.ToolGuardActivity:
-                Append(toolGuardSpans, conversationId, new ToolGuardObservation(
-                    activity.GetTagItem(MorganaTelemetry.ToolGuardTool) as string,
-                    activity.GetTagItem(MorganaTelemetry.ToolGuardExternal) as bool?,
-                    activity.GetTagItem(MorganaTelemetry.ToolGuardCompliant) as bool?,
-                    activity.GetTagItem(MorganaTelemetry.ToolGuardSource) as string,
-                    activity.GetTagItem(MorganaTelemetry.ToolGuardViolation) as string));
-                break;
-
-            case MorganaTelemetry.PresentationActivity:
-                Append(presentationSpans, conversationId, new PresentationObservation(
-                    activity.GetTagItem(MorganaTelemetry.PresentationTool) as string,
-                    activity.GetTagItem(MorganaTelemetry.PresentationAccepted) as bool?,
-                    activity.GetTagItem(MorganaTelemetry.PresentationRejection) as string));
-                break;
-
-            case MorganaTelemetry.PeerGuardActivity:
-                Append(peerGuardSpans, conversationId, new PeerGuardObservation(
-                    activity.GetTagItem(MorganaTelemetry.PeerGuardCaller) as string,
-                    activity.GetTagItem(MorganaTelemetry.PeerGuardTarget) as string,
-                    activity.GetTagItem(MorganaTelemetry.PeerGuardCompliant) as bool?,
-                    activity.GetTagItem(MorganaTelemetry.PeerGuardSource) as string,
-                    activity.GetTagItem(MorganaTelemetry.PeerGuardViolation) as string));
-                break;
-
             case MorganaTelemetry.GuardActivity:
                 Append(guardSpans, conversationId, new GuardSpan(
                     activity.GetTagItem(MorganaTelemetry.GuardCompliant) as bool?,
-                    activity.GetTagItem(MorganaTelemetry.GuardViolation) as string,
-                    activity.GetTagItem(MorganaTelemetry.GuardSource) as string));
+                    activity.GetTagItem(MorganaTelemetry.GuardViolation) as string));
                 break;
 
             case MorganaTelemetry.ClassifierActivity:
@@ -461,83 +369,11 @@ public sealed class TurnObserver : IDisposable
             _ => 0
         };
 
-    // The provider's reasons arrive as one array per call; a call reports one reason in practice.
-    private static string? ReadFinishReasons(object? tag) => tag switch
-    {
-        string[] reasons => string.Join(",", reasons),
-        string text => text.Trim('[', ']').Replace("\"", "", StringComparison.Ordinal),
-        _ => null
-    };
-
-    /// <summary>
-    /// Turns the <c>gen_ai.output.messages</c> document into one entry per emitted part: a text with
-    /// its length and opening, a tool call with its name and arguments. An empty text is named as
-    /// such, because a turn that ends on one is exactly the case this exists to expose.
-    /// </summary>
-    private static IReadOnlyList<string> DescribeModelOutput(string? outputMessages)
-    {
-        if (string.IsNullOrEmpty(outputMessages))
-            return [];
-
-        List<string> parts = [];
-        try
-        {
-            using JsonDocument document = JsonDocument.Parse(outputMessages);
-            foreach (JsonElement message in document.RootElement.EnumerateArray())
-            {
-                if (!message.TryGetProperty("parts", out JsonElement messageParts))
-                    continue;
-
-                foreach (JsonElement part in messageParts.EnumerateArray())
-                    parts.Add(DescribeModelOutputPart(part));
-            }
-        }
-        catch (JsonException)
-        {
-            // A shape this reader does not know is still evidence: shown raw rather than dropped.
-            parts.Add($"unparsed output: {Excerpt(outputMessages, 400)}");
-        }
-
-        return parts;
-    }
-
-    private static string DescribeModelOutputPart(JsonElement part)
-    {
-        string type = part.TryGetProperty("type", out JsonElement typeElement) ? typeElement.GetString() ?? "?" : "?";
-        if (type == "tool_call")
-        {
-            string name = part.TryGetProperty("name", out JsonElement nameElement) ? nameElement.GetString() ?? "?" : "?";
-            string arguments = part.TryGetProperty("arguments", out JsonElement argumentsElement) ? argumentsElement.GetRawText() : "";
-            return $"call {name}({Excerpt(arguments, 300)})";
-        }
-
-        // MEAI writes a standard part with its content as a string, but any content it has no
-        // convention for as a serialized object named by its .NET type: reasoning arrives that way,
-        // so the type is always shown, short, lest a thought read as an answer.
-        string kind = type[(type.LastIndexOf('.') + 1)..];
-        string? text = part.TryGetProperty("content", out JsonElement content)
-            ? content.ValueKind == JsonValueKind.String
-                ? content.GetString()
-                : content.ValueKind == JsonValueKind.Object && content.TryGetProperty("text", out JsonElement nestedText) ? nestedText.GetString() : null
-            : null;
-
-        if (text is null)
-            return kind;
-
-        return text.Length == 0 ? $"{kind} (empty)" : $"{kind}[{text.Length}] \"{Excerpt(text, 200)}\"";
-    }
-
-    private static string Excerpt(string value, int length)
-    {
-        string singleLine = value.ReplaceLineEndings(" ");
-        return singleLine.Length <= length ? singleLine : singleLine[..length] + "…";
-    }
-
     /// <summary>What a closed <c>morgana.agent</c> span contributes to a turn result.</summary>
     private sealed record AgentSpan(string? AgentName, IReadOnlyList<string> ToolsInvoked);
 
     /// <summary>What a closed <c>morgana.guard</c> span contributes to a turn result.</summary>
-    private sealed record GuardSpan(bool? Compliant, string? Violation, string? Source);
+    private sealed record GuardSpan(bool? Compliant, string? Violation);
 
     /// <summary>What a closed <c>morgana.classifier</c> span contributes to a turn result.</summary>
     private sealed record ClassifierSpan(string? Intent, double? Confidence);
@@ -586,6 +422,4 @@ public sealed record TokenUsage(
 /// <param name="ConsultationSpanCount">Consultation spans already recorded for the conversation.</param>
 /// <param name="ClassifierSpanCount">Classifier spans already recorded for the conversation.</param>
 /// <param name="LlmSpanCount">LLM spans already recorded, process-wide.</param>
-/// <param name="ToolGuardSpanCount">Screened tool results already recorded for the conversation.</param>
-/// <param name="PresentationSpanCount">Presentation tool calls already recorded for the conversation.</param>
-public sealed record TurnScope(string ConversationId, int LogMark, int SpanCount, int GuardSpanCount, int ClassifierSpanCount, int LlmSpanCount, int ConsultationSpanCount, int ToolGuardSpanCount, int PresentationSpanCount);
+public sealed record TurnScope(string ConversationId, int LogMark, int SpanCount, int GuardSpanCount, int ClassifierSpanCount, int LlmSpanCount, int ConsultationSpanCount);

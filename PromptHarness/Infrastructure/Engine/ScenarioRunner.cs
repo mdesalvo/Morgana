@@ -12,13 +12,11 @@ namespace PromptHarness.Infrastructure.Engine;
 /// <param name="Failures">Violated expectations; empty when the run passed.</param>
 /// <param name="Transcript">Per-turn rendering of what happened, attached to failing runs.</param>
 /// <param name="Tokens">Token usage summed over the run's turns. Judge calls are excluded: they are the harness's cost, not Morgana's.</param>
-/// <param name="Backstage">Per-turn model calls and host log, aligned with <paramref name="Transcript"/>; written to the failure log only.</param>
 public sealed record RunOutcome(
     int Index,
     IReadOnlyList<string> Failures,
     IReadOnlyList<string> Transcript,
-    TokenUsage Tokens,
-    IReadOnlyList<string> Backstage)
+    TokenUsage Tokens)
 {
     /// <summary>Whether every expectation of every turn held.</summary>
     public bool Passed => Failures.Count == 0;
@@ -54,12 +52,8 @@ public sealed record ScenarioOutcome(ScenarioDefinition Scenario, int Required, 
          + $"per run: {CallsPerRun:F1} LLM calls, in={InputTokensPerRun}, out={OutputTokensPerRun}, "
          + $"cacheRead={(Runs.Count == 0 ? 0 : TotalTokens.CacheReadTokens / Runs.Count)}";
 
-    /// <summary>
-    /// Human-readable report, printed on failure. With <paramref name="withBackstage"/> every turn of a
-    /// failing run is followed by its model calls and host log: the failure log carries them, the
-    /// assertion message on the console stays readable without them.
-    /// </summary>
-    public string Report(bool withBackstage = false)
+    /// <summary>Human-readable report, printed on failure.</summary>
+    public string Report()
     {
         StringBuilder report = new StringBuilder();
         report.AppendLine(CultureInfo.InvariantCulture, $"Scenario '{Scenario.Id}': {Passes}/{Runs.Count} runs passed, {Required} required.");
@@ -78,13 +72,10 @@ public sealed record ScenarioOutcome(ScenarioDefinition Scenario, int Required, 
 
             // The full per-turn transcript follows the failure list, so the reader sees not just
             // *what* was violated but the entire conversation that produced it.
-            for (int turnIndex = 0; turnIndex < run.Transcript.Count; turnIndex++)
+            foreach (string turn in run.Transcript)
             {
                 report.AppendLine();
-                report.AppendLine(run.Transcript[turnIndex]);
-
-                if (withBackstage && turnIndex < run.Backstage.Count)
-                    report.AppendLine(run.Backstage[turnIndex]);
+                report.AppendLine(turn);
             }
         }
 
@@ -169,14 +160,8 @@ public sealed class ScenarioRunner
     {
         List<string> failures = [];
         List<string> transcript = [];
-        List<string> backstage = [];
         TokenUsage tokens = TokenUsage.Zero;
         string? conversationId = null;
-
-        // The turn in flight, kept until it completes: a turn abandoned by a timeout or an exception
-        // must still leave its evidence behind, gathered from the marks it was opened with.
-        TurnScope? openScope = null;
-        string? openSay = null;
 
         try
         {
@@ -208,14 +193,10 @@ public sealed class ScenarioRunner
                 // Mark, send, then close the window: BeginTurn/CompleteTurnAsync bracket exactly
                 // the observation period this one turn's send-and-reply spans.
                 TurnScope scope = observer.BeginTurn(conversationId);
-                openScope = scope;
-                openSay = say;
                 ChannelMessage message = await channel.SendAsync(conversationId, say, timeout);
                 TurnResult turn = await observer.CompleteTurnAsync(scope, say, message);
-                openScope = null;
 
                 transcript.Add(turn.Describe());
-                backstage.Add(turn.Backstage());
 
                 // Accumulated before the judge runs, so the measurement stays Morgana's cost only.
                 tokens += turn.Tokens;
@@ -250,12 +231,6 @@ public sealed class ScenarioRunner
             // into a single failure entry rather than propagating and aborting every remaining run
             // of the scenario; the loop in RunAsync keeps going for the runs after this one.
             failures.Add($"run aborted: {ex.GetType().Name}: {ex.Message}");
-
-            if (openScope is not null)
-            {
-                transcript.Add($"user: {openSay}\n(turn abandoned before it completed)");
-                backstage.Add(observer.BackstageSince(openScope));
-            }
         }
         finally
         {
@@ -265,6 +240,6 @@ public sealed class ScenarioRunner
                 await channel.EndConversationAsync(conversationId);
         }
 
-        return new RunOutcome(index, failures, transcript, tokens, backstage);
+        return new RunOutcome(index, failures, transcript, tokens);
     }
 }

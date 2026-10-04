@@ -13,7 +13,7 @@
 
 ⭐ We appreciate your star, it helps!
 
-Morgana is a modern and flexible **conversational AI framework** designed to handle complex scenarios through a sophisticated **multi-agent, semantic-routing architecture**. Built on **.NET 10** and leveraging the actor model via **Akka.NET**, Morgana orchestrates specialized **AI agents** that collaborate to understand, classify and resolve customer inquiries with precision and context awareness.
+Morgana is a modern and flexible **conversational AI framework** designed to handle complex scenarios through a sophisticated **multi-agent, semantic-routing architecture**. Built on cutting-edge **.NET 10** and leveraging the actor model via **Akka.NET**, Morgana orchestrates specialized **AI agents** that collaborate to understand, classify and resolve customer inquiries with precision and context awareness.
 
 The system is powered by **Microsoft.Agents.AI**, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
 
@@ -283,7 +283,7 @@ docker compose --env-file .env --env-file .env.versions --profile authoring up a
 
 </details>
 
-These pillars are argued at length in the [**project handbooks**](https://mdesalvo.github.io/Morgana/)
+These pillars are argued at length in the [**project handbooks**](https://mdesalvo.github.io/Morgana/).
 
 ---
 

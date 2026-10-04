@@ -95,7 +95,7 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
             // of narrowing it: the id is minted here and a group is joinable before anything is
             // keyed on it. On the server side this is the documented ordering, see
             // MorganaHub.JoinConversation.
-            await _signalR.JoinConversation(request.ConversationId, seal: null);
+            await _signalR.JoinConversation(request.ConversationId);
 
             HttpResponseMessage response = await _http.PostAsJsonAsync(
                 "/api/morgana/conversation/start", request);
@@ -106,9 +106,8 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
                     .ReadFromJsonAsync<StartConversationResponse>();
 
                 // The server's id wins over the one just minted: it is what every later call
-                // and every SignalR group is keyed on. The seal comes this once and never again.
+                // and every SignalR group is keyed on.
                 _chatStateService.ConversationId = result?.ConversationId ?? string.Empty;
-                _chatStateService.ConversationSeal = result?.Seal ?? string.Empty;
 
                 // Today the server echoes the id it was given, so the group joined above is already
                 // the right one. Should it ever hand back a different one, the pre-join landed on a
@@ -119,13 +118,10 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
                         _chatStateService.ConversationId, request.ConversationId);
 
                     await _signalR.LeaveConversation(request.ConversationId);
+                    await _signalR.JoinConversation(_chatStateService.ConversationId);
                 }
 
-                // Joined again with the seal: the conversation is on record now, so a reconnect is admitted only with it
-                await _signalR.JoinConversation(_chatStateService.ConversationId, _chatStateService.ConversationSeal);
-
-                await _storage.SaveStoredConversationAsync(
-                    new StoredConversation(_chatStateService.ConversationId, _chatStateService.ConversationSeal));
+                await _storage.SaveConversationIdAsync(_chatStateService.ConversationId);
 
                 _logger.LogInformation("Conversation started: {ConversationId}", _chatStateService.ConversationId);
                 return true;
@@ -156,10 +152,8 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
     /// Falls back to StartConversationAsync on any failure.
     /// </summary>
     /// <returns>True if conversation was resumed or a new one started successfully.</returns>
-    public async Task<bool> ResumeConversationAsync(StoredConversation storedConversation)
+    public async Task<bool> ResumeConversationAsync(string savedConversationId)
     {
-        string savedConversationId = storedConversation.ConversationId;
-
         // Scopes every log line below to this conversation id, so a single id lets an
         // operator pull the whole start attempt out of the log stream, failures included.
         using IDisposable? scope = _logger.BeginScope(new Dictionary<string, object>
@@ -171,9 +165,8 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         {
             _logger.LogInformation("Attempting to resume conversation {ConversationId}", savedConversationId);
 
-            using HttpRequestMessage resumeRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/morgana/conversation/{savedConversationId}/resume");
-            resumeRequest.Headers.Add(StartConversationResponse.SealHeader, storedConversation.Seal);
-            HttpResponseMessage response = await _http.SendAsync(resumeRequest);
+            HttpResponseMessage response = await _http.PostAsync(
+                $"/api/morgana/conversation/{savedConversationId}/resume", null);
 
             if (response.IsSuccessStatusCode)
             {
@@ -181,7 +174,6 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
                     .ReadFromJsonAsync<ResumeConversationResponse>();
 
                 _chatStateService.ConversationId = result?.ConversationId ?? savedConversationId;
-                _chatStateService.ConversationSeal = storedConversation.Seal;
 
                 // Rehydrate the dust gauge from the resumed conversation's budget so the
                 // widget reflects real residual dust immediately, not a pristine bar that
@@ -207,14 +199,13 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
                     _chatStateService.CurrentAgentName = $"Morgana ({char.ToUpperInvariant(result.ActiveAgent[0]) + result.ActiveAgent[1..]})";
                 }
 
-                await _signalR.JoinConversation(_chatStateService.ConversationId, _chatStateService.ConversationSeal);
+                await _signalR.JoinConversation(_chatStateService.ConversationId);
 
                 return await LoadHistoryAsync();
             }
 
             // 404 is the ordinary case of a stale browser: the saved id outlived the server's
-            // knowledge of it or its seal no longer matches. Anything else is a real failure, but
-            // both recover the same way.
+            // knowledge of it. Anything else is a real failure, but both recover the same way.
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                 _logger.LogWarning("Conversation {ConversationId} not found, starting fresh", savedConversationId);
             else
@@ -237,7 +228,6 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         // Snapshot the id before anything else touches the state, so the whole teardown targets
         // one conversation even though the caller clears the state right after.
         string conversationId = _chatStateService.ConversationId;
-        string conversationSeal = _chatStateService.ConversationSeal;
 
         // Nothing to end when no conversation was ever established (first load, or a start that failed)
         if (string.IsNullOrEmpty(conversationId))
@@ -259,9 +249,7 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
             // Tell Morgana the conversation is over: the manager stops the supervisor and the
             // guard/classifier/router/agent subtree underneath it, releasing their sessions.
             // The persisted history is untouched — this frees actors, it does not delete data.
-            using HttpRequestMessage endRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/morgana/conversation/{conversationId}/end");
-            endRequest.Headers.Add(StartConversationResponse.SealHeader, conversationSeal);
-            await _http.SendAsync(endRequest);
+            await _http.PostAsync($"/api/morgana/conversation/{conversationId}/end", content: null);
 
             _logger.LogInformation("Conversation ended: {ConversationId}", conversationId);
         }
@@ -280,15 +268,15 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
     public async Task ClearConversationAsync()
     {
         _logger.LogInformation("Clearing conversation from storage");
-        await _storage.ClearStoredConversationAsync();
+        await _storage.ClearConversationIdAsync();
     }
 
     /// <summary>
-    /// Checks storage for an existing conversation and its seal.
+    /// Checks storage for an existing conversation ID.
     /// </summary>
-    public async Task<StoredConversation?> GetStoredConversationAsync()
+    public async Task<string?> GetSavedConversationIdAsync()
     {
-        return await _storage.GetStoredConversationAsync();
+        return await _storage.GetConversationIdAsync();
     }
 
     /// <summary>
@@ -309,10 +297,8 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
             SendMessageRequest request = new SendMessageRequest(
                 Text: text);
 
-            using HttpRequestMessage messageRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/morgana/conversation/{_chatStateService.ConversationId}/message");
-            messageRequest.Headers.Add(StartConversationResponse.SealHeader, _chatStateService.ConversationSeal);
-            messageRequest.Content = JsonContent.Create(request);
-            HttpResponseMessage response = await _http.SendAsync(messageRequest);
+            HttpResponseMessage response = await _http.PostAsJsonAsync(
+                $"/api/morgana/conversation/{_chatStateService.ConversationId}/message", request);
 
             _logger.LogInformation("Message sent, response status: {StatusCode}", response.StatusCode);
 
@@ -382,7 +368,7 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         if (!IsAwaitingReply || string.IsNullOrWhiteSpace(_chatStateService.ConversationId))
             return [];
 
-        ConversationHistoryResponse? history = await _history.GetHistoryAsync(_chatStateService.ConversationId, _chatStateService.ConversationSeal);
+        ConversationHistoryResponse? history = await _history.GetHistoryAsync(_chatStateService.ConversationId);
         if (history?.Messages is not { Length: > 0 })
             return [];
 
@@ -413,7 +399,7 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
     {
         try
         {
-            ConversationHistoryResponse? history = await _history.GetHistoryAsync(_chatStateService.ConversationId, _chatStateService.ConversationSeal);
+            ConversationHistoryResponse? history = await _history.GetHistoryAsync(_chatStateService.ConversationId);
 
             if (history?.Messages is not { Length: > 0 })
             {
@@ -434,18 +420,13 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
 
             // Morgana saves a phrase the moment it arrives, so a history ending on the visitor's
             // own words means that turn is still being worked on — typically a reload during it.
-            MorganaChatMessage lastMessage = history.Messages.Last();
-            if (lastMessage.Type == ChatMessageType.User)
-            {
-                // A phrase silent for the whole timeout already is a lost turn, given up on at once: the history
-                // just read is what the deadline would ask. Otherwise the composer stays shut and the wait resumes,
-                // the deadline still recovering a reply pushed in the gap before this client rejoined its group
-                if (DateTime.UtcNow - lastMessage.Timestamp >= _replyTimeout)
-                {
-                    AbandonTurn();
-                    return true;
-                }
+            bool isTurnInFlight = history.Messages.Last().Type == ChatMessageType.User;
 
+            // The composer stays shut and the wait resumes where the reload cut it. This also
+            // recovers a reply pushed into the gap before this client rejoined its group: the
+            // deadline asks the history first and gives up only on a turn with nothing there.
+            if (isTurnInFlight)
+            {
                 _chatStateService.IsSending = true;
                 _chatStateService.AddTypingIndicator();
                 NoteReplyActivity();
@@ -465,6 +446,13 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
     /// <summary>
     /// Projects a history message from the wire contract onto the mutable UI model.
     /// </summary>
+    /// <remarks>
+    /// The two models are deliberately distinct: <see cref="MorganaChatMessage"/> is what Morgana
+    /// persisted, <see cref="ChatMessage"/> carries UI-only state the server knows nothing about
+    /// (typing indicator, streaming flag, selected quick reply). Mapping the message type through
+    /// an exhaustive switch means a new value added server-side surfaces here rather than being
+    /// silently coerced into the wrong UI styling.
+    /// </remarks>
     private static ChatMessage MapToChatMessage(MorganaChatMessage message) =>
         new()
         {
@@ -506,7 +494,7 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
     {
         // Drop the unusable id first: leaving it would make the next page load retry the same
         // dead conversation and fall through to here again.
-        await _storage.ClearStoredConversationAsync();
+        await _storage.ClearConversationIdAsync();
         return await StartConversationAsync();
     }
 

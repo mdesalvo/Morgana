@@ -1,5 +1,4 @@
 using System.ClientModel;
-using System.ClientModel.Primitives;
 using Azure;
 using Azure.AI.OpenAI;
 using Microsoft.Extensions.AI;
@@ -45,31 +44,31 @@ public class AzureOpenAI : MorganaLLM
         Dictionary<Records.LLMTier, Records.TierDefinition> tiers =
             this.configuration.GetSection("Morgana:LLM:AzureOpenAI:Tiers").Get<Dictionary<Records.LLMTier, Records.TierDefinition>>() ?? [];
 
-        // Throttling is bounded and made visible on either endpoint style as it is for Anthropic: a
-        // retry ceiling read from configuration, a timeout on each attempt and every attempt written
-        // down. Left to its defaults the SDK would retry just as often, only with nobody seeing it happen.
-        ClientRetryPolicy retryPolicy = new ClientRetryPolicy(this.configuration.GetValue("Morgana:LLM:AzureOpenAI:MaxRetries", 3));
-        TimeSpan attemptTimeout = TimeSpan.FromSeconds(this.configuration.GetValue("Morgana:LLM:AzureOpenAI:TimeoutSeconds", 120));
-        HttpClientPipelineTransport transport = new HttpClientPipelineTransport(CreateAttemptLoggingHttpClient(Timeout.InfiniteTimeSpan));
-
         // Azure AI Foundry projects expose an OpenAI-compatible unified "v1" API surface
         // (path containing "/openai/v1") that rejects the "api-version" query parameter that
         // AzureOpenAIClient always appends. For these endpoints, the vanilla OpenAI client
-        // (pointed at the Foundry endpoint) must be used instead. AzureOpenAIClient is itself an
-        // OpenAIClient, so the endpoint style is settled here once and every tier below only
-        // differs by deployment name (TierDefinition.Options.ModelId).
-        OpenAIClient openaiClient = endpoint.AbsolutePath.Contains("/openai/v1", StringComparison.OrdinalIgnoreCase)
-            ? new OpenAIClient(
-                new ApiKeyCredential(apiKey),
-                new OpenAIClientOptions { Endpoint = endpoint, RetryPolicy = retryPolicy, NetworkTimeout = attemptTimeout, Transport = transport })
-            : new AzureOpenAIClient(
-                endpoint,
-                new AzureKeyCredential(apiKey),
-                new AzureOpenAIClientOptions { RetryPolicy = retryPolicy, NetworkTimeout = attemptTimeout, Transport = transport });
+        // (pointed at the Foundry endpoint) must be used instead. Either underlying client is
+        // built once and reused across every configured tier — each tier only differs by
+        // deployment name (TierDefinition.Options.ModelId).
+        bool isFoundryV1 = endpoint.AbsolutePath.Contains("/openai/v1", StringComparison.OrdinalIgnoreCase);
+        OpenAIClient? foundryClient = isFoundryV1
+            ? new OpenAIClient(new ApiKeyCredential(apiKey), new OpenAIClientOptions { Endpoint = endpoint })
+            : null;
+        AzureOpenAIClient? azureClient = isFoundryV1
+            ? null
+            : new AzureOpenAIClient(endpoint, new AzureKeyCredential(apiKey));
 
-        // Wrap with the MEAI OpenTelemetry decorator for gen_ai.* spans and metrics (input/output tokens, latency, errors).
         foreach ((Records.LLMTier tier, Records.TierDefinition tierDefinition) in tiers)
-            RegisterTierClient(tier, tierDefinition.Options.ModelId, WrapWithTelemetry(openaiClient.GetChatClient(tierDefinition.Options.ModelId).AsIChatClient()), tierDefinition.MagicDust, tierDefinition.Options.ToChatOptions());
+        {
+            // Picks whichever of the two client flavors was actually built above, matching the
+            // endpoint style detected for this deployment.
+            IChatClient innerChatClient = isFoundryV1
+                ? foundryClient!.GetChatClient(tierDefinition.Options.ModelId).AsIChatClient()
+                : azureClient!.GetChatClient(tierDefinition.Options.ModelId).AsIChatClient();
+
+            // Wrap with the MEAI OpenTelemetry decorator for gen_ai.* spans and metrics (input/output tokens, latency, errors).
+            RegisterTierClient(tier, tierDefinition.Options.ModelId, WrapWithTelemetry(innerChatClient), tierDefinition.MagicDust, tierDefinition.Options.ToChatOptions());
+        }
 
         // Wraps up tier registration and picks which client the framework's own actors
         // (Guard, Classifier, Presenter, ChannelAdapter) will use.

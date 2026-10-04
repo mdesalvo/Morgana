@@ -1,8 +1,8 @@
 # Morgana
 
 Morgana is a modern and flexible **conversational AI framework** designed to handle complex scenarios
-through a sophisticated **multi-agent, semantic-routing architecture**. Built on **.NET 10** and
-leveraging the actor model via **Akka.NET**, Morgana orchestrates specialized **AI agents** that
+through a sophisticated **multi-agent, semantic-routing architecture**. Built on cutting-edge **.NET 10**
+and leveraging the actor model via **Akka.NET**, Morgana orchestrates specialized **AI agents** that
 collaborate to understand, classify and resolve customer inquiries with precision and context awareness.
 
 The system is powered by **Microsoft.Agents.AI**, enabling seamless integration with Large Language
@@ -15,13 +15,13 @@ The source, the issue tracker and the releases live in the
   <a class="tile" href="Morgana-Handbook.html">
     <div class="icon">&#x1F52E;</div>
     <h4>Morgana Handbook</h4>
-    <p>The AI framework: architecture, pipeline, agent authoring, prompt composition, channels,
-       persistence, observability</p>
+    <p>The framework: architecture, pipeline, agent authoring, prompt composition, channels,
+       persistence, observability.</p>
   </a>
   <a class="tile" href="Alembic-Handbook.html">
     <div class="icon">&#x2697;&#xFE0F;</div>
     <h4>Alembic Handbook</h4>
     <p>The authoring workbench that distils an interview with a domain expert into a complete,
-       buildable Morgana domain</p>
+       buildable Morgana domain.</p>
   </a>
 </div>

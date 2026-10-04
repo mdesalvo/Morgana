@@ -23,7 +23,6 @@ namespace Morgana.AI.Telemetry;
 ///   ├── Activity: morgana.router     ← agent selection marker (new requests only)
 ///   └── Activity: morgana.agent      ← agent execution (includes streaming)
 ///       event: "first_chunk"         ← TTFT marker
-///       └── Activity: morgana.toolguard ← one per screened tool result
 /// </code>
 ///
 /// <para><strong>Context Propagation:</strong></para>
@@ -68,21 +67,6 @@ public static class MorganaTelemetry
     /// <summary>Counts messages rejected by the guard.</summary>
     public static readonly Counter<long> GuardRejectionCounter =
         MorganaMeter.CreateCounter<long>("morgana.guard.rejections", description: "Number of messages rejected by content moderation");
-
-    /// <summary>
-    /// Counts texts a guard let through because nobody could judge them, tagged with the guard. The
-    /// one number that says a guard is present on paper and absent in fact.
-    /// </summary>
-    public static readonly Counter<long> GuardFailOpenCounter =
-        MorganaMeter.CreateCounter<long>("morgana.guard.fail_open", description: "Number of texts a guard admitted unjudged");
-
-    /// <summary>Counts tool results put in quarantine, tagged with the tool, its source and the layer that decided.</summary>
-    public static readonly Counter<long> ToolQuarantineCounter =
-        MorganaMeter.CreateCounter<long>("morgana.toolguard.quarantines", description: "Number of tool results put in quarantine");
-
-    /// <summary>Counts partners' questions declined, tagged with the partner, the agent asked and the layer that decided.</summary>
-    public static readonly Counter<long> PeerDeclineCounter =
-        MorganaMeter.CreateCounter<long>("morgana.peerguard.declines", description: "Number of partners' questions declined");
 
     /// <summary>End-to-end turn duration in milliseconds (from UserMessage to response).</summary>
     public static readonly Histogram<double> TurnDuration =
@@ -130,15 +114,6 @@ public static class MorganaTelemetry
     /// <summary>Activity wrapping one agent answering a colleague, nested under the asking agent's own activity.</summary>
     public const string ConsultationActivity = "morgana.consultation";
 
-    /// <summary>Activity wrapping the guard's check of one tool result, nested under the agent that called the tool.</summary>
-    public const string ToolGuardActivity = "morgana.toolguard";
-
-    /// <summary>Activity wrapping the guard's check of one question a partner puts to an agent here.</summary>
-    public const string PeerGuardActivity = "morgana.peerguard";
-
-    /// <summary>Activity wrapping one quick-reply or rich-card emission, accepted or refused by its tool, nested under the agent.</summary>
-    public const string PresentationActivity = "morgana.presentation";
-
     // ==============================================================================
     // ATTRIBUTE NAMES — CONVERSATION
     // ==============================================================================
@@ -146,8 +121,8 @@ public static class MorganaTelemetry
     /// <summary>Unique identifier of the conversation. Maps to conversationId.</summary>
     public const string ConversationId = "conversation.id";
 
-    /// <summary>Role that consumed dust on a charge: "Morgana" (framework actors), "Morgana (ToolGuard)"
-    /// (the inspection of external tool results) or "Morgana (Intent/Tier)" (domain agents). Tag on <see cref="DustConsumed"/>.</summary>
+    /// <summary>Role that consumed dust on a charge: "Morgana" (framework actors) or
+    /// "Morgana (Intent/Tier)" (domain agents). Tag on <see cref="DustConsumed"/>.</summary>
     public const string DustLlmRole = "dust.llm_role";
 
     // ==============================================================================
@@ -166,12 +141,6 @@ public static class MorganaTelemetry
 
     /// <summary>Description of the policy violation when guard.compliant is false.</summary>
     public const string GuardViolation = "guard.violation";
-
-    /// <summary>Which layer decided the verdict (see <see cref="Records.GuardVerdictSource"/>): a clean verdict and an unjudged admission never read alike.</summary>
-    public const string GuardSource = "guard.source";
-
-    /// <summary>Which guard a fail-open count belongs to: <c>user</c>, <c>tool</c> or <c>peer</c>.</summary>
-    public const string GuardKind = "guard.kind";
 
     // ==============================================================================
     // ATTRIBUTE NAMES — CLASSIFIER
@@ -215,9 +184,6 @@ public static class MorganaTelemetry
     /// <summary>True if the agent returned quick replies to the user.</summary>
     public const string AgentHasQuickReplies = "agent.has_quick_replies";
 
-    /// <summary>True if the agent returned a rich card to the user.</summary>
-    public const string AgentHasRichCard = "agent.has_rich_card";
-
     /// <summary>
     /// Comma-separated names of the tools invoked during this turn, in call order (names only,
     /// never arguments — span attributes reach every configured exporter).
@@ -254,69 +220,6 @@ public static class MorganaTelemetry
 
     /// <summary>What the colleague answered, whole, for the same reason.</summary>
     public const string ConsultationAnswer = "consultation.answer";
-
-    // ==============================================================================
-    // ATTRIBUTE NAMES — TOOL GUARD
-    // ==============================================================================
-
-    /// <summary>Function whose result was screened. Its arguments and its result never reach the span.</summary>
-    public const string ToolGuardTool = "toolguard.tool";
-
-    /// <summary>Whether the result came from outside this installation and was read by the ToolGuard inspector.</summary>
-    public const string ToolGuardExternal = "toolguard.external";
-
-    /// <summary>Whether the result reached the model; false means it was quarantined.</summary>
-    public const string ToolGuardCompliant = "toolguard.compliant";
-
-    /// <summary>Which layer decided the verdict on the result.</summary>
-    public const string ToolGuardSource = "toolguard.source";
-
-    /// <summary>Why the result was quarantined: a category or a clinical sentence, never a quote of the result.</summary>
-    public const string ToolGuardViolation = "toolguard.violation";
-
-    // ==============================================================================
-    // ATTRIBUTE NAMES — PEER GUARD
-    // ==============================================================================
-
-    /// <summary>Partner that asked, as its token declared it. The question itself never reaches the span.</summary>
-    public const string PeerGuardCaller = "peerguard.caller";
-
-    /// <summary>Intent of the agent the question was put to.</summary>
-    public const string PeerGuardTarget = "peerguard.target";
-
-    /// <summary>Whether the question reached the agent; false means the partner was answered with a refusal.</summary>
-    public const string PeerGuardCompliant = "peerguard.compliant";
-
-    /// <summary>Which layer decided the verdict on the question.</summary>
-    public const string PeerGuardSource = "peerguard.source";
-
-    /// <summary>Why the question was declined: a category or a clinical sentence, never a quote of the question.</summary>
-    public const string PeerGuardViolation = "peerguard.violation";
-
-    // ==============================================================================
-    // ATTRIBUTE NAMES — PRESENTATION
-    // ==============================================================================
-
-    /// <summary>Presentation tool the model called: SetQuickReplies or SetRichCard. Its payload never reaches the span.</summary>
-    public const string PresentationTool = "presentation.tool";
-
-    /// <summary>Whether the tool stored what the model sent; false means the user will not see it.</summary>
-    public const string PresentationAccepted = "presentation.accepted";
-
-    /// <summary>Why the tool refused the payload, as one of the rejection values below; absent when accepted.</summary>
-    public const string PresentationRejection = "presentation.rejection";
-
-    /// <summary>Rejection value: nothing to present was sent.</summary>
-    public const string PresentationRejectionEmpty = "empty";
-
-    /// <summary>Rejection value: the rich card is not JSON a strict parser reads.</summary>
-    public const string PresentationRejectionInvalidJson = "invalid_json";
-
-    /// <summary>Rejection value: the rich card nests deeper than the channels draw.</summary>
-    public const string PresentationRejectionExcessiveDepth = "excessive_depth";
-
-    /// <summary>Rejection value: the rich card carries more components than the channels draw.</summary>
-    public const string PresentationRejectionTooManyComponents = "too_many_components";
 
     // ==============================================================================
     // EVENT NAMES

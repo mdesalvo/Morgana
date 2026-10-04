@@ -1,7 +1,6 @@
 using Morgana.Contracts;
 using Morgana.Terminal.Abstractions;
 using Morgana.Terminal.Interfaces;
-using Morgana.Terminal.Messages;
 using Morgana.Terminal.Services;
 
 namespace Morgana.Terminal.Commands;
@@ -35,18 +34,17 @@ public sealed class TerminalNewCommand : TerminalCommand
         // The screen swaps only once the fresh conversation exists; opening it is this command's own business
         ui.ReplaceConversationAsync(OpenFreshConversationAsync, cancellationToken);
 
-    /// <summary>Opens the fresh conversation, then ends the one it replaces.</summary>
-    private async Task<ConversationOnScreen> OpenFreshConversationAsync(CancellationToken cancellationToken)
+    /// <summary>Opens the fresh conversation, then ends the one it replaces, returning the new id.</summary>
+    private async Task<string> OpenFreshConversationAsync(CancellationToken cancellationToken)
     {
         // The fresh conversation is opened before the old one is ended: a Morgana that refuses or cannot be
         // reached throws here and leaves the user in the conversation they were in
         string previousConversationId = session.ConversationId;
-        string previousConversationSeal = session.ConversationSeal;
         string openedConversationId = await session.OpenConversationAsync(cancellationToken);
 
         // The conversation left behind is closed on Morgana's side without the fresh one waiting on it:
         // ending is best-effort and never throws
-        _ = morganaClientService.EndConversationAsync(previousConversationId, previousConversationSeal, cancellationToken);
-        return ConversationOnScreen.Fresh(openedConversationId);
+        _ = morganaClientService.EndConversationAsync(previousConversationId, cancellationToken);
+        return openedConversationId;
     }
 }

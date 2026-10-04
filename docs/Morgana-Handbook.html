@@ -628,9 +628,7 @@
           <tr><td>Morgana:ConversationPersistence:EncryptionKey</td><td>AES-256 key for SQLite encryption (base64)</td></tr>
           <tr><td>Morgana:ConversationPersistence:StoragePath</td><td>Directory for SQLite database files</td></tr>
           <tr><td>Morgana:ActorSystem:TimeoutSeconds</td><td>Actor/agent timeout (default: 180)</td></tr>
-          <tr><td>Morgana:ActorSystem:EnableUserGuardrail</td><td>Toggle the guard on the user's messages</td></tr>
-          <tr><td>Morgana:ActorSystem:EnableToolGuardrail</td><td>Toggle the guard on tool results: a result carrying prompt injection is quarantined before the agent reads it</td></tr>
-          <tr><td>Morgana:ActorSystem:EnablePeerGuardrail</td><td>Toggle the guard on partners' questions: a question trying to hijack the agent is declined before it reaches it</td></tr>
+          <tr><td>Morgana:ActorSystem:EnableGuardrail</td><td>Toggle content moderation guard</td></tr>
           <tr><td>Morgana:ActorSystem:IntentCollisionThreshold</td><td>How close two candidate intents must rank before the turn asks the user which one it is, instead of routing</td></tr>
           <tr><td>Morgana:AgentToAgent:*</td><td>
             Peer consultation: <code>Enabled</code> (default <code>true</code>), <code>MaxRoundsPerTurn</code> (default 4), <code>Partners[]</code> (one entry per federated installation).

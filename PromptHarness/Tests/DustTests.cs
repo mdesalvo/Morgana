@@ -17,14 +17,14 @@ namespace PromptHarness.Tests;
 /// summarization reducer, dust limiting is process-wide for the single assembly-shared host, so
 /// lowering it would silently start throttling every other class's conversations too. Run this class
 /// on its own:</para>
-/// <code>Harness__DustBudgetPerConversation=20 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.DustTests"</code>
+/// <code>Harness__DustBudgetPerConversation=15 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~DustTests"</code>
 ///
 /// <para>The number just needs to be small enough that <see cref="MaxTurns"/> is enough room to
 /// exhaust it and large enough that a single turn's own charge cannot jump straight past 90% into
 /// exhaustion in one shot — <c>EmitDustWarningsIfNeededAsync</c> / <c>EmitDustExhaustionAsync</c> are
 /// mutually exclusive per turn (whichever the post-send gauge calls for), so a turn crossing both at
-/// once logs only the exhaustion line and this test would see 90% "never appeared". Budgets of 3, 8
-/// and 15 have each hit exactly that on live runs; 20 has not.</para>
+/// once logs only the exhaustion line and this test would see 90% "never appeared". Budgets of 3 and
+/// 8 both hit exactly that on live runs; 15 comfortably didn't.</para>
 ///
 /// <para><strong>Evidence-driven, not turn-pinned.</strong> Earlier attempts at a scripted YAML
 /// scenario asserting a threshold on a specific turn number kept breaking across reruns: how many
@@ -122,13 +122,13 @@ public sealed class DustTests
 
         ChannelApiClient api = new ChannelApiClient(fixture);
         string conversationId = ChannelApiClient.NewConversationId();
-        string seal = await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing", fixture.Channel.CallbackUrl);
+        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing", fixture.Channel.CallbackUrl);
         await api.QueryRecordAsync(conversationId,
             $"UPDATE dust_budget SET dust_consumed = {fixture.Options.DustBudgetPerConversation!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)} WHERE id = 1;");
 
         // A command asked of a spent conversation is refused as that command's outcome, carrying the reason a
         // channel ends the conversation on
-        Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendCommandAsync(conversationId, seal, """{"name":"compact"}""", TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendCommandAsync(conversationId, """{"name":"compact"}""", TestContext.Current.CancellationToken)).StatusCode);
         ChannelMessage commandRefusal = await fixture.Channel.ReceiveAsync(conversationId, TimeSpan.FromSeconds(15));
         Assert.Equal("dust_budget_exhausted", commandRefusal.ErrorReason);
         Assert.Equal("system", commandRefusal.MessageType);
@@ -136,14 +136,14 @@ public sealed class DustTests
 
         // A message is refused as a notice in the conversation, with no frame belonging to it
         Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendAsync(
-            "POST", "/api/morgana/conversation/{id}/message", conversationId, api.HarnessToken(), seal)).StatusCode);
+            "POST", "/api/morgana/conversation/{id}/message", conversationId, api.HarnessToken())).StatusCode);
         ChannelMessage messageRefusal = await fixture.Channel.ReceiveAsync(conversationId, TimeSpan.FromSeconds(15));
         Assert.Equal("dust_budget_exhausted", messageRefusal.ErrorReason);
         Assert.Equal("error", messageRefusal.MessageType);
         Assert.Null(messageRefusal.Progress);
 
         // A channel coming back to the conversation learns at once that it is over, gauge at zero
-        HttpResponseMessage resumed = await api.SendAsync("POST", "/api/morgana/conversation/{id}/resume", conversationId, api.HarnessToken(), seal);
+        HttpResponseMessage resumed = await api.SendAsync("POST", "/api/morgana/conversation/{id}/resume", conversationId, api.HarnessToken());
         JsonElement body = await resumed.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         Assert.Equal(0.0, body.GetProperty("dustLevel").GetDouble());
         Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("dustExhaustedMessage").GetString()), "A resume of a spent conversation did not say it is over.");

@@ -65,7 +65,7 @@ public static class FailureLog
               + $"recorded: {DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}Z\n"
               + verdict
               + "\n"
-              + outcome.Report(withBackstage: true));
+              + outcome.Report());
         }
         catch (IOException)
         {

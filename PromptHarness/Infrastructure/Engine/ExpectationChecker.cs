@@ -3,7 +3,6 @@ using System.Text.RegularExpressions;
 using Markdig;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
-using Morgana.AI;
 using Morgana.Contracts;
 using PromptHarness.Infrastructure.Wiring;
 
@@ -57,8 +56,6 @@ public static partial class ExpectationChecker
         CheckContext(expect, turn, failures);
         CheckText(expect, turn, failures);
         CheckGuard(expect, turn, failures);
-        CheckToolGuard(expect, turn, failures);
-        CheckNoGuardFailedOpen(turn, failures);
         CheckClassifier(expect, turn, failures);
         CheckSummarization(expect, turn, failures);
         CheckHistory(expect, history, failures);
@@ -102,69 +99,7 @@ public static partial class ExpectationChecker
     private static void CheckGuard(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
         if (expect.GuardCompliant is { } expectedCompliant && turn.GuardCompliant != expectedCompliant)
-            failures.Add($"guardCompliant: expected {expectedCompliant}, got {turn.GuardCompliant?.ToString() ?? "(no guard span — is Harness:EnableUserGuardrail on?)"}");
-
-        // The verdict alone cannot tell a judged message from one admitted unjudged: the layer can.
-        if (expect.GuardDecidedBy is { Count: > 0 } expectedSources
-            && !expectedSources.Contains(turn.GuardSource ?? "", StringComparer.OrdinalIgnoreCase))
-            failures.Add($"guardDecidedBy: expected {string.Join(" or ", expectedSources)}, got {turn.GuardSource ?? "(no guard span — is Harness:EnableUserGuardrail on?)"}");
-    }
-
-    /// <summary>
-    /// Holds on every turn, whatever the scenario declares: a guard that admitted a text because nobody
-    /// could judge it proves nothing, so the turn cannot pass on it however good its answer reads.
-    /// </summary>
-    private static void CheckNoGuardFailedOpen(TurnResult turn, List<string> failures)
-    {
-        if (turn.GuardSource == FailOpenSource)
-            failures.Add("the user guard failed open: the message was admitted without being judged");
-
-        foreach (ToolGuardObservation screened in turn.Screened.Where(screened => screened.Source == FailOpenSource))
-            failures.Add($"the tool guard failed open on '{screened.Tool}': its result reached the model without being judged");
-    }
-
-    /// <summary>How the framework names an admission nobody judged, spelled out: it is read off a span, not shared code.</summary>
-    private const string FailOpenSource = "FailOpen";
-
-    /// <summary>Verdicts of the <c>morgana.toolguard</c> spans on the tools the scenario names.</summary>
-    private static void CheckToolGuard(ExpectSpec expect, TurnResult turn, List<string> failures)
-    {
-        foreach (string tool in expect.ToolsQuarantined ?? [])
-        {
-            // One quarantined result is enough: the injected text never reached the model on that call.
-            if (!turn.Screened.Any(screened => IsVerdictOn(screened, tool, compliant: false)))
-                failures.Add($"toolsQuarantined: '{tool}' was not quarantined ({DescribeScreening(turn, tool)})");
-
-            // Quarantined by the layer the scenario was written to exercise: by any other, it proved something else.
-            else if (expect.QuarantinedBy is { Count: > 0 } expectedSources
-                     && !turn.Screened.Any(screened => IsVerdictOn(screened, tool, compliant: false)
-                                                      && expectedSources.Contains(screened.Source ?? "", StringComparer.OrdinalIgnoreCase)))
-                failures.Add($"quarantinedBy: '{tool}' was quarantined, but not by {string.Join(" or ", expectedSources)} ({DescribeScreening(turn, tool)})");
-        }
-
-        foreach (string tool in expect.ToolsAdmitted ?? [])
-        {
-            // Every screening of the tool must have let it through: a clean result refused even once
-            // left the agent without data it needed.
-            List<ToolGuardObservation> screenings = [.. turn.Screened.Where(screened => string.Equals(screened.Tool, tool, StringComparison.OrdinalIgnoreCase))];
-            if (screenings.Count == 0 || screenings.Any(screened => screened.Compliant != true))
-                failures.Add($"toolsAdmitted: '{tool}' was not admitted ({DescribeScreening(turn, tool)})");
-        }
-
-        static bool IsVerdictOn(ToolGuardObservation screened, string tool, bool compliant)
-            => string.Equals(screened.Tool, tool, StringComparison.OrdinalIgnoreCase) && screened.Compliant == compliant;
-
-        // What the spans did say about the tool, or why none may have been seen at all.
-        static string DescribeScreening(TurnResult turn, string tool)
-        {
-            string[] verdicts = [.. turn.Screened
-                .Where(screened => string.Equals(screened.Tool, tool, StringComparison.OrdinalIgnoreCase))
-                .Select(screened => $"{(screened.Compliant == false ? "quarantined" : "admitted")} by {screened.Source ?? "?"}")];
-
-            return verdicts.Length > 0
-                ? $"screened: {string.Join(", ", verdicts)}"
-                : "never screened: was it called? Is Harness:EnableToolGuardrail on?";
-        }
+            failures.Add($"guardCompliant: expected {expectedCompliant}, got {turn.GuardCompliant?.ToString() ?? "(no guard span — is Harness:EnableGuardrail on?)"}");
     }
 
     /// <summary>Intent and confidence of the <c>morgana.classifier</c> span.</summary>
@@ -224,7 +159,7 @@ public static partial class ExpectationChecker
                     break;
 
                 case "any" when quickReplies.Count == 0:
-                    failures.Add($"quickReplies: expected at least one, got none ({turn.MissingPresentationCause(Constants.Tools.SetQuickReplies)})");
+                    failures.Add("quickReplies: expected at least one, got none");
                     break;
 
                 case "count":
@@ -291,7 +226,7 @@ public static partial class ExpectationChecker
                 break;
 
             case "present" when !present:
-                failures.Add($"richCard: expected present, got none ({turn.MissingPresentationCause(Constants.Tools.SetRichCard)})");
+                failures.Add("richCard: expected present, got none");
                 break;
         }
     }
@@ -425,7 +360,7 @@ public static partial class ExpectationChecker
     /// rather than by calling into <c>MorganaChannelAdapter</c>'s own private detector — the harness
     /// judges the delivered text on its own terms, keeping the black-box boundary structural.
     /// </summary>
-    internal static bool ContainsMarkdownSyntax(string text)
+    private static bool ContainsMarkdownSyntax(string text)
     {
         MarkdownDocument document = Markdown.Parse(text);
         foreach (MarkdownObject node in document.Descendants())

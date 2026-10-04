@@ -5,43 +5,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.33.0] - UNDER DEVELOPMENT
-### 🎯 Major Feature: Guard on Tool Results and A2A Questions
-What a tool returns can be turned against Morgana: a plugin tool, an MCP server, a partner's agent over A2A: all of these may answer with text meant to steer the agent instead of data. **Every tool result is now screened before the agent reads it**: a deterministic check on all of them and an LLM inspection on those coming from outside (MCP servers and partners).
-**It stops five families of hijacking**: of personality, of authority, of behaviour, of data and of the user. A result found hostile is **quarantined**: it never reaches the agent, which does without it, invents nothing in its place and tells the user plainly it cannot give that information.
-### 🎯 Major Feature: Conversation Resume for Terminal Channels
-Grimoire and Rune can now pick up a conversation opened earlier, as Cauldron already could: `/resume id:… seal:…` redraws the transcript on screen and the conversation carries on from where it was left.
-The header shows a glimpse of the current conversation's seal and `/status` shows it whole, so it can be noted down for later recovery.
-### 🎯 Major Feature: Sealed Conversations
-Resuming from any channel makes a conversation ID worth guarding, so **every conversation is now protected by a seal**.
-At start Morgana hands the channel the seal just once and keeps only its hash: from then on every call on the conversation, REST and SignalR alike, needs the seal and the channel that opened it.
-**Knowing a conversation ID is no longer enough to read it, write to it or follow it**: without the seal Morgana answers as if the conversation did not exist.
-
-### ✨ Added
-- **Tool result guard**: hostile results from tools, MCP servers and partners are quarantined before the agent reads them (`Morgana:ActorSystem:EnableToolGuardrail`)
-- **Partner question guard**: a question asked by a partner's agent is screened before an agent here reads it (`Morgana:ActorSystem:EnablePeerGuardrail`)
-- **`/resume` command**: Grimoire and Rune take back a conversation opened earlier, **given its ID and seal**
-- **Conversation seal**: handed to the channel once at start, it is required by every later call on the conversation
-
-### 🔄 Changed
-- Starting a conversation under an ID that is not a GUID in its 32-digit format is now refused
-- Retries and timeouts are now uniform across every LLM provider: until now only Anthropic bounded them, while the others had no settings at all
-- An agent stays in service until it hands the conversation back: `SetTurnContinuation` tool is replaced by `SetTurnEnding`, Morgana takes the conversation back only when the agent calls it
-
-### 🐛 Fixed
-- A conversation left with an agent no longer installed should be handed back to Morgana on resume
-- A chat no longer stays stuck on the typing indicator when an agent fails or answers nothing: an error message arrives and survives a refresh
-- On recent Anthropic models (Sonnet 5.5 onwards) an agent could lose its answer: text written before a closing tool call came back empty, leaving the user with no reply or a truncated one
-
-### 📦 Dependencies
-- Updated `OllamaSharp` to 5.5.0
-
-### 🚀 Future Enablement
-- **Third-party sources without blind trust**: what partners and MCP servers answer is screened before any agent believes it, the precondition for a **federation of Morgana** (v0.31) open to peers nobody can check in advance
-- **Trust measured per source**: every quarantine is traced with its source and the layer that decided it, so how often a server or a partner tries to steer Morgana becomes a number per source. The natural basis for demoting or cutting off ones that keep trying
-- **A conversation that follows its owner**: the seal already proves who may take a conversation back, independent of where it was opened. Once Morgana knows who the user is, the same conversation can move from Cauldron to a terminal and back
-
-
 ## [0.32.0] - 2026-09-26
 ### 🎯 Major Feature: Terminal Command System
 Grimoire and Rune now support **commands**: type `/` at the prompt and a palette opens listing everything this installation offers, beside the channel's own `/new` and `/exit`. It filters as you type and Enter runs the highlighted one. A command is not prose: it never reaches any agents, so it costs no reasoning and interrupts nothing the conversation was doing.

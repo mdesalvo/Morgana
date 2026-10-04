@@ -96,7 +96,7 @@ different purpose.
 |---|---|---|
 | `Target` | what this agent does well and existentially and what it is significant to say it does **not** do | 2-4 sentences |
 | `Personality` | the empathy, language, tone and humanity it meets the user with — voice only | 2-3 sentences |
-| `Territory` | the competence this agent is characteristically the one to answer for | 1-2 sentences |
+| `ConsultMeFor` | the competence this agent is characteristically the one to answer for | 1-2 sentences |
 | `Instructions` | how it goes about it, what it is trying to achieve, what it must **not** do on the way | 2-5 sentences |
 | `Formatting` | how it presents its **own** information: which shape suits which tool's output | brief, concrete |
 
@@ -177,7 +177,7 @@ capability the framework does not have.
 ### The card an agent carries
 
 Morgana publishes one card per agent and builds it from three things: the intent's name, the
-`Territory` as the description a caller reads and the tools as skills. Alembic packs the same card
+`ConsultMeFor` as the description a caller reads and the tools as skills. Alembic packs the same card
 **during the interview**, so what the model weighs and what validation reports is what a caller will
 be handed.
 
@@ -308,7 +308,7 @@ still a defect — the contradiction is paid in tokens and settled by a model ra
 So `DeclareConsultation` takes the asking agent's rewritten prose **in the same call**.
 
 **The closing pass is handed each agent's territory and that is what keeps the repair honest.** The
-framework appends the colleague's own `Territory` to the asking agent's prompt, so the boundary must
+framework appends the colleague's own `ConsultMeFor` to the asking agent's prompt, so the boundary must
 state fact about this agent's **own** books and nothing about the other agent. A pass that could not read
 the territory had only the colleague's `Target` and `Instructions` to work from, so asked to strike a
 refusal it wrote the colleague's *process* into the asking agent's prose instead — the defect the

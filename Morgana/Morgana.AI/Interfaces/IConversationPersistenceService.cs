@@ -73,13 +73,6 @@ public interface IConversationPersistenceService
     Task<string?> GetMostRecentActiveAgentAsync(string conversationId);
 
     /// <summary>
-    /// Closes on the record the turn <paramref name="agentName"/> left open, as the agent itself would on
-    /// completing: the conversation is Morgana's again and its history no longer offers the agent's widgets.
-    /// Nothing is written to its session. A conversation or an agent with no row is left as it is.
-    /// </summary>
-    Task CloseAgentTurnAsync(string conversationId, string agentName);
-
-    /// <summary>
     /// Retrieves the complete conversation history across all agents for a given conversation.
     /// Decrypts, deserializes and chronologically orders messages from all participating agents.
     /// </summary>
@@ -112,14 +105,19 @@ public interface IConversationPersistenceService
     /// </summary>
     /// <param name="conversationId">Conversation whose orchestrator side is being appended to.</param>
     /// <param name="messages">Messages to append, in the order they were spoken. An empty sequence writes nothing.</param>
-    /// <param name="quickReplies">
-    /// The choices Morgana offered with the last of <paramref name="messages"/>, which reached the user as much
-    /// as its text did: kept with it, so a history read back offers them again. Null when she offered none.
-    /// </param>
+    /// <remarks>
+    /// <para>Deliberately not addressable by author: this reaches one row and only that row. An agent's
+    /// row carries a live agent session that the agent resurrects itself from, so messages appended to
+    /// it from outside would discard everything else that session holds. The orchestrator owns no
+    /// session and no model, which is what makes her row safe to append to from anywhere.</para>
+    /// <para>Concurrent appends are expected — the user's phrase arrives on one path while an answer
+    /// leaves on another — so implementations must read, extend and write back as one step.</para>
+    /// <para>The row is never left active: the orchestrator is not an agent a conversation can be
+    /// resumed onto. What reports the active agent must keep naming real agents only.</para>
+    /// </remarks>
     Task AppendOrchestratorMessagesAsync(
         string conversationId,
-        IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> messages,
-        IReadOnlyList<QuickReply>? quickReplies = null);
+        IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> messages);
 
     /// <summary>
     /// Reads the messages an agent's row holds, as they were written, for work done on the record rather
@@ -127,8 +125,7 @@ public interface IConversationPersistenceService
     /// </summary>
     /// <param name="conversationId">Conversation the agent belongs to.</param>
     /// <param name="agentName">The agent as its row names it, such as "billing".</param>
-    Task<IReadOnlyList<Microsoft.Extensions.AI.ChatMessage>> LoadParticipantMessagesAsync(
-        string conversationId, string agentName);
+    Task<IReadOnlyList<Microsoft.Extensions.AI.ChatMessage>> LoadParticipantMessagesAsync(string conversationId, string agentName);
 
     /// <summary>
     /// Writes <paramref name="messages"/> back as that agent's messages, leaving the rest of its row exactly
@@ -198,17 +195,6 @@ public interface IConversationPersistenceService
     /// <param name="conversationId">Conversation identifier (used to locate the per-conversation DB).</param>
     /// <returns>The persisted <see cref="ChannelMetadata"/>, or null if absent.</returns>
     Task<ChannelMetadata?> LoadChannelMetadataAsync(string conversationId);
-
-    /// <summary>Keeps the text a message dated <paramref name="messageTimestamp"/> was delivered in, once degraded for the channel; the first kept wins.</summary>
-    /// <remarks>
-    /// The record keeps every answer as its author wrote it, which a poor channel never showed: without this
-    /// text a returning channel can only degrade the answer again, paying for it or showing different words.
-    /// </remarks>
-    /// <param name="agentDisplayName">The name the message was delivered under, "Morgana (Billing)" for an agent: it names the row holding the rich message.</param>
-    Task SaveDegradedMessageAsync(string conversationId, string agentDisplayName, DateTime messageTimestamp, string degradedText);
-
-    /// <summary>Every text kept by <see cref="SaveDegradedMessageAsync"/>, keyed by the name and the instant its message carries in a history.</summary>
-    Task<IReadOnlyDictionary<(string AgentDisplayName, DateTime MessageTimestamp), string>> LoadDegradedMessagesAsync(string conversationId);
 
     /// <summary>
     /// Persists shared context variable into conversation-scoped shared_context registry for cross-agent access.

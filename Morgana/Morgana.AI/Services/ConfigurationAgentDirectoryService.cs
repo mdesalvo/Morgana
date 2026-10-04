@@ -839,7 +839,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         if (definition is null)
             return null;
 
-        // The prose the agent was authored with: its Territory becomes the card's description and its
+        // The prose the agent was authored with: its ConsultMeFor becomes the card's description and its
         // tool definitions become the skills, so nothing about this agent is written twice.
         Records.Prompt prompt = await promptResolverService.ResolveAsync(intent);
 
@@ -855,7 +855,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
             // The agent's own address to whoever might consult it. The intent description stands in
             // when there is none, but it is a routing phrase written for the classifier — it tells a
             // caller which user utterances land here, never what this agent answers for.
-            Description = string.IsNullOrWhiteSpace(prompt.Territory) ? definition.Description : prompt.Territory,
+            Description = string.IsNullOrWhiteSpace(prompt.ConsultMeFor) ? definition.Description : prompt.ConsultMeFor,
             Version = LocalCardVersion,
             Skills = ProjectSkills(prompt),
 
@@ -904,7 +904,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
     /// Reserved framework tools are absent by construction, being declared in <c>morgana.json</c>
     /// rather than in the agent's own prompt. An MCP-only agent advertises no skills, honestly: its
     /// competences are known only once its servers answer. These reach an external consumer of the
-    /// card and nobody else: a sibling agent is offered its colleague's Territory, never this
+    /// card and nobody else: a sibling agent is offered its colleague's ConsultMeFor, never this
     /// inventory, which invites the caller to rule out a question the colleague has never seen.
     /// </remarks>
     /// <param name="prompt">The agent's already-resolved prompt.</param>

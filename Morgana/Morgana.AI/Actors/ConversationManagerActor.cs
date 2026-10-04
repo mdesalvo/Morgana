@@ -284,8 +284,7 @@ public class ConversationManagerActor : MorganaActor
         if (response.RecordedTimestamp is null)
             await conversationPersistenceService.AppendOrchestratorMessagesAsync(
                 conversationId,
-                [new ChatMessage(ChatRole.Assistant, response.Response) { CreatedAt = answerTimestamp }],
-                response.QuickReplies);
+                [new ChatMessage(ChatRole.Assistant, response.Response) { CreatedAt = answerTimestamp }]);
 
         try
         {

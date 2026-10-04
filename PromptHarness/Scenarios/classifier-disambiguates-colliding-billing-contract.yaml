@@ -21,7 +21,7 @@ turns:
       quickReplyIds: ["billing", "contract"]
       textNotEmpty: true
     judge:
-      - "The message asks the user which of two topics they mean."
+      - "The message asks the user to clarify which of two distinct topics they mean, without committing to either one."
     judgeNot:
       # The disease this scenario exists to catch: the classifier picks a single winner under the
       # hood and Morgana just runs with it — silently answering (or starting to work) as if only

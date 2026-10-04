@@ -57,9 +57,7 @@ public record MorganaChatMessage
     public List<QuickReply>? QuickReplies { get; init; }
 
     /// <summary>
-    /// Set on a message read back from the history, null on one pushed live. True on the last message
-    /// when its quick replies and rich card still wait on the user; false on every other one, the last
-    /// included when the agent that wrote it no longer holds the conversation.
+    /// Optional flag indicating that this is the last message of a resumed conversation.
     /// </summary>
     public bool? IsLastHistoryMessage { get; init; }
 

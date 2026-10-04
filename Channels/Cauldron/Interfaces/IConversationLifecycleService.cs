@@ -1,4 +1,3 @@
-using Cauldron.Messages;
 using Morgana.Contracts;
 
 namespace Cauldron.Interfaces;
@@ -19,9 +18,9 @@ public interface IConversationLifecycleService
     /// Resumes an existing conversation from storage.
     /// Falls back to StartConversationAsync on any failure.
     /// </summary>
-    /// <param name="storedConversation">The conversation and its seal retrieved from storage.</param>
+    /// <param name="savedConversationId">The conversation ID retrieved from storage.</param>
     /// <returns>True if conversation was resumed or a new one started successfully.</returns>
-    Task<bool> ResumeConversationAsync(StoredConversation storedConversation);
+    Task<bool> ResumeConversationAsync(string savedConversationId);
 
     /// <summary>
     /// Ends the current conversation server-side so Morgana can tear down its actor tree.
@@ -34,9 +33,9 @@ public interface IConversationLifecycleService
     Task ClearConversationAsync();
 
     /// <summary>
-    /// Checks storage for an existing conversation and its seal.
+    /// Checks storage for an existing conversation ID.
     /// </summary>
-    Task<StoredConversation?> GetStoredConversationAsync();
+    Task<string?> GetSavedConversationIdAsync();
 
     /// <summary>
     /// Sends a user message to the Morgana backend.

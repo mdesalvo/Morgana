@@ -24,7 +24,7 @@ namespace PromptHarness.Tests;
 /// <remarks>
 /// No turn is ever run, so no agent and no judge is reached. A conversation these tests need on record
 /// is synthesised straight into the run's storage (<see cref="ChannelApiClient.SeedConversationOnRecordAsync"/>), so the
-/// only model call of the group is the presentation of its few real starts, which the presenter
+/// only model call of the group is the presentation of the single real start, which the presenter
 /// computes once per channel name for the whole process. Every path, status and field is spelled out
 /// literally, as in <see cref="AgentCardTests"/>: what must be noticed is the API changing shape.
 /// </remarks>
@@ -111,7 +111,7 @@ public sealed class ConversationApiTests
     {
         string conversationId = ChannelApiClient.NewConversationId();
 
-        HttpResponseMessage response = await api.PostJsonAsync("/api/morgana/conversation/start", body.Replace("{id}", conversationId), cancellationToken: TestContext.Current.CancellationToken);
+        HttpResponseMessage response = await api.PostJsonAsync("/api/morgana/conversation/start", body.Replace("{id}", conversationId), TestContext.Current.CancellationToken);
 
         Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"A start with {missing} was answered {(int)response.StatusCode}, not 400.");
         Assert.False(api.ConversationIsOnRecord(conversationId), $"A start refused for {missing} left a conversation on record.");
@@ -125,7 +125,6 @@ public sealed class ConversationApiTests
         { "POST", "/api/morgana/conversation/{id}/message" },
         { "POST", "/api/morgana/conversation/{id}/resume" },
         { "GET", "/api/morgana/conversation/{id}/history" },
-        { "POST", "/api/morgana/conversation/{id}/end" },
         { "POST", "/api/morgana/conversation/{id}/command" }
     };
 
@@ -150,12 +149,11 @@ public sealed class ConversationApiTests
 
         HttpResponseMessage start = await api.StartAsync(conversationId);
         Assert.Equal(HttpStatusCode.Accepted, start.StatusCode);
-        string seal = (await start.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("seal").GetString()!;
 
-        // Asked right after start returns, with nothing else awaited in between: a channel may send its
+        // Asked the instant start returns, with nothing awaited in between: a channel may send its
         // first message just as fast and it must find a conversation there, not a 404.
         HttpResponseMessage resume = await api.SendAsync("POST", "/api/morgana/conversation/{id}/resume", conversationId,
-            api.HarnessToken(), seal);
+            api.HarnessToken());
 
         Assert.Equal(HttpStatusCode.Accepted, resume.StatusCode);
         Assert.True(api.ConversationIsOnRecord(conversationId), "Start answered before the conversation was on record.");
@@ -177,93 +175,13 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
-    public async Task Start_hands_over_a_seal_it_keeps_only_as_a_hash()
-    {
-        string conversationId = ChannelApiClient.NewConversationId();
-
-        HttpResponseMessage start = await api.StartAsync(conversationId);
-        Assert.Equal(HttpStatusCode.Accepted, start.StatusCode);
-        string? seal = (await start.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken)).GetProperty("seal").GetString();
-
-        // Sixteen Crockford symbols in four groups, which a person can copy by hand
-        Assert.Matches("^[0-9A-HJKMNP-TV-Z]{4}(-[0-9A-HJKMNP-TV-Z]{4}){3}$", seal);
-
-        // What the record holds is the channel it was handed to and a digest, never the seal itself
-        Assert.Equal("harness", await api.QueryRecordAsync(conversationId, "SELECT issuer FROM conversation_seal;"));
-        Assert.Equal(32L, await api.QueryRecordAsync(conversationId, "SELECT length(seal_hash) FROM conversation_seal;"));
-    }
-
-    [Theory]
-    [MemberData(nameof(ConversationEndpoints))]
-    public async Task Endpoint_answers_404_without_the_seal(string method, string path)
-    {
-        string conversationId = ChannelApiClient.NewConversationId();
-        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
-
-        // Holding the id is not holding the conversation: no seal and a wrong one are both answered as an
-        // unknown id is, so a stolen id cannot even tell that the conversation exists
-        foreach (string? presentedSeal in (string?[])[null, "0000-0000-0000-0000"])
-        {
-            HttpResponseMessage response = await api.SendAsync(method, path, conversationId, api.HarnessToken(), presentedSeal);
-
-            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-            JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
-            Assert.Equal("Conversation not found", body.GetProperty("error").GetString());
-        }
-    }
-
-    [Theory]
-    [MemberData(nameof(ConversationEndpoints))]
-    public async Task Endpoint_answers_404_to_a_channel_other_than_the_one_holding_the_seal(string method, string path)
-    {
-        // Sealed under another channel: the harness presents the right seal and is still not the one it was handed to
-        string conversationId = ChannelApiClient.NewConversationId();
-        string seal = await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing", sealingIssuer: "grimoire");
-
-        HttpResponseMessage response = await api.SendAsync(method, path, conversationId, api.HarnessToken(), seal);
-
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Seal_is_read_the_way_a_person_copies_it()
-    {
-        string conversationId = ChannelApiClient.NewConversationId();
-        string seal = await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
-
-        // Lower case, no dashes and the letters Crockford reads as digits: all the same seal
-        string retyped = seal.Replace("-", " ").ToLowerInvariant().Replace('0', 'o').Replace('1', 'l');
-        HttpResponseMessage response = await api.SendAsync("POST", "/api/morgana/conversation/{id}/resume", conversationId, api.HarnessToken(), retyped);
-
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task Conversation_older_than_the_seal_stays_closed()
-    {
-        string conversationId = ChannelApiClient.NewConversationId();
-        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
-
-        // The record as a version 6 host left it: nobody was ever handed a seal for it
-        await api.QueryRecordAsync(conversationId, "DROP TABLE conversation_seal; PRAGMA user_version = 6;");
-
-        HttpResponseMessage resume = await api.SendAsync("POST", "/api/morgana/conversation/{id}/resume", conversationId, api.HarnessToken(), "0000-0000-0000-0000");
-        HttpResponseMessage start = await api.StartAsync(conversationId);
-
-        // Closed to everyone: whatever is presented opens nothing and start cannot seal it afresh for whoever asks first
-        Assert.Equal(HttpStatusCode.NotFound, resume.StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, start.StatusCode);
-        Assert.Equal(0L, await api.QueryRecordAsync(conversationId, "SELECT COUNT(*) FROM conversation_seal;"));
-    }
-
-    [Fact]
     public async Task Resume_reports_the_state_to_redraw()
     {
         string conversationId = ChannelApiClient.NewConversationId();
-        string seal = await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
+        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
 
         HttpResponseMessage response = await api.SendAsync("POST", "/api/morgana/conversation/{id}/resume", conversationId,
-            api.HarnessToken(), seal);
+            api.HarnessToken());
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
 
@@ -277,34 +195,17 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
-    public async Task Resume_hands_back_to_Morgana_a_conversation_left_with_an_agent_no_longer_served()
-    {
-        string conversationId = ChannelApiClient.NewConversationId();
-        string seal = await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "pippo");
-
-        HttpResponseMessage response = await api.SendAsync("POST", "/api/morgana/conversation/{id}/resume", conversationId,
-            api.HarnessToken(), seal);
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
-
-        // No installed agent answers to the intent, so the client is told Morgana holds the conversation
-        // and the record agrees: the turn left open is closed, not merely left unreported
-        Assert.Equal(JsonValueKind.Null, body.GetProperty("activeAgent").ValueKind);
-        Assert.Equal(0L, await api.QueryRecordAsync(conversationId, "SELECT is_active FROM morgana WHERE agent_name = 'pippo';"));
-    }
-
-    [Fact]
     public async Task End_can_be_called_twice()
     {
         string conversationId = ChannelApiClient.NewConversationId();
-        string seal = await api.SeedConversationOnRecordAsync(conversationId, activeAgent: null);
+        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: null);
 
         string token = api.HarnessToken();
 
         // A channel ends a conversation on its way out, often more than once (a page closing, a
         // process stopping): the second call finds nothing to tear down and says so without failing.
-        Assert.Equal(HttpStatusCode.OK, (await api.SendAsync("POST", "/api/morgana/conversation/{id}/end", conversationId, token, seal)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await api.SendAsync("POST", "/api/morgana/conversation/{id}/end", conversationId, token, seal)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await api.SendAsync("POST", "/api/morgana/conversation/{id}/end", conversationId, token)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await api.SendAsync("POST", "/api/morgana/conversation/{id}/end", conversationId, token)).StatusCode);
 
         // Ending frees the actors and keeps the record: the conversation can still be resumed.
         Assert.True(api.ConversationIsOnRecord(conversationId), "Ending a conversation deleted its record.");
@@ -349,9 +250,9 @@ public sealed class ConversationApiTests
     public async Task Command_refuses_a_request_it_could_not_run(string reason, string body, string? activeAgent)
     {
         string conversationId = ChannelApiClient.NewConversationId();
-        string seal = await api.SeedConversationOnRecordAsync(conversationId, activeAgent);
+        await api.SeedConversationOnRecordAsync(conversationId, activeAgent);
 
-        HttpResponseMessage response = await api.SendCommandAsync(conversationId, seal, body.Replace("{id}", conversationId), TestContext.Current.CancellationToken);
+        HttpResponseMessage response = await api.SendCommandAsync(conversationId, body.Replace("{id}", conversationId), TestContext.Current.CancellationToken);
 
         Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"A command with {reason} was answered {(int)response.StatusCode}, not 400.");
         JsonElement refusal = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
@@ -359,26 +260,31 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
-    public async Task Record_left_at_schema_5_is_brought_up_to_8()
+    public async Task Record_left_at_schema_5_is_served_then_brought_up_to_6()
     {
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
 
         // The record as a version 5 host left it: the agent's row as it was, with nothing saying whether it was
-        // rewritten behind its agent or how much of its agent's history it accounts for. Nor is it sealed and no
-        // answer of it was ever kept in the words a poor channel was shown
+        // rewritten behind its agent or how much of its agent's history it accounts for
         await api.QueryRecordAsync(conversationId,
-            "ALTER TABLE morgana DROP COLUMN is_dirty; ALTER TABLE morgana DROP COLUMN agent_message_count; DROP TABLE conversation_seal; DROP TABLE degraded_message; PRAGMA user_version = 5;");
+            "ALTER TABLE morgana DROP COLUMN is_dirty; ALTER TABLE morgana DROP COLUMN agent_message_count; PRAGMA user_version = 5;");
         Assert.Equal(5L, await api.QueryRecordAsync(conversationId, "PRAGMA user_version;"));
+
+        HttpResponseMessage response = await api.SendAsync("POST", "/api/morgana/conversation/{id}/resume", conversationId, api.HarnessToken());
+
+        // The conversation is served from the record it had, the agent it was with included: what reads no flag
+        // needs no upgrade to answer
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        Assert.Equal("billing", body.GetProperty("activeAgent").GetString());
 
         // The step every write and every flag read takes first upgrades it in place: the columns exist, the row
         // is clean since nothing rewrote it behind its agent and it is still the one the conversation is with.
         // How much history it accounts for stays unknown until its agent next reads or writes it
         await api.HostPersistenceService().EnsureDatabaseInitializedAsync(conversationId);
         Assert.Equal("billing", await api.HostPersistenceService().GetMostRecentActiveAgentAsync(conversationId));
-        Assert.Equal(7L, await api.QueryRecordAsync(conversationId, "PRAGMA user_version;"));
-        Assert.Equal(0L, await api.QueryRecordAsync(conversationId, "SELECT COUNT(*) FROM conversation_seal;"));
-        Assert.Equal(0L, await api.QueryRecordAsync(conversationId, "SELECT COUNT(*) FROM degraded_message;"));
+        Assert.Equal(6L, await api.QueryRecordAsync(conversationId, "PRAGMA user_version;"));
         Assert.Equal(0L, await api.QueryRecordAsync(conversationId, "SELECT is_dirty FROM morgana WHERE agent_name = 'billing';"));
         Assert.Equal(DBNull.Value, await api.QueryRecordAsync(conversationId, "SELECT agent_message_count FROM morgana WHERE agent_name = 'billing';"));
     }
@@ -387,9 +293,9 @@ public sealed class ConversationApiTests
     public async Task Command_runs_on_the_agent_carrying_the_conversation()
     {
         string conversationId = ChannelApiClient.NewConversationId();
-        string seal = await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
+        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
 
-        HttpResponseMessage response = await api.SendCommandAsync(conversationId, seal, """{"name":"compact"}""", TestContext.Current.CancellationToken);
+        HttpResponseMessage response = await api.SendCommandAsync(conversationId, """{"name":"compact"}""", TestContext.Current.CancellationToken);
 
         // The command runs once it is admitted and the acknowledgement names it
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
@@ -406,9 +312,9 @@ public sealed class ConversationApiTests
     public async Task Command_outcome_names_the_run_the_channel_asked_for()
     {
         string conversationId = ChannelApiClient.NewConversationId();
-        string seal = await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing", fixture.Channel.CallbackUrl);
+        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing", fixture.Channel.CallbackUrl);
 
-        HttpResponseMessage response = await api.SendCommandAsync(conversationId, seal, """{"name":"compact","invocationId":"run-7"}""", TestContext.Current.CancellationToken);
+        HttpResponseMessage response = await api.SendCommandAsync(conversationId, """{"name":"compact","invocationId":"run-7"}""", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
 
         // Every frame the run sent is on the channel by the time the call returns

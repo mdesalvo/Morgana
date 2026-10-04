@@ -25,12 +25,6 @@ public interface IChatStateService
     string ConversationId { get; set; }
 
     /// <summary>
-    /// The seal Morgana handed over when the conversation started: every call on it carries it and
-    /// without it the id opens nothing. Empty until a conversation is started or resumed.
-    /// </summary>
-    string ConversationSeal { get; set; }
-
-    /// <summary>
     /// Name of the currently active agent ("Morgana", "Morgana (Billing)", etc.).
     /// </summary>
     string CurrentAgentName { get; set; }

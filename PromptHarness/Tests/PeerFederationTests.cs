@@ -332,6 +332,8 @@ public sealed class PeerFederationTests
     /// <summary>Stands in for prompt resolution, which no path toward a colleague elsewhere reaches.</summary>
     private sealed class UnreadPromptResolver : IPromptResolverService
     {
+        public Task<Records.Prompt[]> GetAllPromptsAsync() => Task.FromResult(Array.Empty<Records.Prompt>());
+
         public Task<Records.Prompt> ResolveAsync(string promptID)
             => throw new InvalidOperationException($"Prompt '{promptID}' was resolved while consulting a colleague published elsewhere.");
     }

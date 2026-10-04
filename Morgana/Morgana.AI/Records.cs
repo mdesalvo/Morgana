@@ -554,43 +554,17 @@ public static class Records
     /// </summary>
     /// <param name="Compliant">True if message passes policy checks, false if violation detected</param>
     /// <param name="Violation">Description of policy violation if Compliant is false</param>
-    /// <param name="Source">Which layer decided, carried from GuardActor to the supervisor's span; never read from the model's JSON.</param>
     public record GuardCheckResponse(
         [property: JsonPropertyName("compliant")] bool Compliant,
-        [property: JsonPropertyName("violation")] string? Violation,
-        [property: JsonIgnore] GuardVerdictSource Source = GuardVerdictSource.Inspector);
+        [property: JsonPropertyName("violation")] string? Violation);
 
     /// <summary>
     /// IGuardRailService result: Compliant (true=passes all checks, false=violated). Violation: human-readable
     /// description of violated rule. Public contract, intentionally decoupled from GuardCheckResponse (internal LLM wire-format DTO).
     /// </summary>
-    /// <param name="Source">
-    /// Which layer decided. Required on every verdict: a text admitted because nobody could judge it
-    /// must never read like one judged clean.
-    /// </param>
     public record GuardRailResult(
         bool Compliant,
-        string? Violation,
-        GuardVerdictSource Source);
-
-    /// <summary>Which layer of a guard decided a verdict, as every guard span and counter reports it.</summary>
-    public enum GuardVerdictSource
-    {
-        /// <summary>The deterministic check found a forgery before any model was asked.</summary>
-        Prefilter,
-
-        /// <summary>A model read the text and judged it.</summary>
-        Inspector,
-
-        /// <summary>The provider's own content filter refused the text before the model could judge it.</summary>
-        ProviderFilter,
-
-        /// <summary>Nobody could judge the text and it was let through: an admission, never a clean verdict.</summary>
-        FailOpen,
-
-        /// <summary>The guard is switched off, so the text was never judged.</summary>
-        Disabled
-    }
+        string? Violation);
     
     /// <summary>
     /// Sent by an agent back to the supervisor when the LLM provider rejects the request
@@ -987,9 +961,9 @@ public static class Records
     /// Complete prompt definition (Target, Instructions, Personality, Formatting) with metadata and structured properties.
     /// Loaded from morgana.json (framework) or agents.json (domain, intent-keyed).
     /// </summary>
-    /// <param name="ID">Prompt identifier: framework="Morgana"/"Classifier"/"Guard"/"ToolGuard"/"PeerGuard"/"Presentation", domain=intent name</param>
+    /// <param name="ID">Prompt identifier: framework="Morgana"/"Classifier"/"Guard"/"Presentation", domain=intent name</param>
     /// <param name="Type">Prompt type category (e.g., "SYSTEM", "INTENT")</param>
-    /// <param name="SubType">Prompt subtype (e.g., "AGENT", "ACTOR", "GUARDRAIL", "ORCHESTRATOR", "PRESENTATION")</param>
+    /// <param name="SubType">Prompt subtype (e.g., "AGENT", "ACTOR", "PRESENTATION")</param>
     /// <param name="Target">Core prompt text: role definition, capabilities statement, operational boundaries</param>
     /// <param name="Instructions">Behavioral rules, operational order, response constraints, tool-usage doctrine</param>
     /// <param name="Formatting">Output formatting rules: markdown usage, quick reply format, rich card rendering</param>
@@ -997,7 +971,7 @@ public static class Records
     /// <param name="Language">BCP 47 language code (e.g., "en-US", "it-IT")</param>
     /// <param name="Version">Prompt version string for tracking iteration history and regression detection</param>
     /// <param name="AdditionalProperties">List of structured properties: Tools, GlobalPolicies, ErrorAnswers, FallbackMessage, etc</param>
-    /// <param name="Territory">Optional: what falls to this agent, addressed to a colleague who might consult it</param>
+    /// <param name="ConsultMeFor">Optional: what falls to this agent, addressed to a colleague who might consult it</param>
     public record Prompt(
         string ID,
         string Type,
@@ -1009,7 +983,7 @@ public static class Records
         string Language,
         string Version,
         List<Dictionary<string, object>> AdditionalProperties,
-        string? Territory = null)
+        string? ConsultMeFor = null)
     {
         /// <summary>
         /// Gets additional property value (Tools, GlobalPolicies, ErrorAnswers, FallbackMessage, etc).
@@ -1107,7 +1081,7 @@ public static class Records
     /// <param name="Parameters">List of tool parameter definitions</param>
     /// <param name="Reserved">
     /// True for the five morgana.json base tools (GetContextVariable, SetContextVariable,
-    /// SetTurnEnding, SetQuickReplies, SetRichCard). Never set from configuration: a domain
+    /// SetTurnContinuation, SetQuickReplies, SetRichCard). Never set from configuration: a domain
     /// tool declaring this in agents.json has it forced back to false by MorganaAgentAdapter —
     /// it is stamped true only where MorganaAgentAdapter reads morgana.json's own Tools array,
     /// so no JSON a plugin author writes can ever make it stick. Consumers (e.g. the reverse

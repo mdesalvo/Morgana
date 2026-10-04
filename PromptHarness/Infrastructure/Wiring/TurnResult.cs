@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using Morgana.Contracts;
 
 namespace PromptHarness.Infrastructure.Wiring;
@@ -55,58 +54,6 @@ public sealed record ConsultationObservation(
     string? Answer);
 
 /// <summary>
-/// One tool result the guard screened during a turn, read from the <c>morgana.toolguard</c> span.
-/// </summary>
-/// <param name="Tool">Function whose result was screened.</param>
-/// <param name="External">Whether the result came from outside the installation and was read by the inspector.</param>
-/// <param name="Compliant">Whether the result reached the model; false means it was quarantined.</param>
-/// <param name="Source">Which layer decided, as the framework names it: <c>Prefilter</c>, <c>Inspector</c>, <c>ProviderFilter</c> or <c>FailOpen</c>.</param>
-/// <param name="Violation">Why the result was quarantined, never a quote of it; null when it was admitted.</param>
-public sealed record ToolGuardObservation(string? Tool, bool? External, bool? Compliant, string? Source = null, string? Violation = null);
-
-/// <summary>
-/// One call to a presentation tool during a turn, read from the <c>morgana.presentation</c> span.
-/// </summary>
-/// <param name="Tool">SetQuickReplies or SetRichCard.</param>
-/// <param name="Accepted">Whether the tool stored what the model sent; false means the user sees nothing of it.</param>
-/// <param name="Rejection">Why the tool refused it, as the framework names the reason; null when accepted.</param>
-public sealed record PresentationObservation(string? Tool, bool? Accepted, string? Rejection);
-
-/// <summary>
-/// One round trip to the model during a turn, read from its <c>gen_ai</c> span: what it cost, why
-/// it stopped and what it emitted.
-/// </summary>
-/// <param name="Operation">Name of the span: a call to the model or a step the same source records around one.</param>
-/// <param name="Usage">Tokens of this one call.</param>
-/// <param name="Model">Model that answered, as the provider reported it.</param>
-/// <param name="FinishReasons">Why the model stopped, as the provider reported it; null when the span carries none.</param>
-/// <param name="Output">What the model emitted, one entry per text or tool call; empty when it emitted nothing.</param>
-public sealed record LlmCallObservation(string Operation, TokenUsage Usage, string? Model, string? FinishReasons, IReadOnlyList<string> Output)
-{
-    /// <summary>
-    /// Whether the span is a round trip to the model. The same source also records each tool's
-    /// execution and the loop around the calls, whose usage is the sum of the calls it wraps: only
-    /// a model call is a cost of its own.
-    /// </summary>
-    public bool IsModelCall => Operation.StartsWith("chat", StringComparison.Ordinal);
-
-    /// <summary>The call on one line, as a failure report shows it.</summary>
-    public string Describe()
-        => $"[{Operation}] {Model ?? "(model unknown)"} finish={FinishReasons ?? "(not reported)"} out={Usage.OutputTokens} → "
-         + (Output.Count == 0 ? "(nothing emitted)" : string.Join(" + ", Output));
-}
-
-/// <summary>
-/// One question a partner put to an agent here, as the peer guard judged it on the <c>morgana.peerguard</c> span.
-/// </summary>
-/// <param name="Caller">Partner that asked.</param>
-/// <param name="Target">Intent of the agent asked.</param>
-/// <param name="Compliant">Whether the question reached the agent; false means it was declined.</param>
-/// <param name="Source">Which layer decided, as the framework names it.</param>
-/// <param name="Violation">Why the question was declined, never a quote of it; null when it reached the agent.</param>
-public sealed record PeerGuardObservation(string? Caller, string? Target, bool? Compliant, string? Source, string? Violation);
-
-/// <summary>
 /// Everything the harness observed about one turn: what the user said, what the channel received
 /// and the two structural signals read from inside the process.
 /// </summary>
@@ -131,10 +78,6 @@ public sealed record PeerGuardObservation(string? Caller, string? Target, bool? 
 /// checking "has this happened by now" against the whole conversation is the only way to assert on it
 /// without pinning to a turn index that variance can invalidate. See <c>ExpectationChecker.CheckDust</c>.
 /// </param>
-/// <param name="ToolGuards">Tool results the guard screened during the turn, in the order they closed; empty when the tool guard is off.</param>
-/// <param name="GuardSource">Which layer decided the user guard's verdict; null when no guard span was seen.</param>
-/// <param name="Presentations">Calls to the presentation tools during the turn, in the order they closed.</param>
-/// <param name="LlmCalls">Every round trip to the model during the turn, classification included, in the order they closed.</param>
 public sealed record TurnResult(
     string ConversationId,
     string UserMessage,
@@ -149,55 +92,8 @@ public sealed record TurnResult(
     string? ClassifierIntent = null,
     double? ClassifierConfidence = null,
     IReadOnlyList<ConsultationObservation>? Consultations = null,
-    IReadOnlyList<string>? CumulativeLogLines = null,
-    IReadOnlyList<ToolGuardObservation>? ToolGuards = null,
-    string? GuardSource = null,
-    IReadOnlyList<PresentationObservation>? Presentations = null,
-    IReadOnlyList<LlmCallObservation>? LlmCalls = null)
+    IReadOnlyList<string>? CumulativeLogLines = null)
 {
-    /// <summary>What the turn did out of sight of the user, as a failure report shows it.</summary>
-    public string Backstage() => RenderBackstage(LlmCalls ?? [], LogLines);
-
-    /// <summary>
-    /// Renders every call to the model, then everything the host logged meanwhile. Shared with a turn
-    /// that never completed, whose evidence is gathered from the same marks without a result to hold it.
-    /// </summary>
-    public static string RenderBackstage(IReadOnlyList<LlmCallObservation> calls, IReadOnlyList<string> hostLines)
-    {
-        StringBuilder backstage = new StringBuilder();
-        backstage.AppendLine(CultureInfo.InvariantCulture, $"backstage — {calls.Count} model call(s):");
-        for (int callIndex = 0; callIndex < calls.Count; callIndex++)
-            backstage.AppendLine(CultureInfo.InvariantCulture, $"  #{callIndex + 1} {calls[callIndex].Describe()}");
-
-        backstage.AppendLine(CultureInfo.InvariantCulture, $"backstage — host log, {hostLines.Count} line(s):");
-        foreach (string line in hostLines)
-            backstage.AppendLine(CultureInfo.InvariantCulture, $"  | {line}");
-
-        return backstage.ToString().TrimEnd();
-    }
-
-    /// <summary>Calls to the presentation tools during the turn, never null.</summary>
-    public IReadOnlyList<PresentationObservation> Presented => Presentations ?? [];
-
-    /// <summary>
-    /// Why a quick-reply set or a card is missing from the delivered message, told apart by its tool's
-    /// own verdict: never asked for, asked for and refused, or stored and still not delivered.
-    /// </summary>
-    public string MissingPresentationCause(string tool)
-    {
-        List<PresentationObservation> calls = [.. Presented.Where(presentation => presentation.Tool == tool)];
-
-        // Each cause belongs to a different layer: the prose, the payload the model wrote, the framework.
-        if (calls.Count == 0)
-            return $"{tool} never called";
-        if (calls.All(presentation => presentation.Accepted == false))
-            return $"{tool} called and rejected: {string.Join(", ", calls.Select(presentation => presentation.Rejection ?? "?"))}";
-        return $"{tool} accepted but not delivered";
-    }
-
-    /// <summary>Tool results screened during the turn, never null.</summary>
-    public IReadOnlyList<ToolGuardObservation> Screened => ToolGuards ?? [];
-
     /// <summary>Consultations served during the turn, never null.</summary>
     public IReadOnlyList<ConsultationObservation> Consulted => Consultations ?? [];
 
@@ -227,7 +123,7 @@ public sealed record TurnResult(
             {(GuardCompliant is null ? "" : $"guard: compliant={GuardCompliant} | violation={GuardViolation ?? "(none)"}\n            ")}{(ClassifierIntent is null ? "" : $"classifier: intent={ClassifierIntent} | confidence={ClassifierConfidence?.ToString("F2", CultureInfo.InvariantCulture) ?? "(unknown)"}\n            ")}agent: {AgentName ?? "(no agent span)"} | completed={Message.AgentCompleted} | quickReplies={QuickReplies.Count} | richCard={(Message.RichCard is null ? "absent" : "present")}
             tools: {(ToolsInvoked.Count == 0 ? "(none)" : string.Join(", ", ToolsInvoked))}
             {(Consultations is not { Count: > 0 } ? "" : string.Join("\n            ", Consultations.Select(c => $"consulted {c.Target}: tools={(c.ToolsInvoked.Count == 0 ? "(none)" : string.Join("/", c.ToolsInvoked))} | awaitingReply={c.AwaitingReply}\n              asked: {c.Question}\n              replied: {c.Answer}")) + "\n            ")}
-            {(ToolGuards is not { Count: > 0 } ? "" : "screened: " + string.Join(", ", ToolGuards.Select(g => $"{g.Tool}={(g.Compliant == false ? "quarantined" : "admitted")} by {g.Source ?? "?"}{(g.External == true ? " (external)" : "")}")) + "\n            ")}{(Presentations is not { Count: > 0 } ? "" : "presented: " + string.Join(", ", Presentations.Select(p => $"{p.Tool}={(p.Accepted == false ? $"rejected ({p.Rejection ?? "?"})" : "accepted")}")) + "\n            ")}tokens: {Tokens}
+            tokens: {Tokens}
             context: {(ContextAccesses.Count == 0 ? "(none)" : string.Join(", ", ContextAccesses.Select(a => $"{a.Operation}:{a.VariableName}")))}
             text: {Text}
             """;

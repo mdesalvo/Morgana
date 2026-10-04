@@ -39,9 +39,6 @@ public class ChatStateService : IChatStateService
     /// </summary>
     public string ConversationId { get; set; } = string.Empty;
 
-    /// <inheritdoc />
-    public string ConversationSeal { get; set; } = string.Empty;
-
     /// <summary>
     /// Name of the currently active agent ("Morgana", "Morgana (Billing)", etc.).
     /// </summary>
@@ -292,7 +289,6 @@ public class ChatStateService : IChatStateService
         ChatMessages.Clear();
         TemporaryMessages.Clear();
         ConversationId = string.Empty;
-        ConversationSeal = string.Empty;
         CurrentAgentName = "Morgana";
         IsConnected = false;
         IsSending = false;

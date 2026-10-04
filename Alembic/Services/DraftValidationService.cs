@@ -17,14 +17,14 @@ public class DraftValidationService : IDraftValidationService
     /// becoming permanently unreachable in silence.
     /// </summary>
     private static readonly string[] FrameworkPromptIds =
-        ["Morgana", "Classifier", "Guard", "ToolGuard", "PeerGuard", "Presentation", "ChannelAdapter"];
+        ["Morgana", "Classifier", "Guard", "Presentation", "ChannelAdapter"];
 
     /// <summary>
     /// The base tools every agent receives from <c>morgana.json</c>. A domain tool sharing one of
     /// these names would be registered twice against the same agent.
     /// </summary>
     private static readonly string[] BaseToolNames =
-        ["GetContextVariable", "SetContextVariable", "SetTurnEnding", "SetQuickReplies", "SetRichCard"];
+        ["GetContextVariable", "SetContextVariable", "SetTurnContinuation", "SetQuickReplies", "SetRichCard"];
 
     /// <summary>
     /// The scopes a parameter may declare. A parameter carrying a value the model itself authors
@@ -267,17 +267,17 @@ public class DraftValidationService : IDraftValidationService
                 "The agent has no Target.",
                 "Target is the domain layer's first section and states what the agent is for; composed empty, the agent inherits only the framework's generic purpose.") { Step = InterviewStep.AgentTarget });
 
-        if (string.IsNullOrWhiteSpace(agent.Territory))
+        if (string.IsNullOrWhiteSpace(agent.ConsultMeFor))
             findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                 "The agent has nothing to say to a colleague consulting it.",
-                "The territory is what a colleague reads to decide whether a question is this agent's; without it the card falls back to the intent description, which is a routing phrase written for the classifier.") { Step = InterviewStep.AgentTerritory });
+                "ConsultMeFor is what a colleague reads to decide whether a question is this agent's; without it the card falls back to the intent description, which is a routing phrase written for the classifier.") { Step = InterviewStep.AgentTerritory });
 
         // The card carries one sentence about this agent and a colleague weighing a question reads
         // that and nothing else. Two ways it comes out useless are decidable here: written as the
         // operations the agent performs, which invites a caller to rule its question out; left as
         // the phrase the classifier routes on, which says which utterances land here rather than
         // what this agent answers for.
-        string? territory = AgentRows.Plain(agent.Territory);
+        string? territory = AgentRows.Plain(agent.ConsultMeFor);
 
         if (!string.IsNullOrWhiteSpace(territory))
         {
@@ -289,7 +289,7 @@ public class DraftValidationService : IDraftValidationService
             if (named is not null)
                 findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                     $"What this agent publishes to a colleague names its own tool '{named}'.",
-                    "A territory names a subject, never functions: a colleague handed an inventory of functions rules its question out instead of asking it.") { Step = InterviewStep.AgentTerritory });
+                    "ConsultMeFor states a territory: a colleague handed an inventory of functions rules its question out instead of asking it.") { Step = InterviewStep.AgentTerritory });
 
             if (intent is not null && string.Equals(Compact(territory), Compact(intent.Description), StringComparison.OrdinalIgnoreCase))
                 findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
@@ -357,7 +357,7 @@ public class DraftValidationService : IDraftValidationService
         if (BaseToolNames.Contains(tool.Name, StringComparer.Ordinal))
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 $"'{tool.Name}' is one of the base tools every agent already receives.",
-                "morgana.json gives every agent GetContextVariable, SetContextVariable, SetTurnEnding, SetQuickReplies and SetRichCard; a domain tool cannot share a name with one."));
+                "morgana.json gives every agent GetContextVariable, SetContextVariable, SetTurnContinuation, SetQuickReplies and SetRichCard; a domain tool cannot share a name with one."));
 
         ValidateIdentifier(tool.Name, where, "tool name", findings);
 

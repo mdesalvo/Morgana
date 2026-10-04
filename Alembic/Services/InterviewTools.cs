@@ -38,7 +38,7 @@ public class InterviewTools
     internal const string PersonalityMarker = "[PERSONALITY]";
 
     /// <summary>Section marker for the statement a colleague reads before consulting this agent.</summary>
-    internal const string TerritoryMarker = "[TERRITORY]";
+    internal const string ConsultMeForMarker = "[CONSULT ME FOR]";
 
     /// <summary>Section label carried by an agent's Instructions.</summary>
     internal const string InstructionsMarker = "[INSTRUCTIONS]";
@@ -229,16 +229,16 @@ public class InterviewTools
     /// </summary>
     /// <remarks>
     /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
-    /// <see cref="TerritoryMarker"/>. Written by the same pass and from the same scope, because it
+    /// <see cref="ConsultMeForMarker"/>. Written by the same pass and from the same scope, because it
     /// is that scope addressed to a different reader: a colleague deciding whether a question is this
     /// agent's. So it names a territory and never a list of what the agent can do — a caller handed an
     /// inventory rules questions out instead of asking them. Short by nature, which is why the shape
     /// it reports against is tighter than the Target's.
     /// </remarks>
-    public string SetAgentTerritory(string territory)
+    public string SetAgentConsultMeFor(string consultMeFor)
     {
-        interviewState.Agent.Territory = Marked(TerritoryMarker, territory);
-        return Shaped("Territory", territory, 1, 3);
+        interviewState.Agent.ConsultMeFor = Marked(ConsultMeForMarker, consultMeFor);
+        return Shaped("ConsultMeFor", consultMeFor, 1, 3);
     }
 
     /// <summary>
@@ -790,7 +790,7 @@ public class InterviewTools
 
         IEnumerable<string> rendered = agents.Select(a =>
             $"- {a.ID}\n    what it is for: {AgentRows.Plain(a.Target) ?? "(nothing said)"}"
-            + $"\n    what it answers for, in the words a colleague reads: {AgentRows.Plain(a.Territory) ?? "(nothing said)"}"
+            + $"\n    what it answers for, in the words a colleague reads: {AgentRows.Plain(a.ConsultMeFor) ?? "(nothing said)"}"
             + $"\n    what it can reach: {(a.Tools.Count > 0 ? string.Join(", ", a.Tools.Select(t => t.Name ?? "(unnamed)")) : "no tool of its own")}"
             + $"\n    how it goes about it: {AgentRows.Plain(a.Instructions) ?? "(nothing said)"}"
             + $"\n    colleagues it may already ask: {PeerNaming.Describe(a.Code.Consults)}");

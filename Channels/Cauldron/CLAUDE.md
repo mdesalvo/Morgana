@@ -159,4 +159,4 @@ collide with the widget's CSS or inherit into its shadow root.
 - Behavioral concerns behind interfaces, default implementation alongside, registration in `Program.cs`
 - `SignalRService` is the only component touching SignalR directly; everything else subscribes to events
 - Transient errors become `FadingMessage` banners; critical ones become persistent chat messages
-- Conversation ID and its seal persist through `ProtectedLocalStorage`, encrypted by ASP.NET Core
+- Conversation ID persists through `ProtectedLocalStorage`, encrypted by ASP.NET Core

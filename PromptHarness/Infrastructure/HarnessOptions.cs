@@ -13,31 +13,10 @@ namespace PromptHarness.Infrastructure;
 public sealed class HarnessOptions
 {
     /// <summary>
-    /// Whether the guard on the user's messages stays enabled on the instance under test. Off by default: no scenario
+    /// Whether the guard rail stays enabled on the instance under test. Off by default: no scenario
     /// asserts moderation behaviour and every guarded turn costs one extra LLM round trip.
     /// </summary>
-    public bool EnableUserGuardrail { get; init; }
-
-    /// <summary>
-    /// Whether this run screens tool results and drives the poisoned domain whose every source answers
-    /// with prompt injection, which is what <c>ToolGuardTests</c> needs and nothing else does.
-    /// </summary>
-    /// <remarks>
-    /// Off by default and process-wide when on, like <see cref="FederatedPeer"/>: it replaces the whole
-    /// domain of the instance under test, so every other group would find its own agents missing. Run it
-    /// on its own:
-    /// <c>Harness__EnableToolGuardrail=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ToolGuardTests"</c>
-    /// </remarks>
-    public bool EnableToolGuardrail { get; init; }
-
-    /// <summary>
-    /// Whether the guard on partners' questions stays enabled on the instance under test, which is what
-    /// <c>PeerGuardTests</c> needs. Off by default: <c>ServedConsultationTests</c> asks as a partner too and
-    /// with the guard on would measure the guard instead of the agent's own prose. Process-wide, so run it
-    /// on its own:
-    /// <c>Harness__EnablePeerGuardrail=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.PeerGuardTests"</c>
-    /// </summary>
-    public bool EnablePeerGuardrail { get; init; }
+    public bool EnableGuardrail { get; init; }
 
     /// <summary>Seconds to wait for the host to answer <c>GET /api/morgana/health</c> before giving up.</summary>
     public int StartupTimeoutSeconds { get; init; } = 180;
@@ -80,7 +59,7 @@ public sealed class HarnessOptions
     /// (12, summing with <see cref="SummarizationTargetCount"/>'s default of 8 to a 21-message
     /// trigger) is far above what any scripted scenario reaches — deliberately unset here, so every
     /// class except <c>SummarizationTests</c> runs against the inherited, unmodified value. Lowering
-    /// it is process-wide for the whole shared host, exactly like <see cref="EnableUserGuardrail"/>: run
+    /// it is process-wide for the whole shared host, exactly like <see cref="EnableGuardrail"/>: run
     /// it in its own filtered <c>dotnet test</c> invocation, never alongside the rest of the suite.
     /// </summary>
     public int? SummarizationThreshold { get; init; }
@@ -114,7 +93,7 @@ public sealed class HarnessOptions
     /// Off by default and process-wide when on, exactly like the guard rail and the dust budget: it
     /// replaces the whole domain of the instance under test with the one agent that holds a colleague
     /// abroad, so every other group would find its own agents missing. Run it on its own:
-    /// <c>Harness__FederatedPeer=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.FederationTests"</c>
+    /// <c>Harness__FederatedPeer=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"</c>
     /// </remarks>
     public bool FederatedPeer { get; init; }
 

@@ -1,12 +1,11 @@
 using Cauldron.Interfaces;
-using Cauldron.Messages;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 
 namespace Cauldron.Services;
 
 /// <summary>
-/// Persists the conversation id and its seal in the browser's localStorage through ProtectedLocalStorage,
-/// which encrypts them with the server's data-protection keys. That is what lets a returning
+/// Persists the conversation id in the browser's localStorage through ProtectedLocalStorage,
+/// which encrypts it with the server's data-protection keys. That is what lets a returning
 /// visitor resume and what makes the value useless if lifted from the browser.
 /// </summary>
 public class ProtectedLocalStorageService : IConversationStorageService
@@ -23,12 +22,12 @@ public class ProtectedLocalStorageService : IConversationStorageService
         this.logger = logger;
     }
 
-    public async Task<StoredConversation?> GetStoredConversationAsync()
+    public async Task<string?> GetConversationIdAsync()
     {
         try
         {
-            ProtectedBrowserStorageResult<StoredConversation> result =
-                await protectedLocalStore.GetAsync<StoredConversation>(StorageKey);
+            ProtectedBrowserStorageResult<string> result =
+                await protectedLocalStore.GetAsync<string>(StorageKey);
 
             // Success is false for a plain absence too, not just a decryption failure
             if (result.Success)
@@ -42,21 +41,20 @@ public class ProtectedLocalStorageService : IConversationStorageService
         }
         catch (Exception ex)
         {
-            // Typically the data-protection keys rotated or the entry holds a bare id saved before
-            // conversations were sealed, which could open nothing. Clearing it turns a permanently
-            // broken load into one fresh conversation.
+            // Typically the data-protection keys rotated, leaving an entry that can no longer be
+            // read. Clearing it turns a permanently broken load into one fresh conversation.
             logger.LogWarning(ex, "Failed to retrieve conversation ID, clearing corrupted data");
-            await ClearStoredConversationAsync();
+            await ClearConversationIdAsync();
             return null;
         }
     }
 
-    public async Task SaveStoredConversationAsync(StoredConversation storedConversation)
+    public async Task SaveConversationIdAsync(string conversationId)
     {
         try
         {
-            await protectedLocalStore.SetAsync(StorageKey, storedConversation);
-            logger.LogInformation("Saved conversation ID to protected storage: {ConversationId}", storedConversation.ConversationId);
+            await protectedLocalStore.SetAsync(StorageKey, conversationId);
+            logger.LogInformation("Saved conversation ID to protected storage: {ConversationId}", conversationId);
         }
         catch (Exception ex)
         {
@@ -67,7 +65,7 @@ public class ProtectedLocalStorageService : IConversationStorageService
         }
     }
 
-    public async Task ClearStoredConversationAsync()
+    public async Task ClearConversationIdAsync()
     {
         try
         {

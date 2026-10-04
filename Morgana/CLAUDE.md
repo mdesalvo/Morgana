@@ -102,7 +102,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Telemetry/` | `MorganaTelemetry`, holding its own span and attribute glossary |
 | `Records.cs` | Every immutable record: actor messages, configuration, DTOs |
 | `Constants.cs` | The glossary: **every literal that is a contract between two parties who cannot see each other**, `PromptProperties` included. Deliberately absent: log text, prompt prose, `IConfiguration` keys. The test is a *resolver*, not a mention |
-| `morgana.json` | Framework prompts: Morgana, Classifier, Guard, ToolGuard, PeerGuard, Presentation, ChannelAdapter |
+| `morgana.json` | Framework prompts: Morgana, Classifier, Guard, Presentation, ChannelAdapter |
 
 ### Morgana.Web
 
@@ -112,7 +112,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Extensions/A2APublicationExtensions.cs` | `AddMorganaA2A` / `MapMorganaA2AAsync` — the one feature whose halves must straddle `builder.Build()` |
 | `Controllers/MorganaController.cs` | REST at `api/morgana`: the conversation |
 | `Controllers/CommandController.cs` | REST at `api/morgana`: the command catalogue and its execution. Reaches no actor |
-| `Filters/ChannelAuthenticationFilter.cs` · `KnownConversationFilter.cs` · `ConversationSealFilter.cs` · `CommandAdmissionFilter.cs` · `ConversationLimitsFilter.cs` | The REST gates as MVC filters. Their `Order` on each action is the gate order |
+| `Filters/ChannelAuthenticationFilter.cs` · `KnownConversationFilter.cs` · `CommandAdmissionFilter.cs` · `ConversationLimitsFilter.cs` | The REST gates as MVC filters. Their `Order` on each action is the gate order |
 | `Hubs/MorganaHub.cs` | SignalR at `/morganaHub` |
 | `Filters/PartnerAuthenticationFilter.cs` | The partners' auth gate on the A2A JSON-RPC endpoints: the channels' token validation, narrowed to the partners admitted to each agent, fail-closed. The card endpoint stays open by design |
 | `Services/PluginLoaderService.cs` | Scans `plugins/` for `MorganaAgent` subclasses |
@@ -150,12 +150,12 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `conversation/start` | POST | Validates `ChannelMetadata` (required), seals the conversation, settles it on record, then creates the manager actor. The seal is returned once |
-| `conversation/{id}/end` | POST | 404 if unknown or without its seal; stops the supervisor |
-| `conversation/{id}/resume` | POST | 404 if unknown or without its seal; reports the active agent and the dust level. Its one write hands the conversation back to Morgana when its agent is no longer installed |
-| `conversation/{id}/message` | POST | Auth, 404 if unknown or without its seal, then rate limit, then dust budget, then `UserMessage` |
-| `conversation/{id}/history` | GET | 404 if unknown or without its seal; `ConversationHistoryResponse` |
-| `conversation/{id}/command` | POST | Auth, 404 if unknown or without its seal, 400 for an unknown name or a missing confirmation, rate limit, dust budget, then runs it; the outcome arrives over the channel |
+| `conversation/start` | POST | Validates `ChannelMetadata` (required), settles it on record, then creates the manager actor |
+| `conversation/{id}/end` | POST | Stops the supervisor |
+| `conversation/{id}/resume` | POST | 404 if unknown; read-only, reports the active agent and the dust level |
+| `conversation/{id}/message` | POST | Auth, 404 if unknown, then rate limit, then dust budget, then `UserMessage` |
+| `conversation/{id}/history` | GET | `ConversationHistoryResponse` |
+| `conversation/{id}/command` | POST | Auth, 404 if unknown, 400 for an unknown name or a missing confirmation, rate limit, dust budget, then runs it; the outcome arrives over the channel |
 | `commands` | GET | `CommandCatalogResponse`: every `ICommand` registered in DI. The framework publishes `/compact` |
 | `health` | GET | Actor system liveness |
 
@@ -163,9 +163,8 @@ Every endpoint but `health` authenticates through `ChannelAuthenticationFilter` 
 
 ### Multi-turn and shared context
 
-An agent stays in service by default and is remembered as `activeAgent`; later messages skip
-classification. It hands the conversation back only by calling `SetTurnEnding` on a turn that
-offers no quick replies and no rich card.
+An agent signalling `IsCompleted = false` — declared via `SetTurnContinuation` or implied by quick
+replies or a rich card — is remembered as `activeAgent`; later messages skip classification.
 
 Tool parameters marked `Shared: true` route their values into a conversation-scoped `shared_context`
 registry (first-write-wins, `INSERT OR IGNORE`). Every agent merges it at the start of each turn, so
@@ -219,7 +218,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | Service | Interface | Purpose |
 |---|---|---|
 | `LLMClassifierService` | `IClassifierService` | LLM intent classification; falls back to `"other"` at confidence 0 |
-| `LLMGuardRailService` | `IGuardRailService` | LLM policy check on the user's message; a deterministic check on every tool result but the base tools' and local colleagues', plus `ToolGuard` on an external one; `PeerGuard` on a partner's question. **Fails open** |
+| `LLMGuardRailService` | `IGuardRailService` | LLM policy check. **Fails open** |
 | `LLMPresenterService` | `IPresenterService` | Welcome message and quick replies. Never throws |
 | `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
 | `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
@@ -234,7 +233,6 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `SQLiteConversationPersistenceService` | `IConversationPersistenceService` | Per-conversation SQLite: encrypted session BLOBs, the shared-context registry |
 | `SQLiteRateLimitService` | `IRateLimitService` | Sliding window per minute, hour and day. **Fails open** |
 | `SQLiteDustLimitService` | `IDustLimitService` | Owns **every** dust question asked anywhere — no caller does the arithmetic itself. Thresholds 70%, 90%, lockout. **Fails open** |
-| `SQLiteConversationSealService` | `IConversationSealService` | The seal handed to the channel at start, kept as a hash and bound to its issuer; REST and the hub admit nothing without it. **Fails closed** |
 | `SQLitePeerAdmissionService` | `IPeerAdmissionService` | Conversations a partner may open per hour. The one ledger that is not a conversation's (`morgana-peers.db`). **Fails closed** |
 | `JWTAuthenticationService` | `IAuthenticationService` | HMAC-SHA256, issuer whitelist, audience, lifetime |
 | `HistoryReducerService` | *(factory)* | Builds `MorganaChatReducer` from config; `null` means "hand the LLM everything" |
@@ -265,7 +263,7 @@ tier) and `GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
 
 1. **Intent** in `agents.json`, Intents array: Name, Description, Label, DefaultValue
 2. **Prompt** in `agents.json`, Agents array: ID matching the intent, Target, Instructions,
-   Personality, Formatting, Territory, Tools
+   Personality, Formatting, ConsultMeFor, Tools
 3. **Agent class** extending `MorganaAgent`, with `[HandlesIntent("x")]` **and** `[RequiresLLMTier]`
    (mandatory, validated at startup). The constructor calls `MorganaAgentAdapter.CreateAgent()`
 4. **Tool class** (optional) extending `MorganaTool`, with `[ProvidesToolForIntent("x")]`. Method
@@ -277,7 +275,7 @@ tier) and `GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
 ## Tool System
 
 Every agent gets the **base tools** from `morgana.json` (`GetContextVariable`, `SetContextVariable`,
-`SetTurnEnding`, `SetQuickReplies`, `SetRichCard`) plus its domain tools.
+`SetTurnContinuation`, `SetQuickReplies`, `SetRichCard`) plus its domain tools.
 
 A parameter resolving an *input* declares a `Scope`: `context` (looked up before being asked) or
 `request` (asked of the user). A parameter carrying a value the model itself authors declares none.
@@ -313,7 +311,7 @@ says the least and the most specific possible. Anything it says that a global po
 belongs deleted; where two agents need the same sentence, that is a policy gap to be filled **above**,
 never a repair below.
 
-A domain prompt carries a fifth authored section, **`Territory`, never composed into its own
+A domain prompt carries a fifth authored section, **`ConsultMeFor`, never composed into its own
 prompt**: it is the one section whose reader is another agent and it travels out on the A2A card.
 
 ### `morgana.json` structure
@@ -321,21 +319,18 @@ prompt**: it is the one section whose reader is another agent and it travels out
 The `Morgana` prompt's `AdditionalProperties` carry two sibling arrays and **which of the two an
 entry is follows from the array it lives in**, never from a field inside it:
 
-- **`GlobalPolicies`** — P0-P8, rendered into every agent's prompt in `Priority` order, each under
-  its rank: the policies header declares the rank a **precedence** — a lower number is never
-  overridden, postponed or reordered by a higher one:
-  ContextHandling, QuickReplyDoctrine, TurnEnding, SessionContinuation, ToolUsage,
+- **`GlobalPolicies`** — P0-P8, rendered into every agent's prompt in `Priority` order:
+  ContextHandling, QuickReplyDoctrine, TurnContinuation, SessionContinuation, ToolUsage,
   ToolGrounding, MandatoryTextualResponse, RichCardUsage, PeerConsultation. `QuickReplyDoctrine` (P1)
   is the master rule the other quick-reply policies instantiate. `PeerConsultation` (P8) is the
-  **only conditionally rendered** one — an agent outside the A2A topology never pays for it. It
-  sits last so it names the policies it builds on instead of forward-referencing them.
+  **only conditionally rendered** one — an agent outside the A2A topology never pays for it — and
+  sits last so it names the policies it suspends instead of forward-referencing them.
 - **`Injections`** — templates, not rules: prose with a single splice site each, never rendered among
   the policies where they would instruct against nothing. No `Priority`: each is fetched by name.
   `ToolDescriptionContextGuidance` (into a tool's own description), `HeldContextDeclaration` (per
   turn, the variables the session holds — the one entry carrying a *fact* rather than a rule),
   `ColleaguesDeclaration` (closing a peer-capable agent's instructions),
-  `PeerConsultationDeclaration` and `PeerConsultationGuardrail` (in front of a colleague's question),
-  `QuarantinedToolResult` (in place of a tool result the guard quarantined, paid only when one is).
+  `PeerConsultationDeclaration` and `PeerConsultationGuardrail` (in front of a colleague's question).
 
 Every injection opens with a **bracketed all-caps label at the head of its first line** — the idiom
 the prompt layers already use for `[TARGET]`. A template arrives spliced into somebody else's text,
@@ -348,9 +343,8 @@ invoking the tool, a tool description when it weighs the tool, the per-turn inje
 is weighed at all — which is where an agent activated mid-conversation would otherwise fail.
 
 The other framework prompts: **Classifier** (JSON `{intents:[{intent,confidence}]}`, ranked; owns the
-`other` complement, which no domain declares), **Guard** (`{compliant, violation}`), **ToolGuard**
-(the same shape, on an external tool's result), **PeerGuard** (the same shape, on a partner's
-question), **Presentation**, **ChannelAdapter**.
+`other` complement, which no domain declares), **Guard** (`{compliant, violation}`),
+**Presentation**, **ChannelAdapter**.
 
 ## Channel Abstraction
 
@@ -385,7 +379,7 @@ LLM-guided rewrite, then a Markdig template fallback. Never throws.
 ## Persistence
 
 Per-conversation SQLite at `{StoragePath}/morgana-{conversationId}.db`, schema version in
-`PRAGMA user_version` (currently 7), idempotent initialization.
+`PRAGMA user_version` (currently 6), idempotent initialization.
 
 | Table | Purpose |
 |---|---|
@@ -394,8 +388,6 @@ Per-conversation SQLite at `{StoragePath}/morgana-{conversationId}.db`, schema v
 | `channel_metadata` | The persisted handshake |
 | `shared_context` | Cross-agent variables, first-write-wins |
 | `dust_budget` · `dust_usage_log` | Lifetime budget, per-charge attribution |
-| `conversation_seal` | The seal's hash and the issuer it was handed to |
-| `degraded_message` | The text a message was delivered in once degraded for its channel, which the history gives back instead of degrading the record again |
 
 **A user's phrase is Morgana's when no agent is active and the active agent's otherwise; an answer
 belongs to whoever wrote it.** So the phrase is saved at ingress, before the guard. The copy the
@@ -404,8 +396,7 @@ banners, the typing indicator. Morgana has a row without being an agent — see
 `IConversationPersistenceService`, which alone knows how a row encodes its messages.
 
 History retrieval decrypts each row, applies a user-facing filter, merges chronologically and
-extracts quick replies and rich cards from the stored function calls. An answer the channel cannot
-show as written comes back in the words it was delivered in. Failing those it is degraded by rule, never by a model.
+extracts quick replies and rich cards from the stored function calls.
 
 ## Authentication
 
@@ -421,14 +412,9 @@ partner, then `OutboundPolicy.Enabled`, then `InboundPolicy.Enabled`.
 ## Observability
 
 Spans `morgana.turn`, `morgana.guard`, `morgana.classifier`, `morgana.router`, `morgana.agent`, with
-`agent.tools_invoked` carrying tool names and **never** arguments. A tool listed there may still have refused its
-input: `morgana.presentation` says whether `SetQuickReplies` or `SetRichCard` stored what it was sent. HTTP Activity context arrives as
+`agent.tools_invoked` carrying tool names and **never** arguments. HTTP Activity context arrives as
 an `ActivityLink`. Metric `morgana.dust.consumed` tagged by role, beside MEAI's `gen_ai.usage.*`.
 Exporters configured under `Morgana:OpenTelemetry:Exporters`.
-
-Every guard verdict states **which layer decided** (`Records.GuardVerdictSource`) on its span
-(`morgana.guard`, `morgana.toolguard` under the agent, `morgana.peerguard`), so an admission nobody
-judged never reads like a clean verdict; `morgana.guard.fail_open` counts those admissions.
 
 ## Startup Validation
 
@@ -456,7 +442,7 @@ fault reaches a user as a conversation that never answers, on a host that passed
 |---|---|
 | `Morgana:LLM:Provider` · `:{Provider}` | Provider choice, credentials, the `Tiers` map |
 | `Morgana:AgentToAgent` | `Enabled`, `MaxRoundsPerTurn`, `PublicUrl` (declared only where a binding cannot answer for the address), `Partners[]`. Consultation waits are one **ladder** derived from `ActorSystem:TimeoutSeconds`, stated once in `Records.PeerConsultationWaits` |
-| `Morgana:ActorSystem` | `TimeoutSeconds`, `EnableUserGuardrail`, `EnableToolGuardrail`, `EnablePeerGuardrail`, `IntentCollisionThreshold` |
+| `Morgana:ActorSystem` | `TimeoutSeconds`, `EnableGuardrail`, `IntentCollisionThreshold` |
 | `Morgana:AdaptiveMessaging` | `EnableStreamingResponse`, `RichFeaturesMinLength` |
 | `Morgana:ConversationPersistence` | `StoragePath`, `EncryptionKey` (AES-256, base64, 32 bytes) |
 | `Morgana:RateLimiting` · `:DustLimiting` | Limits and their authored error messages. `MagicDust` pricing lives per tier |
@@ -486,9 +472,9 @@ or environment variables.
 - Actor messages are immutable records in `Records.cs`; every cross-party literal is a `Constants` member
 - Actors use `Tell`, never `Ask` (streaming) and `Become()` for FSM transitions
 - Tool method names match the JSON `Name` exactly
-- Prompts resolve by ID: the seven framework ids or an intent name
+- Prompts resolve by ID: the five framework ids or an intent name
 - Rich cards use polymorphic JSON with a `type` discriminator
-- The hand-back to Morgana is signalled out-of-band by a tool, never by a token inside the response text
+- Turn continuation is signalled out-of-band by a tool, never by a token inside the response text
 - Channel names are normalized to lowercase at ingress
 - **Invariant culture everywhere**: every host sets it as its first statement and library code
   (`Morgana.AI`, `Morgana.Terminal`) still passes `CultureInfo.InvariantCulture` or

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
@@ -14,7 +13,6 @@ using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 using Morgana.AI.Services;
-using Morgana.AI.Telemetry;
 
 namespace Morgana.AI.Adapters;
 
@@ -73,12 +71,6 @@ public class MorganaAgentAdapter
     protected readonly IAgentDirectoryService agentDirectoryService;
 
     /// <summary>
-    /// Screens every tool result the agent's model is about to read, keeping text addressed to the
-    /// assistant out of the tool loop and out of the session that would replay it at every turn.
-    /// </summary>
-    protected readonly IGuardRailService guardRailService;
-
-    /// <summary>
     /// Application configuration, read for the peer-consultation budget and timeout.
     /// </summary>
     protected readonly IConfiguration configuration;
@@ -96,7 +88,7 @@ public class MorganaAgentAdapter
 
     /// <summary>
     /// The morgana.json base tools (GetContextVariable, SetContextVariable,
-    /// SetTurnEnding, SetQuickReplies, SetRichCard), stamped <c>Reserved = true</c> exactly
+    /// SetTurnContinuation, SetQuickReplies, SetRichCard), stamped <c>Reserved = true</c> exactly
     /// once here — the only place in the codebase that ever sets it true. Every other reader of a
     /// ToolDefinition's Reserved flag (domain tools included) sees false by construction, never by
     /// a check: see the Reserved remarks on Records.ToolDefinition.
@@ -122,7 +114,6 @@ public class MorganaAgentAdapter
     /// <param name="chatReducerService">Service for reducing context window sent to LLM</param>
     /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
     /// <param name="agentDirectoryService">Supplies the card of each declared colleague and resolves it into a callable agent</param>
-    /// <param name="guardRailService">Screens tool results before the agent's model reads them</param>
     /// <param name="configuration">Application configuration, read for the peer-consultation budget and timeout</param>
     /// <param name="logger">Logger instance for diagnostics</param>
     public MorganaAgentAdapter(
@@ -134,7 +125,6 @@ public class MorganaAgentAdapter
         HistoryReducerService chatReducerService,
         IDustLimitService dustLimitService,
         IAgentDirectoryService agentDirectoryService,
-        IGuardRailService guardRailService,
         IConfiguration configuration,
         ILogger logger)
     {
@@ -146,7 +136,6 @@ public class MorganaAgentAdapter
         this.chatReducerService = chatReducerService;
         this.dustLimitService = dustLimitService;
         this.agentDirectoryService = agentDirectoryService;
-        this.guardRailService = guardRailService;
         this.configuration = configuration;
         this.logger = logger;
 
@@ -339,11 +328,6 @@ public class MorganaAgentAdapter
                     Tools = [.. await morganaToolAdapter.CreateAllFunctionsAsync(), .. mcpTools, .. peerAgents]
                 }
             });
-
-        // 9b) Every tool result passes the guard before the model reads it. Switched off, the agent is
-        //     exactly the one assembled above, with nothing mounted in front of its tools.
-        if (ToolGuardrailEnabled)
-            aiAgent = GuardToolResults(aiAgent, agentType, conversationId, mcpTools);
 
         // 10) Return all three: the caller (MorganaAgent subclass) keeps the provider and
         //     history-provider handles to drive context/history across turns — the agent
@@ -543,101 +527,6 @@ public class MorganaAgentAdapter
         => configuration.GetValue("Morgana:AgentToAgent:Enabled", true);
 
     /// <summary>
-    /// True when tool results are screened before the agent's model reads them.
-    /// </summary>
-    private bool ToolGuardrailEnabled
-        => configuration.GetValue("Morgana:ActorSystem:EnableToolGuardrail", true);
-
-    /// <summary>
-    /// Mounts the guard on the tool results of the agent, replacing a result it refuses with a fact
-    /// saying it was quarantined.
-    /// </summary>
-    /// <param name="agent">The assembled agent, whose function-invoking loop the guard joins.</param>
-    /// <param name="agentType">Agent whose <c>[ConsultsAgent]</c> declarations tell local colleagues from partners.</param>
-    /// <param name="conversationId">Conversation the checks are correlated with and charged to.</param>
-    /// <param name="mcpTools">Tools discovered from the agent's MCP servers.</param>
-    private AIAgent GuardToolResults(AIAgent agent, Type agentType, string conversationId, IEnumerable<AIFunction> mcpTools)
-    {
-        ConsultsAgentAttribute[] colleagues = [.. agentType.GetCustomAttributes<ConsultsAgentAttribute>()];
-
-        // Never screened: the base tools hand back values that already crossed the user's guard and a
-        // colleague of this installation answers from the same ring.
-        HashSet<string> unguardedToolNames =
-        [
-            .. morganaTools.Select(tool => tool.Name),
-            .. colleagues.Where(colleague => colleague.Instance is null)
-                .Select(colleague => ToFunctionName(new Records.PeerReference(colleague.Intent, null)))
-        ];
-
-        // Screened in depth: an MCP server and a partner's agent speak for systems nobody here vouches
-        // for. Whatever falls in neither set is a plugin tool, trusted code over data users may have written.
-        HashSet<string> externalToolNames =
-        [
-            .. mcpTools.Select(tool => tool.Name),
-            .. colleagues.Where(colleague => colleague.Instance is not null)
-                .Select(colleague => ToFunctionName(new Records.PeerReference(colleague.Intent, colleague.Instance)))
-        ];
-
-        return new AIAgentBuilder(agent)
-            .Use(async (_, invocation, next, cancellationToken) =>
-            {
-                // The tool always runs: what the guard judges is what it returned.
-                object? result = await next(invocation, cancellationToken);
-
-                string toolName = invocation.Function.Name;
-                if (unguardedToolNames.Contains(toolName))
-                    return result;
-
-                // Judged in the text the model would read: a structured result is serialized the way
-                // the tool loop serializes it for the provider.
-                string resultText = result as string ?? JsonSerializer.Serialize(result, AIJsonUtilities.DefaultOptions);
-
-                bool externalSource = externalToolNames.Contains(toolName);
-
-                // The check runs between the chunk announcing the call and the one carrying its result,
-                // both renewing the supervisor's budget on silence: the tool and its check share one gap.
-                using Activity? toolGuardSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.ToolGuardActivity);
-                toolGuardSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
-                toolGuardSpan?.SetTag(MorganaTelemetry.ToolGuardTool, toolName);
-                toolGuardSpan?.SetTag(MorganaTelemetry.ToolGuardExternal, externalSource);
-
-                Records.GuardRailResult verdict = await guardRailService.CheckToolResultAsync(
-                    conversationId, toolName, resultText, externalSource);
-
-                toolGuardSpan?.SetTag(MorganaTelemetry.ToolGuardCompliant, verdict.Compliant);
-                toolGuardSpan?.SetTag(MorganaTelemetry.ToolGuardSource, verdict.Source.ToString());
-                RecordToolVerdict(verdict, toolGuardSpan, toolName, externalSource);
-
-                // A refused result is replaced by Morgana's own word on it, saying how to go on without it:
-                // the model never reads the injection and neither does the session that would replay it.
-                return verdict.Compliant
-                    ? result
-                    : await promptComposerService.ComposeQuarantinedResultAsync(toolName);
-            })
-            .Build();
-    }
-
-    /// <summary>
-    /// Leaves the evidence of one verdict on a tool result: why it was quarantined on the span, how
-    /// often results are quarantined or admitted unjudged on the counters.
-    /// </summary>
-    private static void RecordToolVerdict(Records.GuardRailResult verdict, Activity? toolGuardSpan, string toolName, bool externalSource)
-    {
-        if (!verdict.Compliant)
-        {
-            toolGuardSpan?.SetTag(MorganaTelemetry.ToolGuardViolation, verdict.Violation);
-            MorganaTelemetry.ToolQuarantineCounter.Add(1,
-                new KeyValuePair<string, object?>(MorganaTelemetry.ToolGuardTool, toolName),
-                new KeyValuePair<string, object?>(MorganaTelemetry.ToolGuardExternal, externalSource),
-                new KeyValuePair<string, object?>(MorganaTelemetry.ToolGuardSource, verdict.Source.ToString()));
-        }
-        else if (verdict.Source == Records.GuardVerdictSource.FailOpen)
-        {
-            MorganaTelemetry.GuardFailOpenCounter.Add(1, new KeyValuePair<string, object?>(MorganaTelemetry.GuardKind, "tool"));
-        }
-    }
-
-    /// <summary>
     /// Composes the agent's two-layer instructions and closes them with the colleagues it holds.
     /// </summary>
     /// <remarks>
@@ -673,7 +562,7 @@ public class MorganaAgentAdapter
     /// <param name="conversationId">Conversation the consultations are scoped to, carried as the A2A context id</param>
     /// <param name="sessionAccessor">Hands back the asking agent's live session, which the guards read at invocation</param>
     /// <param name="contextProvider">Context store of the asking agent, holding the per-turn consultation budget</param>
-    /// <param name="peerTerritories">Filled with function name → the colleague's own Territory, for the declaration spliced into this agent's instructions</param>
+    /// <param name="peerTerritories">Filled with function name → the colleague's own ConsultMeFor, for the declaration spliced into this agent's instructions</param>
     /// <returns>One AIFunction per resolvable colleague, empty if none is declared</returns>
     private async Task<List<AIFunction>> RegisterPeerAgentsAsync(
         Type agentType,
@@ -806,7 +695,7 @@ public class MorganaAgentAdapter
 
             // The colleague becomes one more callable function in this agent's tool list, bound to the
             // session created above so every call of it belongs to the same A2A exchange. It is offered
-            // under its own Territory and nothing else: an inventory of its tools would invite the
+            // under its own ConsultMeFor and nothing else: an inventory of its tools would invite the
             // caller to rule out a question the colleague has never seen.
             AIFunction peerFunction = guardedPeerAgent.AsAIFunction(
                 new AIFunctionFactoryOptions

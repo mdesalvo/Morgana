@@ -26,12 +26,6 @@ public static class Constants
         /// <summary>The guard rail's compliance-check prompt.</summary>
         public const string Guard = "Guard";
 
-        /// <summary>The guard rail's check for instructions smuggled into an external tool's result.</summary>
-        public const string ToolGuard = "ToolGuard";
-
-        /// <summary>The guard rail's check for hijacking in a question a partner puts to an agent here.</summary>
-        public const string PeerGuard = "PeerGuard";
-
         /// <summary>The welcome message and its quick replies.</summary>
         public const string Presentation = "Presentation";
 
@@ -99,9 +93,6 @@ public static class Constants
 
         /// <summary>Spliced into a peer-capable agent's own instructions, naming the colleagues it holds.</summary>
         public const string ColleaguesDeclaration = "ColleaguesDeclaration";
-
-        /// <summary>Read by the agent in place of a tool result the guard put in quarantine, saying how to go on without it.</summary>
-        public const string QuarantinedToolResult = "QuarantinedToolResult";
     }
 
     /// <summary>
@@ -197,8 +188,8 @@ public static class Constants
     /// </summary>
     public static class Tools
     {
-        /// <summary>Declares out-of-band that the agent hands the conversation back to Morgana.</summary>
-        public const string SetTurnEnding = "SetTurnEnding";
+        /// <summary>Declares out-of-band that the agent awaits the user's next turn.</summary>
+        public const string SetTurnContinuation = "SetTurnContinuation";
 
         /// <summary>Attaches the turn's quick replies.</summary>
         public const string SetQuickReplies = "SetQuickReplies";
@@ -214,8 +205,8 @@ public static class Constants
     /// </summary>
     public static class ContextKeys
     {
-        /// <summary>Set by <see cref="Tools.SetTurnEnding"/>; read once, then dropped.</summary>
-        public const string TurnEnding = "turn_ending";
+        /// <summary>Set by <see cref="Tools.SetTurnContinuation"/>; read once, then dropped.</summary>
+        public const string TurnContinuation = "turn_continuation";
 
         /// <summary>Set by <see cref="Tools.SetQuickReplies"/>; read once, then dropped.</summary>
         public const string QuickReplies = "quick_replies";
@@ -285,9 +276,6 @@ public static class Constants
 
         /// <summary>In <see cref="Injections.PeerConsultationGuardrail"/> — the colleague's question, inside the fence that marks it as data.</summary>
         public const string ConsultationQuestion = "((question))";
-
-        /// <summary>In <see cref="Injections.QuarantinedToolResult"/> — the function whose result was quarantined.</summary>
-        public const string QuarantinedTool = "((tool))";
 
         /// <summary>In <see cref="Injections.ColleaguesDeclaration"/> — one line per colleague: function name and territory.</summary>
         public const string Colleagues = "((colleagues))";
