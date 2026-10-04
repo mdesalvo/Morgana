@@ -24,10 +24,9 @@ turns:
       # asking a departing user to depart again.
       quickReplies: none
       textNotEmpty: true
-      textNotContains: ["#INT#"]
     judge:
       # One act and the cautions that used to trail it are gone: an in-character farewell IS a
       # farewell and saying so twice only gave the judge a second thing to weigh.
       - "The response reads as a farewell or as an acknowledgement of thanks, in whatever words."
     judgeNot:
-      - "The response asks a question or invites the user to continue the conversation."
+      - "The response asks the user a question."

@@ -197,8 +197,8 @@ public static class Constants
     /// </summary>
     public static class Tools
     {
-        /// <summary>Declares out-of-band that the agent awaits the user's next turn.</summary>
-        public const string SetTurnContinuation = "SetTurnContinuation";
+        /// <summary>Declares out-of-band that the agent hands the conversation back to Morgana.</summary>
+        public const string SetTurnEnding = "SetTurnEnding";
 
         /// <summary>Attaches the turn's quick replies.</summary>
         public const string SetQuickReplies = "SetQuickReplies";
@@ -214,8 +214,8 @@ public static class Constants
     /// </summary>
     public static class ContextKeys
     {
-        /// <summary>Set by <see cref="Tools.SetTurnContinuation"/>; read once, then dropped.</summary>
-        public const string TurnContinuation = "turn_continuation";
+        /// <summary>Set by <see cref="Tools.SetTurnEnding"/>; read once, then dropped.</summary>
+        public const string TurnEnding = "turn_ending";
 
         /// <summary>Set by <see cref="Tools.SetQuickReplies"/>; read once, then dropped.</summary>
         public const string QuickReplies = "quick_replies";

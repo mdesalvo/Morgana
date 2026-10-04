@@ -111,29 +111,23 @@ public class MorganaTool
     }
 
     // =========================================================================
-    // TURN CONTINUATION SYSTEM TOOL
+    // TURN ENDING SYSTEM TOOL
     // =========================================================================
 
     /// <summary>
-    /// Declares whether the agent expects the user to take another turn with it.
-    /// Replaces the legacy in-band <c>#INT#</c> token with an explicit, out-of-band signal
-    /// that lives where quick replies and rich cards already live: the ephemeral context.
+    /// Hands the conversation back to Morgana once the current turn ends. An agent stays in service
+    /// by default, so this out-of-band signal, kept in the ephemeral context beside quick replies and
+    /// rich cards, is the one declaration a turn makes about where the conversation goes next.
     /// </summary>
-    /// <param name="turnContinuation">
-    /// <c>true</c> when the agent awaits the user's turn and must stay in service;
-    /// <c>false</c> when the agent has finished and the conversation may return to Morgana.
-    /// </param>
     /// <returns>Confirmation message for the LLM.</returns>
-    public async Task<object> SetTurnContinuation(bool turnContinuation)
+    public async Task<object> SetTurnEnding()
     {
         ToolContext ctx = getToolContext();
-        await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.TurnContinuation, turnContinuation);
+        await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.TurnEnding, true);
 
-        toolLogger.LogInformation("LLM set turn continuation to {TurnContinuation} via SetTurnContinuation tool", turnContinuation);
+        toolLogger.LogInformation("LLM handed the conversation back to Morgana via SetTurnEnding tool");
 
-        return turnContinuation
-            ? "Turn continuation set: you remain in service and await the user's next turn."
-            : "Turn continuation cleared: this turn concludes your handling of the request.";
+        return "Turn ending set: once this turn ends, the conversation returns to Morgana.";
     }
 
     // =========================================================================

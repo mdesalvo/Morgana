@@ -96,7 +96,7 @@ public class MorganaAgentAdapter
 
     /// <summary>
     /// The morgana.json base tools (GetContextVariable, SetContextVariable,
-    /// SetTurnContinuation, SetQuickReplies, SetRichCard), stamped <c>Reserved = true</c> exactly
+    /// SetTurnEnding, SetQuickReplies, SetRichCard), stamped <c>Reserved = true</c> exactly
     /// once here — the only place in the codebase that ever sets it true. Every other reader of a
     /// ToolDefinition's Reserved flag (domain tools included) sees false by construction, never by
     /// a check: see the Reserved remarks on Records.ToolDefinition.

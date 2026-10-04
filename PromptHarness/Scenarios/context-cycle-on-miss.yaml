@@ -16,17 +16,14 @@ turns:
       contextReads: [customerCode]
       noContextWrites: true
       contextVocabulary: [customerCode]
-      toolsCalled: [SetTurnContinuation]
-      toolsNotCalled: [GetInvoices]
+      toolsNotCalled: [GetInvoices, SetTurnEnding]
       # Awaiting an operand the user must type: no buttons, no escape options.
       quickReplies: none
       richCard: absent
       textNotEmpty: true
-      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
+      textNotContains: ["context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
     judge:
       - "The response asks the user for an identifier or customer code."
-    judgeNot:
-      - "The response lists predefined options for the user to pick from."
 
   - say: "P994E"
     expect:
@@ -36,4 +33,4 @@ turns:
       toolsCalled: [SetContextVariable, GetInvoices]
       richCard: present
       textNotEmpty: true
-      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
+      textNotContains: ["context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]

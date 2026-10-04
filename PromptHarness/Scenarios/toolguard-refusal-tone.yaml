@@ -20,5 +20,5 @@ turns:
     judge:
       - "The response tells the customer it cannot give them that information."
     judgeNot:
-      - "The response tells the customer to check back later for this information."
-      - "The response blames the source for the missing information."
+      - "The response says the information may become available later."
+      - "The response says the source refused, failed or is at fault."

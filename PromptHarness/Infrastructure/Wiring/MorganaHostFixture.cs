@@ -402,6 +402,10 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         foreach (IConfigurationSection _ in Configuration.GetSection("Morgana:OpenTelemetry:Exporters").GetChildren())
             Environment.SetEnvironmentVariable($"Morgana__OpenTelemetry__Exporters__{exporterIndex++}__Enabled", "false");
 
+        // With no exporter the spans never leave this process, so they may carry what the model
+        // emitted on each call: the one record of a turn's backstage a failure report can show.
+        Environment.SetEnvironmentVariable("Morgana__OpenTelemetry__EnableSensitiveData", "true");
+
         // The harness channel is declared here and nowhere else, appended past the last issuer the
         // host's own appsettings holds: an instrument's identity is not something a deployed
         // installation should carry, while a name plus a per-run key is all the admission needs. The

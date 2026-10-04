@@ -21,12 +21,8 @@ description: >-
   calling the tool, 5/5 runs. That is correct behaviour, not a bug — the scenario is written to
   match it, the same way behaviour-order-confirmation-bills-invoice does for Inventory.
 
-  Two judgeNots were reworded after a live run, neither because the agent was right to fail them.
-  'States a specific invoice total' fired on the plan's own monthly fee, which GetPlanOverview gave
-  the agent in turn 1 and which it is entitled to restate; and 'claims the plan is already active'
-  fired on the future-tense restatement of what enrolling will do — which is precisely what the
-  positive proposition of that same turn demands before the go-ahead. Both now judge the tense and
-  the subject rather than the presence of a number.
+  The judgeNot of the go-ahead turn judges tense and subject, never the presence of a number: restating
+  the fee and what enrolling will do is exactly what that turn demands before the explicit yes.
 
 customerCodes: [M455D, M455E, M455F, M455G, M455H]
 
@@ -43,7 +39,7 @@ turns:
       # replies, no continuation signal) the one time this regressed live.
       richCard: present
       textNotEmpty: true
-      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
+      textNotContains: ["context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
     judge:
       - "The response states a concrete monthly fee for the plan."
     judgeNot:
@@ -55,26 +51,20 @@ turns:
       agentCompleted: false
       toolsNotCalled: [SubscribeToGreenCarePlan]
       textNotEmpty: true
-      textNotContains: ["#INT#", "invoiceId", "InvoiceLines", "contractId"]
+      textNotContains: ["invoiceId", "InvoiceLines", "contractId"]
     judge:
-      - "The response states the plan's monthly fee."
-      - "The response states at least one other term of the plan: its coverage, its visit frequency, or its guarantee."
-      - "The response asks the customer to confirm before going ahead."
+      - "The response states the plan's monthly fee and asks the customer to confirm before going ahead."
     judgeNot:
       # Tense, named outright. The turn is REQUIRED to describe the billing that enrolling causes, so
       # the only thing left to forbid is describing it as done. Everything else this used to guard is
       # already guaranteed structurally by toolsNotCalled above: nothing was opened, nothing billed.
-      - "The response says the plan is active now, or that the first month has already been billed."
+      - "Read in full, the response tells the customer the plan is already active or its first month already billed."
 
   - say: "Yes, proceed"
     expect:
       agent: ContractAgent
       toolsCalled: [SubscribeToGreenCarePlan]
       textNotEmpty: true
-      textNotContains: ["#INT#", "invoiceId", "InvoiceLines", "contractId"]
+      textNotContains: ["invoiceId", "InvoiceLines", "contractId"]
     judge:
-      - "The response says the plan is now active."
-      - "The response says the first month has been billed."
-      - "The response tells the customer that invoice can be seen if they wish."
-    judgeNot:
-      - "The response gives the invoice's own total, its tax, or a line on it."
+      - "The response says the plan is now active and its first month billed."

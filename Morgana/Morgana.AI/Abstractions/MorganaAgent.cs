@@ -385,9 +385,9 @@ public class MorganaAgent : MorganaActor
             string llmResponseText = fullResponse.ToString().Trim();
 
             #region LLM tools
-            // TurnContinuation
-            bool wantsContinuation = GetTurnContinuationFromContext(aiAgentSession);
-            aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnContinuation);
+            // TurnEnding
+            bool wantsEnding = GetTurnEndingFromContext(aiAgentSession);
+            aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnEnding);
 
             // QuickReplies
             List<QuickReply>? quickReplies = GetQuickRepliesFromContext(aiAgentSession);
@@ -408,12 +408,13 @@ public class MorganaAgent : MorganaActor
             }
             #endregion
 
-            // Determine turn continuation strategy, depending on LLM output
-            bool isCompleted = !wantsContinuation && !hasQuickReplies && !hasRichCard;
+            // The agent stays in service unless it hands the conversation back. A turn offering buttons
+            // or a card awaits the answer to them whatever it declared.
+            bool isCompleted = wantsEnding && !hasQuickReplies && !hasRichCard;
 
             agentLogger.LogInformation(
                 "Agent response analysis:" +
-                $"WantsContinuation={wantsContinuation}," +
+                $"WantsEnding={wantsEnding}," +
                 $"HasQuickReplies={hasQuickReplies}," +
                 $"HasRichCard={hasRichCard}," +
                 $"IsCompleted={isCompleted}");
@@ -441,6 +442,17 @@ public class MorganaAgent : MorganaActor
                 .Skip(historyBaseline)
                 .LastOrDefault(m => m.Role == ChatRole.Assistant
                                      && m.Contents.OfType<TextContent>().Any(t => !string.IsNullOrWhiteSpace(t.Text)));
+
+            // A hand-back with no words is a complete turn: the conversation returns to Morgana, whose own
+            // farewell is what the user reads next, so nothing of the agent's is recorded or delivered.
+            if (finalAssistantMessage is null && isCompleted)
+            {
+                agentLogger.LogInformation("Agent '{AgentIntent}' handed the conversation back without a word for the user", AgentIntent);
+
+                await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted);
+                senderRef.Tell(new Records.AgentResponse(string.Empty, IsCompleted: true));
+                return;
+            }
 
             // A turn without a word for the user has failed, however cleanly the model closed it: prose
             // always introduces whatever a card or a quick reply offers. Recorded as an answer, so a resumed
@@ -496,7 +508,7 @@ public class MorganaAgent : MorganaActor
             {
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.RichCard);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.QuickReplies);
-                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnContinuation);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnEnding);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ConsultationRounds);
             }
         }
@@ -555,14 +567,16 @@ public class MorganaAgent : MorganaActor
 
             // The colleague's presentation decisions are handed over as data rather than drained:
             // the asking agent reads the options it was offered and may come back having chosen one.
-            bool awaitsReply = GetTurnContinuationFromContext(consultationSession);
+            // Options are the only way an answer awaits a reply: a colleague answers one question on
+            // a session made for it, so its staying in service has nobody to wait for.
             List<QuickReply>? quickReplies = GetQuickRepliesFromContext(consultationSession);
+            bool awaitsReply = quickReplies?.Count > 0;
             RichCard? richCard = GetRichCardFromContext(consultationSession);
 
             // A baseline of 0 where a user turn passes its own: this session was created for the
             // exchange and holds nothing else, so every tool call in it belongs to this answer and
             // there is no earlier history to skip past.
-            consultationSpan?.SetTag(MorganaTelemetry.ConsultationAwaitingReply, awaitsReply || quickReplies?.Count > 0);
+            consultationSpan?.SetTag(MorganaTelemetry.ConsultationAwaitingReply, awaitsReply);
             consultationSpan?.SetTag(MorganaTelemetry.AgentToolsInvoked, GetToolsInvoked(consultationSession, 0));
             consultationSpan?.SetTag(MorganaTelemetry.ConsultationAnswer, response.Text);
             consultationSpan?.Dispose();
@@ -573,7 +587,7 @@ public class MorganaAgent : MorganaActor
 
             senderRef.Tell(new Records.PeerConsultationResponse(
                 response.Text.Trim(),
-                awaitsReply || quickReplies?.Count > 0,
+                awaitsReply,
                 quickReplies,
                 richCard));
         }
@@ -741,18 +755,18 @@ public class MorganaAgent : MorganaActor
             .Select(c => c.Name));
 
     /// <summary>
-    /// Reads the <c>turn_continuation</c> context variable, set by the <c>SetTurnContinuation</c>
-    /// base tool when the agent declares it is staying in service awaiting the user's next turn.
+    /// Reads the <c>turn_ending</c> context variable, set by the <c>SetTurnEnding</c> base tool when
+    /// the agent hands the conversation back to Morgana.
     /// </summary>
     /// <param name="session">Active agent session.</param>
-    /// <returns><c>true</c> if the agent declared continuation on this turn; <c>false</c> if it
-    /// declared completion or made no declaration at all.</returns>
-    protected bool GetTurnContinuationFromContext(AgentSession session)
+    /// <returns><c>true</c> if the agent handed the conversation back on this turn; <c>false</c> if it
+    /// made no such declaration and so stays in service.</returns>
+    protected bool GetTurnEndingFromContext(AgentSession session)
     {
-        object? ctxTurnContinuation = aiContextProvider.GetVariable(session, Constants.ContextKeys.TurnContinuation);
-        return ctxTurnContinuation switch
+        object? ctxTurnEnding = aiContextProvider.GetVariable(session, Constants.ContextKeys.TurnEnding);
+        return ctxTurnEnding switch
         {
-            bool continuation => continuation,
+            bool ending => ending,
             JsonElement { ValueKind: JsonValueKind.True } => true,
             JsonElement { ValueKind: JsonValueKind.False } => false,
             JsonElement { ValueKind: JsonValueKind.String } element => bool.TryParse(element.GetString(), out bool parsed) && parsed,

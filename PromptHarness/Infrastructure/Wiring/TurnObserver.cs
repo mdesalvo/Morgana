@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Morgana.AI;
 using Morgana.AI.Telemetry;
@@ -109,12 +110,11 @@ public sealed class TurnObserver : IDisposable
     private readonly ConcurrentDictionary<string, List<ClassifierSpan>> classifierSpans = new ConcurrentDictionary<string, List<ClassifierSpan>>();
 
     /// <summary>
-    /// Token usage of every closed LLM span, in completion order. Not keyed by conversation: the
-    /// MEAI spans carry <c>gen_ai.*</c> attributes and no conversation id, so they are attributed
-    /// to a turn by position in this list — sound for the same reason the log correlation is and
-    /// no more.
+    /// Every closed LLM span, in completion order. Not keyed by conversation: the MEAI spans carry
+    /// <c>gen_ai.*</c> attributes and no conversation id, so they are attributed to a turn by
+    /// position in this list — sound for the same reason the log correlation is and no more.
     /// </summary>
-    private readonly List<TokenUsage> llmSpans = [];
+    private readonly List<LlmCallObservation> llmSpans = [];
 
     /// <summary>Guards <see cref="llmSpans"/>.</summary>
     private readonly Lock llmGate = new Lock();
@@ -261,9 +261,8 @@ public sealed class TurnObserver : IDisposable
         // LLM spans are process-wide, not per-conversation (see the field's own remarks on why),
         // so isolating this turn's usage means skipping every span that existed before BeginTurn's
         // mark and summing whatever landed after — sound only because the suite runs serially.
-        TokenUsage usage;
-        lock (llmGate)
-            usage = llmSpans.Skip(scope.LlmSpanCount).Aggregate(TokenUsage.Zero, (total, next) => total + next);
+        IReadOnlyList<LlmCallObservation> calls = LlmCallsSince(scope);
+        TokenUsage usage = calls.Where(call => call.IsModelCall).Aggregate(TokenUsage.Zero, (total, next) => total + next.Usage);
 
         return new TurnResult(
             scope.ConversationId,
@@ -282,7 +281,22 @@ public sealed class TurnObserver : IDisposable
             conversationLogMark is { } mark ? output.Since(mark) : [],
             screened,
             guard?.Source,
-            presentations);
+            presentations,
+            calls);
+    }
+
+    /// <summary>
+    /// What a turn that never completed did before it was abandoned — every model call and host log
+    /// line since its scope was opened. A timeout is the failure whose cause is invisible from the
+    /// channel, so its report must carry the same evidence a completed turn's does.
+    /// </summary>
+    public string BackstageSince(TurnScope scope)
+        => TurnResult.RenderBackstage(LlmCallsSince(scope), output.Since(scope.LogMark));
+
+    private IReadOnlyList<LlmCallObservation> LlmCallsSince(TurnScope scope)
+    {
+        lock (llmGate)
+            return [.. llmSpans.Skip(scope.LlmSpanCount)];
     }
 
     /// <summary>
@@ -320,8 +334,18 @@ public sealed class TurnObserver : IDisposable
                 ReadTokenTag(activity, "gen_ai.usage.cache_write.input_tokens"),
                 Calls: 1);
 
+            // What the model emitted reaches the span only because the fixture turns sensitive data
+            // on for this in-process host: it is what tells a model that stopped without a word
+            // from one whose words were lost on the way to the user.
+            LlmCallObservation call = new LlmCallObservation(
+                activity.OperationName,
+                usage,
+                activity.GetTagItem("gen_ai.response.model") as string ?? activity.GetTagItem("gen_ai.request.model") as string,
+                ReadFinishReasons(activity.GetTagItem("gen_ai.response.finish_reasons")),
+                DescribeModelOutput(activity.GetTagItem("gen_ai.output.messages") as string));
+
             lock (llmGate)
-                llmSpans.Add(usage);
+                llmSpans.Add(call);
 
             return;
         }
@@ -436,6 +460,78 @@ public sealed class TurnObserver : IDisposable
             string text when long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out long parsed) => parsed,
             _ => 0
         };
+
+    // The provider's reasons arrive as one array per call; a call reports one reason in practice.
+    private static string? ReadFinishReasons(object? tag) => tag switch
+    {
+        string[] reasons => string.Join(",", reasons),
+        string text => text.Trim('[', ']').Replace("\"", "", StringComparison.Ordinal),
+        _ => null
+    };
+
+    /// <summary>
+    /// Turns the <c>gen_ai.output.messages</c> document into one entry per emitted part: a text with
+    /// its length and opening, a tool call with its name and arguments. An empty text is named as
+    /// such, because a turn that ends on one is exactly the case this exists to expose.
+    /// </summary>
+    private static IReadOnlyList<string> DescribeModelOutput(string? outputMessages)
+    {
+        if (string.IsNullOrEmpty(outputMessages))
+            return [];
+
+        List<string> parts = [];
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(outputMessages);
+            foreach (JsonElement message in document.RootElement.EnumerateArray())
+            {
+                if (!message.TryGetProperty("parts", out JsonElement messageParts))
+                    continue;
+
+                foreach (JsonElement part in messageParts.EnumerateArray())
+                    parts.Add(DescribeModelOutputPart(part));
+            }
+        }
+        catch (JsonException)
+        {
+            // A shape this reader does not know is still evidence: shown raw rather than dropped.
+            parts.Add($"unparsed output: {Excerpt(outputMessages, 400)}");
+        }
+
+        return parts;
+    }
+
+    private static string DescribeModelOutputPart(JsonElement part)
+    {
+        string type = part.TryGetProperty("type", out JsonElement typeElement) ? typeElement.GetString() ?? "?" : "?";
+        if (type == "tool_call")
+        {
+            string name = part.TryGetProperty("name", out JsonElement nameElement) ? nameElement.GetString() ?? "?" : "?";
+            string arguments = part.TryGetProperty("arguments", out JsonElement argumentsElement) ? argumentsElement.GetRawText() : "";
+            return $"call {name}({Excerpt(arguments, 300)})";
+        }
+
+        // MEAI writes a standard part with its content as a string, but any content it has no
+        // convention for as a serialized object named by its .NET type: reasoning arrives that way,
+        // so the type is always shown, short, lest a thought read as an answer.
+        string kind = type[(type.LastIndexOf('.') + 1)..];
+        string? text = part.TryGetProperty("content", out JsonElement content)
+            ? content.ValueKind == JsonValueKind.String
+                ? content.GetString()
+                : content.ValueKind == JsonValueKind.Object && content.TryGetProperty("text", out JsonElement nestedText) ? nestedText.GetString() : null
+            : null;
+
+        if (text is null)
+            return kind;
+
+        return text.Length == 0 ? $"{kind} (empty)" : $"{kind}[{text.Length}] \"{Excerpt(text, 200)}\"";
+    }
+
+    private static string Excerpt(string value, int length)
+    {
+        string singleLine = value.ReplaceLineEndings(" ");
+        return singleLine.Length <= length ? singleLine : singleLine[..length] + "…";
+    }
 
     /// <summary>What a closed <c>morgana.agent</c> span contributes to a turn result.</summary>
     private sealed record AgentSpan(string? AgentName, IReadOnlyList<string> ToolsInvoked);

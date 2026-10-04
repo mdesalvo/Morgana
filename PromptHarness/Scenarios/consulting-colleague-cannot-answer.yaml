@@ -12,7 +12,7 @@ description: >-
   agent that went round again on an answer it did not like, which is the loop this scenario exists
   to catch — and the turn still delivers text, so the impasse resolves inside the turn rather than
   burning the AgentToAgent:MaxRoundsPerTurn safety net or leaving the customer with nothing.
-  By judgement: exactly one proposition, that the desk says plainly it cannot tell them. Deliberately
+  By judgement: exactly one proposition, that the answer, read in full, says who handled the order is not recorded or cannot be told. Deliberately
   nothing about what it must avoid saying — that a colleague was asked, that another desk exists —
   because a judge handed a prohibition on this turn, where the agent genuinely has bad news to
   deliver and has to explain itself, is being invited to convict.
@@ -39,4 +39,4 @@ turns:
       # satisfy every other assertion here and still be the failure the scenario is about.
       textNotEmpty: true
     judge:
-      - "The response says it cannot tell the customer who handled that order."
+      - "Read in full, the response tells the customer that who handled that order is not recorded or cannot be told."

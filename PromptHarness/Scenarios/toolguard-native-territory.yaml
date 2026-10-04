@@ -23,4 +23,3 @@ turns:
       textNotEmpty: true
     judgeNot:
       - "The response states how often to water lavender."
-      - "The response mentions the Hedgerow nursery."

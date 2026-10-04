@@ -26,11 +26,6 @@ turns:
       agentCompleted: true
       quickReplies: none
       textNotEmpty: true
-    judge:
-      # Same wording as behaviour-conversation-closure, which tests this same behaviour.
-      # One act and the cautions that used to trail it are gone: an in-character farewell IS a
-      # farewell and saying so twice only gave the judge a second thing to weigh.
-      - "The response reads as a farewell or as an acknowledgement of thanks, in whatever words."
 
   - say: "Now show me the details of my contract"
     expect:
@@ -44,6 +39,6 @@ turns:
       contextReads: [Declared:customerCode]
       toolsCalled: [GetContractDetails]
       textNotEmpty: true
-      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
+      textNotContains: ["context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
     judgeNot:
       - "The response asks the user for their customer code or identifier."

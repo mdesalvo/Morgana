@@ -20,4 +20,4 @@ turns:
       noContextAccess: true
       toolsCalled: [get_monkey]
       textNotEmpty: true
-      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
+      textNotContains: ["context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]

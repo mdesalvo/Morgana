@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using Morgana.Contracts;
 
 namespace PromptHarness.Infrastructure.Wiring;
@@ -72,6 +73,30 @@ public sealed record ToolGuardObservation(string? Tool, bool? External, bool? Co
 public sealed record PresentationObservation(string? Tool, bool? Accepted, string? Rejection);
 
 /// <summary>
+/// One round trip to the model during a turn, read from its <c>gen_ai</c> span: what it cost, why
+/// it stopped and what it emitted.
+/// </summary>
+/// <param name="Operation">Name of the span: a call to the model or a step the same source records around one.</param>
+/// <param name="Usage">Tokens of this one call.</param>
+/// <param name="Model">Model that answered, as the provider reported it.</param>
+/// <param name="FinishReasons">Why the model stopped, as the provider reported it; null when the span carries none.</param>
+/// <param name="Output">What the model emitted, one entry per text or tool call; empty when it emitted nothing.</param>
+public sealed record LlmCallObservation(string Operation, TokenUsage Usage, string? Model, string? FinishReasons, IReadOnlyList<string> Output)
+{
+    /// <summary>
+    /// Whether the span is a round trip to the model. The same source also records each tool's
+    /// execution and the loop around the calls, whose usage is the sum of the calls it wraps: only
+    /// a model call is a cost of its own.
+    /// </summary>
+    public bool IsModelCall => Operation.StartsWith("chat", StringComparison.Ordinal);
+
+    /// <summary>The call on one line, as a failure report shows it.</summary>
+    public string Describe()
+        => $"[{Operation}] {Model ?? "(model unknown)"} finish={FinishReasons ?? "(not reported)"} out={Usage.OutputTokens} → "
+         + (Output.Count == 0 ? "(nothing emitted)" : string.Join(" + ", Output));
+}
+
+/// <summary>
 /// One question a partner put to an agent here, as the peer guard judged it on the <c>morgana.peerguard</c> span.
 /// </summary>
 /// <param name="Caller">Partner that asked.</param>
@@ -109,6 +134,7 @@ public sealed record PeerGuardObservation(string? Caller, string? Target, bool? 
 /// <param name="ToolGuards">Tool results the guard screened during the turn, in the order they closed; empty when the tool guard is off.</param>
 /// <param name="GuardSource">Which layer decided the user guard's verdict; null when no guard span was seen.</param>
 /// <param name="Presentations">Calls to the presentation tools during the turn, in the order they closed.</param>
+/// <param name="LlmCalls">Every round trip to the model during the turn, classification included, in the order they closed.</param>
 public sealed record TurnResult(
     string ConversationId,
     string UserMessage,
@@ -126,8 +152,30 @@ public sealed record TurnResult(
     IReadOnlyList<string>? CumulativeLogLines = null,
     IReadOnlyList<ToolGuardObservation>? ToolGuards = null,
     string? GuardSource = null,
-    IReadOnlyList<PresentationObservation>? Presentations = null)
+    IReadOnlyList<PresentationObservation>? Presentations = null,
+    IReadOnlyList<LlmCallObservation>? LlmCalls = null)
 {
+    /// <summary>What the turn did out of sight of the user, as a failure report shows it.</summary>
+    public string Backstage() => RenderBackstage(LlmCalls ?? [], LogLines);
+
+    /// <summary>
+    /// Renders every call to the model, then everything the host logged meanwhile. Shared with a turn
+    /// that never completed, whose evidence is gathered from the same marks without a result to hold it.
+    /// </summary>
+    public static string RenderBackstage(IReadOnlyList<LlmCallObservation> calls, IReadOnlyList<string> hostLines)
+    {
+        StringBuilder backstage = new StringBuilder();
+        backstage.AppendLine(CultureInfo.InvariantCulture, $"backstage — {calls.Count} model call(s):");
+        for (int callIndex = 0; callIndex < calls.Count; callIndex++)
+            backstage.AppendLine(CultureInfo.InvariantCulture, $"  #{callIndex + 1} {calls[callIndex].Describe()}");
+
+        backstage.AppendLine(CultureInfo.InvariantCulture, $"backstage — host log, {hostLines.Count} line(s):");
+        foreach (string line in hostLines)
+            backstage.AppendLine(CultureInfo.InvariantCulture, $"  | {line}");
+
+        return backstage.ToString().TrimEnd();
+    }
+
     /// <summary>Calls to the presentation tools during the turn, never null.</summary>
     public IReadOnlyList<PresentationObservation> Presented => Presentations ?? [];
 

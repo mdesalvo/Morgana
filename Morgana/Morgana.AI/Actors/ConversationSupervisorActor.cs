@@ -742,16 +742,21 @@ public class ConversationSupervisorActor : MorganaActor
 
                 // Sends the agent's response back to the client, forwarding the classification's
                 // intent and metadata, the agent's completion flag, quick replies, rich card
-                // and the timestamp the reply is recorded under.
-                ctx.OriginalSender.Tell(new Records.ConversationResponse(
-                    response.Response,
-                    ctx.Classification?.Intent,
-                    ctx.Classification?.Metadata,
-                    agentName,
-                    response.IsCompleted,
-                    response.QuickReplies,
-                    response.RecordedTimestamp,
-                    response.RichCard));
+                // and the timestamp the reply is recorded under. An agent that handed the
+                // conversation back without a word has nothing to deliver: Morgana's farewell below
+                // is the whole answer.
+                if (response.Response.Length > 0)
+                {
+                    ctx.OriginalSender.Tell(new Records.ConversationResponse(
+                        response.Response,
+                        ctx.Classification?.Intent,
+                        ctx.Classification?.Metadata,
+                        agentName,
+                        response.IsCompleted,
+                        response.QuickReplies,
+                        response.RecordedTimestamp,
+                        response.RichCard));
+                }
 
                 // The agent has finished: Morgana takes the conversation back and says so, behind
                 // the answer above rather than in place of it.
@@ -948,16 +953,20 @@ public class ConversationSupervisorActor : MorganaActor
 
                 // Sends the agent's response back to the client. Unlike AwaitingAgentResponse's
                 // equivalent Tell, Intent/Metadata are hardcoded null: this state has neither to
-                // forward (see the comment above currentIntent).
-                originalSender.Tell(new Records.ConversationResponse(
-                    response.Response,
-                    null,
-                    null,
-                    agentName,
-                    response.IsCompleted,
-                    response.QuickReplies,
-                    response.RecordedTimestamp,
-                    response.RichCard));
+                // forward (see the comment above currentIntent). A hand-back without a word is
+                // answered by Morgana's farewell alone, as in AwaitingAgentResponse.
+                if (response.Response.Length > 0)
+                {
+                    originalSender.Tell(new Records.ConversationResponse(
+                        response.Response,
+                        null,
+                        null,
+                        agentName,
+                        response.IsCompleted,
+                        response.QuickReplies,
+                        response.RecordedTimestamp,
+                        response.RichCard));
+                }
 
                 // The agent has finished: Morgana takes the conversation back and says so, behind
                 // the answer above rather than in place of it.

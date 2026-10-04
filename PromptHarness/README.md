@@ -251,7 +251,7 @@ turns:
       toolsAdmitted: [get_soil_temperature] # every screening of it let the result through
       guardDecidedBy: [Inspector]       # the layer that decided the user guard's verdict
       textNotEmpty: true
-      textNotContains: ["#INT#"]
+      textNotContains: ["context variable"] # no listed fragment appears in the text
     judge:                        # propositions an LLM must find TRUE
       - "The response asks the user for an identifier."
     judgeNot:                     # …and FALSE
