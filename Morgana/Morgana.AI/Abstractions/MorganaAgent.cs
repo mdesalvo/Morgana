@@ -299,124 +299,124 @@ public class MorganaAgent : MorganaActor
                 agentLogger.LogInformation("Agent '{AgentIntent}' bypassing LLM streaming: channel does not advertise SupportsStreaming", AgentIntent);
 
             StringBuilder fullResponse = new StringBuilder();
-            if (useStreaming)
-            {
-                Stopwatch firstChunkStopwatch = Stopwatch.StartNew();
-                bool firstChunkEmitted = false;
-                string? lastTextMessageId = null;
 
-                // The whole turn runs here — tool calls included, which surface as chunks carrying no text.
-                // The phrase being answered is the one already filed above, so nothing is handed in here.
-                await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(aiAgentSession))
+            // One pass of the model over the session, its text streamed or batched into fullResponse.
+            async Task RunModelAsync()
+            {
+                if (useStreaming)
                 {
-                    if (!string.IsNullOrEmpty(chunk.Text))
+                    Stopwatch firstChunkStopwatch = Stopwatch.StartNew();
+                    bool firstChunkEmitted = false;
+                    string? lastTextMessageId = null;
+
+                    // The whole turn runs here — tool calls included, which surface as chunks carrying no text.
+                    // The phrase being answered is the one already filed above, so nothing is handed in here.
+                    await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(aiAgentSession))
                     {
-                        // Two text chunks with different MessageIds come from different messages and that
-                        // is where the separator belongs. Within one message the chunks are tokens and must
-                        // stay welded, so only text-carrying chunks update the id. A provider that never
-                        // sets MessageId reports no boundary and nothing is inserted.
-                        if (lastTextMessageId is not null
-                             && !string.Equals(chunk.MessageId, lastTextMessageId, StringComparison.Ordinal)
-                             && NeedsMessageSeparator(fullResponse, chunk.Text))
+                        if (!string.IsNullOrEmpty(chunk.Text))
                         {
+                            // Two text chunks with different MessageIds come from different messages and that
+                            // is where the separator belongs. Within one message the chunks are tokens and must
+                            // stay welded, so only text-carrying chunks update the id. A provider that never
+                            // sets MessageId reports no boundary and nothing is inserted.
+                            if (lastTextMessageId is not null
+                                 && !string.Equals(chunk.MessageId, lastTextMessageId, StringComparison.Ordinal)
+                                 && NeedsMessageSeparator(fullResponse, chunk.Text))
+                            {
+                                fullResponse.Append(Constants.Markers.MessageSeparator);
+
+                                // Streamed too, so the live text matches the final one the client is about to
+                                // overwrite it with, instead of showing the weld for the rest of the turn.
+                                senderRef.Tell(new Records.AgentStreamChunk(Constants.Markers.MessageSeparator));
+                            }
+
+                            lastTextMessageId = chunk.MessageId;
+
+                            fullResponse.Append(chunk.Text);
+                            senderRef.Tell(new Records.AgentStreamChunk(chunk.Text));
+
+                            // Record time-to-first-token on the very first chunk
+                            if (!firstChunkEmitted)
+                            {
+                                firstChunkEmitted = true;
+                                long ttft = firstChunkStopwatch.ElapsedMilliseconds;
+                                firstChunkStopwatch.Stop();
+                                agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.EventFirstChunk));
+                                agentSpan?.SetTag(MorganaTelemetry.AgentTtftMs, ttft);
+                                MorganaTelemetry.AgentTtftHistogram.Record(ttft);
+                            }
+                        }
+                        else
+                        {
+                            // The turn is advancing on something with no text in it — a tool being called
+                            // or a colleague being asked. The supervisor's wait counts silence and a
+                            // consultation is a whole turn at another agent: unannounced, it reads as an
+                            // agent that has died and the user's turn is abandoned while its answer is
+                            // still being written.
+                            senderRef.Tell(new Records.AgentStillWorking());
+                        }
+                    }
+                }
+                else
+                {
+                    Stopwatch responseStopwatch = Stopwatch.StartNew();
+                    // Same turn as the streaming branch, answering the same already-filed phrase: nothing
+                    // reaches the channel until the model and every tool it decided to call, are done.
+                    AgentResponse response = await aiAgent.RunAsync(aiAgentSession);
+                    responseStopwatch.Stop();
+
+                    // Assembled message by message rather than through AgentResponse.Text, which is
+                    // documented to concatenate every message's text and so produces exactly the weld
+                    // Markers.MessageSeparator exists to prevent. Here every element is a whole message, so the
+                    // boundary needs no detecting — unlike the streaming path above.
+                    foreach (ChatMessage responseMessage in response.Messages)
+                    {
+                        if (string.IsNullOrEmpty(responseMessage.Text))
+                            continue;
+
+                        if (NeedsMessageSeparator(fullResponse, responseMessage.Text))
                             fullResponse.Append(Constants.Markers.MessageSeparator);
 
-                            // Streamed too, so the live text matches the final one the client is about to
-                            // overwrite it with, instead of showing the weld for the rest of the turn.
-                            senderRef.Tell(new Records.AgentStreamChunk(Constants.Markers.MessageSeparator));
-                        }
-
-                        lastTextMessageId = chunk.MessageId;
-
-                        fullResponse.Append(chunk.Text);
-                        senderRef.Tell(new Records.AgentStreamChunk(chunk.Text));
-
-                        // Record time-to-first-token on the very first chunk
-                        if (!firstChunkEmitted)
-                        {
-                            firstChunkEmitted = true;
-                            long ttft = firstChunkStopwatch.ElapsedMilliseconds;
-                            firstChunkStopwatch.Stop();
-                            agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.EventFirstChunk));
-                            agentSpan?.SetTag(MorganaTelemetry.AgentTtftMs, ttft);
-                            MorganaTelemetry.AgentTtftHistogram.Record(ttft);
-                        }
+                        fullResponse.Append(responseMessage.Text);
                     }
-                    else
-                    {
-                        // The turn is advancing on something with no text in it — a tool being called
-                        // or a colleague being asked. The supervisor's wait counts silence and a
-                        // consultation is a whole turn at another agent: unannounced, it reads as an
-                        // agent that has died and the user's turn is abandoned while its answer is
-                        // still being written.
-                        senderRef.Tell(new Records.AgentStillWorking());
-                    }
+
+                    long ttft = responseStopwatch.ElapsedMilliseconds;
+                    agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.EventFirstChunk));
+                    agentSpan?.SetTag(MorganaTelemetry.AgentTtftMs, ttft);
+                    MorganaTelemetry.AgentTtftHistogram.Record(ttft);
                 }
             }
-            else
+
+            await RunModelAsync();
+
+            // A turn the user would receive as an empty bubble is run once more: the session already
+            // holds whatever the first pass did, so the model picks up from there and writes its text.
+            if (string.IsNullOrWhiteSpace(fullResponse.ToString()))
             {
-                Stopwatch responseStopwatch = Stopwatch.StartNew();
-                // Same turn as the streaming branch, answering the same already-filed phrase: nothing
-                // reaches the channel until the model and every tool it decided to call, are done.
-                AgentResponse response = await aiAgent.RunAsync(aiAgentSession);
-                responseStopwatch.Stop();
-
-                // Assembled message by message rather than through AgentResponse.Text, which is
-                // documented to concatenate every message's text and so produces exactly the weld
-                // Markers.MessageSeparator exists to prevent. Here every element is a whole message, so the
-                // boundary needs no detecting — unlike the streaming path above.
-                foreach (ChatMessage responseMessage in response.Messages)
-                {
-                    if (string.IsNullOrEmpty(responseMessage.Text))
-                        continue;
-
-                    if (NeedsMessageSeparator(fullResponse, responseMessage.Text))
-                        fullResponse.Append(Constants.Markers.MessageSeparator);
-
-                    fullResponse.Append(responseMessage.Text);
-                }
-
-                long ttft = responseStopwatch.ElapsedMilliseconds;
-                agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.EventFirstChunk));
-                agentSpan?.SetTag(MorganaTelemetry.AgentTtftMs, ttft);
-                MorganaTelemetry.AgentTtftHistogram.Record(ttft);
+                agentLogger.LogWarning("Agent '{AgentIntent}' ended its turn with no text: running it once more", AgentIntent);
+                await RunModelAsync();
             }
+
+            // Still nothing to say: the turn has failed and the user is told so, rather than left facing silence.
+            if (string.IsNullOrWhiteSpace(fullResponse.ToString()))
+                throw new InvalidOperationException($"Agent '{AgentIntent}' produced no text in two passes");
 
             string llmResponseText = fullResponse.ToString().Trim();
 
-            #region LLM tools
-            // TurnContinuation
-            bool wantsContinuation = GetTurnContinuationFromContext(aiAgentSession);
-            aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnContinuation);
+            // How the turn closes, recorded by Reply whether the model called it or the framework closed
+            // the turn on its behalf. A turn that still declares nothing is answered and ends.
+            Records.TurnReply turnReply = GetTurnReplyFromContext(aiAgentSession)
+                                          ?? new Records.TurnReply(Records.AwaitedFromUser.Nothing, false, [], null);
+            aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnReply);
 
-            // QuickReplies
-            List<QuickReply>? quickReplies = GetQuickRepliesFromContext(aiAgentSession);
-            bool hasQuickReplies = quickReplies?.Count > 0;
-            if (hasQuickReplies)
-            {
-                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.QuickReplies);
-                agentLogger.LogInformation("Dropped {Count} quick replies from context (ephemeral data)", quickReplies!.Count);
-            }
-
-            // RichCard
-            RichCard? richCard = GetRichCardFromContext(aiAgentSession);
-            bool hasRichCard = richCard != null;
-            if (hasRichCard)
-            {
-                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.RichCard);
-                agentLogger.LogInformation("Dropped rich card '{Title}' from context (ephemeral data)", richCard!.Title);
-            }
-            #endregion
-
-            // Determine turn continuation strategy, depending on LLM output
-            bool isCompleted = !wantsContinuation && !hasQuickReplies && !hasRichCard;
+            List<QuickReply>? quickReplies = turnReply.Actions.Count > 0 ? turnReply.ToQuickReplies() : null;
+            RichCard? richCard = turnReply.Card;
+            bool hasQuickReplies = quickReplies is not null;
+            bool isCompleted = turnReply.IsCompleted;
 
             agentLogger.LogInformation(
-                "Agent response analysis:" +
-                $"WantsContinuation={wantsContinuation}," +
-                $"HasQuickReplies={hasQuickReplies}," +
-                $"HasRichCard={hasRichCard}," +
-                $"IsCompleted={isCompleted}");
+                "Agent response analysis: Awaits={Awaits}, UserIsLeaving={UserIsLeaving}, QuickReplies={QuickReplies}, HasRichCard={HasRichCard}, IsCompleted={IsCompleted}",
+                turnReply.Awaits, turnReply.UserIsLeaving, quickReplies?.Count ?? 0, richCard is not null, isCompleted);
 
             // Finalize agent span with outcome attributes
             string responsePreview = Preview(llmResponseText);
@@ -442,6 +442,15 @@ public class MorganaAgent : MorganaActor
                 finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
                 finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.UserFacing] = true;
                 finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnText] = llmResponseText;
+
+                // What the user was offered beside the text, kept as delivered so a transcript shows the
+                // same buttons and card whoever composed them.
+                if (quickReplies is not null)
+                    finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnQuickReplies] =
+                        JsonSerializer.Serialize(quickReplies, Records.DefaultJsonSerializerOptions);
+                if (richCard is not null)
+                    finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnRichCard] =
+                        JsonSerializer.Serialize(richCard, Records.DefaultJsonSerializerOptions);
             }
 
             // Written last, so what lands in the database is the history already stripped of the
@@ -477,12 +486,10 @@ public class MorganaAgent : MorganaActor
         }
         finally
         {
-            // Safety net: ephemeral UI variables (rich card, quick replies, ...) must NEVER leak to the next turn.
+            // Safety net: a turn's closure and its consultation budget must NEVER leak to the next turn.
             if (aiAgentSession is not null)
             {
-                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.RichCard);
-                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.QuickReplies);
-                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnContinuation);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnReply);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ConsultationRounds);
             }
         }
@@ -541,9 +548,10 @@ public class MorganaAgent : MorganaActor
 
             // The colleague's presentation decisions are handed over as data rather than drained:
             // the asking agent reads the options it was offered and may come back having chosen one.
-            bool awaitsReply = GetTurnContinuationFromContext(consultationSession);
-            List<QuickReply>? quickReplies = GetQuickRepliesFromContext(consultationSession);
-            RichCard? richCard = GetRichCardFromContext(consultationSession);
+            Records.TurnReply? turnReply = GetTurnReplyFromContext(consultationSession);
+            bool awaitsReply = turnReply is { IsCompleted: false };
+            List<QuickReply>? quickReplies = turnReply?.Actions.Count > 0 ? turnReply.ToQuickReplies() : null;
+            RichCard? richCard = turnReply?.Card;
 
             // A baseline of 0 where a user turn passes its own: this session was created for the
             // exchange and holds nothing else, so every tool call in it belongs to this answer and
@@ -686,104 +694,31 @@ public class MorganaAgent : MorganaActor
             .Select(c => c.Name));
 
     /// <summary>
-    /// Reads the <c>turn_continuation</c> context variable, set by the <c>SetTurnContinuation</c>
-    /// base tool when the agent declares it is staying in service awaiting the user's next turn.
+    /// Reads the closure the Reply tool recorded on the current turn.
     /// </summary>
     /// <param name="session">Active agent session.</param>
-    /// <returns><c>true</c> if the agent declared continuation on this turn; <c>false</c> if it
-    /// declared completion or made no declaration at all.</returns>
-    protected bool GetTurnContinuationFromContext(AgentSession session)
+    /// <returns>The turn's closure; <c>null</c> when none was recorded.</returns>
+    protected Records.TurnReply? GetTurnReplyFromContext(AgentSession session)
     {
-        object? ctxTurnContinuation = aiContextProvider.GetVariable(session, Constants.ContextKeys.TurnContinuation);
-        return ctxTurnContinuation switch
+        // Written this process lifetime it is the string Reply stored; restored from a saved session it is JSON.
+        string? turnReplyJson = aiContextProvider.GetVariable(session, Constants.ContextKeys.TurnReply) switch
         {
-            bool continuation => continuation,
-            JsonElement { ValueKind: JsonValueKind.True } => true,
-            JsonElement { ValueKind: JsonValueKind.False } => false,
-            JsonElement { ValueKind: JsonValueKind.String } element => bool.TryParse(element.GetString(), out bool parsed) && parsed,
-            string text => bool.TryParse(text, out bool parsed) && parsed,
-            _ => false
-        };
-    }
-
-    /// <summary>
-    /// Reads and deserializes the <c>quick_replies</c> context variable, if the agent set one
-    /// on the current turn via the <c>SetQuickReplies</c> base tool. Drops the variable if the
-    /// stored JSON is malformed.
-    /// </summary>
-    /// <param name="session">Active agent session.</param>
-    /// <returns>The deserialized quick replies, or <c>null</c> if absent or invalid.</returns>
-    protected List<QuickReply>? GetQuickRepliesFromContext(AgentSession session)
-    {
-        #region Utilities
-        List<QuickReply>? GetQuickReplies(string quickRepliesJSON)
-        {
-            try
-            {
-                List<QuickReply>? quickReplies = JsonSerializer.Deserialize<List<QuickReply>>(quickRepliesJSON, Records.DefaultJsonSerializerOptions);
-                if (quickReplies is { Count: > 0 })
-                {
-                    agentLogger.LogInformation("Retrieved {QuickRepliesCount} quick replies from context", quickReplies.Count);
-                    return quickReplies;
-                }
-            }
-            catch (JsonException ex)
-            {
-                agentLogger.LogError(ex, "Failed to deserialize quick replies from context");
-                aiContextProvider.DropVariable(session, Constants.ContextKeys.QuickReplies);
-            }
-
-            return null;
-        }
-        #endregion
-
-        object? ctxQuickReplies = aiContextProvider.GetVariable(session, Constants.ContextKeys.QuickReplies);
-        return ctxQuickReplies switch
-        {
-            string ctxQuickRepliesJson when !string.IsNullOrEmpty(ctxQuickRepliesJson) => GetQuickReplies(ctxQuickRepliesJson),
-            JsonElement { ValueKind: JsonValueKind.String } ctxQuickRepliesJsonElement => GetQuickReplies(ctxQuickRepliesJsonElement.GetString()!),
+            string text => text,
+            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
             _ => null
         };
-    }
 
-    /// <summary>
-    /// Reads and deserializes the <c>rich_card</c> context variable, if the agent set one
-    /// on the current turn via the <c>SetRichCard</c> base tool. Drops the variable if the
-    /// stored JSON is malformed.
-    /// </summary>
-    /// <param name="session">Active agent session.</param>
-    /// <returns>The deserialized rich card, or <c>null</c> if absent or invalid.</returns>
-    protected RichCard? GetRichCardFromContext(AgentSession session)
-    {
-        #region Utilities
-        RichCard? GetRichCard(string richCardJSON)
+        if (string.IsNullOrEmpty(turnReplyJson))
+            return null;
+
+        try
         {
-            try
-            {
-                RichCard? richCard = JsonSerializer.Deserialize<RichCard>(
-                    richCardJSON, Records.DefaultJsonSerializerOptions);
-                if (richCard != null)
-                {
-                    agentLogger.LogInformation("Retrieved rich card from context");
-                    return richCard;
-                }
-            }
-            catch (JsonException ex)
-            {
-                agentLogger.LogError(ex, "Failed to deserialize rich card from context");
-                aiContextProvider.DropVariable(session, Constants.ContextKeys.RichCard);
-            }
-
+            return JsonSerializer.Deserialize<Records.TurnReply>(turnReplyJson, Records.DefaultJsonSerializerOptions);
+        }
+        catch (JsonException ex)
+        {
+            agentLogger.LogError(ex, "Failed to read the turn's closure from context");
             return null;
         }
-        #endregion
-
-        object? ctxRichCard = aiContextProvider.GetVariable(session, Constants.ContextKeys.RichCard);
-        return ctxRichCard switch
-        {
-            string ctxRichCardJson when !string.IsNullOrEmpty(ctxRichCardJson) => GetRichCard(ctxRichCardJson),
-            JsonElement { ValueKind: JsonValueKind.String } ctxRichCardJsonElement => GetRichCard(ctxRichCardJsonElement.GetString()!),
-            _ => null
-        };
     }
 }

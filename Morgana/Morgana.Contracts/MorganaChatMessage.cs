@@ -52,7 +52,7 @@ public record MorganaChatMessage
 
     /// <summary>
     /// Optional list of quick reply buttons attached to this message.
-    /// Reconstructed from SetQuickReplies tool calls when loading conversation history.
+    /// Read back from what the turn recorded as delivered when loading conversation history.
     /// </summary>
     public List<QuickReply>? QuickReplies { get; init; }
 
@@ -63,7 +63,7 @@ public record MorganaChatMessage
 
     /// <summary>
     /// Optional rich card attached to this message.
-    /// Reconstructed from SetRichCard tool calls when loading conversation history.
+    /// Read back from what the turn recorded as delivered when loading conversation history.
     /// </summary>
     public RichCard? RichCard { get; init; }
 }

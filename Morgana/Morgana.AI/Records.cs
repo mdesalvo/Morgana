@@ -1080,8 +1080,7 @@ public static class Records
     /// <param name="Description">Tool description for LLM understanding</param>
     /// <param name="Parameters">List of tool parameter definitions</param>
     /// <param name="Reserved">
-    /// True for the three morgana.json base tools (SetTurnContinuation, SetQuickReplies,
-    /// SetRichCard). Never set from configuration: a domain
+    /// True for the morgana.json base tool (Reply). Never set from configuration: a domain
     /// tool declaring this in agents.json has it forced back to false by MorganaAgentAdapter —
     /// it is stamped true only where MorganaAgentAdapter reads morgana.json's own Tools array,
     /// so no JSON a plugin author writes can ever make it stick. Consumers (e.g. the reverse
@@ -1104,6 +1103,65 @@ public static class Records
         bool Required,
         string Scope,
         bool Shared = false);
+
+    // ==========================================================================
+    // TURN CLOSURE
+    // ==========================================================================
+
+    /// <summary>
+    /// What a turn ends waiting for from the user, declared through the Reply tool. Anything but
+    /// <see cref="Nothing"/> keeps the agent in service for the user's next message.
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter<AwaitedFromUser>))]
+    public enum AwaitedFromUser
+    {
+        /// <summary>The request is answered: the conversation may return to Morgana.</summary>
+        [JsonStringEnumMemberName("nothing")] Nothing,
+
+        /// <summary>A value the user types in their own words: a code, a quantity, a name.</summary>
+        [JsonStringEnumMemberName("typed_answer")] TypedAnswer,
+
+        /// <summary>One of the actions the turn offers as buttons.</summary>
+        [JsonStringEnumMemberName("action_choice")] ActionChoice
+    }
+
+    /// <summary>
+    /// One action a turn offers the user as a button, naming the agent's own tool that carries it out.
+    /// </summary>
+    /// <param name="Tool">The agent's tool the action leads to.</param>
+    /// <param name="Label">What the button shows.</param>
+    /// <param name="Value">The message sent on the user's behalf when the button is pressed.</param>
+    public record ReplyAction(
+        [property: JsonPropertyName("tool")] string Tool,
+        [property: JsonPropertyName("label")] string Label,
+        [property: JsonPropertyName("value")] string Value);
+
+    /// <summary>
+    /// How an agent closed its turn: the one structured decision beside its free text, recorded by the
+    /// Reply tool and read once by <c>MorganaAgent</c> at the end of the turn.
+    /// </summary>
+    /// <param name="Awaits">What the turn ends waiting for from the user.</param>
+    /// <param name="UserIsLeaving">True when the user's own message was a goodbye.</param>
+    /// <param name="Actions">The actions offered as buttons; empty when none.</param>
+    /// <param name="Card">The card presenting the turn's structured data; null when none.</param>
+    public record TurnReply(
+        [property: JsonPropertyName("awaits")] AwaitedFromUser Awaits,
+        [property: JsonPropertyName("userIsLeaving")] bool UserIsLeaving,
+        [property: JsonPropertyName("actions")] IReadOnlyList<ReplyAction> Actions,
+        [property: JsonPropertyName("card")] RichCard? Card)
+    {
+        /// <summary>
+        /// True when the agent hands the conversation back: it awaits nothing or the user is leaving.
+        /// </summary>
+        [JsonIgnore]
+        public bool IsCompleted => Awaits == AwaitedFromUser.Nothing || UserIsLeaving;
+
+        /// <summary>
+        /// The actions as the channel's buttons, numbered so two actions on one tool stay distinct.
+        /// </summary>
+        public List<QuickReply> ToQuickReplies()
+            => [.. Actions.Select((action, index) => new QuickReply($"{action.Tool}-{index + 1}", action.Label, action.Value))];
+    }
 
     // ==========================================================================
     // MODEL CONTEXT PROTOCOL

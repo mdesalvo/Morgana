@@ -7,7 +7,7 @@ turns:
   - say: "Show me the greenhouse catalog"
     expect:
       agent: InventoryAgent
-      toolsCalled: [GetProductCatalog, SetRichCard]
+      toolsCalled: [GetProductCatalog]
       richCard: present
       textNotEmpty: true
       # A response that leaks the tool's JSON payload into the prose fails here.

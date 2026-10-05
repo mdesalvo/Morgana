@@ -24,7 +24,7 @@ public class DraftValidationService : IDraftValidationService
     /// these names would be registered twice against the same agent.
     /// </summary>
     private static readonly string[] BaseToolNames =
-        ["SetTurnContinuation", "SetQuickReplies", "SetRichCard"];
+        ["Reply"];
 
     /// <summary>
     /// The scopes a parameter may declare. A parameter carrying a value the model itself authors
@@ -357,7 +357,7 @@ public class DraftValidationService : IDraftValidationService
         if (BaseToolNames.Contains(tool.Name, StringComparer.Ordinal))
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 $"'{tool.Name}' is one of the base tools every agent already receives.",
-                "morgana.json gives every agent SetTurnContinuation, SetQuickReplies and SetRichCard; a domain tool cannot share a name with one."));
+                "morgana.json gives every agent Reply; a domain tool cannot share its name."));
 
         ValidateIdentifier(tool.Name, where, "tool name", findings);
 

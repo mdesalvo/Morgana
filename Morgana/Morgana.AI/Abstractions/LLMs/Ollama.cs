@@ -20,6 +20,10 @@ namespace Morgana.AI.Abstractions.LLMs;
 /// </remarks>
 public class Ollama : MorganaLLM
 {
+    /// <inheritdoc />
+    /// <remarks>Ollama's API has no way to name the tool a model must call and its client drops the request.</remarks>
+    public override bool CanForceToolCall => false;
+
     /// <summary>
     /// Initializes a new instance of Ollama.
     /// Creates Ollama client and wraps it with Microsoft.Extensions.AI IChatClient.

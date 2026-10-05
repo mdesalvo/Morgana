@@ -17,7 +17,6 @@ turns:
       toolsCalledFirst: [GetInvoices]
       contextReads: [Miss:customerCode]
       noContextWrites: true
-      toolsCalled: [SetTurnContinuation]
       # Awaiting an operand the user must type: no buttons, no escape options.
       quickReplies: none
       richCard: absent

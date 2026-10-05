@@ -213,6 +213,10 @@ public class MorganaLLM : ILLMService
     /// <inheritdoc/>
     public IChatClient GetChatClient(Records.LLMTier tier) => ResolveTierEntry(tier).Client;
 
+    /// <inheritdoc />
+    /// <remarks>True for every provider whose API names a required tool; a provider without one overrides it.</remarks>
+    public virtual bool CanForceToolCall => true;
+
     /// <inheritdoc/>
     public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => ResolveTierEntry(tier).Pricing;
 

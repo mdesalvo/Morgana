@@ -87,6 +87,9 @@ public static class Constants
 
         /// <summary>Spliced into a peer-capable agent's own instructions, naming the colleagues it holds.</summary>
         public const string ColleaguesDeclaration = "ColleaguesDeclaration";
+
+        /// <summary>Follows a turn the model wrote without Reply, asking for that turn's closure alone.</summary>
+        public const string TurnClosureRequest = "TurnClosureRequest";
     }
 
     /// <summary>
@@ -176,20 +179,13 @@ public static class Constants
     }
 
     /// <summary>
-    /// The base tools whose names travel further than the tool loop: a stored function call is
-    /// recognised by name when a conversation's history is replayed, long after the agent that made
-    /// it is gone.
+    /// The base tool the framework resolves by name: it is the one call a turn is closed with, so the
+    /// agent forces it when the model forgot it and returns its argument errors for repair.
     /// </summary>
     public static class Tools
     {
-        /// <summary>Declares out-of-band that the agent awaits the user's next turn.</summary>
-        public const string SetTurnContinuation = "SetTurnContinuation";
-
-        /// <summary>Attaches the turn's quick replies.</summary>
-        public const string SetQuickReplies = "SetQuickReplies";
-
-        /// <summary>Attaches the turn's rich card.</summary>
-        public const string SetRichCard = "SetRichCard";
+        /// <summary>Closes the agent's turn: whether it awaits the user, the actions it offers and its card.</summary>
+        public const string Reply = "Reply";
     }
 
     /// <summary>
@@ -199,14 +195,8 @@ public static class Constants
     /// </summary>
     public static class ContextKeys
     {
-        /// <summary>Set by <see cref="Tools.SetTurnContinuation"/>; read once, then dropped.</summary>
-        public const string TurnContinuation = "turn_continuation";
-
-        /// <summary>Set by <see cref="Tools.SetQuickReplies"/>; read once, then dropped.</summary>
-        public const string QuickReplies = "quick_replies";
-
-        /// <summary>Set by <see cref="Tools.SetRichCard"/>; read once, then dropped.</summary>
-        public const string RichCard = "rich_card";
+        /// <summary>Set by <see cref="Tools.Reply"/>; read once, then dropped.</summary>
+        public const string TurnReply = "turn_reply";
 
         /// <summary>Marks the turn as serving a colleague, which is what refuses a second hop.</summary>
         public const string ServingConsultation = "peer_consultation";
@@ -236,6 +226,15 @@ public static class Constants
         /// <c>SQLiteConversationPersistenceService.ExtractTextFromMessage</c>.
         /// </summary>
         public const string TurnText = "morgana:turn_text";
+
+        /// <summary>
+        /// Written alongside <see cref="TurnText"/>, carrying the buttons delivered with the turn, so a
+        /// transcript shows exactly what the user was offered whoever composed them.
+        /// </summary>
+        public const string TurnQuickReplies = "morgana:turn_quick_replies";
+
+        /// <summary>Written alongside <see cref="TurnText"/>, carrying the card delivered with the turn.</summary>
+        public const string TurnRichCard = "morgana:turn_rich_card";
 
         /// <summary>
         /// Written by <c>MorganaAgent</c> on a user message the orchestrator had already filed as

@@ -12,11 +12,11 @@ namespace Morgana.Contracts;
 /// <param name="Components">Array of visual components to render</param>
 /// <remarks>
 /// <para><strong>Usage:</strong></para>
-/// <para>LLM generates rich cards via SetRichCard tool when presenting structured data.
+/// <para>LLM generates rich cards as the card argument of the Reply tool, whose schema is derived from these types.
 /// Cards flow through actor pipeline (Agent → Router → Supervisor → Manager → SignalR → Cauldron).</para>
 /// <para><strong>Constraints:</strong></para>
 /// <list type="bullet">
-/// <item>Maximum nesting depth: 3 levels (enforced by SetRichCard tool)</item>
+/// <item>Maximum nesting depth: 3 levels (enforced by the Reply tool)</item>
 /// <item>Maximum 50 components total (prevents abuse)</item>
 /// <item>Components must be from known dictionary (unknown types fallback to text in Cauldron)</item>
 /// </list>

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Providers;
 using Morgana.Contracts;
@@ -7,8 +8,7 @@ using Morgana.Contracts;
 namespace Morgana.AI.Abstractions;
 
 /// <summary>
-/// Base class for agent tools. Provides the turn's presentation tools (continuation, quick replies,
-/// rich cards); context-scoped parameters are resolved by <c>MorganaToolAdapter</c> before a tool
+/// Base class for agent tools. Provides the Reply tool closing every turn; context-scoped parameters are resolved by <c>MorganaToolAdapter</c> before a tool
 /// method is reached. Domain agents extend this class. Uses ToolContext factory
 /// (lazy-evaluated per tool invocation) to access in-flight AgentSession without exposing
 /// it to LLM schema inspection (session never appears in method signatures).
@@ -37,6 +37,18 @@ public class MorganaTool
     protected readonly Func<ToolContext> getToolContext;
 
     /// <summary>
+    /// What Reply answers once the turn is closed. Read by <c>TurnClosingChatClient</c> to tell a
+    /// closed turn from one whose Reply was refused.
+    /// </summary>
+    internal const string TurnClosed = "Turn closed.";
+
+    /// <summary>Deepest card nesting the channels lay out: card, section, nested section.</summary>
+    private const int MaxCardDepth = 3;
+
+    /// <summary>Most components, nested ones included, a card may carry.</summary>
+    private const int MaxCardComponents = 50;
+
+    /// <summary>
     /// Initializes a new instance of <see cref="MorganaTool"/>.
     /// </summary>
     /// <param name="toolLogger">Logger for tool diagnostics.</param>
@@ -54,138 +66,69 @@ public class MorganaTool
     }
 
     // =========================================================================
-    // TURN CONTINUATION SYSTEM TOOL
+    // TURN CLOSURE SYSTEM TOOL
     // =========================================================================
 
     /// <summary>
-    /// Declares whether the agent expects the user to take another turn with it.
-    /// Replaces the legacy in-band <c>#INT#</c> token with an explicit, out-of-band signal
-    /// that lives where quick replies and rich cards already live: the ephemeral context.
+    /// Closes the agent's turn: what it ends waiting for, whether the user is leaving, the actions it
+    /// offers and the card it presents. Recorded for <c>MorganaAgent</c> to read at the end of the turn.
     /// </summary>
-    /// <param name="turnContinuation">
-    /// <c>true</c> when the agent awaits the user's turn and must stay in service;
-    /// <c>false</c> when the agent has finished and the conversation may return to Morgana.
-    /// </param>
-    /// <returns>Confirmation message for the LLM.</returns>
-    public async Task<object> SetTurnContinuation(bool turnContinuation)
+    /// <param name="awaits">What the turn ends waiting for from the user.</param>
+    /// <param name="userIsLeaving">True when the user's own message was a goodbye.</param>
+    /// <param name="actions">The agent's own actions offered as buttons, if any.</param>
+    /// <param name="card">The card presenting the turn's structured data, if any.</param>
+    /// <returns>A fact for the model: the turn is closed or the reason its card was refused.</returns>
+    public async Task<object> Reply(
+        Records.AwaitedFromUser awaits,
+        bool userIsLeaving,
+        List<Records.ReplyAction>? actions = null,
+        RichCard? card = null)
     {
+        // A card the channel could not lay out is refused here and the turn stays open, so the
+        // model reads why and calls Reply again with a card that fits.
+        if (card is not null)
+        {
+            int depth = CalculateMaxDepth(card.Components, 1);
+            if (depth > MaxCardDepth)
+            {
+                toolLogger.LogWarning("Reply refused a rich card nesting {Depth} levels (max {Max})", depth, MaxCardDepth);
+                return $"Card refused: it nests {depth} levels and at most {MaxCardDepth} are allowed. The turn is not closed.";
+            }
+
+            int totalComponents = CountComponents(card.Components);
+            if (totalComponents > MaxCardComponents)
+            {
+                toolLogger.LogWarning("Reply refused a rich card of {Count} components (max {Max})", totalComponents, MaxCardComponents);
+                return $"Card refused: it holds {totalComponents} components and at most {MaxCardComponents} are allowed. The turn is not closed.";
+            }
+        }
+
+        Records.TurnReply turnReply = new Records.TurnReply(awaits, userIsLeaving, actions ?? [], card);
+
         ToolContext ctx = getToolContext();
-        await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.TurnContinuation, turnContinuation);
+        await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.TurnReply,
+            JsonSerializer.Serialize(turnReply, Records.DefaultJsonSerializerOptions));
 
-        toolLogger.LogInformation("LLM set turn continuation to {TurnContinuation} via SetTurnContinuation tool", turnContinuation);
+        // Nothing is left for the model to do once the turn is closed, so the tool loop ends here
+        // instead of spending another call. Absent when the framework records a closure itself.
+        if (FunctionInvokingChatClient.CurrentContext is { } invocation)
+            invocation.Terminate = true;
 
-        return turnContinuation
-            ? "Turn continuation set: you remain in service and await the user's next turn."
-            : "Turn continuation cleared: this turn concludes your handling of the request.";
-    }
+        toolLogger.LogInformation(
+            "LLM closed its turn via Reply: awaits={Awaits}, userIsLeaving={UserIsLeaving}, actions={Actions}, card={Card}",
+            awaits, userIsLeaving, turnReply.Actions.Count, card?.Title ?? "(none)");
 
-    // =========================================================================
-    // QUICK REPLY SYSTEM TOOL
-    // =========================================================================
-
-    /// <summary>
-    /// Sets quick reply buttons to be rendered in the user interface below the agent's response.
-    /// </summary>
-    /// <param name="quickReplies">
-    /// Array of quick reply definitions. Each object requires:
-    /// <c>id</c> (identifier), <c>label</c> (display text, may include emoji), <c>value</c> (message sent on tap),
-    /// plus the optional <c>termination</c> flag.
-    /// </param>
-    /// <returns>Confirmation message for the LLM.</returns>
-    public async Task<object> SetQuickReplies(List<QuickReply> quickReplies)
-    {
-        // Validate input — empty list is a no-op
-        if (quickReplies == null || quickReplies.Count == 0)
-        {
-            toolLogger.LogWarning("SetQuickReplies called with no quick replies");
-            return "Warning: No quick replies were set (empty data).";
-        }
-
-        // Store serialized quick replies in ephemeral context; agents retrieve them via ExecuteAgentAsync before sending response
-        ToolContext ctx = getToolContext();
-        await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.QuickReplies,
-            JsonSerializer.Serialize(quickReplies, Records.DefaultJsonSerializerOptions));
-
-        toolLogger.LogInformation("LLM set {Count} quick reply buttons via SetQuickReplies tool", quickReplies.Count);
-
-        return $"Quick reply buttons set successfully. The user will see {quickReplies.Count} interactive options. Now provide your text response to the user - the quick reply buttons will appear below your message.";
-    }
-
-    // =========================================================================
-    // RICH CARD SYSTEM TOOL
-    // =========================================================================
-
-    /// <summary>
-    /// Sets a rich card for structured visual presentation of complex data in the user interface.
-    /// Use when presenting invoices, profiles, reports, or any content that benefits from
-    /// visual hierarchy over plain text.
-    /// </summary>
-    /// <param name="richCard">
-    /// JSON string containing the rich card structure with title, subtitle and components array.
-    /// </param>
-    /// <returns>Confirmation message for the LLM.</returns>
-    /// <remarks>
-    /// <para><strong>Constraints:</strong></para>
-    /// <list type="bullet">
-    /// <item>Maximum nesting depth: 3 levels</item>
-    /// <item>Maximum 50 components total</item>
-    /// </list>
-    /// </remarks>
-    public async Task<object> SetRichCard(string richCard)
-    {
-        try
-        {
-            // Parse JSON string into strongly-typed RichCard structure; gracefully reject invalid JSON
-            RichCard? parsedRichCard = JsonSerializer.Deserialize<RichCard>(
-                richCard, Records.DefaultJsonSerializerOptions);
-            if (parsedRichCard == null)
-            {
-                toolLogger.LogWarning("SetRichCard called with invalid JSON structure");
-                return "Error: Rich card JSON structure is invalid.";
-            }
-
-            // Enforce depth constraint (max 3 levels: card → section → nested content)
-            int depth = CalculateMaxDepth(parsedRichCard.Components, 1);
-            if (depth > 3)
-            {
-                toolLogger.LogWarning("SetRichCard called with excessive nesting depth: {Depth} (max 3)", depth);
-                return $"Error: Rich card exceeds maximum nesting depth of 3 (found: {depth}). Please simplify the card structure.";
-            }
-
-            // Enforce component limit (max 50 total, including nested components in sections)
-            int totalComponents = CountComponents(parsedRichCard.Components);
-            if (totalComponents > 50)
-            {
-                toolLogger.LogWarning("SetRichCard called with too many components: {TotalComponents} (max 50)", totalComponents);
-                return $"Error: Rich card has too many components: {totalComponents} (max 50). Please create a more focused card.";
-            }
-
-            // Store original JSON string (not the parsed object) in ephemeral context; agents retrieve it via ExecuteAgentAsync
-            ToolContext ctx = getToolContext();
-            await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.RichCard, richCard);
-
-            toolLogger.LogInformation(
-                "LLM set rich card '{Title}' with {TotalComponents} components (depth: {Depth}) via SetRichCard tool",
-                parsedRichCard.Title, totalComponents, depth);
-
-            return $"Rich card set successfully. The user will see a structured visual card titled '{parsedRichCard.Title}'. You can now provide additional context or explanation in text if needed.";
-        }
-        catch (JsonException ex)
-        {
-            // JSON parsing failed; return error message the LLM can act on
-            toolLogger.LogError(ex, "Failed to parse rich card JSON in SetRichCard");
-            return "Error: Rich card JSON format is invalid. Please check the structure and try again.";
-        }
+        return TurnClosed;
     }
 
     /// <summary>
     /// Calculates the maximum nesting depth of components in a card.
-    /// Used by SetRichCard to enforce 3-level depth constraint.
+    /// Used by Reply to refuse a card nesting deeper than the channels lay out.
     /// </summary>
     /// <param name="components">List of card components to analyze</param>
     /// <param name="currentDepth">Current depth level (starts at 1)</param>
     /// <returns>Maximum depth found in the component tree</returns>
-    private int CalculateMaxDepth(List<CardComponent> components, int currentDepth)
+    private static int CalculateMaxDepth(List<CardComponent> components, int currentDepth)
     {
         int maxDepth = currentDepth;
 
@@ -203,11 +146,11 @@ public class MorganaTool
 
     /// <summary>
     /// Counts total number of components recursively (including nested sections).
-    /// Used by SetRichCard to enforce 50-component limit.
+    /// Used by Reply to refuse a card larger than the channels lay out.
     /// </summary>
     /// <param name="components">List of card components to count</param>
     /// <returns>Total component count including all nested components</returns>
-    private int CountComponents(List<CardComponent> components)
+    private static int CountComponents(List<CardComponent> components)
     {
         int count = components.Count;
 

@@ -178,6 +178,14 @@ public class ConfigurationPromptComposerService : IPromptComposerService
             : composed.Replace(Constants.Placeholders.ConsultationQuestion, question);
     }
 
+    /// <inheritdoc />
+    public async Task<string?> ComposeTurnClosureRequestAsync()
+    {
+        FrameworkLayer framework = await frameworkLayer.Value;
+        string request = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.TurnClosureRequest);
+        return request.Length == 0 ? null : request;
+    }
+
     /// <summary>
     /// Renders the global policies into the fenced block that opens the framework layer.
     /// </summary>

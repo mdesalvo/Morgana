@@ -11,7 +11,7 @@ turns:
   - say: "Hi, my customer code is P994E — show me my last 3 invoices"
     expect:
       agent: BillingAgent
-      toolsCalled: [GetInvoices, SetQuickReplies]
+      toolsCalled: [GetInvoices]
       quickReplies: any
       escapeOptionsWithPrimary: true
       textNotEmpty: true

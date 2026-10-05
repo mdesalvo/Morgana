@@ -95,7 +95,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
-| `ChatClients/` | `IChatClient` decorators: `TierDefaultsChatClient`, `DustAccountingChatClient`, `MorganaAnthropicClient` |
+| `ChatClients/` | `IChatClient` decorators: `TierDefaultsChatClient`, `DustAccountingChatClient`, `MorganaAnthropicClient`, `TurnClosingChatClient` (closes a turn the model wrote without `Reply`: a forced tool call, structured output where the provider cannot force one) |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
 | `Providers/` | `MorganaAIContextProvider` (context variables plus the shared registry), `MorganaChatHistoryProvider` |
 | `SessionStores/` | `MorganaHostedAgentSessionStore` — which conversation an inbound A2A request is served on |
@@ -163,8 +163,10 @@ Every endpoint but `health` authenticates through `ChannelAuthenticationFilter` 
 
 ### Multi-turn and shared context
 
-An agent signalling `IsCompleted = false` — declared via `SetTurnContinuation` or implied by quick
-replies or a rich card — is remembered as `activeAgent`; later messages skip classification.
+Every turn closes with one `Reply` call carrying what it awaits from the user (`nothing`,
+`typed_answer`, `action_choice`), whether the user is leaving, the actions offered as buttons and the
+card — a typed argument whose schema is derived from `Morgana.Contracts`. An agent awaiting anything is
+remembered as `activeAgent`; later messages skip classification.
 
 Tool parameters marked `Shared: true` route their values into a conversation-scoped `shared_context`
 registry (first-write-wins, `INSERT OR IGNORE`). Every agent merges it at the start of each turn, so
@@ -274,8 +276,7 @@ tier) and `GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
 
 ## Tool System
 
-Every agent gets the **base tools** from `morgana.json` (`SetTurnContinuation`, `SetQuickReplies`,
-`SetRichCard`) plus its domain tools.
+Every agent gets the **base tool** `Reply` from `morgana.json` plus its domain tools.
 
 A parameter resolving an *input* declares a `Scope`: `context` or `request` (asked of the user). A
 parameter carrying a value the model itself authors declares none. **A `context` parameter is the
@@ -319,8 +320,8 @@ prompt**: it is the one section whose reader is another agent and it travels out
 The `Morgana` prompt's `AdditionalProperties` carry two sibling arrays and **which of the two an
 entry is follows from the array it lives in**, never from a field inside it:
 
-- **`GlobalPolicies`** — P1-P8, rendered into every agent's prompt in `Priority` order:
-  QuickReplyDoctrine, TurnContinuation, SessionContinuation, ToolUsage,
+- **`GlobalPolicies`** — rendered into every agent's prompt in `Priority` order:
+  QuickReplyDoctrine, SessionContinuation, ToolUsage,
   ToolGrounding, MandatoryTextualResponse, RichCardUsage, PeerConsultation. `QuickReplyDoctrine` (P1)
   is the master rule the other quick-reply policies instantiate. `PeerConsultation` (P8) is the
   **only conditionally rendered** one — an agent outside the A2A topology never pays for it — and
@@ -328,7 +329,8 @@ entry is follows from the array it lives in**, never from a field inside it:
 - **`Injections`** — templates, not rules: prose with a single splice site each, never rendered among
   the policies where they would instruct against nothing. No `Priority`: each is fetched by name.
   `ColleaguesDeclaration` (closing a peer-capable agent's instructions),
-  `PeerConsultationDeclaration` and `PeerConsultationGuardrail` (in front of a colleague's question).
+  `PeerConsultationDeclaration` and `PeerConsultationGuardrail` (in front of a colleague's question),
+  `TurnClosureRequest` (after a turn the model wrote without `Reply`).
 
 Every injection opens with a **bracketed all-caps label at the head of its first line** — the idiom
 the prompt layers already use for `[TARGET]`. A template arrives spliced into somebody else's text,
@@ -388,7 +390,7 @@ banners, the typing indicator. Morgana has a row without being an agent — see
 `IConversationPersistenceService`, which alone knows how a row encodes its messages.
 
 History retrieval decrypts each row, applies a user-facing filter, merges chronologically and
-extracts quick replies and rich cards from the stored function calls.
+reads back the buttons and card each turn recorded as delivered on its user-facing message.
 
 ## Authentication
 
@@ -466,7 +468,7 @@ or environment variables.
 - Tool method names match the JSON `Name` exactly
 - Prompts resolve by ID: the five framework ids or an intent name
 - Rich cards use polymorphic JSON with a `type` discriminator
-- Turn continuation is signalled out-of-band by a tool, never by a token inside the response text
+- A turn is closed out-of-band by `Reply`, never by a token inside the response text
 - Channel names are normalized to lowercase at ingress
 - **Invariant culture everywhere**: every host sets it as its first statement and library code
   (`Morgana.AI`, `Morgana.Terminal`) still passes `CultureInfo.InvariantCulture` or

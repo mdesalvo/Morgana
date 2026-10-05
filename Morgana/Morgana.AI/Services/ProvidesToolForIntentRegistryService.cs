@@ -194,7 +194,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     /// <summary>Finds the MorganaTool type registered for an intent, or null (case-insensitive).</summary>
     /// <remarks>
     /// Null is a legitimate, expected outcome — not an error: it means the agent for that intent
-    /// has no native tool and runs on framework tools alone (SetTurnContinuation, etc.) or MCP.
+    /// has no native tool and runs on framework tool alone (Reply) or MCP.
     /// </remarks>
     public Type? FindToolTypeForIntent(string intent)
     {

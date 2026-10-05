@@ -87,7 +87,7 @@ public class MorganaAgentAdapter
     protected readonly Records.Prompt morganaPrompt;
 
     /// <summary>
-    /// The morgana.json base tools (SetTurnContinuation, SetQuickReplies, SetRichCard), stamped <c>Reserved = true</c> exactly
+    /// The morgana.json base tool (Reply), stamped <c>Reserved = true</c> exactly
     /// once here — the only place in the codebase that ever sets it true. Every other reader of a
     /// ToolDefinition's Reserved flag (domain tools included) sees false by construction, never by
     /// a check: see the Reserved remarks on Records.ToolDefinition.
@@ -217,8 +217,8 @@ public class MorganaAgentAdapter
         //    resolved from agents.json.
         Records.Prompt agentPrompt = await promptResolverService.ResolveAsync(intentAttribute.Intent);
 
-        // 3) Tool surface = framework base tools (morgana.json: SetTurnContinuation,
-        //    SetQuickReplies, SetRichCard) UNION the agent's domain tools (agents.json). Union de-dups so a domain tool can't shadow a base one.
+        // 3) Tool surface = framework base tool (morgana.json: Reply) UNION the agent's
+        //    domain tools (agents.json). Union de-dups so a domain tool can't shadow a base one.
         Records.ToolDefinition[] domainTools = [.. agentPrompt.GetAdditionalProperty<Records.ToolDefinition[]>(Constants.PromptProperties.Tools)
             .Select(t => t with { Reserved = false })];
         Records.ToolDefinition[] agentTools = [.. morganaTools.Union(domainTools)];
@@ -297,7 +297,23 @@ public class MorganaAgentAdapter
         //    context + history providers, a stable per-conversation Id (intent-conversationId),
         //    the two-layer composed instructions (framework prompt + domain prompt) and the
         //    tool delegates materialized as AIFunctions.
-        AIAgent aiAgent = agentChatClient.AsAIAgent(
+        // The tool loop the agent runs on. Reply's argument errors go back to the model in full, so a
+        // card breaking its schema is repaired on the next call rather than lost; every other tool
+        // fails as tersely as before, keeping a domain tool's internals out of the model's sight.
+        FunctionInvokingChatClient toolLoopChatClient = new FunctionInvokingChatClient(agentChatClient)
+        {
+            FunctionInvoker = InvokeToolAsync
+        };
+
+        // Above the loop, where a whole turn is visible: a turn the model wrote without Reply is
+        // closed here, on whichever path the provider supports.
+        TurnClosingChatClient turnClosingChatClient = new TurnClosingChatClient(
+            toolLoopChatClient,
+            await promptComposerService.ComposeTurnClosureRequestAsync(),
+            llmService.CanForceToolCall,
+            logger);
+
+        AIAgent aiAgent = turnClosingChatClient.AsAIAgent(
             new ChatClientAgentOptions
             {
                 // Give the agent its context providers
@@ -330,6 +346,24 @@ public class MorganaAgentAdapter
         //     history-provider handles to drive context/history across turns — the agent
         //     alone is not enough because providers are queried/mutated outside InvokeAsync.
         return (aiAgent, morganaAIContextProvider, chatHistoryProvider);
+    }
+
+    /// <summary>
+    /// Runs one tool call of the agent's loop, turning a Reply whose arguments break their schema into
+    /// a fact the model can act on.
+    /// </summary>
+    private static async ValueTask<object?> InvokeToolAsync(FunctionInvocationContext context, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await context.Function.InvokeAsync(context.Arguments, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException
+                                   && string.Equals(context.Function.Name, Constants.Tools.Reply, StringComparison.Ordinal))
+        {
+            // The turn stays open: the model reads what was wrong with what it sent and closes it again.
+            return $"Reply refused: {ex.Message} The turn is not closed.";
+        }
     }
 
     /// <summary>
@@ -407,8 +441,8 @@ public class MorganaAgentAdapter
         // intent-specific. Name is the stable identity (tool method names are unique).
         Records.ToolDefinition[] agentSpecificTools = [.. agentTools.Except(morganaTools, new ToolDefinitionNameComparer())];
 
-        // ALWAYS register base tools (SetTurnContinuation, SetQuickReplies, SetRichCard). They are implemented by the MorganaTool BASE
-        // class itself — no subclass needed — so every agent gets them unconditionally,
+        // ALWAYS register the base tool (Reply). It is implemented by the MorganaTool BASE
+        // class itself — no subclass needed — so every agent closes its turns the same way,
         // even an MCP-only or tool-less one.
         MorganaTool baseTool = new MorganaTool(logger, toolContextFactory);
         RegisterToolsInAdapter(morganaToolAdapter, baseTool, morganaTools);

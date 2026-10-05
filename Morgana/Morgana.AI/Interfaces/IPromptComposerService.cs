@@ -62,4 +62,10 @@ public interface IPromptComposerService
     /// <param name="question">What the colleague asked, in its own words.</param>
     /// <returns>The composed turn, falling back to the bare question where no template is declared.</returns>
     Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question);
+
+    /// <summary>
+    /// Produces what the model reads after a turn it wrote without closing it, asking for the closure alone.
+    /// </summary>
+    /// <returns>The request; <c>null</c> when no template is declared and such turns stay unclosed.</returns>
+    Task<string?> ComposeTurnClosureRequestAsync();
 }
