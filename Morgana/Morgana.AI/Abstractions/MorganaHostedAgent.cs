@@ -190,7 +190,7 @@ public sealed class MorganaHostedAgent : AIAgent
                 && await peerAdmissionService.TryAdmitNewConversationAsync(openingIssuer) is { IsAdmitted: false } refusal)
             {
                 return BuildAgentResponseFromMessage(
-                    refusal.RefusalMessage ?? $"The agent for '{intent}' cannot take on further conversations right now. Proceed without it.");
+                    refusal.RefusalMessage ?? await ComposeFallbackAsync(Constants.ToolResults.PeerAtCapacity));
             }
 
             // Opened before the turn, because a partner's exchange has none until now: the ledger is
@@ -207,7 +207,7 @@ public sealed class MorganaHostedAgent : AIAgent
                     "Hosted agent '{Intent}' refused a request from '{CallerIntent}': conversation '{ConversationId}' is over budget",
                     intent, callerIntent, hostedAgentSession.ConversationId);
 
-                return BuildAgentResponseFromMessage($"The agent for '{intent}' has no budget left on this conversation. Proceed without it.");
+                return BuildAgentResponseFromMessage(await ComposeFallbackAsync(Constants.ToolResults.PeerOutOfBudget));
             }
 
             // Resolve the actor system
@@ -260,11 +260,19 @@ public sealed class MorganaHostedAgent : AIAgent
             // not serialize, an actor that could not be reached — told the asking model to expect a
             // slow colleague when what it had was a broken one, which is a different thing to decide
             // against. Either way the instruction is the same: this answer is not coming.
-            return BuildAgentResponseFromMessage(ex is AskTimeoutException or OperationCanceledException
-                ? $"The agent for '{intent}' did not answer in time. Proceed without it."
-                : $"The agent for '{intent}' could not answer. Proceed without it.");
+            return BuildAgentResponseFromMessage(await ComposeFallbackAsync(ex is AskTimeoutException or OperationCanceledException
+                ? Constants.ToolResults.PeerTimedOut
+                : Constants.ToolResults.PeerFailed));
         }
     }
+
+    /// <summary>
+    /// The answer that a caller's model reads when this agent does not serve its request, worded in
+    /// morgana.json and naming the agent that did not answer.
+    /// </summary>
+    private Task<string> ComposeFallbackAsync(string toolResultName)
+        => promptComposerService.ComposeToolResultAsync(
+            toolResultName, new Dictionary<string, string> { [Constants.Placeholders.AgentIntent] = intent });
 
     /// <summary>Streaming form of <see cref="RunCoreAsync"/>, emitting the answer as a single update.</summary>
     /// <remarks>

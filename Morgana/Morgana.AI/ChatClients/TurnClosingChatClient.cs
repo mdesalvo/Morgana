@@ -24,7 +24,10 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
     /// </summary>
     private readonly string? turnClosureRequest;
 
-    /// <summary>Whether the provider honours a request naming the tool the model must call.</summary>
+    /// <summary>What an accepted Reply answers, which tells a closed turn from one whose Reply was refused.</summary>
+    private readonly string turnClosedResult;
+
+    /// <summary>Whether the provider honours a request naming the tool that the model must call.</summary>
     private readonly bool canForceToolCall;
 
     /// <summary>Records each turn closed on the model's behalf, a sign the prose is not doing its job.</summary>
@@ -35,11 +38,13 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
     /// </summary>
     /// <param name="innerClient">The tool loop the agent runs on.</param>
     /// <param name="turnClosureRequest">The request for a turn's closure; null closes nothing.</param>
+    /// <param name="turnClosedResult">What an accepted Reply answers.</param>
     /// <param name="canForceToolCall">Whether the provider can be made to call Reply.</param>
     /// <param name="logger">Receives a line for every turn closed on the model's behalf.</param>
-    public TurnClosingChatClient(IChatClient innerClient, string? turnClosureRequest, bool canForceToolCall, ILogger logger) : base(innerClient)
+    public TurnClosingChatClient(IChatClient innerClient, string? turnClosureRequest, string turnClosedResult, bool canForceToolCall, ILogger logger) : base(innerClient)
     {
         this.turnClosureRequest = turnClosureRequest;
+        this.turnClosedResult = turnClosedResult;
         this.canForceToolCall = canForceToolCall;
         this.logger = logger;
     }
@@ -97,7 +102,8 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         bool closed = turnMessages
             .SelectMany(message => message.Contents)
             .OfType<FunctionResultContent>()
-            .Any(result => string.Equals(ResultText(result.Result), MorganaTool.TurnClosed, StringComparison.Ordinal));
+            .Any(result => result.Result is Records.FrameworkToolResult { Name: Constants.ToolResults.TurnClosed }
+                           || string.Equals(ResultText(result.Result), turnClosedResult, StringComparison.Ordinal));
         if (closed)
             return;
 
@@ -109,7 +115,7 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         logger.LogWarning("Turn ended without Reply: closing it on the model's behalf");
 
         // The exchange being closed and nothing else: earlier turns are already closed and the tool
-        // traffic of this one is folded into the text it produced.
+        // traffic of this one is folded into the text that it produced.
         List<ChatMessage> closingMessages =
         [
             new ChatMessage(ChatRole.User, turnInput.LastOrDefault(message => message.Role == ChatRole.User)?.Text ?? string.Empty),
@@ -186,7 +192,7 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         if (!response.TryGetResult(out Records.TurnReply? turnReply))
             return null;
 
-        // Handed to Reply as the arguments the model would have passed it, property by property.
+        // Handed to Reply as the arguments that the model would have passed it, property by property.
         return JsonSerializer.SerializeToElement(turnReply, Records.DefaultJsonSerializerOptions)
             .EnumerateObject()
             .ToDictionary(property => property.Name, property => (object?)property.Value.Clone());

@@ -132,7 +132,7 @@ public sealed class TurnClosureTests
              "card":{"components":[{"content":"Overdue","type":"text_block"}],"title":"Account","subtitle":null}}
             """));
 
-        Assert.Equal("Turn closed.", result?.ToString());
+        Assert.Equal("TurnClosed", Assert.IsType<Records.FrameworkToolResult>(result).Name);
         Records.TurnReply recorded = reply.Recorded()!;
         Assert.Equal(Records.AwaitedFromUser.ActionChoice, recorded.Awaits);
         Assert.Equal("GetInvoices", Assert.Single(recorded.Actions).Tool);
@@ -144,15 +144,17 @@ public sealed class TurnClosureTests
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
 
-        // Refused with the reason as a fact, which the agent's tool loop hands back to the model.
-        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments("""
+        // Refused by name, with the values that the authored reason splices in; the tool loop words it.
+        object? result = await reply.Function.InvokeAsync(Arguments("""
             {"awaits":"nothing","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
               {"type":"section","title":"1","subtitle":null,"components":[
                 {"type":"section","title":"2","subtitle":null,"components":[
                   {"type":"section","title":"3","subtitle":null,"components":[{"type":"divider"}]}]}]}]}}
-            """)).AsTask());
+            """));
 
-        Assert.Contains("nests 4 levels", refusal.Message);
+        Records.FrameworkToolResult refusal = Assert.IsType<Records.FrameworkToolResult>(result);
+        Assert.Equal("CardTooDeep", refusal.Name);
+        Assert.Equal("4", refusal.Values!["((depth))"]);
         Assert.Null(reply.Recorded());
     }
 
@@ -299,13 +301,14 @@ public sealed class TurnClosureTests
         => new ChatResponse(new ChatMessage(ChatRole.Assistant, [.. text.Messages[0].Contents, .. call.Messages[0].Contents]));
 
     /// <summary>
-    /// Runs one turn through the chain an agent runs on: the tool loop, then the turn-closing client.
+    /// Runs one turn through the chain that an agent runs on: the tool loop, then the turn-closing client.
     /// </summary>
     private static async Task RunTurnAsync(ScriptedChatClient model, ReplyUnderTest reply, bool canForceToolCall)
     {
         TurnClosingChatClient chain = new TurnClosingChatClient(
             new FunctionInvokingChatClient(model),
             "[TURN CLOSURE]\nDeclare how that turn closes.",
+            "Turn closed.",
             canForceToolCall,
             NullLogger.Instance);
 
@@ -331,7 +334,7 @@ public sealed class TurnClosureTests
         /// <summary>
         /// Builds Reply over a session of an agent that never talks to a model.
         /// </summary>
-        /// <param name="actionableToolNames">The agent's tools an action may lead to; null accepts any.</param>
+        /// <param name="actionableToolNames">The agent's tools that an action may lead to; null accepts any.</param>
         public static async Task<ReplyUnderTest> CreateAsync(IReadOnlyCollection<string>? actionableToolNames = null)
         {
             ReplyUnderTest reply = new ReplyUnderTest();

@@ -130,6 +130,7 @@ public sealed class HistoryViewTests
         public Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question) => throw new NotSupportedException();
         public Task<string?> ComposeTurnClosureRequestAsync() => throw new NotSupportedException();
         public Task<string> ComposeReplyNotAcceptedAsync(string reason) => throw new NotSupportedException();
+        public Task<string> ComposeToolResultAsync(string name, IReadOnlyDictionary<string, string>? values = null) => throw new NotSupportedException();
     }
 
     /// <summary>
@@ -137,7 +138,7 @@ public sealed class HistoryViewTests
     /// </summary>
     private sealed class RecordingChatClient : IChatClient
     {
-        /// <summary>What the last request carried: the view the agent's model would read.</summary>
+        /// <summary>What the last request carried: the view that the agent's model would read.</summary>
         public IReadOnlyList<ChatMessage> LastRequest { get; private set; } = [];
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)

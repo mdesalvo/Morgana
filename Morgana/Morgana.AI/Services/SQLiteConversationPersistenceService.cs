@@ -1178,7 +1178,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             if (string.IsNullOrWhiteSpace(messageText))
                 continue;
 
-            // The buttons and card the turn delivered, recorded on the message they arrived with.
+            // The buttons and card that the turn delivered, recorded on the message that they arrived with.
             List<QuickReply>? quickReplies = isUserFacing
                 ? TryReadRecorded<List<QuickReply>>(chatMessage, Constants.MessageProperties.TurnQuickReplies, jsonSerializerOptions)
                 : null;
@@ -1206,7 +1206,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     }
 
     /// <summary>
-    /// Reads a value a turn recorded on its user-facing message as JSON; null when it recorded none
+    /// Reads a value that a turn recorded on its user-facing message as JSON; null when it recorded none
     /// or what it recorded no longer reads (graceful degradation: the text is still shown).
     /// </summary>
     private T? TryReadRecorded<T>(ChatMessage chatMessage, string propertyName, JsonSerializerOptions jsonSerializerOptions) where T : class
@@ -1260,7 +1260,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     }
 
     /// <summary>
-    /// Reads a string a turn recorded on a message under <paramref name="propertyName"/>; <c>null</c> when absent.
+    /// Reads a string that a turn recorded on a message under <paramref name="propertyName"/>; <c>null</c> when absent.
     /// </summary>
     /// <remarks>
     /// A session's properties come back from the encrypted round trip as loosely-typed JSON, so the same

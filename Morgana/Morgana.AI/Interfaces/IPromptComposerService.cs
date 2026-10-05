@@ -64,13 +64,13 @@ public interface IPromptComposerService
     Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question);
 
     /// <summary>
-    /// Produces what the model reads after a turn it wrote without closing it, asking for the closure alone.
+    /// Produces what the model reads after a turn that it wrote without closing it, asking for the closure alone.
     /// </summary>
     /// <returns>The request; <c>null</c> when no template is declared and such turns stay unclosed.</returns>
     Task<string?> ComposeTurnClosureRequestAsync();
 
     /// <summary>
-    /// Produces what the model reads in place of Reply's result when the closure it sent was refused.
+    /// Produces what the model reads in place of Reply's result when the closure that it sent was refused.
     /// </summary>
     /// <param name="reason">Why the closure was refused, as a fact.</param>
     /// <returns>The composed answer, falling back to the bare reason where no template is declared.</returns>
@@ -82,4 +82,11 @@ public interface IPromptComposerService
     /// <param name="result">The result as the tool returned it.</param>
     /// <returns>The wrapped result; <c>null</c> when no template is declared and results stay as they were.</returns>
     Task<string?> ComposeEarlierToolResultAsync(string result);
+
+    /// <summary>
+    /// Produces the text a framework tool returns to the model, by name and with its values spliced in.
+    /// </summary>
+    /// <param name="name">Which result (see <c>Constants.ToolResults</c>).</param>
+    /// <param name="values">Placeholder to the value that it stands for, if the text carries any.</param>
+    Task<string> ComposeToolResultAsync(string name, IReadOnlyDictionary<string, string>? values = null);
 }

@@ -138,6 +138,58 @@
               }
             ]
           }
+        },
+        {
+          "ToolResults": [
+            {
+              "Name": "TurnClosed",
+              "Content": "Turn closed."
+            },
+            {
+              "Name": "ContextValueMissing",
+              "Content": "((tool)) was not run: this conversation does not hold ((missing)) yet."
+            },
+            {
+              "Name": "ReplyWithoutText",
+              "Content": "no text has reached the user yet this turn"
+            },
+            {
+              "Name": "CardTooDeep",
+              "Content": "the card nests ((depth)) levels and at most ((max)) are allowed"
+            },
+            {
+              "Name": "CardTooLarge",
+              "Content": "the card holds ((count)) components and at most ((max)) are allowed"
+            },
+            {
+              "Name": "ConsultationChained",
+              "Content": "You are currently answering a colleague and a colleague may not consult a further colleague. Answer with what you know."
+            },
+            {
+              "Name": "ConsultationRoundsExhausted",
+              "Content": "This exchange has run for ((rounds)) rounds and must end now. Answer with what you already have."
+            },
+            {
+              "Name": "ColleagueCouldNotAnswer",
+              "Content": "Your colleague for '((agent))' could not answer. Proceed without them."
+            },
+            {
+              "Name": "PeerAtCapacity",
+              "Content": "The agent for '((agent))' cannot take on further conversations right now. Proceed without it."
+            },
+            {
+              "Name": "PeerOutOfBudget",
+              "Content": "The agent for '((agent))' has no budget left on this conversation. Proceed without it."
+            },
+            {
+              "Name": "PeerTimedOut",
+              "Content": "The agent for '((agent))' did not answer in time. Proceed without it."
+            },
+            {
+              "Name": "PeerFailed",
+              "Content": "The agent for '((agent))' could not answer. Proceed without it."
+            }
+          ]
         }
       ]
     },

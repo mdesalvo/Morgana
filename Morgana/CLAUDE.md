@@ -319,8 +319,8 @@ prompt**: it is the one section whose reader is another agent and it travels out
 
 ### `morgana.json` structure
 
-The `Morgana` prompt's `AdditionalProperties` carry two sibling arrays and **which of the two an
-entry is follows from the array it lives in**, never from a field inside it:
+The `Morgana` prompt's `AdditionalProperties` carry sibling arrays and **what an entry is follows
+from the array that it lives in**, never from a field inside it:
 
 - **`GlobalPolicies`** — rendered into every agent's prompt in `Priority` order:
   QuickReplyDoctrine, ToolGrounding, MandatoryTextualResponse, RichCardUsage, PeerConsultation.
@@ -334,6 +334,9 @@ entry is follows from the array it lives in**, never from a field inside it:
   `TurnClosureRequest` (after a turn the model wrote without `Reply`), `ReplyNotAccepted` (in place of
   a refused `Reply`'s result, its reason as datum), `EarlierToolResult` (around a tool result of an
   earlier turn, as the model reads its history).
+- **`ToolResults`** — the texts that the framework's own tools return to the model (`Reply`, the
+  context wrapper, the consultation guards and fallbacks), fetched by name with their values as
+  `((…))` placeholders. A domain tool's return is the domain's own and Morgana never authors it.
 
 Every injection opens with a **bracketed all-caps label at the head of its first line** — the idiom
 the prompt layers already use for `[TARGET]`. A template arrives spliced into somebody else's text,

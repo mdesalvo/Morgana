@@ -223,7 +223,7 @@ public class MorganaAgentAdapter
             .Select(t => t with { Reserved = false })];
         Records.ToolDefinition[] agentTools = [.. morganaTools.Union(domainTools)];
 
-        // 4) Per-agent context provider (the variable store the context-scoped parameters are
+        // 4) Per-agent context provider (the variable store that the context-scoped parameters are
         //    resolved from); sharedContextCallback wires Shared:true writes into the cross-agent registry.
         MorganaAIContextProvider morganaAIContextProvider = CreateAIContextProvider(
             intentAttribute.Intent,
@@ -235,7 +235,7 @@ public class MorganaAgentAdapter
         //    sessionAccessor at call time (Akka's single-thread guarantee makes it
         //    non-null during execution). A null here means the agent was invoked without
         //    ExecuteAgentAsync seeding the session — a hard wiring error, so throw.
-        // Filled once every tool is known below and read by Reply at every call: the tools a user
+        // Filled once every tool is known below and read by Reply at every call: the tools that a user
         // action may lead to, so an action naming anything else is discarded.
         List<string> actionableToolNames = [];
 
@@ -315,11 +315,12 @@ public class MorganaAgentAdapter
             FunctionInvoker = InvokeToolAsync
         };
 
-        // Above the loop, where a whole turn is visible: a turn the model wrote without Reply is
+        // Above the loop, where a whole turn is visible: a turn that the model wrote without Reply is
         // closed here, on whichever path the provider supports.
         TurnClosingChatClient turnClosingChatClient = new TurnClosingChatClient(
             toolLoopChatClient,
             await promptComposerService.ComposeTurnClosureRequestAsync(),
+            await promptComposerService.ComposeToolResultAsync(Constants.ToolResults.TurnClosed),
             llmService.CanForceToolCall,
             logger);
 
@@ -364,19 +365,30 @@ public class MorganaAgentAdapter
     /// </summary>
     private async ValueTask<object?> InvokeToolAsync(FunctionInvocationContext context, CancellationToken cancellationToken)
     {
+        bool isReply = string.Equals(context.Function.Name, Constants.Tools.Reply, StringComparison.Ordinal);
+        object? result;
         try
         {
-            return await context.Function.InvokeAsync(context.Arguments, cancellationToken);
+            result = await context.Function.InvokeAsync(context.Arguments, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException
-                                   && string.Equals(context.Function.Name, Constants.Tools.Reply, StringComparison.Ordinal))
+        catch (Exception ex) when (ex is not OperationCanceledException && isReply)
         {
-            // Logged with its reason: a refused closure is otherwise visible only inside the session.
+            // Arguments breaking their schema: the reason is the deserializer's own account of what is wrong.
             logger.LogWarning("Reply refused: {Reason}", ex.Message);
-
-            // The turn stays open: the model reads why and closes again without narrating it to the user.
             return await promptComposerService.ComposeReplyNotAcceptedAsync(ex.Message);
         }
+
+        // Anything but a framework tool's named result reaches the model as the tool returned it.
+        if (result is not Records.FrameworkToolResult named)
+            return result;
+
+        string text = await promptComposerService.ComposeToolResultAsync(named.Name, named.Values);
+        if (!isReply || named.Name == Constants.ToolResults.TurnClosed)
+            return text;
+
+        // The turn stays open: the model reads why and closes again without narrating it to the user.
+        logger.LogWarning("Reply refused: {Reason}", text);
+        return await promptComposerService.ComposeReplyNotAcceptedAsync(text);
     }
 
     /// <summary>
@@ -783,7 +795,7 @@ public class MorganaAgentAdapter
         if (contextProvider.GetVariable(callerSession, Constants.ContextKeys.ServingConsultation) is not null)
         {
             logger.LogWarning("Agent '{CallerIntent}' attempted to consult '{PeerIntent}' while itself answering a colleague", callerIntent, peerIntent);
-            return RefusalEnvelope("You are currently answering a colleague and a colleague may not consult a further colleague. Answer with what you know.");
+            return RefusalEnvelope(await promptComposerService.ComposeToolResultAsync(Constants.ToolResults.ConsultationChained));
         }
 
         // The second rule: a cap on how many rounds one user turn may spend talking to colleagues.
@@ -793,7 +805,9 @@ public class MorganaAgentAdapter
         if (roundsSoFar >= maxRoundsPerTurn)
         {
             logger.LogWarning("Agent '{CallerIntent}' exhausted its {MaxRounds} consultation round(s) for this turn", callerIntent, maxRoundsPerTurn);
-            return RefusalEnvelope($"This exchange has run for {roundsSoFar} rounds and must end now. Answer with what you already have.");
+            return RefusalEnvelope(await promptComposerService.ComposeToolResultAsync(
+                Constants.ToolResults.ConsultationRoundsExhausted,
+                new Dictionary<string, string> { [Constants.Placeholders.ConsultationRounds] = roundsSoFar.ToString(CultureInfo.InvariantCulture) }));
         }
 
         // Charged before the colleague is called, not after it answers: a consultation that hangs or

@@ -67,7 +67,8 @@ public class ConfigurationPromptComposerService : IPromptComposerService
             return new FrameworkLayer(
                 prompt,
                 prompt.GetAdditionalProperty<List<Records.GlobalPolicy>>(Constants.PromptProperties.GlobalPolicies),
-                prompt.GetAdditionalProperty<List<Records.Injection>>(Constants.PromptProperties.Injections));
+                prompt.GetAdditionalProperty<List<Records.Injection>>(Constants.PromptProperties.Injections),
+                prompt.GetAdditionalPropertyOrDefault<List<Records.ToolResult>>(Constants.PromptProperties.ToolResults, []));
         });
     }
 
@@ -205,6 +206,10 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         return template.Length == 0 ? null : template.Replace(Constants.Placeholders.EarlierToolResultContent, result);
     }
 
+    /// <inheritdoc />
+    public async Task<string> ComposeToolResultAsync(string name, IReadOnlyDictionary<string, string>? values = null)
+        => Records.ToolResult.Resolve((await frameworkLayer.Value).ToolResults, name, values);
+
     /// <summary>
     /// Renders the global policies into the fenced block that opens the framework layer.
     /// </summary>
@@ -236,11 +241,13 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <summary>
-    /// The framework prompt and the two lists it declares beside its four sections, resolved once
-    /// and reused: the rules rendered into every agent's prompt and the templates spliced elsewhere.
+    /// The framework prompt and the lists that it declares beside its four sections, resolved once and
+    /// reused: the rules rendered into every agent's prompt, the templates spliced elsewhere and the
+    /// texts its tools return.
     /// </summary>
     private sealed record FrameworkLayer(
         Records.Prompt Prompt,
         List<Records.GlobalPolicy> Policies,
-        List<Records.Injection> Injections);
+        List<Records.Injection> Injections,
+        List<Records.ToolResult> ToolResults);
 }

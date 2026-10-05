@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -36,12 +37,6 @@ public class MorganaTool
     /// </summary>
     protected readonly Func<ToolContext> getToolContext;
 
-    /// <summary>
-    /// What Reply answers once the turn is closed. Read by <c>TurnClosingChatClient</c> to tell a
-    /// closed turn from one whose Reply was refused.
-    /// </summary>
-    internal const string TurnClosed = "Turn closed.";
-
     /// <summary>Deepest card nesting the channels lay out: card, section, nested section.</summary>
     private const int MaxCardDepth = 3;
 
@@ -70,18 +65,17 @@ public class MorganaTool
     // =========================================================================
 
     /// <summary>
-    /// Closes the agent's turn: what it ends waiting for, whether the user is leaving, the actions it
-    /// offers and the card it presents. Recorded for <c>MorganaAgent</c> to read at the end of the turn.
+    /// Closes the agent's turn: what it ends waiting for, whether the user is leaving, the actions that it
+    /// offers and the card that it presents. Recorded for <c>MorganaAgent</c> to read at the end of the turn.
     /// </summary>
     /// <param name="awaits">What the turn ends waiting for from the user.</param>
     /// <param name="userIsLeaving">True when the user's own message was a goodbye.</param>
     /// <param name="actions">The agent's own actions offered as buttons, if any.</param>
     /// <param name="card">The card presenting the turn's structured data, if any.</param>
-    /// <returns>The fact that the turn is closed.</returns>
-    /// <exception cref="ArgumentException">
-    /// The closure is refused and the turn stays open: no text has reached the user yet or the card
-    /// exceeds what the channels lay out. The message is the reason, handed to the model for repair.
-    /// </exception>
+    /// <returns>
+    /// The named result the tool loop turns into its authored text: the turn closed or, with the turn
+    /// left open for repair, the reason the closure was refused.
+    /// </returns>
     public async Task<object> Reply(
         Records.AwaitedFromUser awaits,
         bool userIsLeaving,
@@ -91,7 +85,7 @@ public class MorganaTool
         // Closed before a word of it was written, the turn would end mute: the model is sent back to
         // write first. Absent when the framework records a closure itself, which it does only after text.
         if (FunctionInvokingChatClient.CurrentContext is { } invocation && !HasTurnText(invocation.Messages))
-            throw new ArgumentException("no text has reached the user yet this turn");
+            return new Records.FrameworkToolResult(Constants.ToolResults.ReplyWithoutText);
 
         // A card the channel could not lay out is refused and the turn stays open, so the model calls
         // Reply again with a card that fits.
@@ -99,16 +93,24 @@ public class MorganaTool
         {
             int depth = CalculateMaxDepth(card.Components, 1);
             if (depth > MaxCardDepth)
-                throw new ArgumentException($"the card nests {depth} levels and at most {MaxCardDepth} are allowed");
+                return new Records.FrameworkToolResult(Constants.ToolResults.CardTooDeep, new Dictionary<string, string>
+                {
+                    [Constants.Placeholders.CardDepth] = depth.ToString(CultureInfo.InvariantCulture),
+                    [Constants.Placeholders.Limit] = MaxCardDepth.ToString(CultureInfo.InvariantCulture)
+                });
 
             int totalComponents = CountComponents(card.Components);
             if (totalComponents > MaxCardComponents)
-                throw new ArgumentException($"the card holds {totalComponents} components and at most {MaxCardComponents} are allowed");
+                return new Records.FrameworkToolResult(Constants.ToolResults.CardTooLarge, new Dictionary<string, string>
+                {
+                    [Constants.Placeholders.CardComponents] = totalComponents.ToString(CultureInfo.InvariantCulture),
+                    [Constants.Placeholders.Limit] = MaxCardComponents.ToString(CultureInfo.InvariantCulture)
+                });
         }
 
         ToolContext ctx = getToolContext();
 
-        // An action is a button the user presses to have something done: one leading to no tool of this
+        // An action is a button that the user presses to have something done: one leading to no tool of this
         // agent would be a promise nothing keeps, so it never reaches the channel.
         List<Records.ReplyAction> offeredActions = actions ?? [];
         if (ctx.ActionableToolNames is { } actionableToolNames)
@@ -133,7 +135,7 @@ public class MorganaTool
             "LLM closed its turn via Reply: awaits={Awaits}, userIsLeaving={UserIsLeaving}, actions={Actions}, card={Card}",
             awaits, userIsLeaving, turnReply.Actions.Count, card?.Title ?? "(none)");
 
-        return TurnClosed;
+        return new Records.FrameworkToolResult(Constants.ToolResults.TurnClosed);
     }
 
     /// <summary>
@@ -226,7 +228,7 @@ public class MorganaTool
         public string ConversationId { get; }
 
         /// <summary>
-        /// The agent's tools a user action may lead to: its own and its MCP tools, never Reply nor a
+        /// The agent's tools that a user action may lead to: its own and its MCP tools, never Reply nor a
         /// colleague. Null when nobody declared them, which leaves every action as the model wrote it.
         /// </summary>
         public IReadOnlyCollection<string>? ActionableToolNames { get; }
@@ -238,7 +240,7 @@ public class MorganaTool
         /// <param name="provider">The singleton context provider for the agent.</param>
         /// <param name="session">The active agent session for the current turn.</param>
         /// <param name="conversationId">The Akka conversation identifier this agent instance is scoped to.</param>
-        /// <param name="actionableToolNames">The agent's tools a user action may lead to, if known.</param>
+        /// <param name="actionableToolNames">The agent's tools that a user action may lead to, if known.</param>
         public ToolContext(
             MorganaAIContextProvider provider,
             AgentSession session,

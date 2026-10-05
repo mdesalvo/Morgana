@@ -590,8 +590,14 @@ public class MorganaAgent : MorganaActor
             consultationSpan?.AddException(ex);
             consultationSpan?.Dispose();
 
+            // What the asking agent's model reads in place of an answer, worded in morgana.json.
+            Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
             senderRef.Tell(new Records.PeerConsultationResponse(
-                $"Your colleague for '{AgentIntent}' could not answer. Proceed without them.", false));
+                Records.ToolResult.Resolve(
+                    morganaPrompt.GetAdditionalPropertyOrDefault<List<Records.ToolResult>>(Constants.PromptProperties.ToolResults, []),
+                    Constants.ToolResults.ColleagueCouldNotAnswer,
+                    new Dictionary<string, string> { [Constants.Placeholders.AgentIntent] = AgentIntent }),
+                false));
         }
         finally
         {
@@ -705,7 +711,7 @@ public class MorganaAgent : MorganaActor
             .Select(c => c.Name));
 
     /// <summary>
-    /// Reads the closure the Reply tool recorded on the current turn.
+    /// Reads the closure that the Reply tool recorded on the current turn.
     /// </summary>
     /// <param name="session">Active agent session.</param>
     /// <returns>The turn's closure; <c>null</c> when none was recorded.</returns>

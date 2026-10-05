@@ -20,7 +20,7 @@ namespace Morgana.AI.Providers;
 /// <para><strong>Storage vs. LLM view:</strong></para>
 /// <list type="bullet">
 /// <item><term>Storage</term><description>All messages are appended to <c>MorganaHistoryState.Messages</c> in AgentSession. The reducer never touches this list.</description></item>
-/// <item><term>LLM view</term><description>The current episode only — what followed the last turn the user left on — reduced if a reducer is configured, with every tool result of an earlier turn marked as such. Computed before each invocation and discarded afterward.</description></item>
+/// <item><term>LLM view</term><description>The current episode only — what followed the last turn that the user left on — reduced if a reducer is configured, with every tool result of an earlier turn marked as such. Computed before each invocation and discarded afterward.</description></item>
 /// <item><term>UI / diagnostics</term><description>Consumers can read the unmodified full history via <see cref="GetMessages"/>.</description></item>
 /// </list>
 /// </remarks>
@@ -143,7 +143,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     }
 
     /// <summary>
-    /// The messages since the last turn the user left on: the episode a returning user opens. The
+    /// The messages since the last turn that the user left on: the episode that a returning user opens. The
     /// same message instances as the history, so a fold stamped on them reaches the stored record.
     /// </summary>
     /// <param name="history">The agent's whole stored history.</param>

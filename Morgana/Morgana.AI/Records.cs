@@ -1059,6 +1059,45 @@ public static class Records
     }
 
     /// <summary>
+    /// A text that a framework tool returns to the model, authored in morgana.json and fetched by name (see
+    /// <see cref="Constants.ToolResults"/>). Domain tools return their own text, which Morgana never authors.
+    /// </summary>
+    /// <param name="Name">Identifier the framework fetches the text by.</param>
+    /// <param name="Content">The text, carrying its values as <c>((…))</c> placeholders.</param>
+    public record ToolResult(
+        string Name,
+        string Content)
+    {
+        /// <summary>
+        /// Resolves a result by name with its values spliced in; the bare name when the prompt layer
+        /// declares none, so a missing entry shows up in the transcript instead of failing the turn.
+        /// </summary>
+        /// <param name="toolResults">The prompt layer's tool results.</param>
+        /// <param name="name">Which result.</param>
+        /// <param name="values">Placeholder (see <see cref="Constants.Placeholders"/>) to the value that it stands for.</param>
+        public static string Resolve(IEnumerable<ToolResult> toolResults, string name, IReadOnlyDictionary<string, string>? values = null)
+        {
+            string content = toolResults.FirstOrDefault(toolResult =>
+                string.Equals(toolResult.Name, name, StringComparison.OrdinalIgnoreCase))?.Content ?? name;
+
+            foreach ((string placeholder, string value) in values ?? new Dictionary<string, string>())
+                content = content.Replace(placeholder, value, StringComparison.Ordinal);
+
+            return content;
+        }
+    }
+
+    /// <summary>
+    /// A framework tool's result named rather than written: the tool loop turns it into the authored text
+    /// of <see cref="ToolResult"/>, which a tool holding no prompt layer cannot reach itself.
+    /// </summary>
+    /// <param name="Name">Which result (see <see cref="Constants.ToolResults"/>).</param>
+    /// <param name="Values">Placeholder to the value that it stands for, if the text carries any.</param>
+    public record FrameworkToolResult(
+        string Name,
+        IReadOnlyDictionary<string, string>? Values = null);
+
+    /// <summary>
     /// Error message template with named identifier.
     /// Used to provide consistent, user-friendly error messages across the system.
     /// </summary>
@@ -1121,12 +1160,12 @@ public static class Records
         /// <summary>A value the user types in their own words: a code, a quantity, a name.</summary>
         [JsonStringEnumMemberName("typed_answer")] TypedAnswer,
 
-        /// <summary>One of the actions the turn offers as buttons.</summary>
+        /// <summary>One of the actions that the turn offers as buttons.</summary>
         [JsonStringEnumMemberName("action_choice")] ActionChoice
     }
 
     /// <summary>
-    /// One action a turn offers the user as a button, naming the agent's own tool that carries it out.
+    /// One action that a turn offers the user as a button, naming the agent's own tool that carries it out.
     /// </summary>
     /// <param name="Tool">The agent's tool the action leads to.</param>
     /// <param name="Label">What the button shows.</param>
@@ -1141,7 +1180,7 @@ public static class Records
     /// authored in morgana.json. Never chosen by the model: which pair a turn gets follows from its closure.
     /// </summary>
     /// <param name="Closure">Offered when the turn answered the request and awaits nothing.</param>
-    /// <param name="Escape">Appended to the actions a turn offers, so the user is never trapped in them.</param>
+    /// <param name="Escape">Appended to the actions that a turn offers, so the user is never trapped in them.</param>
     public record ServiceButtons(
         [property: JsonPropertyName("Closure")] List<QuickReply> Closure,
         [property: JsonPropertyName("Escape")] List<QuickReply> Escape);
@@ -1161,7 +1200,7 @@ public static class Records
         [property: JsonPropertyName("card")] RichCard? Card)
     {
         /// <summary>
-        /// True when the turn ends waiting for the user: a typed answer or one of the actions it offers.
+        /// True when the turn ends waiting for the user: a typed answer or one of the actions that it offers.
         /// </summary>
         [JsonIgnore]
         public bool AwaitsUser => !UserIsLeaving && (Awaits != AwaitedFromUser.Nothing || Actions.Count > 0);

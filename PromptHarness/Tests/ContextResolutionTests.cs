@@ -90,7 +90,9 @@ public sealed class ContextResolutionTests
         object? result = await tool.Function.InvokeAsync(new AIFunctionArguments { [CustomerCode] = " ", [InvoiceId] = "INV-0247" });
 
         Assert.Null(tool.ReceivedCall);
-        Assert.Contains(CustomerCode, result?.ToString());
+        Records.FrameworkToolResult missing = Assert.IsType<Records.FrameworkToolResult>(result);
+        Assert.Equal("ContextValueMissing", missing.Name);
+        Assert.Equal(CustomerCode, missing.Values!["((missing))"]);
         Assert.Null(tool.Provider.GetVariable(tool.Session, CustomerCode));
     }
 

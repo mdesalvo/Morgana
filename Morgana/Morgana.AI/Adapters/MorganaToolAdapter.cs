@@ -46,7 +46,7 @@ public class MorganaToolAdapter
     private readonly Dictionary<string, Records.ToolDefinition> toolDefinitions = [];
 
     /// <summary>
-    /// Supplies the session the context-scoped parameters are resolved from and stored into.
+    /// Supplies the session that the context-scoped parameters are resolved from and stored into.
     /// Null for an adapter whose tools declare none, such as a workbench agent holding no conversation.
     /// </summary>
     private readonly Func<MorganaTool.ToolContext>? toolContextFactory;
@@ -130,6 +130,15 @@ public class MorganaToolAdapter
                 Name = definition.Name,
                 Description = definition.Description,
                 SerializerOptions = ToolSerializerOptions,
+
+                // A framework tool's named result reaches the tool loop as itself, to be given its authored
+                // text there; anything else is serialized for the model exactly as by default.
+                MarshalResult = (result, resultType, _) => new ValueTask<object?>(result switch
+                {
+                    null => null,
+                    Records.FrameworkToolResult named => named,
+                    _ => JsonSerializer.SerializeToElement(result, resultType ?? result.GetType(), ToolSerializerOptions)
+                }),
                 JsonSchemaCreateOptions = AIJsonSchemaCreateOptions.Default with
                 {
                     ParameterDescriptionProvider = parameter =>
@@ -211,12 +220,6 @@ public class MorganaToolAdapter
     /// </remarks>
     private sealed class ContextResolvingFunction : DelegatingAIFunction
     {
-        /// <summary>
-        /// What the model reads in place of the tool's result when a value is missing. A fact about
-        /// the call, never an instruction: what to do about it is the ToolUsage policy's to say.
-        /// </summary>
-        private const string MissingContextResult = "{0} was not run: this conversation does not hold {1} yet.";
-
         /// <summary>The tool's own context-scoped parameter names.</summary>
         private readonly string[] contextParameters;
 
@@ -226,14 +229,14 @@ public class MorganaToolAdapter
         /// <summary>Emits the observable HIT, MISS and SET lines.</summary>
         private readonly ILogger logger;
 
-        /// <summary>The tool's schema with the context-scoped parameters no longer required.</summary>
+        /// <summary>The tool's schema, in which the context-scoped parameters are no longer required.</summary>
         private readonly JsonElement jsonSchema;
 
         /// <summary>
         /// Wraps a tool generated from its delegate.
         /// </summary>
         /// <param name="innerFunction">The tool as generated from its delegate</param>
-        /// <param name="contextParameters">The parameters to resolve from the session</param>
+        /// <param name="contextParameters">The parameters that are resolved from the session</param>
         /// <param name="toolContextFactory">Supplies the in-flight session at each invocation</param>
         /// <param name="logger">Receives the observable context-access lines</param>
         public ContextResolvingFunction(
@@ -274,7 +277,7 @@ public class MorganaToolAdapter
 
             foreach (string parameter in contextParameters)
             {
-                // A value the model passes came from the user on this turn or an earlier one: it is
+                // A value that the model passes came from the user on this turn or an earlier one: it is
                 // stored before use, so every later turn and every agent sharing it finds it held.
                 string? supplied = AsText(arguments.TryGetValue(parameter, out object? argument) ? argument : null);
                 if (supplied is not null)
@@ -291,7 +294,7 @@ public class MorganaToolAdapter
                     continue;
                 }
 
-                // Omitted by the model: the session answers, including for a value another agent obtained.
+                // Omitted by the model: the session answers, including for a value that another agent obtained.
                 string? held = AsText(toolContext.Provider.GetVariable(toolContext.Session, parameter));
                 if (held is not null)
                 {
@@ -312,13 +315,17 @@ public class MorganaToolAdapter
             // Run on a missing value the tool would answer about nobody: the model is told which
             // values are lacking, which are exactly what the user has to be asked for.
             if (missingParameters.Count > 0)
-                return string.Format(CultureInfo.InvariantCulture, MissingContextResult, Name, string.Join(", ", missingParameters));
+                return new Records.FrameworkToolResult(Constants.ToolResults.ContextValueMissing, new Dictionary<string, string>
+                {
+                    [Constants.Placeholders.ToolName] = Name,
+                    [Constants.Placeholders.MissingValues] = string.Join(", ", missingParameters)
+                });
 
             return await base.InvokeCoreAsync(arguments, cancellationToken);
         }
 
         /// <summary>
-        /// Reads a value as the text a tool parameter receives; null when it carries none.
+        /// Reads a value as the text that a tool parameter receives; null when it carries none.
         /// </summary>
         /// <remarks>
         /// A model argument and a value restored from a persisted session both arrive as JSON, a

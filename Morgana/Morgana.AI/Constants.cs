@@ -88,7 +88,7 @@ public static class Constants
         /// <summary>Spliced into a peer-capable agent's own instructions, naming the colleagues it holds.</summary>
         public const string ColleaguesDeclaration = "ColleaguesDeclaration";
 
-        /// <summary>Follows a turn the model wrote without Reply, asking for that turn's closure alone.</summary>
+        /// <summary>Follows a turn that the model wrote without Reply, asking for that turn's closure alone.</summary>
         public const string TurnClosureRequest = "TurnClosureRequest";
 
         /// <summary>Answers a Reply the framework refused, with the reason it was refused.</summary>
@@ -116,6 +116,9 @@ public static class Constants
 
         /// <summary>What the user is told when a turn fails, authored rather than hard-coded.</summary>
         public const string ErrorAnswers = "ErrorAnswers";
+
+        /// <summary>The texts that framework tools return to the model, authored rather than hard-coded.</summary>
+        public const string ToolResults = "ToolResults";
 
         /// <summary>The buttons the framework adds to let the user stay with an agent or leave it, authored as data.</summary>
         public const string ServiceButtons = "ServiceButtons";
@@ -188,12 +191,54 @@ public static class Constants
     }
 
     /// <summary>
-    /// The base tool the framework resolves by name: it is the one call a turn is closed with, so the
+    /// Names of the texts that framework tools return, authored under <c>ToolResults</c> in morgana.json.
+    /// </summary>
+    public static class ToolResults
+    {
+        /// <summary>Reply accepted the closure.</summary>
+        public const string TurnClosed = "TurnClosed";
+
+        /// <summary>A tool did not run because a context-scoped value is held by nobody yet.</summary>
+        public const string ContextValueMissing = "ContextValueMissing";
+
+        /// <summary>Reply refused: nothing of the turn has reached the user.</summary>
+        public const string ReplyWithoutText = "ReplyWithoutText";
+
+        /// <summary>Reply refused: the card nests too deep.</summary>
+        public const string CardTooDeep = "CardTooDeep";
+
+        /// <summary>Reply refused: the card holds too many components.</summary>
+        public const string CardTooLarge = "CardTooLarge";
+
+        /// <summary>A colleague answering a consultation tried to consult another.</summary>
+        public const string ConsultationChained = "ConsultationChained";
+
+        /// <summary>A turn spent its consultation rounds.</summary>
+        public const string ConsultationRoundsExhausted = "ConsultationRoundsExhausted";
+
+        /// <summary>A colleague of this installation failed while answering.</summary>
+        public const string ColleagueCouldNotAnswer = "ColleagueCouldNotAnswer";
+
+        /// <summary>A published agent refused a partner's new conversation.</summary>
+        public const string PeerAtCapacity = "PeerAtCapacity";
+
+        /// <summary>A published agent's conversation has no dust left.</summary>
+        public const string PeerOutOfBudget = "PeerOutOfBudget";
+
+        /// <summary>A published agent did not answer within the wait.</summary>
+        public const string PeerTimedOut = "PeerTimedOut";
+
+        /// <summary>A published agent failed while answering.</summary>
+        public const string PeerFailed = "PeerFailed";
+    }
+
+    /// <summary>
+    /// The base tool the framework resolves by name: it is the one call that closes a turn, so the
     /// agent forces it when the model forgot it and returns its argument errors for repair.
     /// </summary>
     public static class Tools
     {
-        /// <summary>Closes the agent's turn: whether it awaits the user, the actions it offers and its card.</summary>
+        /// <summary>Closes the agent's turn: whether it awaits the user, the actions that it offers and its card.</summary>
         public const string Reply = "Reply";
     }
 
@@ -246,7 +291,7 @@ public static class Constants
         public const string TurnRichCard = "morgana:turn_rich_card";
 
         /// <summary>
-        /// Written on the user-facing message of a turn the user left on. What the agent's model reads
+        /// Written on the user-facing message of a turn that the user left on. What the agent's model reads
         /// starts after the last one: a returning user opens a new episode, never the end of the old one.
         /// </summary>
         public const string EpisodeEnd = "morgana:episode_end";
@@ -278,6 +323,27 @@ public static class Constants
 
         /// <summary>In <see cref="Injections.PeerConsultationGuardrail"/> — the colleague's question, inside the fence that marks it as data.</summary>
         public const string ConsultationQuestion = "((question))";
+
+        /// <summary>In a tool result — the framework tool or colleague the text is about.</summary>
+        public const string ToolName = "((tool))";
+
+        /// <summary>In <see cref="ToolResults.ContextValueMissing"/> — the context-scoped values no one holds yet.</summary>
+        public const string MissingValues = "((missing))";
+
+        /// <summary>In <see cref="ToolResults.CardTooDeep"/> — how many levels the refused card nests.</summary>
+        public const string CardDepth = "((depth))";
+
+        /// <summary>In <see cref="ToolResults.CardTooLarge"/> — how many components the refused card holds.</summary>
+        public const string CardComponents = "((count))";
+
+        /// <summary>In the card refusals — the limit the card broke.</summary>
+        public const string Limit = "((max))";
+
+        /// <summary>In <see cref="ToolResults.ConsultationRoundsExhausted"/> — the rounds already spent.</summary>
+        public const string ConsultationRounds = "((rounds))";
+
+        /// <summary>In the colleague fallbacks — the intent of the colleague that did not answer.</summary>
+        public const string AgentIntent = "((agent))";
 
         /// <summary>In <see cref="Injections.EarlierToolResult"/> — the result as the tool returned it.</summary>
         public const string EarlierToolResultContent = "((result))";
