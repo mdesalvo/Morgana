@@ -75,4 +75,11 @@ public interface IPromptComposerService
     /// <param name="reason">Why the closure was refused, as a fact.</param>
     /// <returns>The composed answer, falling back to the bare reason where no template is declared.</returns>
     Task<string> ComposeReplyNotAcceptedAsync(string reason);
+
+    /// <summary>
+    /// Produces what the model reads in place of a tool result an earlier turn received.
+    /// </summary>
+    /// <param name="result">The result as the tool returned it.</param>
+    /// <returns>The wrapped result; <c>null</c> when no template is declared and results stay as they were.</returns>
+    Task<string?> ComposeEarlierToolResultAsync(string result);
 }

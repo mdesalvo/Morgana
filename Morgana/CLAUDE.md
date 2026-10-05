@@ -97,7 +97,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
 | `ChatClients/` | `IChatClient` decorators: `TierDefaultsChatClient`, `DustAccountingChatClient`, `MorganaAnthropicClient`, `TurnClosingChatClient` (closes a turn the model wrote without `Reply`: a forced tool call, structured output where the provider cannot force one) |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
-| `Providers/` | `MorganaAIContextProvider` (context variables plus the shared registry), `MorganaChatHistoryProvider` |
+| `Providers/` | `MorganaAIContextProvider` (context variables plus the shared registry), `MorganaChatHistoryProvider` (stores the whole history, hands the model the current episode only — since the user last left — with earlier tool results marked) |
 | `SessionStores/` | `MorganaHostedAgentSessionStore` — which conversation an inbound A2A request is served on |
 | `Telemetry/` | `MorganaTelemetry`, holding its own span and attribute glossary |
 | `Records.cs` | Every immutable record: actor messages, configuration, DTOs |
@@ -323,9 +323,8 @@ The `Morgana` prompt's `AdditionalProperties` carry two sibling arrays and **whi
 entry is follows from the array it lives in**, never from a field inside it:
 
 - **`GlobalPolicies`** — rendered into every agent's prompt in `Priority` order:
-  QuickReplyDoctrine, SessionContinuation, ToolUsage,
-  ToolGrounding, MandatoryTextualResponse, RichCardUsage, PeerConsultation. `QuickReplyDoctrine` (P1)
-  is the master rule the other quick-reply policies instantiate. `PeerConsultation` (P8) is the
+  QuickReplyDoctrine, ToolGrounding, MandatoryTextualResponse, RichCardUsage, PeerConsultation.
+  `PeerConsultation` (P8) is the
   **only conditionally rendered** one — an agent outside the A2A topology never pays for it — and
   sits last so it names the policies it suspends instead of forward-referencing them.
 - **`Injections`** — templates, not rules: prose with a single splice site each, never rendered among
@@ -333,7 +332,8 @@ entry is follows from the array it lives in**, never from a field inside it:
   `ColleaguesDeclaration` (closing a peer-capable agent's instructions),
   `PeerConsultationDeclaration` and `PeerConsultationGuardrail` (in front of a colleague's question),
   `TurnClosureRequest` (after a turn the model wrote without `Reply`), `ReplyNotAccepted` (in place of
-  a refused `Reply`'s result, its reason as datum).
+  a refused `Reply`'s result, its reason as datum), `EarlierToolResult` (around a tool result of an
+  earlier turn, as the model reads its history).
 
 Every injection opens with a **bracketed all-caps label at the head of its first line** — the idiom
 the prompt layers already use for `[TARGET]`. A template arrives spliced into somebody else's text,

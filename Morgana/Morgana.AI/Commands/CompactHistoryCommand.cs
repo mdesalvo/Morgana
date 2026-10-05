@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Morgana.AI.Attributes;
 using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
+using Morgana.AI.Providers;
 using Morgana.AI.Services;
 using Morgana.Contracts;
 
@@ -143,7 +144,8 @@ public sealed class CompactHistoryCommand : ICommand
 
         // The summary is stamped onto the message it stands behind, inside the history just read: that mark
         // is what a later reduction reads to know where the agent's window opens. Every message stays
-        int foldedMessages = await reducer.CompactAsync(history, cancellationToken);
+        // Only the current episode is folded: what came before the user last left is never read again.
+        int foldedMessages = await reducer.CompactAsync(MorganaChatHistoryProvider.CurrentEpisode(history), cancellationToken);
 
         // A fold that came to nothing leaves the row alone: rewriting it would date a record that did not change
         if (foldedMessages == 0)

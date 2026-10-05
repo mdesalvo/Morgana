@@ -196,6 +196,15 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         return template.Length == 0 ? reason : template.Replace(Constants.Placeholders.ReplyNotAcceptedReason, reason);
     }
 
+    /// <inheritdoc />
+    public async Task<string?> ComposeEarlierToolResultAsync(string result)
+    {
+        // The result is spliced last: it is the tool's text and is never read for placeholders of this layer.
+        FrameworkLayer framework = await frameworkLayer.Value;
+        string template = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.EarlierToolResult);
+        return template.Length == 0 ? null : template.Replace(Constants.Placeholders.EarlierToolResultContent, result);
+    }
+
     /// <summary>
     /// Renders the global policies into the fenced block that opens the framework layer.
     /// </summary>

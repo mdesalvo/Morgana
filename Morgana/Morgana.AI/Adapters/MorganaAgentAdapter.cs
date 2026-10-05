@@ -300,7 +300,8 @@ public class MorganaAgentAdapter
         // 8) History provider: keeps the full transcript in AgentSession, exposes the
         //    (optionally reduced) view to the LLM. Null reducer → full history verbatim.
         IChatReducer? chatReducer = chatReducerService.CreateReducer(agentChatClient);
-        MorganaChatHistoryProvider chatHistoryProvider = new MorganaChatHistoryProvider(intentAttribute.Intent, chatReducer, logger);
+        MorganaChatHistoryProvider chatHistoryProvider = new MorganaChatHistoryProvider(
+            intentAttribute.Intent, chatReducer, logger, promptComposerService: promptComposerService);
 
         // 9) Assemble the Microsoft.Agents.AI agent over the metered client, injecting the
         //    context + history providers, a stable per-conversation Id (intent-conversationId),

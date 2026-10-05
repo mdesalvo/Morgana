@@ -455,6 +455,10 @@ public class MorganaAgent : MorganaActor
                 if (richCard is not null)
                     finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnRichCard] =
                         JsonSerializer.Serialize(richCard, Records.DefaultJsonSerializerOptions);
+
+                // The user left on this turn: whatever they bring next opens a new episode, read on its own.
+                if (turnReply.UserIsLeaving)
+                    finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.EpisodeEnd] = true;
             }
 
             // Written last, so what lands in the database is the history already stripped of the

@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Providers;
 
@@ -19,7 +20,7 @@ namespace Morgana.AI.Providers;
 /// <para><strong>Storage vs. LLM view:</strong></para>
 /// <list type="bullet">
 /// <item><term>Storage</term><description>All messages are appended to <c>MorganaHistoryState.Messages</c> in AgentSession. The reducer never touches this list.</description></item>
-/// <item><term>LLM view</term><description>If a reducer is configured, a temporary reduced copy is computed before each invocation and discarded afterward.</description></item>
+/// <item><term>LLM view</term><description>The current episode only — what followed the last turn the user left on — reduced if a reducer is configured, with every tool result of an earlier turn marked as such. Computed before each invocation and discarded afterward.</description></item>
 /// <item><term>UI / diagnostics</term><description>Consumers can read the unmodified full history via <see cref="GetMessages"/>.</description></item>
 /// </list>
 /// </remarks>
@@ -36,6 +37,11 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
 
     /// <summary>Agent intent label used in log output.</summary>
     private readonly string agentIntent;
+
+    /// <summary>
+    /// Marks the tool results of earlier turns in the view. Null leaves them as they were returned.
+    /// </summary>
+    private readonly IPromptComposerService? promptComposerService;
 
     /// <summary>
     /// Manages storage and retrieval of <see cref="MorganaHistoryState"/> within <see cref="AgentSession"/>.
@@ -57,13 +63,16 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     /// JSON serialization options for state persistence.
     /// Defaults to <c>AgentAbstractionsJsonUtilities.DefaultOptions</c>.
     /// </param>
+    /// <param name="promptComposerService">Marks earlier tool results in the view. Pass <c>null</c> to leave them unmarked.</param>
     public MorganaChatHistoryProvider(
         string agentIntent,
         IChatReducer? chatReducer,
         ILogger logger,
-        JsonSerializerOptions? jsonSerializerOptions = null)
+        JsonSerializerOptions? jsonSerializerOptions = null,
+        IPromptComposerService? promptComposerService = null)
     {
         this.agentIntent = agentIntent;
+        this.promptComposerService = promptComposerService;
         viewReducer = chatReducer;
         this.logger = logger;
 
@@ -108,8 +117,8 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     // =========================================================================
 
     /// <summary>
-    /// Called BEFAORE each agent invocation to supply conversation history to the LLM.
-    /// Returns a reduced view if a reducer is configured; otherwise returns the full history.
+    /// Called BEFORE each agent invocation to supply conversation history to the LLM: the current
+    /// episode, reduced if a reducer is configured, its earlier tool results marked as such.
     /// The stored history is never modified.
     /// </summary>
     protected override async ValueTask<IEnumerable<ChatMessage>> ProvideChatHistoryAsync(
@@ -119,22 +128,92 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         MorganaHistoryState historyState = sessionState.GetOrInitializeState(context.Session);
         List<ChatMessage> fullMessageHistory = historyState.Messages;
 
-        if (viewReducer != null)
-        {
-            List<ChatMessage> reducedView = [.. await viewReducer.ReduceAsync(fullMessageHistory, cancellationToken)];
-
-            logger.LogInformation(
-                $"{nameof(MorganaChatHistoryProvider)} PROVIDING reduced view " +
-                $"({fullMessageHistory.Count} → {reducedView.Count} messages) for LLM context in agent '{agentIntent}'");
-
-            return reducedView;
-        }
+        // Reduced on the stored messages themselves: the reducer stamps its summary onto one of them,
+        // which is how the summary reaches the saved session.
+        List<ChatMessage> episode = CurrentEpisode(fullMessageHistory);
+        List<ChatMessage> view = viewReducer != null
+            ? [.. await viewReducer.ReduceAsync(episode, cancellationToken)]
+            : episode;
 
         logger.LogInformation(
-            $"{nameof(MorganaChatHistoryProvider)} PROVIDING all {fullMessageHistory.Count} messages (no reducer) for agent '{agentIntent}'");
+            $"{nameof(MorganaChatHistoryProvider)} PROVIDING {{ViewCount}} messages (history {{HistoryCount}}, episode {{EpisodeCount}}) for agent '{{AgentIntent}}'",
+            view.Count, fullMessageHistory.Count, episode.Count, agentIntent);
 
-        return fullMessageHistory;
+        return await MarkEarlierToolResultsAsync(view);
     }
+
+    /// <summary>
+    /// The messages since the last turn the user left on: the episode a returning user opens. The
+    /// same message instances as the history, so a fold stamped on them reaches the stored record.
+    /// </summary>
+    /// <param name="history">The agent's whole stored history.</param>
+    public static List<ChatMessage> CurrentEpisode(IReadOnlyList<ChatMessage> history)
+    {
+        int lastEpisodeEnd = -1;
+        for (int index = history.Count - 1; index >= 0 && lastEpisodeEnd < 0; index--)
+        {
+            if (history[index].AdditionalProperties?.ContainsKey(Constants.MessageProperties.EpisodeEnd) == true)
+                lastEpisodeEnd = index;
+        }
+
+        return [.. history.Skip(lastEpisodeEnd + 1)];
+    }
+
+    /// <summary>
+    /// Wraps every tool result that came back before the turn now opening, so the model reads it as how
+    /// things stood then. Copies are wrapped and the stored messages stay as the tools returned them.
+    /// </summary>
+    private async Task<IEnumerable<ChatMessage>> MarkEarlierToolResultsAsync(List<ChatMessage> view)
+    {
+        if (promptComposerService is null)
+            return view;
+
+        // The turn now opening starts at the user's message, filed before the run: a result after it
+        // belongs to this turn, which happens only when the turn is run a second time.
+        int currentTurnStart = view.FindLastIndex(message => message.Role == ChatRole.User);
+
+        List<ChatMessage> marked = [];
+        for (int index = 0; index < view.Count; index++)
+        {
+            ChatMessage message = view[index];
+            if (index >= currentTurnStart || !message.Contents.OfType<FunctionResultContent>().Any())
+            {
+                marked.Add(message);
+                continue;
+            }
+
+            List<AIContent> contents = [];
+            foreach (AIContent content in message.Contents)
+            {
+                string? wrapped = content is FunctionResultContent result
+                    ? await promptComposerService.ComposeEarlierToolResultAsync(ResultText(result.Result))
+                    : null;
+                contents.Add(wrapped is null ? content : new FunctionResultContent(((FunctionResultContent)content).CallId, wrapped));
+            }
+
+            marked.Add(new ChatMessage(message.Role, contents)
+            {
+                AuthorName = message.AuthorName,
+                CreatedAt = message.CreatedAt,
+                MessageId = message.MessageId,
+                AdditionalProperties = message.AdditionalProperties
+            });
+        }
+
+        return marked;
+    }
+
+    /// <summary>
+    /// A tool result as text: a tool's string comes back as a JSON string, anything else as its JSON.
+    /// </summary>
+    private static string ResultText(object? result) => result switch
+    {
+        null => string.Empty,
+        string text => text,
+        JsonElement { ValueKind: JsonValueKind.String } element => element.GetString() ?? string.Empty,
+        JsonElement element => element.GetRawText(),
+        _ => JsonSerializer.Serialize(result)
+    };
 
     /// <summary>
     /// Called AFTER agent invocation to persist new messages.

@@ -93,6 +93,9 @@ public static class Constants
 
         /// <summary>Answers a Reply the framework refused, with the reason it was refused.</summary>
         public const string ReplyNotAccepted = "ReplyNotAccepted";
+
+        /// <summary>Wraps a tool result of an earlier turn, as the model reads it back in its history.</summary>
+        public const string EarlierToolResult = "EarlierToolResult";
     }
 
     /// <summary>
@@ -243,6 +246,12 @@ public static class Constants
         public const string TurnRichCard = "morgana:turn_rich_card";
 
         /// <summary>
+        /// Written on the user-facing message of a turn the user left on. What the agent's model reads
+        /// starts after the last one: a returning user opens a new episode, never the end of the old one.
+        /// </summary>
+        public const string EpisodeEnd = "morgana:episode_end";
+
+        /// <summary>
         /// Written by <c>MorganaAgent</c> on a user message the orchestrator had already filed as
         /// her own, which is every phrase that arrived while no agent was active. The agent keeps
         /// the phrase because its model must read it. This says the phrase belongs to somebody
@@ -269,6 +278,9 @@ public static class Constants
 
         /// <summary>In <see cref="Injections.PeerConsultationGuardrail"/> — the colleague's question, inside the fence that marks it as data.</summary>
         public const string ConsultationQuestion = "((question))";
+
+        /// <summary>In <see cref="Injections.EarlierToolResult"/> — the result as the tool returned it.</summary>
+        public const string EarlierToolResultContent = "((result))";
 
         /// <summary>In <see cref="Injections.ReplyNotAccepted"/> — why the closure was refused.</summary>
         public const string ReplyNotAcceptedReason = "((reason))";
