@@ -43,8 +43,8 @@ public sealed class TurnClosureTests
     [InlineData("typed_answer", false, false, "", false)]
     [InlineData("typed_answer", false, true, "", false)]
     // Offered actions carry the escape pair after them.
-    [InlineData("action_choice", false, true, "GetInvoices-1,continue_agent,exit_agent", false)]
-    [InlineData("nothing", false, true, "GetInvoices-1,continue_agent,exit_agent", false)]
+    [InlineData("action_choice", false, true, "GetInvoices#1,continue_agent,exit_agent", false)]
+    [InlineData("nothing", false, true, "GetInvoices#1,continue_agent,exit_agent", false)]
     // An answered request carries the closure pair and the agent stays until the user leaves.
     [InlineData("nothing", false, false, "continue_agent,exit_agent", false)]
     [InlineData("action_choice", false, false, "continue_agent,exit_agent", false)]
@@ -84,9 +84,16 @@ public sealed class TurnClosureTests
 
         List<QuickReply> buttons = turnReply.ToDelivery(ServiceButtons).QuickReplies!;
 
-        Assert.Equal(["ConfirmOrder-1", "ConfirmOrder-2", "continue_agent", "exit_agent"], buttons.Select(button => button.Id));
+        Assert.Equal(["ConfirmOrder#1", "ConfirmOrder#2", "continue_agent", "exit_agent"], buttons.Select(button => button.Id));
         Assert.Equal("Confirm my order", buttons[0].Value);
     }
+
+    [Theory]
+    [InlineData("ConfirmOrder#1", "ConfirmOrder")]
+    [InlineData("continue_agent", null)]
+    [InlineData("approve_action", null)]
+    public void Pressed_button_names_the_tool_its_action_leads_to(string buttonId, string? tool)
+        => Assert.Equal(tool, Records.TurnReply.ActionTool(buttonId));
 
     [Fact]
     public async Task Reply_discards_an_action_leading_to_a_tool_the_agent_lacks()

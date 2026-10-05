@@ -98,6 +98,10 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         if (agentTools.OfType<AIFunction>().FirstOrDefault(tool => tool.Name == Constants.Tools.Reply) is not AIFunction reply)
             return;
 
+        // A turn waiting for the user's approval of a tool is closed by the agent, with the approval buttons.
+        if (turnMessages.SelectMany(message => message.Contents).OfType<ToolApprovalRequestContent>().Any())
+            return;
+
         // A Reply refused for its card left the turn open just as much as no Reply at all.
         bool closed = turnMessages
             .SelectMany(message => message.Contents)

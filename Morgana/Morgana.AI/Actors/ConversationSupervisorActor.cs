@@ -1083,7 +1083,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         // Get the disambiguation message from the classifier's prompt
         Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Classifier);
-        string disambiguationMessage = classifierPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.DisambiguationMessage);
+        string disambiguationMessage = classifierPrompt.GetMessage(Constants.Messages.Disambiguation);
 
         // Tell the response straight to the client — no router, no agent, exactly like a Guard
         // rejection or the Presentation message. AgentCompleted:false signals "I'm not done, I'm
@@ -1161,7 +1161,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         string farewellTemplate = promptResolverService
             .ResolveAsync(Constants.Morgana).GetAwaiter().GetResult()
-            .GetAdditionalProperty<string>(Constants.PromptProperties.AgentExitMessage);
+            .GetMessage(Constants.Messages.AgentExit);
 
         if (string.IsNullOrWhiteSpace(farewellTemplate))
             return;

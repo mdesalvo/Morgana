@@ -115,6 +115,19 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
+    public async Task<string> ComposeToolDescriptionAsync(Records.ToolDefinition toolDefinition)
+    {
+        // Without this the model asks for a go-ahead before calling and the user is asked twice.
+        // Said once here, never by each tool's author.
+        if (!toolDefinition.RequiresExecutionApproval)
+            return toolDefinition.Description;
+
+        FrameworkLayer framework = await frameworkLayer.Value;
+        string guidance = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.ExecutionApprovalGuidance);
+        return guidance.Length == 0 ? toolDefinition.Description : $"{toolDefinition.Description}\n\n{guidance}";
+    }
+
+    /// <inheritdoc />
     public Task<string> ComposePeerDescriptionAsync(A2A.AgentCard peerCard)
         // The colleague's own words and nothing of the framework's: how to consult one is already
         // carried by the policy every peer-capable agent reads and repeating it per colleague would

@@ -94,6 +94,9 @@ public static class Constants
         /// <summary>Answers a Reply the framework refused, with the reason it was refused.</summary>
         public const string ReplyNotAccepted = "ReplyNotAccepted";
 
+        /// <summary>Closes the description of a tool requiring execution approval, telling the model that the user approves it.</summary>
+        public const string ExecutionApprovalGuidance = "ExecutionApprovalGuidance";
+
         /// <summary>Wraps a tool result of an earlier turn, as the model reads it back in its history.</summary>
         public const string EarlierToolResult = "EarlierToolResult";
     }
@@ -114,33 +117,14 @@ public static class Constants
         /// <summary>The callable tools a prompt declares, framework base tools and domain tools alike.</summary>
         public const string Tools = "Tools";
 
-        /// <summary>What the user is told when a turn fails, authored rather than hard-coded.</summary>
-        public const string ErrorAnswers = "ErrorAnswers";
-
         /// <summary>The texts that framework tools return to the model, authored rather than hard-coded.</summary>
         public const string ToolResults = "ToolResults";
 
         /// <summary>The buttons the framework adds to let the user stay with an agent or leave it, authored as data.</summary>
         public const string ServiceButtons = "ServiceButtons";
 
-        /// <summary>The opening message served when the presenter's own model call fails.</summary>
-        public const string FallbackMessage = "FallbackMessage";
-
-        /// <summary>The opening message served by a deployment carrying no agent at all.</summary>
-        public const string NoAgentsMessage = "NoAgentsMessage";
-
-        /// <summary>What the user is asked when two intents collide too closely to route between.</summary>
-        public const string DisambiguationMessage = "DisambiguationMessage";
-
-        /// <summary>
-        /// What Morgana says when an agent finishes and the conversation comes back to her. <c>{0}</c>
-        /// is that agent's display name. Authored here because it is Morgana speaking: every channel
-        /// used to carry its own copy and invent when to show it, from a history that never held it.
-        /// </summary>
-        public const string AgentExitMessage = "AgentExitMessage";
-
-        /// <summary>What the user is told when classification lands on an intent no agent handles.</summary>
-        public const string UnrecognizedIntentError = "UnrecognizedIntentError";
+        /// <summary>The texts that the framework says to the user in its own voice, each fetched by name (see <see cref="Constants.Messages"/>).</summary>
+        public const string Messages = "Messages";
 
         /// <summary>
         /// What a request matching no modelled agent is. It belongs to the classifier and to no domain,
@@ -188,6 +172,40 @@ public static class Constants
 
         /// <summary>The conversation's dust budget is spent: it will take no further turn or command.</summary>
         public const string DustBudgetExhausted = "dust_budget_exhausted";
+    }
+
+    /// <summary>
+    /// Names of the texts that the framework says to the user in its own voice, authored under a
+    /// prompt's <c>Messages</c> section in morgana.json.
+    /// </summary>
+    public static class Messages
+    {
+        /// <summary>The opening message served when the presenter's own model call fails (Presentation).</summary>
+        public const string Fallback = "Fallback";
+
+        /// <summary>The opening message served by a deployment carrying no agent at all (Presentation).</summary>
+        public const string NoAgents = "NoAgents";
+
+        /// <summary>What the user is asked when two intents collide too closely to route between (Classifier).</summary>
+        public const string Disambiguation = "Disambiguation";
+
+        /// <summary>What the user is told when classification lands on an intent that no agent handles (Classifier).</summary>
+        public const string UnrecognizedIntent = "UnrecognizedIntent";
+
+        /// <summary>
+        /// What Morgana says when an agent finishes and the conversation comes back to her (Morgana).
+        /// <c>{0}</c> is that agent's display name.
+        /// </summary>
+        public const string AgentExit = "AgentExit";
+
+        /// <summary>What the user is asked when a turn asks to run a tool that needs their approval and says nothing itself (Morgana).</summary>
+        public const string Approval = "Approval";
+
+        /// <summary>What the user is told when an agent's turn fails (Morgana).</summary>
+        public const string GenericError = "GenericError";
+
+        /// <summary>What the user is told when the model service itself fails a call (Morgana).</summary>
+        public const string LLMServiceError = "LLMServiceError";
     }
 
     /// <summary>

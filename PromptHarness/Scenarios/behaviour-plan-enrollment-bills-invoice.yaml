@@ -53,7 +53,9 @@ turns:
     expect:
       agent: ContractAgent
       agentCompleted: false
+      # Asked, never run: enrolling requires execution approval, so this turn ends on its buttons.
       toolsNotCalled: [SubscribeToGreenCarePlan]
+      quickReplyIds: [approve_action, reject_action]
       textNotEmpty: true
       textNotContains: ["#INT#", "invoiceId", "InvoiceLines", "contractId"]
     judge:
@@ -66,7 +68,7 @@ turns:
       # already guaranteed structurally by toolsNotCalled above: nothing was opened, nothing billed.
       - "The response says the plan is active now, or that the first month has already been billed."
 
-  - say: "Yes, proceed"
+  - say: "Go ahead"
     expect:
       agent: ContractAgent
       toolsCalled: [SubscribeToGreenCarePlan]

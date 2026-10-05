@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Akka.Actor;
@@ -970,7 +971,7 @@ public static class Records
     /// <param name="Personality">Optional tone/character: formality, voice, domain-specific persona traits</param>
     /// <param name="Language">BCP 47 language code (e.g., "en-US", "it-IT")</param>
     /// <param name="Version">Prompt version string for tracking iteration history and regression detection</param>
-    /// <param name="AdditionalProperties">List of structured properties: Tools, GlobalPolicies, ErrorAnswers, FallbackMessage, etc</param>
+    /// <param name="AdditionalProperties">List of structured properties: Tools, GlobalPolicies, Messages, etc</param>
     /// <param name="ConsultMeFor">Optional: what falls to this agent, addressed to a colleague who might consult it</param>
     public record Prompt(
         string ID,
@@ -986,7 +987,7 @@ public static class Records
         string? ConsultMeFor = null)
     {
         /// <summary>
-        /// Gets additional property value (Tools, GlobalPolicies, ErrorAnswers, FallbackMessage, etc).
+        /// Gets additional property value (Tools, GlobalPolicies, Messages, etc).
         /// Throws KeyNotFoundException if property not found. Deserializes JsonElement to type T.
         /// </summary>
         public T GetAdditionalProperty<T>(string additionalPropertyName)
@@ -1001,6 +1002,16 @@ public static class Records
             }
             throw new KeyNotFoundException($"AdditionalProperty with key '{additionalPropertyName}' was not found in the prompt with id='{ID}'");
         }
+
+        /// <summary>
+        /// Gets a text that the framework says to the user in its own voice, from the prompt's
+        /// <c>Messages</c> section (see <see cref="Constants.Messages"/>).
+        /// </summary>
+        /// <param name="name">Which message.</param>
+        /// <returns>The authored text; empty when the prompt declares no such message.</returns>
+        public string GetMessage(string name)
+            => GetAdditionalPropertyOrDefault<Dictionary<string, string>>(Constants.PromptProperties.Messages, [])
+                .TryGetValue(name, out string? message) ? message : string.Empty;
 
         /// <summary>
         /// Gets an additional property, or <paramref name="defaultValue"/> when the prompt does not
@@ -1097,16 +1108,6 @@ public static class Records
         string Name,
         IReadOnlyDictionary<string, string>? Values = null);
 
-    /// <summary>
-    /// Error message template with named identifier.
-    /// Used to provide consistent, user-friendly error messages across the system.
-    /// </summary>
-    /// <param name="Name">Error identifier (e.g., "GenericError", "LLMServiceError")</param>
-    /// <param name="Content">Error message template (may contain placeholders</param>
-    public record ErrorAnswer(
-        string Name,
-        string Content);
-
     // ==========================================================================
     // TOOL CONFIGURATION RECORDS
     // ==========================================================================
@@ -1118,6 +1119,11 @@ public static class Records
     /// <param name="Name">Tool method name (must match actual method name in MorganaTool class)</param>
     /// <param name="Description">Tool description for LLM understanding</param>
     /// <param name="Parameters">List of tool parameter definitions</param>
+    /// <param name="RequiresExecutionApproval">
+    /// True when the tool changes something real and runs only once the user has approved that exact
+    /// call. Declared in agents.json; the approval itself is Microsoft.Extensions.AI's, through
+    /// <c>ApprovalRequiredAIFunction</c>.
+    /// </param>
     /// <param name="Reserved">
     /// True for the morgana.json base tool (Reply). Never set from configuration: a domain
     /// tool declaring this in agents.json has it forced back to false by MorganaAgentAdapter —
@@ -1129,7 +1135,8 @@ public static class Records
         string Name,
         string Description,
         IReadOnlyList<ToolParameter> Parameters,
-        bool Reserved = false);
+        bool Reserved = false,
+        bool RequiresExecutionApproval = false);
 
     /// <summary>
     /// Tool parameter: name (must match method param), description, Required flag. Scope: "context" (resolved by
@@ -1181,9 +1188,14 @@ public static class Records
     /// </summary>
     /// <param name="Closure">Offered when the turn answered the request and awaits nothing.</param>
     /// <param name="Escape">Appended to the actions that a turn offers, so the user is never trapped in them.</param>
+    /// <param name="Approval">
+    /// Offered when the turn asks to run a tool that needs the user's approval: the first approves it,
+    /// the second declines it. Pressing anything else or typing declines it too.
+    /// </param>
     public record ServiceButtons(
         [property: JsonPropertyName("Closure")] List<QuickReply> Closure,
-        [property: JsonPropertyName("Escape")] List<QuickReply> Escape);
+        [property: JsonPropertyName("Escape")] List<QuickReply> Escape,
+        [property: JsonPropertyName("Approval")] List<QuickReply>? Approval = null);
 
     /// <summary>
     /// How an agent closed its turn: the one structured decision beside its free text, recorded by the
@@ -1199,6 +1211,22 @@ public static class Records
         [property: JsonPropertyName("actions")] IReadOnlyList<ReplyAction> Actions,
         [property: JsonPropertyName("card")] RichCard? Card)
     {
+        /// <summary>Joins an action's tool and its number in the id of the button that offers it.</summary>
+        private const char ActionIdSeparator = '#';
+
+        /// <summary>
+        /// The tool that an action button leads to, read back from its id; null for a button that offers no
+        /// action of an agent's, such as the framework's own.
+        /// </summary>
+        /// <param name="quickReplyId">The id of a button that a turn delivered.</param>
+        public static string? ActionTool(string quickReplyId)
+        {
+            int separator = quickReplyId.LastIndexOf(ActionIdSeparator);
+            return separator > 0 && int.TryParse(quickReplyId[(separator + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out _)
+                ? quickReplyId[..separator]
+                : null;
+        }
+
         /// <summary>
         /// True when the turn ends waiting for the user: a typed answer or one of the actions that it offers.
         /// </summary>
@@ -1225,7 +1253,7 @@ public static class Records
 
             // Numbered per turn, so two actions leading to one tool stay two distinct buttons.
             if (Actions.Count > 0)
-                return ([.. Actions.Select((action, index) => new QuickReply($"{action.Tool}-{index + 1}", action.Label, action.Value)),
+                return ([.. Actions.Select((action, index) => new QuickReply($"{action.Tool}{ActionIdSeparator}{index + 1}", action.Label, action.Value)),
                          .. serviceButtons.Escape], false);
 
             return serviceButtons.Closure.Count > 0 ? ([.. serviceButtons.Closure], false) : (null, true);

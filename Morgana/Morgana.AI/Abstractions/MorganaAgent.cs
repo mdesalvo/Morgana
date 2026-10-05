@@ -21,12 +21,6 @@ namespace Morgana.AI.Abstractions;
 /// Extends <see cref="MorganaActor"/> with AI agent capabilities, session management,
 /// conversation context and inter-agent communication.
 /// </summary>
-/// <remarks>
-/// Providers (MorganaAIContextProvider, MorganaChatHistoryProvider) are singletons on AIAgent,
-/// shared across sessions. Per-session state in AgentSession (serialized by framework).
-/// CurrentSession set per-turn, single-threaded. OTel: morgana.agent span as child of TurnContext,
-/// TTFT event, tags: agent.ttft_ms, agent.response_preview, agent.is_completed.
-/// </remarks>
 public class MorganaAgent : MorganaActor
 {
     /// <summary>
@@ -41,6 +35,18 @@ public class MorganaAgent : MorganaActor
     /// Null before the first <see cref="ExecuteAgentAsync"/> call.
     /// </summary>
     protected AgentSession? aiAgentSession;
+
+    /// <summary>
+    /// The throwaway session a consultation is answered on, non-null only for that turn.
+    /// </summary>
+    private AgentSession? consultationSession;
+
+    /// <summary>
+    /// The active <see cref="AgentSession"/> for the current turn.
+    /// Exposed so that tool closures can pass it to provider calls (GetVariable, SetVariable, etc.).
+    /// Always non-null during a live agent invocation.
+    /// </summary>
+    public AgentSession? CurrentSession => consultationSession ?? aiAgentSession;
 
     /// <summary>
     /// Provider holding per-session variables and the shared-context write callback that
@@ -65,24 +71,6 @@ public class MorganaAgent : MorganaActor
     /// Logger scoped to this agent instance, used for turn-level diagnostics and tool tracing.
     /// </summary>
     protected readonly ILogger agentLogger;
-
-    /// <summary>
-    /// The throwaway session a consultation is answered on, non-null only for that turn.
-    /// </summary>
-    private AgentSession? consultationSession;
-
-    /// <summary>
-    /// The active <see cref="AgentSession"/> for the current turn.
-    /// Exposed so that tool closures can pass it to provider calls (GetVariable, SetVariable, etc.).
-    /// Always non-null during a live agent invocation.
-    /// </summary>
-    /// <remarks>
-    /// While a colleague is being answered this is the consultation's own session, not the agent's:
-    /// that turn's tools and the guard refusing a chained consultation, must all read the session
-    /// the turn is actually running on.
-    /// </remarks>
-    public AgentSession? CurrentSession
-        => consultationSession ?? aiAgentSession;
 
     /// <summary>
     /// Intent name handled by this agent, resolved from the mandatory
@@ -160,11 +148,6 @@ public class MorganaAgent : MorganaActor
     /// activated — can pick it up at the start of its next turn via
     /// <see cref="IConversationPersistenceService.LoadSharedVariablesAsync"/>.
     /// </summary>
-    /// <remarks>
-    /// <para>The persistence-based model writes once and lets each interested agent read on
-    /// demand at the start of its next turn. Agents that never become active in a conversation
-    /// pay zero cost; a write reaches an agent only if and when that agent actually runs.</para>
-    /// </remarks>
     /// <param name="key">Name of the shared variable.</param>
     /// <param name="value">Value to persist.</param>
     protected async Task OnSharedContextUpdate(string key, object value)
@@ -261,7 +244,32 @@ public class MorganaAgent : MorganaActor
 
             // Stamped server-side because the history of a conversation is reassembled by merging every
             // agent's own session chronologically: a message without a timestamp cannot be placed.
-            ChatMessage userMessage = new ChatMessage(ChatRole.User, req.Content!) { CreatedAt = DateTimeOffset.UtcNow };
+            // The buttons that let the user stay, leave or approve are the framework's, worded in morgana.json.
+            Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
+            Records.ServiceButtons serviceButtons = morganaPrompt.GetAdditionalPropertyOrDefault(
+                Constants.PromptProperties.ServiceButtons, new Records.ServiceButtons([], []));
+
+            // A tool still waiting for the user's approval is answered by this very message: approved only
+            // when it is the approval button, declined by anything else, which then reads as an ordinary
+            // request. Read from the stored history, so a turn resumed after a restart is answered alike.
+            List<AIContent> userContents = [new TextContent(req.Content!)];
+            List<ToolApprovalRequestContent> pendingApprovals = GetPendingApprovals(aiAgentSession);
+            if (pendingApprovals.Count > 0)
+            {
+                bool approved = serviceButtons.Approval is [QuickReply approveButton, ..]
+                                && string.Equals(req.Content?.Trim(), approveButton.Value, StringComparison.OrdinalIgnoreCase);
+                userContents.AddRange(pendingApprovals.Select(request => (AIContent)request.CreateResponse(approved)));
+
+                agentLogger.LogInformation(
+                    "Agent '{AgentIntent}' {Outcome} {Count} tool call(s) on the user's answer",
+                    AgentIntent, approved ? "runs the approved" : "declines", pendingApprovals.Count);
+            }
+
+            ChatMessage userMessage = new ChatMessage(ChatRole.User, userContents) { CreatedAt = DateTimeOffset.UtcNow };
+
+            // A press on a button leading to one of the agent's tools is already the user's consent to it,
+            // read before this message joins the history it is compared against.
+            string? pressedActionTool = PressedActionTool(aiAgentSession, req.Content);
 
             // A phrase that arrived while no agent was active is already saved as Morgana's own.
             // This agent keeps it because its model has to read it, marked as somebody else's so a
@@ -389,19 +397,40 @@ public class MorganaAgent : MorganaActor
 
             await RunModelAsync();
 
+            // A call that needs approval, to the very tool whose button opened this turn, was approved by
+            // that press: it runs now and the user is never asked to confirm the same thing twice.
+            List<ToolApprovalRequestContent> approvedByPress = [.. GetPendingApprovals(aiAgentSession)
+                .Where(request => request.ToolCall is FunctionCallContent call && call.Name == pressedActionTool)];
+            if (approvedByPress.Count > 0)
+            {
+                agentLogger.LogInformation(
+                    "Agent '{AgentIntent}' runs {Tool}: the user approved it by pressing its button", AgentIntent, pressedActionTool);
+
+                aiChatHistoryProvider.AppendMessage(aiAgentSession, new ChatMessage(ChatRole.User,
+                    [.. approvedByPress.Select(request => (AIContent)request.CreateResponse(true))]) { CreatedAt = DateTimeOffset.UtcNow });
+                await RunModelAsync();
+            }
+
+            // A turn that asks the user to approve a tool ends here, whatever the model wrote: running it
+            // again would only meet the same request still unanswered.
+            bool awaitsApproval = GetPendingApprovals(aiAgentSession).Count > 0;
+
             // A turn the user would receive as an empty bubble is run once more: the session already
             // holds whatever the first pass did, so the model picks up from there and writes its text.
-            if (string.IsNullOrWhiteSpace(fullResponse.ToString()))
+            if (string.IsNullOrWhiteSpace(fullResponse.ToString()) && !awaitsApproval)
             {
                 agentLogger.LogWarning("Agent '{AgentIntent}' ended its turn with no text: running it once more", AgentIntent);
                 await RunModelAsync();
             }
 
             // Still nothing to say: the turn has failed and the user is told so, rather than left facing silence.
-            if (string.IsNullOrWhiteSpace(fullResponse.ToString()))
+            if (string.IsNullOrWhiteSpace(fullResponse.ToString()) && !awaitsApproval)
                 throw new InvalidOperationException($"Agent '{AgentIntent}' produced no text in two passes");
 
+            // An approval asked with no word of the model's own is asked in Morgana's words.
             string llmResponseText = fullResponse.ToString().Trim();
+            if (llmResponseText.Length == 0)
+                llmResponseText = morganaPrompt.GetMessage(Constants.Messages.Approval);
 
             // How the turn closes, recorded by Reply whether the model called it or the framework closed
             // the turn on its behalf. A turn that still declares nothing is answered and ends.
@@ -409,13 +438,12 @@ public class MorganaAgent : MorganaActor
                                           ?? new Records.TurnReply(Records.AwaitedFromUser.Nothing, false, [], null);
             aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnReply);
 
-            // The buttons that let the user stay or leave are the framework's to add, worded in morgana.json.
-            Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
-            Records.ServiceButtons serviceButtons = morganaPrompt.GetAdditionalPropertyOrDefault(
-                Constants.PromptProperties.ServiceButtons, new Records.ServiceButtons([], []));
-
-            (List<QuickReply>? quickReplies, bool isCompleted) = turnReply.ToDelivery(serviceButtons);
-            RichCard? richCard = turnReply.Card;
+            // A turn waiting for an approval offers exactly the two answers to it; any other turn gets the
+            // buttons its closure calls for.
+            (List<QuickReply>? quickReplies, bool isCompleted) = awaitsApproval
+                ? (serviceButtons.Approval is { Count: > 0 } approvalButtons ? [.. approvalButtons] : null, false)
+                : turnReply.ToDelivery(serviceButtons);
+            RichCard? richCard = awaitsApproval ? null : turnReply.Card;
             bool hasQuickReplies = quickReplies is not null;
 
             agentLogger.LogInformation(
@@ -439,8 +467,17 @@ public class MorganaAgent : MorganaActor
             // actually carries text content.
             ChatMessage? finalAssistantMessage = aiChatHistoryProvider
                 .GetMessages(aiAgentSession)
+                .Skip(historyBaseline)
                 .LastOrDefault(m => m.Role == ChatRole.Assistant
                                      && m.Contents.OfType<TextContent>().Any(t => !string.IsNullOrWhiteSpace(t.Text)));
+
+            // Text that Morgana supplied for the model has no message of its own yet: it gets one, so the
+            // transcript read back on resume shows it with its buttons.
+            if (finalAssistantMessage is null && llmResponseText.Length > 0)
+            {
+                finalAssistantMessage = new ChatMessage(ChatRole.Assistant, llmResponseText) { CreatedAt = DateTimeOffset.UtcNow };
+                aiChatHistoryProvider.AppendMessage(aiAgentSession, finalAssistantMessage);
+            }
             if (finalAssistantMessage is not null)
             {
                 finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
@@ -613,10 +650,7 @@ public class MorganaAgent : MorganaActor
         agentLogger.LogError(failure.Failure.Cause, "Agent execution failed in {Name}", GetType().Name);
 
         Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
-        List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>(Constants.PromptProperties.ErrorAnswers);
-        Records.ErrorAnswer? genericError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "GenericError", StringComparison.OrdinalIgnoreCase));
-
-        failure.OriginalSender.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred.", true, null));
+        failure.OriginalSender.Tell(new Records.AgentResponse(morganaPrompt.GetMessage(Constants.Messages.GenericError), true, null));
     }
 
     /// <summary>
@@ -709,6 +743,47 @@ public class MorganaAgent : MorganaActor
             .Skip(historyBaseline)
             .SelectMany(m => m.Contents.OfType<FunctionCallContent>())
             .Select(c => c.Name));
+
+    /// <summary>
+    /// The tool that the user's message leads to when it is the press of an action button that the
+    /// agent's last turn offered; null for anything else, typed text included.
+    /// </summary>
+    /// <param name="session">Active agent session, read before the user's message joins it.</param>
+    /// <param name="userText">What the user sent: a pressed button sends its own value.</param>
+    protected string? PressedActionTool(AgentSession session, string? userText)
+    {
+        // The buttons that the last turn delivered, as it recorded them on its user-facing message.
+        object? recorded = null;
+        aiChatHistoryProvider.GetMessages(session)
+            .LastOrDefault(message => message.AdditionalProperties?.ContainsKey(Constants.MessageProperties.UserFacing) == true)?
+            .AdditionalProperties?.TryGetValue(Constants.MessageProperties.TurnQuickReplies, out recorded);
+        string? offered = recorded switch
+        {
+            string text => text,
+            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
+            _ => null
+        };
+        if (string.IsNullOrEmpty(offered) || string.IsNullOrWhiteSpace(userText))
+            return null;
+
+        List<QuickReply>? buttons = JsonSerializer.Deserialize<List<QuickReply>>(offered, Records.DefaultJsonSerializerOptions);
+        QuickReply? pressed = buttons?.FirstOrDefault(button =>
+            string.Equals(button.Value, userText.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        return pressed is null ? null : Records.TurnReply.ActionTool(pressed.Id);
+    }
+
+    /// <summary>
+    /// The approval requests in the agent's history that no answer of the user's has met yet.
+    /// </summary>
+    /// <param name="session">Active agent session.</param>
+    protected List<ToolApprovalRequestContent> GetPendingApprovals(AgentSession session)
+    {
+        List<AIContent> contents = [.. aiChatHistoryProvider.GetMessages(session).SelectMany(message => message.Contents)];
+        HashSet<string> answered = [.. contents.OfType<ToolApprovalResponseContent>().Select(response => response.RequestId)];
+
+        return [.. contents.OfType<ToolApprovalRequestContent>().Where(request => !answered.Contains(request.RequestId))];
+    }
 
     /// <summary>
     /// Reads the closure that the Reply tool recorded on the current turn.

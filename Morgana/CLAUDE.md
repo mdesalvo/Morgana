@@ -95,7 +95,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
-| `ChatClients/` | `IChatClient` decorators: `TierDefaultsChatClient`, `DustAccountingChatClient`, `MorganaAnthropicClient`, `TurnClosingChatClient` (closes a turn the model wrote without `Reply`: a forced tool call, structured output where the provider cannot force one) |
+| `ChatClients/` | `IChatClient` decorators: `TierDefaultsChatClient`, `DustAccountingChatClient`, `MorganaAnthropicClient`, `ApprovalTurnChatClient` (drops `Reply` from a response asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model wrote without `Reply`: a forced tool call, structured output where the provider cannot force one) |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
 | `Providers/` | `MorganaAIContextProvider` (context variables plus the shared registry), `MorganaChatHistoryProvider` (stores the whole history, hands the model the current episode only — since the user last left — with earlier tool results marked) |
 | `SessionStores/` | `MorganaHostedAgentSessionStore` — which conversation an inbound A2A request is served on |
@@ -144,7 +144,7 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
    The wait here is a budget on **silence**, not on the turn: every chunk renews it and so does
    `AgentStillWorking` on updates carrying no text — without it a consultation reads as a dead agent
 5. Back to **Idle** — the response is forwarded through `IChannelService`, followed by Morgana's own
-   closing line (`AgentExitMessage`) when an agent signalled completion
+   closing line (the `AgentExit` message) when an agent signalled completion
 
 ### REST API
 
@@ -271,7 +271,10 @@ tier) and `GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
 3. **Agent class** extending `MorganaAgent`, with `[HandlesIntent("x")]` **and** `[RequiresLLMTier]`
    (mandatory, validated at startup). The constructor calls `MorganaAgentAdapter.CreateAgent()`
 4. **Tool class** (optional) extending `MorganaTool`, with `[ProvidesToolForIntent("x")]`. Method
-   names must match the JSON `Name` exactly. Constructor `(ILogger, Func<ToolContext>)`
+   names must match the JSON `Name` exactly. Constructor `(ILogger, Func<ToolContext>)`. A tool that
+   changes something real declares `"RequiresExecutionApproval": true`: it runs only once the user has
+   approved that exact call, through MEAI's own `ApprovalRequiredAIFunction`. The framework offers the
+   approval buttons; pressing an action button that leads to the tool is that approval already
 5. **Or MCP** — `[UsesMCPServer(...)]`, repeatable, tools discovered at runtime
 6. **Colleagues** — `[ConsultsAgent("otherintent")]`, once each, validated at startup
 7. **Package as a plugin DLL** into `plugins/`
@@ -337,6 +340,10 @@ from the array that it lives in**, never from a field inside it:
 - **`ToolResults`** — the texts that the framework's own tools return to the model (`Reply`, the
   context wrapper, the consultation guards and fallbacks), fetched by name with their values as
   `((…))` placeholders. A domain tool's return is the domain's own and Morgana never authors it.
+- **`ServiceButtons`** — the buttons the framework adds to let the user stay, leave or approve, as data.
+- **`Messages`** — on any framework prompt, what Morgana says to the user in her own voice (the agent
+  exit, the approval question, the errors, the presenter's fallbacks, the classifier's answers), each
+  read by name through `Prompt.GetMessage`.
 
 Every injection opens with a **bracketed all-caps label at the head of its first line** — the idiom
 the prompt layers already use for `[TARGET]`. A template arrives spliced into somebody else's text,

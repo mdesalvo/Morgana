@@ -32,6 +32,13 @@ public interface IPromptComposerService
     Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false);
 
     /// <summary>
+    /// Produces the description that a tool presents to the model: the authored one, closed by the
+    /// framework's guidance when the tool requires execution approval.
+    /// </summary>
+    /// <param name="toolDefinition">The tool definition from <c>morgana.json</c> or <c>agents.json</c>.</param>
+    Task<string> ComposeToolDescriptionAsync(Records.ToolDefinition toolDefinition);
+
+    /// <summary>
     /// Produces the description under which a colleague is offered as a callable function: the
     /// colleague's own statement of what falls to it (its <c>ConsultMeFor</c>, carried on the card as
     /// its description), with nothing of the framework's added to it.

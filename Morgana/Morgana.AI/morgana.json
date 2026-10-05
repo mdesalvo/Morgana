@@ -63,16 +63,10 @@
             {
               "Name": "EarlierToolResult",
               "Description": "[RESULT FROM AN EARLIER TURN — it shows things as they stood then]\n((result))"
-            }
-          ],
-          "ErrorAnswers": [
-            {
-              "Name": "GenericError",
-              "Content": "I'm sorry, something went wrong during the preparation of this potion and I couldn't complete it :("
             },
             {
-              "Name": "LLMServiceError",
-              "Content": "I'm sorry, the magic sphere refused my spell :("
+              "Name": "ExecutionApprovalGuidance",
+              "Description": "[THE USER APPROVES THIS TOOL ITSELF]\nCalling this tool does not run it: the user is shown this very call and approves or declines it, so never ask for their go-ahead yourself. Call it as soon as the user asks for what it does, with your text saying what it will do."
             }
           ]
         },
@@ -107,9 +101,6 @@
           ]
         },
         {
-          "AgentExitMessage": "{0} has completed its spell and the circle returns to me. What else can I conjure for you?"
-        },
-        {
           "ServiceButtons": {
             "Closure": [
               {
@@ -135,6 +126,18 @@
                 "label": "✨ We're done, thanks",
                 "value": "We're done, thanks",
                 "termination": true
+              }
+            ],
+            "Approval": [
+              {
+                "id": "approve_action",
+                "label": "✅ Go ahead",
+                "value": "Go ahead"
+              },
+              {
+                "id": "reject_action",
+                "label": "✋ Not now",
+                "value": "Not now"
               }
             ]
           }
@@ -190,6 +193,14 @@
               "Content": "The agent for '((agent))' could not answer. Proceed without it."
             }
           ]
+        },
+        {
+          "Messages": {
+            "AgentExit": "{0} has completed its spell and the circle returns to me. What else can I conjure for you?",
+            "Approval": "Shall I go ahead?",
+            "GenericError": "I'm sorry, something went wrong during the preparation of this potion and I couldn't complete it :(",
+            "LLMServiceError": "I'm sorry, the magic sphere refused my spell :("
+          }
         }
       ]
     },
@@ -204,10 +215,10 @@
       "Version": "1",
       "AdditionalProperties": [
         {
-          "FallbackMessage": "✨ Welcome! I am Morgana, your magical digital assistant.\n\nTell me traveler, what brings you to me?"
-        },
-        {
-          "NoAgentsMessage": "✨ Welcome! I am Morgana, your magical digital assistant.\n\nAt the moment I don't have spells to help you, but my creator can add them soon!"
+          "Messages": {
+            "Fallback": "✨ Welcome! I am Morgana, your magical digital assistant.\n\nTell me traveler, what brings you to me?",
+            "NoAgents": "✨ Welcome! I am Morgana, your magical digital assistant.\n\nAt the moment I don't have spells to help you, but my creator can add them soon!"
+          }
         }
       ]
     },
@@ -244,13 +255,13 @@
       "Version": "1",
       "AdditionalProperties": [
         {
-          "UnrecognizedIntentError": "The shadows remain silent. Your words lack the catalysts needed to awaken the correct incantation within these pages."
-        },
-        {
-          "DisambiguationMessage": "You've lit more than one candle with those words andI can't tell which lights your way. Which is it?"
-        },
-        {
           "ComplementIntentDescription": "any other topic not expressly intercepted by known intents"
+        },
+        {
+          "Messages": {
+            "UnrecognizedIntent": "The shadows remain silent. Your words lack the catalysts needed to awaken the correct incantation within these pages.",
+            "Disambiguation": "You've lit more than one candle with those words andI can't tell which lights your way. Which is it?"
+          }
         }
       ]
     }

@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
+using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Adapters;
 
@@ -57,6 +58,11 @@ public class MorganaToolAdapter
     private readonly ILogger? logger;
 
     /// <summary>
+    /// Composes the description that each tool presents. Null presents every tool exactly as authored.
+    /// </summary>
+    private readonly IPromptComposerService? promptComposerService;
+
+    /// <summary>
     /// Initializes an adapter for tools declaring no context-scoped parameter.
     /// </summary>
     public MorganaToolAdapter() { }
@@ -66,10 +72,12 @@ public class MorganaToolAdapter
     /// </summary>
     /// <param name="logger">Logger receiving the observable context-access lines</param>
     /// <param name="toolContextFactory">Supplies the in-flight session at each tool invocation</param>
-    public MorganaToolAdapter(ILogger logger, Func<MorganaTool.ToolContext> toolContextFactory)
+    /// <param name="promptComposerService">Composes the tool descriptions; null presents them as authored</param>
+    public MorganaToolAdapter(ILogger logger, Func<MorganaTool.ToolContext> toolContextFactory, IPromptComposerService? promptComposerService = null)
     {
         this.logger = logger;
         this.toolContextFactory = toolContextFactory;
+        this.promptComposerService = promptComposerService;
     }
 
     /// <summary>
@@ -104,13 +112,13 @@ public class MorganaToolAdapter
 
     /// <summary>
     /// Creates the AIFunction the model calls for a registered tool: its authored description, its
-    /// parameter descriptions in the JSON schema and, where it declares context-scoped parameters,
-    /// the session resolution of those parameters around the invocation.
+    /// parameter descriptions in the JSON schema, the session resolution of its context-scoped
+    /// parameters and, where it requires execution approval, the user's approval before it runs.
     /// </summary>
     /// <param name="toolName">Name of the tool to create function for</param>
     /// <returns>AIFunction instance ready for agent use</returns>
     /// <exception cref="InvalidOperationException">Thrown if tool or definition not found or if a context-scoped tool reaches an adapter holding no session</exception>
-    public Task<AIFunction> CreateFunctionAsync(string toolName)
+    public async Task<AIFunction> CreateFunctionAsync(string toolName)
     {
         Delegate implementation = ResolveTool(toolName);
         Records.ToolDefinition definition = toolDefinitions.TryGetValue(toolName, out Records.ToolDefinition? def)
@@ -128,7 +136,9 @@ public class MorganaToolAdapter
             new AIFunctionFactoryOptions
             {
                 Name = definition.Name,
-                Description = definition.Description,
+                Description = promptComposerService is null
+                    ? definition.Description
+                    : await promptComposerService.ComposeToolDescriptionAsync(definition),
                 SerializerOptions = ToolSerializerOptions,
 
                 // A framework tool's named result reaches the tool loop as itself, to be given its authored
@@ -153,17 +163,22 @@ public class MorganaToolAdapter
             .Where(p => string.Equals(p.Scope?.Trim(), Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
             .Select(p => p.Name)];
 
-        // A tool resolving nothing from the session reaches the model exactly as declared.
-        if (contextParameters.Length == 0)
-            return Task.FromResult(function);
-
         // A context-scoped tool on an adapter with no session has nowhere to resolve its inputs from:
         // a wiring fault, refused at agent creation rather than at the first call.
-        if (toolContextFactory is null || logger is null)
+        if (contextParameters.Length > 0 && (toolContextFactory is null || logger is null))
             throw new InvalidOperationException(
                 $"Tool '{toolName}' declares context-scoped parameters but its adapter holds no session to resolve them from");
 
-        return Task.FromResult<AIFunction>(new ContextResolvingFunction(function, contextParameters, toolContextFactory, logger));
+        // A tool resolving nothing from the session reaches the model exactly as declared.
+        AIFunction resolvedFunction = contextParameters.Length == 0
+            ? function
+            : new ContextResolvingFunction(function, contextParameters, toolContextFactory!, logger!);
+
+        // A tool that changes something real waits for the user's approval of the exact call before it
+        // runs. Outermost, so nothing of the call is resolved or stored until the user has approved it.
+        return definition.RequiresExecutionApproval
+            ? new ApprovalRequiredAIFunction(resolvedFunction)
+            : resolvedFunction;
     }
 
     /// <summary>

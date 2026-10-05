@@ -310,7 +310,9 @@ public class MorganaAgentAdapter
         // The tool loop the agent runs on. Reply's argument errors go back to the model in full, so a
         // card breaking its schema is repaired on the next call rather than lost; every other tool
         // fails as tersely as before, keeping a domain tool's internals out of the model's sight.
-        FunctionInvokingChatClient toolLoopChatClient = new FunctionInvokingChatClient(agentChatClient)
+        // Below the loop, a response asking for the user's approval loses its Reply: that turn is the
+        // framework's to close, with the approval buttons.
+        FunctionInvokingChatClient toolLoopChatClient = new FunctionInvokingChatClient(new ApprovalTurnChatClient(agentChatClient))
         {
             FunctionInvoker = InvokeToolAsync
         };
@@ -457,7 +459,7 @@ public class MorganaAgentAdapter
     {
         // The adapter resolves every context-scoped parameter from the session the factory hands it
         // at invocation, so the model never looks a value up nor stores one itself.
-        MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(logger, toolContextFactory);
+        MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(logger, toolContextFactory, promptComposerService);
 
         // Split the merged set back into base (morgana.json, the `morganaTools` field) vs
         // intent-specific (agents.json). Compare by Name only: the incoming `agentTools` array

@@ -10,7 +10,7 @@ namespace Morgana.AI.Services;
 /// <summary>
 /// IPresenterService implementation: generates presentation via LLM or falls back to config.
 /// Caches per-channel (same intents + capabilities = same outcome) and never throws — LLM
-/// failures route to a deterministic fallback (FallbackMessage + intent-derived quick replies).
+/// failures route to a deterministic fallback (the Fallback message + intent-derived quick replies).
 /// </summary>
 public class LLMPresenterService : IPresenterService
 {
@@ -22,8 +22,8 @@ public class LLMPresenterService : IPresenterService
 
     /// <summary>
     /// Source of the <c>Presentation</c> prompt: the message template interpolated with
-    /// <c>((intents))</c>, plus the <c>FallbackMessage</c> and <c>NoAgentsMessage</c>
-    /// additional properties the two non-LLM paths return verbatim.
+    /// <c>((intents))</c>, plus the <c>Fallback</c> and <c>NoAgents</c> messages that the two
+    /// non-LLM paths return verbatim.
     /// </summary>
     private readonly IPromptResolverService promptResolverService;
 
@@ -54,7 +54,7 @@ public class LLMPresenterService : IPresenterService
     private readonly ConcurrentDictionary<string, Lazy<Task<Records.PresentationResult>>> cache = new();
 
     /// <param name="llmService">LLM service used to generate the presentation; always runs on the cheapest configured tier.</param>
-    /// <param name="promptResolverService">Prompt resolver used to load the <c>Presentation</c> prompt (message template, <c>FallbackMessage</c>, <c>NoAgentsMessage</c>).</param>
+    /// <param name="promptResolverService">Prompt resolver used to load the <c>Presentation</c> prompt (message template, <c>Fallback</c> and <c>NoAgents</c> messages).</param>
     /// <param name="channelMetadataStore">Resolves the originating channel's name/capabilities, so callers only pass conversationId.</param>
     /// <param name="channelAdapter">Same capability-driven degradation chain any outbound message goes through.</param>
     /// <param name="logger">Logger for generation, cache-miss and fallback diagnostics.</param>
@@ -99,7 +99,7 @@ public class LLMPresenterService : IPresenterService
     /// Generates the initial presentation and runs it through the canonical adaptation chain so that
     /// the cached value is exactly what a real outbound send would produce for this channel.
     /// </summary>
-    /// <param name="displayableIntents">Intents to turn into quick replies; an empty list yields the prompt's <c>NoAgentsMessage</c> and no buttons.</param>
+    /// <param name="displayableIntents">Intents to turn into quick replies; an empty list yields the prompt's <c>NoAgents</c> message and no buttons.</param>
     /// <param name="channelCapabilities">Feature budget of the originating channel, driving the degradation pass.</param>
     /// <param name="channelName">Cache key and channel identity, also used to synthesise the adapter's placeholder conversation id.</param>
     /// <returns>The presentation already degraded to what this channel can actually render.</returns>
@@ -115,7 +115,7 @@ public class LLMPresenterService : IPresenterService
         // Morgana must always present herself.
         Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Presentation);
         Records.PresentationResult presentationResult = displayableIntents.Count == 0
-            ? new Records.PresentationResult(presentationPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.NoAgentsMessage), [])
+            ? new Records.PresentationResult(presentationPrompt.GetMessage(Constants.Messages.NoAgents), [])
             : await GenerateMessageAsync(presentationPrompt, displayableIntents);
 
         // Capability-driven degradation with caching of the outcome: subsequent conversations on this channel pay zero LLM cost.
@@ -186,12 +186,12 @@ public class LLMPresenterService : IPresenterService
     }
 
     /// <summary>
-    /// Builds a presentation purely from configuration: the static <c>FallbackMessage</c> from
+    /// Builds a presentation purely from configuration: the static <c>Fallback</c> message from
     /// the Presentation prompt, plus one quick reply per displayable intent derived from its
     /// label and default value. This path makes no LLM call and cannot fail — it's the safety net
     /// that lets the service guarantee its never-throw contract.
     /// </summary>
-    /// <param name="presentationPrompt">Resolved <c>Presentation</c> prompt, read here only for its <c>FallbackMessage</c> additional property.</param>
+    /// <param name="presentationPrompt">Resolved <c>Presentation</c> prompt, read here only for its <c>Fallback</c> message.</param>
     /// <param name="displayableIntents">One quick reply is derived per intent from its <c>Label</c> and <c>DefaultValue</c>.</param>
     /// <returns>The presentation a user sees when no model wrote one.</returns>
     private Records.PresentationResult BuildFallbackMessage(
@@ -200,7 +200,7 @@ public class LLMPresenterService : IPresenterService
     {
         // The greeting authored for exactly this case: a real welcome somebody wrote in morgana.json,
         // never an error string, because the user is opening a conversation rather than meeting a fault.
-        string fallbackMessage = presentationPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.FallbackMessage);
+        string fallbackMessage = presentationPrompt.GetMessage(Constants.Messages.Fallback);
 
         // One quick reply per intent. Label falls back to the intent name; value falls back to a
         // generic "Help me with X" so the button always carries a usable payload.
