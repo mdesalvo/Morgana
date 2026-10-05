@@ -19,6 +19,6 @@ turns:
       toolsCalled: [SetTurnContinuation]
       noStandaloneEscapeOptions: true
       textNotEmpty: true
-      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
+      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache"]
     judge:
       - "The response either asks the user which invoice they mean, or presents specific invoices to choose from."

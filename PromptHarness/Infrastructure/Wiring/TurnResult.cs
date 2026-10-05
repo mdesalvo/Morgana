@@ -3,26 +3,17 @@ using Morgana.Contracts;
 
 namespace PromptHarness.Infrastructure.Wiring;
 
-/// <summary>How a turn touched one context variable.</summary>
+/// <summary>How the framework resolved one context-scoped parameter of a tool the turn called.</summary>
 public enum ContextOperation
 {
-    /// <summary><c>GetContextVariable</c> found the variable.</summary>
+    /// <summary>The model omitted the value and the session held it.</summary>
     Hit,
 
-    /// <summary><c>GetContextVariable</c> did not find the variable.</summary>
+    /// <summary>The model omitted the value and the session lacked it: the tool did not run.</summary>
     Miss,
 
-    /// <summary><c>SetContextVariable</c> wrote the variable.</summary>
-    Set,
-
-    /// <summary>
-    /// The variable was handed to the model directly in the per-turn <c>HeldContextDeclaration</c>
-    /// injection (name and value), so no <c>GetContextVariable</c> call happened — there was nothing
-    /// left to look up. The proof of hydration for an already-held variable, replacing <c>Hit</c> in
-    /// that case: a follow-up agent, or a later turn of the same agent, reads its held variables from
-    /// the declaration, not from a tool call.
-    /// </summary>
-    Declared
+    /// <summary>The model passed the value, which was stored.</summary>
+    Set
 }
 
 /// <summary>A single context-variable access observed on a turn, in the order it happened.</summary>
@@ -100,11 +91,11 @@ public sealed record TurnResult(
     /// <summary>Never null even when the caller didn't ask for cumulative tracking — see the parameter's own remarks.</summary>
     public IReadOnlyList<string> Cumulative => CumulativeLogLines ?? [];
 
-    /// <summary>Names read via <c>GetContextVariable</c>, whether the read hit or missed.</summary>
+    /// <summary>Names read from the session, whether the read hit or missed.</summary>
     public IReadOnlyList<string> ContextReads
         => [.. ContextAccesses.Where(a => a.Operation != ContextOperation.Set).Select(a => a.VariableName)];
 
-    /// <summary>Names written via <c>SetContextVariable</c>.</summary>
+    /// <summary>Names the model passed and the framework stored.</summary>
     public IReadOnlyList<string> ContextWrites
         => [.. ContextAccesses.Where(a => a.Operation == ContextOperation.Set).Select(a => a.VariableName)];
 

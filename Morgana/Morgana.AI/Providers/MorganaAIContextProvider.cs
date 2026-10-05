@@ -3,7 +3,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
-using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Providers;
 
@@ -14,30 +13,8 @@ namespace Morgana.AI.Providers;
 /// </summary>
 public class MorganaAIContextProvider : AIContextProvider
 {
-    /// <summary>
-    /// Reserved keys the framework writes into the same dictionary to carry a turn's presentation
-    /// decisions (drained by <c>MorganaAgent</c> at the end of every turn) and its peer-consultation
-    /// bookkeeping (see <c>MorganaAgentAdapter</c>). They are never declared to the model: naming a
-    /// stale one would invite the next turn to re-read a card already rendered and consumed.
-    /// </summary>
-    private static readonly ImmutableHashSet<string> EphemeralVariableNames =
-        [
-            Constants.ContextKeys.TurnContinuation,
-            Constants.ContextKeys.QuickReplies,
-            Constants.ContextKeys.RichCard,
-            Constants.ContextKeys.ServingConsultation,
-            Constants.ContextKeys.ConsultationRounds
-        ];
-
     /// <summary>Logger for provider-level diagnostics.</summary>
     private readonly ILogger logger;
-
-    /// <summary>
-    /// Assembles the per-turn declaration naming the variables this session holds. Returns
-    /// <c>null</c> when nothing should be injected — no variables held, or no template declared by
-    /// the prompt layer — in which case behaviour is unchanged.
-    /// </summary>
-    private readonly IPromptComposerService? promptComposerService;
 
     /// <summary>
     /// Names of variables subject to cross-agent persistence in the conversation-scoped
@@ -77,19 +54,13 @@ public class MorganaAIContextProvider : AIContextProvider
     /// JSON serialization options for state persistence.
     /// Defaults to <c>AgentAbstractionsJsonUtilities.DefaultOptions</c>.
     /// </param>
-    /// <param name="promptComposerService">
-    /// Composes the per-turn held-context declaration. Left null,
-    /// <see cref="ProvideAIContextAsync"/> injects nothing.
-    /// </param>
     public MorganaAIContextProvider(
         ILogger logger,
         IEnumerable<string>? sharedVariableNames = null,
-        JsonSerializerOptions? jsonSerializerOptions = null,
-        IPromptComposerService? promptComposerService = null)
+        JsonSerializerOptions? jsonSerializerOptions = null)
     {
         this.logger = logger;
         this.sharedVariableNames = [.. sharedVariableNames ?? []];
-        this.promptComposerService = promptComposerService;
 
         sessionState = new ProviderSessionState<MorganaContextState>(
             stateInitializer: _ => new MorganaContextState(),
@@ -188,42 +159,6 @@ public class MorganaAIContextProvider : AIContextProvider
     // =========================================================================
     // AIContextProvider overrides
     // =========================================================================
-
-    /// <summary>
-    /// Per-turn injection: hands the model the context variables the session holds, name and value,
-    /// ordinal-sorted. Critical for agents activated mid-conversation on empty per-agent history:
-    /// hydrated shared variables from registry are invisible in history. Empty session → no injection.
-    /// </summary>
-    protected override async ValueTask<AIContext> ProvideAIContextAsync(
-        InvokingContext context,
-        CancellationToken cancellationToken = default)
-    {
-        if (promptComposerService is null)
-            return new AIContext();
-
-        MorganaContextState contextState = sessionState.GetOrInitializeState(context.Session);
-
-        // Strip the framework's own ephemeral keys (turn_continuation, quick_replies, rich_card) —
-        // they are not inputs to resolve, never something the model should be told it "holds". The
-        // SortedDictionary keeps keys in ordinal order so the declaration text is byte-identical
-        // across turns whenever the held set itself doesn't change (keeps the composed prompt stable).
-        SortedDictionary<string, object> heldVariables = new SortedDictionary<string, object>(
-            contextState.Variables
-                .Where(kvp => !EphemeralVariableNames.Contains(kvp.Key))
-                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
-            StringComparer.Ordinal);
-
-        string? declaration = await promptComposerService.ComposeHeldContextDeclarationAsync(heldVariables);
-
-        if (declaration is null)
-            return new AIContext();
-
-        logger.LogInformation(
-            Constants.ObservableLogs.DeclaredContext,
-            Constants.ObservableLogs.ContextProviderName, string.Join(", ", heldVariables.Keys));
-
-        return new AIContext { Instructions = declaration };
-    }
 
     /// <summary>
     /// Called AFTER each agent invocation. Override to inspect response messages and apply context updates.

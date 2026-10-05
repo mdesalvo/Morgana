@@ -196,26 +196,8 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
             ChatOptions clonedChatOptions = chatOptions.Clone();
             clonedChatOptions.Instructions = null;
 
-            // The per-turn held-context declaration (marked with Constants.Markers.DynamicInstructions) rides at
-            // the tail of Instructions. Split it off so only the stable framework+domain prefix is
-            // cached — otherwise every turn's declaration change would bust the whole prompt's cache.
-            int markerIndex = chatOptions.Instructions.IndexOf(
-                Constants.Markers.DynamicInstructions, StringComparison.Ordinal);
-
-            // No marker means no held-context declaration was injected this turn (empty session) —
-            // the whole string is the static prefix, same as before this split existed.
-            string staticPrefix = markerIndex < 0 ? chatOptions.Instructions : chatOptions.Instructions[..markerIndex];
-            TextContent staticContent = new TextContent(staticPrefix).WithCacheControl(Ttl.Ttl1h);
-            List<AIContent> systemContents = [staticContent];
-
-            if (markerIndex >= 0)
-            {
-                // Deliberately no cache_control here: Anthropic caches everything up to and including
-                // a marked block, so a second, unmarked block just rides along uncached — exactly what
-                // we want for text that changes every turn.
-                string dynamicTail = chatOptions.Instructions[(markerIndex + Constants.Markers.DynamicInstructions.Length)..];
-                systemContents.Add(new TextContent(dynamicTail));
-            }
+            // The agent's whole system prompt is stable for its life, so all of it is cached.
+            List<AIContent> systemContents = [new TextContent(chatOptions.Instructions).WithCacheControl(Ttl.Ttl1h)];
 
             chatMessages.Insert(0, new ChatMessage(ChatRole.System, systemContents));
 

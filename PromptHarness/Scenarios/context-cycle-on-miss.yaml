@@ -1,8 +1,9 @@
 id: context-cycle-on-miss
 description: >-
-  The full context cycle when the variable is not there yet: read before asking, ask in bare prose,
-  write on the answer, then use the domain tool. This is the load-bearing scenario of the whole
-  suite — if it regresses, context handling has regressed.
+  The full context cycle when the variable is not there yet: the agent calls its tool, the framework
+  finds no customer code and keeps the tool from running, the agent asks in bare prose and the code
+  the user types is passed to the tool, stored and used. This is the load-bearing scenario of the
+  whole suite — if it regresses, context handling has regressed.
 runs: 5
 minPasses: 5
 
@@ -11,18 +12,17 @@ turns:
     expect:
       agent: BillingAgent
       agentCompleted: false
-      # GetContextVariable must come first: asking the user before looking is the regression.
-      toolsCalledFirst: [GetContextVariable]
-      contextReads: [customerCode]
+      # The tool comes first: asking the user before the framework has reported the value missing
+      # is the regression.
+      toolsCalledFirst: [GetInvoices]
+      contextReads: [Miss:customerCode]
       noContextWrites: true
-      contextVocabulary: [customerCode]
       toolsCalled: [SetTurnContinuation]
-      toolsNotCalled: [GetInvoices]
       # Awaiting an operand the user must type: no buttons, no escape options.
       quickReplies: none
       richCard: absent
       textNotEmpty: true
-      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
+      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache"]
     judge:
       - "The response asks the user for an identifier or customer code."
     judgeNot:
@@ -32,8 +32,7 @@ turns:
     expect:
       agent: BillingAgent
       contextWrites: [customerCode]
-      contextVocabulary: [customerCode]
-      toolsCalled: [SetContextVariable, GetInvoices]
+      toolsCalled: [GetInvoices]
       richCard: present
       textNotEmpty: true
-      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
+      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache"]

@@ -449,10 +449,8 @@ public sealed class ToolDraft
     public string? Name { get; set; }
 
     /// <summary>
-    /// What the tool does, read by the model when it weighs whether to call it. The framework
-    /// splices <c>ToolDescriptionContextGuidance</c> onto this description when the tool declares
-    /// at least one context-scoped parameter — so what is authored here is only half of what the
-    /// model finally reads.
+    /// What the tool does, read by the model when it weighs whether to call it, exactly as written
+    /// here: a context-scoped parameter is resolved by the framework without a word added to it.
     /// </summary>
     public string? Description { get; set; }
 

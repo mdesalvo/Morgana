@@ -274,14 +274,14 @@ tier) and `GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
 
 ## Tool System
 
-Every agent gets the **base tools** from `morgana.json` (`GetContextVariable`, `SetContextVariable`,
-`SetTurnContinuation`, `SetQuickReplies`, `SetRichCard`) plus its domain tools.
+Every agent gets the **base tools** from `morgana.json` (`SetTurnContinuation`, `SetQuickReplies`,
+`SetRichCard`) plus its domain tools.
 
-A parameter resolving an *input* declares a `Scope`: `context` (looked up before being asked) or
-`request` (asked of the user). A parameter carrying a value the model itself authors declares none.
-**Neither scope carries a parameter-level template** — the lookup-before-asking rule lives in P0 and
-in `ToolDescriptionContextGuidance` and a per-parameter restatement is the only form of it paid on
-every round trip. `Scope` still decides whether the *tool* gets its template.
+A parameter resolving an *input* declares a `Scope`: `context` or `request` (asked of the user). A
+parameter carrying a value the model itself authors declares none. **A `context` parameter is the
+framework's, not the model's**: `MorganaToolAdapter` drops it from the schema's required list, stores
+a value the model passes, reads one it omits from the session and keeps the tool from running when
+nobody holds it. No prose tells the model any of this beyond one sentence of `ToolUsage`.
 
 Parameter descriptions reach the model **only** through the JSON schema, via
 `AIJsonSchemaCreateOptions.ParameterDescriptionProvider`. MCP tools never pass through
@@ -319,28 +319,20 @@ prompt**: it is the one section whose reader is another agent and it travels out
 The `Morgana` prompt's `AdditionalProperties` carry two sibling arrays and **which of the two an
 entry is follows from the array it lives in**, never from a field inside it:
 
-- **`GlobalPolicies`** — P0-P8, rendered into every agent's prompt in `Priority` order:
-  ContextHandling, QuickReplyDoctrine, TurnContinuation, SessionContinuation, ToolUsage,
+- **`GlobalPolicies`** — P1-P8, rendered into every agent's prompt in `Priority` order:
+  QuickReplyDoctrine, TurnContinuation, SessionContinuation, ToolUsage,
   ToolGrounding, MandatoryTextualResponse, RichCardUsage, PeerConsultation. `QuickReplyDoctrine` (P1)
   is the master rule the other quick-reply policies instantiate. `PeerConsultation` (P8) is the
   **only conditionally rendered** one — an agent outside the A2A topology never pays for it — and
   sits last so it names the policies it suspends instead of forward-referencing them.
 - **`Injections`** — templates, not rules: prose with a single splice site each, never rendered among
   the policies where they would instruct against nothing. No `Priority`: each is fetched by name.
-  `ToolDescriptionContextGuidance` (into a tool's own description), `HeldContextDeclaration` (per
-  turn, the variables the session holds — the one entry carrying a *fact* rather than a rule),
   `ColleaguesDeclaration` (closing a peer-capable agent's instructions),
   `PeerConsultationDeclaration` and `PeerConsultationGuardrail` (in front of a colleague's question).
 
 Every injection opens with a **bracketed all-caps label at the head of its first line** — the idiom
 the prompt layers already use for `[TARGET]`. A template arrives spliced into somebody else's text,
-so where it begins has to be visible without being read. What may share that line is the block's own
-**datum** (`((context_parameters))`, `((held_variables))`); prose and anything of any length go under
-the label.
-
-The splice sites form a **ladder**: a parameter description is read once the model is already
-invoking the tool, a tool description when it weighs the tool, the per-turn injection before any tool
-is weighed at all — which is where an agent activated mid-conversation would otherwise fail.
+so where it begins has to be visible without being read. Everything else goes under the label.
 
 The other framework prompts: **Classifier** (JSON `{intents:[{intent,confidence}]}`, ranked; owns the
 `other` complement, which no domain declares), **Guard** (`{compliant, violation}`),

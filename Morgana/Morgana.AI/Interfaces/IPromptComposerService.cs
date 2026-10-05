@@ -1,9 +1,9 @@
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
-/// Assembles every piece of text destined for a domain agent's model: the composed system prompt
-/// (framework layer + domain layer, fenced), the tool descriptions and the per-turn declaration of
-/// held context variables. Sibling of <see cref="IPromptResolverService"/> — that one abstracts
+/// Assembles every piece of framework text destined for a domain agent's model: the composed system
+/// prompt (framework layer + domain layer, fenced), the colleagues it may consult and the question a
+/// colleague puts to it. Sibling of <see cref="IPromptResolverService"/> — that one abstracts
 /// <em>where prompts come from</em>, this one abstracts <em>how they are assembled into what the
 /// model reads</em>.
 /// </summary>
@@ -32,16 +32,6 @@ public interface IPromptComposerService
     Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false);
 
     /// <summary>
-    /// Produces the description a tool presents to the model. When the tool declares
-    /// context-scoped parameters, the <c>ToolDescriptionContextGuidance</c> injection template is
-    /// appended with its <c>((context_parameters))</c> placeholder resolved to those parameter
-    /// names; otherwise the authored description is returned unchanged.
-    /// </summary>
-    /// <param name="toolDefinition">The tool definition from <c>morgana.json</c> or <c>agents.json</c>.</param>
-    /// <returns>The description to expose on the generated <c>AIFunction</c>.</returns>
-    Task<string> ComposeToolDescriptionAsync(Records.ToolDefinition toolDefinition);
-
-    /// <summary>
     /// Produces the description under which a colleague is offered as a callable function: the
     /// colleague's own statement of what falls to it (its <c>ConsultMeFor</c>, carried on the card as
     /// its description), with nothing of the framework's added to it.
@@ -57,7 +47,7 @@ public interface IPromptComposerService
     /// that decides whether the lower one is ever read: a colleague's own description reaches the
     /// model only once it is already weighing that function, which is exactly what an agent about to
     /// answer "this is not on my books" never does. Static for the agent's life, so it rides in the
-    /// cached prefix rather than being re-sent per turn like the held-context declaration.
+    /// cached prefix rather than being re-sent per turn.
     /// </remarks>
     /// <param name="colleagues">Function name to the colleague's own statement of what falls to it.</param>
     /// <returns>The block to append, or <c>null</c> when there are no colleagues or no template.</returns>
@@ -72,21 +62,4 @@ public interface IPromptComposerService
     /// <param name="question">What the colleague asked, in its own words.</param>
     /// <returns>The composed turn, falling back to the bare question where no template is declared.</returns>
     Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question);
-
-    /// <summary>
-    /// Produces the per-turn declaration handing the session's currently-held context variables
-    /// directly to the model — name AND value, not just the name. This is the one composed fragment
-    /// carrying a <em>fact</em> rather than a rule: tool descriptions are built once at agent creation
-    /// and can only state the contract ("this tool takes a customerCode"), never the state
-    /// ("customerCode is T780C right now"). Handing over the value outright turns recall from a
-    /// discretionary tool call into a fact already in front of the model.
-    /// </summary>
-    /// <param name="heldVariables">
-    /// The variables held by the session, framework-ephemeral keys already excluded.
-    /// </param>
-    /// <returns>
-    /// The declaration to inject, or <c>null</c> when nothing should be injected — either because
-    /// the session holds no variables or because the prompt layer declares no such template.
-    /// </returns>
-    Task<string?> ComposeHeldContextDeclarationAsync(IReadOnlyDictionary<string, object> heldVariables);
 }

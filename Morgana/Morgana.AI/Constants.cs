@@ -79,12 +79,6 @@ public static class Constants
     /// </summary>
     public static class Injections
     {
-        /// <summary>Appended to the description of a tool declaring context-scoped parameters.</summary>
-        public const string ToolDescriptionContextGuidance = "ToolDescriptionContextGuidance";
-
-        /// <summary>Injected per turn, naming the context variables the session currently holds.</summary>
-        public const string HeldContextDeclaration = "HeldContextDeclaration";
-
         /// <summary>Placed in front of a colleague's question, telling the answering agent who its reader is.</summary>
         public const string PeerConsultationDeclaration = "PeerConsultationDeclaration";
 
@@ -199,8 +193,8 @@ public static class Constants
     }
 
     /// <summary>
-    /// The framework's own context keys: ephemeral, one turn long and excluded from the held-context
-    /// declaration precisely because they are machinery rather than knowledge about the user. Written
+    /// The framework's own context keys: ephemeral, one turn long and machinery rather than knowledge
+    /// about the user, so no tool parameter is ever resolved from them. Written
     /// by a base tool or by the consultation guards, read and dropped by the agent at end of turn.
     /// </summary>
     public static class ContextKeys
@@ -265,12 +259,6 @@ public static class Constants
     /// </summary>
     public static class Placeholders
     {
-        /// <summary>In <see cref="Injections.ToolDescriptionContextGuidance"/> — the tool's own context-scoped parameter names.</summary>
-        public const string ContextParameters = "((context_parameters))";
-
-        /// <summary>In <see cref="Injections.HeldContextDeclaration"/> — the held variables as name: value pairs.</summary>
-        public const string HeldVariables = "((held_variables))";
-
         /// <summary>In <see cref="Injections.PeerConsultationDeclaration"/> — the intent of the agent asking.</summary>
         public const string ConsultationCaller = "((caller))";
 
@@ -378,25 +366,22 @@ public static class Constants
     /// <summary>
     /// Log lines somebody OUTSIDE the process reads. Ordinary logging is prose for an operator and
     /// belongs nowhere near this file; these three lines are different — they are the only place a
-    /// context variable's NAME becomes observable and the PromptHarness parses them to assert the
-    /// lookup-before-asking cycle, which no span attribute carries (a name is data and spans carry
+    /// context variable's NAME becomes observable and the PromptHarness parses them to assert how a
+    /// context-scoped parameter was resolved, which no span attribute carries (a name is data and spans carry
     /// none). That makes their shape a contract with a reader that cannot be recompiled with them.
     /// </summary>
     public static class ObservableLogs
     {
         /// <summary>Emitter of the context-access lines, as it names itself in them.</summary>
-        public const string ToolName = nameof(Abstractions.MorganaTool);
+        public const string ToolName = nameof(Adapters.MorganaToolAdapter);
 
-        /// <summary>Emitter of the declaration line, as it names itself in it.</summary>
-        public const string ContextProviderName = nameof(Providers.MorganaAIContextProvider);
-
-        /// <summary>The variable was already held: the lookup answered and the user was not asked.</summary>
+        /// <summary>The model omitted the variable and the session held it: the user was not asked.</summary>
         public const string Hit = "HIT";
 
-        /// <summary>The variable was not held: asking the user is legitimate from here on.</summary>
+        /// <summary>The model omitted the variable and the session lacked it: the tool did not run.</summary>
         public const string Miss = "MISS";
 
-        /// <summary>The variable was written, whoever the value came from.</summary>
+        /// <summary>The model passed the variable, which was stored before the tool ran.</summary>
         public const string Set = "SET";
 
         /// <summary>
@@ -414,12 +399,6 @@ public static class Constants
 
         /// <summary>Write of a variable, with the value stored.</summary>
         public const string ContextSet = ContextAccessHead + " into agent context. Value is: {Value}";
-
-        /// <summary>
-        /// The per-turn declaration: the variables handed to the model outright, which is why an agent
-        /// may legitimately use one without ever calling GetContextVariable. Names several at once.
-        /// </summary>
-        public const string DeclaredContext = "{MorganaAiContextProviderName} DECLARED '{VariableNames}'";
     }
 
     /// <summary>
@@ -446,14 +425,6 @@ public static class Constants
     /// </summary>
     public static class Markers
     {
-        /// <summary>
-        /// Separates the stable framework+domain prompt from the per-turn dynamic tail, so
-        /// <c>MorganaAnthropicClient</c> can cache the former without a changing declaration busting
-        /// it. The actual ASCII Record Separator (U+001E), not its printable glyph: never typed by a
-        /// human and never produced by a model, so it cannot collide with real content.
-        /// </summary>
-        public const string DynamicInstructions = "\u001E";
-
         /// <summary>
         /// Inserted between the text of two consecutive assistant messages of the same turn, both
         /// while streaming and when batching, so two messages meant to be read apart do not weld

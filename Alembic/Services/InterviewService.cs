@@ -75,13 +75,6 @@ public class InterviewService : IInterviewService
     private readonly IAlembicPromptService alembicPromptService;
 
     /// <summary>
-    /// Splices <see cref="Morgana.AI.Records.ToolDescriptionContextGuidance"/> into a tool's
-    /// description where it declares context-scoped parameters — needed here only to hand
-    /// <see cref="MorganaToolAdapter"/> the same composer the rest of the framework uses.
-    /// </summary>
-    private readonly IPromptComposerService promptComposerService;
-
-    /// <summary>
     /// Every check decidable by reading the Draft alone, consulted by <c>GetFindings</c> so a pass
     /// can see the same deterministic findings Review shows, filtered to its own business.
     /// </summary>
@@ -164,7 +157,6 @@ public class InterviewService : IInterviewService
     /// </summary>
     public InterviewService(
         IAlembicPromptService alembicPromptService,
-        IPromptComposerService promptComposerService,
         IDraftValidationService draftValidationService,
         IRecapService recapService,
         ILLMService llmService,
@@ -173,7 +165,6 @@ public class InterviewService : IInterviewService
         ILogger logger)
     {
         this.alembicPromptService = alembicPromptService;
-        this.promptComposerService = promptComposerService;
         this.draftValidationService = draftValidationService;
         this.recapService = recapService;
         this.llmService = llmService;
@@ -1259,7 +1250,7 @@ public class InterviewService : IInterviewService
             interviewer.GetAdditionalPropertyOrDefault<List<Records.ToolDefinition>>(Constants.PromptProperties.Tools, []);
 
         InterviewTools tools = new InterviewTools(interviewState, draftStateService, draftValidationService, recapService);
-        MorganaToolAdapter toolAdapter = new MorganaToolAdapter(promptComposerService);
+        MorganaToolAdapter toolAdapter = new MorganaToolAdapter();
 
         // The delegate map is the one place a tool's name, its declaration and its implementation
         // meet. AddTool validates the pair (parameter count, names, required/optional) and throws

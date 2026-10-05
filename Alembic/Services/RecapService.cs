@@ -53,7 +53,7 @@ public class RecapService : IRecapService
 
             tools.Add(new ToolRecap(
                 definition.Name,
-                await promptComposerService.ComposeToolDescriptionAsync(definition),
+                definition.Description,
                 [.. definition.Parameters.Select(p => new ParameterRecap(
                     p.Name,
                     p.Description,

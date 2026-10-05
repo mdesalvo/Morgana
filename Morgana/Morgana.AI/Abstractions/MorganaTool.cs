@@ -7,8 +7,9 @@ using Morgana.Contracts;
 namespace Morgana.AI.Abstractions;
 
 /// <summary>
-/// Base class for agent tools. Provides context variable access (Get/Set/Drop) and UI output tools
-/// (quick replies, rich cards). Domain agents extend this class. Uses ToolContext factory
+/// Base class for agent tools. Provides the turn's presentation tools (continuation, quick replies,
+/// rich cards); context-scoped parameters are resolved by <c>MorganaToolAdapter</c> before a tool
+/// method is reached. Domain agents extend this class. Uses ToolContext factory
 /// (lazy-evaluated per tool invocation) to access in-flight AgentSession without exposing
 /// it to LLM schema inspection (session never appears in method signatures).
 /// </summary>
@@ -50,62 +51,6 @@ public class MorganaTool
     {
         this.toolLogger = toolLogger;
         this.getToolContext = getToolContext;
-    }
-
-    // =========================================================================
-    // CONTEXT SYSTEM TOOLS
-    // =========================================================================
-
-    /// <summary>
-    /// Retrieves a context variable from the agent's conversation context.
-    /// Agents should call this before asking the user for any piece of information
-    /// that may already be available.
-    /// </summary>
-    /// <param name="variableName">Name of the variable to retrieve (e.g. "customerCode", "invoiceId").</param>
-    /// <returns>
-    /// The variable value if found, or an instructional message directing the LLM to call <see cref="SetContextVariable"/> or ask the user.
-    /// </returns>
-    public Task<object> GetContextVariable(string variableName)
-    {
-        ToolContext ctx = getToolContext();
-        object? value = ctx.Provider.GetVariable(ctx.Session, variableName);
-
-        if (value != null)
-        {
-            toolLogger.LogInformation(
-                Constants.ObservableLogs.ContextHit,
-                Constants.ObservableLogs.ToolName, GetType().Name, Constants.ObservableLogs.Hit, variableName, value);
-
-            return Task.FromResult(value);
-        }
-
-        toolLogger.LogInformation(
-            Constants.ObservableLogs.ContextMiss,
-            Constants.ObservableLogs.ToolName, GetType().Name, Constants.ObservableLogs.Miss, variableName);
-
-        return Task.FromResult<object>(
-            $"Information {variableName} not available in context: you need to engage SetContextVariable to set it.");
-    }
-
-    /// <summary>
-    /// Stores a variable in the agent's conversation context.
-    /// If the variable is declared as shared in configuration, it is automatically persisted in
-    /// the conversation-scoped <c>shared_context</c> registry so other agents of the same
-    /// conversation can hydrate it on their next turn.
-    /// </summary>
-    /// <param name="variableName">Name of the variable to set (e.g. "customerCode", "invoiceId").</param>
-    /// <param name="variableValue">Value to store.</param>
-    /// <returns>Confirmation message for the LLM.</returns>
-    public async Task<object> SetContextVariable(string variableName, string variableValue)
-    {
-        ToolContext ctx = getToolContext();
-        await ctx.Provider.SetVariableAsync(ctx.Session, variableName, variableValue);
-
-        toolLogger.LogInformation(
-            Constants.ObservableLogs.ContextSet,
-            Constants.ObservableLogs.ToolName, GetType().Name, Constants.ObservableLogs.Set, variableName, variableValue);
-
-        return $"Information {variableName} inserted in context with value: {variableValue}";
     }
 
     // =========================================================================

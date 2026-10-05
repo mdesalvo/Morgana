@@ -10,8 +10,8 @@ namespace PromptHarness.Infrastructure.Wiring;
 
 /// <summary>
 /// Reads the two structural signals a turn leaves behind inside the host process: the
-/// <c>morgana.agent</c> span and the context-related log lines — from <c>MorganaTool</c>
-/// (HIT/MISS/SET) and from <c>MorganaAIContextProvider</c>'s per-turn declaration.
+/// <c>morgana.agent</c> span and the context-access log lines <c>MorganaToolAdapter</c> writes as it
+/// resolves a tool's context-scoped parameters (HIT/MISS/SET).
 /// </summary>
 /// <remarks>
 /// <para>Neither signal exists for the harness's benefit — both are production instrumentation the
@@ -25,7 +25,7 @@ namespace PromptHarness.Infrastructure.Wiring;
 public sealed class TurnObserver : IDisposable
 {
     /// <summary>
-    /// Matches the context-tool log lines emitted by <c>MorganaTool</c>, built from the framework's
+    /// Matches the context-access log lines emitted by <c>MorganaToolAdapter</c>, built from the framework's
     /// own message template rather than from a copy of it.
     /// </summary>
     /// <remarks>
@@ -42,19 +42,6 @@ public sealed class TurnObserver : IDisposable
             ("{Name}", "[^)]*"),
             ("{Operation}", $"(?<op>{Constants.ObservableLogs.Hit}|{Constants.ObservableLogs.Miss}|{Constants.ObservableLogs.Set})"),
             ("{VariableName}", "(?<name>[^']*)")),
-        RegexOptions.CultureInvariant | RegexOptions.Compiled);
-
-    /// <summary>
-    /// Matches <c>MorganaAIContextProvider</c>'s per-turn declaration line — the proof that one or
-    /// more variables were handed to the model directly, without a <c>GetContextVariable</c> call.
-    /// The line is only ever logged when the session holds at least one variable, so an empty
-    /// session simply produces no match here — nothing to skip specially.
-    /// </summary>
-    private static readonly Regex DeclaredContextPattern = new Regex(
-        PatternFrom(
-            Constants.ObservableLogs.DeclaredContext,
-            ("{MorganaAiContextProviderName}", Regex.Escape(Constants.ObservableLogs.ContextProviderName)),
-            ("{VariableNames}", "(?<names>[^']*)")),
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     /// <summary>
@@ -178,8 +165,8 @@ public sealed class TurnObserver : IDisposable
         // access parsing below and, unparsed, TurnResult.LogLines (used for failure diagnosis) work from.
         IReadOnlyList<string> lines = output.Since(scope.LogMark);
 
-        // Parse every context-tool log line in this window into a structured access. Lines that
-        // don't match either pattern (ordinary framework noise) are silently skipped rather than
+        // Parse every context-access log line in this window into a structured access. Lines that
+        // don't match the pattern (ordinary framework noise) are silently skipped rather than
         // treated as an error — this parser only cares about the subset it recognises.
         List<ContextAccess> accesses = [];
         foreach (string line in lines)
@@ -195,16 +182,6 @@ public sealed class TurnObserver : IDisposable
                 };
 
                 accesses.Add(new ContextAccess(operation, match.Groups["name"].Value));
-                continue;
-            }
-
-            // One DECLARED line can name several variables at once ("customerCode, invoiceId") —
-            // one ContextAccess per name, same as a tool-log line would produce one per call.
-            Match declared = DeclaredContextPattern.Match(line);
-            if (declared.Success)
-            {
-                foreach (string name in declared.Groups["names"].Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                    accesses.Add(new ContextAccess(ContextOperation.Declared, name));
             }
         }
 

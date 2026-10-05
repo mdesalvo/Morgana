@@ -44,8 +44,7 @@ PromptHarness (test process)
   ├── HarnessChannel     ──► channelName "harness", deliveryMode "webhook", full capabilities
   │                          REST out (JWT iss=harness) · webhook in (own ephemeral port)
   ├── TurnObserver      ──► ActivityListener on morgana.agent  → agent.tools_invoked
-  │                          Console.Out tee on MorganaTool logs → context reads/writes
-  │                          + MorganaAIContextProvider's per-turn declaration → Declared reads
+  │                          Console.Out tee on MorganaToolAdapter logs → context reads/writes
   ├── LlmJudge          ──► ILLMService.CompleteWithSystemPromptAsync (cheapest configured tier)
   └── ScenarioRunner    ──► replays a YAML scenario N times, reports passes against a threshold
 ```
@@ -160,13 +159,12 @@ otherwise would mean measuring a configuration nobody runs. With the example plu
 | Scenario | Agent | Tier |
 |---|---|---|
 | `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand` | Billing, Contract | `Efficiency` |
-| `context-closed-vocabulary-monkeys` | Monkeys | `Efficiency` |
 | `classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
-| `behaviour-rich-card`, `context-no-invented-writes`, `classifier-routes-catalog-request-to-inventory` | Inventory | **`Performance`** |
+| `behaviour-rich-card`, `classifier-routes-catalog-request-to-inventory` | Inventory | **`Performance`** |
 | `classifier-disambiguates-colliding-billing-contract` | *(none — diverted before routing)* | `Efficiency` (classifier only) |
 
 Everything Morgana runs on its own account — guard, classifier, presenter — plus the judge, always
-goes to the cheapest configured tier. So the three Inventory scenarios dominate the bill: a handful
+goes to the cheapest configured tier. So the two Inventory scenarios dominate the bill: a handful
 of `Performance` turns against a suite that is otherwise `Efficiency` throughout — which is also why
 `classifier-routes-catalog-request-to-inventory` runs 3 times rather than 5, its property being a
 routing decision that merely happens to land on a `Performance` agent. Keep them out of the tight
@@ -227,14 +225,12 @@ turns:
       quickReplyIds: [continue_agent]
       noQuickReplyIds: [exit_agent]
       richCard: absent            # absent | present
-      toolsCalled: [GetContextVariable]
-      toolsNotCalled: [GetInvoices]
-      toolsCalledFirst: [GetContextVariable]   # prefix of the invocation order
-      contextReads: [customerCode]
+      toolsCalled: [GetInvoices]
+      toolsNotCalled: [GetPaymentHistory]
+      toolsCalledFirst: [GetInvoices]   # prefix of the invocation order
+      contextReads: [Miss:customerCode] # Hit | Miss; a bare name matches either
       contextWrites: [customerCode]
       noContextWrites: true
-      noContextAccess: true
-      contextVocabulary: [customerCode] # every name touched must appear here
       historyExcludesAgents: [billing]  # no message in the persisted history belongs to that agent
       historyUserMessages: 2            # …and exactly one user message per turn played so far
       textNotEmpty: true
@@ -263,7 +259,7 @@ works once and a single run cannot tell them apart. The threshold makes each sce
 budget explicit instead of hiding it in a retry.
 
 **The context-handling group runs at 5/5 and is blocking.** Its three properties — the cycle, the
-closed vocabulary, non-revelation — are contract, not behaviour and their failure mode is silent:
+hydration of a shared value, non-revelation — are contract, not behaviour and their failure mode is silent:
 an agent that re-asks for something it already knows still looks like it works. A regression there
 stops the prompt revision and the text goes back, rather than the threshold going down.
 

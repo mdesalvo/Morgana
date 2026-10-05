@@ -288,7 +288,7 @@ public static partial class ExpectationChecker
         }
     }
 
-    /// <summary>Context reads, writes and the closed vocabulary.</summary>
+    /// <summary>Context reads and writes.</summary>
     private static void CheckContext(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
         foreach (string entry in expect.ContextReads ?? [])
@@ -319,21 +319,6 @@ public static partial class ExpectationChecker
 
         if (expect.NoContextWrites is true && turn.ContextWrites.Count > 0)
             failures.Add($"noContextWrites: expected none, got {FormatList(turn.ContextWrites)}");
-
-        if (expect.NoContextAccess is true && turn.ContextAccesses.Count > 0)
-            failures.Add($"noContextAccess: expected the turn to touch no context variable, got {string.Join(", ", turn.ContextAccesses.Select(access => $"{access.Operation}:{access.VariableName}"))}");
-
-        // The anti-invention check: every name the turn actually touched (read or write) must
-        // appear in the scenario's declared vocabulary. One failure per offending access, not just
-        // the first, so a turn that invents several names in one go doesn't hide the rest.
-        if (expect.ContextVocabulary is { Count: > 0 } vocabulary)
-        {
-            foreach (ContextAccess access in turn.ContextAccesses)
-            {
-                if (!vocabulary.Contains(access.VariableName, StringComparer.OrdinalIgnoreCase))
-                    failures.Add($"contextVocabulary: '{access.VariableName}' ({access.Operation}) is outside the declared vocabulary {FormatList(vocabulary)}");
-            }
-        }
     }
 
     /// <summary>Properties of the response text itself.</summary>

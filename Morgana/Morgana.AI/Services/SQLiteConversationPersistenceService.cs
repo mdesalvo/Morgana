@@ -793,10 +793,8 @@ WHERE id = 1;
                 string decrypted = Decrypt(encrypted);
                 JsonElement element = JsonSerializer.Deserialize<JsonElement>(decrypted);
 
-                // Convert back to a "natural" .NET value so callers (and the LLM via
-                // GetContextVariable) see the same shape that was originally written. Without
-                // this unwrap, primitives would round-trip as JsonElement and the framework's
-                // tool-result serialiser would re-encode them with extra JSON wrapping.
+                // Convert back to a "natural" .NET value, so an agent hydrating this variable holds
+                // the same shape the writing agent stored.
                 object? value = element.ValueKind switch
                 {
                     JsonValueKind.String => element.GetString(),

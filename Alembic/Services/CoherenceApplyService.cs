@@ -26,7 +26,6 @@ public class CoherenceApplyService : ICoherenceApplyService
     private const string PromptId = "CoherenceApplier";
 
     private readonly IAlembicPromptService alembicPromptService;
-    private readonly IPromptComposerService promptComposerService;
     private readonly ILLMService llmService;
     private readonly ILogger logger;
 
@@ -34,17 +33,14 @@ public class CoherenceApplyService : ICoherenceApplyService
     /// Initializes the apply service.
     /// </summary>
     /// <param name="alembicPromptService">Resolves the <c>CoherenceApplier</c> prompt and its tool declarations from <c>alembic.json</c>.</param>
-    /// <param name="promptComposerService">Passed through to <see cref="MorganaToolAdapter"/> — the framework's own tool-schema machinery.</param>
     /// <param name="llmService">Supplies the chat client, always on the Performance tier.</param>
     /// <param name="logger">Records a failed apply — the caller also sees it, via the returned result.</param>
     public CoherenceApplyService(
         IAlembicPromptService alembicPromptService,
-        IPromptComposerService promptComposerService,
         ILLMService llmService,
         ILogger logger)
     {
         this.alembicPromptService = alembicPromptService;
-        this.promptComposerService = promptComposerService;
         this.llmService = llmService;
         this.logger = logger;
     }
@@ -65,7 +61,7 @@ public class CoherenceApplyService : ICoherenceApplyService
             prompt.GetAdditionalPropertyOrDefault<List<Records.ToolDefinition>>(Constants.PromptProperties.Tools, []);
 
         CoherenceApplyTools tools = new CoherenceApplyTools(draft);
-        MorganaToolAdapter toolAdapter = new MorganaToolAdapter(promptComposerService);
+        MorganaToolAdapter toolAdapter = new MorganaToolAdapter();
 
         // Maps each tool's name in alembic.json to the CoherenceApplyTools method that implements
         // it. The lookup below turns a declaration with no matching method into a startup-time

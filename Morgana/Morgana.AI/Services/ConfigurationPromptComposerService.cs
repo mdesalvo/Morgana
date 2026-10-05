@@ -114,29 +114,6 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
-    public async Task<string> ComposeToolDescriptionAsync(Records.ToolDefinition toolDefinition)
-    {
-        // The lookup-before-asking rule, authored once in morgana.json instead of restated by every
-        // tool author. Empty when a deployment declares no such template.
-        FrameworkLayer framework = await frameworkLayer.Value;
-        string descriptionGuidance = Records.Injection.ResolveTemplate(
-            framework.Injections, Constants.Injections.ToolDescriptionContextGuidance);
-
-        // The inputs this tool resolves from the session rather than from the user. They are what the
-        // guidance names, so a tool with none has nothing to be guided about.
-        string[] contextParameters = [.. toolDefinition.Parameters
-            .Where(p => string.Equals(p.Scope?.Trim(), Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
-            .Select(p => p.Name)];
-
-        // Guidance is joined by a blank line rather than by inserted punctuation: an authored
-        // description is a finished sentence that closes itself. A tool with no context-scoped input
-        // reaches the model exactly as its author wrote it.
-        return contextParameters.Length > 0 && descriptionGuidance.Length > 0
-            ? $"{toolDefinition.Description}\n\n{descriptionGuidance.Replace(Constants.Placeholders.ContextParameters, string.Join(", ", contextParameters))}"
-            : toolDefinition.Description;
-    }
-
-    /// <inheritdoc />
     public Task<string> ComposePeerDescriptionAsync(A2A.AgentCard peerCard)
         // The colleague's own words and nothing of the framework's: how to consult one is already
         // carried by the policy every peer-capable agent reads and repeating it per colleague would
@@ -199,34 +176,6 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         return guardrail.Length == 0
             ? $"{composed}\n{question}"
             : composed.Replace(Constants.Placeholders.ConsultationQuestion, question);
-    }
-
-    /// <inheritdoc />
-    public async Task<string?> ComposeHeldContextDeclarationAsync(IReadOnlyDictionary<string, object> heldVariables)
-    {
-        // A session holding nothing gets no injection at all.
-        if (heldVariables.Count == 0)
-            return null;
-
-        // The one framework entry that carries a fact rather than a rule. It is also the only rung read
-        // before any tool is weighed: a tool description can state the contract, never what is held now.
-        FrameworkLayer framework = await frameworkLayer.Value;
-        string declaration = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.HeldContextDeclaration);
-
-        // A deployment declaring no such template gets no per-turn tail.
-        if (declaration.Length == 0)
-            return null;
-
-        // Values and not merely names: an agent waking on a shared variable it never asked for has
-        // nothing left to look up. The names-only variant relied on the model choosing to call
-        // GetContextVariable, which proved unreliable. A number or a date held here reaches the model in
-        // the same notation whichever host composed the turn.
-        string pairs = string.Join(", ", heldVariables.Select(kvp => string.Create(CultureInfo.InvariantCulture, $"{kvp.Key}: {kvp.Value}")));
-        string resolvedDeclaration = declaration.Replace(Constants.Placeholders.HeldVariables, pairs);
-
-        // Marked so the cache split lands above this tail. It changes every turn while the framework
-        // and domain layers before it do not. A changing tail must not bust the whole prefix.
-        return Constants.Markers.DynamicInstructions + resolvedDeclaration;
     }
 
     /// <summary>

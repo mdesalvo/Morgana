@@ -22,8 +22,7 @@ namespace Alembic.Model;
 /// layer. Read once, before anything else.
 /// </param>
 /// <param name="Tools">
-/// Each tool as the model weighs it, with the framework's context guidance already spliced in
-/// where the tool declares context-scoped parameters.
+/// Each tool as the model weighs it.
 /// </param>
 public sealed record AgentRecap(
     string AgentId,
@@ -35,8 +34,7 @@ public sealed record AgentRecap(
 /// </summary>
 /// <param name="Name">Tool name, which is also the C# method name.</param>
 /// <param name="Description">
-/// The composed description: what the author wrote, plus <c>ToolDescriptionContextGuidance</c>
-/// where the tool declares context-scoped parameters.
+/// The description exactly as the author wrote it: the framework adds nothing to it.
 /// </param>
 /// <param name="Parameters">The parameters, as their JSON schema will carry them.</param>
 public sealed record ToolRecap(

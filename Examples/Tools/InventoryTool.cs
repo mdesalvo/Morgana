@@ -607,7 +607,7 @@ public class InventoryTool : MorganaTool
     /// <returns>JSON array of that customer's orders across every conversation (no sealWord included).</returns>
     public async Task<string> GetOrderHistory(string customerCode)
     {
-        // customerCode is a shared context variable the LLM itself can write via SetContextVariable —
+        // customerCode is a shared context variable the LLM itself can write by passing it to a tool —
         // unlike GetOrders()'s ConversationId, it is not a trust boundary, which is exactly why
         // this tool deliberately stops at a summary (no sealWord, no ability to act on any
         // of these orders) rather than granting the same access ConfirmOrder/CancelOrder do.

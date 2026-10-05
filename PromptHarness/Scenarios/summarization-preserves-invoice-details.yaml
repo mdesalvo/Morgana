@@ -13,14 +13,16 @@ turns:
   - say: "Mi fai vedere la mia fattura più recente?"
     expect:
       agent: BillingAgent
-      toolsNotCalled: [GetInvoices]
+      # The tool is called and does not run: no code is held yet, which is what makes the agent ask.
+      toolsCalled: [GetInvoices]
+      contextReads: [Miss:customerCode]
       textNotEmpty: true
 
   - say: "Eccolo: P994E"
     expect:
       agent: BillingAgent
       contextWrites: [customerCode]
-      toolsCalled: [SetContextVariable, GetInvoices]
+      toolsCalled: [GetInvoices]
       textNotEmpty: true
 
   - say: "Quant'era l'importo esatto di quella fattura?"

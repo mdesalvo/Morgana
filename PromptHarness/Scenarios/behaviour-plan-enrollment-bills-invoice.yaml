@@ -43,7 +43,7 @@ turns:
       # replies, no continuation signal) the one time this regressed live.
       richCard: present
       textNotEmpty: true
-      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
+      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache"]
     judge:
       - "The response states a concrete monthly fee for the plan."
     judgeNot:

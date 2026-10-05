@@ -136,34 +136,18 @@ public sealed class ExpectSpec
     public List<string>? ToolsCalledFirst { get; init; }
 
     /// <summary>
-    /// Context variables the turn must have read — via <c>GetContextVariable</c> (<c>Hit</c> /
-    /// <c>Miss</c>) or via the per-turn <c>HeldContextDeclaration</c> injection (<c>Declared</c>),
-    /// which hands an already-held variable's value to the model directly, with no tool call at all.
-    /// A bare name (<c>customerCode</c>) matches any of the three; prefixing it (<c>Hit:customerCode</c>
-    /// / <c>Miss:customerCode</c> / <c>Declared:customerCode</c>) asserts that specific one. A shared
-    /// variable hydrated for a follow-up agent is normally a <c>Declared</c>, not a <c>Hit</c>: the
-    /// agent already has the value in front of it and has no reason to call the tool.
+    /// Context variables the framework must have read from the session for a tool the model called
+    /// without them. A bare name (<c>customerCode</c>) matches either outcome; prefixing it
+    /// (<c>Hit:customerCode</c> / <c>Miss:customerCode</c>) asserts that specific one. A shared
+    /// variable hydrated for a follow-up agent is a <c>Hit</c>: that agent's history never saw the value.
     /// </summary>
     public List<string>? ContextReads { get; init; }
 
-    /// <summary>Context variables that must have been written via <c>SetContextVariable</c>.</summary>
+    /// <summary>Context variables the model must have passed to a tool, which the framework stores.</summary>
     public List<string>? ContextWrites { get; init; }
 
     /// <summary>Assert that no context write happened at all.</summary>
     public bool? NoContextWrites { get; init; }
-
-    /// <summary>
-    /// Assert that the turn touched the context registry not at all — neither read nor write. The
-    /// form the closed vocabulary takes for an agent that declares no <c>Scope: context</c>
-    /// parameter: there, every legal name is no name, so any access is an invention.
-    /// </summary>
-    public bool? NoContextAccess { get; init; }
-
-    /// <summary>
-    /// The closed vocabulary: every context name touched on this turn must appear here. This is the
-    /// anti-invention assertion — a name derived from the user's message fails it.
-    /// </summary>
-    public List<string>? ContextVocabulary { get; init; }
 
     /// <summary>Require a non-empty response text (the <c>MandatoryTextualResponse</c> policy).</summary>
     public bool? TextNotEmpty { get; init; }

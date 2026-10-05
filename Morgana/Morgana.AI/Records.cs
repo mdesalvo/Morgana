@@ -1080,8 +1080,8 @@ public static class Records
     /// <param name="Description">Tool description for LLM understanding</param>
     /// <param name="Parameters">List of tool parameter definitions</param>
     /// <param name="Reserved">
-    /// True for the five morgana.json base tools (GetContextVariable, SetContextVariable,
-    /// SetTurnContinuation, SetQuickReplies, SetRichCard). Never set from configuration: a domain
+    /// True for the three morgana.json base tools (SetTurnContinuation, SetQuickReplies,
+    /// SetRichCard). Never set from configuration: a domain
     /// tool declaring this in agents.json has it forced back to false by MorganaAgentAdapter —
     /// it is stamped true only where MorganaAgentAdapter reads morgana.json's own Tools array,
     /// so no JSON a plugin author writes can ever make it stick. Consumers (e.g. the reverse
@@ -1094,8 +1094,8 @@ public static class Records
         bool Reserved = false);
 
     /// <summary>
-    /// Tool parameter: name (must match method param), description, Required flag. Scope: "context" (GetContextVariable)
-    /// or "request" (user input). Shared: whether to persist in conversation-scoped shared_context registry for
+    /// Tool parameter: name (must match method param), description, Required flag. Scope: "context" (resolved by
+    /// the framework from the session, never required of the model) or "request" (user input). Shared: whether to persist in conversation-scoped shared_context registry for
     /// cross-agent hydration. Only applies when Scope="context". Default: false.
     /// </summary>
     public record ToolParameter(

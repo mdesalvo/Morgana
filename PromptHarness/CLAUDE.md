@@ -31,7 +31,7 @@ project: every build setting lives in the `.csproj`, so it carries unchanged acr
 
 ## Commands
 
-Sixteen test classes. **Never combine filters**: six groups carry a process-wide boot knob the
+Seventeen test classes. **Never combine filters**: six groups carry a process-wide boot knob the
 others must not see and two of those five share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
@@ -43,6 +43,7 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~StartupValidationT
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~AgentCardTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PeerFederationTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ConversationApiTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ContextResolutionTests"
 
 # blocking
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ContextHandlingTests"
@@ -83,7 +84,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 
 | Group | Threshold | What it protects |
 |---|---|---|
-| `ContextHandlingTests` | **5/5, blocking** | The context cycle, the closed vocabulary, non-revelation. Failure is **silent**: an agent re-asking for what it knows still looks like it works |
+| `ContextHandlingTests` | **5/5, blocking** | The context cycle, the hydration of a shared value, non-revelation. Failure is **silent**: an agent re-asking for what it knows still looks like it works |
 | `ConsultingTests` | **4/4, blocking** | A colleague reached on demand for a datum only it holds; an exchange leaving the conversation as it found it. Silent the same way. Also depends on a **topology**, so a failure here has a second meaning: check the `[ConsultsAgent]` attributes first |
 | `BehaviourTests` | 5/4 | Visible presentation: buttons, cards, closure |
 | `GuardTests` | 5/5 | Moderation. A false negative is safety-adjacent, so it sits with the blocking reasoning rather than with presentation |
@@ -93,6 +94,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `DustTests` | — | The budget thresholds, crossed in order. Evidence-driven rather than turn-pinned: how many turns it takes is a real token measurement |
 | `RateLimitTests` | none | The REST gate's rate limit: the 429 past the window, refused commands left uncounted, one window shared by messages and commands. No model is reached |
 | `ConversationPersistenceTests` | — | Who owns each line of a conversation, how it is dated and in what order it is read back. The record is photographed after every exchange rather than at the end, because a transcript that reads correctly can still have been written by the wrong participant. Asserts nothing about wording: the oracle is what the channel was pushed and what the channel said. Shares the guard's knob, since a refused turn is one of the five it stages |
+| `ContextResolutionTests` | none | How the framework resolves a context-scoped parameter — passed and stored, omitted and read, missing and the tool not run — on the real adapter with no model |
 | `AgentCardTests` · `StartupValidationTests` · `PeerFederationTests` · `ConversationApiTests` | none | Wire contracts and boot refusals, asserted deterministically. **Every literal is spelled out in the test** rather than read from `Constants`: a test comparing a constant against itself asserts that a constant equals a constant, while the point is to notice a published document changing shape under whoever consumes it |
 | `FederationTests` | — | Two Morganas, one consulting the other — the only test where the card is written by a Morgana, read by a Morgana and the token one mints is proven by the other |
 

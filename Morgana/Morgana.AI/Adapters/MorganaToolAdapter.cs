@@ -1,6 +1,10 @@
-﻿using System.Reflection;
+﻿using System.Globalization;
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.AI;
-using Morgana.AI.Interfaces;
+using Microsoft.Extensions.Logging;
+using Morgana.AI.Abstractions;
 
 namespace Morgana.AI.Adapters;
 
@@ -11,8 +15,9 @@ namespace Morgana.AI.Adapters;
 /// <remarks>
 /// Bridges between Morgana tool definitions (from agents.json) and Microsoft.Extensions.AI AIFunction system.
 /// Manages registration of tool method delegates against their definitions, validates delegate signatures
-/// and converts them to AIFunction instances for LLM tool calling. Tool descriptions are assembled by
-/// <see cref="IPromptComposerService"/>; parameter descriptions are passed through as authored.
+/// and converts them to AIFunction instances for LLM tool calling. A tool declaring context-scoped
+/// parameters is wrapped so the framework resolves them from the session: the model never looks a
+/// value up or stores it, it calls the tool and asks the user only for what the tool reports missing.
 /// Workflow: Create adapter → AddTool for each → CreateAllFunctions to generate AIFunction[] → pass to AIAgent.
 /// </remarks>
 public class MorganaToolAdapter
@@ -28,18 +33,30 @@ public class MorganaToolAdapter
     private readonly Dictionary<string, Records.ToolDefinition> toolDefinitions = [];
 
     /// <summary>
-    /// Assembles the description each generated AIFunction presents to the model, splicing the
-    /// framework's context guidance into the tools that declare context-scoped parameters.
+    /// Supplies the session the context-scoped parameters are resolved from and stored into.
+    /// Null for an adapter whose tools declare none, such as a workbench agent holding no conversation.
     /// </summary>
-    private readonly IPromptComposerService promptComposerService;
+    private readonly Func<MorganaTool.ToolContext>? toolContextFactory;
 
     /// <summary>
-    /// Initializes a new instance of the MorganaToolAdapter.
+    /// Emits the context-access lines, which the PromptHarness parses to observe the resolution.
     /// </summary>
-    /// <param name="promptComposerService">Composes the descriptions exposed to the model</param>
-    public MorganaToolAdapter(IPromptComposerService promptComposerService)
+    private readonly ILogger? logger;
+
+    /// <summary>
+    /// Initializes an adapter for tools declaring no context-scoped parameter.
+    /// </summary>
+    public MorganaToolAdapter() { }
+
+    /// <summary>
+    /// Initializes an adapter whose context-scoped parameters are resolved from the agent's session.
+    /// </summary>
+    /// <param name="logger">Logger receiving the observable context-access lines</param>
+    /// <param name="toolContextFactory">Supplies the in-flight session at each tool invocation</param>
+    public MorganaToolAdapter(ILogger logger, Func<MorganaTool.ToolContext> toolContextFactory)
     {
-        this.promptComposerService = promptComposerService;
+        this.logger = logger;
+        this.toolContextFactory = toolContextFactory;
     }
 
     /// <summary>
@@ -73,21 +90,19 @@ public class MorganaToolAdapter
             : throw new InvalidOperationException($"Tool '{toolName}' not registered");
 
     /// <summary>
-    /// Creates an AIFunction instance for a registered tool with resolved descriptions.
-    /// Applies global policies and resolves context-parameter placeholders in tool descriptions.
-    /// Converts the tool delegate into a JSON schema-ready AIFunction for the LLM.
+    /// Creates the AIFunction the model calls for a registered tool: its authored description, its
+    /// parameter descriptions in the JSON schema and, where it declares context-scoped parameters,
+    /// the session resolution of those parameters around the invocation.
     /// </summary>
     /// <param name="toolName">Name of the tool to create function for</param>
     /// <returns>AIFunction instance ready for agent use</returns>
-    /// <exception cref="InvalidOperationException">Thrown if tool or definition not found</exception>
-    public async Task<AIFunction> CreateFunctionAsync(string toolName)
+    /// <exception cref="InvalidOperationException">Thrown if tool or definition not found or if a context-scoped tool reaches an adapter holding no session</exception>
+    public Task<AIFunction> CreateFunctionAsync(string toolName)
     {
         Delegate implementation = ResolveTool(toolName);
         Records.ToolDefinition definition = toolDefinitions.TryGetValue(toolName, out Records.ToolDefinition? def)
             ? def
             : throw new InvalidOperationException($"Tool definition '{toolName}' not found");
-
-        string description = await promptComposerService.ComposeToolDescriptionAsync(definition);
 
         // Build parameter name → description map; fed to AIFunctionFactory's ParameterDescriptionProvider hook,
         // which resolves each parameter's description keyword in the generated JSON schema
@@ -96,11 +111,11 @@ public class MorganaToolAdapter
 
         // Create AIFunction with custom ParameterDescriptionProvider that looks up each parameter's description
         // from the map; unknown parameters fall back to null, which lets AIFunctionFactory use [Description] attributes (none here)
-        return AIFunctionFactory.Create(implementation,
+        AIFunction function = AIFunctionFactory.Create(implementation,
             new AIFunctionFactoryOptions
             {
                 Name = definition.Name,
-                Description = description,
+                Description = definition.Description,
                 JsonSchemaCreateOptions = AIJsonSchemaCreateOptions.Default with
                 {
                     ParameterDescriptionProvider = parameter =>
@@ -110,6 +125,22 @@ public class MorganaToolAdapter
                             : null
                 }
             });
+
+        string[] contextParameters = [.. definition.Parameters
+            .Where(p => string.Equals(p.Scope?.Trim(), Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.Name)];
+
+        // A tool resolving nothing from the session reaches the model exactly as declared.
+        if (contextParameters.Length == 0)
+            return Task.FromResult(function);
+
+        // A context-scoped tool on an adapter with no session has nowhere to resolve its inputs from:
+        // a wiring fault, refused at agent creation rather than at the first call.
+        if (toolContextFactory is null || logger is null)
+            throw new InvalidOperationException(
+                $"Tool '{toolName}' declares context-scoped parameters but its adapter holds no session to resolve them from");
+
+        return Task.FromResult<AIFunction>(new ContextResolvingFunction(function, contextParameters, toolContextFactory, logger));
     }
 
     /// <summary>
@@ -152,6 +183,146 @@ public class MorganaToolAdapter
             bool isOptional = methodParam.HasDefaultValue;
             if (defParam.Required && isOptional)
                 throw new ArgumentException($"Parameter '{methodParam.Name}' is required in definition but optional in method");
+        }
+    }
+
+    /// <summary>
+    /// A tool whose context-scoped parameters the framework resolves: a value the model passes is
+    /// stored and used, one it omits is read from the session and one the session lacks keeps the
+    /// tool from running at all.
+    /// </summary>
+    /// <remarks>
+    /// The parameters stay in the schema, so the model may still pass a value the user has just
+    /// given, but they are never required of it: on every other turn the session answers for them.
+    /// </remarks>
+    private sealed class ContextResolvingFunction : DelegatingAIFunction
+    {
+        /// <summary>
+        /// What the model reads in place of the tool's result when a value is missing. A fact about
+        /// the call, never an instruction: what to do about it is the ToolUsage policy's to say.
+        /// </summary>
+        private const string MissingContextResult = "{0} was not run: this conversation does not hold {1} yet.";
+
+        /// <summary>The tool's own context-scoped parameter names.</summary>
+        private readonly string[] contextParameters;
+
+        /// <summary>Supplies the in-flight session at each invocation.</summary>
+        private readonly Func<MorganaTool.ToolContext> toolContextFactory;
+
+        /// <summary>Emits the observable HIT, MISS and SET lines.</summary>
+        private readonly ILogger logger;
+
+        /// <summary>The tool's schema with the context-scoped parameters no longer required.</summary>
+        private readonly JsonElement jsonSchema;
+
+        /// <summary>
+        /// Wraps a tool generated from its delegate.
+        /// </summary>
+        /// <param name="innerFunction">The tool as generated from its delegate</param>
+        /// <param name="contextParameters">The parameters to resolve from the session</param>
+        /// <param name="toolContextFactory">Supplies the in-flight session at each invocation</param>
+        /// <param name="logger">Receives the observable context-access lines</param>
+        public ContextResolvingFunction(
+            AIFunction innerFunction,
+            string[] contextParameters,
+            Func<MorganaTool.ToolContext> toolContextFactory,
+            ILogger logger) : base(innerFunction)
+        {
+            this.contextParameters = contextParameters;
+            this.toolContextFactory = toolContextFactory;
+            this.logger = logger;
+
+            // The C# method still requires every one of them: the framework fills them in before
+            // the method is reached, so only the model is released from supplying them.
+            JsonObject schema = JsonNode.Parse(innerFunction.JsonSchema.GetRawText())!.AsObject();
+            if (schema["required"] is JsonArray required)
+                schema["required"] = new JsonArray([.. required
+                    .Where(name => !contextParameters.Contains(name!.GetValue<string>(), StringComparer.Ordinal))
+                    .Select(name => name!.DeepClone())]);
+            jsonSchema = JsonSerializer.SerializeToElement(schema);
+        }
+
+        /// <inheritdoc />
+        public override JsonElement JsonSchema => jsonSchema;
+
+        /// <summary>
+        /// Resolves every context-scoped parameter, then runs the tool only when all of them hold a value.
+        /// </summary>
+        protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+        {
+            MorganaTool.ToolContext toolContext = toolContextFactory();
+            List<string> missingParameters = [];
+
+            // A colleague's answer must leave the conversation as it found it, so a value it was
+            // handed is used and never stored where the shared registry would keep it.
+            bool servingConsultation =
+                toolContext.Provider.GetVariable(toolContext.Session, Constants.ContextKeys.ServingConsultation) is not null;
+
+            foreach (string parameter in contextParameters)
+            {
+                // A value the model passes came from the user on this turn or an earlier one: it is
+                // stored before use, so every later turn and every agent sharing it finds it held.
+                string? supplied = AsText(arguments.TryGetValue(parameter, out object? argument) ? argument : null);
+                if (supplied is not null)
+                {
+                    arguments[parameter] = supplied;
+                    if (servingConsultation)
+                        continue;
+
+                    await toolContext.Provider.SetVariableAsync(toolContext.Session, parameter, supplied);
+
+                    logger.LogInformation(
+                        Constants.ObservableLogs.ContextSet,
+                        Constants.ObservableLogs.ToolName, Name, Constants.ObservableLogs.Set, parameter, supplied);
+                    continue;
+                }
+
+                // Omitted by the model: the session answers, including for a value another agent obtained.
+                string? held = AsText(toolContext.Provider.GetVariable(toolContext.Session, parameter));
+                if (held is not null)
+                {
+                    arguments[parameter] = held;
+
+                    logger.LogInformation(
+                        Constants.ObservableLogs.ContextHit,
+                        Constants.ObservableLogs.ToolName, Name, Constants.ObservableLogs.Hit, parameter, held);
+                    continue;
+                }
+
+                logger.LogInformation(
+                    Constants.ObservableLogs.ContextMiss,
+                    Constants.ObservableLogs.ToolName, Name, Constants.ObservableLogs.Miss, parameter);
+                missingParameters.Add(parameter);
+            }
+
+            // Run on a missing value the tool would answer about nobody: the model is told which
+            // values are lacking, which are exactly what the user has to be asked for.
+            if (missingParameters.Count > 0)
+                return string.Format(CultureInfo.InvariantCulture, MissingContextResult, Name, string.Join(", ", missingParameters));
+
+            return await base.InvokeCoreAsync(arguments, cancellationToken);
+        }
+
+        /// <summary>
+        /// Reads a value as the text a tool parameter receives; null when it carries none.
+        /// </summary>
+        /// <remarks>
+        /// A model argument and a value restored from a persisted session both arrive as JSON, a
+        /// value written this process lifetime as the string it was stored as.
+        /// </remarks>
+        private static string? AsText(object? value)
+        {
+            string? text = value switch
+            {
+                null => null,
+                JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined } => null,
+                JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
+                JsonElement element => element.GetRawText(),
+                _ => Convert.ToString(value, CultureInfo.InvariantCulture)
+            };
+
+            // A blank argument is the model naming the parameter without a value, never a value.
+            return string.IsNullOrWhiteSpace(text) ? null : text;
         }
     }
 }

@@ -87,8 +87,7 @@ public class MorganaAgentAdapter
     protected readonly Records.Prompt morganaPrompt;
 
     /// <summary>
-    /// The morgana.json base tools (GetContextVariable, SetContextVariable,
-    /// SetTurnContinuation, SetQuickReplies, SetRichCard), stamped <c>Reserved = true</c> exactly
+    /// The morgana.json base tools (SetTurnContinuation, SetQuickReplies, SetRichCard), stamped <c>Reserved = true</c> exactly
     /// once here — the only place in the codebase that ever sets it true. Every other reader of a
     /// ToolDefinition's Reserved flag (domain tools included) sees false by construction, never by
     /// a check: see the Reserved remarks on Records.ToolDefinition.
@@ -96,9 +95,8 @@ public class MorganaAgentAdapter
     protected readonly Records.ToolDefinition[] morganaTools;
 
     /// <summary>
-    /// Assembles everything the agent's model reads: the composed system prompt and the tool
-    /// descriptions. Passed on to <see cref="MorganaToolAdapter"/> and
-    /// <see cref="MorganaAIContextProvider"/>, which compose their own fragments through it.
+    /// Assembles the framework prose the agent's model reads: the composed system prompt, the
+    /// colleagues declaration and each colleague's description.
     /// </summary>
     protected readonly IPromptComposerService promptComposerService;
 
@@ -108,7 +106,7 @@ public class MorganaAgentAdapter
     /// </summary>
     /// <param name="llmService">LLM service abstraction, queried per-agent for its declared tier's chat client and pricing</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
-    /// <param name="promptComposerService">Service composing prompts and tool descriptions for the model</param>
+    /// <param name="promptComposerService">Service composing the framework prose the model reads</param>
     /// <param name="toolRegistryService">Service for discovering custom MorganaTool implementations</param>
     /// <param name="imcpClientRegistryService">Service for managing MCP server connections</param>
     /// <param name="chatReducerService">Service for reducing context window sent to LLM</param>
@@ -219,15 +217,14 @@ public class MorganaAgentAdapter
         //    resolved from agents.json.
         Records.Prompt agentPrompt = await promptResolverService.ResolveAsync(intentAttribute.Intent);
 
-        // 3) Tool surface = framework base tools (morgana.json: GetContextVariable,
-        //    SetContextVariable, SetQuickReplies, SetRichCard) UNION the agent's domain
-        //    tools (agents.json). Union de-dups so a domain tool can't shadow a base one.
+        // 3) Tool surface = framework base tools (morgana.json: SetTurnContinuation,
+        //    SetQuickReplies, SetRichCard) UNION the agent's domain tools (agents.json). Union de-dups so a domain tool can't shadow a base one.
         Records.ToolDefinition[] domainTools = [.. agentPrompt.GetAdditionalProperty<Records.ToolDefinition[]>(Constants.PromptProperties.Tools)
             .Select(t => t with { Reserved = false })];
         Records.ToolDefinition[] agentTools = [.. morganaTools.Union(domainTools)];
 
-        // 4) Per-agent context provider (the variable store behind GetVariable/SetVariable);
-        //    sharedContextCallback wires Shared:true writes into the cross-agent registry.
+        // 4) Per-agent context provider (the variable store the context-scoped parameters are
+        //    resolved from); sharedContextCallback wires Shared:true writes into the cross-agent registry.
         MorganaAIContextProvider morganaAIContextProvider = CreateAIContextProvider(
             intentAttribute.Intent,
             agentTools,
@@ -373,11 +370,8 @@ public class MorganaAgentAdapter
                 : $"Agent '{agentName}' has NO shared variables");
 
         // The provider needs the allow-list up front: only writes to a name in this set
-        // trigger OnSharedContextUpdate; everything else stays agent-local. The composer goes
-        // with it because the held-context declaration is assembled per turn, not now: it names
-        // the variables the session holds at that moment, which nobody knows at creation time.
-        MorganaAIContextProvider aiContextProvider =
-            new MorganaAIContextProvider(logger, sharedVariables, promptComposerService: promptComposerService);
+        // trigger OnSharedContextUpdate; everything else stays agent-local.
+        MorganaAIContextProvider aiContextProvider = new MorganaAIContextProvider(logger, sharedVariables);
 
         // Wire persistence only when a callback was supplied. Left null (e.g. an agent
         // created outside the actor path) shared writes still update local state but are
@@ -402,11 +396,9 @@ public class MorganaAgentAdapter
         Records.ToolDefinition[] agentTools,
         Func<MorganaTool.ToolContext> toolContextFactory)
     {
-        // The adapter composes the description of each generated AIFunction through the composer,
-        // which splices ToolDescriptionContextGuidance into the tools declaring context-scoped
-        // parameters. Parameter descriptions carry no framework template at all — see
-        // MorganaToolAdapter.CreateFunctionAsync.
-        MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(promptComposerService);
+        // The adapter resolves every context-scoped parameter from the session the factory hands it
+        // at invocation, so the model never looks a value up nor stores one itself.
+        MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(logger, toolContextFactory);
 
         // Split the merged set back into base (morgana.json, the `morganaTools` field) vs
         // intent-specific (agents.json). Compare by Name only: the incoming `agentTools` array
@@ -415,8 +407,7 @@ public class MorganaAgentAdapter
         // intent-specific. Name is the stable identity (tool method names are unique).
         Records.ToolDefinition[] agentSpecificTools = [.. agentTools.Except(morganaTools, new ToolDefinitionNameComparer())];
 
-        // ALWAYS register base tools (GetContextVariable, SetContextVariable,
-        // SetQuickReplies, SetRichCard). They are implemented by the MorganaTool BASE
+        // ALWAYS register base tools (SetTurnContinuation, SetQuickReplies, SetRichCard). They are implemented by the MorganaTool BASE
         // class itself — no subclass needed — so every agent gets them unconditionally,
         // even an MCP-only or tool-less one.
         MorganaTool baseTool = new MorganaTool(logger, toolContextFactory);
