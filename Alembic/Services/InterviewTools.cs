@@ -31,21 +31,6 @@ namespace Alembic.Services;
 /// </remarks>
 public class InterviewTools
 {
-    /// <summary>Section label carried by an agent's Target.</summary>
-    internal const string TargetMarker = "[TARGET]";
-
-    /// <summary>Section label carried by an agent's Personality.</summary>
-    internal const string PersonalityMarker = "[PERSONALITY]";
-
-    /// <summary>Section marker for the statement a colleague reads before consulting this agent.</summary>
-    internal const string ConsultMeForMarker = "[CONSULT ME FOR]";
-
-    /// <summary>Section label carried by an agent's Instructions.</summary>
-    internal const string InstructionsMarker = "[INSTRUCTIONS]";
-
-    /// <summary>Section label carried by an agent's Formatting.</summary>
-    internal const string FormattingMarker = "[FORMATTING]";
-
     /// <summary>
     /// The intent name the framework reserves for the classifier's fallback. No authored agent may
     /// take it.
@@ -213,14 +198,13 @@ public class InterviewTools
     /// </summary>
     /// <remarks>
     /// Overwrites whatever was there — a pass may call this more than once as the client's answer
-    /// sharpens and the last call is the one that stands. <see cref="Marked"/> guarantees the
-    /// section carries <see cref="TargetMarker"/> before it is stored and the returned sentence
-    /// tells the model whether the prose it just wrote fits this section's shape — never blocking,
+    /// sharpens and the last call is the one that stands. The section is stored as written: its label
+    /// is the framework's to add when the prompt is composed. The returned sentence tells the model whether the prose it just wrote fits this section's shape — never blocking,
     /// only informing, so the model can tighten a Target that ran long before moving on.
     /// </remarks>
     public string SetAgentTarget(string target)
     {
-        interviewState.Agent.Target = Marked(TargetMarker, target);
+        interviewState.Agent.Target = target?.Trim();
         return Shaped("Target", target, 2, 4);
     }
 
@@ -228,30 +212,28 @@ public class InterviewTools
     /// Records what a colleague reads before consulting this agent.
     /// </summary>
     /// <remarks>
-    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
-    /// <see cref="ConsultMeForMarker"/>. Written by the same pass and from the same scope, because it
+    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>. Written by the same pass and from the same scope, because it
     /// is that scope addressed to a different reader: a colleague deciding whether a question is this
     /// agent's. So it names a territory and never a list of what the agent can do — a caller handed an
     /// inventory rules questions out instead of asking them. Short by nature, which is why the shape
     /// it reports against is tighter than the Target's.
     /// </remarks>
-    public string SetAgentConsultMeFor(string consultMeFor)
+    public string SetAgentTerritory(string territory)
     {
-        interviewState.Agent.ConsultMeFor = Marked(ConsultMeForMarker, consultMeFor);
-        return Shaped("ConsultMeFor", consultMeFor, 1, 3);
+        interviewState.Agent.Territory = territory?.Trim();
+        return Shaped("Territory", territory, 1, 3);
     }
 
     /// <summary>
     /// Records the agent's Personality section.
     /// </summary>
     /// <remarks>
-    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
-    /// <see cref="PersonalityMarker"/> instead. Only the <c>AgentPersonality</c> pass declares this tool,
+    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>. Only the <c>AgentPersonality</c> pass declares this tool,
     /// so it is the one place in the interview a voice can be written.
     /// </remarks>
     public string SetAgentPersonality(string personality)
     {
-        interviewState.Agent.Personality = Marked(PersonalityMarker, personality);
+        interviewState.Agent.Personality = personality?.Trim();
         return Shaped("Personality", personality, 2, 3);
     }
 
@@ -259,8 +241,7 @@ public class InterviewTools
     /// Records the agent's Instructions section.
     /// </summary>
     /// <remarks>
-    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
-    /// <see cref="InstructionsMarker"/>. Declared only from the <c>AgentInstructions</c> pass on, once
+    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>. Declared only from the <c>AgentInstructions</c> pass on, once
     /// the toolkit exists — Instructions speaks about the agent's tools, so nothing earlier may
     /// write it.
     /// <para>
@@ -272,7 +253,7 @@ public class InterviewTools
     /// </remarks>
     public string SetAgentInstructions(string instructions)
     {
-        interviewState.Agent.Instructions = Marked(InstructionsMarker, instructions);
+        interviewState.Agent.Instructions = instructions?.Trim();
         return Shaped("Instructions", instructions, 2, 5);
     }
 
@@ -280,8 +261,7 @@ public class InterviewTools
     /// Records the agent's Formatting section.
     /// </summary>
     /// <remarks>
-    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>, stamped with
-    /// <see cref="FormattingMarker"/>. Declared only in the last pass, <c>AgentFormatting</c>, since
+    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>. Declared only in the last pass, <c>AgentFormatting</c>, since
     /// everything else about the agent — the toolkit included — is settled by the time it runs.
     /// <para>
     /// The upper bound is wider than a plain presentation rule would need, on purpose: this section
@@ -293,7 +273,7 @@ public class InterviewTools
     /// </remarks>
     public string SetAgentFormatting(string formatting)
     {
-        interviewState.Agent.Formatting = Marked(FormattingMarker, formatting);
+        interviewState.Agent.Formatting = formatting?.Trim();
         return Shaped("Formatting", formatting, 2, 10);
     }
 
@@ -474,15 +454,15 @@ public class InterviewTools
         [
             $"Intent '{interviewState.Intent.Name}': {interviewState.Intent.Description}",
             $"Opening sentence a user would send: {interviewState.Intent.DefaultValue}",
-            interviewState.Agent.Target ?? "(no target)",
-            interviewState.Agent.Personality ?? "(no personality)"
+            Records.Prompt.Labeled(Constants.SectionLabels.Target, interviewState.Agent.Target ?? "(no target)"),
+            Records.Prompt.Labeled(Constants.SectionLabels.Personality, interviewState.Agent.Personality ?? "(no personality)")
         ];
 
         if (!string.IsNullOrWhiteSpace(interviewState.Agent.Instructions))
-            sections.Add(interviewState.Agent.Instructions);
+            sections.Add(Records.Prompt.Labeled(Constants.SectionLabels.Instructions, interviewState.Agent.Instructions));
 
         if (!string.IsNullOrWhiteSpace(interviewState.Agent.Formatting))
-            sections.Add(interviewState.Agent.Formatting);
+            sections.Add(Records.Prompt.Labeled(Constants.SectionLabels.Formatting, interviewState.Agent.Formatting));
 
         return "Settled in the earlier passes and not yours to reopen:\n\n"
                + string.Join("\n\n", sections);
@@ -790,7 +770,7 @@ public class InterviewTools
 
         IEnumerable<string> rendered = agents.Select(a =>
             $"- {a.ID}\n    what it is for: {AgentRows.Plain(a.Target) ?? "(nothing said)"}"
-            + $"\n    what it answers for, in the words a colleague reads: {AgentRows.Plain(a.ConsultMeFor) ?? "(nothing said)"}"
+            + $"\n    what it answers for, in the words a colleague reads: {AgentRows.Plain(a.Territory) ?? "(nothing said)"}"
             + $"\n    what it can reach: {(a.Tools.Count > 0 ? string.Join(", ", a.Tools.Select(t => t.Name ?? "(unnamed)")) : "no tool of its own")}"
             + $"\n    how it goes about it: {AgentRows.Plain(a.Instructions) ?? "(nothing said)"}"
             + $"\n    colleagues it may already ask: {PeerNaming.Describe(a.Code.Consults)}");
@@ -867,16 +847,16 @@ public class InterviewTools
 
         ConsultationDraft edge = existing ?? new ConsultationDraft { Asking = from, Asked = to };
 
-        edge.AskingInstructions = Marked(InstructionsMarker, askingInstructions)!;
+        edge.AskingInstructions = askingInstructions?.Trim()!;
         edge.AskedInstructions = string.IsNullOrWhiteSpace(askedInstructions)
             ? null
-            : Marked(InstructionsMarker, askedInstructions);
+            : askedInstructions?.Trim();
 
         // The boundary is as often in the Target as in the Instructions, since that is where a boundary
         // belongs; one left refusing the colleague's subject goes on being read every turn.
         edge.AskingTarget = string.IsNullOrWhiteSpace(askingTarget)
             ? null
-            : Marked(TargetMarker, askingTarget);
+            : askingTarget?.Trim();
 
         if (existing is null)
             interviewState.Colleagues.Add(edge);
@@ -975,7 +955,7 @@ public class InterviewTools
         // second reading — which the passes that hunt a sentence repeating hers are told to take —
         // doubles the request for nothing: what changed between the two is the agent's own prose and
         // only that. Whole the first time, because the comparison needs her words in front of it.
-        int domain = framework ? recap.SystemPrompt.LastIndexOf(TargetMarker, StringComparison.Ordinal) : -1;
+        int domain = framework ? recap.SystemPrompt.LastIndexOf(Constants.SectionLabels.Target, StringComparison.Ordinal) : -1;
 
         framework = true;
 
@@ -1142,13 +1122,7 @@ public class InterviewTools
             : $"But the {what} should be {(pascalCase ? "PascalCase" : "camelCase")}, the way the framework's own are. Call again to fix it.";
     }
 
-    /// <summary>
-    /// Guarantees a section carries its label. Idempotent.
-    /// </summary>
-    internal static string? Marked(string marker, string? value) =>
-        string.IsNullOrWhiteSpace(value) || value.StartsWith(marker, StringComparison.Ordinal)
-            ? value?.Trim()
-            : $"{marker} {value.Trim()}";
+
 
     /// <summary>
     /// Reports whether a section landed inside the size its doctrine gives it.

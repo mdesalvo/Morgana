@@ -76,6 +76,30 @@ public sealed class FrameworkPromptTests
     public async Task Every_message_morgana_says_in_her_own_voice_is_authored(string promptId, string message)
         => Assert.False(string.IsNullOrWhiteSpace((await resolver.ResolveAsync(promptId)).GetMessage(message)));
 
+    [Theory]
+    [InlineData("Morgana")]
+    [InlineData("Classifier")]
+    [InlineData("Guard")]
+    [InlineData("Presentation")]
+    [InlineData("ChannelAdapter")]
+    public async Task Sections_carry_no_label_of_their_own(string promptId)
+    {
+        Records.Prompt prompt = await resolver.ResolveAsync(promptId);
+
+        // The label is put in front by whoever composes the prompt: one written here would be one more
+        // place to forget it, which is exactly what composing it in code exists to rule out.
+        foreach (string? section in new[] { prompt.Target, prompt.Personality, prompt.Instructions, prompt.Formatting })
+            Assert.False(section?.TrimStart().StartsWith('[') == true, $"{promptId}: {section}");
+    }
+
+    [Fact]
+    public void A_section_is_labeled_once_whether_or_not_it_was_authored_with_its_label()
+    {
+        Assert.Equal("[TARGET] Answer billing questions.", Records.Prompt.Labeled("[TARGET]", "Answer billing questions."));
+        Assert.Equal("[TARGET] Answer billing questions.", Records.Prompt.Labeled("[TARGET]", "[TARGET] Answer billing questions."));
+        Assert.Equal("", Records.Prompt.Labeled("[TARGET]", "  "));
+    }
+
     /// <summary>A deployment with no domain: only the framework prompts are resolved.</summary>
     private sealed class NoDomain : IAgentConfigurationService
     {

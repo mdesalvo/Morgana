@@ -77,7 +77,7 @@ public class CoherenceApplyTools
         if (Find(agentId) is not { } agent)
             return $"Nothing recorded: no agent named '{agentId}'.";
 
-        agent.Target = InterviewTools.Marked(InterviewTools.TargetMarker, target);
+        agent.Target = target?.Trim();
         MarkRevised(agent);
         return $"{agentId}'s Target revised.";
     }
@@ -90,7 +90,7 @@ public class CoherenceApplyTools
         if (Find(agentId) is not { } agent)
             return $"Nothing recorded: no agent named '{agentId}'.";
 
-        agent.Instructions = InterviewTools.Marked(InterviewTools.InstructionsMarker, instructions);
+        agent.Instructions = instructions?.Trim();
         MarkRevised(agent);
         return $"{agentId}'s Instructions revised.";
     }
@@ -103,7 +103,7 @@ public class CoherenceApplyTools
         if (Find(agentId) is not { } agent)
             return $"Nothing recorded: no agent named '{agentId}'.";
 
-        agent.Formatting = InterviewTools.Marked(InterviewTools.FormattingMarker, formatting);
+        agent.Formatting = formatting?.Trim();
         MarkRevised(agent);
         return $"{agentId}'s Formatting revised.";
     }

@@ -64,7 +64,12 @@ public class ToolMockService : IToolMockService
         // speaks to someone; this call speaks to nobody and emits a file. Handing it a voice would
         // be the same defect the interview doctrine warns about, pointed the other way.
         string system = string.Join("\n\n",
-            new[] { mock.Target, mock.Instructions, mock.Formatting }.Where(s => !string.IsNullOrWhiteSpace(s)));
+            new[]
+            {
+                Records.Prompt.Labeled(Constants.SectionLabels.Target, mock.Target),
+                Records.Prompt.Labeled(Constants.SectionLabels.Instructions, mock.Instructions),
+                Records.Prompt.Labeled(Constants.SectionLabels.Formatting, mock.Formatting)
+            }.Where(section => section.Length > 0));
 
         // The generated half IS the specification: it carries the exact signatures the answer must
         // implement, the class name, the namespace and the base class. Describing them in prose as

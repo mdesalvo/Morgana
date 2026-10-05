@@ -117,8 +117,13 @@ public class CoherenceService : ICoherenceService
         // draws, a colleague relation the framework already governs) while a reader who has not been
         // told what those rules are is left judging by resemblance.
         string system = string.Join("\n\n",
-            new[] { await alembicPromptService.ComposeFrameworkPrimerAsync(), coherence.Target, instructions, formatting }
-                .Where(s => !string.IsNullOrWhiteSpace(s)));
+            new[]
+            {
+                await alembicPromptService.ComposeFrameworkPrimerAsync(),
+                Records.Prompt.Labeled(Constants.SectionLabels.Target, coherence.Target),
+                Records.Prompt.Labeled(Constants.SectionLabels.Instructions, instructions),
+                Records.Prompt.Labeled(Constants.SectionLabels.Formatting, formatting)
+            }.Where(section => !string.IsNullOrWhiteSpace(section)));
 
         IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);
 
@@ -205,10 +210,10 @@ public class CoherenceService : ICoherenceService
             sb.AppendLine(CultureInfo.InvariantCulture, $"## {agent.ID}");
             sb.AppendLine();
 
-            // ConsultMeFor rides with the four an agent reads about itself, though nobody but a
+            // Territory rides with the four an agent reads about itself, though nobody but a
             // colleague ever reads it: an agent claiming a territory its own Instructions refuse is a
             // contradiction visible only when the two are set side by side, which is this pass's job.
-            foreach (string? section in new[] { agent.Target, agent.ConsultMeFor, agent.Instructions, agent.Personality, agent.Formatting })
+            foreach (string? section in new[] { agent.Target, agent.Territory, agent.Instructions, agent.Personality, agent.Formatting })
                 if (!string.IsNullOrWhiteSpace(section))
                     sb.AppendLine(section);
 

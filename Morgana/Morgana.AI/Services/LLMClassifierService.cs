@@ -100,7 +100,10 @@ public class LLMClassifierService : IClassifierService
         // What the classifier reads on every turn of this process's life: the three authored sections
         // with the domain's vocabulary spliced into the first. Composed here so no turn pays for it.
         classifierSystemPrompt =
-            $"{classifierPrompt.Target.Replace(Constants.Placeholders.FormattedIntents, formattedIntents)}\n{classifierPrompt.Instructions}\n{classifierPrompt.Formatting}";
+            string.Join("\n",
+                Records.Prompt.Labeled(Constants.SectionLabels.Target, classifierPrompt.Target.Replace(Constants.Placeholders.FormattedIntents, formattedIntents)),
+                Records.Prompt.Labeled(Constants.SectionLabels.Instructions, classifierPrompt.Instructions),
+                Records.Prompt.Labeled(Constants.SectionLabels.Formatting, classifierPrompt.Formatting));
     }
 
     /// <inheritdoc/>

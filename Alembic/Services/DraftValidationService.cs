@@ -267,17 +267,17 @@ public class DraftValidationService : IDraftValidationService
                 "The agent has no Target.",
                 "Target is the domain layer's first section and states what the agent is for; composed empty, the agent inherits only the framework's generic purpose.") { Step = InterviewStep.AgentTarget });
 
-        if (string.IsNullOrWhiteSpace(agent.ConsultMeFor))
+        if (string.IsNullOrWhiteSpace(agent.Territory))
             findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                 "The agent has nothing to say to a colleague consulting it.",
-                "ConsultMeFor is what a colleague reads to decide whether a question is this agent's; without it the card falls back to the intent description, which is a routing phrase written for the classifier.") { Step = InterviewStep.AgentTerritory });
+                "Territory is what a colleague reads to decide whether a question is this agent's; without it the card falls back to the intent description, which is a routing phrase written for the classifier.") { Step = InterviewStep.AgentTerritory });
 
         // The card carries one sentence about this agent and a colleague weighing a question reads
         // that and nothing else. Two ways it comes out useless are decidable here: written as the
         // operations the agent performs, which invites a caller to rule its question out; left as
         // the phrase the classifier routes on, which says which utterances land here rather than
         // what this agent answers for.
-        string? territory = AgentRows.Plain(agent.ConsultMeFor);
+        string? territory = AgentRows.Plain(agent.Territory);
 
         if (!string.IsNullOrWhiteSpace(territory))
         {
@@ -289,7 +289,7 @@ public class DraftValidationService : IDraftValidationService
             if (named is not null)
                 findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                     $"What this agent publishes to a colleague names its own tool '{named}'.",
-                    "ConsultMeFor states a territory: a colleague handed an inventory of functions rules its question out instead of asking it.") { Step = InterviewStep.AgentTerritory });
+                    "Territory states a territory: a colleague handed an inventory of functions rules its question out instead of asking it.") { Step = InterviewStep.AgentTerritory });
 
             if (intent is not null && string.Equals(Compact(territory), Compact(intent.Description), StringComparison.OrdinalIgnoreCase))
                 findings.Add(new ValidationFinding(FindingSeverity.Warning, where,

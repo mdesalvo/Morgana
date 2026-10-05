@@ -18,12 +18,12 @@ public static class AgentSections
     /// <summary>
     /// A section's prose as the client reads it; <c>null</c> while unwritten.
     /// </summary>
-    // The Territory is the agent's ConsultMeFor. The Toolkit has no prose: callers list its tools.
+    // The Toolkit has no prose: callers list its tools.
     public static string? Prose(AgentDraft agent, int rail) => rail switch
     {
         1 => AgentRows.Plain(agent.Target),
         2 => AgentRows.Plain(agent.Personality),
-        4 => AgentRows.Plain(agent.ConsultMeFor),
+        4 => AgentRows.Plain(agent.Territory),
         5 => AgentRows.Plain(agent.Instructions),
         6 => AgentRows.Plain(agent.Formatting),
         _ => null

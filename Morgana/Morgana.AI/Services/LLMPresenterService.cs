@@ -156,7 +156,11 @@ public class LLMPresenterService : IPresenterService
 
             // Compose the system prompt by interpolating the formatted list into the template.
             string presentationSystemPrompt =
-                $"{presentationPrompt.Target}\n\n{presentationPrompt.Instructions}\n\n{presentationPrompt.Formatting}".Replace(Constants.Placeholders.Intents, formattedIntents);
+                string.Join("\n\n",
+                    Records.Prompt.Labeled(Constants.SectionLabels.Target, presentationPrompt.Target),
+                    Records.Prompt.Labeled(Constants.SectionLabels.Instructions, presentationPrompt.Instructions),
+                    Records.Prompt.Labeled(Constants.SectionLabels.Formatting, presentationPrompt.Formatting))
+                .Replace(Constants.Placeholders.Intents, formattedIntents);
 
             // The fixed user message acts as a trigger; the real instructions live in the system prompt.
             string llmResponse = await llmService.CompleteWithSystemPromptAsync(

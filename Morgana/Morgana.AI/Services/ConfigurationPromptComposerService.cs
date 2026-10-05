@@ -84,15 +84,15 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // Framework
         sb.AppendLine(FrameworkLayerHeader);
         sb.AppendLine();
-        sb.AppendLine(framework.Prompt.Target);
+        sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Target, framework.Prompt.Target));
         sb.AppendLine();
-        sb.AppendLine(framework.Prompt.Personality);
+        sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Personality, framework.Prompt.Personality));
         sb.AppendLine();
         sb.AppendLine(FormatGlobalPolicies(framework.Policies, peerCapable));
         sb.AppendLine();
-        sb.AppendLine(framework.Prompt.Instructions);
+        sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Instructions, framework.Prompt.Instructions));
         sb.AppendLine();
-        sb.AppendLine(framework.Prompt.Formatting);
+        sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Formatting, framework.Prompt.Formatting));
         sb.AppendLine();
         sb.AppendLine(FrameworkLayerFooter);
         sb.AppendLine();
@@ -100,13 +100,13 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // Domain
         sb.AppendLine(DomainLayerHeader);
         sb.AppendLine();
-        sb.AppendLine(domainPrompt.Target);
+        sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Target, domainPrompt.Target));
         sb.AppendLine();
-        sb.AppendLine(domainPrompt.Personality);
+        sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Personality, domainPrompt.Personality));
         sb.AppendLine();
-        sb.AppendLine(domainPrompt.Instructions);
+        sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Instructions, domainPrompt.Instructions));
         sb.AppendLine();
-        sb.AppendLine(domainPrompt.Formatting);
+        sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Formatting, domainPrompt.Formatting));
         sb.AppendLine();
         sb.AppendLine(DomainLayerFooter);
         sb.AppendLine();

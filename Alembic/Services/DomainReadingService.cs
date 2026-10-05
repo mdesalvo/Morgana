@@ -60,8 +60,12 @@ public class DomainReadingService : IDomainReadingService
         Records.Prompt reader = alembicPromptService.Resolve(ReaderPromptId);
 
         string system = string.Join("\n\n",
-            new[] { reader.Target, reader.Instructions, reader.Formatting }
-                .Where(section => !string.IsNullOrWhiteSpace(section)));
+            new[]
+            {
+                Records.Prompt.Labeled(Constants.SectionLabels.Target, reader.Target),
+                Records.Prompt.Labeled(Constants.SectionLabels.Instructions, reader.Instructions),
+                Records.Prompt.Labeled(Constants.SectionLabels.Formatting, reader.Formatting)
+            }.Where(section => section.Length > 0));
 
         IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);
 
@@ -165,7 +169,7 @@ public class DomainReadingService : IDomainReadingService
             if (AgentRows.Plain(agent.Target) is { Length: > 0 } target)
                 described.AppendLine(CultureInfo.InvariantCulture, $"- what it is for: {target}");
 
-            if (AgentRows.Plain(agent.ConsultMeFor) is { Length: > 0 } territory)
+            if (AgentRows.Plain(agent.Territory) is { Length: > 0 } territory)
                 described.AppendLine(CultureInfo.InvariantCulture, $"- what it is asked about: {territory}");
 
             if (AgentRows.Plain(agent.Instructions) is { Length: > 0 } instructions)

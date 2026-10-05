@@ -136,9 +136,9 @@ public class AlembicPromptService : IAlembicPromptService
         Records.Prompt morgana = await morganaPrompt.Value;
         sb.AppendLine(MorganaLayerHeader);
         sb.AppendLine();
-        sb.AppendLine(morgana.Target);
+        sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Target, morgana.Target));
         sb.AppendLine();
-        sb.AppendLine(morgana.Personality);
+        sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Personality, morgana.Personality));
         sb.AppendLine();
         sb.AppendLine(await ComposeFrameworkPrimerAsync());
         sb.AppendLine();
@@ -154,10 +154,10 @@ public class AlembicPromptService : IAlembicPromptService
 
         sb.AppendLine(AlembicLayerHeader);
         sb.AppendLine();
-        AppendSection(sb, alembic.Target, mode.Target, interviewer.Target);
-        AppendSection(sb, alembic.Personality, mode.Personality, interviewer.Personality);
-        AppendSection(sb, alembic.Instructions, mode.Instructions, interviewer.Instructions);
-        AppendSection(sb, alembic.Formatting, mode.Formatting, interviewer.Formatting);
+        AppendSection(sb, Constants.SectionLabels.Target, alembic.Target, mode.Target, interviewer.Target);
+        AppendSection(sb, Constants.SectionLabels.Personality, alembic.Personality, mode.Personality, interviewer.Personality);
+        AppendSection(sb, Constants.SectionLabels.Instructions, alembic.Instructions, mode.Instructions, interviewer.Instructions);
+        AppendSection(sb, Constants.SectionLabels.Formatting, alembic.Formatting, mode.Formatting, interviewer.Formatting);
 
         return sb.ToString();
     }
@@ -273,16 +273,16 @@ public class AlembicPromptService : IAlembicPromptService
     /// label; then which of the two jobs this step is; then what this interviewer adds. Only the
     /// first is labelled — the rest fall under it, which is what makes the three read as one section.
     /// </param>
-    private static void AppendSection(StringBuilder sb, params string?[] parts)
+    private static void AppendSection(StringBuilder sb, string label, params string?[] parts)
     {
-        foreach (string? part in parts)
-        {
-            if (string.IsNullOrWhiteSpace(part))
-                continue;
+        // The three rows read as one section under one label: the model sees no seam between them.
+        string section = Records.Prompt.Labeled(label,
+            string.Join("\n\n", parts.Where(part => !string.IsNullOrWhiteSpace(part)).Select(part => part!.Trim())));
+        if (section.Length == 0)
+            return;
 
-            sb.AppendLine(part.Trim());
-            sb.AppendLine();
-        }
+        sb.AppendLine(section);
+        sb.AppendLine();
     }
 
     /// <summary>

@@ -5,7 +5,7 @@ namespace Alembic.Model;
 /// </summary>
 /// <remarks>
 /// A running Morgana publishes one per agent and builds it from three things and no others: the
-/// intent's name, the agent's <c>ConsultMeFor</c> as the description a caller reads and its tools as
+/// intent's name, the agent's <c>Territory</c> as the description a caller reads and its tools as
 /// the skills. Alembic packs the same card while the agent is still being written, so what the
 /// interview weighs and what validation reports is what a caller will be handed — the card travels
 /// with the agent from the pass that settles its territory to the moment it is let into the domain.
@@ -27,7 +27,7 @@ public static class CardProjection
     /// </remarks>
     public static string Render(IntentDraft intent, AgentDraft agent)
     {
-        string description = AgentRows.Plain(agent.ConsultMeFor) is { Length: > 0 } territory
+        string description = AgentRows.Plain(agent.Territory) is { Length: > 0 } territory
             ? territory
             : intent.Description ?? string.Empty;
 

@@ -40,7 +40,7 @@ public interface IPromptComposerService
 
     /// <summary>
     /// Produces the description under which a colleague is offered as a callable function: the
-    /// colleague's own statement of what falls to it (its <c>ConsultMeFor</c>, carried on the card as
+    /// colleague's own statement of what falls to it (its <c>Territory</c>, carried on the card as
     /// its description), with nothing of the framework's added to it.
     /// </summary>
     /// <returns>The description to expose on the generated <c>AIFunction</c>.</returns>

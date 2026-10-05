@@ -102,8 +102,13 @@ public class CoherenceApplyService : ICoherenceApplyService
                 // rule binding above the agent — cannot be told from mutilation without knowing
                 // which rules those are.
                 Instructions = string.Join("\n\n",
-                    new[] { await alembicPromptService.ComposeFrameworkPrimerAsync(), prompt.Target, prompt.Instructions, prompt.Formatting }
-                        .Where(s => !string.IsNullOrWhiteSpace(s))),
+                    new[]
+                    {
+                        await alembicPromptService.ComposeFrameworkPrimerAsync(),
+                        Records.Prompt.Labeled(Constants.SectionLabels.Target, prompt.Target),
+                        Records.Prompt.Labeled(Constants.SectionLabels.Instructions, prompt.Instructions),
+                        Records.Prompt.Labeled(Constants.SectionLabels.Formatting, prompt.Formatting)
+                    }.Where(section => !string.IsNullOrWhiteSpace(section))),
                 Tools = [.. await toolAdapter.CreateAllFunctionsAsync()]
             }
         });

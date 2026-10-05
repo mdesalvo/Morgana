@@ -51,7 +51,10 @@ public class LLMGuardRailService : IGuardRailService
 
         // What the Guard reads before every user message. No placeholder to splice, unlike the
         // classifier's: what is admissible is a policy of the framework, not of a domain.
-        guardSystemPrompt = $"{guardPrompt.Target}\n{guardPrompt.Instructions}\n{guardPrompt.Formatting}";
+        guardSystemPrompt = string.Join("\n",
+            Records.Prompt.Labeled(Constants.SectionLabels.Target, guardPrompt.Target),
+            Records.Prompt.Labeled(Constants.SectionLabels.Instructions, guardPrompt.Instructions),
+            Records.Prompt.Labeled(Constants.SectionLabels.Formatting, guardPrompt.Formatting));
     }
 
     /// <inheritdoc/>
