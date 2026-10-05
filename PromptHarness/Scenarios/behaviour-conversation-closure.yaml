@@ -1,13 +1,13 @@
 id: behaviour-conversation-closure
 description: >-
-  Family B in both its wordings: escape appended to a choice list so the user is never trapped and
-  closure withheld when the user has already said goodbye. Also where the removal of the
-  endsWithQuestion heuristic shows — nothing but the tool decides that the agent is done.
+  The service buttons the framework adds from the agent's closure, in both wordings: escape appended
+  to a choice list so the user is never trapped and nothing at all once the user has said goodbye.
+  What the model owns here is the closure itself: recognising a goodbye as one.
 
 turns:
-  # Two lawful shapes again: having shown the invoices, the agent may close the request (CLOSURE
-  # pair) or offer the invoices as further choices (Family A + ESCAPE appended). What holds either
-  # way is that the user always has a way out of the turn.
+  # Two lawful shapes again: having shown the invoices, the agent may close the request (closure
+  # pair) or offer further actions (escape pair appended). What holds either way is that the user
+  # always has a way out of the turn.
   - say: "Hi, my customer code is P994E — show me my last 3 invoices"
     expect:
       agent: BillingAgent

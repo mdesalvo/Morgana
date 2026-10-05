@@ -409,10 +409,14 @@ public class MorganaAgent : MorganaActor
                                           ?? new Records.TurnReply(Records.AwaitedFromUser.Nothing, false, [], null);
             aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnReply);
 
-            List<QuickReply>? quickReplies = turnReply.Actions.Count > 0 ? turnReply.ToQuickReplies() : null;
+            // The buttons that let the user stay or leave are the framework's to add, worded in morgana.json.
+            Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
+            Records.ServiceButtons serviceButtons = morganaPrompt.GetAdditionalPropertyOrDefault(
+                Constants.PromptProperties.ServiceButtons, new Records.ServiceButtons([], []));
+
+            (List<QuickReply>? quickReplies, bool isCompleted) = turnReply.ToDelivery(serviceButtons);
             RichCard? richCard = turnReply.Card;
             bool hasQuickReplies = quickReplies is not null;
-            bool isCompleted = turnReply.IsCompleted;
 
             agentLogger.LogInformation(
                 "Agent response analysis: Awaits={Awaits}, UserIsLeaving={UserIsLeaving}, QuickReplies={QuickReplies}, HasRichCard={HasRichCard}, IsCompleted={IsCompleted}",
@@ -549,8 +553,11 @@ public class MorganaAgent : MorganaActor
             // The colleague's presentation decisions are handed over as data rather than drained:
             // the asking agent reads the options it was offered and may come back having chosen one.
             Records.TurnReply? turnReply = GetTurnReplyFromContext(consultationSession);
-            bool awaitsReply = turnReply is { IsCompleted: false };
-            List<QuickReply>? quickReplies = turnReply?.Actions.Count > 0 ? turnReply.ToQuickReplies() : null;
+            bool awaitsReply = turnReply?.AwaitsUser == true;
+
+            // The colleague's own actions and nothing of the framework's: staying or leaving is the
+            // asking agent's user's choice, never the colleague's.
+            List<QuickReply>? quickReplies = turnReply?.ToDelivery(new Records.ServiceButtons([], [])).QuickReplies;
             RichCard? richCard = turnReply?.Card;
 
             // A baseline of 0 where a user turn passes its own: this session was created for the

@@ -28,21 +28,53 @@ namespace PromptHarness.Tests;
 /// </remarks>
 public sealed class TurnClosureTests
 {
-    [Theory]
-    [InlineData("nothing", false, true)]
-    [InlineData("typed_answer", false, false)]
-    [InlineData("action_choice", false, false)]
-    [InlineData("typed_answer", true, true)]
-    public void Agent_hands_the_conversation_back_only_when_awaiting_nothing_or_the_user_leaves(
-        string awaits, bool userIsLeaving, bool isCompleted)
-    {
-        Records.TurnReply turnReply = Deserialize($$"""{"awaits":"{{awaits}}","userIsLeaving":{{(userIsLeaving ? "true" : "false")}},"actions":[],"card":null}""");
+    /// <summary>The service buttons as morgana.json authors them, ids being what the channels act on.</summary>
+    private static readonly Records.ServiceButtons ServiceButtons = new Records.ServiceButtons(
+        [new QuickReply("continue_agent", "🔮 I still need you", "I have another question for you"),
+         new QuickReply("exit_agent", "✨ We're done, thanks", "We're done, thanks", true)],
+        [new QuickReply("continue_agent", "💬 Ask me something else", "I want to ask you something else"),
+         new QuickReply("exit_agent", "✨ We're done, thanks", "We're done, thanks", true)]);
 
-        Assert.Equal(isCompleted, turnReply.IsCompleted);
+    [Theory]
+    // A departing user is let go: no button and the conversation returns to Morgana, whatever else was declared.
+    [InlineData("nothing", true, false, "", true)]
+    [InlineData("action_choice", true, true, "", true)]
+    // A typed answer is asked with nothing gating it.
+    [InlineData("typed_answer", false, false, "", false)]
+    [InlineData("typed_answer", false, true, "", false)]
+    // Offered actions carry the escape pair after them.
+    [InlineData("action_choice", false, true, "GetInvoices-1,continue_agent,exit_agent", false)]
+    [InlineData("nothing", false, true, "GetInvoices-1,continue_agent,exit_agent", false)]
+    // An answered request carries the closure pair and the agent stays until the user leaves.
+    [InlineData("nothing", false, false, "continue_agent,exit_agent", false)]
+    [InlineData("action_choice", false, false, "continue_agent,exit_agent", false)]
+    public void Framework_decides_the_service_buttons_from_the_closure(
+        string awaits, bool userIsLeaving, bool withAction, string buttonIds, bool handsBack)
+    {
+        string actions = withAction ? """[{"tool":"GetInvoices","label":"📄 Invoices","value":"Show my invoices"}]""" : "[]";
+        Records.TurnReply turnReply = Deserialize(
+            $$"""{"awaits":"{{awaits}}","userIsLeaving":{{(userIsLeaving ? "true" : "false")}},"actions":{{actions}},"card":null}""");
+
+        (List<QuickReply>? quickReplies, bool handsBackConversation) = turnReply.ToDelivery(ServiceButtons);
+
+        Assert.Equal(buttonIds, string.Join(",", quickReplies?.Select(button => button.Id) ?? []));
+        Assert.Equal(handsBack, handsBackConversation);
     }
 
     [Fact]
-    public void Actions_become_buttons_numbered_per_turn()
+    public void Answered_request_with_no_authored_closure_hands_the_conversation_back()
+    {
+        Records.TurnReply turnReply = Deserialize("""{"awaits":"nothing","userIsLeaving":false,"actions":[],"card":null}""");
+
+        (List<QuickReply>? quickReplies, bool handsBack) = turnReply.ToDelivery(new Records.ServiceButtons([], []));
+
+        // With no button to leave by, staying in service would trap the user with this agent.
+        Assert.Null(quickReplies);
+        Assert.True(handsBack);
+    }
+
+    [Fact]
+    public void Two_actions_on_one_tool_stay_two_buttons()
     {
         Records.TurnReply turnReply = Deserialize("""
             {"awaits":"action_choice","userIsLeaving":false,"card":null,"actions":[
@@ -50,10 +82,24 @@ public sealed class TurnClosureTests
               {"tool":"ConfirmOrder","label":"✅ Confirm both","value":"Confirm both orders"}]}
             """);
 
-        List<QuickReply> buttons = turnReply.ToQuickReplies();
+        List<QuickReply> buttons = turnReply.ToDelivery(ServiceButtons).QuickReplies!;
 
-        Assert.Equal(["ConfirmOrder-1", "ConfirmOrder-2"], buttons.Select(button => button.Id));
+        Assert.Equal(["ConfirmOrder-1", "ConfirmOrder-2", "continue_agent", "exit_agent"], buttons.Select(button => button.Id));
         Assert.Equal("Confirm my order", buttons[0].Value);
+    }
+
+    [Fact]
+    public async Task Reply_discards_an_action_leading_to_a_tool_the_agent_lacks()
+    {
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
+
+        await reply.Function.InvokeAsync(Arguments("""
+            {"awaits":"action_choice","userIsLeaving":false,"actions":[
+              {"tool":"GetInvoices","label":"📄 Invoices","value":"Show my invoices"},
+              {"tool":"DownloadPdf","label":"⬇️ PDF","value":"Download it as PDF"}]}
+            """));
+
+        Assert.Equal("GetInvoices", Assert.Single(reply.Recorded()!.Actions).Tool);
     }
 
     [Fact]
@@ -98,16 +144,32 @@ public sealed class TurnClosureTests
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
 
-        object? result = await reply.Function.InvokeAsync(Arguments("""
+        // Refused with the reason as a fact, which the agent's tool loop hands back to the model.
+        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments("""
             {"awaits":"nothing","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
               {"type":"section","title":"1","subtitle":null,"components":[
                 {"type":"section","title":"2","subtitle":null,"components":[
                   {"type":"section","title":"3","subtitle":null,"components":[{"type":"divider"}]}]}]}]}}
-            """));
+            """)).AsTask());
 
-        // Refused and left open, so the model reads why and closes again.
-        Assert.Contains("not closed", result?.ToString());
+        Assert.Contains("nests 4 levels", refusal.Message);
         Assert.Null(reply.Recorded());
+    }
+
+    [Fact]
+    public async Task Reply_before_any_text_is_refused_until_the_turn_is_written()
+    {
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
+        ScriptedChatClient model = new ScriptedChatClient(
+            Call("Reply", """{"awaits":"nothing","userIsLeaving":true}"""),
+            Merge(Text("Farewell: may your garden bloom."),
+                  Call("Reply", """{"awaits":"nothing","userIsLeaving":true}""")));
+
+        await RunTurnAsync(model, reply, canForceToolCall: true);
+
+        // The first closure would have left the turn mute: refused, the model wrote and closed again.
+        Assert.Equal(2, model.Requests.Count);
+        Assert.True(reply.Recorded()!.UserIsLeaving);
     }
 
     [Theory]
@@ -269,7 +331,8 @@ public sealed class TurnClosureTests
         /// <summary>
         /// Builds Reply over a session of an agent that never talks to a model.
         /// </summary>
-        public static async Task<ReplyUnderTest> CreateAsync()
+        /// <param name="actionableToolNames">The agent's tools an action may lead to; null accepts any.</param>
+        public static async Task<ReplyUnderTest> CreateAsync(IReadOnlyCollection<string>? actionableToolNames = null)
         {
             ReplyUnderTest reply = new ReplyUnderTest();
             reply.session = await new ChatClientAgent(new ScriptedChatClient()).CreateSessionAsync();
@@ -283,7 +346,7 @@ public sealed class TurnClosureTests
             ]);
 
             MorganaTool baseTool = new MorganaTool(NullLogger.Instance,
-                () => new MorganaTool.ToolContext(reply.provider, reply.session, "turn-closure"));
+                () => new MorganaTool.ToolContext(reply.provider, reply.session, "turn-closure", actionableToolNames));
             MorganaToolAdapter adapter = new MorganaToolAdapter(NullLogger.Instance,
                 () => new MorganaTool.ToolContext(reply.provider, reply.session, "turn-closure"));
 

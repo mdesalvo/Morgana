@@ -77,48 +77,77 @@ public class MorganaTool
     /// <param name="userIsLeaving">True when the user's own message was a goodbye.</param>
     /// <param name="actions">The agent's own actions offered as buttons, if any.</param>
     /// <param name="card">The card presenting the turn's structured data, if any.</param>
-    /// <returns>A fact for the model: the turn is closed or the reason its card was refused.</returns>
+    /// <returns>The fact that the turn is closed.</returns>
+    /// <exception cref="ArgumentException">
+    /// The closure is refused and the turn stays open: no text has reached the user yet or the card
+    /// exceeds what the channels lay out. The message is the reason, handed to the model for repair.
+    /// </exception>
     public async Task<object> Reply(
         Records.AwaitedFromUser awaits,
         bool userIsLeaving,
         List<Records.ReplyAction>? actions = null,
         RichCard? card = null)
     {
-        // A card the channel could not lay out is refused here and the turn stays open, so the
-        // model reads why and calls Reply again with a card that fits.
+        // Closed before a word of it was written, the turn would end mute: the model is sent back to
+        // write first. Absent when the framework records a closure itself, which it does only after text.
+        if (FunctionInvokingChatClient.CurrentContext is { } invocation && !HasTurnText(invocation.Messages))
+            throw new ArgumentException("no text has reached the user yet this turn");
+
+        // A card the channel could not lay out is refused and the turn stays open, so the model calls
+        // Reply again with a card that fits.
         if (card is not null)
         {
             int depth = CalculateMaxDepth(card.Components, 1);
             if (depth > MaxCardDepth)
-            {
-                toolLogger.LogWarning("Reply refused a rich card nesting {Depth} levels (max {Max})", depth, MaxCardDepth);
-                return $"Card refused: it nests {depth} levels and at most {MaxCardDepth} are allowed. The turn is not closed.";
-            }
+                throw new ArgumentException($"the card nests {depth} levels and at most {MaxCardDepth} are allowed");
 
             int totalComponents = CountComponents(card.Components);
             if (totalComponents > MaxCardComponents)
-            {
-                toolLogger.LogWarning("Reply refused a rich card of {Count} components (max {Max})", totalComponents, MaxCardComponents);
-                return $"Card refused: it holds {totalComponents} components and at most {MaxCardComponents} are allowed. The turn is not closed.";
-            }
+                throw new ArgumentException($"the card holds {totalComponents} components and at most {MaxCardComponents} are allowed");
         }
 
-        Records.TurnReply turnReply = new Records.TurnReply(awaits, userIsLeaving, actions ?? [], card);
-
         ToolContext ctx = getToolContext();
+
+        // An action is a button the user presses to have something done: one leading to no tool of this
+        // agent would be a promise nothing keeps, so it never reaches the channel.
+        List<Records.ReplyAction> offeredActions = actions ?? [];
+        if (ctx.ActionableToolNames is { } actionableToolNames)
+        {
+            foreach (Records.ReplyAction discarded in offeredActions.Where(action => !actionableToolNames.Contains(action.Tool)))
+                toolLogger.LogWarning("Reply discarded the action '{Label}': it leads to '{Tool}', which this agent does not have", discarded.Label, discarded.Tool);
+
+            offeredActions = [.. offeredActions.Where(action => actionableToolNames.Contains(action.Tool))];
+        }
+
+        Records.TurnReply turnReply = new Records.TurnReply(awaits, userIsLeaving, offeredActions, card);
+
         await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.TurnReply,
             JsonSerializer.Serialize(turnReply, Records.DefaultJsonSerializerOptions));
 
         // Nothing is left for the model to do once the turn is closed, so the tool loop ends here
         // instead of spending another call. Absent when the framework records a closure itself.
-        if (FunctionInvokingChatClient.CurrentContext is { } invocation)
-            invocation.Terminate = true;
+        if (FunctionInvokingChatClient.CurrentContext is { } closingInvocation)
+            closingInvocation.Terminate = true;
 
         toolLogger.LogInformation(
             "LLM closed its turn via Reply: awaits={Awaits}, userIsLeaving={UserIsLeaving}, actions={Actions}, card={Card}",
             awaits, userIsLeaving, turnReply.Actions.Count, card?.Title ?? "(none)");
 
         return TurnClosed;
+    }
+
+    /// <summary>
+    /// True when the turn under way has already written text to the user: an assistant message with
+    /// text after the message that opened the turn.
+    /// </summary>
+    private static bool HasTurnText(IList<ChatMessage> messages)
+    {
+        int turnStart = messages.Count - 1;
+        while (turnStart >= 0 && messages[turnStart].Role != ChatRole.User)
+            turnStart--;
+
+        return messages.Skip(turnStart + 1)
+            .Any(message => message.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(message.Text));
     }
 
     /// <summary>
@@ -197,17 +226,29 @@ public class MorganaTool
         public string ConversationId { get; }
 
         /// <summary>
+        /// The agent's tools a user action may lead to: its own and its MCP tools, never Reply nor a
+        /// colleague. Null when nobody declared them, which leaves every action as the model wrote it.
+        /// </summary>
+        public IReadOnlyCollection<string>? ActionableToolNames { get; }
+
+        /// <summary>
         /// Initializes a new <see cref="ToolContext"/> pairing the agent's context provider
         /// with the session and conversationId for the in-flight turn.
         /// </summary>
         /// <param name="provider">The singleton context provider for the agent.</param>
         /// <param name="session">The active agent session for the current turn.</param>
         /// <param name="conversationId">The Akka conversation identifier this agent instance is scoped to.</param>
-        public ToolContext(MorganaAIContextProvider provider, AgentSession session, string conversationId)
+        /// <param name="actionableToolNames">The agent's tools a user action may lead to, if known.</param>
+        public ToolContext(
+            MorganaAIContextProvider provider,
+            AgentSession session,
+            string conversationId,
+            IReadOnlyCollection<string>? actionableToolNames = null)
         {
             Provider = provider;
             Session = session;
             ConversationId = conversationId;
+            ActionableToolNames = actionableToolNames;
         }
     }
 }

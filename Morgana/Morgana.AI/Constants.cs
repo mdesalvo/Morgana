@@ -90,6 +90,9 @@ public static class Constants
 
         /// <summary>Follows a turn the model wrote without Reply, asking for that turn's closure alone.</summary>
         public const string TurnClosureRequest = "TurnClosureRequest";
+
+        /// <summary>Answers a Reply the framework refused, with the reason it was refused.</summary>
+        public const string ReplyNotAccepted = "ReplyNotAccepted";
     }
 
     /// <summary>
@@ -110,6 +113,9 @@ public static class Constants
 
         /// <summary>What the user is told when a turn fails, authored rather than hard-coded.</summary>
         public const string ErrorAnswers = "ErrorAnswers";
+
+        /// <summary>The buttons the framework adds to let the user stay with an agent or leave it, authored as data.</summary>
+        public const string ServiceButtons = "ServiceButtons";
 
         /// <summary>The opening message served when the presenter's own model call fails.</summary>
         public const string FallbackMessage = "FallbackMessage";
@@ -263,6 +269,9 @@ public static class Constants
 
         /// <summary>In <see cref="Injections.PeerConsultationGuardrail"/> — the colleague's question, inside the fence that marks it as data.</summary>
         public const string ConsultationQuestion = "((question))";
+
+        /// <summary>In <see cref="Injections.ReplyNotAccepted"/> — why the closure was refused.</summary>
+        public const string ReplyNotAcceptedReason = "((reason))";
 
         /// <summary>In <see cref="Injections.ColleaguesDeclaration"/> — one line per colleague: function name and territory.</summary>
         public const string Colleagues = "((colleagues))";

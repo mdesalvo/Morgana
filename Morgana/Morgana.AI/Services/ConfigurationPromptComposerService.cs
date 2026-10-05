@@ -186,6 +186,16 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         return request.Length == 0 ? null : request;
     }
 
+    /// <inheritdoc />
+    public async Task<string> ComposeReplyNotAcceptedAsync(string reason)
+    {
+        // Spliced at the one moment it is true, in place of the refused call's result, rather than
+        // carried by every prompt for an event most turns never meet.
+        FrameworkLayer framework = await frameworkLayer.Value;
+        string template = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.ReplyNotAccepted);
+        return template.Length == 0 ? reason : template.Replace(Constants.Placeholders.ReplyNotAcceptedReason, reason);
+    }
+
     /// <summary>
     /// Renders the global policies into the fenced block that opens the framework layer.
     /// </summary>

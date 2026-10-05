@@ -235,6 +235,10 @@ public class MorganaAgentAdapter
         //    sessionAccessor at call time (Akka's single-thread guarantee makes it
         //    non-null during execution). A null here means the agent was invoked without
         //    ExecuteAgentAsync seeding the session — a hard wiring error, so throw.
+        // Filled once every tool is known below and read by Reply at every call: the tools a user
+        // action may lead to, so an action naming anything else is discarded.
+        List<string> actionableToolNames = [];
+
         Func<MorganaTool.ToolContext> toolContextFactory = () =>
         {
             AgentSession session = sessionAccessor()
@@ -242,7 +246,7 @@ public class MorganaAgentAdapter
                     $"Agent '{intentAttribute.Intent}' has no active session during tool execution. " +
                     $"Ensure ExecuteAgentAsync sets aiAgentSession before invoking the agent.");
 
-            return new MorganaTool.ToolContext(morganaAIContextProvider, session, conversationId);
+            return new MorganaTool.ToolContext(morganaAIContextProvider, session, conversationId, actionableToolNames);
         };
 
         // 6a) Bind the declared tools to their delegates (native MorganaTool methods), then
@@ -258,6 +262,11 @@ public class MorganaAgentAdapter
         //     failing to exist). They stay apart from the native adapter because they need
         //     nothing from it: each one arrives already an AIFunction.
         List<AIFunction> mcpTools = await RegisterMCPToolsAsync(agentType);
+
+        // An action leads to something this agent does itself: its domain tools and its MCP tools.
+        // Reply closes turns and a colleague is consulted, never pressed for, so neither is listed.
+        actionableToolNames.AddRange(agentTools.Where(tool => !tool.Reserved).Select(tool => tool.Name));
+        actionableToolNames.AddRange(mcpTools.Select(tool => tool.Name));
 
         // 6c) Collect the colleagues this agent declares it may consult. Like MCP tools they arrive
         //     already AIFunctions and bypass the native adapter entirely — they are not declared in
@@ -349,10 +358,10 @@ public class MorganaAgentAdapter
     }
 
     /// <summary>
-    /// Runs one tool call of the agent's loop, turning a Reply whose arguments break their schema into
-    /// a fact the model can act on.
+    /// Runs one tool call of the agent's loop, turning a refused Reply — arguments breaking their
+    /// schema, a card too large, a turn not yet written — into the framework's answer for that event.
     /// </summary>
-    private static async ValueTask<object?> InvokeToolAsync(FunctionInvocationContext context, CancellationToken cancellationToken)
+    private async ValueTask<object?> InvokeToolAsync(FunctionInvocationContext context, CancellationToken cancellationToken)
     {
         try
         {
@@ -361,8 +370,11 @@ public class MorganaAgentAdapter
         catch (Exception ex) when (ex is not OperationCanceledException
                                    && string.Equals(context.Function.Name, Constants.Tools.Reply, StringComparison.Ordinal))
         {
-            // The turn stays open: the model reads what was wrong with what it sent and closes it again.
-            return $"Reply refused: {ex.Message} The turn is not closed.";
+            // Logged with its reason: a refused closure is otherwise visible only inside the session.
+            logger.LogWarning("Reply refused: {Reason}", ex.Message);
+
+            // The turn stays open: the model reads why and closes again without narrating it to the user.
+            return await promptComposerService.ComposeReplyNotAcceptedAsync(ex.Message);
         }
     }
 

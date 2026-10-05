@@ -190,8 +190,8 @@ public static partial class ExpectationChecker
                 failures.Add($"noQuickReplyIds: '{id}' present but must not be");
         }
 
-        // The two escape-pair rules are complementary halves of one policy (QuickReplyEscapeOptions
-        // in the framework's own prose): this one fails when the escape pair is emitted alone, with
+        // The two escape-pair rules are complementary halves of one rule the framework applies to an
+        // agent's closure: this one fails when the escape pair is emitted alone, with
         // no primary option beside it — "must not stand alone" — see the property's own <remarks>
         // for why it's opt-in rather than always checked.
         if (expect.NoStandaloneEscapeOptions is true

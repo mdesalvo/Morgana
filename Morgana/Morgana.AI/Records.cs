@@ -1137,6 +1137,16 @@ public static class Records
         [property: JsonPropertyName("value")] string Value);
 
     /// <summary>
+    /// The two pairs of buttons the framework adds to an agent's turn so the user can stay or leave,
+    /// authored in morgana.json. Never chosen by the model: which pair a turn gets follows from its closure.
+    /// </summary>
+    /// <param name="Closure">Offered when the turn answered the request and awaits nothing.</param>
+    /// <param name="Escape">Appended to the actions a turn offers, so the user is never trapped in them.</param>
+    public record ServiceButtons(
+        [property: JsonPropertyName("Closure")] List<QuickReply> Closure,
+        [property: JsonPropertyName("Escape")] List<QuickReply> Escape);
+
+    /// <summary>
     /// How an agent closed its turn: the one structured decision beside its free text, recorded by the
     /// Reply tool and read once by <c>MorganaAgent</c> at the end of the turn.
     /// </summary>
@@ -1151,16 +1161,36 @@ public static class Records
         [property: JsonPropertyName("card")] RichCard? Card)
     {
         /// <summary>
-        /// True when the agent hands the conversation back: it awaits nothing or the user is leaving.
+        /// True when the turn ends waiting for the user: a typed answer or one of the actions it offers.
         /// </summary>
         [JsonIgnore]
-        public bool IsCompleted => Awaits == AwaitedFromUser.Nothing || UserIsLeaving;
+        public bool AwaitsUser => !UserIsLeaving && (Awaits != AwaitedFromUser.Nothing || Actions.Count > 0);
 
         /// <summary>
-        /// The actions as the channel's buttons, numbered so two actions on one tool stay distinct.
+        /// What the channel receives beside the text and whether the agent hands the conversation back.
         /// </summary>
-        public List<QuickReply> ToQuickReplies()
-            => [.. Actions.Select((action, index) => new QuickReply($"{action.Tool}-{index + 1}", action.Label, action.Value))];
+        /// <remarks>
+        /// A departing user gets no button and the conversation returns to Morgana. A typed answer is
+        /// asked with no button, so nothing gates it. Offered actions carry the escape pair; an answered
+        /// request carries the closure pair, through which the user stays or leaves. Without authored
+        /// closure buttons an answered request has no way to be left, so it hands the conversation back.
+        /// </remarks>
+        /// <param name="serviceButtons">The authored closure and escape pairs.</param>
+        public (List<QuickReply>? QuickReplies, bool HandsBack) ToDelivery(ServiceButtons serviceButtons)
+        {
+            if (UserIsLeaving)
+                return (null, true);
+
+            if (Awaits == AwaitedFromUser.TypedAnswer)
+                return (null, false);
+
+            // Numbered per turn, so two actions leading to one tool stay two distinct buttons.
+            if (Actions.Count > 0)
+                return ([.. Actions.Select((action, index) => new QuickReply($"{action.Tool}-{index + 1}", action.Label, action.Value)),
+                         .. serviceButtons.Escape], false);
+
+            return serviceButtons.Closure.Count > 0 ? ([.. serviceButtons.Closure], false) : (null, true);
+        }
     }
 
     // ==========================================================================

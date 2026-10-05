@@ -85,13 +85,12 @@ public sealed class ExpectSpec
     public List<string>? NoQuickReplyIds { get; init; }
 
     /// <summary>
-    /// Assert that the escape options are not the entire emission — the precondition
-    /// <c>QuickReplyEscapeOptions</c> states in so many words: they are "an APPENDIX, never a
-    /// standalone emission", valid only alongside at least one primary option.
+    /// Assert that the escape options are not the entire emission: the framework appends them to
+    /// offered actions and never sends them alone on a turn that awaits the user.
     /// </summary>
     /// <remarks>
-    /// Opt-in and deliberately so: a turn that has genuinely concluded emits exactly those two
-    /// buttons and nothing else, which is <c>ConversationClosure</c> working as intended. The
+    /// Opt-in and deliberately so: a turn that has genuinely concluded carries exactly the closure
+    /// pair (whose ids are the same two) and nothing else. The
     /// assertion belongs on turns that declare continuation, where a standalone escape pair would
     /// gate a lawful in-progress step behind an exit button.
     /// </remarks>

@@ -165,8 +165,10 @@ Every endpoint but `health` authenticates through `ChannelAuthenticationFilter` 
 
 Every turn closes with one `Reply` call carrying what it awaits from the user (`nothing`,
 `typed_answer`, `action_choice`), whether the user is leaving, the actions offered as buttons and the
-card — a typed argument whose schema is derived from `Morgana.Contracts`. An agent awaiting anything is
-remembered as `activeAgent`; later messages skip classification.
+card — a typed argument whose schema is derived from `Morgana.Contracts`. The buttons that let the user
+stay or leave are the framework's (`ServiceButtons` in `morgana.json`), chosen from that closure by
+`TurnReply.ToDelivery`: the agent stays `activeAgent` — later messages skip classification — until the
+user leaves.
 
 Tool parameters marked `Shared: true` route their values into a conversation-scoped `shared_context`
 registry (first-write-wins, `INSERT OR IGNORE`). Every agent merges it at the start of each turn, so
@@ -330,7 +332,8 @@ entry is follows from the array it lives in**, never from a field inside it:
   the policies where they would instruct against nothing. No `Priority`: each is fetched by name.
   `ColleaguesDeclaration` (closing a peer-capable agent's instructions),
   `PeerConsultationDeclaration` and `PeerConsultationGuardrail` (in front of a colleague's question),
-  `TurnClosureRequest` (after a turn the model wrote without `Reply`).
+  `TurnClosureRequest` (after a turn the model wrote without `Reply`), `ReplyNotAccepted` (in place of
+  a refused `Reply`'s result, its reason as datum).
 
 Every injection opens with a **bracketed all-caps label at the head of its first line** — the idiom
 the prompt layers already use for `[TARGET]`. A template arrives spliced into somebody else's text,

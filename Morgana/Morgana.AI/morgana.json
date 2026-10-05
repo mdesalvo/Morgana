@@ -65,6 +65,10 @@
             {
               "Name": "TurnClosureRequest",
               "Description": "[TURN CLOSURE]\nYour text above has reached the user. Declare how that turn closes: what it awaits from the user, whether the user is leaving, the actions it offers and its card."
+            },
+            {
+              "Name": "ReplyNotAccepted",
+              "Description": "[REPLY NOT ACCEPTED] ((reason))\nYour turn is still open. Any text you already wrote this turn has reached the user as it stands: write only what the user is still owed, never a word about this, then call Reply again with the closure corrected."
             }
           ],
           "ErrorAnswers": [
@@ -110,6 +114,36 @@
         },
         {
           "AgentExitMessage": "{0} has completed its spell and the circle returns to me. What else can I conjure for you?"
+        },
+        {
+          "ServiceButtons": {
+            "Closure": [
+              {
+                "id": "continue_agent",
+                "label": "🔮 I still need you",
+                "value": "I have another question for you"
+              },
+              {
+                "id": "exit_agent",
+                "label": "✨ We're done, thanks",
+                "value": "We're done, thanks",
+                "termination": true
+              }
+            ],
+            "Escape": [
+              {
+                "id": "continue_agent",
+                "label": "💬 Ask me something else",
+                "value": "I want to ask you something else"
+              },
+              {
+                "id": "exit_agent",
+                "label": "✨ We're done, thanks",
+                "value": "We're done, thanks",
+                "termination": true
+              }
+            ]
+          }
         }
       ]
     },
