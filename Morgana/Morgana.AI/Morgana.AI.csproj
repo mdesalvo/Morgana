@@ -60,7 +60,7 @@
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.0" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.0" />
     <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
-    <PackageReference Include="OllamaSharp" Version="5.4.30" />
+    <PackageReference Include="OllamaSharp" Version="5.5.0" />
     <!-- Services -->
     <PackageReference Include="Markdig" Version="1.4.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.*" />
