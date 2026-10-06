@@ -1,4 +1,6 @@
-﻿using System.Reflection;
+﻿using System.Globalization;
+using System.Reflection;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
@@ -35,6 +37,12 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     private readonly IConfiguration configuration;
 
     /// <summary>
+    /// Source of the native tool types, whose methods are weighed against what agents.json declares
+    /// that they return.
+    /// </summary>
+    private readonly IToolRegistryService toolRegistryService;
+
+    /// <summary>
     /// Registry mapping intent names to agent types.
     /// Built during service initialization via assembly scanning.
     /// Case-insensitive string comparison for intent matching.
@@ -45,15 +53,18 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// <param name="agentConfigService">Loads intent configuration from agents.json.</param>
     /// <param name="llmTierValidationService">Validates each agent's [RequiresLLMTier], delegated as a separate concern.</param>
     /// <param name="configuration">Application configuration, read for the declared instances.</param>
+    /// <param name="toolRegistryService">Finds the native tool type of each intent, for the check of what its tools return.</param>
     /// <exception cref="InvalidOperationException">Validation fails: missing agents or missing configuration.</exception>
     public HandlesIntentAgentRegistryService(
         IAgentConfigurationService agentConfigService,
         ILLMTierValidationService llmTierValidationService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IToolRegistryService toolRegistryService)
     {
         this.agentConfigService = agentConfigService;
         this.llmTierValidationService = llmTierValidationService;
         this.configuration = configuration;
+        this.toolRegistryService = toolRegistryService;
 
         // The scan must see every plugin assembly. DI construction order does not guarantee they have
         // all loaded, so the registry is built on first use rather than here.
@@ -127,7 +138,8 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         [
             .. ValidateIntentCoverage(registry, configuredIntents),
             .. ValidateDeclaredTiers(registry),
-            .. ValidatePeerDeclarations(registry)
+            .. ValidatePeerDeclarations(registry),
+            .. ValidateToolContracts(registry)
         ];
 
         // One exception carrying every problem, so a deployment is fixed in one pass.
@@ -248,6 +260,130 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         }
 
         return errors;
+    }
+
+    /// <summary>
+    /// Refuses a native tool whose returned record and <c>Returns</c> declaration in agents.json do not describe the same thing.
+    /// </summary>
+    /// <param name="registry">The discovered intent-to-agent map, which is the roster of intents to weigh.</param>
+    /// <returns>One message per violation, empty when every contract holds.</returns>
+    private List<string> ValidateToolContracts(Dictionary<string, Type> registry)
+    {
+        List<string> errors = [];
+        List<Records.Prompt> prompts = agentConfigService.GetAgentPromptsAsync().GetAwaiter().GetResult();
+
+        foreach (string intent in registry.Keys)
+        {
+            // An intent without a tool type is the registry's own warning path. An intent without a
+            // prompt is already refused by the coverage check. Neither has a contract to weigh here.
+            Type? toolType = toolRegistryService.FindToolTypeForIntent(intent);
+            Records.Prompt? prompt = prompts.FirstOrDefault(candidate => string.Equals(candidate.ID, intent, StringComparison.OrdinalIgnoreCase));
+            if (toolType is null || prompt is null)
+                continue;
+
+            errors.AddRange(ValidateToolContract(intent, toolType, prompt.GetAdditionalPropertyOrDefault<Records.ToolDefinition[]>(Constants.PromptProperties.Tools, [])));
+        }
+
+        return errors;
+    }
+
+    /// <summary>
+    /// Weighs each declared tool of one intent against the record its method returns.
+    /// </summary>
+    /// <remarks>
+    /// The record is what the model reads and the declaration is what Alembic and a workflow engine read:
+    /// the two are one contract only while the same fields stand on both sides.
+    /// </remarks>
+    /// <param name="intent">The intent that owns the tools, named in the messages.</param>
+    /// <param name="toolType">The class implementing the tools.</param>
+    /// <param name="declaredTools">The tools that agents.json declares for the intent.</param>
+    /// <returns>One message per violation, empty when every contract holds.</returns>
+    public static List<string> ValidateToolContract(string intent, Type toolType, IEnumerable<Records.ToolDefinition> declaredTools)
+    {
+        List<string> errors = [];
+
+        foreach (Records.ToolDefinition tool in declaredTools)
+        {
+            // A declared tool with no method is the adapter's warning, not a contract violation.
+            MethodInfo? method = toolType.GetMethod(tool.Name);
+            if (method is null)
+                continue;
+
+            string subject = $"Tool '{tool.Name}' of intent '{intent}'";
+            Type? returnType = UnwrapReturnType(method.ReturnType);
+
+            // A string or an object tells the schema nothing: the model would read a document that nobody declared.
+            if (returnType is null || returnType == typeof(string) || returnType == typeof(object))
+            {
+                errors.Add($"{subject} returns '{method.ReturnType.Name}': a native tool returns a typed record");
+                continue;
+            }
+
+            JsonElement schema = MorganaToolAdapter.CreateReturnSchema(returnType);
+            if (!schema.TryGetProperty("properties", out JsonElement properties))
+            {
+                errors.Add($"{subject} returns '{returnType.Name}', which has no properties: a native tool returns a typed record");
+                continue;
+            }
+
+            if (tool.Returns is null || tool.Returns.Count == 0)
+            {
+                errors.Add($"{subject} declares no \"Returns\" in agents.json while its method returns '{returnType.Name}'");
+                continue;
+            }
+
+            HashSet<string> recordFields = [.. properties.EnumerateObject().Select(property => property.Name)];
+            HashSet<string> declaredFields = [.. tool.Returns.Select(field => field.Name)];
+
+            foreach (string missing in declaredFields.Except(recordFields, StringComparer.Ordinal))
+                errors.Add($"{subject} declares the returned field '{missing}', which '{returnType.Name}' does not have");
+
+            foreach (string undeclared in recordFields.Except(declaredFields, StringComparer.Ordinal))
+                errors.Add($"{subject} returns the field '{undeclared}' in '{returnType.Name}', which its \"Returns\" does not declare");
+
+            List<Records.ToolReturn> failureFields = [.. tool.Returns.Where(field => field.Failure)];
+            if (failureFields.Count > 1)
+                errors.Add($"{subject} marks {failureFields.Count.ToString(CultureInfo.InvariantCulture)} fields as the failure ({string.Join(", ", failureFields.Select(field => $"'{field.Name}'"))}): at most one may be");
+
+            // The failure field is the one whose holding a value means the call failed, so a record that
+            // cannot leave it empty would report every call as failed.
+            foreach (Records.ToolReturn failure in failureFields.Take(1))
+            {
+                if (properties.TryGetProperty(failure.Name, out JsonElement failureSchema) && !AllowsNull(failureSchema))
+                    errors.Add($"{subject} marks the field '{failure.Name}' as the failure but '{returnType.Name}' does not allow it to be null");
+            }
+        }
+
+        return errors;
+    }
+
+    /// <summary>
+    /// Takes the result type out of a <c>Task</c> or a <c>ValueTask</c>; null when the method returns no value.
+    /// </summary>
+    /// <param name="methodReturnType">The return type as the method declares it.</param>
+    private static Type? UnwrapReturnType(Type methodReturnType)
+    {
+        if (methodReturnType == typeof(void) || methodReturnType == typeof(Task) || methodReturnType == typeof(ValueTask))
+            return null;
+
+        return methodReturnType.IsGenericType
+               && (methodReturnType.GetGenericTypeDefinition() == typeof(Task<>) || methodReturnType.GetGenericTypeDefinition() == typeof(ValueTask<>))
+            ? methodReturnType.GetGenericArguments()[0]
+            : methodReturnType;
+    }
+
+    /// <summary>
+    /// Tells whether a property's schema accepts null, which is how a nullable reference or value type announces itself.
+    /// </summary>
+    /// <param name="propertySchema">The schema the return type derives for the property.</param>
+    private static bool AllowsNull(JsonElement propertySchema)
+    {
+        if (!propertySchema.TryGetProperty("type", out JsonElement type))
+            return true;
+
+        return type.ValueKind == JsonValueKind.Array
+            ? type.EnumerateArray().Any(entry => entry.GetString() == "null")
+            : type.GetString() == "null";
     }
 
     /// <summary>

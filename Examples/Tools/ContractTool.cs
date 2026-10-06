@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using Examples.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
@@ -201,13 +200,10 @@ public class ContractTool : MorganaTool
     // No gate on the customer registry, here or anywhere else in this plugin: an unknown code is
     // simply a code no plan hangs from, which is the same answer a known customer without a plan
     // gets — SubscribeToGreenCarePlan takes either exactly the same way.
-    private static string NoCarePlan(string customerCode, string? customerName) => JsonSerializer.Serialize(new
-    {
-        error = "No care plan found",
-        customerCode,
-        customerName,
-        note = "No Green Care Plan is held under this customer code: either none was ever opened under it, or the code is mistyped. This response carries nothing about what the plan offers or costs — no term, fee or figure of the plan can be read out of it. SubscribeToGreenCarePlan is the only tool that opens one."
-    }, GreenhouseDatabaseHelper.JsonOptions);
+    private const string NoCarePlanError = "No care plan found";
+
+    private const string NoCarePlanNote =
+        "No Green Care Plan is held under this customer code: either none was ever opened under it, or the code is mistyped. This response carries nothing about what the plan offers or costs — no term, fee or figure of the plan can be read out of it. SubscribeToGreenCarePlan is the only tool that opens one.";
 
     // The only plan product the nursery currently offers. GetPlanProductAsync already reads any
     // PlanCode the schema might hold, so a second product would only need this constant to grow
@@ -237,26 +233,24 @@ public class ContractTool : MorganaTool
     /// whether to sign up does not have yet. This is the ONE thing SubscribeToGreenCarePlan's
     /// restate-then-confirm step can ground its numbers in without already having enrolled them.
     /// </summary>
-    /// <returns>JSON object with the plan's name, coverage, guarantee, fee and included features.</returns>
-    public async Task<string> GetPlanOverview()
+    /// <returns>The plan's name, coverage, guarantee, fee and included features.</returns>
+    public async Task<PlanOverviewResult> GetPlanOverview()
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
         PlanProduct product = await GetPlanProductAsync(connection, DefaultPlanCode);
         List<string> features = await GetFeaturesAsync(connection, DefaultPlanCode);
 
-        return JsonSerializer.Serialize(new
-        {
-            planCode = product.PlanCode,
-            name = product.Name,
-            visitFrequency = product.VisitFrequency,
-            coverage = product.Coverage,
-            guarantee = product.Guarantee,
-            monthlyFee = product.MonthlyFee,
-            includedFeatures = features,
-            noticePeriodDays = product.NoticePeriodDays,
-            earlyTerminationFee = product.EarlyTerminationFee
-        }, GreenhouseDatabaseHelper.JsonOptions);
+        return new PlanOverviewResult(
+            product.PlanCode,
+            product.Name,
+            product.VisitFrequency,
+            product.Coverage,
+            product.Guarantee,
+            product.MonthlyFee,
+            features,
+            product.NoticePeriodDays,
+            product.EarlyTerminationFee);
     }
 
     /// <summary>
@@ -265,8 +259,8 @@ public class ContractTool : MorganaTool
     /// the same backoffice write path InventoryTool.ConfirmOrder bills a confirmed order through.
     /// </summary>
     /// <param name="customerCode">Customer code enrolling (retrieved from shared context).</param>
-    /// <returns>JSON object with the new contractId, the plan's terms and the invoice it was billed to.</returns>
-    public async Task<string> SubscribeToGreenCarePlan(string customerCode)
+    /// <returns>The new contractId, the plan's terms and the invoice it was billed to, or the error saying that a plan is already held.</returns>
+    public async Task<SubscriptionResult> SubscribeToGreenCarePlan(string customerCode)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -275,13 +269,11 @@ public class ContractTool : MorganaTool
         CarePlanSchedule? existing = await FindScheduleAsync(connection, customerCode);
         if (existing != null && existing.Status is "Active" or "PendingRenewal")
         {
-            return JsonSerializer.Serialize(new
-            {
-                error = "Customer already has an active Green Care Plan",
-                existingContractId = existing.ContractId,
-                status = existing.Status,
-                note = "Only one Green Care Plan may be active per customer code at a time and this code already holds one: nothing was opened and nothing was billed. GetContractDetails reads the existing plan, GetTerminationProcedure describes how one is ended."
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            return new SubscriptionResult(
+                Error: "Customer already has an active Green Care Plan",
+                ExistingContractId: existing.ContractId,
+                Status: existing.Status,
+                Note: "Only one Green Care Plan may be active per customer code at a time and this code already holds one: nothing was opened and nothing was billed. GetContractDetails reads the existing plan, GetTerminationProcedure describes how one is ended.");
         }
 
         PlanProduct product = await GetPlanProductAsync(connection, DefaultPlanCode);
@@ -317,28 +309,26 @@ public class ContractTool : MorganaTool
 
         toolLogger.LogInformation("Enrolled {CustomerCode} in Green Care Plan {PlanCode}: contract {ContractId}, billed to invoice {InvoiceId}", customerCode, DefaultPlanCode, contractId, invoiceId);
 
-        return JsonSerializer.Serialize(new
-        {
-            contractId,
-            customerCode,
-            planCode = DefaultPlanCode,
-            planName = product.Name,
-            status = "Active",
-            startDate = startDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-            endDate = endDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-            monthlyFee = product.MonthlyFee,
-            visitDays,
-            invoiceId,
-            note = "The plan is active and its first month has been billed to this invoice. This response carries the invoice identifier and nothing else about it: its total and its line items are not on these pages."
-        }, GreenhouseDatabaseHelper.JsonOptions);
+        return new SubscriptionResult(
+            ContractId: contractId,
+            CustomerCode: customerCode,
+            PlanCode: DefaultPlanCode,
+            PlanName: product.Name,
+            Status: "Active",
+            StartDate: startDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+            EndDate: endDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+            MonthlyFee: product.MonthlyFee,
+            VisitDays: visitDays,
+            InvoiceId: invoiceId,
+            Note: "The plan is active and its first month has been billed to this invoice. This response carries the invoice identifier and nothing else about it: its total and its line items are not on these pages.");
     }
 
     /// <summary>
     /// Retrieves the customer's Green Care Plan in full as structured JSON.
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
-    /// <returns>JSON object with complete plan overview</returns>
-    public async Task<string> GetContractDetails(string customerCode)
+    /// <returns>The complete plan overview, or the error saying that no plan is held</returns>
+    public async Task<ContractDetailsResult> GetContractDetails(string customerCode)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -346,7 +336,7 @@ public class ContractTool : MorganaTool
 
         CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
-            return NoCarePlan(customerCode, customerName);
+            return new ContractDetailsResult(Error: NoCarePlanError, CustomerCode: customerCode, CustomerName: customerName, Note: NoCarePlanNote);
 
         PlanProduct product = await GetPlanProductAsync(connection, schedule.PlanCode);
         List<string> features = await GetFeaturesAsync(connection, schedule.PlanCode);
@@ -355,15 +345,13 @@ public class ContractTool : MorganaTool
 
         int remainingDays = (schedule.EndDate - DateTime.UtcNow).Days;
 
-        var result = new
-        {
-            contractId = schedule.ContractId,
-            customerCode = schedule.CustomerCode,
-            customerName,
-            status = new
-            {
-                value = schedule.Status,
-                icon = schedule.Status switch
+        return new ContractDetailsResult(
+            ContractId: schedule.ContractId,
+            CustomerCode: schedule.CustomerCode,
+            CustomerName: customerName,
+            Status: new ContractStatus(
+                schedule.Status,
+                schedule.Status switch
                 {
                     "Active" => "✅",
                     "PendingRenewal" => "🔄",
@@ -371,57 +359,34 @@ public class ContractTool : MorganaTool
                     "Terminated" => "❌",
                     "Suspended" => "⏸️",
                     _ => "📋"
-                }
-            },
-            plan = new
-            {
-                name = product.Name,
-                visitFrequency = product.VisitFrequency,
-                coverage = product.Coverage,
-                guarantee = product.Guarantee,
-                includedFeatures = features
-            },
-            contractPeriod = new
-            {
-                startDate = schedule.StartDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-                endDate = schedule.EndDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-                remainingDays = remainingDays > 0 ? remainingDays : 0,
-                remainingMonths = remainingDays > 0 ? remainingDays / 30 : 0
-            },
-            fee = new
-            {
-                monthlyFee = schedule.MonthlyFee,
-                billingCycle = schedule.BillingCycle
-            },
-            services = services.Select(service => new
-            {
-                serviceId = service.ServiceId,
-                name = service.Name,
-                description = service.Description,
-                monthlyCost = service.MonthlyCost,
-                isOptional = service.IsOptional,
-                category = service.IsOptional ? "Optional" : "Required"
-            }).ToList(),
-            termination = new
-            {
-                noticePeriodDays = product.NoticePeriodDays,
-                earlyTerminationFee = product.EarlyTerminationFee,
-                autoRenewal = new
-                {
-                    enabled = true,
-                    noticeDays = 60,
-                    renewalDate = schedule.EndDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)
-                }
-            },
-            availableClauses = clauses.Select(clause => new
-            {
-                clauseNumber = clause.ClauseNumber,
-                title = clause.Title,
-                type = clause.ClauseType
-            }).ToList()
-        };
-
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+                }),
+            Plan: new ContractPlan(
+                product.Name,
+                product.VisitFrequency,
+                product.Coverage,
+                product.Guarantee,
+                features),
+            ContractPeriod: new ContractPeriod(
+                schedule.StartDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                schedule.EndDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                remainingDays > 0 ? remainingDays : 0,
+                remainingDays > 0 ? remainingDays / 30 : 0),
+            Fee: new ContractFee(schedule.MonthlyFee, schedule.BillingCycle),
+            Services: [.. services.Select(service => new ContractService(
+                service.ServiceId,
+                service.Name,
+                service.Description,
+                service.MonthlyCost,
+                service.IsOptional,
+                service.IsOptional ? "Optional" : "Required"))],
+            Termination: new ContractTermination(
+                product.NoticePeriodDays,
+                product.EarlyTerminationFee,
+                new AutoRenewal(true, 60, schedule.EndDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture))),
+            AvailableClauses: [.. clauses.Select(clause => new ClauseListing(
+                clause.ClauseNumber,
+                clause.Title,
+                clause.ClauseType))]);
     }
 
     /// <summary>
@@ -429,8 +394,8 @@ public class ContractTool : MorganaTool
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="clauseNumber">Clause number to retrieve (1-7)</param>
-    /// <returns>JSON object with complete clause details</returns>
-    public async Task<string> GetContractClause(string customerCode, int clauseNumber)
+    /// <returns>The complete clause details, or the error saying why none can be read</returns>
+    public async Task<ContractClauseResult> GetContractClause(string customerCode, int clauseNumber)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -438,52 +403,42 @@ public class ContractTool : MorganaTool
 
         CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
-            return NoCarePlan(customerCode, customerName);
+            return new ContractClauseResult(Error: NoCarePlanError, CustomerCode: customerCode, CustomerName: customerName, Note: NoCarePlanNote);
 
         List<PlanClause> clauses = await GetClausesAsync(connection, schedule.PlanCode, clauseNumber);
         if (clauses.Count == 0)
         {
             List<PlanClause> allClauses = await GetClausesAsync(connection, schedule.PlanCode);
-            return JsonSerializer.Serialize(new
-            {
-                error = "Clause not found",
-                requestedClauseNumber = clauseNumber,
-                availableClauses = allClauses.Select(clause => new
-                {
-                    clauseNumber = clause.ClauseNumber,
-                    title = clause.Title
-                }).ToList()
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            return new ContractClauseResult(
+                Error: "Clause not found",
+                RequestedClauseNumber: clauseNumber,
+                AvailableClauses: [.. allClauses.Select(clause => new ClauseHeading(clause.ClauseNumber, clause.Title))]);
         }
 
         PlanClause found = clauses[0];
 
-        var result = new
-        {
-            contractId = schedule.ContractId,
-            clauseNumber = found.ClauseNumber,
-            title = found.Title,
-            type = found.ClauseType,
-            summary = found.Summary,
-            fullText = found.FullText,
-            relatedInfo = found.ClauseType switch
+        return new ContractClauseResult(
+            ContractId: schedule.ContractId,
+            ClauseNumber: found.ClauseNumber,
+            Title: found.Title,
+            Type: found.ClauseType,
+            Summary: found.Summary,
+            FullText: found.FullText,
+            RelatedInfo: found.ClauseType switch
             {
                 "Termination" => "For termination procedures, use GetTerminationProcedure tool",
                 "VisitSchedule" => "Extra visits are charged on the customer's invoices, which another bench of the nursery keeps: no tool here reads them",
                 "PlantHealth" => "For the dates this guarantee runs against, use GetContractDetails tool",
                 _ => null
-            }
-        };
-
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+            });
     }
 
     /// <summary>
     /// Retrieves the customer's tending calendar: the visits already made and when the next ones fall.
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
-    /// <returns>JSON object with the recent visits, the upcoming dates and this month's allowance</returns>
-    public async Task<string> GetVisitSchedule(string customerCode)
+    /// <returns>The recent visits, the upcoming dates and this month's allowance, or the error saying that no plan is held</returns>
+    public async Task<VisitScheduleResult> GetVisitSchedule(string customerCode)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -491,7 +446,7 @@ public class ContractTool : MorganaTool
 
         CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
-            return NoCarePlan(customerCode, customerName);
+            return new VisitScheduleResult(Error: NoCarePlanError, CustomerCode: customerCode, CustomerName: customerName, Note: NoCarePlanNote);
 
         PlanProduct product = await GetPlanProductAsync(connection, schedule.PlanCode);
         DateTime today = DateTime.UtcNow.Date;
@@ -499,7 +454,7 @@ public class ContractTool : MorganaTool
         // Only visits that have actually happened are read from the table. What is still to come is
         // COMPUTED from the plan's own visit days, never stored: a seeded calendar of future dates
         // is stale the day after it is written, while a recurrence rule is right forever.
-        List<object> recent = [];
+        List<RecentVisit> recent = [];
         int takenThisMonth = 0;
         await using (SqliteCommand command = connection.CreateCommand())
         {
@@ -517,43 +472,33 @@ public class ContractTool : MorganaTool
                 if (visitDate.Year == today.Year && visitDate.Month == today.Month && kind == "Included" && outcome == "Completed")
                     takenThisMonth++;
 
-                recent.Add(new
-                {
-                    visitId = reader.GetString(0),
-                    date = visitDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                recent.Add(new RecentVisit(
+                    reader.GetString(0),
+                    visitDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
                     kind,
                     outcome,
-                    outcomeIcon = outcome == "Completed" ? "\u2705" : "\u26A0\uFE0F",
-                    notes = reader.GetString(4),
-                    charged = kind == "Extra",
-                    invoiceId = reader.IsDBNull(5) ? null : reader.GetString(5)
-                });
+                    outcome == "Completed" ? "\u2705" : "\u26A0\uFE0F",
+                    reader.GetString(4),
+                    kind == "Extra",
+                    reader.IsDBNull(5) ? null : reader.GetString(5)));
             }
         }
 
-        var result = new
-        {
-            contractId = schedule.ContractId,
-            customerName,
-            visitFrequency = product.VisitFrequency,
-            visitDays = schedule.VisitDays,
-            allowance = new
-            {
-                includedPerMonth = product.IncludedVisitsPerMonth,
+        return new VisitScheduleResult(
+            ContractId: schedule.ContractId,
+            CustomerName: customerName,
+            VisitFrequency: product.VisitFrequency,
+            VisitDays: schedule.VisitDays,
+            Allowance: new VisitAllowance(
+                product.IncludedVisitsPerMonth,
                 takenThisMonth,
-                remainingThisMonth = Math.Max(0, product.IncludedVisitsPerMonth - takenThisMonth),
-                extraVisitFee = product.ExtraVisitFee
-            },
-            upcoming = NextVisitDates(schedule.VisitDays, today, 3).Select(date => new
-            {
-                date = date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-                daysAway = (date - today).Days,
-                kind = "Included"
-            }).ToList(),
-            recentVisits = recent
-        };
-
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+                Math.Max(0, product.IncludedVisitsPerMonth - takenThisMonth),
+                product.ExtraVisitFee),
+            Upcoming: [.. NextVisitDates(schedule.VisitDays, today, 3).Select(date => new UpcomingVisit(
+                date.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                (date - today).Days,
+                "Included"))],
+            RecentVisits: recent);
     }
 
     /// <summary>
@@ -598,8 +543,8 @@ public class ContractTool : MorganaTool
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="reason">Optional termination reason for internal tracking</param>
-    /// <returns>JSON object with complete termination guide</returns>
-    public async Task<string> GetTerminationProcedure(string customerCode, string? reason = null)
+    /// <returns>The complete termination guide, or the error saying that no plan is held</returns>
+    public async Task<TerminationProcedureResult> GetTerminationProcedure(string customerCode, string? reason = null)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -607,7 +552,7 @@ public class ContractTool : MorganaTool
 
         CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
-            return NoCarePlan(customerCode, customerName);
+            return new TerminationProcedureResult(Error: NoCarePlanError, CustomerCode: customerCode, CustomerName: customerName, Note: NoCarePlanNote);
 
         PlanProduct product = await GetPlanProductAsync(connection, schedule.PlanCode);
         List<string> steps = await GetTerminationStepsAsync(connection, schedule.PlanCode);
@@ -616,55 +561,36 @@ public class ContractTool : MorganaTool
         DateTime earliestTerminationDate = DateTime.UtcNow.AddDays(product.NoticePeriodDays);
         bool earlyTermination = earliestTerminationDate < schedule.EndDate;
 
-        var result = new
-        {
-            contractId = schedule.ContractId,
-            customerName,
-            reason = reason ?? "Not specified",
-            noticePeriod = new
-            {
-                requiredDays = product.NoticePeriodDays,
-                earliestEffectiveDate = earliestTerminationDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)
-            },
-            fees = new
-            {
-                earlyTermination = new
-                {
-                    applicable = earlyTermination,
-                    amount = earlyTermination ? product.EarlyTerminationFee : 0m,
-                    reason = earlyTermination
+        return new TerminationProcedureResult(
+            ContractId: schedule.ContractId,
+            CustomerName: customerName,
+            Reason: reason ?? "Not specified",
+            NoticePeriod: new NoticePeriod(
+                product.NoticePeriodDays,
+                earliestTerminationDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)),
+            Fees: new TerminationFees(
+                new EarlyTerminationFee(
+                    earlyTermination,
+                    earlyTermination ? product.EarlyTerminationFee : 0m,
+                    earlyTermination
                         ? $"Plan runs to {schedule.EndDate:dd/MM/yyyy}, termination before this date incurs fee"
-                        : "No early termination fee (plan expired or within normal period)"
-                },
-                waiverEligibility = new
-                {
-                    available = true,
-                    conditions = new[]
-                    {
+                        : "No early termination fee (plan expired or within normal period)"),
+                new WaiverEligibility(
+                    true,
+                    [
                         "Relocation outside the service area (proof required)",
                         "Three consecutive months with more than half the scheduled visits missed by the nursery"
-                    }
-                }
-            },
-            procedure = new
-            {
-                steps = steps.Select((step, index) => new
-                {
-                    stepNumber = index + 1,
-                    description = step
-                }).ToList(),
-                requiredDocuments = documents
-            },
-            refundPolicy = product.RefundPolicy,
-            importantNotes = new[]
-            {
+                    ])),
+            Procedure: new TerminationProcedure(
+                [.. steps.Select((step, index) => new TerminationStep(index + 1, step))],
+                documents),
+            RefundPolicy: product.RefundPolicy,
+            ImportantNotes:
+            [
                 "Termination request must be submitted in writing",
                 "All outstanding invoices must be settled before termination",
                 "Leased equipment must be returned to avoid replacement charges",
                 "The plant health guarantee lapses on the termination effective date"
-            }
-        };
-
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+            ]);
     }
 }

@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using Microsoft.Data.Sqlite;
 
 namespace Examples.Data;
@@ -40,12 +39,6 @@ internal static class GreenhouseDatabaseHelper
     private static string DbPath => Path.Combine(StorageDirectory, "Examples.db");
 
     private static string ConnectionString => $"Data Source={DbPath}";
-
-    internal static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = false,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     /// <summary>
     /// Deploys the embedded seed database to <see cref="DbPath"/> the very first time any tool of

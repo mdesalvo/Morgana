@@ -37,6 +37,20 @@ public class MorganaToolAdapter
         };
 
     /// <summary>
+    /// How a tool's record is written for the model: compact, since every space of it is paid for on each
+    /// turn that carries it and a provider sends a text result exactly as it receives it.
+    /// </summary>
+    private static readonly JsonSerializerOptions ToolResultSerializerOptions =
+        new JsonSerializerOptions(ToolSerializerOptions) { WriteIndented = false };
+
+    /// <summary>
+    /// Derives the JSON schema of what a tool method returns, exactly as its <see cref="AIFunction"/> publishes it.
+    /// </summary>
+    /// <param name="returnType">The method's return type, already unwrapped from <c>Task</c> or <c>ValueTask</c>.</param>
+    public static JsonElement CreateReturnSchema(Type returnType)
+        => AIJsonUtilities.CreateJsonSchema(returnType, serializerOptions: ToolSerializerOptions, inferenceOptions: AIJsonSchemaCreateOptions.Default);
+
+    /// <summary>
     /// Dictionary mapping tool names to their delegate implementations.
     /// </summary>
     private readonly Dictionary<string, Delegate> toolMethods = [];
@@ -142,12 +156,14 @@ public class MorganaToolAdapter
                 SerializerOptions = ToolSerializerOptions,
 
                 // A framework tool's named result reaches the tool loop as itself, to be given its authored
-                // text there; anything else is serialized for the model exactly as by default.
+                // text there. A domain tool's record reaches the model as compact JSON text, never as a
+                // structure that a provider might write out indented.
                 MarshalResult = (result, resultType, _) => new ValueTask<object?>(result switch
                 {
                     null => null,
                     Records.FrameworkToolResult named => named,
-                    _ => JsonSerializer.SerializeToElement(result, resultType ?? result.GetType(), ToolSerializerOptions)
+                    string text => text,
+                    _ => JsonSerializer.Serialize(result, resultType ?? result.GetType(), ToolResultSerializerOptions)
                 }),
                 JsonSchemaCreateOptions = AIJsonSchemaCreateOptions.Default with
                 {

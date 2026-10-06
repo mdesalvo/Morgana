@@ -57,6 +57,28 @@
                   "Required": true,
                   "Scope": "request"
                 }
+              ],
+              "Returns": [
+                {
+                  "Name": "customerCode",
+                  "Description": "The customer code the books were asked about"
+                },
+                {
+                  "Name": "customerName",
+                  "Description": "The customer's name when the shop knows the code"
+                },
+                {
+                  "Name": "totalCount",
+                  "Description": "How many invoices are listed"
+                },
+                {
+                  "Name": "invoices",
+                  "Description": "The invoices, most recent first, each with period, dates, total, status and days overdue"
+                },
+                {
+                  "Name": "note",
+                  "Description": "Says that the books hold nothing under the code"
+                }
               ]
             },
             {
@@ -75,6 +97,61 @@
                   "Description": "Unique alphanumeric identifier of the invoice to retrieve (e.g., 'INV-0512'). The user should specify which invoice they want to examine, or you should ask them to choose from the list of available invoices. Do NOT guess or assume which invoice the user wants.",
                   "Required": true,
                   "Scope": "request"
+                }
+              ],
+              "Returns": [
+                {
+                  "Name": "error",
+                  "Description": "Why no invoice is returned, present only when the invoice was not found",
+                  "Failure": true
+                },
+                {
+                  "Name": "invoiceId",
+                  "Description": "The invoice identifier"
+                },
+                {
+                  "Name": "customerCode",
+                  "Description": "The customer the invoice was issued to"
+                },
+                {
+                  "Name": "customerName",
+                  "Description": "The customer's name when the shop knows the code"
+                },
+                {
+                  "Name": "period",
+                  "Description": "The period the invoice covers"
+                },
+                {
+                  "Name": "dates",
+                  "Description": "Issue date, due date and paid date"
+                },
+                {
+                  "Name": "status",
+                  "Description": "Status with icon, description and days until due or overdue"
+                },
+                {
+                  "Name": "lineItems",
+                  "Description": "The charge lines, each with description, order reference, unit price, quantity and amount"
+                },
+                {
+                  "Name": "amounts",
+                  "Description": "Subtotal, tax, tax rate and total"
+                },
+                {
+                  "Name": "paymentMethod",
+                  "Description": "How the invoice was paid, absent while it is unpaid"
+                },
+                {
+                  "Name": "requestedInvoiceId",
+                  "Description": "The invoice identifier that was asked for, on an error"
+                },
+                {
+                  "Name": "availableInvoices",
+                  "Description": "The invoice identifiers the customer does have, on an error"
+                },
+                {
+                  "Name": "note",
+                  "Description": "Says that the books hold nothing under the code"
                 }
               ]
             },
@@ -95,6 +172,36 @@
                   "Required": false,
                   "Scope": "request"
                 }
+              ],
+              "Returns": [
+                {
+                  "Name": "customerCode",
+                  "Description": "The customer code the books were asked about"
+                },
+                {
+                  "Name": "customerName",
+                  "Description": "The customer's name when the shop knows the code"
+                },
+                {
+                  "Name": "months",
+                  "Description": "The number of months of history that was read"
+                },
+                {
+                  "Name": "hasData",
+                  "Description": "Whether any payment was received in that window"
+                },
+                {
+                  "Name": "summary",
+                  "Description": "Payment count, total amount and monthly average"
+                },
+                {
+                  "Name": "payments",
+                  "Description": "The payments received, most recent first"
+                },
+                {
+                  "Name": "message",
+                  "Description": "Says that no payment was received in the window"
+                }
               ]
             },
             {
@@ -107,6 +214,44 @@
                   "Required": true,
                   "Scope": "context",
                   "Shared": true
+                }
+              ],
+              "Returns": [
+                {
+                  "Name": "customerCode",
+                  "Description": "The customer code the books were asked about"
+                },
+                {
+                  "Name": "customerName",
+                  "Description": "The customer's name when the shop knows the code"
+                },
+                {
+                  "Name": "hasOutstanding",
+                  "Description": "Whether any invoice is left unpaid"
+                },
+                {
+                  "Name": "totalDue",
+                  "Description": "The sum of the unpaid invoices"
+                },
+                {
+                  "Name": "invoiceCount",
+                  "Description": "How many invoices are unpaid"
+                },
+                {
+                  "Name": "oldestDueDate",
+                  "Description": "The earliest due date among the unpaid invoices"
+                },
+                {
+                  "Name": "daysOverdue",
+                  "Description": "The longest delay among the unpaid invoices, absent when none is late"
+                },
+                {
+                  "Name": "invoices",
+                  "Description": "The unpaid invoices, oldest due first"
+                },
+                {
+                  "Name": "message",
+                  "Description": "Says that nothing is outstanding"
                 }
               ]
             }
@@ -140,12 +285,105 @@
                   "Shared": true
                 }
               ],
+              "Returns": [
+                {
+                  "Name": "error",
+                  "Description": "Why no plan was opened, present only when the customer already holds one",
+                  "Failure": true
+                },
+                {
+                  "Name": "existingContractId",
+                  "Description": "The contract the customer already holds, on an error"
+                },
+                {
+                  "Name": "contractId",
+                  "Description": "The new contract identifier"
+                },
+                {
+                  "Name": "customerCode",
+                  "Description": "The customer that was enrolled"
+                },
+                {
+                  "Name": "planCode",
+                  "Description": "The plan product code"
+                },
+                {
+                  "Name": "planName",
+                  "Description": "The plan product name"
+                },
+                {
+                  "Name": "status",
+                  "Description": "The status of the contract"
+                },
+                {
+                  "Name": "startDate",
+                  "Description": "The date the contract starts"
+                },
+                {
+                  "Name": "endDate",
+                  "Description": "The date the contract ends"
+                },
+                {
+                  "Name": "monthlyFee",
+                  "Description": "The monthly fee that was billed"
+                },
+                {
+                  "Name": "visitDays",
+                  "Description": "The days of the month on which visits fall"
+                },
+                {
+                  "Name": "invoiceId",
+                  "Description": "The invoice the first month was billed to"
+                },
+                {
+                  "Name": "note",
+                  "Description": "What the response does and does not carry"
+                }
+              ],
               "RequiresExecutionApproval": true
             },
             {
               "Name": "GetPlanOverview",
               "Description": "Retrieves the Green Care Plan's own terms as structured JSON — planCode, name, visitFrequency, coverage, guarantee, monthlyFee, includedFeatures, noticePeriodDays, earlyTerminationFee. Needs no customer code and no existing schedule: this is the ONE tool that answers what the plan itself offers and costs, for a prospect who does not hold one yet as much as for a customer who already does. Never answer a 'what does it include / what does it cost' question from GetContractDetails or from memory: always call this tool first.",
-              "Parameters": []
+              "Parameters": [],
+              "Returns": [
+                {
+                  "Name": "planCode",
+                  "Description": "The plan product code"
+                },
+                {
+                  "Name": "name",
+                  "Description": "The plan product name"
+                },
+                {
+                  "Name": "visitFrequency",
+                  "Description": "How often the garden is tended"
+                },
+                {
+                  "Name": "coverage",
+                  "Description": "What the plan covers"
+                },
+                {
+                  "Name": "guarantee",
+                  "Description": "The plant-health guarantee"
+                },
+                {
+                  "Name": "monthlyFee",
+                  "Description": "The monthly fee"
+                },
+                {
+                  "Name": "includedFeatures",
+                  "Description": "The features the plan includes"
+                },
+                {
+                  "Name": "noticePeriodDays",
+                  "Description": "The days of notice that ending the plan requires"
+                },
+                {
+                  "Name": "earlyTerminationFee",
+                  "Description": "The fee for ending the plan early"
+                }
+              ]
             },
             {
               "Name": "GetContractDetails",
@@ -157,6 +395,57 @@
                   "Required": true,
                   "Scope": "context",
                   "Shared": true
+                }
+              ],
+              "Returns": [
+                {
+                  "Name": "error",
+                  "Description": "Why no plan is returned, present only when none is held",
+                  "Failure": true
+                },
+                {
+                  "Name": "contractId",
+                  "Description": "The contract identifier"
+                },
+                {
+                  "Name": "customerCode",
+                  "Description": "The customer the contract belongs to"
+                },
+                {
+                  "Name": "customerName",
+                  "Description": "The customer's name when the shop knows the code"
+                },
+                {
+                  "Name": "status",
+                  "Description": "Contract status with icon"
+                },
+                {
+                  "Name": "plan",
+                  "Description": "Name, visit frequency, coverage, guarantee and included features"
+                },
+                {
+                  "Name": "contractPeriod",
+                  "Description": "Start and end dates with the time remaining"
+                },
+                {
+                  "Name": "fee",
+                  "Description": "Monthly fee and billing cycle"
+                },
+                {
+                  "Name": "services",
+                  "Description": "The services of the plan, each marked optional or required"
+                },
+                {
+                  "Name": "termination",
+                  "Description": "Notice period, early termination fee and automatic renewal"
+                },
+                {
+                  "Name": "availableClauses",
+                  "Description": "The clauses of the plan with number, title and type"
+                },
+                {
+                  "Name": "note",
+                  "Description": "What the response does and does not carry"
                 }
               ]
             },
@@ -177,6 +466,61 @@
                   "Required": true,
                   "Scope": "request"
                 }
+              ],
+              "Returns": [
+                {
+                  "Name": "error",
+                  "Description": "Why no clause is returned, present only when no plan is held or the clause does not exist",
+                  "Failure": true
+                },
+                {
+                  "Name": "customerCode",
+                  "Description": "The customer code the books were asked about, on an error"
+                },
+                {
+                  "Name": "customerName",
+                  "Description": "The customer's name when the shop knows the code, on an error"
+                },
+                {
+                  "Name": "note",
+                  "Description": "What the response does and does not carry"
+                },
+                {
+                  "Name": "contractId",
+                  "Description": "The contract identifier"
+                },
+                {
+                  "Name": "clauseNumber",
+                  "Description": "The clause number"
+                },
+                {
+                  "Name": "title",
+                  "Description": "The clause title"
+                },
+                {
+                  "Name": "type",
+                  "Description": "The clause type"
+                },
+                {
+                  "Name": "summary",
+                  "Description": "The clause summary"
+                },
+                {
+                  "Name": "fullText",
+                  "Description": "The full text of the clause"
+                },
+                {
+                  "Name": "relatedInfo",
+                  "Description": "Where a related matter is read"
+                },
+                {
+                  "Name": "requestedClauseNumber",
+                  "Description": "The clause number that was asked for, on an error"
+                },
+                {
+                  "Name": "availableClauses",
+                  "Description": "The clauses that exist, on an error"
+                }
               ]
             },
             {
@@ -196,6 +540,53 @@
                   "Required": false,
                   "Scope": "request"
                 }
+              ],
+              "Returns": [
+                {
+                  "Name": "error",
+                  "Description": "Why no procedure is returned, present only when no plan is held",
+                  "Failure": true
+                },
+                {
+                  "Name": "contractId",
+                  "Description": "The contract identifier"
+                },
+                {
+                  "Name": "customerCode",
+                  "Description": "The customer code the books were asked about, on an error"
+                },
+                {
+                  "Name": "customerName",
+                  "Description": "The customer's name when the shop knows the code"
+                },
+                {
+                  "Name": "reason",
+                  "Description": "The termination reason that was given"
+                },
+                {
+                  "Name": "noticePeriod",
+                  "Description": "Required days and earliest effective date"
+                },
+                {
+                  "Name": "fees",
+                  "Description": "Early termination fee and waiver eligibility"
+                },
+                {
+                  "Name": "procedure",
+                  "Description": "The numbered steps and the required documents"
+                },
+                {
+                  "Name": "refundPolicy",
+                  "Description": "The refund policy of the plan"
+                },
+                {
+                  "Name": "importantNotes",
+                  "Description": "Conditions that apply to a termination"
+                },
+                {
+                  "Name": "note",
+                  "Description": "What the response does and does not carry"
+                }
               ]
             },
             {
@@ -208,6 +599,49 @@
                   "Required": true,
                   "Scope": "context",
                   "Shared": true
+                }
+              ],
+              "Returns": [
+                {
+                  "Name": "error",
+                  "Description": "Why no calendar is returned, present only when no plan is held",
+                  "Failure": true
+                },
+                {
+                  "Name": "contractId",
+                  "Description": "The contract identifier"
+                },
+                {
+                  "Name": "customerCode",
+                  "Description": "The customer code the books were asked about, on an error"
+                },
+                {
+                  "Name": "customerName",
+                  "Description": "The customer's name when the shop knows the code"
+                },
+                {
+                  "Name": "visitFrequency",
+                  "Description": "How often the garden is tended"
+                },
+                {
+                  "Name": "visitDays",
+                  "Description": "The days of the month on which visits fall"
+                },
+                {
+                  "Name": "allowance",
+                  "Description": "Included visits per month, taken, remaining and the fee of an extra visit"
+                },
+                {
+                  "Name": "upcoming",
+                  "Description": "The next visits with date and days away"
+                },
+                {
+                  "Name": "recentVisits",
+                  "Description": "The visits already made, most recent first"
+                },
+                {
+                  "Name": "note",
+                  "Description": "What the response does and does not carry"
                 }
               ]
             }
@@ -249,7 +683,17 @@
             {
               "Name": "GetProductCatalog",
               "Description": "Retrieves the full greenhouse/nursery catalog as structured JSON: totalProducts and an array of plants with sku, name, category, quantityOnHand, unitPrice, stockStatus (InStock/LowStock/OutOfStock) and statusIcon. This tool has only informative capabilities: it does NOT reserve, order, or modify anything.",
-              "Parameters": []
+              "Parameters": [],
+              "Returns": [
+                {
+                  "Name": "totalProducts",
+                  "Description": "How many products the catalog holds"
+                },
+                {
+                  "Name": "products",
+                  "Description": "The products with SKU, name, category, quantity, price and stock status"
+                }
+              ]
             },
             {
               "Name": "CheckStockLevel",
@@ -260,6 +704,57 @@
                   "Description": "Product SKU to inspect (e.g. 'RSE-100'). The user should specify which plant they mean, or you should present the catalog and let them choose. Do NOT guess or assume which plant the user wants.",
                   "Required": true,
                   "Scope": "request"
+                }
+              ],
+              "Returns": [
+                {
+                  "Name": "error",
+                  "Description": "Why no stock level is returned, present only when the product was not found",
+                  "Failure": true
+                },
+                {
+                  "Name": "sku",
+                  "Description": "The product SKU"
+                },
+                {
+                  "Name": "name",
+                  "Description": "The product name"
+                },
+                {
+                  "Name": "category",
+                  "Description": "The product category"
+                },
+                {
+                  "Name": "quantityOnHand",
+                  "Description": "The quantity in stock"
+                },
+                {
+                  "Name": "reorderThreshold",
+                  "Description": "The quantity at or under which stock is low"
+                },
+                {
+                  "Name": "unitPrice",
+                  "Description": "The price of one unit"
+                },
+                {
+                  "Name": "stockStatus",
+                  "Description": "InStock, LowStock or OutOfStock"
+                },
+                {
+                  "Name": "statusIcon",
+                  "Description": "The icon of the stock status"
+                },
+                {
+                  "Name": "maxOrderableQuantity",
+                  "Description": "The largest quantity that can be ordered"
+                },
+                {
+                  "Name": "requestedSku",
+                  "Description": "The SKU that was asked for, on an error"
+                },
+                {
+                  "Name": "availableSkus",
+                  "Description": "The SKUs that exist, on an error"
                 }
               ]
             },
@@ -286,6 +781,65 @@
                   "Scope": "context",
                   "Shared": true
                 }
+              ],
+              "Returns": [
+                {
+                  "Name": "error",
+                  "Description": "Why no order was created",
+                  "Failure": true
+                },
+                {
+                  "Name": "orderId",
+                  "Description": "The new order identifier"
+                },
+                {
+                  "Name": "sealWord",
+                  "Description": "The one-time word that confirming or cancelling the order requires"
+                },
+                {
+                  "Name": "sku",
+                  "Description": "The product SKU"
+                },
+                {
+                  "Name": "productName",
+                  "Description": "The product name"
+                },
+                {
+                  "Name": "quantity",
+                  "Description": "The quantity quoted"
+                },
+                {
+                  "Name": "unitPrice",
+                  "Description": "The price of one unit"
+                },
+                {
+                  "Name": "totalPrice",
+                  "Description": "The price of the whole quantity"
+                },
+                {
+                  "Name": "status",
+                  "Description": "The status of the order"
+                },
+                {
+                  "Name": "note",
+                  "Description": "What the response does and does not carry"
+                },
+                {
+                  "Name": "requestedSku",
+                  "Description": "The SKU that was asked for, on an error"
+                },
+                {
+                  "Name": "availableSkus",
+                  "Description": "The SKUs that exist, on an error"
+                },
+                {
+                  "Name": "requestedQuantity",
+                  "Description": "The quantity that was asked for, on an error"
+                },
+                {
+                  "Name": "availableQuantity",
+                  "Description": "The quantity in stock, on an error"
+                }
               ]
             },
             {
@@ -305,6 +859,57 @@
                   "Scope": "request"
                 }
               ],
+              "Returns": [
+                {
+                  "Name": "error",
+                  "Description": "Why the order was not confirmed",
+                  "Failure": true
+                },
+                {
+                  "Name": "requestedOrderId",
+                  "Description": "The order identifier that was asked for, on an error"
+                },
+                {
+                  "Name": "orderId",
+                  "Description": "The order identifier"
+                },
+                {
+                  "Name": "sku",
+                  "Description": "The product SKU"
+                },
+                {
+                  "Name": "quantity",
+                  "Description": "The quantity confirmed"
+                },
+                {
+                  "Name": "status",
+                  "Description": "The status of the order"
+                },
+                {
+                  "Name": "confirmedAt",
+                  "Description": "When the order was confirmed"
+                },
+                {
+                  "Name": "remainingStock",
+                  "Description": "The stock left after the confirmation"
+                },
+                {
+                  "Name": "invoiceId",
+                  "Description": "The invoice the order was billed to"
+                },
+                {
+                  "Name": "note",
+                  "Description": "What the response does and does not carry"
+                },
+                {
+                  "Name": "requestedQuantity",
+                  "Description": "The quantity the order asks for, on an error"
+                },
+                {
+                  "Name": "availableQuantity",
+                  "Description": "The quantity in stock, on an error"
+                }
+              ],
               "RequiresExecutionApproval": true
             },
             {
@@ -316,6 +921,45 @@
                   "Description": "Identifier of the order to inspect, as originally returned by CreatePurchaseOrder. May belong to a past session — always trust this tool's answer over what you remember.",
                   "Required": true,
                   "Scope": "request"
+                }
+              ],
+              "Returns": [
+                {
+                  "Name": "error",
+                  "Description": "Why no status is returned, present only when no order matches",
+                  "Failure": true
+                },
+                {
+                  "Name": "orderId",
+                  "Description": "The order identifier"
+                },
+                {
+                  "Name": "sku",
+                  "Description": "The product SKU"
+                },
+                {
+                  "Name": "quantity",
+                  "Description": "The quantity ordered"
+                },
+                {
+                  "Name": "status",
+                  "Description": "The status of the order"
+                },
+                {
+                  "Name": "createdAt",
+                  "Description": "When the order was created"
+                },
+                {
+                  "Name": "confirmedAt",
+                  "Description": "When the order was confirmed, absent until then"
+                },
+                {
+                  "Name": "cancelledAt",
+                  "Description": "When the order was cancelled, absent until then"
+                },
+                {
+                  "Name": "requestedOrderId",
+                  "Description": "The order identifier that was asked for, on an error"
                 }
               ]
             },
@@ -342,12 +986,57 @@
                   "Scope": "request"
                 }
               ],
+              "Returns": [
+                {
+                  "Name": "error",
+                  "Description": "Why the order was not cancelled",
+                  "Failure": true
+                },
+                {
+                  "Name": "requestedOrderId",
+                  "Description": "The order identifier that was asked for, on an error"
+                },
+                {
+                  "Name": "orderId",
+                  "Description": "The order identifier"
+                },
+                {
+                  "Name": "previousStatus",
+                  "Description": "The status the order had before the cancellation"
+                },
+                {
+                  "Name": "status",
+                  "Description": "The status of the order"
+                },
+                {
+                  "Name": "cancelledAt",
+                  "Description": "When the order was cancelled"
+                },
+                {
+                  "Name": "stockRestored",
+                  "Description": "Whether the stock of a confirmed order was given back"
+                },
+                {
+                  "Name": "reason",
+                  "Description": "The cancellation reason that was given"
+                }
+              ],
               "RequiresExecutionApproval": true
             },
             {
               "Name": "GetOrders",
               "Description": "Lists the orders placed during THIS conversation as structured JSON: totalOrders and an array of order summaries (orderId, sku, quantity, status, createdAt, confirmedAt, cancelledAt). Does NOT include sealWord (shown only once, by CreatePurchaseOrder) so this listing alone is never enough to confirm or cancel anything. This tool has only informative capabilities.",
-              "Parameters": []
+              "Parameters": [],
+              "Returns": [
+                {
+                  "Name": "totalOrders",
+                  "Description": "How many orders this conversation placed"
+                },
+                {
+                  "Name": "orders",
+                  "Description": "The orders with identifier, SKU, quantity, status and timestamps"
+                }
+              ]
             },
             {
               "Name": "GetOrderHistory",
@@ -359,6 +1048,24 @@
                   "Required": true,
                   "Scope": "context",
                   "Shared": true
+                }
+              ],
+              "Returns": [
+                {
+                  "Name": "customerCode",
+                  "Description": "The customer code the books were asked about"
+                },
+                {
+                  "Name": "customerName",
+                  "Description": "The customer's name when the shop knows the code"
+                },
+                {
+                  "Name": "totalOrders",
+                  "Description": "How many orders the customer ever placed"
+                },
+                {
+                  "Name": "orders",
+                  "Description": "The orders with identifier, SKU, quantity, status and timestamps"
                 }
               ]
             }

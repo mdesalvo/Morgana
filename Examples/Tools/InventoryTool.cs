@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using Examples.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
@@ -147,15 +146,15 @@ public class InventoryTool : MorganaTool
     /// <summary>
     /// Lists every plant in the greenhouse catalog with its current stock status.
     /// </summary>
-    /// <returns>JSON array of products with stock status icons.</returns>
-    public async Task<string> GetProductCatalog()
+    /// <returns>The products with their stock status icons.</returns>
+    public async Task<ProductCatalogResult> GetProductCatalog()
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT Sku, Name, Category, QuantityOnHand, ReorderThreshold, UnitPrice FROM Products ORDER BY Category, Name";
 
-        List<object> products = [];
+        List<CatalogProduct> products = [];
         await using (SqliteDataReader reader = await command.ExecuteReaderAsync())
         {
             while (await reader.ReadAsync())
@@ -163,54 +162,48 @@ public class InventoryTool : MorganaTool
                 long quantity = reader.GetInt64(3);
                 long threshold = reader.GetInt64(4);
 
-                products.Add(new
-                {
-                    sku = reader.GetString(0),
-                    name = reader.GetString(1),
-                    category = reader.GetString(2),
-                    quantityOnHand = quantity,
-                    unitPrice = reader.GetDouble(5),
-                    stockStatus = StockStatus(quantity, threshold),
-                    statusIcon = StockStatusIcon(quantity, threshold)
-                });
+                products.Add(new CatalogProduct(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    quantity,
+                    reader.GetDouble(5),
+                    StockStatus(quantity, threshold),
+                    StockStatusIcon(quantity, threshold)));
             }
         }
 
-        return JsonSerializer.Serialize(new { totalProducts = products.Count, products }, GreenhouseDatabaseHelper.JsonOptions);
+        return new ProductCatalogResult(products.Count, products);
     }
 
     /// <summary>
     /// Retrieves the detailed stock level for a single product.
     /// </summary>
     /// <param name="sku">Product SKU to inspect (e.g. "RSE-100").</param>
-    /// <returns>JSON object with quantity, threshold, price and stock status.</returns>
-    public async Task<string> CheckStockLevel(string sku)
+    /// <returns>The quantity, threshold, price and stock status, or the error listing the SKUs that exist.</returns>
+    public async Task<StockLevelResult> CheckStockLevel(string sku)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
         Product? product = await FindProductAsync(connection, sku);
         if (product == null)
         {
-            return JsonSerializer.Serialize(new
-            {
-                error = "Product not found",
-                requestedSku = sku,
-                availableSkus = await GetAllSkusAsync(connection)
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            return new StockLevelResult(
+                Error: "Product not found",
+                RequestedSku: sku,
+                AvailableSkus: await GetAllSkusAsync(connection));
         }
 
-        return JsonSerializer.Serialize(new
-        {
-            sku = product.Sku,
-            name = product.Name,
-            category = product.Category,
-            quantityOnHand = product.QuantityOnHand,
-            reorderThreshold = product.ReorderThreshold,
-            unitPrice = product.UnitPrice,
-            stockStatus = StockStatus(product.QuantityOnHand, product.ReorderThreshold),
-            statusIcon = StockStatusIcon(product.QuantityOnHand, product.ReorderThreshold),
-            maxOrderableQuantity = product.QuantityOnHand
-        }, GreenhouseDatabaseHelper.JsonOptions);
+        return new StockLevelResult(
+            Sku: product.Sku,
+            Name: product.Name,
+            Category: product.Category,
+            QuantityOnHand: product.QuantityOnHand,
+            ReorderThreshold: product.ReorderThreshold,
+            UnitPrice: product.UnitPrice,
+            StockStatus: StockStatus(product.QuantityOnHand, product.ReorderThreshold),
+            StatusIcon: StockStatusIcon(product.QuantityOnHand, product.ReorderThreshold),
+            MaxOrderableQuantity: product.QuantityOnHand);
     }
 
     /// <summary>
@@ -221,23 +214,21 @@ public class InventoryTool : MorganaTool
     /// <param name="sku">Product SKU to order.</param>
     /// <param name="quantity">Quantity requested (must not exceed current stock).</param>
     /// <param name="customerCode">Identifier of the requesting customer (retrieved from shared context).</param>
-    /// <returns>JSON object with the new orderId, one-time sealWord, quote and pending status.</returns>
-    public async Task<string> CreatePurchaseOrder(string sku, int quantity, string customerCode)
+    /// <returns>The new orderId, one-time sealWord, quote and pending status, or the error saying why no order was created.</returns>
+    public async Task<PurchaseOrderResult> CreatePurchaseOrder(string sku, int quantity, string customerCode)
     {
         if (quantity <= 0)
-            return JsonSerializer.Serialize(new { error = "Quantity must be a positive number", requestedQuantity = quantity }, GreenhouseDatabaseHelper.JsonOptions);
+            return new PurchaseOrderResult(Error: "Quantity must be a positive number", RequestedQuantity: quantity);
 
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
         Product? product = await FindProductAsync(connection, sku);
         if (product == null)
         {
-            return JsonSerializer.Serialize(new
-            {
-                error = "Product not found",
-                requestedSku = sku,
-                availableSkus = await GetAllSkusAsync(connection)
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            return new PurchaseOrderResult(
+                Error: "Product not found",
+                RequestedSku: sku,
+                AvailableSkus: await GetAllSkusAsync(connection));
         }
 
         // This check is a courtesy at quote time, not a reservation: nothing here decrements
@@ -246,13 +237,11 @@ public class InventoryTool : MorganaTool
         // re-runs this exact comparison itself, right before it is the one that matters.
         if (quantity > product.QuantityOnHand)
         {
-            return JsonSerializer.Serialize(new
-            {
-                error = "Insufficient stock for the requested quantity",
-                sku = product.Sku,
-                requestedQuantity = quantity,
-                availableQuantity = product.QuantityOnHand
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            return new PurchaseOrderResult(
+                Error: "Insufficient stock for the requested quantity",
+                Sku: product.Sku,
+                RequestedQuantity: quantity,
+                AvailableQuantity: product.QuantityOnHand);
         }
 
         // getToolContext() (not a method parameter) is the only way to reach ConversationId: it
@@ -285,18 +274,16 @@ public class InventoryTool : MorganaTool
 
         toolLogger.LogInformation("Created purchase order {OrderId} for {Quantity}x {Sku} (user {CustomerCode})", orderId, quantity, sku, customerCode);
 
-        return JsonSerializer.Serialize(new
-        {
-            orderId,
-            sealWord,
-            sku = product.Sku,
-            productName = product.Name,
-            quantity,
-            unitPrice = product.UnitPrice,
-            totalPrice = Math.Round(product.UnitPrice * quantity, 2),
-            status = "Pending",
-            note = "Order created but NOT committed: stock is untouched and nothing is billed until ConfirmOrder runs on this exact orderId and sealWord. The sealWord appears in this response and in no other, now or later — ConfirmOrder and CancelOrder each require the pair, in this session and in any future one."
-        }, GreenhouseDatabaseHelper.JsonOptions);
+        return new PurchaseOrderResult(
+            OrderId: orderId,
+            SealWord: sealWord,
+            Sku: product.Sku,
+            ProductName: product.Name,
+            Quantity: quantity,
+            UnitPrice: product.UnitPrice,
+            TotalPrice: Math.Round(product.UnitPrice * quantity, 2),
+            Status: "Pending",
+            Note: "Order created but NOT committed: stock is untouched and nothing is billed until ConfirmOrder runs on this exact orderId and sealWord. The sealWord appears in this response and in no other, now or later — ConfirmOrder and CancelOrder each require the pair, in this session and in any future one.");
     }
 
     /// <summary>
@@ -305,8 +292,8 @@ public class InventoryTool : MorganaTool
     /// </summary>
     /// <param name="orderId">Identifier of the order to confirm. Tracked from the conversation itself, NOT a single stored context value: a customer may have more than one order in flight.</param>
     /// <param name="sealWord">One-time seal word returned by CreatePurchaseOrder for this exact orderId. Tracked from the conversation itself, one per order — a customer with multiple orders in flight has a different seal word for each.</param>
-    /// <returns>JSON object with the confirmed order and remaining stock.</returns>
-    public async Task<string> ConfirmOrder(string orderId, string sealWord)
+    /// <returns>The confirmed order and remaining stock, or the error saying why the order was not confirmed.</returns>
+    public async Task<ConfirmOrderResult> ConfirmOrder(string orderId, string sealWord)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -316,7 +303,7 @@ public class InventoryTool : MorganaTool
         // field at a time. One combined check, one combined message, no such leak.
         Order? order = await FindOrderAsync(connection, orderId);
         if (order == null || !string.Equals(order.SealWord, sealWord, StringComparison.OrdinalIgnoreCase))
-            return JsonSerializer.Serialize(new { error = "No order matches that orderId and sealWord combination", requestedOrderId = orderId }, GreenhouseDatabaseHelper.JsonOptions);
+            return new ConfirmOrderResult(Error: "No order matches that orderId and sealWord combination", RequestedOrderId: orderId);
 
         // This pre-read is ONLY for the seal-word gate and a friendly fast-path error. It is NOT the
         // state the writes below trust: between here and the commit another conversation may
@@ -325,12 +312,10 @@ public class InventoryTool : MorganaTool
         // as a WHERE clause on the write itself — the pre-read is never the authority.
         if (order.Status != "Pending")
         {
-            return JsonSerializer.Serialize(new
-            {
-                error = $"Order cannot be confirmed: current status is '{order.Status}', not 'Pending'",
-                orderId,
-                status = order.Status
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            return new ConfirmOrderResult(
+                Error: $"Order cannot be confirmed: current status is '{order.Status}', not 'Pending'",
+                OrderId: orderId,
+                Status: order.Status);
         }
 
         // Read once, outside the transaction, purely for the name/price that go on the invoice
@@ -365,12 +350,10 @@ public class InventoryTool : MorganaTool
             // A concurrent ConfirmOrder/CancelOrder moved this order between our pre-read and now.
             await transaction.RollbackAsync();
             Order? latest = await FindOrderAsync(connection, orderId);
-            return JsonSerializer.Serialize(new
-            {
-                error = $"Order cannot be confirmed: current status is '{latest?.Status ?? "Unknown"}', not 'Pending'",
-                orderId,
-                status = latest?.Status
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            return new ConfirmOrderResult(
+                Error: $"Order cannot be confirmed: current status is '{latest?.Status ?? "Unknown"}', not 'Pending'",
+                OrderId: orderId,
+                Status: latest?.Status);
         }
 
         // Decrement stock, guarded so it can NEVER go negative: WHERE QuantityOnHand >= qty means a
@@ -391,13 +374,11 @@ public class InventoryTool : MorganaTool
         {
             await transaction.RollbackAsync();
             Product? current = await FindProductAsync(connection, order.Sku);
-            return JsonSerializer.Serialize(new
-            {
-                error = "Stock is no longer sufficient to confirm this order",
-                orderId,
-                requestedQuantity = order.Quantity,
-                availableQuantity = current?.QuantityOnHand ?? 0
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            return new ConfirmOrderResult(
+                Error: "Stock is no longer sufficient to confirm this order",
+                OrderId: orderId,
+                RequestedQuantity: order.Quantity,
+                AvailableQuantity: current?.QuantityOnHand ?? 0);
         }
 
         // Read the remaining stock back inside the SAME transaction, so the figure reported is the
@@ -424,44 +405,40 @@ public class InventoryTool : MorganaTool
 
         toolLogger.LogInformation("Confirmed order {OrderId}: stock of {Sku} decremented by {Quantity}, billed to invoice {InvoiceId}", orderId, order.Sku, order.Quantity, invoiceId);
 
-        return JsonSerializer.Serialize(new
-        {
-            orderId,
-            sku = order.Sku,
-            quantity = order.Quantity,
-            status = "Confirmed",
-            confirmedAt,
-            remainingStock,
-            invoiceId,
-            note = invoiceId == null
+        return new ConfirmOrderResult(
+            OrderId: orderId,
+            Sku: order.Sku,
+            Quantity: order.Quantity,
+            Status: "Confirmed",
+            ConfirmedAt: confirmedAt,
+            RemainingStock: remainingStock,
+            InvoiceId: invoiceId,
+            Note: invoiceId == null
                 ? null
-                : "The order has been billed to this invoice as of this confirmation. This response carries the invoice identifier and nothing else about it: its total and its line items are not on these pages."
-        }, GreenhouseDatabaseHelper.JsonOptions);
+                : "The order has been billed to this invoice as of this confirmation. This response carries the invoice identifier and nothing else about it: its total and its line items are not on these pages.");
     }
 
     /// <summary>
     /// Retrieves the current status and lifecycle timestamps of an existing order.
     /// </summary>
     /// <param name="orderId">Identifier of the order to inspect. Tracked from the conversation itself, NOT a single stored context value: a customer may have more than one order in flight.</param>
-    /// <returns>JSON object with order status and timestamps.</returns>
-    public async Task<string> GetOrderStatus(string orderId)
+    /// <returns>The order status and timestamps, or the error saying that no order matches.</returns>
+    public async Task<OrderStatusResult> GetOrderStatus(string orderId)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
         Order? order = await FindOrderAsync(connection, orderId);
         if (order == null)
-            return JsonSerializer.Serialize(new { error = "No order matches that orderId", requestedOrderId = orderId }, GreenhouseDatabaseHelper.JsonOptions);
+            return new OrderStatusResult(Error: "No order matches that orderId", RequestedOrderId: orderId);
 
-        return JsonSerializer.Serialize(new
-        {
-            orderId = order.OrderId,
-            sku = order.Sku,
-            quantity = order.Quantity,
-            status = order.Status,
-            createdAt = order.CreatedAt,
-            confirmedAt = order.ConfirmedAt,
-            cancelledAt = order.CancelledAt
-        }, GreenhouseDatabaseHelper.JsonOptions);
+        return new OrderStatusResult(
+            OrderId: order.OrderId,
+            Sku: order.Sku,
+            Quantity: order.Quantity,
+            Status: order.Status,
+            CreatedAt: order.CreatedAt,
+            ConfirmedAt: order.ConfirmedAt,
+            CancelledAt: order.CancelledAt);
     }
 
     /// <summary>
@@ -471,18 +448,18 @@ public class InventoryTool : MorganaTool
     /// <param name="orderId">Identifier of the order to cancel. Tracked from the conversation itself, NOT a single stored context value: a customer may have more than one order in flight.</param>
     /// <param name="sealWord">One-time seal word returned by CreatePurchaseOrder for this exact orderId. Tracked from the conversation itself, one per order — a customer with multiple orders in flight has a different seal word for each.</param>
     /// <param name="reason">Optional free-text cancellation reason, recorded for logging only.</param>
-    /// <returns>JSON object describing the cancellation outcome.</returns>
-    public async Task<string> CancelOrder(string orderId, string sealWord, string? reason = null)
+    /// <returns>The cancellation outcome, or the error saying why the order was not cancelled.</returns>
+    public async Task<CancelOrderResult> CancelOrder(string orderId, string sealWord, string? reason = null)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
         // Same combined not-found/wrong-sealWord check as ConfirmOrder, same reason.
         Order? order = await FindOrderAsync(connection, orderId);
         if (order == null || !string.Equals(order.SealWord, sealWord, StringComparison.OrdinalIgnoreCase))
-            return JsonSerializer.Serialize(new { error = "No order matches that orderId and sealWord combination", requestedOrderId = orderId }, GreenhouseDatabaseHelper.JsonOptions);
+            return new CancelOrderResult(Error: "No order matches that orderId and sealWord combination", RequestedOrderId: orderId);
 
         if (order.Status == "Cancelled")
-            return JsonSerializer.Serialize(new { error = "Order is already cancelled", orderId }, GreenhouseDatabaseHelper.JsonOptions);
+            return new CancelOrderResult(Error: "Order is already cancelled", OrderId: orderId);
 
         // Cancel and (if needed) restore stock as one atomic unit, first statement a write so we
         // take the write lock up front (no lock-upgrade deadlock; busy_timeout makes a concurrent
@@ -524,7 +501,7 @@ public class InventoryTool : MorganaTool
             // Neither claim won a row: a concurrent CancelOrder already cancelled it between our
             // pre-read and now (Cancelled is the only other status this order could be in).
             await transaction.RollbackAsync();
-            return JsonSerializer.Serialize(new { error = "Order is already cancelled", orderId }, GreenhouseDatabaseHelper.JsonOptions);
+            return new CancelOrderResult(Error: "Order is already cancelled", OrderId: orderId);
         }
 
         // stockRestored is derived from which UPDATE actually won a row — atomic with the claim,
@@ -546,15 +523,13 @@ public class InventoryTool : MorganaTool
 
         toolLogger.LogInformation("Cancelled order {OrderId} (was {PreviousStatus}, stock restored: {StockRestored})", orderId, previousStatus, stockRestored);
 
-        return JsonSerializer.Serialize(new
-        {
-            orderId,
-            previousStatus,
-            status = "Cancelled",
-            cancelledAt,
-            stockRestored,
-            reason = reason ?? "Not specified"
-        }, GreenhouseDatabaseHelper.JsonOptions);
+        return new CancelOrderResult(
+            OrderId: orderId,
+            PreviousStatus: previousStatus,
+            Status: "Cancelled",
+            CancelledAt: cancelledAt,
+            StockRestored: stockRestored,
+            Reason: reason ?? "Not specified");
     }
 
     /// <summary>
@@ -562,8 +537,8 @@ public class InventoryTool : MorganaTool
     /// (never exposed to the LLM, never spoofable via a context variable) — no sealWord needed
     /// since the caller is, by construction, the same conversation that created them.
     /// </summary>
-    /// <returns>JSON array of this conversation's orders (no sealWord included).</returns>
-    public async Task<string> GetOrders()
+    /// <returns>This conversation's orders (no sealWord included).</returns>
+    public async Task<OrdersResult> GetOrders()
     {
         // ctx.ConversationId, not a parameter: this scoping is intentionally NOT something the LLM
         // can influence or spoof — "this conversation's orders" means exactly that, decided by
@@ -576,25 +551,23 @@ public class InventoryTool : MorganaTool
         command.CommandText = "SELECT OrderId, Sku, Quantity, Status, CreatedAt, ConfirmedAt, CancelledAt FROM Orders WHERE ConversationId = $conversationId ORDER BY CreatedAt DESC";
         command.Parameters.AddWithValue("$conversationId", ctx.ConversationId);
 
-        List<object> orders = [];
+        List<OrderSummary> orders = [];
         await using (SqliteDataReader reader = await command.ExecuteReaderAsync())
         {
             while (await reader.ReadAsync())
             {
-                orders.Add(new
-                {
-                    orderId = reader.GetString(0),
-                    sku = reader.GetString(1),
-                    quantity = reader.GetInt64(2),
-                    status = reader.GetString(3),
-                    createdAt = reader.GetString(4),
-                    confirmedAt = reader.IsDBNull(5) ? null : reader.GetString(5),
-                    cancelledAt = reader.IsDBNull(6) ? null : reader.GetString(6)
-                });
+                orders.Add(new OrderSummary(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetInt64(2),
+                    reader.GetString(3),
+                    reader.GetString(4),
+                    reader.IsDBNull(5) ? null : reader.GetString(5),
+                    reader.IsDBNull(6) ? null : reader.GetString(6)));
             }
         }
 
-        return JsonSerializer.Serialize(new { totalOrders = orders.Count, orders }, GreenhouseDatabaseHelper.JsonOptions);
+        return new OrdersResult(orders.Count, orders);
     }
 
     /// <summary>
@@ -604,8 +577,8 @@ public class InventoryTool : MorganaTool
     /// list is not enough to act on any of the orders it names.
     /// </summary>
     /// <param name="customerCode">Identifier of the customer whose order history to retrieve (retrieved from shared context).</param>
-    /// <returns>JSON array of that customer's orders across every conversation (no sealWord included).</returns>
-    public async Task<string> GetOrderHistory(string customerCode)
+    /// <returns>That customer's orders across every conversation (no sealWord included).</returns>
+    public async Task<OrderHistoryResult> GetOrderHistory(string customerCode)
     {
         // customerCode is a shared context variable the LLM itself can write by passing it to a tool —
         // unlike GetOrders()'s ConversationId, it is not a trust boundary, which is exactly why
@@ -619,24 +592,22 @@ public class InventoryTool : MorganaTool
         command.CommandText = "SELECT OrderId, Sku, Quantity, Status, CreatedAt, ConfirmedAt, CancelledAt FROM Orders WHERE CustomerCode = $customerCode COLLATE NOCASE ORDER BY CreatedAt DESC";
         command.Parameters.AddWithValue("$customerCode", customerCode);
 
-        List<object> orders = [];
+        List<OrderSummary> orders = [];
         await using (SqliteDataReader reader = await command.ExecuteReaderAsync())
         {
             while (await reader.ReadAsync())
             {
-                orders.Add(new
-                {
-                    orderId = reader.GetString(0),
-                    sku = reader.GetString(1),
-                    quantity = reader.GetInt64(2),
-                    status = reader.GetString(3),
-                    createdAt = reader.GetString(4),
-                    confirmedAt = reader.IsDBNull(5) ? null : reader.GetString(5),
-                    cancelledAt = reader.IsDBNull(6) ? null : reader.GetString(6)
-                });
+                orders.Add(new OrderSummary(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.GetInt64(2),
+                    reader.GetString(3),
+                    reader.GetString(4),
+                    reader.IsDBNull(5) ? null : reader.GetString(5),
+                    reader.IsDBNull(6) ? null : reader.GetString(6)));
             }
         }
 
-        return JsonSerializer.Serialize(new { customerCode, customerName, totalOrders = orders.Count, orders }, GreenhouseDatabaseHelper.JsonOptions);
+        return new OrderHistoryResult(customerCode, customerName, orders.Count, orders);
     }
 }

@@ -353,7 +353,8 @@ WebApplication app = builder.Build();
 // A refusal is only a startup refusal if something asks at startup. Left to first use, the same fault
 // reaches a user as a conversation that never answers or a channel with no commands to offer.
 await app.Services.GetRequiredService<IAgentConfigurationService>().GetIntentsAsync();
-app.Services.GetRequiredService<IAgentRegistryService>();
+// The registry validates when it is first asked for an intent, never when it is merely resolved.
+_ = app.Services.GetRequiredService<IAgentRegistryService>().GetAllIntents();
 app.Services.GetRequiredService<ICommandRegistryService>();
 
 app.UseCors("Channel");                 // Open CORS; trust gate is JWT, not origin

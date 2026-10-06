@@ -77,7 +77,9 @@ public static class DraftProjection
         new(tool.Name ?? string.Empty,
             tool.Description ?? string.Empty,
             [.. tool.Parameters.Select(ToToolParameter)],
-            RequiresExecutionApproval: tool.RequiresExecutionApproval);
+            RequiresExecutionApproval: tool.RequiresExecutionApproval,
+            // A tool that declared none leaves the key out, so a domain written before Returns existed gets none.
+            Returns: tool.Returns.Count > 0 ? [.. tool.Returns] : null);
 
     /// <summary>
     /// Rebuilds a tool parameter from its Draft element.

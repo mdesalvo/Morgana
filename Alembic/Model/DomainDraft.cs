@@ -465,6 +465,11 @@ public sealed class ToolDraft
     public bool RequiresExecutionApproval { get; set; }
 
     /// <summary>
+    /// The fields of what the tool's method returns, as agents.json declares them and startup verifies them against the C#.
+    /// </summary>
+    public List<Records.ToolReturn> Returns { get; set; } = [];
+
+    /// <summary>
     /// Where this tool came from.
     /// </summary>
     public Provenance Origin { get; set; } = Provenance.Authored;

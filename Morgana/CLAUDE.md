@@ -271,7 +271,8 @@ tier) and `GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
 3. **Agent class** extending `MorganaAgent`, with `[HandlesIntent("x")]` **and** `[RequiresLLMTier]`
    (mandatory, validated at startup). The constructor calls `MorganaAgentAdapter.CreateAgent()`
 4. **Tool class** (optional) extending `MorganaTool`, with `[ProvidesToolForIntent("x")]`. Method
-   names must match the JSON `Name` exactly. Constructor `(ILogger, Func<ToolContext>)`. A tool that
+   names must match the JSON `Name` exactly and each returns a typed record that the tool declares as
+   `Returns` in agents.json, verified at startup. Constructor `(ILogger, Func<ToolContext>)`. A tool that
    changes something real declares `"RequiresExecutionApproval": true`: it runs only once the user has
    approved that exact call, through MEAI's own `ApprovalRequiredAIFunction`. The framework offers the
    approval buttons; pressing an action button that leads to the tool is that approval already
@@ -330,7 +331,7 @@ from the array that it lives in**, never from a field inside it:
 - **`GlobalPolicies`** — rendered into every agent's prompt in `Priority` order:
   QuickReplyDoctrine, ToolGrounding, MandatoryTextualResponse, RichCardUsage, PeerConsultation.
   `PeerConsultation` (P8) is the
-  **only conditionally rendered** one — an agent outside the A2A topology never pays for it — and
+  **only conditionally rendered** one (an agent outside the A2A topology never pays for it) and
   sits last so it names the policies it suspends instead of forward-referencing them.
 - **`Injections`** — templates, not rules: prose with a single splice site each, never rendered among
   the policies where they would instruct against nothing. No `Priority`: each is fetched by name.
@@ -433,7 +434,7 @@ fails or opens, silently.**
 1. Every configured intent has an agent and every agent an intent
 2. Every agent declares `[RequiresLLMTier]` and that tier is configured
 3. Every `[ConsultsAgent]` names a reachable colleague and no two fold to one function name
-4. Tools: warn on orphans, error on duplicates for one intent
+4. Tools: warn on orphans, error on duplicates for one intent; a tool whose declared `Returns` and returned record disagree is refused
 5. Plugin `agents.json` files merge with no duplicated intent or prompt id and none declares `other`
    or `Morgana`
 6. No `Tiers` entry left on its override placeholder, no empty `Tiers` map

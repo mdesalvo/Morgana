@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using Examples.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
@@ -147,23 +146,21 @@ public class BillingTool : MorganaTool
         _ => status
     };
 
-    private static object? PaymentMethod(string? paymentType, string? lastFourDigits)
+    private static PaymentMethodInfo? PaymentMethod(string? paymentType, string? lastFourDigits)
     {
         if (paymentType == null || lastFourDigits == null)
             return null;
 
-        return new
-        {
-            type = paymentType,
+        return new PaymentMethodInfo(
+            paymentType,
             lastFourDigits,
-            formatted = paymentType switch
+            paymentType switch
             {
                 "CreditCard" => $"Credit Card ending in {lastFourDigits}",
                 "BankTransfer" => $"Bank Transfer from account ending in {lastFourDigits}",
                 "DirectDebit" => $"Direct Debit from account ending in {lastFourDigits}",
                 _ => $"{paymentType} ({lastFourDigits})"
-            }
-        };
+            });
     }
 
     private const string NothingUnderThisCode =
@@ -179,8 +176,8 @@ public class BillingTool : MorganaTool
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="count">Number of recent invoices to retrieve (1-10)</param>
-    /// <returns>JSON array of invoice summaries</returns>
-    public async Task<string> GetInvoices(string customerCode, int count)
+    /// <returns>The invoice summaries, or a note when the books hold none</returns>
+    public async Task<InvoicesResult> GetInvoices(string customerCode, int count)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -202,38 +199,25 @@ public class BillingTool : MorganaTool
 
         if (invoices.Count == 0)
         {
-            return JsonSerializer.Serialize(new
-            {
-                customerCode,
-                customerName,
-                totalCount = 0,
-                invoices = Array.Empty<object>(),
-                note = NothingUnderThisCode
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            return new InvoicesResult(customerCode, customerName, 0, [], NothingUnderThisCode);
         }
 
-        var result = new
-        {
+        return new InvoicesResult(
             customerCode,
             customerName,
-            totalCount = invoices.Count,
-            invoices = invoices.Select(invoice => new
-            {
-                invoiceId = invoice.InvoiceId,
-                period = PeriodLabel(invoice.PeriodStart, invoice.PeriodEnd),
-                issueDate = invoice.IssueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-                dueDate = invoice.DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-                total = invoice.Total,
-                status = invoice.Status,
-                statusIcon = StatusIcon(invoice.Status),
-                paidDate = invoice.PaidDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-                daysOverdue = invoice.Status == "Pending"
+            invoices.Count,
+            [.. invoices.Select(invoice => new InvoiceSummary(
+                invoice.InvoiceId,
+                PeriodLabel(invoice.PeriodStart, invoice.PeriodEnd),
+                invoice.IssueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                invoice.DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                invoice.Total,
+                invoice.Status,
+                StatusIcon(invoice.Status),
+                invoice.PaidDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                invoice.Status == "Pending"
                     ? Math.Max(0, -(invoice.DueDate - DateTime.UtcNow).Days)
-                    : (int?)null
-            }).ToList()
-        };
-
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+                    : null))]);
     }
 
     /// <summary>
@@ -241,8 +225,8 @@ public class BillingTool : MorganaTool
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="invoiceId">Specific invoice identifier (e.g., "INV-0512")</param>
-    /// <returns>JSON object with complete invoice details</returns>
-    public async Task<string> GetInvoiceDetails(string customerCode, string invoiceId)
+    /// <returns>The complete invoice details, or the error naming the invoices that exist</returns>
+    public async Task<InvoiceDetailsResult> GetInvoiceDetails(string customerCode, string invoiceId)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -276,76 +260,62 @@ public class BillingTool : MorganaTool
                     invoiceIds.Add(reader.GetString(0));
             }
 
-            return JsonSerializer.Serialize(new
-            {
-                error = "Invoice not found",
-                requestedInvoiceId = invoiceId,
-                availableInvoices = invoiceIds,
-                note = invoiceIds.Count == 0 ? NothingUnderThisCode : null
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            return new InvoiceDetailsResult(
+                Error: "Invoice not found",
+                RequestedInvoiceId: invoiceId,
+                AvailableInvoices: invoiceIds,
+                Note: invoiceIds.Count == 0 ? NothingUnderThisCode : null);
         }
 
         List<InvoiceLine> lines = await GetInvoiceLinesAsync(connection, invoice.InvoiceId);
         int daysUntilDue = (invoice.DueDate - DateTime.UtcNow).Days;
 
-        var result = new
-        {
-            invoiceId = invoice.InvoiceId,
-            customerCode = invoice.CustomerCode,
-            customerName,
-            period = PeriodLabel(invoice.PeriodStart, invoice.PeriodEnd),
-            dates = new
-            {
-                issueDate = invoice.IssueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-                dueDate = invoice.DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-                paidDate = invoice.PaidDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)
-            },
-            status = new
-            {
-                value = invoice.Status,
-                icon = StatusIcon(invoice.Status),
-                description = StatusDescription(invoice.Status),
-                daysUntilDue = invoice.Status == "Pending" ? daysUntilDue : (int?)null,
-                isOverdue = invoice.Status == "Pending" && daysUntilDue < 0,
-                daysOverdue = invoice.Status == "Pending" && daysUntilDue < 0
+        return new InvoiceDetailsResult(
+            InvoiceId: invoice.InvoiceId,
+            CustomerCode: invoice.CustomerCode,
+            CustomerName: customerName,
+            Period: PeriodLabel(invoice.PeriodStart, invoice.PeriodEnd),
+            Dates: new InvoiceDates(
+                invoice.IssueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                invoice.DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                invoice.PaidDate?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)),
+            Status: new InvoiceStatus(
+                invoice.Status,
+                StatusIcon(invoice.Status),
+                StatusDescription(invoice.Status),
+                invoice.Status == "Pending" ? daysUntilDue : null,
+                invoice.Status == "Pending" && daysUntilDue < 0,
+                invoice.Status == "Pending" && daysUntilDue < 0
                     ? Math.Abs(daysUntilDue)
-                    : (int?)null
-            },
+                    : null),
             // Sku is read from the row but never surfaced: it is the greenhouse ledger's identifier
             // for a plant and an accounts agent that hands it out starts being asked catalog
             // questions. OrderId is a different thing — a reference to what was billed, which is
             // exactly what an invoice line is for.
-            lineItems = lines.Select(line => new
-            {
-                description = line.Description,
-                orderId = line.OrderId,
-                unitPrice = line.UnitPrice,
-                quantity = line.Quantity,
-                unit = line.Unit,
-                amount = line.Amount,
-                formattedQuantity = line.Quantity > 1
+            LineItems: [.. lines.Select(line => new InvoiceLineItem(
+                line.Description,
+                line.OrderId,
+                line.UnitPrice,
+                line.Quantity,
+                line.Unit,
+                line.Amount,
+                line.Quantity > 1
                     ? string.Create(CultureInfo.InvariantCulture, $"{line.Quantity} {line.Unit} × €{line.UnitPrice:F2}")
-                    : null
-            }).ToList(),
-            amounts = new
-            {
-                subtotal = invoice.Subtotal,
-                tax = invoice.Tax,
-                taxRate = string.Create(CultureInfo.InvariantCulture, $"{invoice.TaxRate * 100:0.##}%"),
-                total = invoice.Total
-            },
-            paymentMethod = PaymentMethod(invoice.PaymentType, invoice.PaymentLastFour)
-        };
-
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+                    : null))],
+            Amounts: new InvoiceAmounts(
+                invoice.Subtotal,
+                invoice.Tax,
+                string.Create(CultureInfo.InvariantCulture, $"{invoice.TaxRate * 100:0.##}%"),
+                invoice.Total),
+            PaymentMethod: PaymentMethod(invoice.PaymentType, invoice.PaymentLastFour));
     }
 
     /// <summary>
     /// Sums what the customer still owes: the invoices left unpaid, oldest first.
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
-    /// <returns>JSON object with the outstanding total and the invoices making it up</returns>
-    public async Task<string> GetOutstandingBalance(string customerCode)
+    /// <returns>The outstanding total and the invoices making it up</returns>
+    public async Task<OutstandingBalanceResult> GetOutstandingBalance(string customerCode)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -364,14 +334,12 @@ public class BillingTool : MorganaTool
 
         if (unpaid.Count == 0)
         {
-            return JsonSerializer.Serialize(new
-            {
+            return new OutstandingBalanceResult(
                 customerCode,
                 customerName,
-                hasOutstanding = false,
-                totalDue = 0m,
-                message = "Nothing is outstanding under this customer code: either every invoice has been settled, or the books hold none."
-            }, GreenhouseDatabaseHelper.JsonOptions);
+                HasOutstanding: false,
+                TotalDue: 0m,
+                Message: "Nothing is outstanding under this customer code: either every invoice has been settled, or the books hold none.");
         }
 
         // The sum is computed here rather than left to whoever reads the list: money that a
@@ -380,28 +348,22 @@ public class BillingTool : MorganaTool
         decimal totalDue = unpaid.Sum(invoice => invoice.Total);
         int worstDaysOverdue = unpaid.Max(invoice => Math.Max(0, -(invoice.DueDate - DateTime.UtcNow).Days));
 
-        var result = new
-        {
+        return new OutstandingBalanceResult(
             customerCode,
             customerName,
-            hasOutstanding = true,
-            totalDue,
-            invoiceCount = unpaid.Count,
-            oldestDueDate = unpaid[0].DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-            daysOverdue = worstDaysOverdue > 0 ? worstDaysOverdue : (int?)null,
-            invoices = unpaid.Select(invoice => new
-            {
-                invoiceId = invoice.InvoiceId,
-                period = PeriodLabel(invoice.PeriodStart, invoice.PeriodEnd),
-                dueDate = invoice.DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-                total = invoice.Total,
-                status = invoice.Status,
-                statusIcon = StatusIcon(invoice.Status),
-                daysOverdue = Math.Max(0, -(invoice.DueDate - DateTime.UtcNow).Days)
-            }).ToList()
-        };
-
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+            HasOutstanding: true,
+            TotalDue: totalDue,
+            InvoiceCount: unpaid.Count,
+            OldestDueDate: unpaid[0].DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+            DaysOverdue: worstDaysOverdue > 0 ? worstDaysOverdue : null,
+            Invoices: [.. unpaid.Select(invoice => new OutstandingInvoice(
+                invoice.InvoiceId,
+                PeriodLabel(invoice.PeriodStart, invoice.PeriodEnd),
+                invoice.DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                invoice.Total,
+                invoice.Status,
+                StatusIcon(invoice.Status),
+                Math.Max(0, -(invoice.DueDate - DateTime.UtcNow).Days)))]);
     }
 
     /// <summary>
@@ -409,8 +371,8 @@ public class BillingTool : MorganaTool
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="months">Number of months of history to retrieve (1-12)</param>
-    /// <returns>JSON object with payment history</returns>
-    public async Task<string> GetPaymentHistory(string customerCode, int months = 6)
+    /// <returns>The payment history, or a message when no payment was received</returns>
+    public async Task<PaymentHistoryResult> GetPaymentHistory(string customerCode, int months = 6)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -433,40 +395,30 @@ public class BillingTool : MorganaTool
 
         if (payments.Count == 0)
         {
-            return JsonSerializer.Serialize(new
-            {
+            return new PaymentHistoryResult(
                 customerCode,
                 customerName,
                 months,
-                hasData = false,
-                message = $"No payment received in the last {months} months under this customer code."
-            }, GreenhouseDatabaseHelper.JsonOptions);
+                HasData: false,
+                Message: $"No payment received in the last {months} months under this customer code.");
         }
 
         decimal totalPaid = payments.Sum(payment => payment.Total);
 
-        var result = new
-        {
+        return new PaymentHistoryResult(
             customerCode,
             customerName,
             months,
-            hasData = true,
-            summary = new
-            {
-                totalPayments = payments.Count,
-                totalAmount = totalPaid,
-                averageMonthly = Math.Round(totalPaid / payments.Count, 2)
-            },
-            payments = payments.Select(payment => new
-            {
-                invoiceId = payment.InvoiceId,
-                period = PeriodLabel(payment.PeriodStart, payment.PeriodEnd),
-                amount = payment.Total,
-                paidDate = payment.PaidDate!.Value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-                paymentMethod = PaymentMethod(payment.PaymentType, payment.PaymentLastFour)
-            }).ToList()
-        };
-
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+            HasData: true,
+            Summary: new PaymentSummary(
+                payments.Count,
+                totalPaid,
+                Math.Round(totalPaid / payments.Count, 2)),
+            Payments: [.. payments.Select(payment => new PaymentEntry(
+                payment.InvoiceId,
+                PeriodLabel(payment.PeriodStart, payment.PeriodEnd),
+                payment.Total,
+                payment.PaidDate!.Value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                PaymentMethod(payment.PaymentType, payment.PaymentLastFour)))]);
     }
 }

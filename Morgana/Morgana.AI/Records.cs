@@ -1135,6 +1135,10 @@ public static class Records
     /// <param name="Name">Tool method name (must match actual method name in MorganaTool class)</param>
     /// <param name="Description">Tool description for LLM understanding</param>
     /// <param name="Parameters">List of tool parameter definitions</param>
+    /// <param name="Returns">
+    /// The fields of the record that the tool method returns, verified against that record at startup.
+    /// Required of every native domain tool; absent for the base tool and for tools acquired over MCP.
+    /// </param>
     /// <param name="RequiresExecutionApproval">
     /// True when the tool changes something real and runs only once the user has approved that exact
     /// call. Declared in agents.json; the approval itself is Microsoft.Extensions.AI's, through
@@ -1152,7 +1156,8 @@ public static class Records
         string Description,
         IReadOnlyList<ToolParameter> Parameters,
         bool Reserved = false,
-        bool RequiresExecutionApproval = false);
+        bool RequiresExecutionApproval = false,
+        IReadOnlyList<ToolReturn>? Returns = null);
 
     /// <summary>
     /// Tool parameter: name (must match method param), description, Required flag. Scope: "context" (resolved by
@@ -1165,6 +1170,15 @@ public static class Records
         bool Required,
         string Scope,
         bool Shared = false);
+
+    /// <summary>
+    /// One field of what a tool returns: its name, what it holds and whether holding a value means
+    /// the call failed. At most one field of a tool is the failure marker and its property is nullable.
+    /// </summary>
+    public record ToolReturn(
+        string Name,
+        string Description,
+        bool Failure = false);
 
     // ==========================================================================
     // TURN CLOSURE
