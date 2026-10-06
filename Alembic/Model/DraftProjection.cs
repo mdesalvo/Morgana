@@ -25,6 +25,12 @@ public static class DraftProjection
     public const string ToolsPropertyName = "Tools";
 
     /// <summary>
+    /// The AdditionalProperties key carrying an agent's workflows, matched ordinally like
+    /// <see cref="ToolsPropertyName"/>.
+    /// </summary>
+    public const string WorkflowsPropertyName = "Workflows";
+
+    /// <summary>
     /// Rebuilds an intent definition from its Draft element.
     /// </summary>
     public static Records.IntentDefinition ToIntentDefinition(IntentDraft intent) =>
@@ -38,7 +44,7 @@ public static class DraftProjection
     /// AdditionalProperties alongside whatever else was carried through.
     /// </summary>
     /// <remarks>
-    /// The toolkit is written as its own entry, first and the unmodelled entries follow. This does
+    /// The toolkit and the workflows are each written as their own entry, first and the unmodelled entries follow. This does
     /// not necessarily reproduce the grouping a file arrived with — AdditionalProperties is a list
     /// of dictionaries and the same content can be spread across it in several ways — which is
     /// precisely why the round-trip invariant is stated as equivalence and not byte identity.
@@ -52,6 +58,12 @@ public static class DraftProjection
             additionalProperties.Add(new Dictionary<string, object>
             {
                 [ToolsPropertyName] = agent.Tools.Select(ToToolDefinition).ToList()
+            });
+
+        if (agent.Workflows.Count > 0)
+            additionalProperties.Add(new Dictionary<string, object>
+            {
+                [WorkflowsPropertyName] = agent.Workflows.Select(ToWorkflowDefinition).ToList()
             });
 
         additionalProperties.AddRange(agent.UnmodelledProperties);
@@ -80,6 +92,20 @@ public static class DraftProjection
             RequiresExecutionApproval: tool.RequiresExecutionApproval,
             // A tool that declared none leaves the key out, so a domain written before Returns existed gets none.
             Returns: tool.Returns.Count > 0 ? [.. tool.Returns] : null);
+
+    /// <summary>
+    /// Rebuilds a workflow definition from its Draft element.
+    /// </summary>
+    public static Records.WorkflowDefinition ToWorkflowDefinition(WorkflowDraft workflow) =>
+        new(workflow.Name ?? string.Empty,
+            workflow.Description ?? string.Empty,
+            [.. workflow.Steps.Select(step => new Records.WorkflowStep(
+                step.Name ?? string.Empty,
+                [.. step.Tools],
+                step.Next,
+                // An empty table leaves the key out: the framework reads absent and empty alike.
+                step.OnFailure.Count > 0 ? step.OnFailure : null,
+                step.Arguments.Count > 0 ? step.Arguments : null))]);
 
     /// <summary>
     /// Rebuilds a tool parameter from its Draft element.

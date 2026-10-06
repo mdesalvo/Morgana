@@ -471,14 +471,27 @@ public class InterviewTools
     /// <summary>
     /// Removes a tool and everything on it.
     /// </summary>
+    /// <remarks>
+    /// The workflow steps that still name it are left as they are and reported, so the pass that
+    /// owns workflows repairs them rather than a tool being dropped behind their back.
+    /// </remarks>
     public string DropTool(string toolName)
     {
-        int removed = interviewState.Agent.Tools.RemoveAll(t =>
-            string.Equals(t.Name, toolName?.Trim(), StringComparison.Ordinal));
+        string cleanName = toolName?.Trim() ?? string.Empty;
 
-        return removed > 0
-            ? $"'{toolName}' dropped, with its parameters and what it hands back."
-            : $"Nothing dropped: no tool named '{toolName}' has been declared.";
+        int removed = interviewState.Agent.Tools.RemoveAll(t =>
+            string.Equals(t.Name, cleanName, StringComparison.Ordinal));
+
+        if (removed == 0)
+            return $"Nothing dropped: no tool named '{toolName}' has been declared.";
+
+        List<string> orphaned =
+        [.. interviewState.Agent.Workflows.SelectMany(workflow => workflow.Steps
+                .Where(step => step.Tools.Contains(cleanName, StringComparer.Ordinal))
+                .Select(step => $"'{cleanName}' is still named by step '{step.Name}' of workflow '{workflow.Name}', which is left without it."))];
+
+        return $"'{toolName}' dropped, with its parameters and what it hands back."
+               + (orphaned.Count > 0 ? " " + string.Join(" ", orphaned) : string.Empty);
     }
 
     /// <summary>
@@ -488,7 +501,8 @@ public class InterviewTools
     {
         if (interviewState.Agent.Tools.Count == 0)
             return "This agent declares no tools yet. That is a legal end interviewState — an agent whose tools "
-                   + "all arrive from an MCP server declares none here — but it must be a conclusion you reached by asking.";
+                   + "all arrive from an MCP server declares none here — but it must be a conclusion you reached by asking.\n\n"
+                   + DescribeWorkflows(interviewState.Agent.Workflows);
 
         IEnumerable<string> rendered = interviewState.Agent.Tools.Select(t =>
             $"- {t.Name}{(t.RequiresExecutionApproval ? " (waits for the user's approval)" : string.Empty)}: {t.Description ?? "(no description)"}"
@@ -505,8 +519,218 @@ public class InterviewTools
                     $"\n    returns {r.Name}{(r.Failure ? " [the failure]" : string.Empty)}: "
                     + (string.IsNullOrWhiteSpace(r.Description) ? "(no description)" : r.Description)))));
 
-        return "The toolkit as it stands:\n" + string.Join("\n", rendered);
+        return "The toolkit as it stands:\n" + string.Join("\n", rendered)
+               + "\n\n" + DescribeWorkflows(interviewState.Agent.Workflows);
     }
+
+    /// <summary>
+    /// Opens a workflow, or revises the description of one already open.
+    /// </summary>
+    /// <remarks>
+    /// Revising rewrites the description and keeps the steps: a workflow is settled in several turns
+    /// (what it achieves comes out of one answer, its steps out of the next), so re-declaring it to
+    /// sharpen the description must not silently empty it.
+    /// </remarks>
+    public string DeclareWorkflow(string name, string description)
+    {
+        string cleanName = (name ?? string.Empty).Trim();
+
+        if (cleanName.Length == 0)
+            return "No workflow recorded: a workflow must have a name, because the model starts it by that name.";
+
+        // The name is what the model passes to LaunchWorkflow, so a workflow kept under one that has
+        // to change would survive the corrected call as a second workflow.
+        string complaint = IdentifierComplaint(cleanName, "workflow name", pascalCase: true);
+
+        if (complaint.Length > 0)
+            return "No workflow recorded. " + complaint;
+
+        WorkflowDraft? existing = FindWorkflow(cleanName);
+        WorkflowDraft workflow = existing ?? new WorkflowDraft { Name = cleanName, Origin = Provenance.Authored };
+        workflow.Description = description?.Trim();
+
+        if (existing is null)
+            interviewState.Agent.Workflows.Add(workflow);
+
+        return (existing is not null ? $"'{cleanName}' revised." : $"'{cleanName}' declared.")
+               + (string.IsNullOrWhiteSpace(description)
+                   ? " It has no description and the description is what the model reads when it decides whether to start this workflow at all."
+                   : string.Empty);
+    }
+
+    /// <summary>
+    /// Adds a step at the end of a workflow, or revises one already there by name and in place.
+    /// </summary>
+    /// <remarks>
+    /// Revision keeps the step's place, because the order of the steps is the order the procedure
+    /// was described in and the first one is where it starts. A link to a step that is not declared
+    /// yet is legal: steps arrive one by one and <see cref="GetFindings"/> reports a link left dangling.
+    /// </remarks>
+    /// <param name="workflow">The already-declared workflow this step belongs to.</param>
+    /// <param name="name">PascalCase and never <c>End</c>, which is the reserved target that closes a workflow.</param>
+    /// <param name="tools">The tools offered at this step, by their exact names.</param>
+    /// <param name="next">Tool name to the step its call leads to when it succeeds, or <c>End</c>.</param>
+    /// <param name="onFailure">Tool name to the step its call leads to when it fails; a tool left out ends the workflow.</param>
+    /// <param name="arguments">Parameter name to <c>Step.field</c>, the earlier result the framework fills it from.</param>
+    public string SetWorkflowStep(
+        string workflow,
+        string name,
+        string[] tools,
+        Dictionary<string, string> next,
+        Dictionary<string, string>? onFailure = null,
+        Dictionary<string, string>? arguments = null)
+    {
+        if (FindWorkflow(workflow) is not { } owner)
+            return $"No step recorded: no workflow named '{workflow}' has been declared yet.";
+
+        string cleanName = (name ?? string.Empty).Trim();
+
+        if (cleanName.Length == 0)
+            return "No step recorded: a step must have a name.";
+
+        List<string> stepTools = [.. (tools ?? []).Select(tool => tool?.Trim() ?? string.Empty)
+                                                  .Where(tool => tool.Length > 0)
+                                                  .Distinct(StringComparer.Ordinal)];
+        List<string> complaints = [];
+
+        string identifierComplaint = IdentifierComplaint(cleanName, "step name", pascalCase: true);
+
+        if (identifierComplaint.Length > 0)
+            complaints.Add(identifierComplaint);
+
+        if (string.Equals(cleanName, Constants.Workflows.End, StringComparison.Ordinal))
+            complaints.Add($"But '{Constants.Workflows.End}' is the reserved target that closes a workflow and no step may bear it.");
+
+        // An agent that acquires tools from an MCP server names tools nothing here can see, so only
+        // an agent with none of those can have a tool judged absent on the spot.
+        if (interviewState.Agent.Code.MCPServers.Count == 0)
+            foreach (string tool in stepTools.Where(tool => Find(tool) is null))
+                complaints.Add($"But this agent declares no tool named '{tool}'.");
+
+        if (stepTools.Count == 0)
+            complaints.Add("But a step offers at least one tool.");
+
+        Dictionary<string, string> successLinks = Cleaned(next);
+        Dictionary<string, string> failureLinks = Cleaned(onFailure);
+        Dictionary<string, string> boundValues = Cleaned(arguments);
+
+        foreach ((string linkKind, Dictionary<string, string> links) in new[] { ("next", successLinks), ("onFailure", failureLinks) })
+            foreach (string tool in links.Keys.Where(tool => !stepTools.Contains(tool, StringComparer.Ordinal)))
+                complaints.Add($"But '{tool}' in {linkKind} is not a tool of this step.");
+
+        foreach ((string parameter, string source) in boundValues)
+        {
+            string[] parts = source.Split('.');
+
+            if (parts.Length != 2 || parts.Any(part => part.Length == 0))
+                complaints.Add($"But '{source}', the source of '{parameter}', is not of the form Step.field.");
+        }
+
+        if (complaints.Count > 0)
+            return "No step recorded. " + string.Join(" ", complaints) + " Call again with the step corrected.";
+
+        WorkflowStepDraft? existing = owner.Steps.FirstOrDefault(step => string.Equals(step.Name, cleanName, StringComparison.Ordinal));
+        WorkflowStepDraft recorded = existing ?? new WorkflowStepDraft { Name = cleanName };
+
+        recorded.Tools = stepTools;
+        recorded.Next = successLinks;
+        recorded.OnFailure = failureLinks;
+        recorded.Arguments = boundValues;
+
+        if (existing is null)
+            owner.Steps.Add(recorded);
+
+        return existing is not null
+            ? $"Step '{cleanName}' of '{owner.Name}' revised."
+            : $"Step '{cleanName}' added to '{owner.Name}' as step {owner.Steps.Count}.";
+    }
+
+    /// <summary>
+    /// Removes a step from a workflow.
+    /// </summary>
+    public string DropWorkflowStep(string workflow, string step)
+    {
+        if (FindWorkflow(workflow) is not { } owner)
+            return $"Nothing dropped: no workflow named '{workflow}' has been declared.";
+
+        int removed = owner.Steps.RemoveAll(candidate =>
+            string.Equals(candidate.Name, step?.Trim(), StringComparison.Ordinal));
+
+        return removed > 0
+            ? $"Step '{step}' dropped from '{owner.Name}'."
+            : $"Nothing dropped: '{owner.Name}' has no step named '{step}'.";
+    }
+
+    /// <summary>
+    /// Removes a workflow and every step of it.
+    /// </summary>
+    public string DropWorkflow(string name)
+    {
+        int removed = interviewState.Agent.Workflows.RemoveAll(workflow =>
+            string.Equals(workflow.Name, name?.Trim(), StringComparison.Ordinal));
+
+        return removed > 0
+            ? $"'{name}' dropped, with its steps."
+            : $"Nothing dropped: no workflow named '{name}' has been declared.";
+    }
+
+    /// <summary>
+    /// Returns the workflows as they currently stand.
+    /// </summary>
+    public string GetWorkflows() => DescribeWorkflows(interviewState.Agent.Workflows);
+
+    /// <summary>
+    /// Renders workflows as readable text: one block each, its steps in order with the tools, where
+    /// each call leads, the failures and the values bound from earlier steps.
+    /// </summary>
+    /// <remarks>
+    /// Internal because the coherence passes read an agent's workflows in the same words the
+    /// interview does, so the prose they judge is set against the procedure it would restate.
+    /// </remarks>
+    internal static string DescribeWorkflows(IReadOnlyList<WorkflowDraft> workflows)
+    {
+        if (workflows.Count == 0)
+            return "This agent has no workflow.";
+
+        return "The workflows as they stand:\n\n"
+               + string.Join("\n\n", workflows.Select(workflow =>
+                   $"Workflow {workflow.Name ?? "(unnamed)"}: {workflow.Description ?? "(no description)"}"
+                   + (workflow.Steps.Count == 0
+                       ? "\n  (no step yet)"
+                       : string.Concat(workflow.Steps.Select((step, position) =>
+                           $"\n  {position + 1}. {step.Name ?? "(unnamed)"} — tools: "
+                           + (step.Tools.Count == 0 ? "(none yet)" : string.Join(", ", step.Tools))
+                           + Links("on success", step.Next)
+                           + Links("on failure", step.OnFailure)
+                           + (step.Arguments.Count == 0
+                               ? string.Empty
+                               : "\n     binds: " + string.Join(", ", step.Arguments.Select(pair => $"{pair.Key} from {pair.Value}"))))))));
+    }
+
+    /// <summary>
+    /// One line of where a step's tools lead, or nothing where it declares none.
+    /// </summary>
+    private static string Links(string label, Dictionary<string, string> links) =>
+        links.Count == 0
+            ? string.Empty
+            : $"\n     {label}: " + string.Join(", ", links.Select(pair => $"{pair.Key} leads to {pair.Value}"));
+
+    /// <summary>
+    /// A link table as the model sent it, with names and targets trimmed and empty entries gone.
+    /// </summary>
+    private static Dictionary<string, string> Cleaned(Dictionary<string, string>? links) =>
+        (links ?? [])
+            .Select(pair => (Key: pair.Key?.Trim() ?? string.Empty, Value: pair.Value?.Trim() ?? string.Empty))
+            .Where(pair => pair.Key.Length > 0 && pair.Value.Length > 0)
+            .GroupBy(pair => pair.Key, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.Ordinal);
+
+    /// <summary>
+    /// Finds a declared workflow by exact name, ordinal because the framework looks it up that way.
+    /// </summary>
+    private WorkflowDraft? FindWorkflow(string? workflowName) =>
+        interviewState.Agent.Workflows.FirstOrDefault(workflow =>
+            string.Equals(workflow.Name, workflowName?.Trim(), StringComparison.Ordinal));
 
     /// <summary>
     /// Returns what earlier passes settled about this agent.
@@ -535,6 +759,9 @@ public class InterviewTools
 
         if (!string.IsNullOrWhiteSpace(interviewState.Agent.Formatting))
             sections.Add(Records.Prompt.Labeled(Constants.SectionLabels.Formatting, interviewState.Agent.Formatting));
+
+        if (interviewState.Agent.Workflows.Count > 0)
+            sections.Add(DescribeWorkflows(interviewState.Agent.Workflows));
 
         return "Settled in the earlier passes and not yours to reopen:\n\n"
                + string.Join("\n\n", sections);
@@ -1143,7 +1370,8 @@ public class InterviewTools
                    InterviewStep.DomainMapper => $"the first of the {interviewState.Map.Count} kinds of request you mapped, taken one at a time until every one has its agent.",
                    InterviewStep.AgentTarget => "how this agent should sound to the people who write in.",
                    InterviewStep.AgentPersonality => "the toolkit — what this agent has to reach for outside the conversation.",
-                   InterviewStep.AgentToolkit => "what this agent is the one to be asked about, which is what another agent of theirs reads before it asks.",
+                   InterviewStep.AgentToolkit => "the workflows — what this agent has to do in a fixed order, which may be nothing.",
+                   InterviewStep.AgentWorkflows => "what this agent is the one to be asked about, which is what another agent of theirs reads before it asks.",
                    InterviewStep.AgentTerritory => "the agent's own instructions and the way it presents what its tools return.",
                    InterviewStep.DomainColleagues => "nothing — the domain is finished and they land on it whole, to read, weigh and take away.",
                    _ => "the agent joins the domain and they can review or export it."

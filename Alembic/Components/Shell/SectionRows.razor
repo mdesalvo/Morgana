@@ -56,6 +56,41 @@
                     </FluentStack>
                 }
             }
+            else if (rail == AgentSections.WorkflowsRail)
+            {
+                @if (Agent.Workflows.Count == 0)
+                {
+                    <FluentText Size="TextSize.Size400">—</FluentText>
+                }
+
+                @foreach (WorkflowDraft workflow in Agent.Workflows)
+                {
+                    <FluentStack Orientation="Orientation.Vertical" VerticalGap="4px" Class="tool">
+                        <FluentText Font="TextFont.Monospace" Size="TextSize.Size300" Class="tool-signature">@(workflow.Name ?? "(unnamed)")</FluentText>
+                        <FluentText Size="TextSize.Size400">@workflow.Description</FluentText>
+
+                        @for (int position = 0; position < workflow.Steps.Count; position++)
+                        {
+                            WorkflowStepDraft step = workflow.Steps[position];
+
+                            <FluentStack Orientation="Orientation.Horizontal" Wrap="true" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="10px" VerticalGap="6px">
+                                <FluentText Font="TextFont.Monospace" Size="TextSize.Size200">@(position + 1)</FluentText>
+                                <FluentText Font="TextFont.Monospace" Size="TextSize.Size300">@(step.Name ?? "(unnamed)")</FluentText>
+
+                                @foreach (string stepTool in step.Tools)
+                                {
+                                    <FluentBadge Appearance="BadgeAppearance.Filled" Color="BadgeColor.Brand" Shape="BadgeShape.Circular">@stepTool</FluentBadge>
+                                }
+                            </FluentStack>
+
+                            @if (Leads(step) is { Length: > 0 } leads)
+                            {
+                                <FluentText Size="TextSize.Size300">@leads</FluentText>
+                            }
+                        }
+                    </FluentStack>
+                }
+            }
             else
             {
                 <FluentText Size="TextSize.Size400">@(AgentSections.Prose(Agent, rail) ?? "—")</FluentText>
@@ -66,13 +101,24 @@
 
 @code {
     /// <summary>
+    /// Where a step's calls lead and which values it takes from earlier steps, as one line.
+    /// </summary>
+    private static string Leads(WorkflowStepDraft step) =>
+        string.Join(" · ", new[]
+        {
+            step.Next.Count == 0 ? null : string.Join(", ", step.Next.Select(pair => $"{pair.Key} → {pair.Value}")),
+            step.OnFailure.Count == 0 ? null : "on failure " + string.Join(", ", step.OnFailure.Select(pair => $"{pair.Key} → {pair.Value}")),
+            step.Arguments.Count == 0 ? null : "binds " + string.Join(", ", step.Arguments.Select(pair => $"{pair.Key} from {pair.Value}"))
+        }.Where(part => part is not null));
+
+    /// <summary>
     /// The agent whose sections are shown.
     /// </summary>
     [Parameter, EditorRequired]
     public AgentDraft Agent { get; set; } = default!;
 
     /// <summary>
-    /// Which section rails to show, all six by default.
+    /// Which section rails to show, all seven by default.
     /// </summary>
     [Parameter]
     public IReadOnlyList<int> Rails { get; set; } = AgentSections.All;

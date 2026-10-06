@@ -211,6 +211,8 @@ public class ToolMockService : IToolMockService
     /// </summary>
     private static void AppendReturnContract(StringBuilder request, AgentDraft agent)
     {
+        HashSet<(string Tool, string Field)> readByWorkflows = FieldsReadByWorkflows(agent);
+
         foreach (ToolDraft tool in agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name) && t.Returns.Count > 0))
         {
             request.AppendLine();
@@ -218,8 +220,38 @@ public class ToolMockService : IToolMockService
 
             foreach (Records.ToolReturn field in tool.Returns.Where(r => !string.IsNullOrWhiteSpace(r.Name)))
                 request.AppendLine(CultureInfo.InvariantCulture,
-                    $"  {field.Name}: {field.Description}{(field.Failure ? " (the failure: null whenever the call succeeds)" : string.Empty)}");
+                    $"  {field.Name}: {field.Description}{(field.Failure ? " (the failure: null whenever the call succeeds)" : string.Empty)}{(readByWorkflows.Contains((tool.Name!, field.Name!)) ? " (read by a later step of a workflow: always filled when the call succeeds)" : string.Empty)}");
         }
+    }
+
+    /// <summary>
+    /// The result fields that a later step of some workflow binds as an argument, as tool and field.
+    /// </summary>
+    /// <remarks>
+    /// A source <c>Step.field</c> names a step and not a tool, so every tool of that step that hands
+    /// the field back is a source: the mock cannot know which branch a run takes.
+    /// </remarks>
+    private static HashSet<(string Tool, string Field)> FieldsReadByWorkflows(AgentDraft agent)
+    {
+        HashSet<(string Tool, string Field)> read = [];
+
+        foreach (WorkflowDraft workflow in agent.Workflows)
+            foreach (string source in workflow.Steps.SelectMany(step => step.Arguments.Values))
+            {
+                string[] parts = source.Split('.');
+
+                if (parts.Length != 2)
+                    continue;
+
+                WorkflowStepDraft? producing = workflow.Steps.FirstOrDefault(step => string.Equals(step.Name, parts[0], StringComparison.Ordinal));
+
+                foreach (string toolName in producing?.Tools ?? [])
+                    if (agent.Tools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.Ordinal)) is { } tool
+                        && tool.Returns.Any(r => string.Equals(r.Name, parts[1], StringComparison.Ordinal)))
+                        read.Add((toolName, parts[1]));
+            }
+
+        return read;
     }
 
     /// <summary>

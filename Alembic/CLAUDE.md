@@ -278,6 +278,10 @@ characteristically the one to answer for — what another agent would come to it
 It runs **after the toolkit**, the earliest it can be true: a territory the agent's own tools do not
 cover is a promise another agent would hold it to.
 
+**The workflows come right after the toolkit and are inferred, never dictated.** A workflow is made of tools that
+must exist and the Instructions must know what it already keeps in order, so it sits between the two: the pass
+proposes the whole procedure from the toolkit and the client corrects it, never designing steps, links or bound values.
+
 **The one thing a later pass may write about an intent is its description, once the territory stands.**
 The classifier's sentence is the map's to write and the map writes it before any agent exists; the same
 subject is then known in sharper words, so the territory pass may say the routing with them — its own

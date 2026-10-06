@@ -2,6 +2,7 @@ using System.Text.Json;
 using Alembic.Interfaces;
 using Alembic.Model;
 using Morgana.AI;
+using Morgana.AI.Services;
 
 namespace Alembic.Services;
 
@@ -25,7 +26,7 @@ public class DraftValidationService : IDraftValidationService
     /// these names would be registered twice against the same agent.
     /// </summary>
     private static readonly string[] BaseToolNames =
-        ["Reply"];
+        [Constants.Tools.Reply, Constants.Tools.LaunchWorkflow];
 
     /// <summary>
     /// The scopes a parameter may declare. A parameter carrying a value the model itself authors
@@ -330,6 +331,45 @@ public class DraftValidationService : IDraftValidationService
 
         foreach (ToolDraft tool in agent.Tools)
             ValidateTool(agent, tool, toolNames, findings);
+
+        ValidateWorkflows(agent, where, findings);
+    }
+
+    /// <summary>
+    /// Replays the framework's startup check of an agent's workflows over what the interview holds.
+    /// </summary>
+    /// <remarks>
+    /// The check itself is the framework's own, so the two can never disagree about what a workflow
+    /// may be. A workflow or a step without a name is not handed to it: projected, the missing name
+    /// becomes an empty one and the framework's message would speak of a step it cannot name.
+    /// </remarks>
+    private static void ValidateWorkflows(AgentDraft agent, string where, List<ValidationFinding> findings)
+    {
+        List<WorkflowDraft> projectable = [];
+
+        foreach (WorkflowDraft workflow in agent.Workflows)
+        {
+            if (string.IsNullOrWhiteSpace(workflow.Name) || workflow.Steps.Any(step => string.IsNullOrWhiteSpace(step.Name)))
+            {
+                findings.Add(new ValidationFinding(FindingSeverity.Error, where,
+                    $"A workflow of this agent is too incomplete to check: {(string.IsNullOrWhiteSpace(workflow.Name) ? "it has no name" : $"'{workflow.Name}' has a step with no name")}.",
+                    "Morgana refuses a workflow or a step without a name at startup: the model starts a workflow by its name and every link between steps is made by theirs.") { Step = InterviewStep.AgentWorkflows });
+                continue;
+            }
+
+            projectable.Add(workflow);
+        }
+
+        IEnumerable<string> refusals = HandlesIntentAgentRegistryService.ValidateWorkflows(
+            agent.ID ?? string.Empty,
+            [.. projectable.Select(DraftProjection.ToWorkflowDefinition)],
+            agent.Tools.Select(DraftProjection.ToToolDefinition),
+            agent.Code.MCPServers.Count > 0);
+
+        foreach (string refusal in refusals)
+            findings.Add(new ValidationFinding(FindingSeverity.Error, where,
+                refusal,
+                "Morgana refuses it at startup: workflows are checked against the agent's tools and against one another before the first conversation.") { Step = InterviewStep.AgentWorkflows });
     }
 
     /// <summary>
@@ -358,7 +398,7 @@ public class DraftValidationService : IDraftValidationService
         if (BaseToolNames.Contains(tool.Name, StringComparer.Ordinal))
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 $"'{tool.Name}' is one of the base tools every agent already receives.",
-                "morgana.json gives every agent Reply; a domain tool cannot share its name."));
+                "morgana.json declares Reply and LaunchWorkflow as base tools; a domain tool cannot share either name."));
 
         ValidateIdentifier(tool.Name, where, "tool name", findings);
 

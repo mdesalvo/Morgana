@@ -225,6 +225,11 @@ public class CoherenceService : ICoherenceService
                 ? $"May consult and is handed each as a function of its own: {PeerNaming.Describe(agent.Code.Consults)}."
                 : "Declares no colleagues: it can put a question to no other agent.");
 
+            // A procedure written in the prose that a workflow of the agent already imposes is a class
+            // of finding, readable only with the workflow set beside the sentence.
+            sb.AppendLine();
+            sb.AppendLine(InterviewTools.DescribeWorkflows(agent.Workflows));
+
             if (agent.Tools.Count == 0)
             {
                 sb.AppendLine();

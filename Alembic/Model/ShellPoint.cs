@@ -4,23 +4,23 @@ namespace Alembic.Model;
 /// A place on the shell's track: the map, one moment of one agent or one moment of the domain.
 /// </summary>
 /// <param name="Entry">The map entry an agent's moment belongs to; -1 for the map and the domain.</param>
-/// <param name="Rail">The moment: 0 the map, 1-7 an agent's, 8-10 the domain's.</param>
+/// <param name="Rail">The moment: 0 the map, 1-8 an agent's, 9-11 the domain's.</param>
 public readonly record struct ShellPoint(int Entry, int Rail) : IComparable<ShellPoint>
 {
     /// <summary>The map's moment.</summary>
     public const int MapRail = 0;
 
     /// <summary>The agent's last moment, where the client lets it into the domain.</summary>
-    public const int AcceptanceRail = 7;
+    public const int AcceptanceRail = 8;
 
     /// <summary>The domain's first moment.</summary>
-    public const int CollaborationRail = 8;
+    public const int CollaborationRail = 9;
 
     /// <summary>
-    /// The seven moments every agent goes through, as the track names them.
+    /// The eight moments every agent goes through, as the track names them.
     /// </summary>
     public static IReadOnlyList<string> AgentMoments { get; } =
-        ["Target", "Personality", "Toolkit", "Territory", "Instructions", "Formatting", "Acceptance"];
+        ["Target", "Personality", "Toolkit", "Workflows", "Territory", "Instructions", "Formatting", "Acceptance"];
 
     /// <summary>
     /// The three moments that close the domain, as the track names them.
@@ -56,7 +56,7 @@ public readonly record struct ShellPoint(int Entry, int Rail) : IComparable<Shel
     /// <summary>
     /// Where the state machine stands: the frontier the pointer may never pass.
     /// </summary>
-    // The agent passes are numbered 1-6 in the same order as the track's sections, so the pass is the
+    // The agent passes are numbered 1-7 in the same order as the track's sections, so the pass is the
     // rail. Acceptance is no pass: the interview waits there once Formatting is settled.
     public static ShellPoint FrontierOf(InterviewState interview) => interview switch
     {

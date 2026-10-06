@@ -40,6 +40,7 @@ public class InterviewService : IInterviewService
         [InterviewStep.AgentTarget] = "AgentTarget",
         [InterviewStep.AgentPersonality] = "AgentPersonality",
         [InterviewStep.AgentToolkit] = "AgentToolkit",
+        [InterviewStep.AgentWorkflows] = "AgentWorkflows",
         [InterviewStep.AgentTerritory] = "AgentTerritory",
         [InterviewStep.AgentInstructions] = "AgentInstructions",
         [InterviewStep.AgentFormatting] = "AgentFormatting",
@@ -59,6 +60,7 @@ public class InterviewService : IInterviewService
                                       + "people with.",
         [InterviewStep.AgentToolkit] = "This step settles its Toolkit, which gives it everything it can "
                                          + "reach outside the conversation.",
+        [InterviewStep.AgentWorkflows] = "This step settles its Workflows, which give it what it must do in a fixed order.",
         [InterviewStep.AgentTerritory] = "This step settles its Territory, which gives it what this agent is "
                                          + "the one to be asked about.",
         [InterviewStep.AgentInstructions] = "This step settles its Instructions, which give it how it goes "
@@ -1275,6 +1277,11 @@ public class InterviewService : IInterviewService
             [nameof(InterviewTools.DropToolReturn)] = tools.DropToolReturn,
             [nameof(InterviewTools.DropTool)] = tools.DropTool,
             [nameof(InterviewTools.GetToolkit)] = tools.GetToolkit,
+            [nameof(InterviewTools.DeclareWorkflow)] = tools.DeclareWorkflow,
+            [nameof(InterviewTools.SetWorkflowStep)] = tools.SetWorkflowStep,
+            [nameof(InterviewTools.DropWorkflowStep)] = tools.DropWorkflowStep,
+            [nameof(InterviewTools.DropWorkflow)] = tools.DropWorkflow,
+            [nameof(InterviewTools.GetWorkflows)] = tools.GetWorkflows,
             [nameof(InterviewTools.GetAgentSoFar)] = tools.GetAgentSoFar,
             [nameof(InterviewTools.SetChoice)] = tools.SetChoice,
             [nameof(InterviewTools.SetExample)] = tools.SetExample,

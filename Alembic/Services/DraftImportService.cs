@@ -27,6 +27,11 @@ public class DraftImportService : IDraftImportService
     private const string ToolsPropertyName = Constants.PromptProperties.Tools;
 
     /// <summary>
+    /// The key carrying an agent's workflows, compared ordinally for the same reason as the toolkit's.
+    /// </summary>
+    private const string WorkflowsPropertyName = Constants.PromptProperties.Workflows;
+
+    /// <summary>
     /// Case-insensitive, mirroring how the framework itself reads <c>agents.json</c>: an author
     /// whose file loads in Morgana must find it loads here.
     /// </summary>
@@ -143,11 +148,14 @@ public class DraftImportService : IDraftImportService
         List<Records.ToolDefinition> tools =
             prompt.GetAdditionalPropertyOrDefault<List<Records.ToolDefinition>>(ToolsPropertyName, []);
 
-        // Everything in AdditionalProperties other than the toolkit, kept as read. Entries that
-        // held nothing but Tools disappear rather than being written back empty.
+        List<Records.WorkflowDefinition> workflows =
+            prompt.GetAdditionalPropertyOrDefault<List<Records.WorkflowDefinition>>(WorkflowsPropertyName, []);
+
+        // Everything in AdditionalProperties other than the toolkit and the workflows, kept as read.
+        // Entries that held nothing but those two disappear rather than being written back empty.
         List<Dictionary<string, object>> unmodelled =
             [.. prompt.AdditionalProperties
-                      .Select(entry => entry.Where(pair => pair.Key != ToolsPropertyName)
+                      .Select(entry => entry.Where(pair => pair.Key != ToolsPropertyName && pair.Key != WorkflowsPropertyName)
                                             .ToDictionary(pair => pair.Key, pair => pair.Value))
                       .Where(entry => entry.Count > 0)];
 
@@ -168,6 +176,7 @@ public class DraftImportService : IDraftImportService
             Language = prompt.Language,
             Version = prompt.Version,
             Tools = [.. tools.Select(ToToolDraft)],
+            Workflows = [.. workflows.Select(ToWorkflowDraft)],
             UnmodelledProperties = unmodelled,
             Code = InferCodeFacts(prompt.ID, tools.Count > 0),
             Origin = Provenance.Imported
@@ -191,6 +200,25 @@ public class DraftImportService : IDraftImportService
             Required = parameter.Required,
             Scope = string.IsNullOrWhiteSpace(parameter.Scope) ? null : parameter.Scope,
             Shared = parameter.Shared
+        })],
+        Origin = Provenance.Imported
+    };
+
+    /// <summary>
+    /// Projects a workflow definition onto its Draft element.
+    /// </summary>
+    /// <param name="workflow">One workflow of an agent, in the framework's own record shape.</param>
+    private static WorkflowDraft ToWorkflowDraft(Records.WorkflowDefinition workflow) => new()
+    {
+        Name = workflow.Name,
+        Description = workflow.Description,
+        Steps = [.. (workflow.Steps ?? []).Select(step => new WorkflowStepDraft
+        {
+            Name = step.Name,
+            Tools = [.. step.Tools ?? []],
+            Next = new Dictionary<string, string>(step.Next ?? new Dictionary<string, string>()),
+            OnFailure = new Dictionary<string, string>(step.OnFailure ?? new Dictionary<string, string>()),
+            Arguments = new Dictionary<string, string>(step.Arguments ?? new Dictionary<string, string>())
         })],
         Origin = Provenance.Imported
     };

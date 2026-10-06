@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Alembic.Interfaces;
 using Alembic.Model;
 
@@ -121,6 +122,7 @@ public class MigrationReportService : IMigrationReportService
                                    .Select(colleague => new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised, $"Consults '{colleague.Intent}' at system '{colleague.Instance}'. Declare that system under " + $"Morgana:AgentToAgent:Partners with its Url, the key you share with it and \"OutboundPolicy\": {{ \"Enabled\": true }}, under exactly the name " + $"'{colleague.Instance}' — spelling and spacing included, or startup refuses the agent. Neither the " + "address nor the key is in this archive. That the system really publishes an agent for " + $"'{colleague.Intent}' is its own card's word, read on the first consultation: a mistake there is a " + "warning at run time and the colleague quietly missing, not a startup error.")));
 
             CompareTools(agent, was, entries);
+            CompareWorkflows(agent, was, entries);
         }
 
         entries.AddRange(
@@ -202,6 +204,45 @@ public class MigrationReportService : IMigrationReportService
                                 && !agent.Tools.Any(x => string.Equals(x.Name, t.Name, StringComparison.Ordinal)))
                   .Select(gone => new MigrationEntry(MigrationKind.Signature, $"{agent.ID}.{gone.Name}", MigrationChange.Removed, $"Gone from the configuration. Its generated declaration disappears, so `{gone.Name}` in the half you own becomes an orphan method — delete it with `{CodeEmitService.ResultTypeName(gone.Name!)}` or the partial no longer matches.")));
     }
+
+    /// <summary>
+    /// One agent's workflows, each added, changed or removed against baseline.
+    /// </summary>
+    /// <remarks>
+    /// Every difference is reported as revised, whatever its kind: a workflow is read from agents.json
+    /// alone, so even a removed one leaves no code behind to delete. An agent that is itself new is
+    /// skipped, since its own entry already says everything in it is new.
+    /// </remarks>
+    private static void CompareWorkflows(AgentDraft agent, AgentDraft? was, List<MigrationEntry> entries)
+    {
+        if (was is null)
+            return;
+
+        foreach (WorkflowDraft workflow in agent.Workflows.Where(w => !string.IsNullOrWhiteSpace(w.Name)))
+        {
+            string where = $"{agent.ID}.{workflow.Name}";
+            WorkflowDraft? previous = was.Workflows.FirstOrDefault(w => string.Equals(w.Name, workflow.Name, StringComparison.Ordinal));
+
+            if (previous is null)
+                entries.Add(new MigrationEntry(MigrationKind.Workflow, where, MigrationChange.Revised,
+                    "New workflow. It is read from agents.json, so nothing needs rebuilding."));
+            else if (Serialized(previous) != Serialized(workflow))
+                entries.Add(new MigrationEntry(MigrationKind.Workflow, where, MigrationChange.Revised,
+                    "Workflow changed. It is read from agents.json, so nothing needs rebuilding."));
+        }
+
+        entries.AddRange(
+            was.Workflows.Where(w => !string.IsNullOrWhiteSpace(w.Name)
+                                     && !agent.Workflows.Any(x => string.Equals(x.Name, w.Name, StringComparison.Ordinal)))
+                         .Select(gone => new MigrationEntry(MigrationKind.Workflow, $"{agent.ID}.{gone.Name}", MigrationChange.Revised,
+                             "Workflow removed. It was read from agents.json, so nothing needs rebuilding.")));
+    }
+
+    /// <summary>
+    /// A workflow as the file would carry it, so two states of it compare as the framework would read them.
+    /// </summary>
+    private static string Serialized(WorkflowDraft workflow) =>
+        JsonSerializer.Serialize(DraftProjection.ToWorkflowDefinition(workflow));
 
     /// <summary>
     /// Whether the names a tool hands back or the one marked as the failure differ between two states of it.

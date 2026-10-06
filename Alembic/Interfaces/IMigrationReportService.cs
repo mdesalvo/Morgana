@@ -67,7 +67,10 @@ public enum MigrationKind
     Tool,
 
     /// <summary>A tool's parameter list — the one that breaks compiled code.</summary>
-    Signature
+    Signature,
+
+    /// <summary>A workflow of an agent, which lives in agents.json alone.</summary>
+    Workflow
 }
 
 /// <summary>What happened to an element.</summary>

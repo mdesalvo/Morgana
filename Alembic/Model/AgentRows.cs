@@ -42,6 +42,7 @@ public static class AgentRows
             new Row("Personality", Plain(interviewState.Agent.Personality),
                 interviewState.Changed.Contains("agentPersonality")),
             new Row("Toolkit", Toolkit(interviewState.Agent.Tools), interviewState.Changed.Contains("tools")),
+            new Row("Workflows", Workflows(interviewState.Agent.Workflows), interviewState.Changed.Contains("workflows")),
             new Row("Territory", Plain(interviewState.Agent.Territory),
                 interviewState.Changed.Contains("agentTerritory")),
             new Row("Instructions", Plain(interviewState.Agent.Instructions),
@@ -72,6 +73,13 @@ public static class AgentRows
     /// </summary>
     public static string? Toolkit(IReadOnlyList<ToolDraft> tools) =>
         tools.Count == 0 ? null : string.Join(" · ", tools.Select(Signature));
+
+    /// <summary>
+    /// The workflows' own <see cref="Row.Value"/>: only enough to say whether the row is empty and to
+    /// give <see cref="Written"/> something to count, since the view renders the steps itself.
+    /// </summary>
+    public static string? Workflows(IReadOnlyList<WorkflowDraft> workflows) =>
+        workflows.Count == 0 ? null : string.Join(" · ", workflows.Select(workflow => workflow.Name ?? "(unnamed)"));
 
     /// <summary>
     /// A tool's name and parameters, plain text, exactly as the client named both.

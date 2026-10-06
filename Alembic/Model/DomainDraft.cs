@@ -418,7 +418,13 @@ public sealed class AgentDraft
     public List<ToolDraft> Tools { get; set; } = [];
 
     /// <summary>
-    /// AdditionalProperties entries other than <c>Tools</c>, kept verbatim so a key Alembic has no
+    /// The agent's workflows: procedures whose steps the framework keeps in order, composed of the
+    /// tools above.
+    /// </summary>
+    public List<WorkflowDraft> Workflows { get; set; } = [];
+
+    /// <summary>
+    /// AdditionalProperties entries other than <c>Tools</c> and <c>Workflows</c>, kept verbatim so a key Alembic has no
     /// use for still survives a round trip. Values are <c>JsonElement</c>s and are written back as
     /// they were read.
     /// </summary>
@@ -473,6 +479,67 @@ public sealed class ToolDraft
     /// Where this tool came from.
     /// </summary>
     public Provenance Origin { get; set; } = Provenance.Authored;
+}
+
+/// <summary>
+/// One workflow under construction: a procedure of one agent that the framework runs step by step.
+/// </summary>
+public sealed class WorkflowDraft
+{
+    /// <summary>
+    /// What the model passes to <c>LaunchWorkflow</c> to start it; unique per agent.
+    /// </summary>
+    /// <remarks><c>null</c> until the <c>AgentWorkflows</c> pass declares this workflow via
+    /// <c>DeclareWorkflow</c>.</remarks>
+    public string? Name { get; set; }
+
+    /// <summary>
+    /// What the procedure does, offered to the model beside its name.
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// The steps in order; the first one is where the workflow starts.
+    /// </summary>
+    public List<WorkflowStepDraft> Steps { get; set; } = [];
+
+    /// <summary>
+    /// Where this workflow came from.
+    /// </summary>
+    public Provenance Origin { get; set; } = Provenance.Authored;
+}
+
+/// <summary>
+/// One step of a workflow under construction.
+/// </summary>
+public sealed class WorkflowStepDraft
+{
+    /// <summary>
+    /// Unique within the workflow and never the reserved <c>End</c>.
+    /// </summary>
+    public string? Name { get; set; }
+
+    /// <summary>
+    /// The tools offered while the workflow stands at this step.
+    /// </summary>
+    public List<string> Tools { get; set; } = [];
+
+    /// <summary>
+    /// Tool name to the step reached when its call succeeds, or <c>End</c>.
+    /// </summary>
+    public Dictionary<string, string> Next { get; set; } = [];
+
+    /// <summary>
+    /// Tool name to the step reached when its call fails; a tool absent here ends the workflow on its
+    /// failure. Empty is written as no key at all.
+    /// </summary>
+    public Dictionary<string, string> OnFailure { get; set; } = [];
+
+    /// <summary>
+    /// Parameter name to <c>Step.field</c>, the field of an earlier step's result that the framework
+    /// fills in. Empty is written as no key at all.
+    /// </summary>
+    public Dictionary<string, string> Arguments { get; set; } = [];
 }
 
 /// <summary>

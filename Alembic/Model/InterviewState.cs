@@ -36,6 +36,12 @@ public enum InterviewStep
     AgentToolkit,
 
     /// <summary>
+    /// The workflows: the procedures whose steps the framework keeps in order, composed of the tools
+    /// the toolkit has just settled.
+    /// </summary>
+    AgentWorkflows,
+
+    /// <summary>
     /// What this agent is characteristically the one to be asked about: its Territory and nothing
     /// else. After the toolkit, because a territory an agent's own tools do not cover is a promise
     /// another agent would hold it to.
@@ -360,6 +366,10 @@ public sealed class InterviewState
         ["tools"] = string.Join("|", Agent.Tools.Select(t =>
             $"{t.Name}:{t.Description}:{string.Join(",", t.Parameters.Select(x => $"{x.Name}/{x.Scope}/{x.Required}/{x.Shared}/{x.Description}"))}")),
 
+        // The whole set of workflows as one string, for the same reason as the toolkit above.
+        ["workflows"] = string.Join("|", Agent.Workflows.Select(w =>
+            $"{w.Name}:{w.Description}:{string.Join(",", w.Steps.Select(x => $"{x.Name}/{string.Join("+", x.Tools)}/{Pairs(x.Next)}/{Pairs(x.OnFailure)}/{Pairs(x.Arguments)}"))}")),
+
         // The whole set as one string, for the same reason as the toolkit above: an edge declared,
         // dropped or re-declared with different prose moves it and nothing finer is worth a row.
         ["colleagues"] = string.Join("|", Colleagues.Select(c =>
@@ -372,7 +382,7 @@ public sealed class InterviewState
     /// <remarks>
     /// Pass-scoped on purpose and it is what makes <c>SetPassCompleted</c> mean anything: a pass is
     /// complete when the fields it owns are set, never when the fields of a later one are still
-    /// blank. The toolkit pass owns no field at all — an agent with no native tools is a legal
+    /// blank. The toolkit and workflows passes own no field at all — an agent with no native tools is a legal
     /// configuration, the MCP-only case — so it reports only tools left half-declared and its
     /// emptiness is a decision Alembic must have taken with the client rather than a gate.
     /// </remarks>
@@ -382,6 +392,7 @@ public sealed class InterviewState
         InterviewStep.AgentTarget => MissingTarget(),
         InterviewStep.AgentPersonality => MissingVoice(),
         InterviewStep.AgentToolkit => MissingToolkit(),
+        InterviewStep.AgentWorkflows => MissingWorkflows(),
         InterviewStep.AgentTerritory => MissingTerritory(),
         InterviewStep.AgentInstructions => MissingInstructions(),
         InterviewStep.AgentFormatting => MissingFormatting(),
@@ -473,6 +484,27 @@ public sealed class InterviewState
             .. Agent.Tools
                 .Where(t => !string.IsNullOrWhiteSpace(t.Name) && t.Returns.Count == 0)
                 .Select(t => $"what {t.Name} hands back")];
+
+    /// <summary>
+    /// Workflows that were opened and never finished. An agent with none is legal, so emptiness is
+    /// no gate: only a workflow without description or steps and a step without tools are reported.
+    /// </summary>
+    private List<string> MissingWorkflows() =>
+        [.. Agent.Workflows
+                .Where(w => string.IsNullOrWhiteSpace(w.Description))
+                .Select(w => $"description of workflow {w.Name ?? "(unnamed workflow)"}"),
+            .. Agent.Workflows
+                .Where(w => w.Steps.Count == 0)
+                .Select(w => $"steps of workflow {w.Name ?? "(unnamed workflow)"}"),
+            .. Agent.Workflows.SelectMany(w => w.Steps
+                .Where(x => x.Tools.Count == 0)
+                .Select(x => $"tools of step {x.Name ?? "(unnamed step)"} of workflow {w.Name ?? "(unnamed workflow)"}"))];
+
+    /// <summary>
+    /// A link table flattened to one comparable string.
+    /// </summary>
+    private static string Pairs(Dictionary<string, string>? pairs) =>
+        pairs is null ? string.Empty : string.Join(",", pairs.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}>{pair.Value}"));
 
     /// <summary>
     /// How the agent goes about the work, which could not be written before the toolkit existed.

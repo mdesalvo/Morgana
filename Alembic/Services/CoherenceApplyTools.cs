@@ -66,7 +66,9 @@ public class CoherenceApplyTools
                 + string.Concat(t.Parameters.Select(p =>
                     $"\n    {p.Name} [{p.Scope ?? "authored"}{(p.Required ? "" : ", optional")}{(p.Shared ? ", shared" : "")}]: {p.Description}"))));
 
-        return string.Join("\n\n", sections) + "\n\n" + tools;
+        // The workflows are read-only here: a procedure written in prose is fixed in the prose, with
+        // the workflow set beside it as the fact the sentence must not restate.
+        return string.Join("\n\n", sections) + "\n\n" + tools + "\n\n" + InterviewTools.DescribeWorkflows(agent.Workflows);
     }
 
     /// <summary>
