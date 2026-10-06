@@ -178,6 +178,14 @@ public class MigrationReportService : IMigrationReportService
                      || previous.Parameters.Zip(tool.Parameters).Any(p => !string.Equals(p.First.Description, p.Second.Description, StringComparison.Ordinal)))
                 entries.Add(new MigrationEntry(MigrationKind.Tool, where, MigrationChange.Revised,
                     "Description changed. It reaches the model through agents.json and the schema, so nothing needs rebuilding."));
+
+            // Reported on its own entry, whatever else changed: the approval is read from agents.json alone,
+            // so a client reading only the signature entry would never learn the tool now waits for the user.
+            if (previous.RequiresExecutionApproval != tool.RequiresExecutionApproval)
+                entries.Add(new MigrationEntry(MigrationKind.Tool, where, MigrationChange.Revised,
+                    tool.RequiresExecutionApproval
+                        ? "Now waits for the user's approval before it runs. It is read from agents.json, so nothing needs rebuilding."
+                        : "No longer waits for the user's approval before it runs. It is read from agents.json, so nothing needs rebuilding."));
         }
 
         entries.AddRange(

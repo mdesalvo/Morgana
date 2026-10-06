@@ -62,7 +62,7 @@ public class CoherenceApplyTools
         string tools = agent.Tools.Count == 0
             ? "Declares no native tools."
             : "Tools:\n" + string.Join("\n", agent.Tools.Select(t =>
-                $"- {t.Name}: {t.Description}"
+                $"- {t.Name}{(t.RequiresExecutionApproval ? " (waits for the user's approval)" : string.Empty)}: {t.Description}"
                 + string.Concat(t.Parameters.Select(p =>
                     $"\n    {p.Name} [{p.Scope ?? "authored"}{(p.Required ? "" : ", optional")}{(p.Shared ? ", shared" : "")}]: {p.Description}"))));
 
@@ -132,14 +132,14 @@ public class CoherenceApplyTools
     }
 
     /// <summary>
-    /// Opens a tool on the named agent, or revises the description of one already open.
+    /// Opens a tool on the named agent, or revises the description and the approval requirement of one already open.
     /// </summary>
     /// <remarks>
-    /// Touches only the tool's name and description. Parameters are a separate concern reached
+    /// Touches only the tool's name, description and approval requirement. Parameters are a separate concern reached
     /// through <see cref="SetToolParameter"/> — a revision here never disturbs a parameter list
     /// already recorded on the same tool, whether the tool is new or already existed.
     /// </remarks>
-    public string DeclareTool(string agentId, string name, string description)
+    public string DeclareTool(string agentId, string name, string description, bool requiresApproval)
     {
         if (Find(agentId) is not { } agent)
             return $"No tool recorded: no agent named '{agentId}'.";
@@ -152,6 +152,7 @@ public class CoherenceApplyTools
         bool revision = existing is not null;
         ToolDraft tool = existing ?? new ToolDraft { Name = cleanName, Origin = Provenance.Authored };
         tool.Description = description?.Trim();
+        tool.RequiresExecutionApproval = requiresApproval;
 
         if (!revision)
             agent.Tools.Add(tool);
@@ -184,7 +185,7 @@ public class CoherenceApplyTools
             return "No parameter recorded: a parameter must have a name.";
 
         // "none"/"null" are read back as the empty scope, the same value a value the model itself
-        // authors (a quick reply, a rich card) legitimately declares — anything else passes through
+        // authors (a note, a search phrase) legitimately declares — anything else passes through
         // verbatim so an unrecognised scope surfaces as a validation finding rather than being
         // silently coerced into one of the two known ones.
         string cleanScope = (scope ?? string.Empty).Trim().ToLowerInvariant();

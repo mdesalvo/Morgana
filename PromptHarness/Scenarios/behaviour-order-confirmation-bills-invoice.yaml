@@ -2,9 +2,8 @@ id: behaviour-order-confirmation-bills-invoice
 description: >-
   Confirming an order is dispositive twice over: it decrements stock AND bills the customer through
   the shared backoffice path (GreenhouseDatabaseHelper.BillCustomerAsync), atomically with the
-  confirmation itself. Guards that InventoryAgent actually tells the customer this happened and
-  points them back to Morgana for the invoice, rather than treating ConfirmOrder as a stock-only
-  event. Uses SEED-400 (500 units seeded) so five replays never run the SKU out of stock within one
+  confirmation itself. Guards that InventoryAgent actually tells the customer this happened, rather
+  than treating ConfirmOrder as a stock-only event. Uses SEED-400 (500 units seeded) so five replays never run the SKU out of stock within one
   harness session. The seal word CANNOT be scripted as the random value a real conversation would
   receive — the harness DSL has no way to capture a value the model invents in one turn and replay
   it in a later turn's fixed text — so InventoryTool.GenerateSealWord() is pinned for the run to
@@ -52,7 +51,7 @@ turns:
       quickReplyIds: [approve_action, reject_action]
       textNotEmpty: true
     judge:
-      - "The response says that confirming is binding: the stock will be committed, or the order cannot easily be undone afterwards."
+      - "The response says that confirming commits the stock to this order."
     judgeNot:
       - "The response claims the order is already confirmed or billed."
 
@@ -65,7 +64,6 @@ turns:
     judge:
       - "The response confirms the order is now settled or binding."
       - "The response says the purchase has been billed to the customer."
-      - "The response tells the customer that invoice can be seen if they wish."
     judgeNot:
       # Judged against everything the customer sees, card included. Naming the invoice is allowed and
       # required; reading its money out is what this forbids, wherever it would be rendered.

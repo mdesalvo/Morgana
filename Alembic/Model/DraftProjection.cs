@@ -76,7 +76,8 @@ public static class DraftProjection
     public static Records.ToolDefinition ToToolDefinition(ToolDraft tool) =>
         new(tool.Name ?? string.Empty,
             tool.Description ?? string.Empty,
-            [.. tool.Parameters.Select(ToToolParameter)]);
+            [.. tool.Parameters.Select(ToToolParameter)],
+            RequiresExecutionApproval: tool.RequiresExecutionApproval);
 
     /// <summary>
     /// Rebuilds a tool parameter from its Draft element.

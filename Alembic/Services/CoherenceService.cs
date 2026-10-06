@@ -237,7 +237,7 @@ public class CoherenceService : ICoherenceService
 
             foreach (ToolDraft tool in agent.Tools)
             {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"- {tool.Name}: {tool.Description}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- {tool.Name}{(tool.RequiresExecutionApproval ? " (waits for the user's approval)" : string.Empty)}: {tool.Description}");
 
                 foreach (ToolParameterDraft parameter in tool.Parameters)
                     sb.AppendLine(CultureInfo.InvariantCulture, $"    {parameter.Name} [{parameter.Scope ?? "authored"}{(parameter.Shared ? ", shared" : "")}]: {parameter.Description}");

@@ -28,6 +28,11 @@
                         <FluentStack Orientation="Orientation.Horizontal" Wrap="true" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="10px" VerticalGap="6px">
                             <FluentText Font="TextFont.Monospace" Size="TextSize.Size300" Class="tool-signature">@(tool.Name ?? "(unnamed)")</FluentText>
 
+                            @if (tool.RequiresExecutionApproval)
+                            {
+                                <FluentBadge Appearance="BadgeAppearance.Ghost" Color="BadgeColor.Informative">approval</FluentBadge>
+                            }
+
                             @foreach (ToolParameterDraft parameter in tool.Parameters)
                             {
                                 <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="3px" Width="auto">

@@ -182,6 +182,7 @@ public class DraftImportService : IDraftImportService
     {
         Name = tool.Name,
         Description = tool.Description,
+        RequiresExecutionApproval = tool.RequiresExecutionApproval,
         Parameters = [.. tool.Parameters.Select(parameter => new ToolParameterDraft
         {
             Name = parameter.Name,

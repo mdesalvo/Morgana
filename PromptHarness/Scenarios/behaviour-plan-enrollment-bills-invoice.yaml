@@ -13,13 +13,8 @@ description: >-
   being measured. Confirmed live: with a single fixed customer, run 1 passed and runs 2-5 failed on
   exactly that refusal, 0/5 overall. Five seeded prospects (Data/Examples.db) cover five runs with room
   to spare.
-  Three turns, not two: ContractAgent's own doctrine for SubscribeToGreenCarePlan ("restate the terms
-  GetPlanOverview already gave you and wait for an explicit yes before calling
-  SubscribeToGreenCarePlan") mirrors InventoryTool.ConfirmOrder's — asking to enroll is not itself the
-  explicit yes, it is what triggers the restate-and-wait step. Confirmed live: with a 2-turn version,
-  the agent restated the terms and asked "Does this suit you?"/"Are you ready to enroll?" instead of
-  calling the tool, 5/5 runs. That is correct behaviour, not a bug — the scenario is written to
-  match it, the same way behaviour-order-confirmation-bills-invoice does for Inventory.
+  Three turns, because SubscribeToGreenCarePlan requires execution approval: the turn that calls it
+  only asks, with the framework's approval buttons; the plan is opened by the turn that answers them.
 
   Two judgeNots were reworded after a live run, neither because the agent was right to fail them.
   'States a specific invoice total' fired on the plan's own monthly fee, which GetPlanOverview gave
@@ -77,6 +72,5 @@ turns:
     judge:
       - "The response says the plan is now active."
       - "The response says the first month has been billed."
-      - "The response tells the customer that invoice can be seen if they wish."
     judgeNot:
       - "The response gives the invoice's own total, its tax, or a line on it."

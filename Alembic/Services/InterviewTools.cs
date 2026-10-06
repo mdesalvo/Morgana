@@ -278,14 +278,15 @@ public class InterviewTools
     }
 
     /// <summary>
-    /// Opens a tool, or revises the description of one already open.
+    /// Opens a tool, or revises the description and the approval requirement of one already open.
     /// </summary>
     /// <remarks>
-    /// Revising keeps the parameters. A tool's contract is settled in several turns (the name and
-    /// what it does come out of one answer, its inputs out of the next), so re-declaring it to
+    /// Revising rewrites the description and the approval but keeps the parameters. A tool's
+    /// contract is settled in several turns (the name and what it does come out of one answer,
+    /// its inputs out of the next), so re-declaring it to
     /// sharpen the description must not silently empty it.
     /// </remarks>
-    public string DeclareTool(string name, string description)
+    public string DeclareTool(string name, string description, bool requiresApproval)
     {
         string cleanName = (name ?? string.Empty).Trim();
 
@@ -297,6 +298,7 @@ public class InterviewTools
 
         ToolDraft tool = existing ?? new ToolDraft { Name = cleanName, Origin = Provenance.Authored };
         tool.Description = description?.Trim();
+        tool.RequiresExecutionApproval = requiresApproval;
 
         if (!revision)
             interviewState.Agent.Tools.Add(tool);
@@ -424,7 +426,7 @@ public class InterviewTools
                    + "all arrive from an MCP server declares none here — but it must be a conclusion you reached by asking.";
 
         IEnumerable<string> rendered = interviewState.Agent.Tools.Select(t =>
-            $"- {t.Name}: {t.Description ?? "(no description)"}"
+            $"- {t.Name}{(t.RequiresExecutionApproval ? " (waits for the user's approval)" : string.Empty)}: {t.Description ?? "(no description)"}"
             + (t.Parameters.Count == 0
                 ? "\n    (takes nothing)"
                 : string.Concat(t.Parameters.Select(p =>
@@ -568,7 +570,7 @@ public class InterviewTools
         kept.Add(new KnownFact(about, written, Inferred: false));
 
         return $"Written down under '{about}'"
-               + (dropped > 0 ? $", and {dropped} thing(s) that said otherwise are gone" : string.Empty)
+               + (dropped > 0 ? $"; {dropped} thing(s) that said otherwise are gone" : string.Empty)
                + $". {kept.Count} thing(s) now stand on record here.";
     }
 

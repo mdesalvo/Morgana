@@ -28,7 +28,7 @@ public class DraftValidationService : IDraftValidationService
 
     /// <summary>
     /// The scopes a parameter may declare. A parameter carrying a value the model itself authors
-    /// (quick replies, a rich card, a turn continuation) declares none at all, which is why the
+    /// (a note, a search phrase) declares none at all, which is why the
     /// empty scope is legal rather than a third value.
     /// </summary>
     private static readonly string[] KnownScopes = [Constants.Scopes.Context, Constants.Scopes.Request];

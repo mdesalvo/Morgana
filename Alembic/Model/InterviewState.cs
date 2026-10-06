@@ -231,7 +231,7 @@ public sealed class InterviewState
     /// </summary>
     /// <remarks>
     /// Set only through the <c>SetPassCompleted</c> tool, never by a token in Alembic's text —
-    /// the same out-of-band rule Morgana applies to its own turn continuation and for the same
+    /// the same out-of-band rule Morgana applies to closing its own turn with Reply and for the same
     /// reason: a marker inside prose is a marker the prose can accidentally produce.
     /// </remarks>
     public bool ReadyForReview { get; set; }

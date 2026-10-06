@@ -460,6 +460,11 @@ public sealed class ToolDraft
     public List<ToolParameterDraft> Parameters { get; set; } = [];
 
     /// <summary>
+    /// Whether the tool runs only once the user has approved that very call; it reaches agents.json and never the C#.
+    /// </summary>
+    public bool RequiresExecutionApproval { get; set; }
+
+    /// <summary>
     /// Where this tool came from.
     /// </summary>
     public Provenance Origin { get; set; } = Provenance.Authored;
