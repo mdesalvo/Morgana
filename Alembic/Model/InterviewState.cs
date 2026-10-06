@@ -464,12 +464,15 @@ public sealed class InterviewState
 
     /// <summary>
     /// Tools that were opened and never finished. A tool with no parameters is not one of them: a
-    /// tool that takes nothing is ordinary.
+    /// tool that takes nothing is ordinary. One that hands back nothing is, since startup refuses it.
     /// </summary>
     private List<string> MissingToolkit() =>
         [.. Agent.Tools
                 .Where(t => string.IsNullOrWhiteSpace(t.Description))
-                .Select(t => $"description of {t.Name ?? "(unnamed tool)"}")];
+                .Select(t => $"description of {t.Name ?? "(unnamed tool)"}"),
+            .. Agent.Tools
+                .Where(t => !string.IsNullOrWhiteSpace(t.Name) && t.Returns.Count == 0)
+                .Select(t => $"what {t.Name} hands back")];
 
     /// <summary>
     /// How the agent goes about the work, which could not be written before the toolkit existed.

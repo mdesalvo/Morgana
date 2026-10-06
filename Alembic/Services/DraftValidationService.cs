@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Alembic.Interfaces;
 using Alembic.Model;
 using Morgana.AI;
@@ -412,6 +413,50 @@ public class DraftValidationService : IDraftValidationService
 
             optionalSeen |= !parameter.Required;
         }
+
+        if (tool.Returns.Count == 0)
+            findings.Add(new ValidationFinding(FindingSeverity.Error, where,
+                "The tool declares nothing it hands back.",
+                "Morgana refuses at startup a native tool whose agents.json entry declares no Returns: they are what the record its method returns is checked against."));
+
+        HashSet<string> returnedNames = new(StringComparer.Ordinal);
+
+        foreach (Records.ToolReturn field in tool.Returns)
+        {
+            string fieldWhere = $"{where}.returns.{field.Name ?? "(unnamed)"}";
+
+            if (string.IsNullOrWhiteSpace(field.Name))
+            {
+                findings.Add(new ValidationFinding(FindingSeverity.Error, fieldWhere,
+                    "The returned field has no name.",
+                    "Startup pairs each declared field with a property of the returned record by name."));
+                continue;
+            }
+
+            if (!returnedNames.Add(field.Name))
+                findings.Add(new ValidationFinding(FindingSeverity.Error, fieldWhere,
+                    "This tool declares two returned fields with this name.",
+                    "The record could not declare two properties with one name."));
+
+            ValidateIdentifier(field.Name, fieldWhere, "returned field name", findings);
+
+            // Startup reads the record's properties back through camelCase, so the name declared has
+            // to be the one that survives the trip out and in.
+            if (!string.Equals(JsonNamingPolicy.CamelCase.ConvertName(CodeEmitService.PropertyName(field.Name)), field.Name, StringComparison.Ordinal))
+                findings.Add(new ValidationFinding(FindingSeverity.Error, fieldWhere,
+                    "The returned field cannot keep this name in C#.",
+                    "The record's property is named with its first letter upper-cased and the model reads it back camelCased, so startup would find a different name than the one declared."));
+
+            if (string.IsNullOrWhiteSpace(field.Description))
+                findings.Add(new ValidationFinding(FindingSeverity.Warning, fieldWhere,
+                    "The returned field has no description.",
+                    "The mock is written from it and it is what the client reads in agents.json about the field."));
+        }
+
+        if (tool.Returns.Count(field => field.Failure) > 1)
+            findings.Add(new ValidationFinding(FindingSeverity.Error, where,
+                "The tool marks more than one returned field as the failure.",
+                "Morgana refuses at startup a tool with more than one failure field: whether a call failed has to be read off one field."));
     }
 
     /// <summary>

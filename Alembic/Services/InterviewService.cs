@@ -1271,6 +1271,8 @@ public class InterviewService : IInterviewService
             [nameof(InterviewTools.DeclareTool)] = tools.DeclareTool,
             [nameof(InterviewTools.SetToolParameter)] = tools.SetToolParameter,
             [nameof(InterviewTools.DropToolParameter)] = tools.DropToolParameter,
+            [nameof(InterviewTools.SetToolReturn)] = tools.SetToolReturn,
+            [nameof(InterviewTools.DropToolReturn)] = tools.DropToolReturn,
             [nameof(InterviewTools.DropTool)] = tools.DropTool,
             [nameof(InterviewTools.GetToolkit)] = tools.GetToolkit,
             [nameof(InterviewTools.GetAgentSoFar)] = tools.GetAgentSoFar,

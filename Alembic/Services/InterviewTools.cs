@@ -404,6 +404,71 @@ public class InterviewTools
     }
 
     /// <summary>
+    /// Adds a field to what a tool hands back, or revises one already there.
+    /// </summary>
+    /// <remarks>
+    /// Revision is by name and in place. The field is paired by name with a property of the record the
+    /// client's half declares, so only its name is recorded here and never its type.
+    /// </remarks>
+    /// <param name="toolName">The already-declared tool whose result this field belongs to.</param>
+    /// <param name="name">camelCase as the model reads it — the record's property is this name with its first letter upper-cased.</param>
+    /// <param name="description">What the model learns from this field of the result.</param>
+    /// <param name="failure">Whether this field is the one that says the call failed; a tool has at most one.</param>
+    public string SetToolReturn(string toolName, string name, string description, bool failure)
+    {
+        if (Find(toolName) is not { } tool)
+            return $"No field recorded: no tool named '{toolName}' has been declared yet.";
+
+        string cleanName = (name ?? string.Empty).Trim();
+
+        if (cleanName.Length == 0)
+            return "No field recorded: a field must have a name, because the record's property is paired with it by name.";
+
+        Records.ToolReturn field = new(cleanName, (description ?? string.Empty).Trim(), failure);
+
+        int index = tool.Returns.FindIndex(r => string.Equals(r.Name, cleanName, StringComparison.Ordinal));
+        if (index >= 0)
+            tool.Returns[index] = field;
+        else
+            tool.Returns.Add(field);
+
+        List<string> complaints = [];
+
+        string identifier = IdentifierComplaint(cleanName, "field name", pascalCase: false);
+        if (identifier.Length > 0)
+            complaints.Add(identifier);
+
+        // Startup reads the record back through camelCase, so a name that changes on the way out and
+        // back would be declared here and never found there.
+        string property = CodeEmitService.PropertyName(cleanName);
+        string converted = JsonNamingPolicy.CamelCase.ConvertName(property);
+        if (!string.Equals(converted, cleanName, StringComparison.Ordinal))
+            complaints.Add($"'{cleanName}' cannot come back from C# under that name: the record's property is '{property}', which the agent's model reads as '{converted}'. Declare it as '{converted}'.");
+
+        if (failure && tool.Returns.FirstOrDefault(r => r.Failure && !string.Equals(r.Name, cleanName, StringComparison.Ordinal)) is { } other)
+            complaints.Add($"'{other.Name}' is already the failure of {tool.Name} and a tool has at most one: drop one of the two marks.");
+
+        return $"'{cleanName}' recorded on what {tool.Name} hands back."
+               + (complaints.Count > 0 ? " " + string.Join(" ", complaints) : string.Empty);
+    }
+
+    /// <summary>
+    /// Removes a field from what a tool hands back.
+    /// </summary>
+    public string DropToolReturn(string toolName, string name)
+    {
+        if (Find(toolName) is not { } tool)
+            return $"Nothing dropped: no tool named '{toolName}' has been declared.";
+
+        int removed = tool.Returns.RemoveAll(r =>
+            string.Equals(r.Name, name?.Trim(), StringComparison.Ordinal));
+
+        return removed > 0
+            ? $"'{name}' dropped from what {tool.Name} hands back."
+            : $"Nothing dropped: {tool.Name} hands back no field named '{name}'.";
+    }
+
+    /// <summary>
     /// Removes a tool and everything on it.
     /// </summary>
     public string DropTool(string toolName)
@@ -412,7 +477,7 @@ public class InterviewTools
             string.Equals(t.Name, toolName?.Trim(), StringComparison.Ordinal));
 
         return removed > 0
-            ? $"'{toolName}' dropped, with its parameters."
+            ? $"'{toolName}' dropped, with its parameters and what it hands back."
             : $"Nothing dropped: no tool named '{toolName}' has been declared.";
     }
 
@@ -433,7 +498,12 @@ public class InterviewTools
                     $"\n    {p.Name} [{p.Scope ?? "authored by you"}"
                     + (p.Required ? "" : ", optional")
                     + (p.Shared ? ", shared" : "")
-                    + $"]: {p.Description ?? "(no description)"}"))));
+                    + $"]: {p.Description ?? "(no description)"}")))
+            + (t.Returns.Count == 0
+                ? "\n    (hands back nothing declared yet)"
+                : string.Concat(t.Returns.Select(r =>
+                    $"\n    returns {r.Name}{(r.Failure ? " [the failure]" : string.Empty)}: "
+                    + (string.IsNullOrWhiteSpace(r.Description) ? "(no description)" : r.Description)))));
 
         return "The toolkit as it stands:\n" + string.Join("\n", rendered);
     }

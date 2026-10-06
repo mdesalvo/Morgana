@@ -82,6 +82,7 @@ public class ToolMockService : IToolMockService
         request.AppendLine();
         request.AppendLine(signatures.Content);
         AppendArgumentContract(request, agent);
+        AppendReturnContract(request, agent);
         request.AppendLine();
         request.AppendLine(CultureInfo.InvariantCulture, $"The agent this toolkit belongs to exists for: {agent.Target}");
 
@@ -116,17 +117,32 @@ public class ToolMockService : IToolMockService
                 + "reasoning and no text. That is what a MaxOutputTokens too small for a source file produces — Alembic's "
                 + "own tier declares a generous one for exactly this reason, so check what the deployment configures.");
 
-        // The constructor belongs to the generated half, which is where the tool's own dependencies
-        // are taken and handed to the base class. One written here wins over it and takes neither, so
-        // the class stops compiling twice over: the base constructor goes unsatisfied and the field
-        // the generated half would have set is left null. Told once and written anyway, the model is
-        // told what it did and asked again — the same backstop as the duplicate attribute below.
-        if (DeclaresConstructor(authored, className))
+        // One retry covers every problem the first answer has, so a file wrong twice over costs one
+        // more completion and not two. The constructor belongs to the generated half, which is where
+        // the tool's own dependencies are taken and handed to the base class: one written here wins
+        // over it and takes neither, so the base constructor goes unsatisfied. The result records are
+        // the opposite case, declared only in this half, so the generated signatures name types that
+        // exist nowhere else. Told once and written anyway, the model is told what it did and asked again.
+        List<string> missingRecords = MissingResultRecords(authored, agent);
+        bool wroteConstructor = DeclaresConstructor(authored, className);
+
+        if (wroteConstructor || missingRecords.Count > 0)
         {
-            request.AppendLine();
-            request.AppendLine($"Your previous answer declared a constructor for {className}. That class already has "
-                               + "one, in the half generated beside yours, and it is the only place its dependencies are "
-                               + "taken. Write the same file again with no constructor of any kind.");
+            if (wroteConstructor)
+            {
+                request.AppendLine();
+                request.AppendLine($"Your previous answer declared a constructor for {className}. That class already has "
+                                   + "one, in the half generated beside yours, and it is the only place its dependencies are "
+                                   + "taken. Write the same file again with no constructor of any kind.");
+            }
+
+            if (missingRecords.Count > 0)
+            {
+                request.AppendLine();
+                request.AppendLine($"Your previous answer did not declare {string.Join(", ", missingRecords)}. Each method returns the record "
+                                   + "its signature names and that record is declared in your half, nested inside the class. "
+                                   + "Write the same file again with every one of them declared.");
+            }
 
             authored = await StreamedCompletion.RunAsync(
                 chatClient, system, request.ToString(),
@@ -146,6 +162,12 @@ public class ToolMockService : IToolMockService
                 $"The model wrote a constructor for {className} twice over. That class takes its dependencies in the "
                 + "generated half of the pair and a second constructor leaves the base class unsatisfied, so the "
                 + "archive would not build.");
+
+        missingRecords = MissingResultRecords(authored, agent);
+        if (missingRecords.Count > 0)
+            throw new InvalidOperationException(
+                $"The model left {string.Join(", ", missingRecords)} undeclared twice over. The generated half returns those "
+                + "records and only the half written here declares them, so the archive would not build.");
 
         return StripDuplicateToolAttribute(authored);
     }
@@ -183,6 +205,31 @@ public class ToolMockService : IToolMockService
                 request.AppendLine(CultureInfo.InvariantCulture, $"  {parameter.Name}: {parameter.Description}");
         }
     }
+
+    /// <summary>
+    /// States to the mock author the fields each result record must carry, in the words agents.json holds.
+    /// </summary>
+    private static void AppendReturnContract(StringBuilder request, AgentDraft agent)
+    {
+        foreach (ToolDraft tool in agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name) && t.Returns.Count > 0))
+        {
+            request.AppendLine();
+            request.AppendLine(CultureInfo.InvariantCulture, $"{tool.Name} returns {CodeEmitService.ResultTypeName(tool.Name!)}, with exactly these fields:");
+
+            foreach (Records.ToolReturn field in tool.Returns.Where(r => !string.IsNullOrWhiteSpace(r.Name)))
+                request.AppendLine(CultureInfo.InvariantCulture,
+                    $"  {field.Name}: {field.Description}{(field.Failure ? " (the failure: null whenever the call succeeds)" : string.Empty)}");
+        }
+    }
+
+    /// <summary>
+    /// The result records the generated half names that the authored source never declares.
+    /// </summary>
+    private static List<string> MissingResultRecords(string source, AgentDraft agent) =>
+        [.. agent.Tools
+            .Where(t => !string.IsNullOrWhiteSpace(t.Name))
+            .Select(t => CodeEmitService.ResultTypeName(t.Name!))
+            .Where(name => !Regex.IsMatch(source, $@"\brecord\s+(?:class\s+|struct\s+)?{Regex.Escape(name)}\b"))];
 
     /// <summary>
     /// The <c>[ProvidesToolForIntent]</c> attribute the <c>.g.cs</c> half already carries on this

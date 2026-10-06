@@ -121,6 +121,9 @@ into `agents.json`. Two things come free: the pair `MorganaToolAdapter.AddTool` 
 is correct by construction and a tool added to the configuration but forgotten in the code **does not
 compile**. Every emitted parameter is a `string`, which is a statement about the configuration rather
 than a shortcut: `Records.ToolParameter` carries no type, so the type lives in the C# and only there.
+**The record a tool returns is the client's, for the same reason**: its fields are `Returns` and
+startup verifies them, its types are C# — so the generated half only names it and the half the client
+owns declares it, first written by the mock.
 
 Because Alembic never sees the client's tree, the convention travels **inside the archive** and needs
 no enforcing: a drifted signature is already a startup failure. Alembic's job is to surface it

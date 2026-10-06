@@ -180,13 +180,25 @@ public class CodeEmitService : ICodeEmitService
             foreach (string line in Wrap(tool.Description))
                 sb.AppendLine(CultureInfo.InvariantCulture, $"    /// {line}");
 
-            sb.AppendLine(CultureInfo.InvariantCulture, $"    public partial Task<string> {tool.Name}({Signature(tool)});");
+            // The record is only named here: the configuration carries field names and no types, so a
+            // record emitted in a file that is regenerated in full would fix them as strings forever.
+            sb.AppendLine(CultureInfo.InvariantCulture, $"    public partial Task<{ResultTypeName(tool.Name!)}> {tool.Name}({Signature(tool)});");
         }
 
         sb.AppendLine("}");
 
         return sb.ToString();
     }
+
+    /// <summary>
+    /// The name of the record a tool's method returns, shared by the emit, the mock and the migration report.
+    /// </summary>
+    public static string ResultTypeName(string toolName) => $"{toolName}Result";
+
+    /// <summary>
+    /// The record property that carries a returned field, named the way the model reads the field back camelCased.
+    /// </summary>
+    public static string PropertyName(string field) => char.ToUpperInvariant(field[0]) + field[1..];
 
     /// <summary>
     /// Renders one tool's parameter list, in the order the configuration declares it.

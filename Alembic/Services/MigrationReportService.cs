@@ -166,18 +166,27 @@ public class MigrationReportService : IMigrationReportService
             {
                 if (was is not null)
                     entries.Add(new MigrationEntry(MigrationKind.Signature, where, MigrationChange.Added,
-                        $"New tool. The generated half declares `public partial Task<string> {tool.Name}({Signature(tool)})` and the file will not compile until you implement it in the half you own."));
+                        $"New tool. The generated half declares `public partial Task<{CodeEmitService.ResultTypeName(tool.Name!)}> {tool.Name}({Signature(tool)})` and the file will not compile until you implement it and declare `{CodeEmitService.ResultTypeName(tool.Name!)}` in the half you own."));
 
                 continue;
             }
+
+            bool returnsChanged = ReturnsChanged(previous, tool);
 
             if (Signature(previous) != Signature(tool))
                 entries.Add(new MigrationEntry(MigrationKind.Signature, where, MigrationChange.SignatureChanged,
                     $"`{Signature(previous)}` became `{Signature(tool)}`. Change your method to match: the generated declaration moves on its own and MorganaToolAdapter.AddTool refuses the pair at startup if it does not."));
             else if (!string.Equals(previous.Description, tool.Description, StringComparison.Ordinal)
-                     || previous.Parameters.Zip(tool.Parameters).Any(p => !string.Equals(p.First.Description, p.Second.Description, StringComparison.Ordinal)))
+                     || previous.Parameters.Zip(tool.Parameters).Any(p => !string.Equals(p.First.Description, p.Second.Description, StringComparison.Ordinal))
+                     || (!returnsChanged && previous.Returns.Zip(tool.Returns).Any(r => !string.Equals(r.First.Description, r.Second.Description, StringComparison.Ordinal))))
                 entries.Add(new MigrationEntry(MigrationKind.Tool, where, MigrationChange.Revised,
                     "Description changed. It reaches the model through agents.json and the schema, so nothing needs rebuilding."));
+
+            // Independent of the parameter signature: the record lives in the client's half, so only
+            // the client can bring it in line with the fields now declared.
+            if (returnsChanged)
+                entries.Add(new MigrationEntry(MigrationKind.Signature, where, MigrationChange.SignatureChanged,
+                    $"What it hands back changed: `{Fields(previous)}` became `{Fields(tool)}`. Change `{CodeEmitService.ResultTypeName(tool.Name!)}` in the half you own to match: startup refuses a record whose fields differ from Returns."));
 
             // Reported on its own entry, whatever else changed: the approval is read from agents.json alone,
             // so a client reading only the signature entry would never learn the tool now waits for the user.
@@ -191,8 +200,24 @@ public class MigrationReportService : IMigrationReportService
         entries.AddRange(
             before.Where(t => !string.IsNullOrWhiteSpace(t.Name)
                                 && !agent.Tools.Any(x => string.Equals(x.Name, t.Name, StringComparison.Ordinal)))
-                  .Select(gone => new MigrationEntry(MigrationKind.Signature, $"{agent.ID}.{gone.Name}", MigrationChange.Removed, $"Gone from the configuration. Its generated declaration disappears, so `{gone.Name}` in the half you own becomes an orphan method — delete it or the partial no longer matches.")));
+                  .Select(gone => new MigrationEntry(MigrationKind.Signature, $"{agent.ID}.{gone.Name}", MigrationChange.Removed, $"Gone from the configuration. Its generated declaration disappears, so `{gone.Name}` in the half you own becomes an orphan method — delete it with `{CodeEmitService.ResultTypeName(gone.Name!)}` or the partial no longer matches.")));
     }
+
+    /// <summary>
+    /// Whether the names a tool hands back or the one marked as the failure differ between two states of it.
+    /// </summary>
+    private static bool ReturnsChanged(ToolDraft was, ToolDraft now) =>
+        !was.Returns.Select(r => r.Name).ToHashSet(StringComparer.Ordinal)
+            .SetEquals(now.Returns.Select(r => r.Name))
+        || !string.Equals(was.Returns.FirstOrDefault(r => r.Failure)?.Name, now.Returns.FirstOrDefault(r => r.Failure)?.Name, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Renders the fields a tool hands back as the report shows them, the failure marked.
+    /// </summary>
+    private static string Fields(ToolDraft tool) =>
+        tool.Returns.Count == 0
+            ? "(nothing declared)"
+            : string.Join(", ", tool.Returns.Select(r => r.Failure ? $"{r.Name} (failure)" : r.Name));
 
     /// <summary>
     /// Renders the report as the <c>MIGRATION.md</c> in the archive.
