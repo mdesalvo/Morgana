@@ -1026,8 +1026,8 @@ public static class Records
         /// <param name="name">Which message.</param>
         /// <returns>The authored text; empty when the prompt declares no such message.</returns>
         public string GetMessage(string name)
-            => GetAdditionalPropertyOrDefault<Dictionary<string, string>>(Constants.PromptProperties.Messages, [])
-                .TryGetValue(name, out string? message) ? message : string.Empty;
+            => GetAdditionalPropertyOrDefault<List<Message>>(Constants.PromptProperties.Messages, [])
+                .FirstOrDefault(message => string.Equals(message.Name, name, StringComparison.OrdinalIgnoreCase))?.Content ?? string.Empty;
 
         /// <summary>
         /// Gets an additional property, or <paramref name="defaultValue"/> when the prompt does not
@@ -1084,6 +1084,13 @@ public static class Records
             => injections.FirstOrDefault(injection =>
                    string.Equals(injection.Name, name, StringComparison.OrdinalIgnoreCase))?.Description ?? "";
     }
+
+    /// <summary>A text that the framework says to the user in its own voice, fetched by name (see <see cref="Constants.Messages"/>).</summary>
+    /// <param name="Name">Identifier the framework fetches the text by.</param>
+    /// <param name="Content">The text as the user reads it.</param>
+    public record Message(
+        string Name,
+        string Content);
 
     /// <summary>
     /// A text that a framework tool returns to the model, authored in morgana.json and fetched by name (see
@@ -1223,9 +1230,32 @@ public static class Records
     /// the second declines it. Pressing anything else or typing declines it too.
     /// </param>
     public record ServiceButtons(
-        [property: JsonPropertyName("Closure")] List<QuickReply> Closure,
-        [property: JsonPropertyName("Escape")] List<QuickReply> Escape,
-        [property: JsonPropertyName("Approval")] List<QuickReply>? Approval = null);
+        List<QuickReply> Closure,
+        List<QuickReply> Escape,
+        List<QuickReply>? Approval = null)
+    {
+        /// <summary>Gathers the authored sets by name; a set that the prompt does not declare is empty (null for the approval pair).</summary>
+        /// <param name="sets">The prompt's <c>ServiceButtons</c> array.</param>
+        public static ServiceButtons From(IEnumerable<ServiceButtonSet> sets)
+        {
+            List<ServiceButtonSet> declared = [.. sets];
+
+            List<QuickReply>? Find(string name)
+                => declared.FirstOrDefault(set => string.Equals(set.Name, name, StringComparison.OrdinalIgnoreCase))?.Buttons;
+
+            return new ServiceButtons(
+                Find(Constants.ServiceButtonSets.Closure) ?? [],
+                Find(Constants.ServiceButtonSets.Escape) ?? [],
+                Find(Constants.ServiceButtonSets.Approval));
+        }
+    }
+
+    /// <summary>One named set of buttons as authored in morgana.json (see <see cref="Constants.ServiceButtonSets"/>).</summary>
+    /// <param name="Name">Which set.</param>
+    /// <param name="Buttons">The buttons of the set, in the order they are offered.</param>
+    public record ServiceButtonSet(
+        string Name,
+        List<QuickReply> Buttons);
 
     /// <summary>
     /// How an agent closed its turn: the one structured decision beside its free text, recorded by the

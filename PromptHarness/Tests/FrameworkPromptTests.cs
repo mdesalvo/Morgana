@@ -55,8 +55,12 @@ public sealed class FrameworkPromptTests
     [Fact]
     public async Task Morgana_prompt_authors_the_service_buttons_by_the_ids_the_channels_act_on()
     {
-        Records.ServiceButtons buttons = (await resolver.ResolveAsync("Morgana"))
-            .GetAdditionalProperty<Records.ServiceButtons>("ServiceButtons");
+        List<Records.ServiceButtonSet> sets = (await resolver.ResolveAsync("Morgana"))
+            .GetAdditionalProperty<List<Records.ServiceButtonSet>>(Constants.PromptProperties.ServiceButtons);
+        Assert.Equal(
+            [Constants.ServiceButtonSets.Closure, Constants.ServiceButtonSets.Escape, Constants.ServiceButtonSets.Approval],
+            sets.Select(set => set.Name));
+        Records.ServiceButtons buttons = Records.ServiceButtons.From(sets);
 
         Assert.Equal(["continue_agent", "exit_agent"], buttons.Closure.Select(button => button.Id));
         Assert.Equal(["continue_agent", "exit_agent"], buttons.Escape.Select(button => button.Id));

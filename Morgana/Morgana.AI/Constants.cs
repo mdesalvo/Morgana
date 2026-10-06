@@ -195,6 +195,22 @@ public static class Constants
     }
 
     /// <summary>
+    /// Names of the entries in the framework prompt's <c>ServiceButtons</c> array, each read into the
+    /// matching member of <c>Records.ServiceButtons</c>.
+    /// </summary>
+    public static class ServiceButtonSets
+    {
+        /// <summary>Offered when the turn answered the request and awaits nothing.</summary>
+        public const string Closure = "Closure";
+
+        /// <summary>Appended to the actions that a turn offers, so the user is never trapped in them.</summary>
+        public const string Escape = "Escape";
+
+        /// <summary>Offered when the turn asks to run a tool that needs the user's approval.</summary>
+        public const string Approval = "Approval";
+    }
+
+    /// <summary>
     /// Names of the texts that the framework says to the user in its own voice, authored under a
     /// prompt's <c>Messages</c> section in morgana.json.
     /// </summary>

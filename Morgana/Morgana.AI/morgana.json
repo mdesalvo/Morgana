@@ -38,7 +38,9 @@
               "Description": "CONSULTING A COLLEAGUE — ask only for a fact your own tools cannot establish and the request in front of you needs, never to check your own work or to satisfy curiosity. Such a fact, when a colleague of yours answers for it, is ASKED and not declined: telling the user you cannot help them while a colleague covers the very thing they asked fails the turn. Ask ONCE, putting into that single question everything you already hold: your colleague sees neither your tools, nor your history, nor the user. Ask again only if the answer names something you can supply yourself.\n\nNEVER ASK A COLLEAGUE FOR WHAT ONLY THE USER CAN GIVE — a secret, a confirmation, a decision, any new value. It cannot take that turn, so never make your answer wait on one.\n\nA GAP A COLLEAGUE LEAVES IS YOURS TO CLOSE, never the user's to be told about: ask them for what is missing yourself, in your own voice, as your own question.\n\nYOUR REACH IS YOUR TOOLS PLUS WHAT YOUR COLLEAGUES KNOW: ToolGrounding lets you offer all of it, answered as your own. Their actions are not yours to offer.",
               "Priority": 8
             }
-          ],
+          ]
+        },
+        {
           "Injections": [
             {
               "Name": "ColleaguesDeclaration",
@@ -101,46 +103,55 @@
           ]
         },
         {
-          "ServiceButtons": {
-            "Closure": [
-              {
-                "id": "continue_agent",
-                "label": "🔮 I still need you",
-                "value": "I have another question for you"
-              },
-              {
-                "id": "exit_agent",
-                "label": "✨ We're done, thanks",
-                "value": "We're done, thanks",
-                "termination": true
-              }
-            ],
-            "Escape": [
-              {
-                "id": "continue_agent",
-                "label": "💬 Ask me something else",
-                "value": "I want to ask you something else"
-              },
-              {
-                "id": "exit_agent",
-                "label": "✨ We're done, thanks",
-                "value": "We're done, thanks",
-                "termination": true
-              }
-            ],
-            "Approval": [
-              {
-                "id": "approve_action",
-                "label": "✅ Go ahead",
-                "value": "Go ahead"
-              },
-              {
-                "id": "reject_action",
-                "label": "✋ Not now",
-                "value": "Not now"
-              }
-            ]
-          }
+          "ServiceButtons": [
+            {
+              "Name": "Closure",
+              "Buttons": [
+                {
+                  "id": "continue_agent",
+                  "label": "🔮 I still need you",
+                  "value": "I have another question for you"
+                },
+                {
+                  "id": "exit_agent",
+                  "label": "✨ We're done, thanks",
+                  "value": "We're done, thanks",
+                  "termination": true
+                }
+              ]
+            },
+            {
+              "Name": "Escape",
+              "Buttons": [
+                {
+                  "id": "continue_agent",
+                  "label": "💬 Ask me something else",
+                  "value": "I want to ask you something else"
+                },
+                {
+                  "id": "exit_agent",
+                  "label": "✨ We're done, thanks",
+                  "value": "We're done, thanks",
+                  "termination": true
+                }
+              ]
+            },
+            {
+              "Name": "Approval",
+              "Buttons": [
+                {
+                  "id": "approve_action",
+                  "label": "✅ Go ahead",
+                  "value": "Go ahead"
+                },
+                {
+                  "id": "reject_action",
+                  "label": "✋ Not now",
+                  "value": "Not now"
+                }
+              ]
+            }
+          ]
         },
         {
           "ToolResults": [
@@ -195,12 +206,24 @@
           ]
         },
         {
-          "Messages": {
-            "AgentExit": "{0} has completed its spell and the circle returns to me. What else can I conjure for you?",
-            "Approval": "Shall I go ahead?",
-            "GenericError": "I'm sorry, something went wrong during the preparation of this potion and I couldn't complete it :(",
-            "LLMServiceError": "I'm sorry, the magic sphere refused my spell :("
-          }
+          "Messages": [
+            {
+              "Name": "AgentExit",
+              "Content": "{0} has completed its spell and the circle returns to me. What else can I conjure for you?"
+            },
+            {
+              "Name": "Approval",
+              "Content": "Shall I go ahead?"
+            },
+            {
+              "Name": "GenericError",
+              "Content": "I'm sorry, something went wrong during the preparation of this potion and I couldn't complete it :("
+            },
+            {
+              "Name": "LLMServiceError",
+              "Content": "I'm sorry, the magic sphere refused my spell :("
+            }
+          ]
         }
       ]
     },
@@ -215,10 +238,16 @@
       "Version": "1",
       "AdditionalProperties": [
         {
-          "Messages": {
-            "Fallback": "✨ Welcome! I am Morgana, your magical digital assistant.\n\nTell me traveler, what brings you to me?",
-            "NoAgents": "✨ Welcome! I am Morgana, your magical digital assistant.\n\nAt the moment I don't have spells to help you, but my creator can add them soon!"
-          }
+          "Messages": [
+            {
+              "Name": "Fallback",
+              "Content": "✨ Welcome! I am Morgana, your magical digital assistant.\n\nTell me traveler, what brings you to me?"
+            },
+            {
+              "Name": "NoAgents",
+              "Content": "✨ Welcome! I am Morgana, your magical digital assistant.\n\nAt the moment I don't have spells to help you, but my creator can add them soon!"
+            }
+          ]
         }
       ]
     },
@@ -258,10 +287,16 @@
           "ComplementIntentDescription": "any other topic not expressly intercepted by known intents"
         },
         {
-          "Messages": {
-            "UnrecognizedIntent": "The shadows remain silent. Your words lack the catalysts needed to awaken the correct incantation within these pages.",
-            "Disambiguation": "You've lit more than one candle with those words andI can't tell which lights your way. Which is it?"
-          }
+          "Messages": [
+            {
+              "Name": "UnrecognizedIntent",
+              "Content": "The shadows remain silent. Your words lack the catalysts needed to awaken the correct incantation within these pages."
+            },
+            {
+              "Name": "Disambiguation",
+              "Content": "You've lit more than one candle with those words and I can't tell which lights your way. Which is it?"
+            }
+          ]
         }
       ]
     }

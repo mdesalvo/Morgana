@@ -246,8 +246,8 @@ public class MorganaAgent : MorganaActor
             // agent's own session chronologically: a message without a timestamp cannot be placed.
             // The buttons that let the user stay, leave or approve are the framework's, worded in morgana.json.
             Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
-            Records.ServiceButtons serviceButtons = morganaPrompt.GetAdditionalPropertyOrDefault(
-                Constants.PromptProperties.ServiceButtons, new Records.ServiceButtons([], []));
+            Records.ServiceButtons serviceButtons = Records.ServiceButtons.From(
+                morganaPrompt.GetAdditionalPropertyOrDefault<List<Records.ServiceButtonSet>>(Constants.PromptProperties.ServiceButtons, []));
 
             // A tool still waiting for the user's approval is answered by this very message: approved only
             // when it is the approval button, declined by anything else, which then reads as an ordinary
