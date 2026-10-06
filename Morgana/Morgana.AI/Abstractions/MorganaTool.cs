@@ -110,9 +110,30 @@ public class MorganaTool
 
         ToolContext ctx = getToolContext();
 
+        List<Records.ReplyAction> offeredActions = actions ?? [];
+
+        // At a choice step the buttons are the framework's proposal: one per tool of the step, each once.
+        // The model words them and nothing else, so any other set is refused and the turn stays open for repair.
+        // A user who is leaving gets no button, so there is nothing to hold to the step.
+        if (ctx.ChoiceStep is { } choice && !userIsLeaving)
+        {
+            bool isExactSet = offeredActions.Count == choice.Tools.Count
+                && choice.Tools.All(tool => offeredActions.Count(action => string.Equals(action.Tool, tool, StringComparison.Ordinal)) == 1);
+            if (!isExactSet)
+                return new Records.FrameworkToolResult(Constants.ToolResults.StepActionsRequired, new Dictionary<string, string>
+                {
+                    [Constants.Placeholders.Step] = choice.Step,
+                    [Constants.Placeholders.Workflow] = choice.Workflow,
+                    [Constants.Placeholders.Tools] = string.Join(", ", choice.Tools)
+                });
+
+            // Recorded in the order the step declares, whatever order the model wrote them in.
+            offeredActions = [.. choice.Tools.Select(tool => offeredActions.First(action => string.Equals(action.Tool, tool, StringComparison.Ordinal)))];
+            awaits = Records.AwaitedFromUser.ActionChoice;
+        }
+
         // An action is a button that the user presses to have something done: one leading to no tool of this
         // agent would be a promise nothing keeps, so it never reaches the channel.
-        List<Records.ReplyAction> offeredActions = actions ?? [];
         if (ctx.ActionableToolNames is { } actionableToolNames)
         {
             foreach (Records.ReplyAction discarded in offeredActions.Where(action => !actionableToolNames.Contains(action.Tool)))
@@ -234,6 +255,12 @@ public class MorganaTool
         public IReadOnlyCollection<string>? ActionableToolNames { get; }
 
         /// <summary>
+        /// The running workflow's step when it names two or more tools, with those tools in declared order.
+        /// Null outside a workflow and at a step with a single tool.
+        /// </summary>
+        public (string Workflow, string Step, IReadOnlyList<string> Tools)? ChoiceStep { get; }
+
+        /// <summary>
         /// Initializes a new <see cref="ToolContext"/> pairing the agent's context provider
         /// with the session and conversationId for the in-flight turn.
         /// </summary>
@@ -241,16 +268,19 @@ public class MorganaTool
         /// <param name="session">The active agent session for the current turn.</param>
         /// <param name="conversationId">The Akka conversation identifier this agent instance is scoped to.</param>
         /// <param name="actionableToolNames">The agent's tools that a user action may lead to, if known.</param>
+        /// <param name="choiceStep">The running workflow's choice step, if it stands at one.</param>
         public ToolContext(
             MorganaAIContextProvider provider,
             AgentSession session,
             string conversationId,
-            IReadOnlyCollection<string>? actionableToolNames = null)
+            IReadOnlyCollection<string>? actionableToolNames = null,
+            (string Workflow, string Step, IReadOnlyList<string> Tools)? choiceStep = null)
         {
             Provider = provider;
             Session = session;
             ConversationId = conversationId;
             ActionableToolNames = actionableToolNames;
+            ChoiceStep = choiceStep;
         }
     }
 }

@@ -276,7 +276,13 @@ public class MorganaAgentAdapter
                     ? running.Step.Tools
                     : actionableToolNames;
 
-            return new MorganaTool.ToolContext(morganaAIContextProvider, session, conversationId, actionable);
+            // A step naming several tools is a choice: Reply holds the turn's buttons to exactly those tools.
+            (string Workflow, string Step, IReadOnlyList<string> Tools)? choiceStep = agentWorkflows is not null
+                && morganaAIContextProvider.GetWorkflowPosition(session)?.Resolve(workflowDefinitions) is { Step.Tools.Count: > 1 } choosing
+                    ? (choosing.Definition.Name, choosing.Step.Name, choosing.Step.Tools)
+                    : null;
+
+            return new MorganaTool.ToolContext(morganaAIContextProvider, session, conversationId, actionable, choiceStep);
         };
 
         // 6a) Bind the declared tools to their delegates (native MorganaTool methods), then

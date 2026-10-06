@@ -299,6 +299,9 @@ public static class Constants
 
         /// <summary>A tool was called that the running workflow does not offer at its current step.</summary>
         public const string ToolNotAtThisStep = "ToolNotAtThisStep";
+
+        /// <summary>A Reply at a choice step did not offer exactly the step's tools, one action each.</summary>
+        public const string StepActionsRequired = "StepActionsRequired";
     }
 
     /// <summary>
@@ -440,6 +443,9 @@ public static class Constants
 
         /// <summary>In the workflow texts — the step at which the workflow stands.</summary>
         public const string Step = "((step))";
+
+        /// <summary>In <see cref="ToolResults.StepActionsRequired"/> — the tools of the step, comma-joined.</summary>
+        public const string Tools = "((tools))";
 
         /// <summary>In <see cref="Injections.EarlierToolResult"/> and the workflow injections — the result as the tool returned it.</summary>
         public const string EarlierToolResultContent = "((result))";

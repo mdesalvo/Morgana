@@ -443,6 +443,16 @@ public class MorganaAgent : MorganaActor
             if (turnReply.UserIsLeaving)
                 aiContextProvider.DropWorkflowPosition(aiAgentSession);
 
+            // A workflow that still stands at a choice step offers its tools as the buttons, whatever the model
+            // closed with: a model that never complied, the framework's own closure and a missing Reply all end here.
+            if (!turnReply.UserIsLeaving && !awaitsApproval)
+            {
+                Records.WorkflowDefinition[] workflows = (await promptResolverService.ResolveAsync(AgentIntent))
+                    .GetAdditionalPropertyOrDefault<Records.WorkflowDefinition[]>(Constants.PromptProperties.Workflows, []);
+                if (aiContextProvider.GetWorkflowPosition(aiAgentSession)?.Resolve(workflows) is { Step.Tools.Count: > 1 } choosing)
+                    turnReply = turnReply.WithStepActions(choosing.Step.Tools);
+            }
+
             // A turn waiting for an approval offers exactly the two answers to it; any other turn gets the
             // buttons its closure calls for.
             (List<QuickReply>? quickReplies, bool isCompleted) = awaitsApproval

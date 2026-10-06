@@ -278,11 +278,97 @@ public sealed class WorkflowTests
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         await agent.RunQuoteTurnAsync();
 
-        string closure = Assert.IsType<string>(agent.Provider.GetVariable(agent.Session, Constants.ContextKeys.TurnReply));
-        Records.TurnReply reply = JsonSerializer.Deserialize<Records.TurnReply>(closure, new JsonSerializerOptions { AllowOutOfOrderMetadataProperties = true })!;
-
         // Stock is the agent's own tool but not the step's: pressing it would lead nowhere that the workflow allows.
-        Assert.Equal(["ConfirmOrder"], reply.Actions.Select(action => action.Tool));
+        Assert.Equal(["ConfirmOrder", "CancelOrder"], ClosureOf(agent).Actions.Select(action => action.Tool));
+    }
+
+    [Fact]
+    public async Task Reply_is_presented_at_a_choice_step_with_the_actions_required_and_bound_to_the_step_tools()
+    {
+        AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
+        await agent.RunQuoteTurnAsync();
+
+        JsonElement atLaunch = ReplySchema(agent.Model.ToolsPerCall[0]);
+        JsonElement atQuote = ReplySchema(agent.Model.ToolsPerCall[1]);
+        JsonElement atDecide = ReplySchema(agent.Model.ToolsPerCall[2]);
+
+        // Outside a choice step the schema is the one Reply was built with: the actions stay optional and free.
+        Assert.Equal(atLaunch.GetRawText(), atQuote.GetRawText());
+        Assert.DoesNotContain("actions", atQuote.GetProperty("required").EnumerateArray().Select(name => name.GetString()));
+        Assert.False(atQuote.GetProperty("properties").GetProperty("actions").TryGetProperty("minItems", out _));
+
+        JsonElement actions = atDecide.GetProperty("properties").GetProperty("actions");
+        Assert.Contains("actions", atDecide.GetProperty("required").EnumerateArray().Select(name => name.GetString()));
+        Assert.Equal("array", actions.GetProperty("type").GetString());
+        Assert.Equal((2, 2), (actions.GetProperty("minItems").GetInt32(), actions.GetProperty("maxItems").GetInt32()));
+        Assert.Equal(["ConfirmOrder", "CancelOrder"], actions.GetProperty("items").GetProperty("properties").GetProperty("tool").GetProperty("enum").EnumerateArray().Select(tool => tool.GetString()));
+    }
+
+    [Theory]
+    [InlineData("""{"awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"}]}""")]
+    [InlineData("""{"awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"CancelOrder","label":"Cancel","value":"cancel"},{"tool":"Stock","label":"Stock","value":"stock"}]}""")]
+    [InlineData("""{"awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"ConfirmOrder","label":"Again","value":"again"}]}""")]
+    [InlineData("""{"awaits":"nothing","userIsLeaving":false}""")]
+    public async Task Reply_at_a_choice_step_is_refused_unless_it_offers_each_step_tool_once(string refused)
+    {
+        AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
+        await agent.RunQuoteTurnAsync(refused, ExactReply);
+
+        // The refusal names the step and its tools. The repaired closure is the one that was recorded.
+        Assert.Contains(agent.FunctionResults(), result => result.Contains("At step Decide of PlaceOrder the actions are exactly ConfirmOrder, CancelOrder, one each.", StringComparison.Ordinal));
+        Assert.Equal(["ConfirmOrder", "CancelOrder"], ClosureOf(agent).Actions.Select(action => action.Tool));
+    }
+
+    [Fact]
+    public async Task Reply_at_a_choice_step_records_the_actions_in_the_step_order_awaiting_an_action_choice()
+    {
+        AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
+        await agent.RunQuoteTurnAsync("""{"awaits":"typed_answer","userIsLeaving":false,"actions":[{"tool":"CancelOrder","label":"Drop it","value":"drop"},{"tool":"ConfirmOrder","label":"Take it","value":"take"}]}""");
+
+        Records.TurnReply closure = ClosureOf(agent);
+
+        Assert.DoesNotContain(agent.FunctionResults(), result => result.Contains("one each", StringComparison.Ordinal));
+        Assert.Equal(Records.AwaitedFromUser.ActionChoice, closure.Awaits);
+        Assert.Equal([("ConfirmOrder", "Take it"), ("CancelOrder", "Drop it")], closure.Actions.Select(action => (action.Tool, action.Label)));
+    }
+
+    [Fact]
+    public async Task A_user_who_is_leaving_is_not_held_to_the_step_actions()
+    {
+        AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
+        await agent.RunQuoteTurnAsync("""{"awaits":"nothing","userIsLeaving":true}""");
+
+        Assert.True(ClosureOf(agent).UserIsLeaving);
+        Assert.DoesNotContain(agent.FunctionResults(), result => result.Contains("one each", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_closure_is_completed_with_a_button_for_each_missing_step_tool_worded_from_its_name()
+    {
+        Records.TurnReply closed = new(Records.AwaitedFromUser.Nothing, false, [], null);
+
+        Records.TurnReply completed = closed.WithStepActions(["ConfirmOrder", "CancelOrder"]);
+
+        Assert.Equal(Records.AwaitedFromUser.ActionChoice, completed.Awaits);
+        Assert.Equal([("ConfirmOrder", "Confirm order", "Confirm order"), ("CancelOrder", "Cancel order", "Cancel order")],
+            completed.Actions.Select(action => (action.Tool, action.Label, action.Value)));
+    }
+
+    [Fact]
+    public void A_closure_keeps_the_model_wording_drops_foreign_actions_and_orders_the_rest_as_declared()
+    {
+        Records.TurnReply closed = new(Records.AwaitedFromUser.TypedAnswer, false,
+        [
+            new("Stock", "Stock", "stock"),
+            new("CancelOrder", "Drop it", "drop"),
+            new("CancelOrder", "Drop it again", "drop again")
+        ], null);
+
+        Records.TurnReply completed = closed.WithStepActions(["ConfirmOrder", "CancelOrder"]);
+
+        // Cancel is the model's first one; Confirm is derived; Stock leads outside the step.
+        Assert.Equal([("ConfirmOrder", "Confirm order"), ("CancelOrder", "Drop it")], completed.Actions.Select(action => (action.Tool, action.Label)));
+        Assert.Equal(Records.AwaitedFromUser.ActionChoice, completed.Awaits);
     }
 
     [Fact]
@@ -384,7 +470,7 @@ public sealed class WorkflowTests
 
         AgentUnderTest second = await AgentUnderTest.CreateAsync(PlaceOrder());
         await second.RestoreAsync(first);
-        second.Model.Enqueue(Closing("Understood."));
+        second.Model.Enqueue([new TextContent("Understood."), Call("Reply", ExactReply)]);
         await second.TurnAsync("no", [.. requests.Select(request => (AIContent)request.CreateResponse(false))]);
 
         // The tool loop answers a declined call itself: the tool is not run and the workflow does not move.
@@ -498,6 +584,20 @@ public sealed class WorkflowTests
     /// <summary>The names of the tools that a model call was offered, in a stable order.</summary>
     private static string[] Names(IEnumerable<AITool> tools)
         => [.. tools.Select(tool => tool.Name).Order(StringComparer.Ordinal)];
+
+    /// <summary>A Reply offering exactly the decision step's two tools.</summary>
+    private const string ExactReply = """{"awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"CancelOrder","label":"Cancel","value":"cancel"}]}""";
+
+    /// <summary>The schema of Reply among the tools of a call.</summary>
+    private static JsonElement ReplySchema(IEnumerable<AITool> tools)
+        => ((AIFunction)Assert.Single(tools, tool => tool.Name == "Reply")).JsonSchema;
+
+    /// <summary>The closure that the turn recorded.</summary>
+    private static Records.TurnReply ClosureOf(AgentUnderTest agent)
+    {
+        string closure = Assert.IsType<string>(agent.Provider.GetVariable(agent.Session, Constants.ContextKeys.TurnReply));
+        return JsonSerializer.Deserialize<Records.TurnReply>(closure, new JsonSerializerOptions { AllowOutOfOrderMetadataProperties = true })!;
+    }
 
     /// <summary>One model answer closing the turn: text first and then Reply.</summary>
     private static List<AIContent> Closing(string text)
@@ -713,16 +813,15 @@ public sealed class WorkflowTests
 
         /// <summary>
         /// Runs the turn that launches PlaceOrder and creates its quote, which leaves the workflow at its decision.
+        /// The turn closes with each given Reply in turn, a refused one being answered by the next; none closes with the exact pair of actions.
         /// </summary>
-        public async Task RunQuoteTurnAsync()
+        public async Task RunQuoteTurnAsync(params string[] replies)
         {
             Model.Enqueue([new TextContent("Starting."), Call("LaunchWorkflow", """{"workflow":"PlaceOrder"}""")]);
             Model.Enqueue([Call("CreatePurchaseOrder", """{"item":"rose"}""")]);
-            Model.Enqueue(
-            [
-                new TextContent("Here is the quote."),
-                Call("Reply", """{"awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"Stock","label":"Stock","value":"stock"}]}""")
-            ]);
+            Model.Enqueue([new TextContent("Here is the quote."), Call("Reply", replies.Length > 0 ? replies[0] : ExactReply)]);
+            foreach (string reply in replies.Skip(1))
+                Model.Enqueue([Call("Reply", reply)]);
 
             await TurnAsync("I want a rose");
         }

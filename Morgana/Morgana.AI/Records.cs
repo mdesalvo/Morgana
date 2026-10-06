@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Akka.Actor;
@@ -1379,6 +1380,41 @@ public static class Records
             return separator > 0 && int.TryParse(quickReplyId[(separator + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out _)
                 ? quickReplyId[..separator]
                 : null;
+        }
+
+        /// <summary>
+        /// The turn as a choice step requires it: one action per tool of the step in the step's order, awaiting an action choice.
+        /// </summary>
+        /// <remarks>
+        /// The model's own action is kept for a tool of the step (the first one) and a missing tool gets a button worded from its name.
+        /// </remarks>
+        /// <param name="stepTools">The tools of the choice step, in the order the step declares them.</param>
+        public TurnReply WithStepActions(IReadOnlyList<string> stepTools)
+        {
+            List<ReplyAction> actions = [.. stepTools.Select(tool =>
+                Actions.FirstOrDefault(action => string.Equals(action.Tool, tool, StringComparison.Ordinal))
+                ?? new ReplyAction(tool, LabelFromToolName(tool), LabelFromToolName(tool)))];
+
+            return new TurnReply(AwaitedFromUser.ActionChoice, UserIsLeaving, actions, Card);
+        }
+
+        /// <summary>Words a tool name as a button label: <c>ConfirmOrder</c> becomes <c>Confirm order</c>.</summary>
+        private static string LabelFromToolName(string toolName)
+        {
+            StringBuilder label = new StringBuilder();
+
+            for (int index = 0; index < toolName.Length; index++)
+            {
+                char current = toolName[index];
+
+                // A word starts at a capital that follows a lower-case letter or a digit, so an acronym stays one word.
+                if (index > 0 && char.IsUpper(current) && (char.IsLower(toolName[index - 1]) || char.IsDigit(toolName[index - 1])))
+                    label.Append(' ');
+
+                label.Append(index == 0 ? char.ToUpperInvariant(current) : char.ToLowerInvariant(current));
+            }
+
+            return label.ToString();
         }
 
         /// <summary>

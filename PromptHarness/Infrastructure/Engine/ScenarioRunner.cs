@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Morgana.AI;
 using Morgana.Contracts;
 using PromptHarness.Infrastructure.Reporting;
 using PromptHarness.Infrastructure.Wiring;
@@ -172,7 +173,7 @@ public sealed class ScenarioRunner
             // Only the one scenario group that means to exercise MorganaChannelAdapter opts into
             // the degraded profile; every other scenario keeps opening on the default full-capability
             // channel, unchanged from before this branch existed.
-            (string opened, ChannelMessage _) = scenario.DegradedChannel is true
+            (string opened, ChannelMessage lastReceived) = scenario.DegradedChannel is true
                 ? await channel.StartConversationAsync(timeout, HarnessChannel.DegradedCapabilities, HarnessChannel.DegradedChannelName)
                 : await channel.StartConversationAsync(timeout);
             conversationId = opened;
@@ -186,14 +187,32 @@ public sealed class ScenarioRunner
 
             foreach (TurnDefinition turnDefinition in scenario.Turns)
             {
-                string say = customerCode is null
-                    ? turnDefinition.Say
-                    : turnDefinition.Say.Replace("{{customerCode}}", customerCode, StringComparison.Ordinal);
+                string say;
+                if (turnDefinition.Press is { } pressedTool)
+                {
+                    // The button's value is written by the model at runtime, so the scenario names the tool and the run reads the value from what was offered.
+                    QuickReply? pressed = (lastReceived.QuickReplies ?? [])
+                        .FirstOrDefault(quickReply => string.Equals(Records.TurnReply.ActionTool(quickReply.Id), pressedTool, StringComparison.Ordinal));
+
+                    if (pressed is null)
+                    {
+                        // Later turns presuppose the press happened, so the run stops here like an aborted one.
+                        failures.Add($"turn {transcript.Count + 1}: no button leading to '{pressedTool}' was offered");
+                        break;
+                    }
+
+                    say = pressed.Value;
+                }
+                else
+                    say = customerCode is null
+                        ? turnDefinition.Say
+                        : turnDefinition.Say.Replace("{{customerCode}}", customerCode, StringComparison.Ordinal);
 
                 // Mark, send, then close the window: BeginTurn/CompleteTurnAsync bracket exactly
                 // the observation period this one turn's send-and-reply spans.
                 TurnScope scope = observer.BeginTurn(conversationId);
                 ChannelMessage message = await channel.SendAsync(conversationId, say, timeout);
+                lastReceived = message;
                 TurnResult turn = await observer.CompleteTurnAsync(scope, say, message);
 
                 transcript.Add(turn.Describe());

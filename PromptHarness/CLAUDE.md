@@ -31,7 +31,7 @@ project: every build setting lives in the `.csproj`, so it carries unchanged acr
 
 ## Commands
 
-Twenty-one test classes. **Never combine filters**: six groups carry a process-wide boot knob the
+Twenty-three test classes. **Never combine filters**: six groups carry a process-wide boot knob the
 others must not see and two of those five share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
@@ -47,6 +47,8 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ContextResolutionT
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~TurnClosureTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~HistoryViewTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ExecutionApprovalTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~WorkflowTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ToolContractTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~FrameworkPromptTests"
 
 # blocking

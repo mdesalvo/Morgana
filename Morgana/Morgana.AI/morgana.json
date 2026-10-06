@@ -229,6 +229,10 @@
             {
               "Name": "ToolNotAtThisStep",
               "Content": "((tool)) is not available at this step of ((workflow))."
+            },
+            {
+              "Name": "StepActionsRequired",
+              "Content": "At step ((step)) of ((workflow)) the actions are exactly ((tools)), one each."
             }
           ]
         },
@@ -240,7 +244,7 @@
             },
             {
               "Name": "Approval",
-              "Content": "Shall I go ahead?"
+              "Content": "The spell is compiled. Shall I execute?"
             },
             {
               "Name": "GenericError",

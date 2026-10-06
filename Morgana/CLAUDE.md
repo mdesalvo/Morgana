@@ -95,7 +95,8 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
-| `ChatClients/` | `IChatClient` decorators: `TierDefaultsChatClient`, `DustAccountingChatClient`, `MorganaAnthropicClient`, `ApprovalTurnChatClient` (drops `Reply` from a response asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model wrote without `Reply`: a forced tool call, structured output where the provider cannot force one) |
+| `ChatClients/` | `IChatClient` decorators: `TierDefaultsChatClient`, `DustAccountingChatClient`, `MorganaAnthropicClient`, `ApprovalTurnChatClient` (drops `Reply` from a response asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model wrote without `Reply`: a forced tool call, structured output where the provider cannot force one), `WorkflowToolsChatClient` (offers the model only the tools that a running workflow's current step allows) |
+| `Workflows/` | `WorkflowEngine`: an agent's workflows on Microsoft.Agents.AI.Workflows, rebuilt at every call from the checkpoint kept in the agent's session |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
 | `Providers/` | `MorganaAIContextProvider` (context variables plus the shared registry), `MorganaChatHistoryProvider` (stores the whole history, hands the model the current episode only — since the user last left — with earlier tool results marked) |
 | `SessionStores/` | `MorganaHostedAgentSessionStore` — which conversation an inbound A2A request is served on |
@@ -278,11 +279,12 @@ tier) and `GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
    approval buttons; pressing an action button that leads to the tool is that approval already
 5. **Or MCP** — `[UsesMCPServer(...)]`, repeatable, tools discovered at runtime
 6. **Colleagues** — `[ConsultsAgent("otherintent")]`, once each, validated at startup
-7. **Package as a plugin DLL** into `plugins/`
+7. **Workflows** (optional) — `Workflows` beside `Tools` in agents.json: ordered steps, each naming its tools, where each call leads (`Next`, `OnFailure`, `End`) and the parameters bound from an earlier step's result (`Arguments`). The agent gets `LaunchWorkflow`; the order is the framework's, so no prose restates it
+8. **Package as a plugin DLL** into `plugins/`
 
 ## Tool System
 
-Every agent gets the **base tool** `Reply` from `morgana.json` plus its domain tools.
+Every agent gets the **base tool** `Reply` from `morgana.json` plus its domain tools; an agent declaring workflows also gets `LaunchWorkflow`.
 
 A parameter resolving an *input* declares a `Scope`: `context` or `request` (asked of the user). A
 parameter carrying a value the model itself authors declares none. **A `context` parameter is the
@@ -428,7 +430,7 @@ Exporters configured under `Morgana:OpenTelemetry:Exporters`.
 
 ## Startup Validation
 
-Nine checks, each fatal, all guarding one failure shape: **a topology that validates cleanly and then
+Ten checks, each fatal, all guarding one failure shape: **a topology that validates cleanly and then
 fails or opens, silently.**
 
 1. Every configured intent has an agent and every agent an intent
@@ -441,6 +443,7 @@ fails or opens, silently.**
 7. Every admitted issuer — channel, partner and the ring alike — carries a name and a key of at least 256 bits and no name is admitted twice
 8. `ValidateTrustConfiguration`: each `Partners[]` entry names somebody once, does something, is coherent per open direction and carries a key that can sign
 9. `ValidatePublishedAddress`: `PublicUrl`, where declared, is absolute, on a bearer-carrying scheme and names one interface
+10. Every declared workflow names only tools its agent declares, links only to its own steps or `End`, reaches every step from the first and binds only fields that an earlier step's tools declare in `Returns`
 
 **Where they run matters**: a refusal is a *startup* refusal only because `Program.cs` resolves the
 configuration and registry services immediately after building the container. Left lazy, the same

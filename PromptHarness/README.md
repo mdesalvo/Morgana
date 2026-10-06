@@ -217,7 +217,7 @@ runs: 5            # default: Harness:DefaultRuns
 minPasses: 4       # default: Harness:DefaultMinPasses
 
 turns:
-  - say: "what the user types"
+  - say: "what the user types"   # or press: ConfirmOrder — sends the value of the offered action button leading to that tool
     expect:
       agent: BillingAgent
       agentCompleted: false

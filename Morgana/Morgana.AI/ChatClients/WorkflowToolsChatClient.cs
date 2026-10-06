@@ -90,7 +90,9 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
             foreach (AITool tool in tools)
             {
                 // Closing the turn and consulting a colleague belong to no step: they are always offered.
-                if (tool.Name == Constants.Tools.Reply
+                if (tool.Name == Constants.Tools.Reply && running.Value.Step.Tools.Count > 1)
+                    presented.Add(WithStepActions(tool, running.Value.Step.Tools));
+                else if (tool.Name == Constants.Tools.Reply
                     || tool.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
                     presented.Add(tool);
                 else if (tool.Name == Constants.Tools.LaunchWorkflow)
@@ -125,43 +127,80 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         if (tool is not AIFunction function)
             return tool;
 
-        JsonObject schema = JsonNode.Parse(function.JsonSchema.GetRawText())!.AsObject();
+        JsonObject schema = SchemaOf(function);
         string[] hidden = [.. boundParameters.Where(parameter => schema["properties"] is JsonObject properties && properties.ContainsKey(parameter))];
         if (hidden.Length == 0)
             return tool;
 
-        // Only a declaration reaches the model from here: the tool loop above runs the original function.
-        // The approval wrapper is put back on top because the client below recognizes a tool needing approval by it.
-        AIFunction trimmed = new SchemaTrimmedFunction(function, schema, hidden);
-        return function is ApprovalRequiredAIFunction ? new ApprovalRequiredAIFunction(trimmed) : trimmed;
+        foreach (string parameter in hidden)
+            schema["properties"]!.AsObject().Remove(parameter);
+
+        if (schema["required"] is JsonArray required)
+            schema["required"] = new JsonArray([.. required
+                .Where(name => !hidden.Contains(name!.GetValue<string>(), StringComparer.Ordinal))
+                .Select(name => name!.DeepClone())]);
+
+        return Rewritten(function, schema);
     }
 
     /// <summary>
-    /// A tool presented with some of its parameters removed from the properties and from the required list of its schema.
+    /// Turns the actions of <c>Reply</c> into the proposal of a choice step: required, one per tool of the step and each leading to one of them.
     /// </summary>
-    private sealed class SchemaTrimmedFunction : DelegatingAIFunction
+    /// <param name="reply">The <c>Reply</c> tool as the agent holds it.</param>
+    /// <param name="stepTools">The tools of the choice step, in declared order.</param>
+    private static AITool WithStepActions(AITool reply, IReadOnlyList<string> stepTools)
     {
-        /// <summary>The schema without the hidden parameters.</summary>
+        if (reply is not AIFunction function)
+            return reply;
+
+        JsonObject schema = SchemaOf(function);
+        JsonObject actions = schema["properties"]!["actions"]!.AsObject();
+
+        // A null in the place of the array would leave the step with no button, so the type is narrowed to the array.
+        actions["type"] = "array";
+        actions.Remove("default");
+        actions["minItems"] = stepTools.Count;
+        actions["maxItems"] = stepTools.Count;
+        actions["items"]!["properties"]!["tool"]!.AsObject()["enum"] = new JsonArray([.. stepTools.Select(tool => (JsonNode)JsonValue.Create(tool)!)]);
+
+        JsonArray required = schema["required"] as JsonArray ?? [];
+        if (!required.Any(name => name!.GetValue<string>() == "actions"))
+            required.Add("actions");
+        schema["required"] = required;
+
+        return Rewritten(function, schema);
+    }
+
+    /// <summary>The schema of a tool, parsed for editing.</summary>
+    private static JsonObject SchemaOf(AIFunction function)
+        => JsonNode.Parse(function.JsonSchema.GetRawText())!.AsObject();
+
+    /// <summary>
+    /// Presents a tool under an edited schema.
+    /// </summary>
+    private static AITool Rewritten(AIFunction function, JsonObject schema)
+    {
+        // Only a declaration reaches the model from here: the tool loop above runs the original function.
+        // The approval wrapper is put back on top because the client below recognizes a tool needing approval by it.
+        AIFunction rewritten = new SchemaRewrittenFunction(function, schema);
+        return function is ApprovalRequiredAIFunction ? new ApprovalRequiredAIFunction(rewritten) : rewritten;
+    }
+
+    /// <summary>
+    /// A tool presented under a schema edited for the current step.
+    /// </summary>
+    private sealed class SchemaRewrittenFunction : DelegatingAIFunction
+    {
+        /// <summary>The schema as edited.</summary>
         private readonly JsonElement jsonSchema;
 
         /// <summary>
         /// Wraps a tool of the current step.
         /// </summary>
         /// <param name="innerFunction">The tool as the agent holds it.</param>
-        /// <param name="schema">The tool's schema, parsed for editing.</param>
-        /// <param name="hidden">The parameters to remove.</param>
-        public SchemaTrimmedFunction(AIFunction innerFunction, JsonObject schema, IReadOnlyCollection<string> hidden) : base(innerFunction)
-        {
-            foreach (string parameter in hidden)
-                schema["properties"]!.AsObject().Remove(parameter);
-
-            if (schema["required"] is JsonArray required)
-                schema["required"] = new JsonArray([.. required
-                    .Where(name => !hidden.Contains(name!.GetValue<string>(), StringComparer.Ordinal))
-                    .Select(name => name!.DeepClone())]);
-
-            jsonSchema = JsonSerializer.SerializeToElement(schema);
-        }
+        /// <param name="schema">The edited schema that the model reads.</param>
+        public SchemaRewrittenFunction(AIFunction innerFunction, JsonObject schema) : base(innerFunction)
+            => jsonSchema = JsonSerializer.SerializeToElement(schema);
 
         /// <inheritdoc />
         public override JsonElement JsonSchema => jsonSchema;

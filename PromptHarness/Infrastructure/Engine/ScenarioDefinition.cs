@@ -54,8 +54,11 @@ public sealed class ScenarioDefinition
 /// <summary>A single user turn and its expectations.</summary>
 public sealed class TurnDefinition
 {
-    /// <summary>What the user says.</summary>
+    /// <summary>What the user says. Exactly one of <c>say:</c> and <c>press:</c> is set.</summary>
     public string Say { get; init; } = string.Empty;
+
+    /// <summary>The name of the tool whose offered action button this turn presses instead of typing.</summary>
+    public string? Press { get; init; }
 
     /// <summary>Structural expectations, evaluated deterministically. Optional.</summary>
     public ExpectSpec? Expect { get; init; }
@@ -225,6 +228,18 @@ public static class ScenarioLoader
         // A YAML file that parses but never sets "id:" would otherwise silently produce a
         // ScenarioDefinition whose Id doesn't round-trip back to the file it came from — every
         // failure message and harness row keys off Id, so this catches the gap at load time.
-        return string.IsNullOrWhiteSpace(scenario.Id) ? throw new InvalidOperationException($"Scenario file {path} declares no id.") : scenario;
+        if (string.IsNullOrWhiteSpace(scenario.Id))
+            throw new InvalidOperationException($"Scenario file {path} declares no id.");
+
+        // A turn that says and presses acts twice and one that does neither acts not at all: both are a typo caught before any paid run.
+        for (int turnIndex = 0; turnIndex < scenario.Turns.Count; turnIndex++)
+        {
+            bool says = !string.IsNullOrWhiteSpace(scenario.Turns[turnIndex].Say);
+            bool presses = !string.IsNullOrWhiteSpace(scenario.Turns[turnIndex].Press);
+            if (says == presses)
+                throw new InvalidOperationException($"Scenario file {path}: turn {turnIndex + 1} must declare exactly one of 'say' and 'press'.");
+        }
+
+        return scenario;
     }
 }
