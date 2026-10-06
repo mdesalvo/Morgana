@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using A2A;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.A2A;
@@ -13,6 +14,7 @@ using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 using Morgana.AI.Services;
+using Morgana.AI.Workflows;
 
 namespace Morgana.AI.Adapters;
 
@@ -95,6 +97,12 @@ public class MorganaAgentAdapter
     protected readonly Records.ToolDefinition[] morganaTools;
 
     /// <summary>
+    /// The morgana.json definition of <c>LaunchWorkflow</c>, kept apart from the base tools: it has no
+    /// method to bind and is built per agent, only for an agent that declares a workflow.
+    /// </summary>
+    protected readonly Records.ToolDefinition? launchWorkflowTool;
+
+    /// <summary>
     /// Assembles the framework prose the agent's model reads: the composed system prompt, the
     /// colleagues declaration and each colleague's description.
     /// </summary>
@@ -139,8 +147,11 @@ public class MorganaAgentAdapter
 
         morganaPrompt = promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
 
-        morganaTools = [.. morganaPrompt.GetAdditionalProperty<Records.ToolDefinition[]>(Constants.PromptProperties.Tools)
+        Records.ToolDefinition[] frameworkTools = [.. morganaPrompt.GetAdditionalProperty<Records.ToolDefinition[]>(Constants.PromptProperties.Tools)
             .Select(t => t with { Reserved = true })];
+
+        launchWorkflowTool = frameworkTools.FirstOrDefault(t => t.Name == Constants.Tools.LaunchWorkflow);
+        morganaTools = [.. frameworkTools.Where(t => t.Name != Constants.Tools.LaunchWorkflow)];
     }
 
     /// <summary>
@@ -239,6 +250,19 @@ public class MorganaAgentAdapter
         // action may lead to, so an action naming anything else is discarded.
         List<string> actionableToolNames = [];
 
+        // The agent's workflows, whose engine is built here and whose position lives in the session. An agent
+        // declaring none carries no workflow machinery at all.
+        Records.WorkflowDefinition[] workflowDefinitions = agentPrompt.GetAdditionalPropertyOrDefault<Records.WorkflowDefinition[]>(
+            Constants.PromptProperties.Workflows, []);
+        AgentWorkflows? agentWorkflows = workflowDefinitions.Length == 0
+            ? null
+            : new AgentWorkflows(
+                new WorkflowEngine(workflowDefinitions),
+                workflowDefinitions,
+                domainTools.GroupBy(tool => tool.Name, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal),
+                morganaAIContextProvider,
+                sessionAccessor);
+
         Func<MorganaTool.ToolContext> toolContextFactory = () =>
         {
             AgentSession session = sessionAccessor()
@@ -246,7 +270,13 @@ public class MorganaAgentAdapter
                     $"Agent '{intentAttribute.Intent}' has no active session during tool execution. " +
                     $"Ensure ExecuteAgentAsync sets aiAgentSession before invoking the agent.");
 
-            return new MorganaTool.ToolContext(morganaAIContextProvider, session, conversationId, actionableToolNames);
+            // Inside a workflow a button may only lead to a tool of the step the workflow stands at.
+            IReadOnlyCollection<string> actionable = agentWorkflows is not null
+                && morganaAIContextProvider.GetWorkflowPosition(session)?.Resolve(workflowDefinitions) is { } running
+                    ? running.Step.Tools
+                    : actionableToolNames;
+
+            return new MorganaTool.ToolContext(morganaAIContextProvider, session, conversationId, actionable);
         };
 
         // 6a) Bind the declared tools to their delegates (native MorganaTool methods), then
@@ -312,9 +342,11 @@ public class MorganaAgentAdapter
         // fails as tersely as before, keeping a domain tool's internals out of the model's sight.
         // Below the loop, a response asking for the user's approval loses its Reply: that turn is the
         // framework's to close, with the approval buttons.
-        FunctionInvokingChatClient toolLoopChatClient = new FunctionInvokingChatClient(new ApprovalTurnChatClient(agentChatClient))
+        // Between the loop and the approval client, the tools that the workflow state allows are what the model is offered.
+        FunctionInvokingChatClient toolLoopChatClient = new FunctionInvokingChatClient(
+            new WorkflowToolsChatClient(new ApprovalTurnChatClient(agentChatClient), sessionAccessor, morganaAIContextProvider, workflowDefinitions))
         {
-            FunctionInvoker = InvokeToolAsync
+            FunctionInvoker = (context, cancellationToken) => InvokeToolAsync(context, agentWorkflows, cancellationToken)
         };
 
         // Above the loop, where a whole turn is visible: a turn that the model wrote without Reply is
@@ -325,6 +357,11 @@ public class MorganaAgentAdapter
             await promptComposerService.ComposeToolResultAsync(Constants.ToolResults.TurnClosed),
             llmService.CanForceToolCall,
             logger);
+
+        // LaunchWorkflow is built for this agent and only when it declares a workflow to launch.
+        List<AIFunction> launchWorkflowFunctions = agentWorkflows is not null && launchWorkflowTool is not null
+            ? [await CreateLaunchWorkflowFunctionAsync(launchWorkflowTool, agentWorkflows)]
+            : [];
 
         AIAgent aiAgent = turnClosingChatClient.AsAIAgent(
             new ChatClientAgentOptions
@@ -351,7 +388,7 @@ public class MorganaAgentAdapter
                         // whole a colleague's question can land on it at any turn.
                         PeerConsultationEnabled,
                         peerTerritories),
-                    Tools = [.. await morganaToolAdapter.CreateAllFunctionsAsync(), .. mcpTools, .. peerAgents]
+                    Tools = [.. await morganaToolAdapter.CreateAllFunctionsAsync(), .. mcpTools, .. peerAgents, .. launchWorkflowFunctions]
                 }
             });
 
@@ -364,10 +401,47 @@ public class MorganaAgentAdapter
     /// <summary>
     /// Runs one tool call of the agent's loop, turning a refused Reply — arguments breaking their
     /// schema, a card too large, a turn not yet written — into the framework's answer for that event.
+    /// Inside a workflow it also holds the call to the current step, binds what the step binds and
+    /// feeds the result to the engine.
     /// </summary>
-    private async ValueTask<object?> InvokeToolAsync(FunctionInvocationContext context, CancellationToken cancellationToken)
+    /// <param name="context">The call that the tool loop is about to run.</param>
+    /// <param name="workflows">The agent's workflow machinery; <c>null</c> for an agent declaring none.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    private async ValueTask<object?> InvokeToolAsync(FunctionInvocationContext context, AgentWorkflows? workflows, CancellationToken cancellationToken)
     {
         bool isReply = string.Equals(context.Function.Name, Constants.Tools.Reply, StringComparison.Ordinal);
+
+        // Before anything else: a tool that the workflow hides is not run, whatever the model was shown.
+        AgentSession? session = workflows is null || isReply ? null : workflows.SessionAccessor();
+        Records.WorkflowPosition? position = session is null ? null : workflows!.ContextProvider.GetWorkflowPosition(session);
+        (Records.WorkflowDefinition Definition, Records.WorkflowStep Step)? running = position?.Resolve(workflows!.Definitions);
+        bool isCurrentStepTool = false;
+
+        if (running is { } active)
+        {
+            string toolName = context.Function.Name;
+            HashSet<string> signature = active.Definition.ToolSignature();
+            isCurrentStepTool = active.Step.Tools.Contains(toolName);
+
+            // A colleague is consulted at any step: it is a private method of the workflow, never part of it.
+            bool isHidden = !toolName.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal)
+                && !isCurrentStepTool
+                && (toolName == Constants.Tools.LaunchWorkflow
+                    || signature.Contains(toolName)
+                    || (workflows!.Tools.TryGetValue(toolName, out Records.ToolDefinition? declared) && declared.RequiresExecutionApproval));
+
+            if (isHidden)
+            {
+                logger.LogWarning("Agent called '{Tool}', which workflow '{Workflow}' does not offer at its step '{Step}'", toolName, active.Definition.Name, active.Step.Name);
+                return await promptComposerService.ComposeToolResultAsync(
+                    Constants.ToolResults.ToolNotAtThisStep,
+                    ToolNotAtThisStepValues(toolName, active.Definition.Name));
+            }
+
+            if (isCurrentStepTool)
+                BindStepArguments(context, position!);
+        }
+
         object? result;
         try
         {
@@ -380,9 +454,12 @@ public class MorganaAgentAdapter
             return await promptComposerService.ComposeReplyNotAcceptedAsync(ex.Message);
         }
 
-        // Anything but a framework tool's named result reaches the model as the tool returned it.
+        // Anything but a framework tool's named result reaches the model as the tool returned it, a
+        // current-step tool's one under the label of where the workflow stands now.
         if (result is not Records.FrameworkToolResult named)
-            return result;
+            return isCurrentStepTool
+                ? await AdvanceWorkflowAsync(context.Function.Name, workflows!, session!, position!, running!.Value.Definition.Name, result)
+                : result;
 
         string text = await promptComposerService.ComposeToolResultAsync(named.Name, named.Values);
         if (!isReply || named.Name == Constants.ToolResults.TurnClosed)
@@ -391,6 +468,150 @@ public class MorganaAgentAdapter
         // The turn stays open: the model reads why and closes again without narrating it to the user.
         logger.LogWarning("Reply refused: {Reason}", text);
         return await promptComposerService.ComposeReplyNotAcceptedAsync(text);
+    }
+
+    /// <summary>
+    /// Writes the parameters that the current step binds into the call, over whatever the model passed for them.
+    /// </summary>
+    private static void BindStepArguments(FunctionInvocationContext context, Records.WorkflowPosition position)
+    {
+        // Only a parameter the tool has: a step binds for all its tools, which do not all take every one.
+        JsonElement schema = context.Function.JsonSchema;
+        if (!schema.TryGetProperty("properties", out JsonElement properties))
+            return;
+
+        foreach ((string parameter, string valueJson) in position.Arguments)
+        {
+            if (properties.TryGetProperty(parameter, out _))
+                context.Arguments[parameter] = JsonDocument.Parse(valueJson).RootElement.Clone();
+        }
+    }
+
+    /// <summary>
+    /// Hands the result of a current-step tool to the engine and stores where the workflow stands afterwards.
+    /// </summary>
+    /// <returns>The result as the model reads it: under the label of the step reached or of the end.</returns>
+    private async Task<object?> AdvanceWorkflowAsync(
+        string toolName,
+        AgentWorkflows workflows,
+        AgentSession session,
+        Records.WorkflowPosition position,
+        string workflowName,
+        object? result)
+    {
+        string resultJson = result switch
+        {
+            string text => text,
+            JsonElement element => element.GetRawText(),
+            _ => JsonSerializer.Serialize(result)
+        };
+
+        // The call failed when the tool's failure field holds a value; a tool declaring none, an MCP tool
+        // included, never fails.
+        string? failureField = workflows.Tools.TryGetValue(toolName, out Records.ToolDefinition? declared)
+            ? declared.Returns?.FirstOrDefault(field => field.Failure)?.Name
+            : null;
+        bool failed = failureField is not null && WorkflowEngine.ReadField(resultJson, failureField) is not null;
+
+        Records.WorkflowPosition? next;
+        try
+        {
+            next = await workflows.Engine.AdvanceAsync(position, new Records.StepOutcome(toolName, failed, resultJson));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The tool has already done its work: a position that the engine cannot advance would pin the
+            // agent to one step for good, so the workflow is dropped and the result stands as it is.
+            logger.LogError(ex, "Workflow '{Workflow}' could not advance from step '{Step}' after '{Tool}': it is dropped", workflowName, position.Step, toolName);
+            workflows.ContextProvider.DropWorkflowPosition(session);
+            return result;
+        }
+
+        if (next is null)
+            workflows.ContextProvider.DropWorkflowPosition(session);
+        else
+            workflows.ContextProvider.SetWorkflowPosition(session, next);
+
+        return await promptComposerService.ComposeWorkflowResultAsync(workflowName, next?.Step, resultJson) ?? result;
+    }
+
+    /// <summary>The values of <see cref="Constants.ToolResults.ToolNotAtThisStep"/>.</summary>
+    private static Dictionary<string, string> ToolNotAtThisStepValues(string toolName, string workflowName)
+        => new()
+        {
+            [Constants.Placeholders.ToolName] = toolName,
+            [Constants.Placeholders.Workflow] = workflowName
+        };
+
+    /// <summary>
+    /// Builds <c>LaunchWorkflow</c> for one agent: a single required <c>workflow</c> parameter, an enum of
+    /// the agent's workflow names, each described beside its name.
+    /// </summary>
+    /// <param name="definition">The tool as morgana.json declares it.</param>
+    /// <param name="workflows">The agent's workflow machinery.</param>
+    private async Task<AIFunction> CreateLaunchWorkflowFunctionAsync(Records.ToolDefinition definition, AgentWorkflows workflows)
+    {
+        string parameterDescription = definition.Parameters
+            .FirstOrDefault(parameter => parameter.Name == Constants.Workflows.WorkflowParameter)?.Description ?? string.Empty;
+
+        JsonObject schema = new()
+        {
+            ["type"] = "object",
+            ["properties"] = new JsonObject
+            {
+                [Constants.Workflows.WorkflowParameter] = new JsonObject
+                {
+                    ["type"] = "string",
+                    ["enum"] = new JsonArray([.. workflows.Definitions.Select(workflow => (JsonNode)JsonValue.Create(workflow.Name)!)]),
+                    ["description"] = string.Join('\n', [parameterDescription, .. workflows.Definitions.Select(workflow => $"{workflow.Name}: {workflow.Description}")])
+                }
+            },
+            ["required"] = new JsonArray(JsonValue.Create(Constants.Workflows.WorkflowParameter)),
+            ["additionalProperties"] = false
+        };
+
+        string description = await promptComposerService.ComposeToolDescriptionAsync(definition);
+
+        return new LaunchWorkflowFunction(description, JsonSerializer.SerializeToElement(schema), arguments => LaunchWorkflowAsync(arguments, workflows));
+    }
+
+    /// <summary>
+    /// Starts the workflow the model named and stores where it stands, unless the call is not one that may open a workflow.
+    /// </summary>
+    private async ValueTask<object?> LaunchWorkflowAsync(AIFunctionArguments arguments, AgentWorkflows workflows)
+    {
+        AgentSession session = workflows.SessionAccessor()
+            ?? throw new InvalidOperationException("LaunchWorkflow was called with no active session");
+
+        string requested = arguments.TryGetValue(Constants.Workflows.WorkflowParameter, out object? argument)
+            ? argument switch
+            {
+                JsonElement { ValueKind: JsonValueKind.String } element => element.GetString() ?? string.Empty,
+                _ => Convert.ToString(argument, CultureInfo.InvariantCulture) ?? string.Empty
+            }
+            : string.Empty;
+
+        Records.WorkflowDefinition? definition = workflows.Definitions.FirstOrDefault(
+            candidate => string.Equals(candidate.Name, requested, StringComparison.Ordinal));
+        Records.WorkflowPosition? running = workflows.ContextProvider.GetWorkflowPosition(session);
+        bool servingConsultation = workflows.ContextProvider.GetVariable(session, Constants.ContextKeys.ServingConsultation) is not null;
+
+        // One workflow at a time and never for a colleague: the call changes nothing and is told so.
+        // A stored position that no declaration serves any more does not count as a workflow running.
+        bool isRunning = running?.Resolve(workflows.Definitions) is not null;
+        if (definition is null || isRunning || servingConsultation)
+            return new Records.FrameworkToolResult(
+                Constants.ToolResults.ToolNotAtThisStep,
+                ToolNotAtThisStepValues(Constants.Tools.LaunchWorkflow, isRunning ? running!.Workflow : requested));
+
+        Records.WorkflowPosition position = await workflows.Engine.LaunchAsync(definition.Name);
+        workflows.ContextProvider.SetWorkflowPosition(session, position);
+
+        return new Records.FrameworkToolResult(Constants.ToolResults.WorkflowStarted, new Dictionary<string, string>
+        {
+            [Constants.Placeholders.Workflow] = definition.Name,
+            [Constants.Placeholders.Step] = position.Step
+        });
     }
 
     /// <summary>
@@ -993,6 +1214,41 @@ public class MorganaAgentAdapter
         logger.LogInformation("Successfully registered {McpToolsCount} MCP tools from {ServerAttributeCommand}", mcpTools.Count, serverAttribute.Command);
 
         return [.. mcpTools];
+    }
+
+    /// <summary>
+    /// What one agent that declares workflows holds to run them: the engine, the declarations and the session
+    /// that the position is kept in.
+    /// </summary>
+    /// <param name="Engine">The state machine of the agent's workflows.</param>
+    /// <param name="Definitions">The workflows the agent declares.</param>
+    /// <param name="Tools">The agent's domain tools by name, which say which need approval and which field marks a failure.</param>
+    /// <param name="ContextProvider">The store the position is written to.</param>
+    /// <param name="SessionAccessor">Returns the agent's current session.</param>
+    private sealed record AgentWorkflows(
+        WorkflowEngine Engine,
+        IReadOnlyList<Records.WorkflowDefinition> Definitions,
+        IReadOnlyDictionary<string, Records.ToolDefinition> Tools,
+        MorganaAIContextProvider ContextProvider,
+        Func<AgentSession?> SessionAccessor);
+
+    /// <summary>
+    /// <c>LaunchWorkflow</c>: a function whose schema is built by code, which a method signature cannot express as an enum of the agent's own names.
+    /// </summary>
+    private sealed class LaunchWorkflowFunction(string description, JsonElement jsonSchema, Func<AIFunctionArguments, ValueTask<object?>> launch) : AIFunction
+    {
+        /// <inheritdoc />
+        public override string Name => Constants.Tools.LaunchWorkflow;
+
+        /// <inheritdoc />
+        public override string Description => description;
+
+        /// <inheritdoc />
+        public override JsonElement JsonSchema => jsonSchema;
+
+        /// <inheritdoc />
+        protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+            => launch(arguments);
     }
 
     private class ToolDefinitionNameComparer : IEqualityComparer<Records.ToolDefinition>

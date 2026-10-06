@@ -220,6 +220,23 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
+    public async Task<string?> ComposeWorkflowResultAsync(string workflow, string? step, string result)
+    {
+        FrameworkLayer framework = await frameworkLayer.Value;
+        string template = Records.Injection.ResolveTemplate(
+            framework.Injections,
+            step is null ? Constants.Injections.WorkflowEnded : Constants.Injections.WorkflowStepReached);
+
+        // The result is spliced last: it is the tool's text and is never read for placeholders of this layer.
+        return template.Length == 0
+            ? null
+            : template
+                .Replace(Constants.Placeholders.Workflow, workflow, StringComparison.Ordinal)
+                .Replace(Constants.Placeholders.Step, step ?? string.Empty, StringComparison.Ordinal)
+                .Replace(Constants.Placeholders.EarlierToolResultContent, result, StringComparison.Ordinal);
+    }
+
+    /// <inheritdoc />
     public async Task<string> ComposeToolResultAsync(string name, IReadOnlyDictionary<string, string>? values = null)
         => Records.ToolResult.Resolve((await frameworkLayer.Value).ToolResults, name, values);
 

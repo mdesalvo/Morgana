@@ -1188,6 +1188,100 @@ public static class Records
         bool Failure = false);
 
     // ==========================================================================
+    // WORKFLOWS
+    // ==========================================================================
+
+    /// <summary>
+    /// A procedure of one agent whose steps are kept in order by the framework: declared in agents.json
+    /// beside the agent's tools and run by the workflow engine.
+    /// </summary>
+    /// <param name="Name">What the model passes to <c>LaunchWorkflow</c> to start it; unique per agent.</param>
+    /// <param name="Description">What the procedure does, offered to the model beside its name.</param>
+    /// <param name="Steps">The steps of the procedure; the first one is where it starts.</param>
+    public record WorkflowDefinition(
+        string Name,
+        string Description,
+        IReadOnlyList<WorkflowStep> Steps)
+    {
+        /// <summary>Every tool that a step of the workflow names.</summary>
+        public HashSet<string> ToolSignature()
+            => [.. (Steps ?? []).SelectMany(step => step.Tools ?? [])];
+    }
+
+    /// <summary>
+    /// One step of a workflow: the tools the agent may call while the workflow stands at it and where each
+    /// call leads.
+    /// </summary>
+    /// <param name="Name">Unique within the workflow and never the reserved <see cref="Constants.Workflows.End"/>.</param>
+    /// <param name="Tools">The tools offered at this step; with several, the tool called decides the branch.</param>
+    /// <param name="Next">Tool name to the step reached when its call succeeds, or <c>End</c>.</param>
+    /// <param name="OnFailure">Tool name to the step reached when its call fails; a tool absent here ends the workflow on its failure.</param>
+    /// <param name="Arguments">Parameter name to <c>Step.field</c>, the field of an earlier step's result that the framework fills in.</param>
+    public record WorkflowStep(
+        string Name,
+        IReadOnlyList<string> Tools,
+        IReadOnlyDictionary<string, string> Next,
+        IReadOnlyDictionary<string, string>? OnFailure = null,
+        IReadOnlyDictionary<string, string>? Arguments = null)
+    {
+        /// <summary>The links that a call leads along: the failure ones or the success ones, empty where none is declared.</summary>
+        /// <param name="failed">Whether the call failed.</param>
+        public IReadOnlyDictionary<string, string> Links(bool failed)
+            => (failed ? OnFailure : Next) ?? new Dictionary<string, string>();
+
+        /// <summary>The parameters that the framework binds at this step, empty where none is declared.</summary>
+        public IReadOnlyDictionary<string, string> BoundArguments()
+            => Arguments ?? new Dictionary<string, string>();
+    }
+
+    /// <summary>
+    /// What the engine asks of the agent at a step: the step itself and the parameters already bound for it.
+    /// </summary>
+    /// <param name="Step">The step the workflow has reached.</param>
+    /// <param name="Arguments">Parameter name to the JSON text of the value the framework binds.</param>
+    public record StepPrompt(
+        string Step,
+        IReadOnlyDictionary<string, string> Arguments);
+
+    /// <summary>
+    /// What the agent answers at a step: the tool it called and how that call ended.
+    /// </summary>
+    /// <param name="Tool">The tool that was called.</param>
+    /// <param name="Failed">True when the result held a value in the tool's failure field.</param>
+    /// <param name="ResultJson">The tool's result as the JSON text the model read.</param>
+    public record StepOutcome(
+        string Tool,
+        bool Failed,
+        string ResultJson);
+
+    /// <summary>
+    /// Where a running workflow stands, kept in the agent's session so that it survives the turn and a restart.
+    /// </summary>
+    /// <param name="Workflow">The workflow that runs.</param>
+    /// <param name="Step">The step it stands at.</param>
+    /// <param name="Arguments">Parameter name to the JSON text of the value bound for this step.</param>
+    /// <param name="Checkpoint">The latest checkpoint of the engine, from which every call rebuilds it.</param>
+    public record WorkflowPosition(
+        string Workflow,
+        string Step,
+        IReadOnlyDictionary<string, string> Arguments,
+        string Checkpoint)
+    {
+        /// <summary>
+        /// Finds the workflow and the step this position names among the agent's declarations.
+        /// </summary>
+        /// <param name="workflows">The workflows the agent declares.</param>
+        /// <returns>Both of them; <c>null</c> when the declarations no longer hold either, which is a position nothing can serve.</returns>
+        public (WorkflowDefinition Definition, WorkflowStep Step)? Resolve(IEnumerable<WorkflowDefinition> workflows)
+        {
+            WorkflowDefinition? definition = workflows.FirstOrDefault(candidate => string.Equals(candidate.Name, Workflow, StringComparison.Ordinal));
+            WorkflowStep? step = definition?.Steps.FirstOrDefault(candidate => string.Equals(candidate.Name, Step, StringComparison.Ordinal));
+
+            return definition is null || step is null ? null : (definition, step);
+        }
+    }
+
+    // ==========================================================================
     // TURN CLOSURE
     // ==========================================================================
 

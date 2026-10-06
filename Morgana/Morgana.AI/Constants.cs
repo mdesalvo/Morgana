@@ -119,6 +119,12 @@ public static class Constants
 
         /// <summary>Wraps a tool result of an earlier turn, as the model reads it back in its history.</summary>
         public const string EarlierToolResult = "EarlierToolResult";
+
+        /// <summary>Wraps the result of a workflow tool that left the workflow standing at a step.</summary>
+        public const string WorkflowStepReached = "WorkflowStepReached";
+
+        /// <summary>Wraps the result of the workflow tool that ended the workflow.</summary>
+        public const string WorkflowEnded = "WorkflowEnded";
     }
 
     /// <summary>
@@ -151,6 +157,9 @@ public static class Constants
         /// so it is authored beside the vocabulary it closes rather than in any plugin.
         /// </summary>
         public const string ComplementIntentDescription = "ComplementIntentDescription";
+
+        /// <summary>The procedures an agent declares beside its tools, whose steps the framework keeps in order.</summary>
+        public const string Workflows = "Workflows";
     }
 
     /// <summary>
@@ -284,6 +293,12 @@ public static class Constants
 
         /// <summary>A published agent failed while answering.</summary>
         public const string PeerFailed = "PeerFailed";
+
+        /// <summary>LaunchWorkflow started a workflow.</summary>
+        public const string WorkflowStarted = "WorkflowStarted";
+
+        /// <summary>A tool was called that the running workflow does not offer at its current step.</summary>
+        public const string ToolNotAtThisStep = "ToolNotAtThisStep";
     }
 
     /// <summary>
@@ -294,12 +309,27 @@ public static class Constants
     {
         /// <summary>Closes the agent's turn: whether it awaits the user, the actions that it offers and its card.</summary>
         public const string Reply = "Reply";
+
+        /// <summary>Starts one of the agent's workflows; offered only to an agent that declares one.</summary>
+        public const string LaunchWorkflow = "LaunchWorkflow";
     }
 
     /// <summary>
-    /// The framework's own context keys: ephemeral, one turn long and machinery rather than knowledge
-    /// about the user, so no tool parameter is ever resolved from them. Written
-    /// by a base tool or by the consultation guards, read and dropped by the agent at end of turn.
+    /// What a workflow declaration and its launch tool agree on across agents.json and morgana.json.
+    /// </summary>
+    public static class Workflows
+    {
+        /// <summary>The step target that closes the workflow as concluded; no step may bear this name.</summary>
+        public const string End = "End";
+
+        /// <summary>The parameter of <see cref="Tools.LaunchWorkflow"/> that names the workflow to start.</summary>
+        public const string WorkflowParameter = "workflow";
+    }
+
+    /// <summary>
+    /// The framework's own context keys: machinery rather than knowledge about the user, so no tool
+    /// parameter is ever resolved from them. Written by a base tool or by the consultation guards and
+    /// dropped by the agent at end of turn; <see cref="WorkflowPosition"/> alone outlives the turn.
     /// </summary>
     public static class ContextKeys
     {
@@ -311,6 +341,12 @@ public static class Constants
 
         /// <summary>Counts the consultations spent on one user turn, against the configured cap.</summary>
         public const string ConsultationRounds = "peer_consultation_rounds";
+
+        /// <summary>
+        /// Where the running workflow stands. Unlike its siblings it is not one turn long: it lasts until the
+        /// workflow ends or the user leaves, so no end-of-turn drop may touch it.
+        /// </summary>
+        public const string WorkflowPosition = "workflow_position";
     }
 
     /// <summary>
@@ -399,7 +435,13 @@ public static class Constants
         /// <summary>In the colleague fallbacks — the intent of the colleague that did not answer.</summary>
         public const string AgentIntent = "((agent))";
 
-        /// <summary>In <see cref="Injections.EarlierToolResult"/> — the result as the tool returned it.</summary>
+        /// <summary>In the workflow texts — the workflow that the text is about.</summary>
+        public const string Workflow = "((workflow))";
+
+        /// <summary>In the workflow texts — the step at which the workflow stands.</summary>
+        public const string Step = "((step))";
+
+        /// <summary>In <see cref="Injections.EarlierToolResult"/> and the workflow injections — the result as the tool returned it.</summary>
         public const string EarlierToolResultContent = "((result))";
 
         /// <summary>In <see cref="Injections.ReplyNotAccepted"/> — why the closure was refused.</summary>

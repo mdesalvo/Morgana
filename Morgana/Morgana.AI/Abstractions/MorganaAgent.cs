@@ -438,6 +438,11 @@ public class MorganaAgent : MorganaActor
                                           ?? new Records.TurnReply(Records.AwaitedFromUser.Nothing, false, [], null);
             aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnReply);
 
+            // A user who leaves abandons the workflow where it stands, undoing nothing. Silence, a disconnection
+            // or a restart leave it in place, so the next message resumes at the pending step.
+            if (turnReply.UserIsLeaving)
+                aiContextProvider.DropWorkflowPosition(aiAgentSession);
+
             // A turn waiting for an approval offers exactly the two answers to it; any other turn gets the
             // buttons its closure calls for.
             (List<QuickReply>? quickReplies, bool isCompleted) = awaitsApproval

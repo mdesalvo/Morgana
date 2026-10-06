@@ -127,6 +127,50 @@ public class MorganaAIContextProvider : AIContextProvider
     }
 
     /// <summary>
+    /// Reads where the running workflow stands; <c>null</c> when none runs.
+    /// </summary>
+    /// <remarks>
+    /// Read without the per-variable access line: the position carries the engine's whole checkpoint and
+    /// the model-call filter reads it before every call.
+    /// </remarks>
+    public Records.WorkflowPosition? GetWorkflowPosition(AgentSession session)
+    {
+        if (!sessionState.GetOrInitializeState(session).Variables.TryGetValue(Constants.ContextKeys.WorkflowPosition, out object? stored))
+            return null;
+
+        // Written this process lifetime it is the string stored below; restored from a saved session it is JSON.
+        string? positionJson = stored switch
+        {
+            string text => text,
+            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
+            _ => null
+        };
+
+        return string.IsNullOrEmpty(positionJson)
+            ? null
+            : JsonSerializer.Deserialize<Records.WorkflowPosition>(positionJson, Records.DefaultJsonSerializerOptions);
+    }
+
+    /// <summary>
+    /// Stores where the running workflow stands, so that it is persisted and encrypted with the agent's row.
+    /// </summary>
+    public void SetWorkflowPosition(AgentSession session, Records.WorkflowPosition position)
+    {
+        MorganaContextState contextState = sessionState.GetOrInitializeState(session);
+        contextState.Variables[Constants.ContextKeys.WorkflowPosition] = JsonSerializer.Serialize(position, Records.DefaultJsonSerializerOptions);
+        sessionState.SaveState(session, contextState);
+
+        logger.LogInformation(
+            "{MorganaAiContextProviderName} workflow '{Workflow}' stands at step '{Step}'", nameof(MorganaAIContextProvider), position.Workflow, position.Step);
+    }
+
+    /// <summary>
+    /// Forgets the running workflow, which ended or was abandoned.
+    /// </summary>
+    public void DropWorkflowPosition(AgentSession session)
+        => DropVariable(session, Constants.ContextKeys.WorkflowPosition);
+
+    /// <summary>
     /// Merges shared context variables received from a sibling agent.
     /// Applies first-write-wins: variables already present in local context are not overwritten.
     /// </summary>

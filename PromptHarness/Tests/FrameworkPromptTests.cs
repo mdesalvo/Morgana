@@ -29,13 +29,13 @@ public sealed class FrameworkPromptTests
         Records.Prompt morgana = await resolver.ResolveAsync("Morgana");
 
         Assert.NotEmpty(morgana.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies"));
-        Assert.Equal(["Reply"], morgana.GetAdditionalProperty<List<Records.ToolDefinition>>("Tools").Select(tool => tool.Name));
+        Assert.Equal(["Reply", "LaunchWorkflow"], morgana.GetAdditionalProperty<List<Records.ToolDefinition>>("Tools").Select(tool => tool.Name));
 
         string[] injections = [.. morgana.GetAdditionalProperty<List<Records.Injection>>("Injections").Select(injection => injection.Name)];
         Assert.Equivalent(new[]
         {
             "ColleaguesDeclaration", "PeerConsultationDeclaration", "PeerConsultationGuardrail", "TurnClosureRequest",
-            "ReplyNotAccepted", "EarlierToolResult", "ExecutionApprovalGuidance"
+            "ReplyNotAccepted", "EarlierToolResult", "ExecutionApprovalGuidance", "WorkflowStepReached", "WorkflowEnded"
         }, injections);
     }
 
@@ -48,7 +48,8 @@ public sealed class FrameworkPromptTests
         Assert.Equivalent(new[]
         {
             "TurnClosed", "ContextValueMissing", "ReplyWithoutText", "CardTooDeep", "CardTooLarge", "ConsultationChained",
-            "ConsultationRoundsExhausted", "ColleagueCouldNotAnswer", "PeerAtCapacity", "PeerOutOfBudget", "PeerTimedOut", "PeerFailed"
+            "ConsultationRoundsExhausted", "ColleagueCouldNotAnswer", "PeerAtCapacity", "PeerOutOfBudget", "PeerTimedOut", "PeerFailed",
+            "WorkflowStarted", "ToolNotAtThisStep"
         }, toolResults);
     }
 

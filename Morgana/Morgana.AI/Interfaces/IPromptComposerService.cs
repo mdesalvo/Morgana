@@ -91,6 +91,15 @@ public interface IPromptComposerService
     Task<string?> ComposeEarlierToolResultAsync(string result);
 
     /// <summary>
+    /// Produces what the model reads in place of the result of a workflow tool: the result under the label that says where the workflow stands.
+    /// </summary>
+    /// <param name="workflow">The workflow that the tool belongs to.</param>
+    /// <param name="step">The step the workflow now stands at; <c>null</c> when the call ended it.</param>
+    /// <param name="result">The result as the tool returned it.</param>
+    /// <returns>The wrapped result; <c>null</c> when no template is declared and the result stays as it was.</returns>
+    Task<string?> ComposeWorkflowResultAsync(string workflow, string? step, string result);
+
+    /// <summary>
     /// Produces the text a framework tool returns to the model, by name and with its values spliced in.
     /// </summary>
     /// <param name="name">Which result (see <c>Constants.ToolResults</c>).</param>

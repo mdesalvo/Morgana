@@ -132,6 +132,7 @@ public sealed class HistoryViewTests
         public Task<string?> ComposeTurnClosureRequestAsync() => throw new NotSupportedException();
         public Task<string> ComposeReplyNotAcceptedAsync(string reason) => throw new NotSupportedException();
         public Task<string> ComposeToolResultAsync(string name, IReadOnlyDictionary<string, string>? values = null) => throw new NotSupportedException();
+        public Task<string?> ComposeWorkflowResultAsync(string workflow, string? step, string result) => throw new NotSupportedException();
     }
 
     /// <summary>
