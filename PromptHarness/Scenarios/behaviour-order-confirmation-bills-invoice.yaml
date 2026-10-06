@@ -27,8 +27,9 @@ turns:
       # pins InventoryTool.GenerateSealWord() to "534LW03D" for this run.
       richCard: present
       richCardContains: ["534LW03D"]
-    judge:
-      - "The response offers to confirm or to cancel the order before it becomes binding."
+      # The quote leaves the workflow at its choice step, whose buttons the framework proposes in the
+      # step's order: structural, so nothing is left to a judge.
+      quickReplyIds: ["ConfirmOrder#1", "CancelOrder#2"]
 
   # The confirm action that the quote offered, pressed: its value is the model's own, so it is sent as offered.
   - press: ConfirmOrder

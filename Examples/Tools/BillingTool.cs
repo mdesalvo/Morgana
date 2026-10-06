@@ -172,7 +172,7 @@ public class BillingTool : MorganaTool
     // =========================================================================
 
     /// <summary>
-    /// Retrieves the most recent invoices issued to a customer as structured JSON.
+    /// Retrieves the most recent invoices issued to a customer.
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="count">Number of recent invoices to retrieve (1-10)</param>
@@ -221,7 +221,7 @@ public class BillingTool : MorganaTool
     }
 
     /// <summary>
-    /// Retrieves detailed information about a specific invoice as structured JSON.
+    /// Retrieves detailed information about a specific invoice.
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="invoiceId">Specific invoice identifier (e.g., "INV-0512")</param>
@@ -367,7 +367,7 @@ public class BillingTool : MorganaTool
     }
 
     /// <summary>
-    /// Retrieves the payment history of a customer as structured JSON.
+    /// Retrieves the payment history of a customer.
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="months">Number of months of history to retrieve (1-12)</param>

@@ -227,7 +227,7 @@ public class ContractTool : MorganaTool
     // =========================================================================
 
     /// <summary>
-    /// Retrieves the Green Care Plan's own terms as structured JSON — no customer code, no
+    /// Retrieves the Green Care Plan's own terms — no customer code, no
     /// existing schedule required. What GetContractDetails cannot be for a prospect: every other
     /// read tool in this class needs a CarePlans row to hang off, which a customer deciding
     /// whether to sign up does not have yet. This is the ONE thing SubscribeToGreenCarePlan's
@@ -324,7 +324,7 @@ public class ContractTool : MorganaTool
     }
 
     /// <summary>
-    /// Retrieves the customer's Green Care Plan in full as structured JSON.
+    /// Retrieves the customer's Green Care Plan in full.
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <returns>The complete plan overview, or the error saying that no plan is held</returns>
@@ -390,7 +390,7 @@ public class ContractTool : MorganaTool
     }
 
     /// <summary>
-    /// Retrieves a single clause of the customer's Green Care Plan as structured JSON.
+    /// Retrieves a single clause of the customer's Green Care Plan.
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="clauseNumber">Clause number to retrieve (1-7)</param>
@@ -539,7 +539,7 @@ public class ContractTool : MorganaTool
     }
 
     /// <summary>
-    /// Provides the step-by-step termination procedure of the customer's plan as structured JSON.
+    /// Provides the step-by-step termination procedure of the customer's plan.
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="reason">Optional termination reason for internal tracking</param>

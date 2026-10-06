@@ -113,7 +113,7 @@ public class MorganaAIContextProvider : AIContextProvider
 
     /// <summary>
     /// Removes a variable from the session's conversation context.
-    /// Used to discard ephemeral data (e.g. quick replies, rich cards) after they have been consumed.
+    /// Used to discard what lasts one turn, such as the turn's closure, once it has been read.
     /// </summary>
     public void DropVariable(AgentSession session, string variableName)
     {
