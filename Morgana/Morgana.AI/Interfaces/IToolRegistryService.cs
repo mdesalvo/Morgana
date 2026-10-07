@@ -56,4 +56,17 @@ public interface IToolRegistryService
     /// intent has no tool type.
     /// </returns>
     IReadOnlyList<Records.ToolDefinition> GetToolDefinitions(string intent);
+
+    /// <summary>
+    /// Gets the workflows that the intent's agent runs, as its <c>MorganaWorkflow</c> classes declare them.
+    /// </summary>
+    /// <param name="intent">The intent whose workflows are wanted (case-insensitive).</param>
+    /// <returns>One definition per workflow class; empty when the intent has none.</returns>
+    IReadOnlyList<Records.WorkflowDefinition> GetWorkflowDefinitions(string intent);
+
+    /// <summary>
+    /// Gets every workflow that discovery projected, keyed by the intent that its class names, whether or
+    /// not an agent handles that intent.
+    /// </summary>
+    IReadOnlyDictionary<string, IReadOnlyList<Records.WorkflowDefinition>> GetAllRegisteredWorkflows();
 }

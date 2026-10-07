@@ -91,10 +91,10 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 
 | Folder | Purpose |
 |---|---|
-| `Abstractions/` | `MorganaActor`, `MorganaAgent`, `MorganaLLM`, `MorganaTool`, `MorganaHostedAgent` (the `AIAgent` publishing an intent over A2A) |
+| `Abstractions/` | `MorganaActor`, `MorganaAgent`, `MorganaLLM`, `MorganaTool`, `MorganaWorkflow`, `MorganaHostedAgent` (the `AIAgent` publishing an intent over A2A) |
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
-| `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[RequiresApproval]`, `[ToolParameter]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
+| `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[ProvidesWorkflowForIntent]`, `[RequiresApproval]`, `[ToolParameter]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
 | `ChatClients/` | `IChatClient` decorators: `TierDefaultsChatClient`, `DustAccountingChatClient`, `MorganaAnthropicClient`, `ApprovalTurnChatClient` (drops `Reply` from a response asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model wrote without `Reply`: a forced tool call, structured output where the provider cannot force one), `WorkflowToolsChatClient` (offers the model only the tools that a running workflow's current step allows) |
 | `Workflows/` | `WorkflowEngine`: an agent's workflows on Microsoft.Agents.AI.Workflows, rebuilt at every call from the checkpoint kept in the agent's session |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
@@ -281,7 +281,7 @@ tier) and `GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
    an action button that leads to the tool is that approval already
 5. **Or MCP** — `[UsesMCPServer(...)]`, repeatable, tools discovered at runtime
 6. **Colleagues** — `[ConsultsAgent("otherintent")]`, once each, validated at startup
-7. **Workflows** (optional) — `Workflows` in the agent's prompt in agents.json: ordered steps, each naming its tools, where each call leads (`Next`, `OnFailure`, `End`) and the parameters bound from an earlier step's result (`Arguments`). The agent gets `LaunchWorkflow`; the order is the framework's, so no prose restates it
+7. **Workflows** (optional) — a `MorganaWorkflow` class with `[ProvidesWorkflowForIntent("x")]`, shaped like a MAAI graph: steps are nodes holding their tools, each transition is one `AddEdge` or `AddFailureEdge` and a call with no edge ends the workflow. The class's public properties are the values that an edge carries by name. The agent gets `LaunchWorkflow`; the order is the framework's, so no prose restates it
 8. **Package as a plugin DLL** into `plugins/`
 
 ## Tool System
@@ -439,14 +439,14 @@ fails or opens, silently.**
 1. Every configured intent has an agent and every agent an intent
 2. Every agent declares `[RequiresLLMTier]` and that tier is configured
 3. Every `[ConsultsAgent]` names a reachable colleague and no two fold to one function name
-4. Tools: warn on orphans, error on duplicates for one intent; every tool method and parameter carries its attributes, every scope combination is one the framework can honour, the record returned is typed with a nullable `error`, no tool is overloaded and no agents.json prompt still declares `Tools`
+4. Tools: warn on orphans, error on duplicates for one intent; every tool method and parameter carries its attributes, every scope combination is one the framework can honour, the record returned is typed with a nullable `error`, no tool is overloaded and no agents.json prompt still declares `Tools` or `Workflows`
 5. Plugin `agents.json` files merge with no duplicated intent or prompt id and none declares `other`
    or `Morgana`
 6. No `Tiers` entry left on its override placeholder, no empty `Tiers` map
 7. Every admitted issuer — channel, partner and the ring alike — carries a name and a key of at least 256 bits and no name is admitted twice
 8. `ValidateTrustConfiguration`: each `Partners[]` entry names somebody once, does something, is coherent per open direction and carries a key that can sign
 9. `ValidatePublishedAddress`: `PublicUrl`, where declared, is absolute, on a bearer-carrying scheme and names one interface
-10. Every declared workflow names only tools its agent declares, links only to its own steps or `End`, reaches every step from the first and binds only fields that an earlier step's tools return
+10. Every workflow class names only tools its agent declares, leads each edge from a tool of its source step, reaches every step from the first and carries only its own public properties, each returned by the edge's tool and taken by a tool of the step it leads to
 
 **Where they run matters**: a refusal is a *startup* refusal only because `Program.cs` resolves the
 configuration and registry services immediately after building the container. Left lazy, the same

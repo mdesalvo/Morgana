@@ -18,7 +18,7 @@ namespace Alembic.Model;
 /// </para>
 /// <para>
 /// <b>What survives that Alembic does not understand.</b> An uploaded <c>agents.json</c> may carry
-/// AdditionalProperties entries beyond <c>Workflows</c>. They are kept verbatim in
+/// AdditionalProperties entries. They are kept verbatim in
 /// <see cref="AgentDraft.UnmodelledProperties"/> and written back untouched: the round-trip
 /// invariant must not depend on Alembic having a use for every key it meets.
 /// </para>
@@ -333,16 +333,6 @@ public sealed class AgentDraft
     public string? ID { get; set; }
 
     /// <summary>
-    /// Prompt type category. <c>"INTENT"</c> for a domain agent.
-    /// </summary>
-    public string Type { get; set; } = "INTENT";
-
-    /// <summary>
-    /// Prompt subtype. <c>"AGENT"</c> for a domain agent.
-    /// </summary>
-    public string SubType { get; set; } = "AGENT";
-
-    /// <summary>
     /// What the client has said about the work this agent does, in their own words: the picture of
     /// their counter as the interview has painted it so far, step by step.
     /// </summary>
@@ -417,12 +407,12 @@ public sealed class AgentDraft
 
     /// <summary>
     /// The agent's workflows: procedures whose steps the framework keeps in order, composed of the
-    /// tools above.
+    /// tools above and emitted as one class each.
     /// </summary>
     public List<WorkflowDraft> Workflows { get; set; } = [];
 
     /// <summary>
-    /// AdditionalProperties entries other than <c>Workflows</c>, kept verbatim so a key Alembic has no
+    /// AdditionalProperties entries, kept verbatim so a key Alembic has no
     /// use for still survives a round trip. Values are <c>JsonElement</c>s and are written back as
     /// they were read.
     /// </summary>
@@ -525,45 +515,17 @@ public sealed class WorkflowDraft
     /// <summary>
     /// The steps in order; the first one is where the workflow starts.
     /// </summary>
-    public List<WorkflowStepDraft> Steps { get; set; } = [];
+    public List<Records.WorkflowStep> Steps { get; set; } = [];
+
+    /// <summary>
+    /// The transitions in declaration order; the properties the workflow carries are the distinct names across them.
+    /// </summary>
+    public List<Records.WorkflowEdge> Edges { get; set; } = [];
 
     /// <summary>
     /// Where this workflow came from.
     /// </summary>
     public Provenance Origin { get; set; } = Provenance.Authored;
-}
-
-/// <summary>
-/// One step of a workflow under construction.
-/// </summary>
-public sealed class WorkflowStepDraft
-{
-    /// <summary>
-    /// Unique within the workflow and never the reserved <c>End</c>.
-    /// </summary>
-    public string? Name { get; set; }
-
-    /// <summary>
-    /// The tools offered while the workflow stands at this step.
-    /// </summary>
-    public List<string> Tools { get; set; } = [];
-
-    /// <summary>
-    /// Tool name to the step reached when its call succeeds, or <c>End</c>.
-    /// </summary>
-    public Dictionary<string, string> Next { get; set; } = [];
-
-    /// <summary>
-    /// Tool name to the step reached when its call fails; a tool absent here ends the workflow on its
-    /// failure. Empty is written as no key at all.
-    /// </summary>
-    public Dictionary<string, string> OnFailure { get; set; } = [];
-
-    /// <summary>
-    /// Parameter name to <c>Step.field</c>, the field of an earlier step's result that the framework
-    /// fills in. Empty is written as no key at all.
-    /// </summary>
-    public Dictionary<string, string> Arguments { get; set; } = [];
 }
 
 /// <summary>

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -54,8 +55,8 @@ public sealed class WorkflowTests
         Records.WorkflowPosition? decide = await engine.AdvanceAsync(quote, Succeeded("CreatePurchaseOrder", """{"orderId":"ORD-1","sealWord":"fern"}"""));
 
         Assert.Equal("Decide", decide!.Step);
-        Assert.Equal("\"ORD-1\"", decide.Arguments["orderId"]);
-        Assert.Equal("\"fern\"", decide.Arguments["sealWord"]);
+        Assert.Equal("\"ORD-1\"", decide.Arguments["OrderId"]);
+        Assert.Equal("\"fern\"", decide.Arguments["SealWord"]);
     }
 
     [Fact]
@@ -80,12 +81,14 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task End_closes_the_workflow()
+    public async Task A_step_with_no_edge_for_an_outcome_ends_the_workflow()
     {
         WorkflowEngine engine = new WorkflowEngine([PlaceOrder()]);
         Records.WorkflowPosition decide = await ReachDecideAsync(engine);
 
+        // Decide has an edge for a failed confirmation only: a cancellation or a confirmation that went well leads nowhere.
         Assert.Null(await engine.AdvanceAsync(decide, Succeeded("CancelOrder", """{"status":"cancelled"}""")));
+        Assert.Null(await engine.AdvanceAsync(decide, Succeeded("ConfirmOrder", """{"status":"confirmed"}""")));
     }
 
     [Fact]
@@ -97,22 +100,32 @@ public sealed class WorkflowTests
 
         Records.WorkflowPosition? again = await engine.AdvanceAsync(quote, Succeeded("CreatePurchaseOrder", """{"orderId":"ORD-2","sealWord":"moss"}"""));
 
-        Assert.Equal("\"ORD-2\"", again!.Arguments["orderId"]);
+        Assert.Equal("\"ORD-2\"", again!.Arguments["OrderId"]);
     }
 
     [Fact]
-    public async Task A_value_is_bound_from_a_step_two_steps_back_exactly_as_the_result_wrote_it()
+    public async Task A_carried_value_is_read_from_the_result_exactly_as_the_result_wrote_it()
     {
         WorkflowEngine engine = new WorkflowEngine([Settle()]);
         Records.WorkflowPosition quote = await engine.LaunchAsync("Settle");
-        Records.WorkflowPosition decide = (await engine.AdvanceAsync(quote, Succeeded("CreatePurchaseOrder", """{"orderId":"ORD-9","total":12.5}""")))!;
 
-        Records.WorkflowPosition? pay = await engine.AdvanceAsync(decide, Succeeded("ConfirmOrder", """{"status":"confirmed"}"""));
+        Records.WorkflowPosition? pay = await engine.AdvanceAsync(quote, Succeeded("CreatePurchaseOrder", """{"orderId":"ORD-9","total":12.5}"""));
 
-        // The field is read by its declared name whatever the record cased it as, numbers staying numbers.
+        // The field is read by the property's name whatever the record cased it as, numbers staying numbers.
         Assert.Equal("Pay", pay!.Step);
-        Assert.Equal("\"ORD-9\"", pay.Arguments["orderId"]);
-        Assert.Equal("12.5", pay.Arguments["amount"]);
+        Assert.Equal("\"ORD-9\"", pay.Arguments["OrderId"]);
+        Assert.Equal("12.5", pay.Arguments["Total"]);
+    }
+
+    [Fact]
+    public async Task A_carried_property_that_the_result_lacks_is_left_unbound()
+    {
+        WorkflowEngine engine = new WorkflowEngine([PlaceOrder()]);
+        Records.WorkflowPosition quote = await engine.LaunchAsync("PlaceOrder");
+
+        Records.WorkflowPosition? decide = await engine.AdvanceAsync(quote, Succeeded("CreatePurchaseOrder", """{"orderId":"ORD-1","sealWord":null}"""));
+
+        Assert.Equal(["OrderId"], decide!.Arguments.Keys);
     }
 
     [Fact]
@@ -478,6 +491,57 @@ public sealed class WorkflowTests
         Assert.Equal("Decide", second.Provider.GetWorkflowPosition(second.Session)!.Step);
     }
 
+    [Fact]
+    public async Task A_carried_property_binds_the_tool_parameter_that_spells_its_name_otherwise()
+    {
+        AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
+        await agent.RunQuoteTurnAsync();
+
+        // The workflow carries OrderId and the tool declares orderId: the value is written under the schema's spelling.
+        agent.Model.Enqueue([new TextContent("Cancelling."), Call("CancelOrder", "{}")]);
+        agent.Model.Enqueue(Closing("Cancelled."));
+        await agent.TurnAsync("cancel it");
+
+        Assert.Contains("CancelOrder:ORD-1", InventoryTools.Calls);
+    }
+
+    // =========================================================================
+    // THE CLASS
+    // =========================================================================
+
+    [Fact]
+    public void A_workflow_class_projects_into_a_definition_named_without_its_suffix()
+    {
+        Records.WorkflowDefinition definition = new PlaceOrderWorkflow().ToDefinition();
+
+        Assert.Equal("PlaceOrder", definition.Name);
+        Assert.Equal("Placing an order.", definition.Description);
+        Assert.Equal(["Quote", "Decide"], definition.Steps.Select(step => step.Name));
+        Assert.Equal(["OrderId", "SealWord"], definition.Parameters);
+        Assert.Equal(
+            [("Quote", "Decide", "CreatePurchaseOrder", false), ("Decide", "Quote", "ConfirmOrder", true)],
+            definition.Edges.Select(edge => (edge.Source, edge.Target, edge.Tool, edge.OnFailure)));
+        Assert.Equal(["OrderId", "SealWord"], definition.Edges[0].Carrying);
+    }
+
+    [Fact]
+    public void The_start_step_comes_first_whatever_edge_was_declared_first()
+    {
+        Records.WorkflowDefinition definition = new BackwardsWorkflow().ToDefinition();
+
+        Assert.Equal("Backwards", definition.Name);
+        Assert.Equal(["Quote", "Decide"], definition.Steps.Select(step => step.Name));
+    }
+
+    [Fact]
+    public void A_definition_lists_only_the_properties_that_the_class_declares_itself()
+    {
+        Records.WorkflowDefinition definition = new DerivedWorkflow().ToDefinition();
+
+        Assert.Equal(["Own"], definition.Parameters);
+        Assert.Equal(string.Empty, definition.Description);
+    }
+
     // =========================================================================
     // THE STARTUP CHECK
     // =========================================================================
@@ -500,22 +564,18 @@ public sealed class WorkflowTests
 
     [Fact]
     public void A_step_name_used_twice_is_refused()
-        => AssertRefused([WithSteps(Quote(), Quote())], "the step 'Quote' more than once");
-
-    [Fact]
-    public void A_step_named_End_is_refused()
-        => AssertRefused([WithSteps(Quote() with { Name = "End", Next = new Dictionary<string, string>() })], "reserved target");
+        => AssertRefused([Ad("PlaceOrder", [QuoteStep, QuoteStep], [], [])], "step 'Quote': the name is declared more than once");
 
     [Fact]
     public void A_step_naming_no_tool_is_refused()
-        => AssertRefused([WithSteps(Quote() with { Tools = [], Next = new Dictionary<string, string>() })], "names no tool");
+        => AssertRefused([Ad("PlaceOrder", [new("Quote", [])], [], [])], "the step offers no tool");
 
     [Fact]
     public void A_step_naming_an_undeclared_tool_is_refused_unless_the_agent_uses_an_MCP_server()
     {
-        Records.WorkflowDefinition workflow = WithSteps(Quote() with { Tools = ["CreatePurchaseOrder", "Mystery"], Next = new Dictionary<string, string> { ["Mystery"] = "End" } });
+        Records.WorkflowDefinition workflow = Ad("PlaceOrder", [new("Quote", ["CreatePurchaseOrder", "Mystery"])], [], []);
 
-        AssertRefused([workflow], "'Mystery', which the agent does not declare");
+        AssertRefused([workflow], "the agent has no tool 'Mystery'");
         Assert.Empty(Validate([workflow], usesMcpServer: true));
     }
 
@@ -524,57 +584,64 @@ public sealed class WorkflowTests
     [InlineData("LaunchWorkflow")]
     [InlineData("consult_billing")]
     public void A_step_naming_a_framework_tool_or_a_colleague_is_refused(string tool)
-        => AssertRefused([WithSteps(Quote() with { Tools = ["CreatePurchaseOrder", tool] })], "may never name");
+        => AssertRefused([Ad("PlaceOrder", [new("Quote", ["CreatePurchaseOrder", tool])], [], [])], "belongs to the framework");
 
     [Fact]
-    public void A_link_keyed_by_a_tool_the_step_does_not_hold_is_refused()
+    public void An_edge_followed_by_a_tool_the_source_step_does_not_hold_is_refused()
     {
-        AssertRefused([WithSteps(Quote() with { Next = new Dictionary<string, string> { ["CancelOrder"] = "End" } })], "\"Next\" names 'CancelOrder'");
-        AssertRefused([WithSteps(Quote() with { OnFailure = new Dictionary<string, string> { ["CancelOrder"] = "End" } })], "\"OnFailure\" names 'CancelOrder'");
+        AssertRefused([Ad("PlaceOrder", [QuoteStep], [new("Quote", "Quote", "CancelOrder", false, [])], [])], "'CancelOrder' is not a tool of step 'Quote'");
+        AssertRefused([Ad("PlaceOrder", [QuoteStep], [new("Quote", "Quote", "CancelOrder", true, [])], [])], "'CancelOrder' is not a tool of step 'Quote'");
     }
-
-    [Fact]
-    public void A_link_to_a_step_that_does_not_exist_is_refused()
-        => AssertRefused([WithSteps(Quote() with { Next = new Dictionary<string, string> { ["CreatePurchaseOrder"] = "Nowhere" } })], "'Nowhere', which is neither a step");
 
     [Fact]
     public void A_step_that_no_path_from_the_first_reaches_is_refused()
-        => AssertRefused([WithSteps(Quote() with { Next = new Dictionary<string, string> { ["CreatePurchaseOrder"] = "End" } }, Decide())], "'Decide', which no path");
+        => AssertRefused([Ad("PlaceOrder", [QuoteStep, DecideStep], [], [])], "step 'Decide': no path leads to it from 'Quote'");
 
     [Fact]
-    public void A_bound_key_that_is_a_parameter_of_none_of_the_step_tools_is_refused()
-        => AssertRefused([WithSteps(Quote(), Decide() with { Arguments = new Dictionary<string, string> { ["colour"] = "Quote.orderId" } })], "'colour', which is a parameter of none");
+    public void A_transition_declared_twice_is_refused()
+        => AssertRefused(
+            [Ad("PlaceOrder", [QuoteStep, DecideStep],
+                [new("Quote", "Decide", "CreatePurchaseOrder", false, ["OrderId"]), new("Quote", "Quote", "CreatePurchaseOrder", false, [])],
+                ["OrderId"])],
+            "the same transition is declared more than once");
 
     [Fact]
-    public void A_binding_that_is_not_of_the_form_Step_field_is_refused()
-        => AssertRefused([WithSteps(Quote(), Decide() with { Arguments = new Dictionary<string, string> { ["orderId"] = "orderId" } })], "not of the form Step.field");
+    public void A_carried_name_that_is_not_a_public_property_of_the_workflow_is_refused()
+        => AssertRefused(
+            [Ad("PlaceOrder", [QuoteStep, DecideStep], [new("Quote", "Decide", "CreatePurchaseOrder", false, ["colour"])], [])],
+            "'colour' is not a public property of the workflow");
 
     [Fact]
-    public void A_binding_to_a_step_the_workflow_does_not_have_is_refused()
-        => AssertRefused([WithSteps(Quote(), Decide() with { Arguments = new Dictionary<string, string> { ["orderId"] = "Nowhere.orderId" } })], "the step 'Nowhere', which the workflow does not have");
+    public void A_carried_name_that_the_source_tool_does_not_return_is_refused()
+        => AssertRefused(
+            [Ad("PlaceOrder", [QuoteStep, DecideStep], [new("Quote", "Decide", "CreatePurchaseOrder", false, ["OrderId", "Status"])], ["OrderId", "Status"])],
+            "tool 'CreatePurchaseOrder' does not declare the returned field 'Status'");
 
     [Fact]
-    public void A_binding_to_the_step_itself_or_to_a_later_one_is_refused()
+    public void A_carried_name_that_no_tool_of_the_target_step_takes_is_refused()
+        => AssertRefused(
+            [Ad("PlaceOrder", [QuoteStep, DecideStep], [new("Quote", "Decide", "CreatePurchaseOrder", false, ["Total"])], ["Total"])],
+            "no tool of step 'Decide' takes a parameter 'Total'");
+
+    [Fact]
+    public void A_property_that_no_edge_carries_is_refused()
+        => AssertRefused(
+            [Ad("PlaceOrder", [QuoteStep, DecideStep], [new("Quote", "Decide", "CreatePurchaseOrder", false, ["OrderId"])], ["OrderId", "SealWord"])],
+            "property 'SealWord' is carried by no edge");
+
+    [Fact]
+    public void A_tool_of_an_MCP_server_may_be_a_step_and_the_source_of_an_edge()
     {
-        AssertRefused([WithSteps(Quote(), Decide() with { Arguments = new Dictionary<string, string> { ["orderId"] = "Decide.status" } })], "does not run before this one");
-
-        // Decide leads back to Quote on a failure, so only without that link is it a step that never runs before it.
-        AssertRefused([WithSteps(Quote() with { Arguments = new Dictionary<string, string> { ["item"] = "Decide.status" } }, Decide() with { OnFailure = null })], "'Decide', which does not run before this one");
-    }
-
-    [Fact]
-    public void A_binding_to_a_field_the_source_tool_does_not_declare_is_refused()
-        => AssertRefused([WithSteps(Quote(), Decide() with { Arguments = new Dictionary<string, string> { ["orderId"] = "Quote.colour" } })], "does not declare the returned field 'colour'");
-
-    [Fact]
-    public void A_tool_of_an_MCP_server_may_be_a_step_but_never_the_source_of_a_binding()
-    {
-        Records.WorkflowDefinition workflow = WithSteps(Quote() with { Tools = ["McpQuote"], Next = new Dictionary<string, string> { ["McpQuote"] = "Decide" } }, Decide());
+        Records.WorkflowDefinition workflow = Ad(
+            "PlaceOrder",
+            [new("Quote", ["McpQuote"]), DecideStep],
+            [new("Quote", "Decide", "McpQuote", false, ["OrderId"])],
+            ["OrderId"]);
 
         List<string> errors = Validate([workflow], usesMcpServer: true);
 
-        Assert.Contains(errors, error => error.Contains("the tool 'McpQuote' of step 'Quote' does not declare the returned field", StringComparison.Ordinal));
-        Assert.DoesNotContain(errors, error => error.Contains("does not declare", StringComparison.Ordinal) && error.Contains("'McpQuote', which the agent", StringComparison.Ordinal));
+        Assert.DoesNotContain(errors, error => error.Contains("the agent has no tool", StringComparison.Ordinal));
+        Assert.Contains(Validate([workflow]), error => error.Contains("the agent has no tool 'McpQuote'", StringComparison.Ordinal));
     }
 
     // =========================================================================
@@ -620,38 +687,21 @@ public sealed class WorkflowTests
         return (await engine.AdvanceAsync(quote, Succeeded("CreatePurchaseOrder", """{"orderId":"ORD-1","sealWord":"fern"}""")))!;
     }
 
-    /// <summary>The quote step: one tool leading to the decision.</summary>
-    private static Records.WorkflowStep Quote() => new(
-        "Quote",
-        ["CreatePurchaseOrder"],
-        new Dictionary<string, string> { ["CreatePurchaseOrder"] = "Decide" });
+    /// <summary>The quote step of a definition written out by hand.</summary>
+    private static readonly Records.WorkflowStep QuoteStep = new("Quote", ["CreatePurchaseOrder"]);
 
-    /// <summary>The decision step: confirm or cancel, with the order and its seal bound from the quote.</summary>
-    private static Records.WorkflowStep Decide() => new(
-        "Decide",
-        ["ConfirmOrder", "CancelOrder"],
-        new Dictionary<string, string> { ["ConfirmOrder"] = "End", ["CancelOrder"] = "End" },
-        new Dictionary<string, string> { ["ConfirmOrder"] = "Quote" },
-        new Dictionary<string, string> { ["orderId"] = "Quote.orderId", ["sealWord"] = "Quote.sealWord" });
+    /// <summary>The decision step of a definition written out by hand.</summary>
+    private static readonly Records.WorkflowStep DecideStep = new("Decide", ["ConfirmOrder", "CancelOrder"]);
 
-    /// <summary>The workflow of the order: quote then decide, a refused confirmation going back to the quote.</summary>
-    private static Records.WorkflowDefinition PlaceOrder() => new("PlaceOrder", "Placing an order.", [Quote(), Decide()]);
+    /// <summary>The workflow of the order as its class declares it.</summary>
+    private static Records.WorkflowDefinition PlaceOrder() => new PlaceOrderWorkflow().ToDefinition();
 
-    /// <summary>A workflow whose last step binds a value from the first, with a step between.</summary>
-    private static Records.WorkflowDefinition Settle() => new(
-        "Settle",
-        "Settling an order.",
-        [
-            Quote(),
-            new Records.WorkflowStep("Decide", ["ConfirmOrder"], new Dictionary<string, string> { ["ConfirmOrder"] = "Pay" },
-                Arguments: new Dictionary<string, string> { ["orderId"] = "Quote.orderId" }),
-            new Records.WorkflowStep("Pay", ["Refund"], new Dictionary<string, string> { ["Refund"] = "End" },
-                Arguments: new Dictionary<string, string> { ["orderId"] = "Quote.orderId", ["amount"] = "Quote.total" })
-        ]);
+    /// <summary>A workflow carrying the order and its price straight from the quote to the payment.</summary>
+    private static Records.WorkflowDefinition Settle() => new SettleWorkflow().ToDefinition();
 
-    /// <summary>A workflow of the given steps under the order's name.</summary>
-    private static Records.WorkflowDefinition WithSteps(params Records.WorkflowStep[] steps)
-        => new("PlaceOrder", "Placing an order.", steps);
+    /// <summary>A definition written out by hand, for the shapes that a class cannot declare.</summary>
+    private static Records.WorkflowDefinition Ad(string name, Records.WorkflowStep[] steps, Records.WorkflowEdge[] edges, string[] parameters)
+        => new(name, "Placing an order.", steps, edges, parameters);
 
     /// <summary>The tools of the sample agent as the catalog projects them.</summary>
     private static Records.ToolDefinition[] DeclaredTools() =>
@@ -664,7 +714,7 @@ public sealed class WorkflowTests
             Returns: [new("error", "Why it failed.", Failure: true), new("status", "The status.")]),
         new("Stock", "Reads a stock level.", [new("item", "The plant.", true, Constants.Scopes.Request)],
             Returns: [new("quantity", "How many.")]),
-        new("Refund", "Refunds an order.", [new("orderId", "The order.", true, Constants.Scopes.Request), new("amount", "The amount.", true, Constants.Scopes.Request)],
+        new("Refund", "Refunds an order.", [new("orderId", "The order.", true, Constants.Scopes.Request), new("total", "The amount.", true, Constants.Scopes.Request)],
             RequiresExecutionApproval: true, Returns: [new("status", "The status.")])
     ];
 
@@ -675,6 +725,67 @@ public sealed class WorkflowTests
     /// <summary>Asserts that the check refuses the declaration with a message holding the given text and naming the intent.</summary>
     private static void AssertRefused(Records.WorkflowDefinition[] workflows, string expected)
         => Assert.Contains(Validate(workflows), error => error.Contains(expected, StringComparison.Ordinal) && error.Contains("'sample'", StringComparison.Ordinal));
+
+    // =========================================================================
+    // THE SAMPLE WORKFLOWS
+    // =========================================================================
+
+    /// <summary>Quote, then decide: a refused confirmation goes back to the quote.</summary>
+    [Description("Placing an order.")]
+    public sealed class PlaceOrderWorkflow : MorganaWorkflow
+    {
+        public string? OrderId { get; init; }
+        public string? SealWord { get; init; }
+
+        private static readonly Records.WorkflowStep Quote = new("Quote", [nameof(InventoryTools.CreatePurchaseOrder)]);
+        private static readonly Records.WorkflowStep Decide = new("Decide", [nameof(InventoryTools.ConfirmOrder), nameof(InventoryTools.CancelOrder)]);
+
+        public PlaceOrderWorkflow() : base(start: Quote)
+        {
+            AddEdge(Quote, Decide, nameof(InventoryTools.CreatePurchaseOrder), carrying: [nameof(OrderId), nameof(SealWord)]);
+            AddFailureEdge(Decide, Quote, nameof(InventoryTools.ConfirmOrder));
+        }
+    }
+
+    /// <summary>Quote, then pay with the order and its price taken from the quote.</summary>
+    [Description("Settling an order.")]
+    public sealed class SettleWorkflow : MorganaWorkflow
+    {
+        public string? OrderId { get; init; }
+        public string? Total { get; init; }
+
+        private static readonly Records.WorkflowStep Quote = new("Quote", [nameof(InventoryTools.CreatePurchaseOrder)]);
+        private static readonly Records.WorkflowStep Pay = new("Pay", [nameof(InventoryTools.Refund)]);
+
+        public SettleWorkflow() : base(start: Quote)
+            => AddEdge(Quote, Pay, nameof(InventoryTools.CreatePurchaseOrder), carrying: [nameof(OrderId), nameof(Total)]);
+    }
+
+    /// <summary>Declares its edge from the later step first, so that the start has to be put in front.</summary>
+    public sealed class BackwardsWorkflow : MorganaWorkflow
+    {
+        private static readonly Records.WorkflowStep Quote = new("Quote", [nameof(InventoryTools.CreatePurchaseOrder)]);
+        private static readonly Records.WorkflowStep Decide = new("Decide", [nameof(InventoryTools.CancelOrder)]);
+
+        public BackwardsWorkflow() : base(start: Quote)
+            => AddEdge(Decide, Quote, nameof(InventoryTools.CancelOrder));
+    }
+
+    /// <summary>Holds the property that a derived workflow inherits.</summary>
+    public abstract class InheritedPropertyWorkflow : MorganaWorkflow
+    {
+        public string? Inherited { get; init; }
+
+        protected InheritedPropertyWorkflow() : base(start: new Records.WorkflowStep("Quote", [nameof(InventoryTools.CreatePurchaseOrder)]))
+        {
+        }
+    }
+
+    /// <summary>Declares one property of its own beside the inherited one.</summary>
+    public sealed class DerivedWorkflow : InheritedPropertyWorkflow
+    {
+        public string? Own { get; init; }
+    }
 
     // =========================================================================
     // THE AGENT UNDER TEST
@@ -724,9 +835,9 @@ public sealed class WorkflowTests
             return Task.FromResult(new StockResult(12));
         }
 
-        public Task<RefundResult> Refund(string orderId, string amount)
+        public Task<RefundResult> Refund(string orderId, string total)
         {
-            Calls.Add($"Refund:{orderId}:{amount}");
+            Calls.Add($"Refund:{orderId}:{total}");
             return Task.FromResult(new RefundResult("refunded"));
         }
     }
@@ -765,10 +876,7 @@ public sealed class WorkflowTests
             InventoryTools.Calls.Clear();
             AgentUnderTest under = new AgentUnderTest();
 
-            List<Dictionary<string, object>> properties = [];
-            if (workflows.Length > 0)
-                properties.Add(new() { [Constants.PromptProperties.Workflows] = JsonSerializer.SerializeToElement(workflows) });
-            Records.Prompt prompt = new("inventory", "INTENT", "AGENT", "Sell plants.", "Answer plainly.", "Plain text.", null, "en-US", "1", properties);
+            Records.Prompt prompt = new("inventory", "Sell plants.", "Answer plainly.", "Plain text.", null, null, "en-US", "1");
 
             ConfigurationPromptResolverService resolver = new ConfigurationPromptResolverService(new SampleDomain(prompt));
             IConfiguration configuration = new ConfigurationBuilder()
@@ -779,7 +887,7 @@ public sealed class WorkflowTests
                 new SampleLlm(under.Model),
                 resolver,
                 new ConfigurationPromptComposerService(resolver),
-                new SampleToolRegistry(),
+                new SampleToolRegistry(workflows),
                 null!,
                 new HistoryReducerService(configuration, NullLogger.Instance),
                 new NoDust(),
@@ -901,13 +1009,18 @@ public sealed class WorkflowTests
     }
 
     /// <summary>Finds the sample tools for the sample intent and declares them as the catalog would project them.</summary>
-    private sealed class SampleToolRegistry : IToolRegistryService
+    private sealed class SampleToolRegistry(IReadOnlyList<Records.WorkflowDefinition> workflows) : IToolRegistryService
     {
         public Type? FindToolTypeForIntent(string intent) => intent == "inventory" ? typeof(InventoryTools) : null;
 
         public IReadOnlyDictionary<string, Type> GetAllRegisteredTools() => new Dictionary<string, Type> { ["inventory"] = typeof(InventoryTools) };
 
         public IReadOnlyList<Records.ToolDefinition> GetToolDefinitions(string intent) => intent == "inventory" ? DeclaredTools() : [];
+
+        public IReadOnlyList<Records.WorkflowDefinition> GetWorkflowDefinitions(string intent) => intent == "inventory" ? workflows : [];
+
+        public IReadOnlyDictionary<string, IReadOnlyList<Records.WorkflowDefinition>> GetAllRegisteredWorkflows()
+            => new Dictionary<string, IReadOnlyList<Records.WorkflowDefinition>> { ["inventory"] = workflows };
     }
 
     /// <summary>A budget that is never spent.</summary>

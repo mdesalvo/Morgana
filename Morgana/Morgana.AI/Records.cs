@@ -977,36 +977,34 @@ public static class Records
     /// Loaded from morgana.json (framework) or agents.json (domain, intent-keyed).
     /// </summary>
     /// <param name="ID">Prompt identifier: framework="Morgana"/"Classifier"/"Guard"/"Presentation", domain=intent name</param>
-    /// <param name="Type">Prompt type category (e.g., "SYSTEM", "INTENT")</param>
-    /// <param name="SubType">Prompt subtype (e.g., "AGENT", "ACTOR", "PRESENTATION")</param>
     /// <param name="Target">Core prompt text: role definition, capabilities statement, operational boundaries</param>
     /// <param name="Instructions">Behavioral rules, operational order, response constraints, tool-usage doctrine</param>
     /// <param name="Formatting">Output formatting rules: markdown usage, quick reply format, rich card rendering</param>
     /// <param name="Personality">Optional tone/character: formality, voice, domain-specific persona traits</param>
+    /// <param name="Territory">What falls to this agent, addressed to a colleague who might consult it</param>
     /// <param name="Language">BCP 47 language code (e.g., "en-US", "it-IT")</param>
     /// <param name="Version">Prompt version string for tracking iteration history and regression detection</param>
-    /// <param name="AdditionalProperties">List of structured properties: Tools, GlobalPolicies, Messages, etc</param>
-    /// <param name="Territory">Optional: what falls to this agent, addressed to a colleague who might consult it</param>
     public record Prompt(
         string ID,
-        string Type,
-        string SubType,
         string Target,
         string Instructions,
         string Formatting,
         string? Personality,
+        string? Territory,
         string Language,
-        string Version,
-        List<Dictionary<string, object>> AdditionalProperties,
-        string? Territory = null)
+        string Version)
     {
+        /// <summary>
+        /// Structured properties of the prompt: GlobalPolicies, Messages, Tools and the like; empty when the prompt declares none.
+        /// </summary>
+        public List<Dictionary<string, object>> AdditionalProperties { get; init; } = [];
         /// <summary>
         /// Gets additional property value (Tools, GlobalPolicies, Messages, etc).
         /// Throws KeyNotFoundException if property not found. Deserializes JsonElement to type T.
         /// </summary>
         public T GetAdditionalProperty<T>(string additionalPropertyName)
         {
-            foreach (Dictionary<string, object> additionalProperties in AdditionalProperties ?? [])
+            foreach (Dictionary<string, object> additionalProperties in AdditionalProperties)
             {
                 if (additionalProperties.TryGetValue(additionalPropertyName, out object value))
                 {
@@ -1053,7 +1051,7 @@ public static class Records
         /// <param name="defaultValue">Value returned when the property is absent</param>
         public T GetAdditionalPropertyOrDefault<T>(string additionalPropertyName, T defaultValue)
         {
-            foreach (Dictionary<string, object> additionalProperties in AdditionalProperties ?? [])
+            foreach (Dictionary<string, object> additionalProperties in AdditionalProperties)
             {
                 if (additionalProperties.TryGetValue(additionalPropertyName, out object value))
                 {
@@ -1208,16 +1206,20 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// A procedure of one agent whose steps are kept in order by the framework: declared in agents.json
-    /// beside the agent's tools and run by the workflow engine.
+    /// A procedure of one agent whose steps are kept in order by the framework: declared by a
+    /// <c>MorganaWorkflow</c> class beside the agent's tools and run by the workflow engine.
     /// </summary>
     /// <param name="Name">What the model passes to <c>LaunchWorkflow</c> to start it; unique per agent.</param>
     /// <param name="Description">What the procedure does, offered to the model beside its name.</param>
     /// <param name="Steps">The steps of the procedure; the first one is where it starts.</param>
+    /// <param name="Edges">Every transition of the procedure, in the order the class declared them.</param>
+    /// <param name="Parameters">The public instance properties that the class declares itself: the values that edges may carry.</param>
     public record WorkflowDefinition(
         string Name,
         string Description,
-        IReadOnlyList<WorkflowStep> Steps)
+        IReadOnlyList<WorkflowStep> Steps,
+        IReadOnlyList<WorkflowEdge> Edges,
+        IReadOnlyList<string> Parameters)
     {
         /// <summary>Every tool that a step of the workflow names.</summary>
         public HashSet<string> ToolSignature()
@@ -1225,30 +1227,29 @@ public static class Records
     }
 
     /// <summary>
-    /// One step of a workflow: the tools the agent may call while the workflow stands at it and where each
-    /// call leads.
+    /// One step of a workflow: the tools the agent may call while the workflow stands at it.
     /// </summary>
-    /// <param name="Name">Unique within the workflow and never the reserved <see cref="Constants.Workflows.End"/>.</param>
+    /// <param name="Name">Unique within the workflow.</param>
     /// <param name="Tools">The tools offered at this step; with several, the tool called decides the branch.</param>
-    /// <param name="Next">Tool name to the step reached when its call succeeds, or <c>End</c>.</param>
-    /// <param name="OnFailure">Tool name to the step reached when its call fails; a tool absent here ends the workflow on its failure.</param>
-    /// <param name="Arguments">Parameter name to <c>Step.field</c>, the field of an earlier step's result that the framework fills in.</param>
     public record WorkflowStep(
         string Name,
-        IReadOnlyList<string> Tools,
-        IReadOnlyDictionary<string, string> Next,
-        IReadOnlyDictionary<string, string>? OnFailure = null,
-        IReadOnlyDictionary<string, string>? Arguments = null)
-    {
-        /// <summary>The links that a call leads along: the failure ones or the success ones, empty where none is declared.</summary>
-        /// <param name="failed">Whether the call failed.</param>
-        public IReadOnlyDictionary<string, string> Links(bool failed)
-            => (failed ? OnFailure : Next) ?? new Dictionary<string, string>();
+        IReadOnlyList<string> Tools);
 
-        /// <summary>The parameters that the framework binds at this step, empty where none is declared.</summary>
-        public IReadOnlyDictionary<string, string> BoundArguments()
-            => Arguments ?? new Dictionary<string, string>();
-    }
+    /// <summary>
+    /// One transition of a workflow: followed when the tool called at the source step ends with the outcome
+    /// that <paramref name="OnFailure"/> names.
+    /// </summary>
+    /// <param name="Source">The step the call is made at.</param>
+    /// <param name="Target">The step the workflow moves to.</param>
+    /// <param name="Tool">The tool whose outcome decides the transition.</param>
+    /// <param name="OnFailure">True when the edge follows a failed call; false when it follows a successful one.</param>
+    /// <param name="Carrying">The workflow's properties whose values the target step takes by name from that call's result.</param>
+    public record WorkflowEdge(
+        string Source,
+        string Target,
+        string Tool,
+        bool OnFailure,
+        IReadOnlyList<string> Carrying);
 
     /// <summary>
     /// What the engine asks of the agent at a step: the step itself and the parameters already bound for it.

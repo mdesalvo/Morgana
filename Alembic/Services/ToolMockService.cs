@@ -278,31 +278,21 @@ public class ToolMockService : IToolMockService
     }
 
     /// <summary>
-    /// The result fields that a later step of some workflow binds as an argument, as tool and field.
+    /// The result fields that an edge of some workflow carries to the next step, as tool and field.
     /// </summary>
     /// <remarks>
-    /// A source <c>Step.field</c> names a step and not a tool, so every tool of that step that hands
-    /// the field back is a source: the mock cannot know which branch a run takes.
+    /// A carried name is matched to the tool's field regardless of case, because the workflow class
+    /// names it as a property and the result record names it as a field.
     /// </remarks>
     private static HashSet<(string Tool, string Field)> FieldsReadByWorkflows(AgentDraft agent)
     {
         HashSet<(string Tool, string Field)> read = [];
 
-        foreach (WorkflowDraft workflow in agent.Workflows)
-            foreach (string source in workflow.Steps.SelectMany(step => step.Arguments.Values))
-            {
-                string[] parts = source.Split('.');
-
-                if (parts.Length != 2)
-                    continue;
-
-                WorkflowStepDraft? producing = workflow.Steps.FirstOrDefault(step => string.Equals(step.Name, parts[0], StringComparison.Ordinal));
-
-                foreach (string toolName in producing?.Tools ?? [])
-                    if (agent.Tools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.Ordinal)) is { } tool
-                        && tool.Returns.Any(r => string.Equals(r.Name, parts[1], StringComparison.Ordinal)))
-                        read.Add((toolName, parts[1]));
-            }
+        foreach (Records.WorkflowEdge edge in agent.Workflows.SelectMany(workflow => workflow.Edges))
+            foreach (string carried in edge.Carrying ?? [])
+                if (agent.Tools.FirstOrDefault(t => string.Equals(t.Name, edge.Tool, StringComparison.Ordinal)) is { } tool
+                    && tool.Returns.FirstOrDefault(r => string.Equals(r.Name, carried, StringComparison.OrdinalIgnoreCase)) is { } field)
+                    read.Add((edge.Tool, field.Name!));
 
         return read;
     }

@@ -101,13 +101,42 @@ public sealed class ToolContractTests
     {
         Records.Prompt leftover = PromptWith(new Dictionary<string, object> { [Constants.PromptProperties.Tools] = JsonSerializer.SerializeToElement(new[] { "any" }) });
         Records.Prompt leftoverEmpty = PromptWith(new Dictionary<string, object> { [Constants.PromptProperties.Tools] = JsonSerializer.SerializeToElement(Array.Empty<string>()) });
-        Records.Prompt clean = PromptWith(new Dictionary<string, object> { [Constants.PromptProperties.Workflows] = JsonSerializer.SerializeToElement(Array.Empty<string>()) });
+        Records.Prompt clean = PromptWith(new Dictionary<string, object>());
 
-        List<string> errors = HandlesIntentAgentRegistryService.ValidateNoDeclaredTools([leftover, leftoverEmpty, clean]);
+        List<string> errors = HandlesIntentAgentRegistryService.ValidateNoDeclarationsInJson([leftover, leftoverEmpty, clean]);
 
         Assert.Equal(2, errors.Count);
         Assert.All(errors, error => Assert.Contains("\"Tools\"", error, StringComparison.Ordinal));
-        Assert.Empty(HandlesIntentAgentRegistryService.ValidateNoDeclaredTools([clean]));
+        Assert.Empty(HandlesIntentAgentRegistryService.ValidateNoDeclarationsInJson([clean]));
+    }
+
+    [Fact]
+    public void A_prompt_still_declaring_workflows_is_refused()
+    {
+        Records.Prompt leftover = PromptWith(new Dictionary<string, object> { [Constants.PromptProperties.Workflows] = JsonSerializer.SerializeToElement(new[] { "any" }) });
+        Records.Prompt leftoverEmpty = PromptWith(new Dictionary<string, object> { [Constants.PromptProperties.Workflows] = JsonSerializer.SerializeToElement(Array.Empty<string>()) });
+
+        List<string> errors = HandlesIntentAgentRegistryService.ValidateNoDeclarationsInJson([leftover, leftoverEmpty]);
+
+        // An empty key is refused as well as a filled one: the key itself is what is retired.
+        Assert.Equal(2, errors.Count);
+        Assert.All(errors, error => Assert.Contains("\"Workflows\"", error, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_prompt_declaring_both_keys_gets_one_message_for_each()
+    {
+        Records.Prompt leftover = PromptWith(new Dictionary<string, object>
+        {
+            [Constants.PromptProperties.Tools] = JsonSerializer.SerializeToElement(new[] { "any" }),
+            [Constants.PromptProperties.Workflows] = JsonSerializer.SerializeToElement(new[] { "any" })
+        });
+
+        List<string> errors = HandlesIntentAgentRegistryService.ValidateNoDeclarationsInJson([leftover]);
+
+        Assert.Equal(2, errors.Count);
+        Assert.Single(errors, error => error.Contains("\"Tools\"", StringComparison.Ordinal));
+        Assert.Single(errors, error => error.Contains("\"Workflows\"", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -189,7 +218,7 @@ public sealed class ToolContractTests
         ProvidesToolForIntentRegistryService toolRegistry = new(NullLogger.Instance);
         int toolsChecked = 0;
 
-        Assert.Empty(HandlesIntentAgentRegistryService.ValidateNoDeclaredTools(prompts));
+        Assert.Empty(HandlesIntentAgentRegistryService.ValidateNoDeclarationsInJson(prompts));
 
         foreach (Records.Prompt prompt in prompts.Where(candidate => toolRegistry.FindToolTypeForIntent(candidate.ID) is not null))
         {
@@ -215,7 +244,10 @@ public sealed class ToolContractTests
 
     /// <summary>A domain prompt carrying the given additional properties and nothing else of note.</summary>
     private static Records.Prompt PromptWith(Dictionary<string, object> properties)
-        => new("sample", "INTENT", "AGENT", "Target.", "Instructions.", "Formatting.", null, "en-US", "1", [properties]);
+        => new("sample", "Target.", "Instructions.", "Formatting.", null, null, "en-US", "1")
+        {
+            AdditionalProperties = [properties]
+        };
 
     /// <summary>The declaration that matches <see cref="HonestTool"/> field for field.</summary>
     private static readonly Records.ToolReturn[] HonestReturns =

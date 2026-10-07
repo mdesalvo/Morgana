@@ -158,7 +158,7 @@ public static class Constants
         /// </summary>
         public const string ComplementIntentDescription = "ComplementIntentDescription";
 
-        /// <summary>The procedures an agent declares beside its tools, whose steps the framework keeps in order.</summary>
+        /// <summary>The retired agents.json key of an agent's procedures, which startup refuses: workflows are declared on their class.</summary>
         public const string Workflows = "Workflows";
     }
 
@@ -318,7 +318,7 @@ public static class Constants
     }
 
     /// <summary>
-    /// What a workflow declaration and its launch tool agree on across agents.json and morgana.json.
+    /// What a workflow class and its launch tool agree on across the plugin and morgana.json.
     /// Also what a plugin's returned record and the workflow engine reading its result agree on.
     /// </summary>
     public static class Workflows
@@ -326,8 +326,8 @@ public static class Constants
         /// <summary>The wire name of the nullable property of a tool's returned record that holds a value only when the call failed.</summary>
         public const string FailureField = "error";
 
-        /// <summary>The step target that closes the workflow as concluded; no step may bear this name.</summary>
-        public const string End = "End";
+        /// <summary>The suffix of a workflow class name that the workflow's name drops: <c>PlaceOrderWorkflow</c> is launched as <c>PlaceOrder</c>.</summary>
+        public const string ClassNameSuffix = "Workflow";
 
         /// <summary>The parameter of <see cref="Tools.LaunchWorkflow"/> that names the workflow to start.</summary>
         public const string WorkflowParameter = "workflow";

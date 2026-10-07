@@ -109,7 +109,7 @@ she claims to do**: a ledger may be gazed into, an invoice may not be conjured.
 
 | File | Owner | Rule |
 |---|---|---|
-| `X.g.cs` | Alembic | attributes, constructor, `partial` signatures, result records — **always overwritten** |
+| `X.g.cs` | Alembic | attributes, constructor, `partial` signatures, result records and workflow classes — **always overwritten** |
 | `X.cs` | the client | the working mock, then their real integration — **written once, never touched again** |
 
 The split does double duty: non-destructive regeneration, *and* the line between what is templated
@@ -287,7 +287,7 @@ cover is a promise another agent would hold it to.
 
 **The workflows come right after the toolkit and are inferred, never dictated.** A workflow is made of tools that
 must exist and the Instructions must know what it already keeps in order, so it sits between the two: the pass
-proposes the whole procedure from the toolkit and the client corrects it, never designing steps, links or bound values.
+proposes the whole procedure from the toolkit and the client corrects it, never designing steps, edges or carried values.
 
 **The one thing a later pass may write about an intent is its description, once the territory stands.**
 The classifier's sentence is the map's to write and the map writes it before any agent exists; the same

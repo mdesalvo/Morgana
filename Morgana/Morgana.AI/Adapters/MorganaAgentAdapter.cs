@@ -224,7 +224,7 @@ public class MorganaAgentAdapter
 
         logger.LogInformation("Creating agent for intent '{IntentAttributeIntent}' on tier '{Tier}'...", intentAttribute.Intent, tierAttribute.Tier);
 
-        // 2) Domain prompt for this intent (instructions/personality/formatting/workflows),
+        // 2) Domain prompt for this intent (instructions/personality/formatting),
         //    resolved from agents.json.
         Records.Prompt agentPrompt = await promptResolverService.ResolveAsync(intentAttribute.Intent);
 
@@ -235,9 +235,11 @@ public class MorganaAgentAdapter
 
         // 4) Per-agent context provider (the variable store that the context-scoped parameters are
         //    resolved from); sharedContextCallback wires Shared:true writes into the cross-agent registry.
+        IReadOnlyList<Records.WorkflowDefinition> workflowDefinitions = toolRegistryService.GetWorkflowDefinitions(intentAttribute.Intent);
         MorganaAIContextProvider morganaAIContextProvider = CreateAIContextProvider(
             intentAttribute.Intent,
             agentTools,
+            workflowDefinitions,
             sharedContextCallback);
 
         // 5) ToolContext factory — evaluated lazily on EACH tool call, never now. The
@@ -251,9 +253,7 @@ public class MorganaAgentAdapter
 
         // The agent's workflows, whose engine is built here and whose position lives in the session. An agent
         // declaring none carries no workflow machinery at all.
-        Records.WorkflowDefinition[] workflowDefinitions = agentPrompt.GetAdditionalPropertyOrDefault<Records.WorkflowDefinition[]>(
-            Constants.PromptProperties.Workflows, []);
-        AgentWorkflows? agentWorkflows = workflowDefinitions.Length == 0
+        AgentWorkflows? agentWorkflows = workflowDefinitions.Count == 0
             ? null
             : new AgentWorkflows(
                 new WorkflowEngine(workflowDefinitions),
@@ -485,10 +485,15 @@ public class MorganaAgentAdapter
         if (!schema.TryGetProperty("properties", out JsonElement properties))
             return;
 
-        foreach ((string parameter, string valueJson) in position.Arguments)
+        foreach ((string carriedName, string valueJson) in position.Arguments)
         {
-            if (properties.TryGetProperty(parameter, out _))
-                context.Arguments[parameter] = JsonDocument.Parse(valueJson).RootElement.Clone();
+            // A workflow carries its property's name while a tool spells its parameter its own way,
+            // so the match ignores case and the value is written under the schema's spelling.
+            foreach (JsonProperty schemaProperty in properties.EnumerateObject())
+            {
+                if (string.Equals(schemaProperty.Name, carriedName, StringComparison.OrdinalIgnoreCase))
+                    context.Arguments[schemaProperty.Name] = JsonDocument.Parse(valueJson).RootElement.Clone();
+            }
         }
     }
 
@@ -626,6 +631,7 @@ public class MorganaAgentAdapter
     /// </summary>
     /// <param name="agentName">Name of the agent for logging purposes (e.g., "billing")</param>
     /// <param name="tools">Tool definitions to scan for shared variable declarations</param>
+    /// <param name="workflows">The agent's workflows, which the provider hands to whoever resolves a stored position.</param>
     /// <param name="sharedContextCallback">
     /// Optional callback invoked when a shared variable is set. Wired to agent's
     /// OnSharedContextUpdate which persists the value via IConversationPersistenceService.
@@ -634,6 +640,7 @@ public class MorganaAgentAdapter
     private MorganaAIContextProvider CreateAIContextProvider(
         string agentName,
         IEnumerable<Records.ToolDefinition> tools,
+        IReadOnlyList<Records.WorkflowDefinition> workflows,
         Func<string, object, Task>? sharedContextCallback = null)
     {
         // Derive the shared-variable allow-list from the tool definitions: a parameter is
@@ -658,7 +665,7 @@ public class MorganaAgentAdapter
 
         // The provider needs the allow-list up front: only writes to a name in this set
         // trigger OnSharedContextUpdate; everything else stays agent-local.
-        MorganaAIContextProvider aiContextProvider = new MorganaAIContextProvider(logger, sharedVariables);
+        MorganaAIContextProvider aiContextProvider = new MorganaAIContextProvider(logger, sharedVariables, workflows: workflows);
 
         // Wire persistence only when a callback was supplied. Left null (e.g. an agent
         // created outside the actor path) shared writes still update local state but are

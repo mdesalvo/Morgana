@@ -14,9 +14,6 @@ namespace Morgana.AI.Workflows;
 /// </remarks>
 public sealed class WorkflowEngine
 {
-    /// <summary>The scope that keeps the result of every step, so that a bound value may come from any earlier step.</summary>
-    private const string ResultScope = "workflow-results";
-
     /// <summary>Prefixes the id of each step's port, which shares its namespace with the executors.</summary>
     private const string PortPrefix = "step-";
 
@@ -82,7 +79,7 @@ public sealed class WorkflowEngine
     /// Reads one field of a tool's result, however the record cased it.
     /// </summary>
     /// <param name="resultJson">The tool's result as the JSON text the model read.</param>
-    /// <param name="field">The field as agents.json declares it.</param>
+    /// <param name="field">The field by the name that a workflow edge carries it under.</param>
     /// <returns>The field's JSON text; <c>null</c> when the field is absent or null or the result is not an object.</returns>
     public static string? ReadField(string resultJson, string field)
     {
@@ -129,13 +126,12 @@ public sealed class WorkflowEngine
         foreach (Records.WorkflowStep step in definition.Steps)
         {
             Records.WorkflowStep current = step;
-            ExecutorBinding router = ((Func<Records.StepOutcome, IWorkflowContext, ValueTask<Records.StepPrompt?>>)(async (outcome, context) =>
-                await RouteAsync(definition, current, outcome, context))).BindAsExecutor(RouterPrefix + step.Name);
+            ExecutorBinding router = ((Func<Records.StepOutcome, IWorkflowContext, ValueTask<Records.StepPrompt?>>)((outcome, _) =>
+                new ValueTask<Records.StepPrompt?>(Route(definition, current, outcome)))).BindAsExecutor(RouterPrefix + step.Name);
 
             builder.AddEdge(ports[step.Name], router);
 
-            foreach (string target in step.Links(false).Values.Concat(step.Links(true).Values).Distinct(StringComparer.Ordinal)
-                         .Where(target => target != Constants.Workflows.End))
+            foreach (string target in definition.Edges.Where(edge => edge.Source == step.Name).Select(edge => edge.Target).Distinct(StringComparer.Ordinal))
                 builder.AddEdge<Records.StepPrompt>(router, ports[target], prompt => prompt!.Step == target);
         }
 
@@ -143,39 +139,30 @@ public sealed class WorkflowEngine
     }
 
     /// <summary>
-    /// Keeps the step's result and picks the step that follows the outcome, binding its arguments.
+    /// Picks the edge that the outcome follows and binds the values that it carries.
     /// </summary>
-    /// <returns>The prompt for the next step; <c>null</c> when the workflow ends.</returns>
-    private static async ValueTask<Records.StepPrompt?> RouteAsync(
+    /// <returns>The prompt for the next step; <c>null</c> when no edge leaves the step for this outcome and the workflow ends.</returns>
+    private static Records.StepPrompt? Route(
         Records.WorkflowDefinition definition,
         Records.WorkflowStep step,
-        Records.StepOutcome outcome,
-        IWorkflowContext context)
+        Records.StepOutcome outcome)
     {
-        await context.QueueStateUpdateAsync(step.Name, outcome.ResultJson, ResultScope);
-
-        // A tool that the step does not link on this outcome ends the workflow, which is how End is also spelled.
-        if (!step.Links(outcome.Failed).TryGetValue(outcome.Tool, out string? target) || target == Constants.Workflows.End)
+        Records.WorkflowEdge? edge = definition.Edges.FirstOrDefault(candidate =>
+            string.Equals(candidate.Source, step.Name, StringComparison.Ordinal)
+            && string.Equals(candidate.Tool, outcome.Tool, StringComparison.Ordinal)
+            && candidate.OnFailure == outcome.Failed);
+        if (edge is null)
             return null;
 
-        Records.WorkflowStep next = definition.Steps.First(candidate => string.Equals(candidate.Name, target, StringComparison.Ordinal));
         Dictionary<string, string> arguments = [];
-
-        foreach ((string parameter, string source) in next.BoundArguments())
+        foreach (string name in edge.Carrying)
         {
-            string[] parts = source.Split('.', 2);
-
-            // The step just left has its result in hand: a queued update is not readable until the superstep ends.
-            string? resultJson = parts[0] == step.Name
-                ? outcome.ResultJson
-                : await context.ReadStateAsync<string>(parts[0], ResultScope);
-
-            // A source that never ran or lacks the field leaves the parameter unbound: the model supplies it.
-            if (resultJson is not null && ReadField(resultJson, parts[1]) is { } value)
-                arguments[parameter] = value;
+            // A result that lacks the field leaves the parameter unbound: the model supplies it.
+            if (ReadField(outcome.ResultJson, name) is { } value)
+                arguments[name] = value;
         }
 
-        return new Records.StepPrompt(target, arguments);
+        return new Records.StepPrompt(edge.Target, arguments);
     }
 
     /// <summary>

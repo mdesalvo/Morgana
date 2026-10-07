@@ -368,7 +368,7 @@ public sealed class InterviewState
 
         // The whole set of workflows as one string, for the same reason as the toolkit above.
         ["workflows"] = string.Join("|", Agent.Workflows.Select(w =>
-            $"{w.Name}:{w.Description}:{string.Join(",", w.Steps.Select(x => $"{x.Name}/{string.Join("+", x.Tools)}/{Pairs(x.Next)}/{Pairs(x.OnFailure)}/{Pairs(x.Arguments)}"))}")),
+            $"{w.Name}:{w.Description}:{string.Join(",", w.Steps.Select(x => $"{x.Name}/{string.Join("+", x.Tools)}"))}:{string.Join(",", w.Edges.Select(e => $"{e.Source}/{e.Tool}/{e.OnFailure}/{e.Target}/{string.Join("+", e.Carrying)}"))}")),
 
         // The whole set as one string, for the same reason as the toolkit above: an edge declared,
         // dropped or re-declared with different prose moves it and nothing finer is worth a row.
@@ -499,12 +499,6 @@ public sealed class InterviewState
             .. Agent.Workflows.SelectMany(w => w.Steps
                 .Where(x => x.Tools.Count == 0)
                 .Select(x => $"tools of step {x.Name ?? "(unnamed step)"} of workflow {w.Name ?? "(unnamed workflow)"}"))];
-
-    /// <summary>
-    /// A link table flattened to one comparable string.
-    /// </summary>
-    private static string Pairs(Dictionary<string, string>? pairs) =>
-        pairs is null ? string.Empty : string.Join(",", pairs.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}>{pair.Value}"));
 
     /// <summary>
     /// How the agent goes about the work, which could not be written before the toolkit existed.

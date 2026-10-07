@@ -128,7 +128,12 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
             return tool;
 
         JsonObject schema = SchemaOf(function);
-        string[] hidden = [.. boundParameters.Where(parameter => schema["properties"] is JsonObject properties && properties.ContainsKey(parameter))];
+        // A workflow carries its property's name while a tool spells its parameter its own way, so the
+        // schema's own spelling is what is hidden.
+        string[] hidden = schema["properties"] is JsonObject properties
+            ? [.. properties.Select(property => property.Key)
+                .Where(name => boundParameters.Contains(name, StringComparer.OrdinalIgnoreCase))]
+            : [];
         if (hidden.Length == 0)
             return tool;
 

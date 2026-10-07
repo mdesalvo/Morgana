@@ -668,28 +668,22 @@ public class InterviewTools
     }
 
     /// <summary>
-    /// Adds a step at the end of a workflow, or revises one already there by name and in place.
+    /// Adds a step at the end of a workflow, or revises the tools of one already there by name and in place.
     /// </summary>
     /// <remarks>
     /// Revision keeps the step's place, because the order of the steps is the order the procedure
-    /// was described in and the first one is where it starts. A link to a step that is not declared
-    /// yet is legal: steps arrive one by one and <see cref="GetFindings"/> reports a link left dangling.
+    /// was described in and the first one is where it starts. The edges of the step stay as they are:
+    /// <see cref="GetFindings"/> reports one whose tool the step no longer offers.
     /// </remarks>
     /// <param name="workflow">The already-declared workflow this step belongs to.</param>
-    /// <param name="name">PascalCase and never <c>End</c>, which is the reserved target that closes a workflow.</param>
+    /// <param name="name">PascalCase, a short name for the moment of the procedure.</param>
     /// <param name="tools">The tools offered at this step, by their exact names.</param>
-    /// <param name="next">Tool name to the step its call leads to when it succeeds, or <c>End</c>.</param>
-    /// <param name="onFailure">Tool name to the step its call leads to when it fails; a tool left out ends the workflow.</param>
-    /// <param name="arguments">Parameter name to <c>Step.field</c>, the earlier result the framework fills it from.</param>
-    [Description("Adds a step at the end of a workflow, or revises one already there by name and in place. The first step is where the workflow starts.")]
+    [Description("Adds a step to a workflow, or revises the tools of one already there by name and in place. The first step set is where the workflow starts.")]
     [RequiresApproval(false)]
     public ToolReply SetWorkflowStep(
         [Description("The exact name of a workflow you have already declared.")] [ToolParameter(Records.ToolScope.Request)] string workflow,
-        [Description("PascalCase, a short name for the moment of the procedure (e.g. 'Quote', 'Decide'). Never 'End'.")] [ToolParameter(Records.ToolScope.Request)] string name,
-        [Description("The tools offered at this step, by their exact names. Two or more make the step a choice the person makes.")] [ToolParameter(Records.ToolScope.Request)] string[] tools,
-        [Description("For each tool of the step, the step its call leads to when it succeeds, or 'End' where the procedure is done.")] [ToolParameter(Records.ToolScope.Request)] Dictionary<string, string> next,
-        [Description("For a tool whose call can fail, the step it leads to when it does: usually the same step, to try again. A tool left out ends the workflow when its call fails.")] [ToolParameter(Records.ToolScope.Request)] Dictionary<string, string>? onFailure = null,
-        [Description("For a parameter of this step's tools that an earlier step already produced, where it comes from, as 'Step.field' with a field that the earlier tool hands back. The agent never asks for it.")] [ToolParameter(Records.ToolScope.Request)] Dictionary<string, string>? arguments = null)
+        [Description("PascalCase, a short name for the moment of the procedure (e.g. 'Quote', 'Decide').")] [ToolParameter(Records.ToolScope.Request)] string name,
+        [Description("The tools offered at this step, by their exact names. Two or more make the step a choice the person makes.")] [ToolParameter(Records.ToolScope.Request)] string[] tools)
     {
         if (FindWorkflow(workflow) is not { } owner)
             return ToolReply.Refused($"No step recorded: no workflow named '{workflow}' has been declared yet.");
@@ -709,9 +703,6 @@ public class InterviewTools
         if (identifierComplaint.Length > 0)
             complaints.Add(identifierComplaint);
 
-        if (string.Equals(cleanName, Constants.Workflows.End, StringComparison.Ordinal))
-            complaints.Add($"But '{Constants.Workflows.End}' is the reserved target that closes a workflow and no step may bear it.");
-
         // An agent that acquires tools from an MCP server names tools nothing here can see, so only
         // an agent with none of those can have a tool judged absent on the spot.
         if (interviewState.Agent.Code.MCPServers.Count == 0)
@@ -721,45 +712,127 @@ public class InterviewTools
         if (stepTools.Count == 0)
             complaints.Add("But a step offers at least one tool.");
 
-        Dictionary<string, string> successLinks = Cleaned(next);
-        Dictionary<string, string> failureLinks = Cleaned(onFailure);
-        Dictionary<string, string> boundValues = Cleaned(arguments);
-
-        foreach ((string linkKind, Dictionary<string, string> links) in new[] { ("next", successLinks), ("onFailure", failureLinks) })
-            foreach (string tool in links.Keys.Where(tool => !stepTools.Contains(tool, StringComparer.Ordinal)))
-                complaints.Add($"But '{tool}' in {linkKind} is not a tool of this step.");
-
-        foreach ((string parameter, string source) in boundValues)
-        {
-            string[] parts = source.Split('.');
-
-            if (parts.Length != 2 || parts.Any(part => part.Length == 0))
-                complaints.Add($"But '{source}', the source of '{parameter}', is not of the form Step.field.");
-        }
-
         if (complaints.Count > 0)
             return ToolReply.Refused("No step recorded. " + string.Join(" ", complaints) + " Call again with the step corrected.");
 
-        WorkflowStepDraft? existing = owner.Steps.FirstOrDefault(step => string.Equals(step.Name, cleanName, StringComparison.Ordinal));
-        WorkflowStepDraft recorded = existing ?? new WorkflowStepDraft { Name = cleanName };
+        Records.WorkflowStep recorded = new(cleanName, stepTools);
+        int position = owner.Steps.FindIndex(step => string.Equals(step.Name, cleanName, StringComparison.Ordinal));
 
-        recorded.Tools = stepTools;
-        recorded.Next = successLinks;
-        recorded.OnFailure = failureLinks;
-        recorded.Arguments = boundValues;
-
-        if (existing is null)
+        if (position >= 0)
+            owner.Steps[position] = recorded;
+        else
             owner.Steps.Add(recorded);
 
-        return new ToolReply(existing is not null
+        return new ToolReply(position >= 0
             ? $"Step '{cleanName}' of '{owner.Name}' revised."
             : $"Step '{cleanName}' added to '{owner.Name}' as step {owner.Steps.Count}.");
     }
 
     /// <summary>
-    /// Removes a step from a workflow.
+    /// Leads the successful call of a tool to the step that follows it, or revises where it leads.
     /// </summary>
-    [Description("Removes a step from a workflow. Also how a step moves: drop it and set it again where it belongs.")]
+    [Description("Leads the successful call of a tool to the step that follows it, or revises where it leads. Carries to that step the values that the call hands back.")]
+    [RequiresApproval(false)]
+    public ToolReply AddEdge(
+        [Description("The exact name of a workflow you have already declared.")] [ToolParameter(Records.ToolScope.Request)] string workflow,
+        [Description("The exact name of the step that offers the tool.")] [ToolParameter(Records.ToolScope.Request)] string source,
+        [Description("The exact name of the step that the successful call leads to; it may be the same step.")] [ToolParameter(Records.ToolScope.Request)] string target,
+        [Description("The exact name of the tool whose call this edge follows.")] [ToolParameter(Records.ToolScope.Request)] string tool,
+        [Description("Names of the tool's own returned fields whose values the next step takes, each through a parameter of the same name. The agent never asks for them.")] [ToolParameter(Records.ToolScope.Request)] string[]? carrying = null)
+        => RecordEdge(workflow, source, target, tool, carrying, onFailure: false);
+
+    /// <summary>
+    /// Leads the failed call of a tool to another step, or revises where it leads.
+    /// </summary>
+    [Description("Leads the failed call of a tool to another step, usually the same one to try again, or revises where it leads. A tool whose failed call no edge leads anywhere ends the workflow when it fails.")]
+    [RequiresApproval(false)]
+    public ToolReply AddFailureEdge(
+        [Description("The exact name of a workflow you have already declared.")] [ToolParameter(Records.ToolScope.Request)] string workflow,
+        [Description("The exact name of the step that offers the tool.")] [ToolParameter(Records.ToolScope.Request)] string source,
+        [Description("The exact name of the step that the failed call leads to; usually the same step.")] [ToolParameter(Records.ToolScope.Request)] string target,
+        [Description("The exact name of the tool whose call this edge follows.")] [ToolParameter(Records.ToolScope.Request)] string tool,
+        [Description("Names of the tool's own returned fields whose values the next step takes, each through a parameter of the same name. The agent never asks for them.")] [ToolParameter(Records.ToolScope.Request)] string[]? carrying = null)
+        => RecordEdge(workflow, source, target, tool, carrying, onFailure: true);
+
+    /// <summary>
+    /// Removes the edge that a tool's call follows.
+    /// </summary>
+    [Description("Removes the edge that a tool's call follows, so that the call ends the workflow.")]
+    [RequiresApproval(false)]
+    public ToolReply DropEdge(
+        [Description("The exact name of a workflow you have already declared.")] [ToolParameter(Records.ToolScope.Request)] string workflow,
+        [Description("The exact name of the step that offers the tool.")] [ToolParameter(Records.ToolScope.Request)] string source,
+        [Description("The exact name of the tool whose edge is removed.")] [ToolParameter(Records.ToolScope.Request)] string tool,
+        [Description("True for the edge of a failed call, false for the edge of a successful one.")] [ToolParameter(Records.ToolScope.Request)] bool failure)
+    {
+        if (FindWorkflow(workflow) is not { } owner)
+            return ToolReply.Refused($"Nothing dropped: no workflow named '{workflow}' has been declared.");
+
+        int removed = owner.Edges.RemoveAll(edge => IsEdge(edge, source, tool, failure));
+
+        return removed > 0
+            ? new ToolReply($"The {(failure ? "failure " : string.Empty)}edge of '{tool}' at '{source}' dropped from '{owner.Name}'.")
+            : ToolReply.Refused($"Nothing dropped: '{owner.Name}' has no {(failure ? "failure " : string.Empty)}edge for '{tool}' at '{source}'.");
+    }
+
+    /// <summary>
+    /// Records an edge under the key (source, tool, outcome), replacing the one already held there in place.
+    /// </summary>
+    /// <remarks>
+    /// Only what makes the edge unrecordable is refused (a workflow or step that is not there, a tool the
+    /// source step does not offer): whether the carried names are returned by the tool is for <see cref="GetFindings"/>.
+    /// </remarks>
+    private ToolReply RecordEdge(string workflow, string source, string target, string tool, string[]? carrying, bool onFailure)
+    {
+        if (FindWorkflow(workflow) is not { } owner)
+            return ToolReply.Refused($"No edge recorded: no workflow named '{workflow}' has been declared yet.");
+
+        string cleanSource = (source ?? string.Empty).Trim();
+        string cleanTarget = (target ?? string.Empty).Trim();
+        string cleanTool = (tool ?? string.Empty).Trim();
+        List<string> complaints = [];
+
+        Records.WorkflowStep? sourceStep = owner.Steps.FirstOrDefault(step => string.Equals(step.Name, cleanSource, StringComparison.Ordinal));
+
+        if (sourceStep is null)
+            complaints.Add($"But '{owner.Name}' has no step named '{source}'.");
+        else if (!sourceStep.Tools.Contains(cleanTool, StringComparer.Ordinal))
+            complaints.Add($"But '{cleanTool}' is not a tool of step '{cleanSource}'.");
+
+        if (!owner.Steps.Any(step => string.Equals(step.Name, cleanTarget, StringComparison.Ordinal)))
+            complaints.Add($"But '{owner.Name}' has no step named '{target}'.");
+
+        if (complaints.Count > 0)
+            return ToolReply.Refused("No edge recorded. " + string.Join(" ", complaints) + " Call again with the edge corrected.");
+
+        List<string> carried = [.. (carrying ?? []).Select(name => name?.Trim() ?? string.Empty)
+                                                   .Where(name => name.Length > 0)
+                                                   .Distinct(StringComparer.Ordinal)];
+        Records.WorkflowEdge recorded = new(cleanSource, cleanTarget, cleanTool, onFailure, carried);
+        int position = owner.Edges.FindIndex(edge => IsEdge(edge, cleanSource, cleanTool, onFailure));
+
+        if (position >= 0)
+            owner.Edges[position] = recorded;
+        else
+            owner.Edges.Add(recorded);
+
+        return new ToolReply($"The {(onFailure ? "failure " : string.Empty)}edge of '{cleanTool}' at '{cleanSource}' "
+               + (position >= 0 ? "revised" : "added")
+               + $" in '{owner.Name}': it leads to '{cleanTarget}'.");
+    }
+
+    /// <summary>
+    /// Whether an edge is the one keyed by the source step, the tool and the outcome.
+    /// </summary>
+    private static bool IsEdge(Records.WorkflowEdge edge, string? source, string? tool, bool onFailure) =>
+        edge.OnFailure == onFailure
+        && string.Equals(edge.Source, source?.Trim(), StringComparison.Ordinal)
+        && string.Equals(edge.Tool, tool?.Trim(), StringComparison.Ordinal);
+
+    /// <summary>
+    /// Removes a step from a workflow with every edge that leaves it or leads to it.
+    /// </summary>
+    [Description("Removes a step from a workflow with every edge that leaves it or leads to it.")]
     [RequiresApproval(false)]
     public ToolReply DropWorkflowStep(
         [Description("The exact name of the workflow.")] [ToolParameter(Records.ToolScope.Request)] string workflow,
@@ -768,12 +841,18 @@ public class InterviewTools
         if (FindWorkflow(workflow) is not { } owner)
             return ToolReply.Refused($"Nothing dropped: no workflow named '{workflow}' has been declared.");
 
-        int removed = owner.Steps.RemoveAll(candidate =>
-            string.Equals(candidate.Name, step?.Trim(), StringComparison.Ordinal));
+        string cleanStep = step?.Trim() ?? string.Empty;
+        int removed = owner.Steps.RemoveAll(candidate => string.Equals(candidate.Name, cleanStep, StringComparison.Ordinal));
 
-        return removed > 0
-            ? new ToolReply($"Step '{step}' dropped from '{owner.Name}'.")
-            : ToolReply.Refused($"Nothing dropped: '{owner.Name}' has no step named '{step}'.");
+        if (removed == 0)
+            return ToolReply.Refused($"Nothing dropped: '{owner.Name}' has no step named '{step}'.");
+
+        // An edge whose end is gone would name a step that no longer exists.
+        int edgesRemoved = owner.Edges.RemoveAll(edge =>
+            string.Equals(edge.Source, cleanStep, StringComparison.Ordinal) || string.Equals(edge.Target, cleanStep, StringComparison.Ordinal));
+
+        return new ToolReply($"Step '{step}' dropped from '{owner.Name}'"
+               + (edgesRemoved > 0 ? $" with {edgesRemoved} edge(s)." : "."));
     }
 
     /// <summary>
@@ -800,8 +879,8 @@ public class InterviewTools
     public ToolReply GetWorkflows() => new ToolReply(DescribeWorkflows(interviewState.Agent.Workflows));
 
     /// <summary>
-    /// Renders workflows as readable text: one block each, its steps in order with the tools, where
-    /// each call leads, the failures and the values bound from earlier steps.
+    /// Renders workflows as readable text: one block each, its steps in order with the tools, then one
+    /// line per edge with the values it carries.
     /// </summary>
     /// <remarks>
     /// Internal because the coherence passes read an agent's workflows in the same words the
@@ -818,32 +897,17 @@ public class InterviewTools
                    + (workflow.Steps.Count == 0
                        ? "\n  (no step yet)"
                        : string.Concat(workflow.Steps.Select((step, position) =>
-                           $"\n  {position + 1}. {step.Name ?? "(unnamed)"} — tools: "
-                           + (step.Tools.Count == 0 ? "(none yet)" : string.Join(", ", step.Tools))
-                           + Links("on success", step.Next)
-                           + Links("on failure", step.OnFailure)
-                           + (step.Arguments.Count == 0
-                               ? string.Empty
-                               : "\n     binds: " + string.Join(", ", step.Arguments.Select(pair => $"{pair.Key} from {pair.Value}"))))))));
+                           $"\n  {position + 1}. {step.Name} — tools: "
+                           + (step.Tools.Count == 0 ? "(none yet)" : string.Join(", ", step.Tools)))))
+                   + string.Concat(workflow.Edges.Select(edge => "\n  " + DescribeEdge(edge)))));
     }
 
     /// <summary>
-    /// One line of where a step's tools lead, or nothing where it declares none.
+    /// One edge as a line: where the call leads and the values it carries.
     /// </summary>
-    private static string Links(string label, Dictionary<string, string> links) =>
-        links.Count == 0
-            ? string.Empty
-            : $"\n     {label}: " + string.Join(", ", links.Select(pair => $"{pair.Key} leads to {pair.Value}"));
-
-    /// <summary>
-    /// A link table as the model sent it, with names and targets trimmed and empty entries gone.
-    /// </summary>
-    private static Dictionary<string, string> Cleaned(Dictionary<string, string>? links) =>
-        (links ?? [])
-            .Select(pair => (Key: pair.Key?.Trim() ?? string.Empty, Value: pair.Value?.Trim() ?? string.Empty))
-            .Where(pair => pair.Key.Length > 0 && pair.Value.Length > 0)
-            .GroupBy(pair => pair.Key, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.Ordinal);
+    internal static string DescribeEdge(Records.WorkflowEdge edge) =>
+        $"{edge.Source} --{edge.Tool}{(edge.OnFailure ? " (failure)" : string.Empty)}--> {edge.Target}"
+        + (edge.Carrying is { Count: > 0 } ? " carrying " + string.Join(", ", edge.Carrying) : string.Empty);
 
     /// <summary>
     /// Finds a declared workflow by exact name, ordinal because the framework looks it up that way.

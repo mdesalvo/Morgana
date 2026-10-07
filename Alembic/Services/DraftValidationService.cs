@@ -355,6 +355,13 @@ public class DraftValidationService : IDraftValidationService
                 continue;
             }
 
+            // The emitted class declares a field per step and a property per carried value, so one name for both does not compile.
+            HashSet<string> carriedProperties = [.. DraftProjection.CarriedNames(workflow).Select(CodeEmitService.PropertyName)];
+            foreach (Records.WorkflowStep step in workflow.Steps.Where(step => carriedProperties.Contains(step.Name)))
+                findings.Add(new ValidationFinding(FindingSeverity.Error, where,
+                    $"Workflow '{workflow.Name}' has a step '{step.Name}' named like a value that one of its edges carries.",
+                    "The workflow's class would declare the step and the carried value under one name and would not compile.") { Step = InterviewStep.AgentWorkflows });
+
             projectable.Add(workflow);
         }
 

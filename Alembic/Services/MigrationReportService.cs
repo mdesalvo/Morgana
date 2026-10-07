@@ -213,9 +213,9 @@ public class MigrationReportService : IMigrationReportService
     /// One agent's workflows, each added, changed or removed against baseline.
     /// </summary>
     /// <remarks>
-    /// Every difference is reported as revised, whatever its kind: a workflow is read from agents.json
-    /// alone, so even a removed one leaves no code behind to delete. An agent that is itself new is
-    /// skipped, since its own entry already says everything in it is new.
+    /// A workflow is a generated class, so every difference is a code change: the class is regenerated and
+    /// the plugin rebuilt. A removed one is reported as removed since its file leaves the archive. An agent
+    /// that is itself new is skipped, since its own entry already says everything in it is new.
     /// </remarks>
     private static void CompareWorkflows(AgentDraft agent, AgentDraft? was, List<MigrationEntry> entries)
     {
@@ -228,18 +228,18 @@ public class MigrationReportService : IMigrationReportService
             WorkflowDraft? previous = was.Workflows.FirstOrDefault(w => string.Equals(w.Name, workflow.Name, StringComparison.Ordinal));
 
             if (previous is null)
-                entries.Add(new MigrationEntry(MigrationKind.Workflow, where, MigrationChange.Revised,
-                    "New workflow. It is read from agents.json, so nothing needs rebuilding."));
+                entries.Add(new MigrationEntry(MigrationKind.Workflow, where, MigrationChange.Added,
+                    $"New workflow. Its class {workflow.Name}Workflow is generated, so the plugin needs rebuilding."));
             else if (Serialized(previous) != Serialized(workflow))
-                entries.Add(new MigrationEntry(MigrationKind.Workflow, where, MigrationChange.Revised,
-                    "Workflow changed. It is read from agents.json, so nothing needs rebuilding."));
+                entries.Add(new MigrationEntry(MigrationKind.Workflow, where, MigrationChange.SignatureChanged,
+                    $"Workflow changed. Its class {workflow.Name}Workflow is regenerated, so the plugin needs rebuilding."));
         }
 
         entries.AddRange(
             was.Workflows.Where(w => !string.IsNullOrWhiteSpace(w.Name)
                                      && !agent.Workflows.Any(x => string.Equals(x.Name, w.Name, StringComparison.Ordinal)))
-                         .Select(gone => new MigrationEntry(MigrationKind.Workflow, $"{agent.ID}.{gone.Name}", MigrationChange.Revised,
-                             "Workflow removed. It was read from agents.json, so nothing needs rebuilding.")));
+                         .Select(gone => new MigrationEntry(MigrationKind.Workflow, $"{agent.ID}.{gone.Name}", MigrationChange.Removed,
+                             $"Workflow removed. Its class {gone.Name}Workflow is no longer emitted, so delete that file from the plugin and rebuild it.")));
     }
 
     /// <summary>

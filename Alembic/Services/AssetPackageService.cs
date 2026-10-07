@@ -193,8 +193,9 @@ public class AssetPackageService : IAssetPackageService
         | Path | Yours or Alembic's |
         |---|---|
         | `*.csproj` / `*.slnx` | Alembic's. A ready project referencing the `Morgana.AI` package, named after your namespace |
-        | `agents.json` | the configuration Morgana loads — intents, agent prose and workflows |
+        | `agents.json` | the configuration Morgana loads — intents and agent prose |
         | `Agents/*.g.cs` | Alembic's. Regenerated in full every time |
+        | `Workflows/*.g.cs` | Alembic's. One class per workflow: its steps, its edges and the values they carry. Regenerated in full every time |
         | `Tools/*.g.cs` | Alembic's. Attributes, constructor, one attributed `partial` signature per tool and the record it returns |
         | `Tools/*.cs` | **yours.** Written once as a working mock, never written again |
         | `MIGRATION.md` | what this differs from: the archive you received before this one, if there was one |

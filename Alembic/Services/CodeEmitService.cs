@@ -58,12 +58,18 @@ public class CodeEmitService : ICodeEmitService
             new EmittedFile($"Agents/{agentClass}.g.cs", EmitAgent(agent, intentName, ns, agentClass), FileOwnership.Generated)
         ];
 
+        string toolClass = agent.Code.ToolClassName ?? $"{Pascal(intentName)}Tool";
+
+        // A workflow can stand without a native tool: an MCP-only agent's steps name its servers' tools by literal.
+        // A workflow with no name or no step has no class to write yet and validation reports it.
+        files.AddRange(agent.Workflows
+            .Where(workflow => !string.IsNullOrWhiteSpace(workflow.Name) && workflow.Steps.Count > 0)
+            .Select(workflow => new EmittedFile($"Workflows/{workflow.Name}Workflow.g.cs", EmitWorkflow(agent, workflow, intentName, ns, toolClass), FileOwnership.Generated)));
+
         // No tool class for an agent that declares none: an MCP-only agent's tools arrive at runtime
         // from its servers and an empty MorganaTool subclass would only invite someone to fill it.
         if (agent.Tools.Count == 0)
             return files;
-
-        string toolClass = agent.Code.ToolClassName ?? $"{Pascal(intentName)}Tool";
 
         files.Add(new EmittedFile($"Tools/{toolClass}.g.cs", EmitToolSignatures(agent, intentName, ns, toolClass), FileOwnership.Generated));
 
@@ -183,6 +189,72 @@ public class CodeEmitService : ICodeEmitService
             AppendResultRecord(sb, tool);
         }
 
+        sb.AppendLine("}");
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// One workflow as a <c>MorganaWorkflow</c> class, whole: there is no half of it for the client to own.
+    /// </summary>
+    /// <remarks>
+    /// A tool of the agent's toolkit is written as <c>nameof</c> so that a tool renamed in the draft
+    /// breaks the build instead of the workflow at run time. Any other name is an MCP tool that only
+    /// the server knows and is written as a literal.
+    /// </remarks>
+    private static string EmitWorkflow(AgentDraft agent, WorkflowDraft workflow, string intentName, string ns, string toolClass)
+    {
+        StringBuilder sb = new StringBuilder();
+        HashSet<string> toolkit = [.. agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name)).Select(t => t.Name!)];
+        List<string> properties = [.. DraftProjection.CarriedNames(workflow).Select(PropertyName).Distinct(StringComparer.Ordinal)];
+
+        string ToolReference(string tool) => toolkit.Contains(tool) ? $"nameof({toolClass}.{tool})" : Literal(tool);
+
+        sb.AppendLine(AgentBanner);
+        sb.AppendLine("#nullable enable");
+        sb.AppendLine();
+        sb.AppendLine("using System.ComponentModel;");
+
+        // The tools' namespace exists only where a tool class does.
+        if (toolkit.Count > 0)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"using {ns}.Tools;");
+
+        sb.AppendLine("using Morgana.AI;");
+        sb.AppendLine("using Morgana.AI.Abstractions;");
+        sb.AppendLine("using Morgana.AI.Attributes;");
+        sb.AppendLine();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"namespace {ns}.Workflows;");
+        sb.AppendLine();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"[ProvidesWorkflowForIntent(\"{intentName}\")]");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"[Description({Literal(workflow.Description)})]");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"public sealed class {workflow.Name}Workflow : MorganaWorkflow");
+        sb.AppendLine("{");
+
+        foreach (string property in properties)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"    public string? {property} {{ get; init; }}");
+
+        if (properties.Count > 0)
+            sb.AppendLine();
+
+        foreach (Records.WorkflowStep step in workflow.Steps)
+            sb.AppendLine(CultureInfo.InvariantCulture,
+                $"    private static readonly Records.WorkflowStep {step.Name} = new(\"{step.Name}\", [{string.Join(", ", step.Tools.Select(ToolReference))}]);");
+
+        sb.AppendLine();
+        sb.AppendLine(CultureInfo.InvariantCulture, $"    public {workflow.Name}Workflow() : base(start: {workflow.Steps[0].Name})");
+        sb.AppendLine("    {");
+
+        foreach (Records.WorkflowEdge edge in workflow.Edges)
+        {
+            string carrying = edge.Carrying is { Count: > 0 }
+                ? $", carrying: [{string.Join(", ", edge.Carrying.Select(name => $"nameof({PropertyName(name)})"))}]"
+                : string.Empty;
+
+            sb.AppendLine(CultureInfo.InvariantCulture,
+                $"        {(edge.OnFailure ? "AddFailureEdge" : "AddEdge")}({edge.Source}, {edge.Target}, {ToolReference(edge.Tool)}{carrying});");
+        }
+
+        sb.AppendLine("    }");
         sb.AppendLine("}");
 
         return sb.ToString();

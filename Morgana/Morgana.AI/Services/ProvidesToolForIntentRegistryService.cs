@@ -37,6 +37,11 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     private readonly ConcurrentDictionary<string, IReadOnlyList<Records.ToolDefinition>> toolDefinitionsByIntent = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// The workflows that classes declare, projected once per intent: a class does not change under a running process.
+    /// </summary>
+    private readonly Lazy<Dictionary<string, IReadOnlyList<Records.WorkflowDefinition>>> workflowsByIntent;
+
+    /// <summary>
     /// Initializes a new instance of ProvidesToolForIntentRegistryService.
     /// Performs tool discovery and validation with comprehensive diagnostic output.
     /// </summary>
@@ -46,6 +51,74 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         this.logger = logger;
 
         intentToToolType = new Lazy<Dictionary<string, Type>>(InitializeRegistry);
+        workflowsByIntent = new Lazy<Dictionary<string, IReadOnlyList<Records.WorkflowDefinition>>>(DiscoverWorkflows);
+    }
+
+    /// <summary>
+    /// Finds every <see cref="MorganaWorkflow"/> that declares an intent and projects each one once.
+    /// </summary>
+    /// <returns>The definitions per intent, lowercased, case-insensitive.</returns>
+    /// <exception cref="InvalidOperationException">A workflow class cannot be instantiated.</exception>
+    private Dictionary<string, IReadOnlyList<Records.WorkflowDefinition>> DiscoverWorkflows()
+    {
+        Console.WriteLine("🔍 Scanning assemblies for MorganaWorkflow implementations...");
+
+        Dictionary<string, List<Records.WorkflowDefinition>> collected = new(StringComparer.OrdinalIgnoreCase);
+
+        // Every assembly in the process, since a domain's workflows arrive in a plugin DLL that
+        // PluginLoaderService has already loaded by the time this runs.
+        IEnumerable<Type> workflowTypes = AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => !a.IsDynamic)
+            .SelectMany(a =>
+            {
+                try
+                {
+                    return a.GetTypes();
+                }
+                catch (ReflectionTypeLoadException ex)
+                {
+                    // An assembly with incomplete dependencies costs only its own types: a half-built
+                    // plugin must not hide the workflows of every other one.
+                    logger.LogWarning("Could not load types from assembly {ArgFullName}: {ExMessage}", a.FullName, ex.Message);
+                    return [];
+                }
+            })
+            // Concrete workflows that declare which agent they belong to. A workflow without the
+            // attribute belongs to no agent, so nothing could ever launch it.
+            .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaWorkflow)))
+            .Where(t => t.GetCustomAttribute<ProvidesWorkflowForIntentAttribute>() != null);
+
+        foreach (Type workflowType in workflowTypes)
+        {
+            ProvidesWorkflowForIntentAttribute declaration = workflowType.GetCustomAttribute<ProvidesWorkflowForIntentAttribute>()!;
+
+            // Lowercased on the way in, since an intent is typed by hand here and on the agent.
+            string intent = declaration.Intent.ToLowerInvariant();
+
+            // Discovery runs while startup validates the agents, so a class that cannot be built stops the host
+            // there instead of leaving its agent without the workflow in front of a user.
+            MorganaWorkflow workflow;
+            try
+            {
+                workflow = (MorganaWorkflow)Activator.CreateInstance(workflowType)!;
+            }
+            catch (Exception ex) when (ex is MissingMethodException or TargetInvocationException)
+            {
+                throw new InvalidOperationException(
+                    $"Workflow class '{workflowType.Name}' of intent '{intent}' cannot be instantiated: {(ex.InnerException ?? ex).Message}", ex);
+            }
+
+            if (!collected.TryGetValue(intent, out List<Records.WorkflowDefinition>? definitions))
+                collected[intent] = definitions = [];
+            definitions.Add(workflow.ToDefinition());
+
+            Console.WriteLine($"  📦 Registered workflow: {workflowType.Name} for intent '{declaration.Intent}'");
+        }
+
+        Console.WriteLine($"✅ Workflow registry initialized with {collected.Values.Sum(definitions => definitions.Count)} workflow(s)");
+        Console.WriteLine();
+
+        return collected.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<Records.WorkflowDefinition>)pair.Value, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -221,6 +294,14 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
 
         return toolDefinitionsByIntent.GetOrAdd(intent, _ => ProjectToolDefinitions(toolType));
     }
+
+    /// <inheritdoc />
+    public IReadOnlyList<Records.WorkflowDefinition> GetWorkflowDefinitions(string intent)
+        => string.IsNullOrWhiteSpace(intent) ? [] : workflowsByIntent.Value.GetValueOrDefault(intent) ?? [];
+
+    /// <inheritdoc />
+    public IReadOnlyDictionary<string, IReadOnlyList<Records.WorkflowDefinition>> GetAllRegisteredWorkflows()
+        => workflowsByIntent.Value;
 
     /// <summary>
     /// Lists the methods of a tool class that are tools: the public instance methods that it declares

@@ -24,7 +24,7 @@ public interface ICodeEmitService
     /// </summary>
     /// <param name="agent">The agent to emit.</param>
     /// <param name="intentName">The intent that routes to it — the <c>[HandlesIntent]</c> argument.</param>
-    /// <returns>One or two files: the agent and its tool class where it declares native tools.</returns>
+    /// <returns>The agent, one class per workflow and its tool class where it declares native tools.</returns>
     IReadOnlyList<EmittedFile> Emit(AgentDraft agent, string intentName);
 }
 

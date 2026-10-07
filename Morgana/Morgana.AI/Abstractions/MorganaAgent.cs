@@ -447,9 +447,7 @@ public class MorganaAgent : MorganaActor
             // closed with: a model that never complied, the framework's own closure and a missing Reply all end here.
             if (!turnReply.UserIsLeaving && !awaitsApproval)
             {
-                Records.WorkflowDefinition[] workflows = (await promptResolverService.ResolveAsync(AgentIntent))
-                    .GetAdditionalPropertyOrDefault<Records.WorkflowDefinition[]>(Constants.PromptProperties.Workflows, []);
-                if (aiContextProvider.GetWorkflowPosition(aiAgentSession)?.Resolve(workflows) is { Step.Tools.Count: > 1 } choosing)
+                if (aiContextProvider.GetWorkflowPosition(aiAgentSession)?.Resolve(aiContextProvider.Workflows) is { Step.Tools.Count: > 1 } choosing)
                     turnReply = turnReply.WithStepActions(choosing.Step.Tools);
             }
 

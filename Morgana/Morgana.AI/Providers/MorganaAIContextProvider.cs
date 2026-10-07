@@ -37,6 +37,12 @@ public class MorganaAIContextProvider : AIContextProvider
     public Func<string, object, Task>? OnSharedContextUpdate { get; set; }
 
     /// <summary>
+    /// The workflows of the agent that owns this provider, so that whoever holds the provider resolves a
+    /// stored position without reaching the tool registry.
+    /// </summary>
+    public IReadOnlyList<Records.WorkflowDefinition> Workflows { get; }
+
+    /// <summary>
     /// Keys used by the framework to store and retrieve this provider's state within <see cref="AgentSession"/>.
     /// </summary>
     public override IReadOnlyList<string> StateKeys => [ nameof(MorganaAIContextProvider) ];
@@ -54,13 +60,16 @@ public class MorganaAIContextProvider : AIContextProvider
     /// JSON serialization options for state persistence.
     /// Defaults to <c>AgentAbstractionsJsonUtilities.DefaultOptions</c>.
     /// </param>
+    /// <param name="workflows">The workflows that the agent runs; none for an agent that declares no workflow.</param>
     public MorganaAIContextProvider(
         ILogger logger,
         IEnumerable<string>? sharedVariableNames = null,
-        JsonSerializerOptions? jsonSerializerOptions = null)
+        JsonSerializerOptions? jsonSerializerOptions = null,
+        IReadOnlyList<Records.WorkflowDefinition>? workflows = null)
     {
         this.logger = logger;
         this.sharedVariableNames = [.. sharedVariableNames ?? []];
+        Workflows = workflows ?? [];
 
         sessionState = new ProviderSessionState<MorganaContextState>(
             stateInitializer: _ => new MorganaContextState(),

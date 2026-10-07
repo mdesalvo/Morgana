@@ -275,7 +275,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
         // Every domain prompt is weighed, including those of intents with no tool type: a leftover
         // declaration there is ignored all the same.
-        errors.AddRange(ValidateNoDeclaredTools(prompts));
+        errors.AddRange(ValidateNoDeclarationsInJson(prompts));
 
         foreach (string intent in registry.Keys)
         {
@@ -291,41 +291,48 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     }
 
     /// <summary>
-    /// Refuses a domain prompt that still carries a <c>Tools</c> declaration.
+    /// Refuses a domain prompt that still carries a <c>Tools</c> or a <c>Workflows</c> declaration.
     /// </summary>
     /// <remarks>
-    /// Tools are declared on the class, so a declaration left in JSON would be silently ignored.
+    /// Tools and workflows are declared on their classes, so a declaration left in JSON would be silently ignored.
     /// </remarks>
     /// <param name="prompts">The domain prompts that agents.json files declare.</param>
-    /// <returns>One message per prompt that carries the key, empty when none does.</returns>
-    public static List<string> ValidateNoDeclaredTools(IEnumerable<Records.Prompt> prompts)
+    /// <returns>One message per prompt and per key that it carries, empty when none does.</returns>
+    public static List<string> ValidateNoDeclarationsInJson(IEnumerable<Records.Prompt> prompts)
     {
-        return
-        [
-            .. prompts
-                .Where(prompt => (prompt.AdditionalProperties ?? []).Any(properties => properties.ContainsKey(Constants.PromptProperties.Tools)))
-                .Select(prompt => $"Prompt '{prompt.ID}' declares \"{Constants.PromptProperties.Tools}\" in agents.json: tools are declared on the tool class and the declaration would be ignored")
-        ];
+        List<string> errors = [];
+
+        foreach (Records.Prompt prompt in prompts)
+        {
+            bool Declares(string key) => prompt.AdditionalProperties.Any(properties => properties.ContainsKey(key));
+
+            if (Declares(Constants.PromptProperties.Tools))
+                errors.Add($"Prompt '{prompt.ID}' declares \"{Constants.PromptProperties.Tools}\" in agents.json: tools are declared on the tool class and the declaration would be ignored");
+
+            if (Declares(Constants.PromptProperties.Workflows))
+                errors.Add($"Prompt '{prompt.ID}' declares \"{Constants.PromptProperties.Workflows}\" in agents.json: workflows are declared on their class and the declaration would be ignored");
+        }
+
+        return errors;
     }
 
     /// <summary>
-    /// Refuses a workflow declaration that would validate cleanly and then stall or bind nothing at run time.
+    /// Refuses a workflow class that would validate cleanly and then stall or bind nothing at run time.
     /// </summary>
     /// <param name="registry">The discovered intent-to-agent map, which is the roster of intents to weigh.</param>
     /// <returns>One message per violation, empty when every workflow holds.</returns>
     private List<string> ValidateWorkflowDeclarations(Dictionary<string, Type> registry)
     {
         List<string> errors = [];
-        List<Records.Prompt> prompts = agentConfigService.GetAgentPromptsAsync().GetAwaiter().GetResult();
+
+        // A workflow naming an intent that no agent handles can never be launched.
+        foreach (string intent in toolRegistryService.GetAllRegisteredWorkflows().Keys.Where(intent => !registry.ContainsKey(intent)))
+            errors.Add($"A workflow declares intent '{intent}', which no agent handles");
 
         foreach ((string intent, Type agentType) in registry)
         {
-            Records.Prompt? prompt = prompts.FirstOrDefault(candidate => string.Equals(candidate.ID, intent, StringComparison.OrdinalIgnoreCase));
-            if (prompt is null)
-                continue;
-
-            Records.WorkflowDefinition[] workflows = prompt.GetAdditionalPropertyOrDefault<Records.WorkflowDefinition[]>(Constants.PromptProperties.Workflows, []);
-            if (workflows.Length == 0)
+            IReadOnlyList<Records.WorkflowDefinition> workflows = toolRegistryService.GetWorkflowDefinitions(intent);
+            if (workflows.Count == 0)
                 continue;
 
             errors.AddRange(ValidateWorkflows(
@@ -343,10 +350,10 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// </summary>
     /// <remarks>
     /// An agent carrying <c>[UsesMCPServer]</c> may name a tool that startup cannot check, since its tools
-    /// arrive at run time: such a tool can be a step but never the source of a bound value, because it declares no <c>Returns</c>.
+    /// arrive at run time: such a tool can be a step and the source or the target of a carried value, which startup leaves unchecked since it declares no <c>Returns</c> or parameters.
     /// </remarks>
     /// <param name="intent">The intent that owns the workflows, named in the messages.</param>
-    /// <param name="workflows">The workflows that agents.json declares for the intent.</param>
+    /// <param name="workflows">The workflows that the classes of the intent declare.</param>
     /// <param name="declaredTools">The domain tools that the intent's tool class declares.</param>
     /// <param name="usesMcpServer">Whether the agent acquires tools from an MCP server.</param>
     /// <returns>One message per violation, empty when every workflow holds.</returns>
@@ -374,6 +381,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             if (string.IsNullOrWhiteSpace(workflow.Description))
                 errors.Add($"{subject} has no description");
 
+            // The first step is where the workflow starts, so a workflow without one has nothing to weigh.
             if (workflow.Steps is not { Count: > 0 })
             {
                 errors.Add($"{subject} has no step");
@@ -381,13 +389,14 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             }
 
             ValidateWorkflowSteps(subject, workflow, tools, usesMcpServer, errors);
+            ValidateWorkflowEdges(subject, workflow, tools, usesMcpServer, errors);
         }
 
         return errors;
     }
 
     /// <summary>
-    /// Weighs the steps of one workflow: their names, their tools, their links and the values they bind.
+    /// Weighs the steps of one workflow: their names, their tools and whether a path from the first step reaches them.
     /// </summary>
     private static void ValidateWorkflowSteps(
         string subject,
@@ -396,17 +405,15 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         bool usesMcpServer,
         List<string> errors)
     {
-        HashSet<string> stepNames = new(StringComparer.Ordinal);
+        if (workflow.Steps.Any(step => string.IsNullOrWhiteSpace(step.Name)))
+            errors.Add($"{subject} has a step with no name");
 
-        foreach (Records.WorkflowStep step in workflow.Steps)
-        {
-            if (string.IsNullOrWhiteSpace(step.Name))
-                errors.Add($"{subject} has a step with no name");
-            else if (step.Name == Constants.Workflows.End)
-                errors.Add($"{subject} names a step '{Constants.Workflows.End}', which is the reserved target that ends the workflow");
-            else if (!stepNames.Add(step.Name))
-                errors.Add($"{subject} declares the step '{step.Name}' more than once");
-        }
+        foreach (string duplicated in workflow.Steps
+                     .Where(step => !string.IsNullOrWhiteSpace(step.Name))
+                     .GroupBy(step => step.Name, StringComparer.Ordinal)
+                     .Where(group => group.Count() > 1)
+                     .Select(group => group.Key))
+            errors.Add($"{subject}, step '{duplicated}': the name is declared more than once");
 
         foreach (Records.WorkflowStep step in workflow.Steps)
         {
@@ -414,7 +421,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             IReadOnlyList<string> stepTools = step.Tools ?? [];
 
             if (stepTools.Count == 0)
-                errors.Add($"{stepSubject}, names no tool");
+                errors.Add($"{stepSubject}: the step offers no tool");
 
             foreach (string tool in stepTools)
             {
@@ -422,112 +429,100 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 // private method of the workflow, never one of its steps.
                 if (tool is Constants.Tools.Reply or Constants.Tools.LaunchWorkflow
                     || tool.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
-                    errors.Add($"{stepSubject}, names '{tool}', which a step may never name");
+                    errors.Add($"{stepSubject}: '{tool}' belongs to the framework and cannot be a step's tool");
                 else if (!tools.ContainsKey(tool) && !usesMcpServer)
-                    errors.Add($"{stepSubject}, names the tool '{tool}', which the agent does not declare");
-            }
-
-            foreach ((string linkKind, IReadOnlyDictionary<string, string>? links) in new[] { ("Next", step.Next), ("OnFailure", step.OnFailure) })
-            {
-                foreach ((string tool, string target) in links ?? new Dictionary<string, string>())
-                {
-                    if (!stepTools.Contains(tool))
-                        errors.Add($"{stepSubject}, \"{linkKind}\" names '{tool}', which is not a tool of the step");
-
-                    if (target != Constants.Workflows.End && !stepNames.Contains(target))
-                        errors.Add($"{stepSubject}, \"{linkKind}\" leads '{tool}' to '{target}', which is neither a step of the workflow nor '{Constants.Workflows.End}'");
-                }
+                    errors.Add($"{stepSubject}: the agent has no tool '{tool}'");
             }
         }
 
         // Steps that no path from the first one reaches would never be offered: the workflow could not mean them.
-        Dictionary<string, HashSet<string>> reach = workflow.Steps
-            .Where(step => !string.IsNullOrWhiteSpace(step.Name))
-            .DistinctBy(step => step.Name, StringComparer.Ordinal)
-            .ToDictionary(step => step.Name, step => ReachableFrom(workflow, step.Name), StringComparer.Ordinal);
-
-        foreach (Records.WorkflowStep step in workflow.Steps.Skip(1).Where(step => !string.IsNullOrWhiteSpace(step.Name)))
-        {
-            if (reach.TryGetValue(workflow.Steps[0].Name ?? string.Empty, out HashSet<string>? fromFirst) && !fromFirst.Contains(step.Name))
-                errors.Add($"{subject} has the step '{step.Name}', which no path from its first step '{workflow.Steps[0].Name}' reaches");
-        }
-
-        foreach (Records.WorkflowStep step in workflow.Steps)
-            ValidateStepArguments($"{subject}, step '{step.Name}'", step, reach, workflow, tools, errors);
+        HashSet<string> reached = ReachableFrom(workflow, workflow.Steps[0].Name);
+        foreach (Records.WorkflowStep step in workflow.Steps.Skip(1).Where(step => !reached.Contains(step.Name)))
+            errors.Add($"{subject}, step '{step.Name}': no path leads to it from '{workflow.Steps[0].Name}'");
     }
 
     /// <summary>
-    /// Weighs the values a step binds: the parameter they fill and the earlier result they are read from.
+    /// Weighs the edges of one workflow: the tool each one follows and the values it carries.
     /// </summary>
-    private static void ValidateStepArguments(
-        string stepSubject,
-        Records.WorkflowStep step,
-        Dictionary<string, HashSet<string>> reach,
+    private static void ValidateWorkflowEdges(
+        string subject,
         Records.WorkflowDefinition workflow,
         Dictionary<string, Records.ToolDefinition> tools,
+        bool usesMcpServer,
         List<string> errors)
     {
-        IReadOnlyList<string> stepTools = step.Tools ?? [];
+        Dictionary<string, Records.WorkflowStep> stepsByName = workflow.Steps
+            .Where(step => !string.IsNullOrWhiteSpace(step.Name))
+            .GroupBy(step => step.Name, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        HashSet<string> carried = new(StringComparer.Ordinal);
 
-        // A tool that startup cannot see may take any parameter: a key cannot be refused on its account.
-        bool hasUncheckableTool = stepTools.Any(tool => !tools.ContainsKey(tool));
+        // The engine follows the first edge it finds, so a transition declared twice would leave one of the two dead.
+        foreach (IGrouping<(string Source, string Tool, bool OnFailure), Records.WorkflowEdge> group in workflow.Edges
+                     .GroupBy(edge => (edge.Source, edge.Tool, edge.OnFailure))
+                     .Where(group => group.Count() > 1))
+            errors.Add($"{EdgeSubject(subject, group.First())}: the same transition is declared more than once");
 
-        foreach ((string parameter, string source) in step.BoundArguments())
+        foreach (Records.WorkflowEdge edge in workflow.Edges)
         {
-            if (!hasUncheckableTool
-                && !stepTools.Any(tool => tools.TryGetValue(tool, out Records.ToolDefinition? declared) && declared.Parameters.Any(p => p.Name == parameter)))
-                errors.Add($"{stepSubject}, \"Arguments\" binds '{parameter}', which is a parameter of none of the step's tools");
+            string edgeSubject = EdgeSubject(subject, edge);
 
-            string[] parts = source.Split('.', 2);
-            if (parts.Length != 2 || parts[0].Length == 0 || parts[1].Length == 0)
+            if (stepsByName.TryGetValue(edge.Source, out Records.WorkflowStep? source) && !source.Tools.Contains(edge.Tool, StringComparer.Ordinal))
+                errors.Add($"{edgeSubject}: '{edge.Tool}' is not a tool of step '{edge.Source}'");
+
+            tools.TryGetValue(edge.Tool, out Records.ToolDefinition? sourceTool);
+            stepsByName.TryGetValue(edge.Target, out Records.WorkflowStep? target);
+
+            // A target tool that startup cannot see may take any parameter: a name cannot be refused on its account.
+            bool targetHasUncheckableTool = usesMcpServer && (target?.Tools ?? []).Any(tool => !tools.ContainsKey(tool));
+
+            foreach (string name in edge.Carrying)
             {
-                errors.Add($"{stepSubject}, \"Arguments\" binds '{parameter}' to '{source}', which is not of the form Step.field");
-                continue;
-            }
+                carried.Add(name);
 
-            Records.WorkflowStep? sourceStep = workflow.Steps.FirstOrDefault(candidate => candidate.Name == parts[0]);
-            if (sourceStep is null)
-            {
-                errors.Add($"{stepSubject}, \"Arguments\" binds '{parameter}' to the step '{parts[0]}', which the workflow does not have");
-                continue;
-            }
+                if (!workflow.Parameters.Contains(name, StringComparer.Ordinal))
+                {
+                    errors.Add($"{edgeSubject}: '{name}' is not a public property of the workflow");
+                    continue;
+                }
 
-            if (parts[0] == step.Name || !reach.TryGetValue(parts[0], out HashSet<string>? reachable) || !reachable.Contains(step.Name))
-            {
-                errors.Add($"{stepSubject}, \"Arguments\" binds '{parameter}' to the step '{parts[0]}', which does not run before this one");
-                continue;
-            }
+                // A value flows from a returned field into a parameter, matched by name whatever the casing of either.
+                if (sourceTool is not null
+                    && !(sourceTool.Returns ?? []).Any(field => string.Equals(field.Name, name, StringComparison.OrdinalIgnoreCase)))
+                    errors.Add($"{edgeSubject}: tool '{edge.Tool}' does not declare the returned field '{name}'");
 
-            foreach (string sourceTool in sourceStep.Tools ?? [])
-            {
-                bool declaresField = tools.TryGetValue(sourceTool, out Records.ToolDefinition? declared)
-                    && declared.Returns?.Any(field => field.Name == parts[1]) == true;
-
-                if (!declaresField)
-                    errors.Add($"{stepSubject}, \"Arguments\" binds '{parameter}' to '{source}', but the tool '{sourceTool}' of step '{parts[0]}' does not declare the returned field '{parts[1]}'");
+                bool taken = (target?.Tools ?? [])
+                    .Where(tools.ContainsKey)
+                    .Any(tool => tools[tool].Parameters.Any(parameter => string.Equals(parameter.Name, name, StringComparison.OrdinalIgnoreCase)));
+                if (!taken && !targetHasUncheckableTool)
+                    errors.Add($"{edgeSubject}: no tool of step '{edge.Target}' takes a parameter '{name}'");
             }
         }
+
+        // A property that no edge carries would stay empty for ever.
+        foreach (string parameter in workflow.Parameters.Where(parameter => !carried.Contains(parameter)))
+            errors.Add($"{subject}: property '{parameter}' is carried by no edge");
     }
 
+    /// <summary>Names an edge in a message: where it leaves from and arrives at and the outcome that it follows.</summary>
+    private static string EdgeSubject(string subject, Records.WorkflowEdge edge)
+        => $"{subject}, edge '{edge.Source}' -> '{edge.Target}' on '{edge.Tool}'{(edge.OnFailure ? " (failure)" : string.Empty)}";
+
     /// <summary>
-    /// The steps that a workflow can reach from one step by following the links of its tools.
+    /// The steps that a workflow can reach from one step by following its edges.
     /// </summary>
     private static HashSet<string> ReachableFrom(Records.WorkflowDefinition workflow, string from)
     {
-        HashSet<string> reached = new(StringComparer.Ordinal);
+        // The start counts as reached from the outset: the first step is where the workflow stands when launched.
+        HashSet<string> reached = new([from], StringComparer.Ordinal);
         Queue<string> pending = new([from]);
 
-        // The start counts as reached only when a loop leads back to it, which is what "can reach" asks.
         while (pending.TryDequeue(out string? current))
         {
-            Records.WorkflowStep? step = workflow.Steps.FirstOrDefault(candidate => candidate.Name == current);
-            if (step is null)
-                continue;
-
-            foreach (string target in step.Links(false).Values.Concat(step.Links(true).Values))
+            foreach (Records.WorkflowEdge edge in workflow.Edges.Where(candidate => candidate.Source == current))
             {
-                if (target != Constants.Workflows.End && reached.Add(target))
-                    pending.Enqueue(target);
+                if (reached.Add(edge.Target))
+                    pending.Enqueue(edge.Target);
             }
         }
 
