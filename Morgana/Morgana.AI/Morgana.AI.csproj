@@ -50,16 +50,16 @@
     <!-- Agents -->
     <PackageReference Include="A2A" Version="1.0.0-preview2" />
     <PackageReference Include="Azure.AI.OpenAI" Version="2.9.0-beta.1" />
-    <PackageReference Include="Microsoft.Agents.AI" Version="1.22.0" />
-    <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.22.0" />
-    <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.22.0" />
-    <PackageReference Include="Microsoft.Agents.AI.A2A" Version="1.22.0-preview.260918.1" />
-    <PackageReference Include="Microsoft.Agents.AI.Hosting" Version="1.22.0-preview.260918.1" />
-    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.22.0-preview.260918.1" />
-    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.22.0" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.24.0" />
+    <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.24.0" />
+    <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.24.0" />
+    <PackageReference Include="Microsoft.Agents.AI.A2A" Version="1.24.0-preview.261006.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Hosting" Version="1.24.0-preview.261006.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.24.0" />
+    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.24.0" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.10.0" />
-    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.0" />
-    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.1" />
     <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
     <PackageReference Include="OllamaSharp" Version="5.5.0" />
     <!-- Services -->
