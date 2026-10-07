@@ -167,9 +167,9 @@ public class AssetPackageService : IAssetPackageService
         | Path | Yours or Alembic's |
         |---|---|
         | `*.csproj` / `*.slnx` | Alembic's. A ready project referencing the `Morgana.AI` package, named after your namespace |
-        | `agents.json` | the configuration Morgana loads — intents and agent prose |
+        | `agents.json` | the configuration Morgana loads — intents, agent prose and workflows |
         | `Agents/*.g.cs` | Alembic's. Regenerated in full every time |
-        | `Tools/*.g.cs` | Alembic's. Attributes, constructor and one `partial` signature per tool |
+        | `Tools/*.g.cs` | Alembic's. Attributes, constructor, one attributed `partial` signature per tool and the record it returns |
         | `Tools/*.cs` | **yours.** Written once as a working mock, never written again |
         | `MIGRATION.md` | what this differs from, if anything was uploaded |
         | `alembic-draft.json` | the interview's save file — upload it to carry on |
@@ -178,17 +178,17 @@ public class AssetPackageService : IAssetPackageService
         ## The two halves
 
         A tool class is split so regeneration is not destructive. Alembic owns the `.g.cs`: the
-        attributes, the constructor and a `partial` declaration for every tool in the
-        configuration. You own the `.cs`: the bodies.
+        attributes, the constructor and a `partial` declaration for every tool, carrying the
+        description, the approval and the scope of each parameter, with the record it returns. You
+        own the `.cs`: the bodies.
 
         The split is not enforced anywhere and does not need to be. A declaration without an
-        implementation does not compile and a tool whose signature stops matching its declaration
-        in `agents.json` fails Morgana's startup in `MorganaToolAdapter.AddTool` — loudly, before a
-        single conversation happens.
+        implementation does not compile and Morgana's startup refuses a tool class that declares
+        a tool incompletely — loudly, before a single conversation happens.
 
-        Every parameter is a `string`, because `agents.json` carries no types: the schema the model
-        reads is generated from your method, so the type lives in the C# and only there. Narrow one
-        where it should be narrower, in both halves.
+        Every parameter is a `string`: the schema the model reads is generated from your method, so
+        the type lives in the C# and only there. Narrow one where it should be narrower, in both
+        halves.
 
         ## Running it
 

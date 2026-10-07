@@ -3,17 +3,15 @@
 @using System.Text.Json
 @using System.IO.Compression
 @using Microsoft.AspNetCore.Components.Forms
-@inject IDraftImportService DraftImportService
-@inject IDomainReadingService DomainReadingService
 @inject IDraftSerializationService DraftSerializationService
 @inject IDraftStateService DraftStateService
 @inject IInterviewService InterviewService
 @inject NavigationManager NavigationManager
 
 @*
-    The only way an existing domain enters Alembic. A save file, a configuration and an archive arrive
-    through the same control and are told apart by reading them, never by their name. What comes back
-    is the domain as the client's business, then the doors onto what can be done with it.
+    The only way an existing domain enters Alembic: it admits nothing but Alembic's own files. The save
+    file and the archive it emits arrive through the same control and are told apart by reading them, never
+    by their name. What comes back is the domain as the client's business, then the doors onto what can be done with it.
 *@
 
 <div class="alembic-page">
@@ -25,7 +23,7 @@
     {
         <div class="landing-head">
             <h1>Bring it here</h1>
-            <p class="tagline">A sitting left unfinished or a domain already at work.</p>
+            <p class="tagline">A sitting left unfinished or the archive Alembic gave you.</p>
         </div>
     }
 
@@ -40,12 +38,12 @@
         <FluentInputFile AnchorId="alembic-upload" DragDropZoneVisible="false" Accept=".json,.zip"
                          MaximumFileSize="MaxUploadBytes" OnInputFileChange="OnFileSelectedAsync" />
 
-        <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Class="muted">I can read any of these: <code>agents.json</code> (Morgana), <code>alembic-draft.json</code> (Alembic Draft), <code>alembic.zip</code> (Alembic Domain)</FluentText>
+        <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Class="muted">I open only what I wrote: <code>alembic-draft.json</code> (the save file) or <code>alembic.zip</code> (the archive).</FluentText>
     </FluentCard>
 
     @if (isReading)
     {
-        <Waiting Text="@(isLearning ? "Working out what your business does, so I do not have to ask you twice…" : "Reading…")" />
+        <Waiting Text="Reading…" />
     }
 
     @if (error is not null)
@@ -60,18 +58,6 @@
             <FluentMessageBar Intent="MessageBarIntent.Info" Layout="MessageBarLayout.MultiLine" AllowDismiss="false" Class="import-news message-fits">
                 <FluentText Size="TextSize.Size400">@resuming</FluentText>
             </FluentMessageBar>
-        }
-
-        @if (notices.Count > 0)
-        {
-            <FluentStack Orientation="Orientation.Vertical" VerticalGap="8px" Class="import-news">
-                @foreach (string notice in notices)
-                {
-                    <FluentMessageBar Intent="MessageBarIntent.Info" Layout="MessageBarLayout.MultiLine" AllowDismiss="false" Class="message-fits">
-                        <FluentText Size="TextSize.Size400">@notice</FluentText>
-                    </FluentMessageBar>
-                }
-            </FluentStack>
         }
 
         @if (HasAgents)
@@ -199,14 +185,14 @@
     private const long MaxUploadBytes = 4 * 1024 * 1024;
 
     /// <summary>
+    /// What the client is told when a file is not one of Alembic's own.
+    /// </summary>
+    private const string OnlyOwnFiles = "I open only my own save file or my own archive.";
+
+    /// <summary>
     /// The root property only a saved interview carries, so the two JSON shapes are told apart by a fact.
     /// </summary>
     private const string SaveFileMarker = "CreatedAt";
-
-    /// <summary>
-    /// What the import wants the client to know about what it read.
-    /// </summary>
-    private IReadOnlyList<string> notices = [];
 
     /// <summary>
     /// Why the file could not be read, when it could not.
@@ -217,11 +203,6 @@
     /// Whether a file is being read.
     /// </summary>
     private bool isReading;
-
-    /// <summary>
-    /// Whether the upload is being read for what it says about the client's business.
-    /// </summary>
-    private bool isLearning;
 
     /// <summary>
     /// Whether the upload was an archive Alembic built, whose next natural question is whether it still stands.
@@ -314,7 +295,6 @@
     {
         isReading = true;
         error = null;
-        notices = [];
         arrivedAsArchive = false;
 
         try
@@ -330,25 +310,19 @@
 
             if (IsZip(buffer))
             {
+                // An archive is Alembic's only where it carries the marker its own emit writes: any other zip is somebody else's.
                 arrivedAsArchive = HasMarker(buffer);
 
-                await using MemoryStream? inner = await ExtractFromZipAsync(buffer);
+                await using MemoryStream? inner = arrivedAsArchive ? await ExtractSaveFileAsync(buffer) : null;
 
                 if (inner is null)
                 {
-                    error = $"{file.Name} is a zip archive, but I could not find an alembic-draft.json or an agents.json inside it.";
-                    return;
-                }
-
-                if (IsSaveFile(inner))
-                {
-                    inner.Position = 0;
-                    await ResumeAsync(inner, file.Name);
+                    error = $"{file.Name} is not an archive of mine. {OnlyOwnFiles}";
                     return;
                 }
 
                 inner.Position = 0;
-                await ImportAsync(inner, file.Name);
+                await ResumeAsync(inner, file.Name);
                 return;
             }
 
@@ -359,8 +333,7 @@
                 return;
             }
 
-            buffer.Position = 0;
-            await ImportAsync(buffer, file.Name);
+            error = $"{file.Name} is not a save file of mine. {OnlyOwnFiles}";
         }
         // Too large, a broken zip or JSON that is not what it claims: each is told to the client, never a dropped circuit.
         catch (Exception unreadable) when (unreadable is not OperationCanceledException)
@@ -370,50 +343,6 @@
         finally
         {
             isReading = false;
-        }
-    }
-
-    /// <summary>
-    /// Imports a configuration and reads what it says about the client's work.
-    /// </summary>
-    private async Task ImportAsync(Stream configuration, string fileName)
-    {
-        DraftImportResult result = await DraftImportService.ImportAsync(configuration, fileName);
-
-        notices = result.Notices;
-        error = result.Error;
-        SetDraft(result.Draft);
-        await LearnTheTradeAsync(result.Draft);
-    }
-
-    /// <summary>
-    /// Works out what the business does from the configuration just uploaded.
-    /// </summary>
-    /// <remarks>
-    /// A configuration carries finished prose and no memory of the conversation behind it. Skipped where
-    /// the domain already remembers; a failure costs the head start and nothing else.
-    /// </remarks>
-    private async Task LearnTheTradeAsync(DomainDraft? draft)
-    {
-        if (draft is null || draft.Agents.Count == 0 || draft.Agents.All(agent => agent.Known.Count > 0))
-            return;
-
-        isLearning = true;
-        StateHasChanged();
-
-        try
-        {
-            DomainReading reading = await DomainReadingService.ReadAsync(draft);
-
-            // Only a failed reading is worth the client's attention: it changes what the interview will ask them.
-            if (reading.Error is { } failure)
-                notices = [.. notices, $"I could not work out what your business does from this file, so I will ask instead: {failure}"];
-
-            DraftStateService.Set(draft);
-        }
-        finally
-        {
-            isLearning = false;
         }
     }
 
@@ -459,16 +388,14 @@
     }
 
     /// <summary>
-    /// Pulls the file inside the archive that carries the domain, preferring the richer save file.
+    /// Pulls the save file out of an archive Alembic built, <c>null</c> where the archive holds none.
     /// </summary>
-    private static async Task<MemoryStream?> ExtractFromZipAsync(MemoryStream buffer)
+    private static async Task<MemoryStream?> ExtractSaveFileAsync(MemoryStream buffer)
     {
         buffer.Position = 0;
         await using ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true);
 
-        ZipArchiveEntry? entry =
-            archive.Entries.FirstOrDefault(e => string.Equals(e.Name, "alembic-draft.json", StringComparison.OrdinalIgnoreCase))
-            ?? archive.Entries.FirstOrDefault(e => string.Equals(e.Name, "agents.json", StringComparison.OrdinalIgnoreCase));
+        ZipArchiveEntry? entry = archive.Entries.FirstOrDefault(e => string.Equals(e.Name, "alembic-draft.json", StringComparison.OrdinalIgnoreCase));
 
         if (entry is null)
             return null;
@@ -482,7 +409,7 @@
     }
 
     /// <summary>
-    /// Whether the JSON is a save file rather than a configuration, by reading it.
+    /// Whether the JSON is a save file, by reading it.
     /// </summary>
     private static bool IsSaveFile(Stream json)
     {
@@ -496,7 +423,7 @@
         }
         catch (JsonException)
         {
-            // Not JSON at all: the importer's message about an unreadable configuration is the right one.
+            // Not JSON at all, so not a save file.
             return false;
         }
     }

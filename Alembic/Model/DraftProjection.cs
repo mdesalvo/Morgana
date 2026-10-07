@@ -19,14 +19,8 @@ namespace Alembic.Model;
 public static class DraftProjection
 {
     /// <summary>
-    /// The AdditionalProperties key carrying an agent's toolkit, matched ordinally — the way
+    /// The AdditionalProperties key carrying an agent's workflows, matched ordinally — the way
     /// <see cref="Records.Prompt.GetAdditionalProperty{T}"/> matches it.
-    /// </summary>
-    public const string ToolsPropertyName = "Tools";
-
-    /// <summary>
-    /// The AdditionalProperties key carrying an agent's workflows, matched ordinally like
-    /// <see cref="ToolsPropertyName"/>.
     /// </summary>
     public const string WorkflowsPropertyName = "Workflows";
 
@@ -40,11 +34,12 @@ public static class DraftProjection
             intent.DefaultValue);
 
     /// <summary>
-    /// Rebuilds an agent prompt from its Draft element, putting the toolkit back into
+    /// Rebuilds an agent prompt from its Draft element, putting the workflows back into
     /// AdditionalProperties alongside whatever else was carried through.
     /// </summary>
     /// <remarks>
-    /// The toolkit and the workflows are each written as their own entry, first and the unmodelled entries follow. This does
+    /// The toolkit is never written: the framework refuses a <c>Tools</c> key in <c>agents.json</c>, since the tool class declares it.
+    /// The workflows are written as their own entry, first and the unmodelled entries follow. This does
     /// not necessarily reproduce the grouping a file arrived with — AdditionalProperties is a list
     /// of dictionaries and the same content can be spread across it in several ways — which is
     /// precisely why the round-trip invariant is stated as equivalence and not byte identity.
@@ -53,12 +48,6 @@ public static class DraftProjection
     public static Records.Prompt ToPrompt(AgentDraft agent)
     {
         List<Dictionary<string, object>> additionalProperties = [];
-
-        if (agent.Tools.Count > 0)
-            additionalProperties.Add(new Dictionary<string, object>
-            {
-                [ToolsPropertyName] = agent.Tools.Select(ToToolDefinition).ToList()
-            });
 
         if (agent.Workflows.Count > 0)
             additionalProperties.Add(new Dictionary<string, object>
@@ -83,15 +72,20 @@ public static class DraftProjection
     }
 
     /// <summary>
-    /// Rebuilds a tool definition from its Draft element.
+    /// Rebuilds the definition the framework would project from the tool's class, for the readers inside Alembic.
     /// </summary>
     public static Records.ToolDefinition ToToolDefinition(ToolDraft tool) =>
         new(tool.Name ?? string.Empty,
             tool.Description ?? string.Empty,
             [.. tool.Parameters.Select(ToToolParameter)],
             RequiresExecutionApproval: tool.RequiresExecutionApproval,
-            // A tool that declared none leaves the key out, so a domain written before Returns existed gets none.
-            Returns: tool.Returns.Count > 0 ? [.. tool.Returns] : null);
+            // A tool that declared no field leaves Returns out, the way a method returning no record projects none.
+            Returns: tool.Returns.Count > 0
+                ? [.. tool.Returns.Select(field => new Records.ToolReturn(
+                    field.Name ?? string.Empty,
+                    field.Description ?? string.Empty,
+                    field.Name == Constants.Workflows.FailureField))]
+                : null);
 
     /// <summary>
     /// Rebuilds a workflow definition from its Draft element.
@@ -111,9 +105,8 @@ public static class DraftProjection
     /// Rebuilds a tool parameter from its Draft element.
     /// </summary>
     /// <remarks>
-    /// A parameter carrying a value the model itself authors declares no scope. The framework's
-    /// record types <c>Scope</c> as a non-nullable string, so "no scope" travels as the empty
-    /// string — which is what the importer read it back from.
+    /// The framework's record types <c>Scope</c> as a non-nullable string, so a scope not settled yet
+    /// travels as the empty string.
     /// </remarks>
     public static Records.ToolParameter ToToolParameter(ToolParameterDraft parameter) =>
         new(parameter.Name ?? string.Empty,

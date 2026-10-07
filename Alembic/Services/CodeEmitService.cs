@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using Alembic.Interfaces;
 using Alembic.Model;
 using Morgana.AI;
@@ -38,12 +39,11 @@ public class CodeEmitService : ICodeEmitService
     /// Every emitted C# parameter is a <c>string</c>.
     /// </summary>
     /// <remarks>
-    /// Not a shortcut — a statement about what the configuration carries.
-    /// <c>Records.ToolParameter</c> has a name, a description, a required flag, a scope and a
-    /// shared flag and no type: the JSON schema the model reads is generated from the
-    /// <em>delegate</em>, so the type lives in the C# and only there. Alembic cannot know it and
-    /// guessing one from a parameter's name would be a guess the client discovers at runtime.
-    /// A narrower type is a one-word edit in the two halves; a wrong one is a bug.
+    /// Not a shortcut — a statement about what the draft carries. A parameter has a name, a
+    /// description, a required flag, a scope and a shared flag and no type: the JSON schema the model
+    /// reads is generated from the method, so the type lives in the C# and only there. Alembic cannot
+    /// know it and guessing one from a parameter's name would be a guess the client discovers at
+    /// runtime. A narrower type is a one-word edit in the two halves; a wrong one is a bug.
     /// </remarks>
     private const string ParameterType = "string";
 
@@ -133,16 +133,15 @@ public class CodeEmitService : ICodeEmitService
     }
 
     /// <summary>
-    /// The tool class's half that Alembic owns: the attribute, the constructor and one
-    /// <c>partial</c> signature per declared tool.
+    /// The tool class's half that Alembic owns: the attribute, the constructor, one attributed
+    /// <c>partial</c> signature per declared tool and the record that each one returns.
     /// </summary>
     /// <remarks>
-    /// The signatures are the load-bearing part. They are generated from the same
-    /// <c>ToolDefinition</c> that goes into <c>agents.json</c>, so the pair
-    /// <c>MorganaToolAdapter.AddTool</c> validates at startup — parameter count, names,
-    /// required-versus-optional — is generated correct by construction. Because a partial method
-    /// declared here and unimplemented in the other half does not compile, a tool added to the
-    /// configuration cannot be silently forgotten in the code.
+    /// The attributes are the whole declaration of the tool: the framework reads the description, the
+    /// approval, each parameter's scope and each returned field off this class and refuses the
+    /// plugin at startup where one is missing. A <c>partial</c> method declared here and unimplemented
+    /// in the other half does not compile, so a tool added to the draft cannot be silently forgotten
+    /// in the code.
     /// </remarks>
     private static string EmitToolSignatures(AgentDraft agent, string intentName, string ns, string toolClass)
     {
@@ -157,9 +156,11 @@ public class CodeEmitService : ICodeEmitService
         // .csproj already declares it project-wide.
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
+        sb.AppendLine("using System.ComponentModel;");
         sb.AppendLine("using Microsoft.Extensions.Logging;");
         sb.AppendLine("using Morgana.AI.Abstractions;");
         sb.AppendLine("using Morgana.AI.Attributes;");
+        sb.AppendLine("using static Morgana.AI.Records;");
         sb.AppendLine();
         sb.AppendLine(CultureInfo.InvariantCulture, $"namespace {ns}.Tools;");
         sb.AppendLine();
@@ -174,21 +175,156 @@ public class CodeEmitService : ICodeEmitService
         foreach (ToolDraft tool in agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name)))
         {
             sb.AppendLine();
+            sb.AppendLine(CultureInfo.InvariantCulture, $"    [Description({Literal(tool.Description)})]");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"    [RequiresApproval({(tool.RequiresExecutionApproval ? "true" : "false")})]");
+            AppendMethod(sb, tool);
 
-            // The description becomes the XML doc the client's IDE shows over the partial method
-            // they implement — the only place that description survives past agents.json.
-            foreach (string line in Wrap(tool.Description))
-                sb.AppendLine(CultureInfo.InvariantCulture, $"    /// {line}");
-
-            // The record is only named here: the configuration carries field names and no types, so a
-            // record emitted in a file that is regenerated in full would fix them as strings forever.
-            sb.AppendLine(CultureInfo.InvariantCulture, $"    public partial Task<{ResultTypeName(tool.Name!)}> {tool.Name}({Signature(tool)});");
+            sb.AppendLine();
+            AppendResultRecord(sb, tool);
         }
 
         sb.AppendLine("}");
 
         return sb.ToString();
     }
+
+    /// <summary>
+    /// Writes one tool's <c>partial</c> method declaration with every parameter on its own line.
+    /// </summary>
+    /// <remarks>
+    /// Declaration order, never sorted: the order is the signature and silently reordering here would
+    /// emit C# that disagrees with the draft. A required parameter behind an optional one therefore
+    /// emits C# that does not compile — which is correct and is why the emit is gated on the validator
+    /// reporting no errors: that exact case is one of its findings, raised while it still costs nothing to fix.
+    /// </remarks>
+    private static void AppendMethod(StringBuilder sb, ToolDraft tool)
+    {
+        List<ToolParameterDraft> parameters = [.. tool.Parameters.Where(p => !string.IsNullOrWhiteSpace(p.Name))];
+
+        if (parameters.Count == 0)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"    public partial Task<{ResultTypeName(tool.Name!)}> {tool.Name}();");
+            return;
+        }
+
+        sb.AppendLine(CultureInfo.InvariantCulture, $"    public partial Task<{ResultTypeName(tool.Name!)}> {tool.Name}(");
+
+        for (int position = 0; position < parameters.Count; position++)
+            sb.AppendLine(CultureInfo.InvariantCulture,
+                $"        {Parameter(parameters[position])}{(position < parameters.Count - 1 ? "," : ");")}");
+    }
+
+    /// <summary>
+    /// Renders one parameter with its description and its scope, the two attributes the framework reads.
+    /// </summary>
+    private static string Parameter(ToolParameterDraft parameter)
+    {
+        StringBuilder declaration = new StringBuilder();
+
+        declaration.Append(CultureInfo.InvariantCulture, $"[Description({Literal(parameter.Description)})] ");
+
+        // A scope not settled yet is left off rather than guessed: the validator reports it before the archive is built.
+        if (string.Equals(parameter.Scope, Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
+            declaration.Append(parameter.Shared ? "[ToolParameter(ToolScope.Context, shared: true)] " : "[ToolParameter(ToolScope.Context)] ");
+        else if (string.Equals(parameter.Scope, Constants.Scopes.Request, StringComparison.OrdinalIgnoreCase))
+            declaration.Append("[ToolParameter(ToolScope.Request)] ");
+
+        declaration.Append(parameter.Required
+            ? $"{ParameterType} {parameter.Name}"
+            : $"{ParameterType}? {parameter.Name} = null");
+
+        return declaration.ToString();
+    }
+
+    /// <summary>
+    /// Writes the record a tool returns, one positional property per declared field.
+    /// </summary>
+    /// <remarks>
+    /// A tool with a failure field answers only what it knows on each branch, so every property is
+    /// nullable with a null default and the failure field stays empty wherever the call succeeds.
+    /// Without one the record is exactly as typed.
+    /// </remarks>
+    private static void AppendResultRecord(StringBuilder sb, ToolDraft tool)
+    {
+        List<ToolReturnDraft> fields = [.. tool.Returns.Where(r => !string.IsNullOrWhiteSpace(r.Name))];
+        bool hasFailureField = fields.Any(r => r.Name == Constants.Workflows.FailureField);
+
+        if (fields.Count == 0)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"    public sealed record {ResultTypeName(tool.Name!)}();");
+            return;
+        }
+
+        sb.AppendLine(CultureInfo.InvariantCulture, $"    public sealed record {ResultTypeName(tool.Name!)}(");
+
+        for (int position = 0; position < fields.Count; position++)
+        {
+            ToolReturnDraft field = fields[position];
+
+            // A type not asked yet is written as text so the file still parses: the validator refuses it before an archive is built.
+            string type = string.IsNullOrWhiteSpace(field.Type) ? ParameterType : field.Type.Trim();
+            string description = string.IsNullOrWhiteSpace(field.Description) ? string.Empty : $"[Description({Literal(field.Description)})] ";
+            string property = hasFailureField ? $"{Nullable(type)} {PropertyName(field.Name!)} = null" : $"{type} {PropertyName(field.Name!)}";
+
+            sb.AppendLine(CultureInfo.InvariantCulture, $"        {description}{property}{(position < fields.Count - 1 ? "," : ");")}");
+        }
+    }
+
+    /// <summary>
+    /// Makes a C# type nullable, leaving one that already is.
+    /// </summary>
+    private static string Nullable(string type) => type.EndsWith('?') ? type : type + "?";
+
+    /// <summary>
+    /// Writes a text as a regular C# string literal, escaped so that what is read back is the text as authored.
+    /// </summary>
+    private static string Literal(string? text)
+    {
+        StringBuilder literal = new StringBuilder("\"");
+
+        foreach (char character in text ?? string.Empty)
+            literal.Append(character switch
+            {
+                '"' => "\\\"",
+                '\\' => "\\\\",
+                '\n' => "\\n",
+                '\r' => "\\r",
+                '\t' => "\\t",
+                _ when char.IsControl(character) => $"\\u{(int)character:x4}",
+                _ => character.ToString()
+            });
+
+        return literal.Append('"').ToString();
+    }
+
+    /// <summary>
+    /// The names a returned field's type refers to that are neither built in nor from the common library set.
+    /// </summary>
+    /// <remarks>
+    /// Such a type is the client's: the generated half declares only the result records, so the half
+    /// the client owns has to declare the others.
+    /// </remarks>
+    /// <param name="type">The C# type text of a returned field, such as <c>List&lt;CatalogProduct&gt;?</c>.</param>
+    public static IReadOnlyList<string> ClientTypeNames(string? type) =>
+        string.IsNullOrWhiteSpace(type)
+            ? []
+            : [.. TypeIdentifier.Matches(type).Select(match => match.Value).Where(name => !LibraryTypeNames.Contains(name)).Distinct(StringComparer.Ordinal)];
+
+    /// <summary>
+    /// An identifier inside a type's text that is not the qualifier of a longer name.
+    /// </summary>
+    private static readonly Regex TypeIdentifier = new(@"\b[A-Za-z_][A-Za-z0-9_]*\b(?!\s*\.)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// The keywords and the library types that a returned field commonly names, none of which a client declares.
+    /// </summary>
+    private static readonly HashSet<string> LibraryTypeNames = new(StringComparer.Ordinal)
+    {
+        "bool", "byte", "sbyte", "char", "decimal", "double", "float", "int", "uint", "long", "ulong", "short", "ushort", "object", "string",
+        "List", "IList", "ICollection", "IEnumerable", "IReadOnlyList", "IReadOnlyCollection", "Dictionary", "IDictionary", "IReadOnlyDictionary",
+        "HashSet", "ISet", "KeyValuePair", "Tuple", "ValueTuple", "Array", "Nullable",
+        "DateOnly", "TimeOnly", "DateTime", "DateTimeOffset", "TimeSpan", "Guid", "Uri", "JsonElement", "JsonNode"
+    };
 
     /// <summary>
     /// The name of the record a tool's method returns, shared by the emit, the mock and the migration report.
@@ -199,74 +335,6 @@ public class CodeEmitService : ICodeEmitService
     /// The record property that carries a returned field, named the way the model reads the field back camelCased.
     /// </summary>
     public static string PropertyName(string field) => char.ToUpperInvariant(field[0]) + field[1..];
-
-    /// <summary>
-    /// Renders one tool's parameter list, in the order the configuration declares it.
-    /// </summary>
-    /// <remarks>
-    /// Declaration order, never sorted. The order in <c>agents.json</c> is the contract and
-    /// silently reordering here would emit C# that disagrees with the file it ships beside. A
-    /// required parameter behind an optional one therefore emits C# that does not compile — which is
-    /// correct and is why the emit is gated on the validator reporting no errors: that exact case is
-    /// one of its findings, raised while it still costs nothing to fix.
-    /// </remarks>
-    private static string Signature(ToolDraft tool) =>
-        string.Join(", ", tool.Parameters
-            .Where(p => !string.IsNullOrWhiteSpace(p.Name))
-            .Select(p => p.Required
-                ? $"{ParameterType} {p.Name}"
-                : $"{ParameterType}? {p.Name} = null"));
-
-    /// <summary>
-    /// Wraps a description into an XML doc comment, escaped.
-    /// </summary>
-    /// <remarks>
-    /// Escaping is XML-only, not Markdown: a description is authored prose, not C# and stray
-    /// <c>&lt;</c>/<c>&amp;</c> characters in it would otherwise be read as XML doc markup by any
-    /// tool that later parses the emitted file.
-    /// </remarks>
-    private static IEnumerable<string> Wrap(string? description)
-    {
-        // Line endings become spaces rather than being dropped: a description authored as several
-        // sentences on several lines must still read as one continuous <summary>, since XML doc
-        // comments have no paragraph break of their own short of a second <para>.
-        string text = (description ?? string.Empty)
-            .Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;")
-            .ReplaceLineEndings(" ")
-            .Trim();
-
-        yield return "<summary>";
-
-        foreach (string line in Chunk(text, 96))
-            yield return line;
-
-        yield return "</summary>";
-    }
-
-    /// <summary>
-    /// Breaks text on word boundaries at a column width.
-    /// </summary>
-    private static IEnumerable<string> Chunk(string text, int width)
-    {
-        StringBuilder line = new StringBuilder();
-
-        foreach (string word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (line.Length > 0 && line.Length + 1 + word.Length > width)
-            {
-                yield return line.ToString();
-                line.Clear();
-            }
-
-            if (line.Length > 0)
-                line.Append(' ');
-
-            line.Append(word);
-        }
-
-        if (line.Length > 0)
-            yield return line.ToString();
-    }
 
     /// <summary>
     /// PascalCases an intent name, for the fallback class names.

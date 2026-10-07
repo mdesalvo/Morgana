@@ -64,7 +64,7 @@ public class CoherenceApplyTools
             : "Tools:\n" + string.Join("\n", agent.Tools.Select(t =>
                 $"- {t.Name}{(t.RequiresExecutionApproval ? " (waits for the user's approval)" : string.Empty)}: {t.Description}"
                 + string.Concat(t.Parameters.Select(p =>
-                    $"\n    {p.Name} [{p.Scope ?? "authored"}{(p.Required ? "" : ", optional")}{(p.Shared ? ", shared" : "")}]: {p.Description}"))));
+                    $"\n    {p.Name} [{p.Scope ?? "no scope yet"}{(p.Required ? "" : ", optional")}{(p.Shared ? ", shared" : "")}]: {p.Description}"))));
 
         // The workflows are read-only here: a procedure written in prose is fixed in the prose, with
         // the workflow set beside it as the fact the sentence must not restate.
@@ -186,18 +186,9 @@ public class CoherenceApplyTools
         if (cleanName.Length == 0)
             return "No parameter recorded: a parameter must have a name.";
 
-        // "none"/"null" are read back as the empty scope, the same value a value the model itself
-        // authors (a note, a search phrase) legitimately declares — anything else passes through
-        // verbatim so an unrecognised scope surfaces as a validation finding rather than being
-        // silently coerced into one of the two known ones.
-        string cleanScope = (scope ?? string.Empty).Trim().ToLowerInvariant();
-        string? resolvedScope = cleanScope switch
-        {
-            Constants.Scopes.Context => Constants.Scopes.Context,
-            Constants.Scopes.Request => Constants.Scopes.Request,
-            "" or "none" or "null" => null,
-            _ => cleanScope
-        };
+        // An unrecognised scope passes through verbatim so that it surfaces as a validation finding
+        // rather than being silently coerced into one of the two known ones.
+        string? resolvedScope = InterviewTools.ResolveScope(scope);
 
         ToolParameterDraft? existing = tool.Parameters.FirstOrDefault(p =>
             string.Equals(p.Name, cleanName, StringComparison.Ordinal));
@@ -215,7 +206,10 @@ public class CoherenceApplyTools
 
         MarkRevised(agent);
 
-        return $"'{cleanName}' recorded on {agentId}.{tool.Name}.";
+        List<string> complaints = InterviewTools.ScopeComplaints(resolvedScope, required, shared);
+
+        return $"'{cleanName}' recorded on {agentId}.{tool.Name}."
+               + (complaints.Count > 0 ? " " + string.Join(" ", complaints) : string.Empty);
     }
 
     /// <summary>

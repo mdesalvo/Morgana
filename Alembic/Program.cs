@@ -48,7 +48,6 @@ builder.Services.AddSingleton<IAgentConfigurationService, AgentlessConfiguration
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
 builder.Services.AddSingleton<IPromptComposerService, ConfigurationPromptComposerService>();
 
-builder.Services.AddSingleton<IDraftImportService, DraftImportService>();
 builder.Services.AddSingleton<IDraftExportService, DraftExportService>();
 builder.Services.AddSingleton<IDraftValidationService, DraftValidationService>();
 builder.Services.AddSingleton<IRecapService, RecapService>();
@@ -64,7 +63,6 @@ builder.Services.AddSingleton<IToolMockService, ToolMockService>();
 builder.Services.AddSingleton<IMigrationReportService, MigrationReportService>();
 
 builder.Services.AddSingleton<ICoherenceService, CoherenceService>();
-builder.Services.AddSingleton<IDomainReadingService, DomainReadingService>();
 builder.Services.AddSingleton<ICoherenceApplyService, CoherenceApplyService>();
 builder.Services.AddSingleton<IAssetPackageService, AssetPackageService>();
 

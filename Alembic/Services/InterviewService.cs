@@ -583,7 +583,7 @@ public class InterviewService : IInterviewService
             interviewState.Agent.Code.AgentClassName = AgentCodeFacts.ProposeClassName(interviewState.Intent.Name, "Agent");
 
             // An agent with no native tools gets no tool class and that is a legal shape rather than
-            // a gap: an MCP-only agent's tools arrive at runtime and never appear in agents.json.
+            // a gap: an MCP-only agent's tools arrive at runtime and no tool class declares them.
             interviewState.Agent.Code.ToolClassName = interviewState.Agent.Tools.Count > 0
                 ? AgentCodeFacts.ProposeClassName(interviewState.Intent.Name, "Tool")
                 : null;

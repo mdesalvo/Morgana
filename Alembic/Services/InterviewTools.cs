@@ -327,10 +327,10 @@ public class InterviewTools
     /// <param name="description">What the model reads when deciding what to pass here.</param>
     /// <param name="scope">
     /// <c>"context"</c> if Morgana resolves it from the session, <c>"request"</c> if the agent must
-    /// obtain it in conversation, or empty/<c>"none"</c> for a value the agent authors itself.
+    /// obtain it in conversation.
     /// </param>
-    /// <param name="required">Whether the call fails without it — required parameters must precede optional ones.</param>
-    /// <param name="shared">Whether a resolved context value is published for other agents to hydrate from; meaningful only with scope <c>"context"</c>.</param>
+    /// <param name="required">Whether the call fails without it — required parameters must precede optional ones and only a request parameter may be optional.</param>
+    /// <param name="shared">Whether a resolved context value is published for other agents to hydrate from; only a <c>"context"</c> parameter may be shared.</param>
     public string SetToolParameter(string toolName, string name, string description, string scope, bool required, bool shared)
     {
         if (Find(toolName) is not { } tool)
@@ -341,15 +341,7 @@ public class InterviewTools
         if (cleanName.Length == 0)
             return "No parameter recorded: a parameter must have a name, because the adapter pairs it with the C# method's parameter by name and not by position.";
 
-        // "none" is spelled out because a model asked for an empty string tends to send the word.
-        string cleanScope = (scope ?? string.Empty).Trim().ToLowerInvariant();
-        string? resolvedScope = cleanScope switch
-        {
-            ContextScope => ContextScope,
-            RequestScope => RequestScope,
-            "" or "none" or "null" => null,
-            _ => cleanScope
-        };
+        string? resolvedScope = ResolveScope(scope);
 
         ToolParameterDraft? existing = tool.Parameters.FirstOrDefault(p =>
             string.Equals(p.Name, cleanName, StringComparison.Ordinal));
@@ -371,20 +363,61 @@ public class InterviewTools
         if (identifier.Length > 0)
             complaints.Add(identifier);
 
-        if (resolvedScope is not null and not ContextScope and not RequestScope)
-            complaints.Add($"'{cleanScope}' is not a scope: a parameter resolving an input declares '{ContextScope}' or '{RequestScope}' and one carrying a value you author yourself declares none.");
-
-        if (shared && resolvedScope != ContextScope)
-            complaints.Add($"Shared only means something alongside scope '{ContextScope}': it publishes a resolved context variable so other agents can hydrate from it.");
+        complaints.AddRange(ScopeComplaints(resolvedScope, required, shared));
 
         // The order is the signature, so an optional parameter followed by a required one is not a
-        // preference: MorganaToolAdapter.AddTool refuses the pair and C# could not declare it.
+        // preference: C# could not declare the signature.
         int firstOptional = tool.Parameters.FindIndex(p => !p.Required);
         if (firstOptional >= 0 && tool.Parameters.Skip(firstOptional).Any(p => p.Required))
             complaints.Add("A required parameter now sits after an optional one, which C# cannot declare. Reorder them by dropping and re-adding, or make the earlier one required.");
 
         return $"'{cleanName}' recorded on {tool.Name}."
                + (complaints.Count > 0 ? " " + string.Join(" ", complaints) : string.Empty);
+    }
+
+    /// <summary>
+    /// Reads a scope the model wrote: one of the two scopes, the text as said where it is neither, or <c>null</c> where it is empty.
+    /// </summary>
+    /// <remarks>
+    /// Internal because <see cref="CoherenceApplyTools"/> writes parameters under the same rules.
+    /// </remarks>
+    internal static string? ResolveScope(string? scope)
+    {
+        // Anything but the two scopes is kept as said, so that the complaint and validation both name it.
+        string cleanScope = (scope ?? string.Empty).Trim().ToLowerInvariant();
+
+        return cleanScope switch
+        {
+            ContextScope => ContextScope,
+            RequestScope => RequestScope,
+            "" => null,
+            _ => cleanScope
+        };
+    }
+
+    /// <summary>
+    /// Says what Morgana refuses at startup in a parameter's scope, whether it is shared and whether it is optional.
+    /// </summary>
+    /// <remarks>
+    /// Internal because <see cref="CoherenceApplyTools"/> writes parameters under the same rules.
+    /// </remarks>
+    /// <param name="scope">The scope as <see cref="ResolveScope"/> read it.</param>
+    /// <param name="required">Whether the call fails without the parameter.</param>
+    /// <param name="shared">Whether the resolved value is published for other agents.</param>
+    internal static List<string> ScopeComplaints(string? scope, bool required, bool shared)
+    {
+        List<string> complaints = [];
+
+        if (scope is not ContextScope and not RequestScope)
+            complaints.Add($"'{scope}' is not a scope: every parameter declares '{ContextScope}' or '{RequestScope}'.");
+
+        if (shared && scope == RequestScope)
+            complaints.Add("A request parameter cannot be shared: only what the context holds is shared and Morgana refuses the combination at startup.");
+
+        if (!required && scope == ContextScope)
+            complaints.Add("A context parameter cannot be optional: a context value that nobody holds stops the tool, so a default would never be used and Morgana refuses it at startup.");
+
+        return complaints;
     }
 
     /// <summary>
@@ -407,14 +440,15 @@ public class InterviewTools
     /// Adds a field to what a tool hands back, or revises one already there.
     /// </summary>
     /// <remarks>
-    /// Revision is by name and in place. The field is paired by name with a property of the record the
-    /// client's half declares, so only its name is recorded here and never its type.
+    /// Revision is by name and in place. The field becomes a property of the record the tool's method
+    /// returns, so the name is the property's with its first letter lowered and the type is the
+    /// property's exactly as C# writes it. The field named <c>error</c> is the failure.
     /// </remarks>
     /// <param name="toolName">The already-declared tool whose result this field belongs to.</param>
     /// <param name="name">camelCase as the model reads it — the record's property is this name with its first letter upper-cased.</param>
     /// <param name="description">What the model learns from this field of the result.</param>
-    /// <param name="failure">Whether this field is the one that says the call failed; a tool has at most one.</param>
-    public string SetToolReturn(string toolName, string name, string description, bool failure)
+    /// <param name="type">The C# type of the record's property, such as <c>string</c>, <c>decimal</c> or <c>List&lt;string&gt;</c>; <c>string</c> for the failure.</param>
+    public string SetToolReturn(string toolName, string name, string description, string type)
     {
         if (Find(toolName) is not { } tool)
             return $"No field recorded: no tool named '{toolName}' has been declared yet.";
@@ -424,7 +458,13 @@ public class InterviewTools
         if (cleanName.Length == 0)
             return "No field recorded: a field must have a name, because the record's property is paired with it by name.";
 
-        Records.ToolReturn field = new(cleanName, (description ?? string.Empty).Trim(), failure);
+        string cleanType = (type ?? string.Empty).Trim();
+        ToolReturnDraft field = new()
+        {
+            Name = cleanName,
+            Description = (description ?? string.Empty).Trim(),
+            Type = cleanType.Length == 0 ? null : cleanType
+        };
 
         int index = tool.Returns.FindIndex(r => string.Equals(r.Name, cleanName, StringComparison.Ordinal));
         if (index >= 0)
@@ -445,8 +485,13 @@ public class InterviewTools
         if (!string.Equals(converted, cleanName, StringComparison.Ordinal))
             complaints.Add($"'{cleanName}' cannot come back from C# under that name: the record's property is '{property}', which the agent's model reads as '{converted}'. Declare it as '{converted}'.");
 
-        if (failure && tool.Returns.FirstOrDefault(r => r.Failure && !string.Equals(r.Name, cleanName, StringComparison.Ordinal)) is { } other)
-            complaints.Add($"'{other.Name}' is already the failure of {tool.Name} and a tool has at most one: drop one of the two marks.");
+        if (cleanType.Length == 0)
+            complaints.Add("It has no type: every field declares the C# type of its property, such as string, decimal or List<string>.");
+        else if (!DraftValidationService.ParsesAsType(cleanType))
+            complaints.Add($"'{cleanType}' is not a C# type as a record property would write it. Call again with one that is.");
+
+        if (string.Equals(cleanName, Constants.Workflows.FailureField, StringComparison.Ordinal) && cleanType.Length > 0 && cleanType.TrimEnd('?') != "string")
+            complaints.Add($"'{cleanName}' is the failure of {tool.Name} and holds why the call failed, so its type is string.");
 
         return $"'{cleanName}' recorded on what {tool.Name} hands back."
                + (complaints.Count > 0 ? " " + string.Join(" ", complaints) : string.Empty);
@@ -509,14 +554,14 @@ public class InterviewTools
             + (t.Parameters.Count == 0
                 ? "\n    (takes nothing)"
                 : string.Concat(t.Parameters.Select(p =>
-                    $"\n    {p.Name} [{p.Scope ?? "authored by you"}"
+                    $"\n    {p.Name} [{p.Scope ?? "no scope yet"}"
                     + (p.Required ? "" : ", optional")
                     + (p.Shared ? ", shared" : "")
                     + $"]: {p.Description ?? "(no description)"}")))
             + (t.Returns.Count == 0
                 ? "\n    (hands back nothing declared yet)"
                 : string.Concat(t.Returns.Select(r =>
-                    $"\n    returns {r.Name}{(r.Failure ? " [the failure]" : string.Empty)}: "
+                    $"\n    returns {r.Name} ({r.Type ?? "no type yet"}){(r.Name == Constants.Workflows.FailureField ? " [the failure]" : string.Empty)}: "
                     + (string.IsNullOrWhiteSpace(r.Description) ? "(no description)" : r.Description)))));
 
         return "The toolkit as it stands:\n" + string.Join("\n", rendered)
@@ -1382,9 +1427,9 @@ public class InterviewTools
     /// Finds a declared tool by exact name.
     /// </summary>
     /// <remarks>
-    /// Ordinal, because the name becomes a C# method name and <c>MorganaToolAdapter.AddTool</c>
-    /// pairs the two exactly. Two tools differing only in case are two tools here and one collision
-    /// at startup, which is a finding rather than something to paper over by matching loosely.
+    /// Ordinal, because the name becomes a C# method name and the model calls the tool by it exactly.
+    /// Two tools differing only in case are two tools here and one collision at startup, which is a
+    /// finding rather than something to paper over by matching loosely.
     /// </remarks>
     private ToolDraft? Find(string? toolName) =>
         interviewState.Agent.Tools.FirstOrDefault(t =>

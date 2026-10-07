@@ -29,9 +29,7 @@ public class DraftValidationService : IDraftValidationService
         [Constants.Tools.Reply, Constants.Tools.LaunchWorkflow];
 
     /// <summary>
-    /// The scopes a parameter may declare. A parameter carrying a value the model itself authors
-    /// (a note, a search phrase) declares none at all, which is why the
-    /// empty scope is legal rather than a third value.
+    /// The scopes a parameter may declare: every parameter declares one of the two.
     /// </summary>
     private static readonly string[] KnownScopes = [Constants.Scopes.Context, Constants.Scopes.Request];
 
@@ -386,7 +384,7 @@ public class DraftValidationService : IDraftValidationService
         {
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 "The tool has no name.",
-                "A tool's name must match its C# method name exactly; MorganaToolAdapter.AddTool pairs them by it."));
+                "A tool's name is its C# method name exactly: the model calls the tool by it."));
             return;
         }
 
@@ -418,7 +416,7 @@ public class DraftValidationService : IDraftValidationService
             {
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "The parameter has no name.",
-                    "A parameter's name must match the C# method's parameter name; the adapter validates the pair by name, not by position."));
+                    "A parameter's name is the C# method's parameter name exactly: the model passes each argument by it."));
                 continue;
             }
 
@@ -430,26 +428,36 @@ public class DraftValidationService : IDraftValidationService
             ValidateIdentifier(parameter.Name, parameterWhere, "parameter name", findings);
 
             if (string.IsNullOrWhiteSpace(parameter.Description))
-                findings.Add(new ValidationFinding(FindingSeverity.Warning, parameterWhere,
+                findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "The parameter has no description.",
-                    "Parameter descriptions reach the model through the JSON schema and nowhere else; an undescribed parameter is emitted bare."));
+                    "Parameter descriptions reach the model through the JSON schema and nowhere else: Morgana refuses at startup a parameter without a [Description]."));
 
-            if (!string.IsNullOrWhiteSpace(parameter.Scope)
-                && !KnownScopes.Contains(parameter.Scope, StringComparer.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(parameter.Scope))
+                findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
+                    "The parameter has no scope.",
+                    "Every parameter declares [ToolParameter] with 'context' or 'request': Morgana refuses at startup a parameter without one."));
+            else if (!KnownScopes.Contains(parameter.Scope, StringComparer.OrdinalIgnoreCase))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     $"'{parameter.Scope}' is not a scope.",
-                    "A parameter resolving an input declares 'context' or 'request'; one carrying a value the model itself authors declares none."));
+                    "A parameter resolving an input declares 'context' or 'request' and nothing else."));
 
-            if (parameter.Shared
-                && !string.Equals(parameter.Scope, Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
-                findings.Add(new ValidationFinding(FindingSeverity.Warning, parameterWhere,
-                    "The parameter is Shared but not context-scoped.",
-                    "Shared publishes a resolved context variable to the conversation's shared_context registry, so it only means anything alongside Scope 'context'."));
+            bool isContext = string.Equals(parameter.Scope, Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase);
+            bool isRequest = string.Equals(parameter.Scope, Constants.Scopes.Request, StringComparison.OrdinalIgnoreCase);
+
+            if (parameter.Shared && isRequest)
+                findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
+                    "A request parameter is marked as shared.",
+                    "Only what the context holds is shared, so a value asked of the user has nothing to share: Morgana refuses the combination at startup."));
+
+            if (!parameter.Required && isContext)
+                findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
+                    "A context parameter is optional.",
+                    "A context value that nobody holds stops the tool, so a default would never be used: Morgana refuses a context parameter with a default value at startup."));
 
             if (parameter.Required && optionalSeen)
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "A required parameter follows an optional one.",
-                    "C# cannot declare that method signature and MorganaToolAdapter.AddTool validates the required/optional split against the delegate."));
+                    "C# cannot declare that method signature."));
 
             optionalSeen |= !parameter.Required;
         }
@@ -457,11 +465,11 @@ public class DraftValidationService : IDraftValidationService
         if (tool.Returns.Count == 0)
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 "The tool declares nothing it hands back.",
-                "Morgana refuses at startup a native tool whose agents.json entry declares no Returns: they are what the record its method returns is checked against."));
+                "A native tool returns a typed record with properties: Morgana refuses at startup a method that returns nothing, a string or an object."));
 
         HashSet<string> returnedNames = new(StringComparer.Ordinal);
 
-        foreach (Records.ToolReturn field in tool.Returns)
+        foreach (ToolReturnDraft field in tool.Returns)
         {
             string fieldWhere = $"{where}.returns.{field.Name ?? "(unnamed)"}";
 
@@ -469,7 +477,7 @@ public class DraftValidationService : IDraftValidationService
             {
                 findings.Add(new ValidationFinding(FindingSeverity.Error, fieldWhere,
                     "The returned field has no name.",
-                    "Startup pairs each declared field with a property of the returned record by name."));
+                    "Each field is a property of the returned record and the model reads it under that property's name."));
                 continue;
             }
 
@@ -480,23 +488,156 @@ public class DraftValidationService : IDraftValidationService
 
             ValidateIdentifier(field.Name, fieldWhere, "returned field name", findings);
 
-            // Startup reads the record's properties back through camelCase, so the name declared has
-            // to be the one that survives the trip out and in.
+            // The model reads the property back through camelCase, so the name declared has to be
+            // the one that survives the trip out and in.
             if (!string.Equals(JsonNamingPolicy.CamelCase.ConvertName(CodeEmitService.PropertyName(field.Name)), field.Name, StringComparison.Ordinal))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, fieldWhere,
                     "The returned field cannot keep this name in C#.",
-                    "The record's property is named with its first letter upper-cased and the model reads it back camelCased, so startup would find a different name than the one declared."));
+                    "The record's property is named with its first letter upper-cased and the model reads it back camelCased, so the model would find a different name than the one declared."));
+
+            if (string.IsNullOrWhiteSpace(field.Type))
+                findings.Add(new ValidationFinding(FindingSeverity.Error, fieldWhere,
+                    "The returned field has no type.",
+                    "The record declares each property with its C# type and the generated half is written from it."));
+            else if (!ParsesAsType(field.Type))
+                findings.Add(new ValidationFinding(FindingSeverity.Error, fieldWhere,
+                    $"'{field.Type}' is not a C# type.",
+                    "The type is written into the record verbatim and a text that is not a type does not compile."));
+
+            if (field.Name == Constants.Workflows.FailureField && !string.IsNullOrWhiteSpace(field.Type) && field.Type.Trim().TrimEnd('?') != "string")
+                findings.Add(new ValidationFinding(FindingSeverity.Error, fieldWhere,
+                    $"The '{Constants.Workflows.FailureField}' field is not a string.",
+                    "The field named error is the failure and holds why the call failed: Morgana refuses a record whose error property is not text that allows null."));
 
             if (string.IsNullOrWhiteSpace(field.Description))
                 findings.Add(new ValidationFinding(FindingSeverity.Warning, fieldWhere,
                     "The returned field has no description.",
-                    "The mock is written from it and it is what the client reads in agents.json about the field."));
+                    "The description reaches the model through the schema of the result and the mock is written from it."));
+        }
+    }
+
+    /// <summary>
+    /// The keywords that name a type, which the keyword list above would otherwise refuse as an identifier.
+    /// </summary>
+    private static readonly HashSet<string> BuiltInTypeKeywords = new(StringComparer.Ordinal)
+    {
+        "bool", "byte", "sbyte", "char", "decimal", "double", "float", "int", "uint", "long", "ulong", "short", "ushort", "object", "string"
+    };
+
+    /// <summary>
+    /// Whether a text is a C# type as a record property would write it, with nothing left over.
+    /// </summary>
+    /// <remarks>
+    /// Shape only, like the identifier check: a dotted name or a built-in keyword with optional generic
+    /// arguments, array brackets and a trailing question mark. Whether the type exists is the compiler's to say.
+    /// </remarks>
+    public static bool ParsesAsType(string text)
+    {
+        int position = 0;
+
+        return ReadType(text, ref position) && position == text.Length;
+    }
+
+    /// <summary>
+    /// Reads one type from the position on, skipping spaces. Leaves the position after it.
+    /// </summary>
+    private static bool ReadType(string text, ref int position)
+    {
+        if (!ReadName(text, ref position))
+            return false;
+
+        SkipSpaces(text, ref position);
+
+        if (position < text.Length && text[position] == '<')
+        {
+            position++;
+
+            while (true)
+            {
+                SkipSpaces(text, ref position);
+                if (!ReadType(text, ref position))
+                    return false;
+
+                SkipSpaces(text, ref position);
+
+                if (position >= text.Length || text[position] != ',')
+                    break;
+
+                position++;
+            }
+
+            if (position >= text.Length || text[position] != '>')
+                return false;
+
+            position++;
         }
 
-        if (tool.Returns.Count(field => field.Failure) > 1)
-            findings.Add(new ValidationFinding(FindingSeverity.Error, where,
-                "The tool marks more than one returned field as the failure.",
-                "Morgana refuses at startup a tool with more than one failure field: whether a call failed has to be read off one field."));
+        // Array brackets and the question mark may follow in any order that C# allows: int[]?, int?[] and int[][].
+        while (true)
+        {
+            SkipSpaces(text, ref position);
+
+            if (position < text.Length && text[position] == '?')
+            {
+                position++;
+            }
+            else if (position < text.Length && text[position] == '[')
+            {
+                position++;
+
+                while (position < text.Length && text[position] == ',')
+                    position++;
+
+                if (position >= text.Length || text[position] != ']')
+                    return false;
+
+                position++;
+            }
+            else
+            {
+                return true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reads a built-in keyword or a dotted name whose every segment is an identifier.
+    /// </summary>
+    private static bool ReadName(string text, ref int position)
+    {
+        while (true)
+        {
+            SkipSpaces(text, ref position);
+            int start = position;
+
+            if (position >= text.Length || !(char.IsLetter(text[position]) || text[position] == '_'))
+                return false;
+
+            while (position < text.Length && (char.IsLetterOrDigit(text[position]) || text[position] == '_'))
+                position++;
+
+            string segment = text[start..position];
+
+            if (ReservedWords.Contains(segment) && !BuiltInTypeKeywords.Contains(segment))
+                return false;
+
+            if (position < text.Length && text[position] == '.')
+            {
+                position++;
+                continue;
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Moves the position past any spaces.
+    /// </summary>
+    private static void SkipSpaces(string text, ref int position)
+    {
+        while (position < text.Length && char.IsWhiteSpace(text[position]))
+            position++;
     }
 
     /// <summary>

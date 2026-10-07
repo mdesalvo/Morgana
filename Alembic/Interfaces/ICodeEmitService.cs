@@ -42,9 +42,7 @@ public sealed record EmittedFile(string Path, string Content, FileOwnership Owne
 /// <remarks>
 /// The convention travels <b>inside the archive</b>, in the file names themselves, because Alembic
 /// never sees the client's tree and cannot enforce anything about it. It does not need to: a
-/// signature that drifts between the two halves is a compile error and a tool whose declaration
-/// stops matching its method fails Morgana's startup in
-/// <c>MorganaToolAdapter.AddTool</c>. The convention only has to be legible.
+/// signature that drifts between the two halves is a compile error. The convention only has to be legible.
 /// </remarks>
 public enum FileOwnership
 {

@@ -103,9 +103,7 @@ public class MigrationReportService : IMigrationReportService
 
             // Separately from the prose, because it lands somewhere else: [ConsultsAgent] is on the
             // agent class, so a gained colleague means re-emitting a file, where a reworded sentence
-            // means replacing agents.json and nothing more. An imported baseline carries none of
-            // these — the attribute lives in C# the upload never had — so only what this sitting
-            // declared can show up here.
+            // means replacing agents.json and nothing more. A baseline carries none of these — the attribute lives in C# — so only what this sitting declared can show up here.
             if (was is not null && !Same(was.Code.Consults, agent.Code.Consults))
                 entries.Add(new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised,
                     $"Colleagues changed to {PeerNaming.Describe(agent.Code.Consults)}. "
@@ -168,7 +166,7 @@ public class MigrationReportService : IMigrationReportService
             {
                 if (was is not null)
                     entries.Add(new MigrationEntry(MigrationKind.Signature, where, MigrationChange.Added,
-                        $"New tool. The generated half declares `public partial Task<{CodeEmitService.ResultTypeName(tool.Name!)}> {tool.Name}({Signature(tool)})` and the file will not compile until you implement it and declare `{CodeEmitService.ResultTypeName(tool.Name!)}` in the half you own."));
+                        $"New tool. The generated half declares `public partial Task<{CodeEmitService.ResultTypeName(tool.Name!)}> {tool.Name}({Signature(tool)})` with its record and the file will not compile until you implement the method in the half you own."));
 
                 continue;
             }
@@ -177,32 +175,38 @@ public class MigrationReportService : IMigrationReportService
 
             if (Signature(previous) != Signature(tool))
                 entries.Add(new MigrationEntry(MigrationKind.Signature, where, MigrationChange.SignatureChanged,
-                    $"`{Signature(previous)}` became `{Signature(tool)}`. Change your method to match: the generated declaration moves on its own and MorganaToolAdapter.AddTool refuses the pair at startup if it does not."));
+                    $"`{Signature(previous)}` became `{Signature(tool)}`. The generated declaration moves on its own: change your implementation to match, since the two parts of a partial method must agree to compile."));
             else if (!string.Equals(previous.Description, tool.Description, StringComparison.Ordinal)
                      || previous.Parameters.Zip(tool.Parameters).Any(p => !string.Equals(p.First.Description, p.Second.Description, StringComparison.Ordinal))
                      || (!returnsChanged && previous.Returns.Zip(tool.Returns).Any(r => !string.Equals(r.First.Description, r.Second.Description, StringComparison.Ordinal))))
                 entries.Add(new MigrationEntry(MigrationKind.Tool, where, MigrationChange.Revised,
-                    "Description changed. It reaches the model through agents.json and the schema, so nothing needs rebuilding."));
+                    "Description changed. It is an attribute in the generated half, so overwriting that file is all it takes."));
 
-            // Independent of the parameter signature: the record lives in the client's half, so only
-            // the client can bring it in line with the fields now declared.
+            // Independent of the parameter signature: the record is declared in the generated half
+            // and the client's half builds it, so only the client can bring that code in line.
             if (returnsChanged)
                 entries.Add(new MigrationEntry(MigrationKind.Signature, where, MigrationChange.SignatureChanged,
-                    $"What it hands back changed: `{Fields(previous)}` became `{Fields(tool)}`. Change `{CodeEmitService.ResultTypeName(tool.Name!)}` in the half you own to match: startup refuses a record whose fields differ from Returns."));
+                    $"What it hands back changed: `{Fields(previous)}` became `{Fields(tool)}`. The generated half declares `{CodeEmitService.ResultTypeName(tool.Name!)}` with the new fields: change the code in your half that builds it to match."));
 
-            // Reported on its own entry, whatever else changed: the approval is read from agents.json alone,
-            // so a client reading only the signature entry would never learn the tool now waits for the user.
+            // Reported on its own entry, whatever else changed: a client reading only the signature entry
+            // would never learn that a parameter now comes from the context or is shared.
+            if (previous.Parameters.Zip(tool.Parameters).Any(p => !string.Equals(p.First.Scope, p.Second.Scope, StringComparison.Ordinal) || p.First.Shared != p.Second.Shared))
+                entries.Add(new MigrationEntry(MigrationKind.Tool, where, MigrationChange.Revised,
+                    "A parameter's scope or sharing changed. It is an attribute on the parameter in the generated half, so overwriting that file is all it takes."));
+
+            // Reported on its own entry, whatever else changed: a client reading only the signature entry
+            // would never learn the tool now waits for the user.
             if (previous.RequiresExecutionApproval != tool.RequiresExecutionApproval)
                 entries.Add(new MigrationEntry(MigrationKind.Tool, where, MigrationChange.Revised,
                     tool.RequiresExecutionApproval
-                        ? "Now waits for the user's approval before it runs. It is read from agents.json, so nothing needs rebuilding."
-                        : "No longer waits for the user's approval before it runs. It is read from agents.json, so nothing needs rebuilding."));
+                        ? "Now waits for the user's approval before it runs. It is an attribute in the generated half, so overwriting that file is all it takes."
+                        : "No longer waits for the user's approval before it runs. It is an attribute in the generated half, so overwriting that file is all it takes."));
         }
 
         entries.AddRange(
             before.Where(t => !string.IsNullOrWhiteSpace(t.Name)
                                 && !agent.Tools.Any(x => string.Equals(x.Name, t.Name, StringComparison.Ordinal)))
-                  .Select(gone => new MigrationEntry(MigrationKind.Signature, $"{agent.ID}.{gone.Name}", MigrationChange.Removed, $"Gone from the configuration. Its generated declaration disappears, so `{gone.Name}` in the half you own becomes an orphan method — delete it with `{CodeEmitService.ResultTypeName(gone.Name!)}` or the partial no longer matches.")));
+                  .Select(gone => new MigrationEntry(MigrationKind.Signature, $"{agent.ID}.{gone.Name}", MigrationChange.Removed, $"Gone from the configuration. Its generated declaration and record disappear, so `{gone.Name}` in the half you own becomes an orphan method — delete it or the partial no longer matches.")));
     }
 
     /// <summary>
@@ -245,20 +249,18 @@ public class MigrationReportService : IMigrationReportService
         JsonSerializer.Serialize(DraftProjection.ToWorkflowDefinition(workflow));
 
     /// <summary>
-    /// Whether the names a tool hands back or the one marked as the failure differ between two states of it.
+    /// Whether the names or the types of the fields a tool hands back differ between two states of it.
     /// </summary>
     private static bool ReturnsChanged(ToolDraft was, ToolDraft now) =>
-        !was.Returns.Select(r => r.Name).ToHashSet(StringComparer.Ordinal)
-            .SetEquals(now.Returns.Select(r => r.Name))
-        || !string.Equals(was.Returns.FirstOrDefault(r => r.Failure)?.Name, now.Returns.FirstOrDefault(r => r.Failure)?.Name, StringComparison.Ordinal);
+        !was.Returns.Select(r => (r.Name, r.Type)).ToHashSet().SetEquals(now.Returns.Select(r => (r.Name, r.Type)));
 
     /// <summary>
-    /// Renders the fields a tool hands back as the report shows them, the failure marked.
+    /// Renders the fields a tool hands back as the report shows them, each with its type.
     /// </summary>
     private static string Fields(ToolDraft tool) =>
         tool.Returns.Count == 0
             ? "(nothing declared)"
-            : string.Join(", ", tool.Returns.Select(r => r.Failure ? $"{r.Name} (failure)" : r.Name));
+            : string.Join(", ", tool.Returns.Select(r => $"{r.Name}: {r.Type ?? "?"}"));
 
     /// <summary>
     /// Renders the report as the <c>MIGRATION.md</c> in the archive.
@@ -275,7 +277,7 @@ public class MigrationReportService : IMigrationReportService
 
         if (draft.Baseline is null)
         {
-            sb.AppendLine("No configuration was uploaded into this session, so there is nothing to compare against:");
+            sb.AppendLine("No earlier configuration came with this sitting, so there is nothing to compare against:");
             sb.AppendLine("everything in this archive is new. Drop it into a plugin project, point Morgana's");
             sb.AppendLine("`Morgana:Plugins:Directories` at the build output and start.");
             return sb.ToString();

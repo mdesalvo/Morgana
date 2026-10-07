@@ -7,7 +7,7 @@ namespace Alembic.Interfaces;
 /// </summary>
 /// <remarks>
 /// One download and not several, because the pieces are only correct together. An
-/// <c>agents.json</c> whose toolkit has moved on from the C# beside it is a startup failure and
+/// <c>agents.json</c> whose workflows name tools that the C# beside it no longer declares is a startup failure and
 /// two separate downloads is an invitation to take one of them.
 /// </remarks>
 public interface IAssetPackageService

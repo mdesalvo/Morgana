@@ -51,7 +51,7 @@ public class DraftSerializationService : IDraftSerializationService
     /// <param name="draftJson">The uploaded file's raw bytes, positioned at its start.</param>
     /// <param name="cancellationToken">Cancels the deserialization.</param>
     /// <returns>The resumed Draft, or <c>null</c> if the file could not be parsed as one — the
-    /// caller falls back to treating the upload as a bare configuration in that case.</returns>
+    /// caller tells the client that it could not be read.</returns>
     public async Task<DomainDraft?> DeserializeAsync(Stream draftJson, CancellationToken cancellationToken = default)
     {
         try

@@ -121,12 +121,14 @@ public class ToolMockService : IToolMockService
         // more completion and not two. The constructor belongs to the generated half, which is where
         // the tool's own dependencies are taken and handed to the base class: one written here wins
         // over it and takes neither, so the base constructor goes unsatisfied. The result records are
-        // the opposite case, declared only in this half, so the generated signatures name types that
-        // exist nowhere else. Told once and written anyway, the model is told what it did and asked again.
-        List<string> missingRecords = MissingResultRecords(authored, agent);
+        // declared there too, so a second declaration collides with them. A type that a record names
+        // and nobody declares is the opposite case: it exists only if this half declares it. Told once
+        // and written anyway, the model is told what it did and asked again.
+        List<string> redeclaredRecords = RedeclaredResultRecords(authored, agent);
+        List<string> missingTypes = UndeclaredClientTypes(authored, agent);
         bool wroteConstructor = DeclaresConstructor(authored, className);
 
-        if (wroteConstructor || missingRecords.Count > 0)
+        if (wroteConstructor || redeclaredRecords.Count > 0 || missingTypes.Count > 0)
         {
             if (wroteConstructor)
             {
@@ -136,11 +138,19 @@ public class ToolMockService : IToolMockService
                                    + "taken. Write the same file again with no constructor of any kind.");
             }
 
-            if (missingRecords.Count > 0)
+            if (redeclaredRecords.Count > 0)
             {
                 request.AppendLine();
-                request.AppendLine($"Your previous answer did not declare {string.Join(", ", missingRecords)}. Each method returns the record "
-                                   + "its signature names and that record is declared in your half, nested inside the class. "
+                request.AppendLine($"Your previous answer declared {string.Join(", ", redeclaredRecords)}. Each method returns the record "
+                                   + "its signature names and that record is already declared in the generated half, nested inside the class. "
+                                   + "Write the same file again with none of them declared.");
+            }
+
+            if (missingTypes.Count > 0)
+            {
+                request.AppendLine();
+                request.AppendLine($"Your previous answer did not declare {string.Join(", ", missingTypes)}. The generated half names "
+                                   + "each of them as the type of a field and declares none, so each is declared in your half, nested inside the class. "
                                    + "Write the same file again with every one of them declared.");
             }
 
@@ -163,11 +173,17 @@ public class ToolMockService : IToolMockService
                 + "generated half of the pair and a second constructor leaves the base class unsatisfied, so the "
                 + "archive would not build.");
 
-        missingRecords = MissingResultRecords(authored, agent);
-        if (missingRecords.Count > 0)
+        redeclaredRecords = RedeclaredResultRecords(authored, agent);
+        if (redeclaredRecords.Count > 0)
             throw new InvalidOperationException(
-                $"The model left {string.Join(", ", missingRecords)} undeclared twice over. The generated half returns those "
-                + "records and only the half written here declares them, so the archive would not build.");
+                $"The model declared {string.Join(", ", redeclaredRecords)} twice over. The generated half already declares "
+                + "those records, so a second declaration would not build.");
+
+        missingTypes = UndeclaredClientTypes(authored, agent);
+        if (missingTypes.Count > 0)
+            throw new InvalidOperationException(
+                $"The model left {string.Join(", ", missingTypes)} undeclared twice over. The generated half names those "
+                + "types as the type of a returned field and only the half written here can declare them, so the archive would not build.");
 
         return StripDuplicateToolAttribute(authored);
     }
@@ -207,7 +223,7 @@ public class ToolMockService : IToolMockService
     }
 
     /// <summary>
-    /// States to the mock author the fields each result record must carry, in the words agents.json holds.
+    /// States to the mock author the fields each result record carries, in the words the model reads.
     /// </summary>
     private static void AppendReturnContract(StringBuilder request, AgentDraft agent)
     {
@@ -216,11 +232,11 @@ public class ToolMockService : IToolMockService
         foreach (ToolDraft tool in agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name) && t.Returns.Count > 0))
         {
             request.AppendLine();
-            request.AppendLine(CultureInfo.InvariantCulture, $"{tool.Name} returns {CodeEmitService.ResultTypeName(tool.Name!)}, with exactly these fields:");
+            request.AppendLine(CultureInfo.InvariantCulture, $"{tool.Name} returns {CodeEmitService.ResultTypeName(tool.Name!)}, which the generated half declares with exactly these fields:");
 
-            foreach (Records.ToolReturn field in tool.Returns.Where(r => !string.IsNullOrWhiteSpace(r.Name)))
+            foreach (ToolReturnDraft field in tool.Returns.Where(r => !string.IsNullOrWhiteSpace(r.Name)))
                 request.AppendLine(CultureInfo.InvariantCulture,
-                    $"  {field.Name}: {field.Description}{(field.Failure ? " (the failure: null whenever the call succeeds)" : string.Empty)}{(readByWorkflows.Contains((tool.Name!, field.Name!)) ? " (read by a later step of a workflow: always filled when the call succeeds)" : string.Empty)}");
+                    $"  {field.Name} ({field.Type}): {field.Description}{(field.Name == Constants.Workflows.FailureField ? " (the failure: null whenever the call succeeds)" : string.Empty)}{(readByWorkflows.Contains((tool.Name!, field.Name!)) ? " (read by a later step of a workflow: always filled when the call succeeds)" : string.Empty)}");
         }
     }
 
@@ -255,13 +271,34 @@ public class ToolMockService : IToolMockService
     }
 
     /// <summary>
-    /// The result records the generated half names that the authored source never declares.
+    /// The result records that the generated half declares and the authored source declares a second time.
     /// </summary>
-    private static List<string> MissingResultRecords(string source, AgentDraft agent) =>
+    private static List<string> RedeclaredResultRecords(string source, AgentDraft agent) =>
         [.. agent.Tools
             .Where(t => !string.IsNullOrWhiteSpace(t.Name))
             .Select(t => CodeEmitService.ResultTypeName(t.Name!))
-            .Where(name => !Regex.IsMatch(source, $@"\brecord\s+(?:class\s+|struct\s+)?{Regex.Escape(name)}\b"))];
+            .Where(name => DeclaresType(source, name))];
+
+    /// <summary>
+    /// The types that a returned field names and that neither the generated half nor the authored source declares.
+    /// </summary>
+    /// <remarks>
+    /// The generated half declares only the result records, so a record that a field refers to
+    /// (a list of catalog entries) exists only if the half the client owns declares it.
+    /// </remarks>
+    private static List<string> UndeclaredClientTypes(string source, AgentDraft agent) =>
+        [.. agent.Tools
+            .SelectMany(t => t.Returns)
+            .SelectMany(field => CodeEmitService.ClientTypeNames(field.Type))
+            .Distinct(StringComparer.Ordinal)
+            .Where(name => !agent.Tools.Any(t => !string.IsNullOrWhiteSpace(t.Name) && CodeEmitService.ResultTypeName(t.Name!) == name))
+            .Where(name => !DeclaresType(source, name))];
+
+    /// <summary>
+    /// Whether the source declares a type of that name.
+    /// </summary>
+    private static bool DeclaresType(string source, string name) =>
+        Regex.IsMatch(source, $@"\b(?:record|class|struct|enum|interface)\s+(?:class\s+|struct\s+)?{Regex.Escape(name)}\b");
 
     /// <summary>
     /// The <c>[ProvidesToolForIntent]</c> attribute the <c>.g.cs</c> half already carries on this

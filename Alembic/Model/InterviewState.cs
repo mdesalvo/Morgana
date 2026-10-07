@@ -364,7 +364,7 @@ public sealed class InterviewState
         // The whole toolkit as one string: any tool added, dropped, renamed, redescribed or
         // reparametrised moves it, which is precisely when the toolkit panel deserves attention.
         ["tools"] = string.Join("|", Agent.Tools.Select(t =>
-            $"{t.Name}:{t.Description}:{string.Join(",", t.Parameters.Select(x => $"{x.Name}/{x.Scope}/{x.Required}/{x.Shared}/{x.Description}"))}")),
+            $"{t.Name}:{t.Description}:{string.Join(",", t.Parameters.Select(x => $"{x.Name}/{x.Scope}/{x.Required}/{x.Shared}/{x.Description}"))}:{string.Join(",", t.Returns.Select(r => $"{r.Name}/{r.Type}/{r.Description}"))}")),
 
         // The whole set of workflows as one string, for the same reason as the toolkit above.
         ["workflows"] = string.Join("|", Agent.Workflows.Select(w =>

@@ -18,7 +18,6 @@ namespace Alembic.Model;
 /// </param>
 /// <param name="Fact">One short sentence about their work, in their own vocabulary.</param>
 /// <param name="Inferred">
-/// <c>true</c> where it was read off an uploaded <c>agents.json</c> rather than said by anyone: an
-/// upload carries finished prose and no memory of the conversation that produced it.
+/// <c>true</c> where Alembic read it off a configuration rather than the client saying it: a configuration carries finished prose and no memory of the conversation that produced it.
 /// </param>
 public sealed record KnownFact(string Subject, string Fact, bool Inferred = false);

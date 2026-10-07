@@ -18,7 +18,7 @@ namespace Alembic.Model;
 /// </para>
 /// <para>
 /// <b>What survives that Alembic does not understand.</b> An uploaded <c>agents.json</c> may carry
-/// AdditionalProperties entries beyond <c>Tools</c>. They are kept verbatim in
+/// AdditionalProperties entries beyond <c>Workflows</c>. They are kept verbatim in
 /// <see cref="AgentDraft.UnmodelledProperties"/> and written back untouched: the round-trip
 /// invariant must not depend on Alembic having a use for every key it meets.
 /// </para>
@@ -30,9 +30,7 @@ public sealed class DomainDraft
     /// works, what is true of every counter in it.
     /// </summary>
     /// <remarks>
-    /// Kept with the domain rather than with the sitting, because it outlives any one of them and an
-    /// upload has no sitting at all: a bare <c>agents.json</c> is read once for what it says about
-    /// the trade and every step of every later interview opens holding it. Each fact says whether
+    /// Kept with the domain rather than with the sitting, because it outlives any one of them: every step of every later interview opens holding it. Each fact says whether
     /// the client said it or Alembic read it. None of it is ever written into an agent — it is what
     /// the questions are made of, not what the agents say.
     /// </remarks>
@@ -49,8 +47,7 @@ public sealed class DomainDraft
     public List<AgentDraft> Agents { get; set; } = [];
 
     /// <summary>
-    /// Name of the uploaded file this Draft was imported from, or <c>null</c> for a greenfield
-    /// Draft. Carried for the migration report, which has to name what it is diffing against.
+    /// Name of the configuration that this Draft was imported from, or <c>null</c> where it was not. Only a save file made before Alembic stopped importing configurations carries one; kept for the migration report, which has to name what it is diffing against.
     /// </summary>
     public string? ImportedFrom { get; set; }
 
@@ -60,7 +57,7 @@ public sealed class DomainDraft
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     /// <summary>
-    /// The domain exactly as it was uploaded, frozen at import. <c>null</c> for a greenfield Draft.
+    /// The domain exactly as it was when a configuration was imported into the Draft, frozen then. <c>null</c> where none was, which is every Draft started here.
     /// </summary>
     /// <remarks>
     /// The migration report has to diff against something and <see cref="Provenance"/> alone cannot
@@ -424,7 +421,7 @@ public sealed class AgentDraft
     public List<WorkflowDraft> Workflows { get; set; } = [];
 
     /// <summary>
-    /// AdditionalProperties entries other than <c>Tools</c> and <c>Workflows</c>, kept verbatim so a key Alembic has no
+    /// AdditionalProperties entries other than <c>Workflows</c>, kept verbatim so a key Alembic has no
     /// use for still survives a round trip. Values are <c>JsonElement</c>s and are written back as
     /// they were read.
     /// </summary>
@@ -442,13 +439,13 @@ public sealed class AgentDraft
 }
 
 /// <summary>
-/// One tool under construction: the contract between the agent's prose and a C# method.
+/// One tool under construction: the contract between the agent's prose and a C# method, declared on
+/// that method and on the record it returns.
 /// </summary>
 public sealed class ToolDraft
 {
     /// <summary>
-    /// Tool name. Must match the C# method name exactly — <c>MorganaToolAdapter.AddTool</c>
-    /// validates the pair and fails startup on a mismatch.
+    /// Tool name: the C# method name, exactly.
     /// </summary>
     /// <remarks><c>null</c> until the <c>AgentToolkit</c> pass declares this tool via
     /// <c>DeclareTool</c>.</remarks>
@@ -466,19 +463,45 @@ public sealed class ToolDraft
     public List<ToolParameterDraft> Parameters { get; set; } = [];
 
     /// <summary>
-    /// Whether the tool runs only once the user has approved that very call; it reaches agents.json and never the C#.
+    /// Whether the tool runs only once the user has approved that very call, declared on the method as <c>[RequiresApproval]</c>.
     /// </summary>
     public bool RequiresExecutionApproval { get; set; }
 
     /// <summary>
-    /// The fields of what the tool's method returns, as agents.json declares them and startup verifies them against the C#.
+    /// The fields of the record the tool's method returns, in the order the record declares them.
     /// </summary>
-    public List<Records.ToolReturn> Returns { get; set; } = [];
+    public List<ToolReturnDraft> Returns { get; set; } = [];
 
     /// <summary>
     /// Where this tool came from.
     /// </summary>
     public Provenance Origin { get; set; } = Provenance.Authored;
+}
+
+/// <summary>
+/// One field of the record a tool returns, under construction.
+/// </summary>
+/// <remarks>
+/// The field named <see cref="Constants.Workflows.FailureField"/> is the failure: it is the one that
+/// holds a value only when the call failed, so no flag says so.
+/// </remarks>
+public sealed class ToolReturnDraft
+{
+    /// <summary>
+    /// The name the model reads: camelCase, the record's property with its first letter lowered.
+    /// </summary>
+    public string? Name { get; set; }
+
+    /// <summary>
+    /// What the field holds, as the model reads it in the result's schema.
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// The C# type of the record's property exactly as written there, such as <c>string</c>, <c>long?</c> or <c>List&lt;string&gt;</c>.
+    /// </summary>
+    /// <remarks><c>null</c> until it is asked: an uploaded domain written before the types were declared arrives with none.</remarks>
+    public string? Type { get; set; }
 }
 
 /// <summary>
@@ -548,7 +571,7 @@ public sealed class WorkflowStepDraft
 public sealed class ToolParameterDraft
 {
     /// <summary>
-    /// Parameter name. Must match the C# method's parameter name.
+    /// Parameter name: the C# method's parameter name, exactly.
     /// </summary>
     public string? Name { get; set; }
 
@@ -559,28 +582,26 @@ public sealed class ToolParameterDraft
     public string? Description { get; set; }
 
     /// <summary>
-    /// Whether the model must supply this parameter.
+    /// Whether the model must supply this parameter: the one that has no default value in the C# signature.
     /// </summary>
+    /// <remarks>Only a request parameter may be optional, since a context value that nobody holds stops the tool.</remarks>
     public bool Required { get; set; } = true;
 
     /// <summary>
     /// <c>"context"</c> (resolved from the session's context variables) or <c>"request"</c>
-    /// (obtained from the user). A parameter carrying a value the model itself authors declares
-    /// no scope at all.
+    /// (obtained from the user).
     /// </summary>
     /// <remarks>
     /// Never asked per parameter — inferred once from a single question about the client's setup
     /// (what the system already knows about a user the moment they arrive), then applied to every
     /// parameter of the toolkit: everything on that answer is <c>"context"</c>, everything else
-    /// <c>"request"</c>. A bare <c>null</c> here is a third, legitimate value, not an unanswered
-    /// question.
+    /// <c>"request"</c>. <c>null</c> means that it is not settled yet.
     /// </remarks>
     public string? Scope { get; set; }
 
     /// <summary>
     /// Whether the resolved value is published to the conversation-scoped <c>shared_context</c>
-    /// registry so other agents can hydrate from it. Only meaningful when <see cref="Scope"/> is
-    /// <c>"context"</c>.
+    /// registry so other agents can hydrate from it. Only a <c>"context"</c> parameter may be shared.
     /// </summary>
     public bool Shared { get; set; }
 }
@@ -590,9 +611,7 @@ public sealed class ToolParameterDraft
 /// MCP servers.
 /// </summary>
 /// <remarks>
-/// On import every field here is unknown, because the uploaded file simply does not contain them.
-/// Alembic infers defaults from the agent ID by the framework's own naming convention and flags
-/// them as such — an inferred value is a proposal for the client to confirm, never a finding.
+/// A fact that nobody has settled yet is unknown. Alembic infers class names from the agent ID by the framework's own naming convention and flags them as such — an inferred value is a proposal for the client to confirm, never a finding.
 /// </remarks>
 public sealed class AgentCodeFacts
 {
@@ -600,9 +619,7 @@ public sealed class AgentCodeFacts
     /// Namespace of the generated classes.
     /// </summary>
     /// <remarks>
-    /// Left <c>null</c> on import rather than guessed, unlike <see cref="AgentClassName"/> and
-    /// <see cref="ToolClassName"/>: a namespace follows from nothing in <c>agents.json</c> and a
-    /// confident wrong value here is worse than one the interview will still ask about.
+    /// Left <c>null</c> until it is asked rather than guessed, unlike <see cref="AgentClassName"/> and <see cref="ToolClassName"/>: a namespace follows from nothing the draft holds and a confident wrong value here is worse than one the interview will still ask about.
     /// </remarks>
     public string? Namespace { get; set; }
 
@@ -643,8 +660,7 @@ public sealed class AgentCodeFacts
     /// attribute: an intent and the instance publishing it where that is not this domain.
     /// </summary>
     /// <remarks>
-    /// A C# fact like <see cref="MCPServers"/> — <c>agents.json</c> carries no trace of it, so an
-    /// imported domain arrives with none and the colleagues step is where they are settled. It is
+    /// A C# fact like <see cref="MCPServers"/> — <c>agents.json</c> carries no trace of it, so the colleagues step is where they are settled. It is
     /// nonetheless a domain question and not an infrastructural one: whether the accounts agent has
     /// to ring the greenhouse is something only the client knows about their own work, which is why
     /// it is asked in the interview rather than ticked on the emit page beside the tier.
@@ -658,8 +674,7 @@ public sealed class AgentCodeFacts
 
     /// <summary>
     /// Whether the values above were inferred by Alembic rather than stated by the client.
-    /// True for everything reconstructed at import, since an uploaded <c>agents.json</c> carries
-    /// none of it.
+    /// True for a class name that Alembic proposed and the client has not confirmed yet.
     /// </summary>
     public bool Inferred { get; set; }
 }
