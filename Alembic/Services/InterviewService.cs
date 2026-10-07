@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Alembic.Interfaces;
 using Alembic.Model;
 using Microsoft.Agents.AI;
@@ -1233,7 +1234,7 @@ public class InterviewService : IInterviewService
     /// Assembles the agent for one pass: its prompt and only the tools that pass is allowed.
     /// </summary>
     /// <remarks>
-    /// The toolset comes from the pass's own <c>Tools</c> declaration in <c>alembic.json</c>, so
+    /// The toolset comes from the pass's own <c>OfferedTools</c> list in <c>alembic.json</c>, so
     /// what a pass may write is settled by which tools exist rather than by a sentence asking it to
     /// abstain. The functional pass has no tool for an agent's instructions or formatting and that
     /// is the whole of the constraint.
@@ -1246,69 +1247,12 @@ public class InterviewService : IInterviewService
     /// </remarks>
     private async Task BuildAgentAsync(InterviewState interviewState, string interviewerId, bool correcting)
     {
-        Records.Prompt interviewer = alembicPromptService.Resolve(interviewerId);
-
-        List<Records.ToolDefinition> definitions =
-            interviewer.GetAdditionalPropertyOrDefault<List<Records.ToolDefinition>>(Constants.PromptProperties.Tools, []);
-
         InterviewTools tools = new InterviewTools(interviewState, draftStateService, draftValidationService, recapService);
-        MorganaToolAdapter toolAdapter = new MorganaToolAdapter();
 
-        // The delegate map is the one place a tool's name, its declaration and its implementation
-        // meet. AddTool validates the pair (parameter count, names, required/optional) and throws
-        // on a mismatch, so a declaration that has drifted from its method fails here rather than
-        // reaching the model as a schema nothing can satisfy.
-        Dictionary<string, Delegate> implementations = new(StringComparer.Ordinal)
-        {
-            [nameof(InterviewTools.DeclareIntent)] = tools.DeclareIntent,
-            [nameof(InterviewTools.DropIntent)] = tools.DropIntent,
-            [nameof(InterviewTools.GetDomainMap)] = tools.GetDomainMap,
-            [nameof(InterviewTools.SetAgentTarget)] = tools.SetAgentTarget,
-            [nameof(InterviewTools.SetAgentTerritory)] = tools.SetAgentTerritory,
-            [nameof(InterviewTools.SetIntentDescription)] = tools.SetIntentDescription,
-            [nameof(InterviewTools.GetAgentCard)] = tools.GetAgentCard,
-            [nameof(InterviewTools.SetAgentPersonality)] = tools.SetAgentPersonality,
-            [nameof(InterviewTools.SetAgentInstructions)] = tools.SetAgentInstructions,
-            [nameof(InterviewTools.SetAgentFormatting)] = tools.SetAgentFormatting,
-            [nameof(InterviewTools.DeclareTool)] = tools.DeclareTool,
-            [nameof(InterviewTools.SetToolParameter)] = tools.SetToolParameter,
-            [nameof(InterviewTools.DropToolParameter)] = tools.DropToolParameter,
-            [nameof(InterviewTools.SetToolReturn)] = tools.SetToolReturn,
-            [nameof(InterviewTools.DropToolReturn)] = tools.DropToolReturn,
-            [nameof(InterviewTools.DropTool)] = tools.DropTool,
-            [nameof(InterviewTools.GetToolkit)] = tools.GetToolkit,
-            [nameof(InterviewTools.DeclareWorkflow)] = tools.DeclareWorkflow,
-            [nameof(InterviewTools.SetWorkflowStep)] = tools.SetWorkflowStep,
-            [nameof(InterviewTools.DropWorkflowStep)] = tools.DropWorkflowStep,
-            [nameof(InterviewTools.DropWorkflow)] = tools.DropWorkflow,
-            [nameof(InterviewTools.GetWorkflows)] = tools.GetWorkflows,
-            [nameof(InterviewTools.GetAgentSoFar)] = tools.GetAgentSoFar,
-            [nameof(InterviewTools.SetChoice)] = tools.SetChoice,
-            [nameof(InterviewTools.SetExample)] = tools.SetExample,
-            [nameof(InterviewTools.SetStepPlacing)] = tools.SetStepPlacing,
-            [nameof(InterviewTools.ShowWhatIsWritten)] = tools.ShowWhatIsWritten,
-            [nameof(InterviewTools.NoteDomainFact)] = tools.NoteDomainFact,
-            [nameof(InterviewTools.DropDomainFact)] = tools.DropDomainFact,
-            [nameof(InterviewTools.RecallAgent)] = tools.RecallAgent,
-            [nameof(InterviewTools.SetTraits)] = tools.SetTraits,
-            [nameof(InterviewTools.GetExistingIntents)] = tools.GetExistingIntents,
-            [nameof(InterviewTools.GetDomainAgents)] = tools.GetDomainAgents,
-            [nameof(InterviewTools.GetConsultations)] = tools.GetConsultations,
-            [nameof(InterviewTools.DeclareConsultation)] = tools.DeclareConsultation,
-            [nameof(InterviewTools.DropConsultation)] = tools.DropConsultation,
-            [nameof(InterviewTools.GetComposedPrompt)] = tools.GetComposedPrompt,
-            [nameof(InterviewTools.GetFindings)] = tools.GetFindings,
-            [nameof(InterviewTools.SetPassCompleted)] = tools.SetPassCompleted
-        };
-
-        foreach (Records.ToolDefinition definition in definitions)
-        {
-            if (!implementations.TryGetValue(definition.Name, out Delegate? implementation))
-                throw new InvalidOperationException(
-                    $"alembic.json declares tool '{definition.Name}' for '{interviewerId}', but InterviewTools has no method by that name.");
-
-            toolAdapter.AddTool(definition.Name, implementation, definition);
-        }
+        // The pass is offered the tools its OfferedTools names and nothing else: the constraint on
+        // what it may write is the absence of a tool. A name the class does not declare throws here,
+        // never reaching the model as a tool that nothing implements.
+        MorganaToolAdapter toolAdapter = alembicPromptService.OfferTools(interviewerId, tools);
 
         // Performance, resolved directly rather than through CompleteWithSystemPromptAsync, which
         // always runs on the cheapest configured tier. Writing non-contradictory dispositive prose
@@ -1519,12 +1463,35 @@ public class InterviewService : IInterviewService
             logger.LogInformation("{Pass} is calling {Tool}({Arguments})", pass, Name, Written(arguments));
 
             object? answer = await base.InvokeCoreAsync(arguments, cancellationToken);
+            ToolReply? reply = Read(answer);
 
-            logger.LogInformation(
-                "{Pass} called {Tool}({Arguments}) and was told, {Elapsed}ms later: {Answer}",
-                pass, Name, Written(arguments), Stopwatch.GetElapsedTime(startedAt).Milliseconds, Short(answer?.ToString()));
+            // A refusal is logged louder than an answer: it is the one outcome a pass can report to the
+            // client as settled while its own tool changed nothing.
+            logger.Log(
+                reply?.Error is null ? LogLevel.Information : LogLevel.Warning,
+                "{Pass} called {Tool}({Arguments}) and was {Outcome}, {Elapsed}ms later: {Answer}",
+                pass, Name, Written(arguments), reply?.Error is null ? "told" : "refused",
+                Stopwatch.GetElapsedTime(startedAt).Milliseconds, Short(reply?.Error ?? reply?.Text ?? answer?.ToString()));
 
             return answer;
+        }
+
+        /// <summary>
+        /// The record a tool answered with, read back from the compact JSON that the model receives; null where the answer is not one.
+        /// </summary>
+        private static ToolReply? Read(object? answer)
+        {
+            if (answer is not string json)
+                return null;
+
+            try
+            {
+                return JsonSerializer.Deserialize<ToolReply>(json, JsonSerializerOptions.Web);
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
         }
 
         /// <summary>The call's arguments as one line, each cut to what identifies it.</summary>

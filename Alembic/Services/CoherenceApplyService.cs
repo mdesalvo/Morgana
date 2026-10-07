@@ -57,37 +57,11 @@ public class CoherenceApplyService : ICoherenceApplyService
     public async Task<CoherenceApplyResult> ApplyAsync(DomainDraft draft, CoherenceFinding finding, CancellationToken cancellationToken = default)
     {
         Records.Prompt prompt = alembicPromptService.Resolve(PromptId);
-        List<Records.ToolDefinition> definitions =
-            prompt.GetAdditionalPropertyOrDefault<List<Records.ToolDefinition>>(Constants.PromptProperties.Tools, []);
-
         CoherenceApplyTools tools = new CoherenceApplyTools(draft);
-        MorganaToolAdapter toolAdapter = new MorganaToolAdapter();
 
-        // Maps each tool's name in alembic.json to the CoherenceApplyTools method that implements
-        // it. The lookup below turns a declaration with no matching method into a startup-time
-        // failure instead of a schema the model is offered and can never actually call.
-        Dictionary<string, Delegate> implementations = new(StringComparer.Ordinal)
-        {
-            [nameof(CoherenceApplyTools.GetAgent)] = tools.GetAgent,
-            [nameof(CoherenceApplyTools.SetAgentTarget)] = tools.SetAgentTarget,
-            [nameof(CoherenceApplyTools.SetAgentInstructions)] = tools.SetAgentInstructions,
-            [nameof(CoherenceApplyTools.SetAgentFormatting)] = tools.SetAgentFormatting,
-            [nameof(CoherenceApplyTools.SetIntentDescription)] = tools.SetIntentDescription,
-            [nameof(CoherenceApplyTools.DeclareTool)] = tools.DeclareTool,
-            [nameof(CoherenceApplyTools.SetToolParameter)] = tools.SetToolParameter,
-            [nameof(CoherenceApplyTools.DropToolParameter)] = tools.DropToolParameter,
-            [nameof(CoherenceApplyTools.DropTool)] = tools.DropTool,
-            [nameof(CoherenceApplyTools.ApplyCompleted)] = tools.ApplyCompleted
-        };
-
-        foreach (Records.ToolDefinition definition in definitions)
-        {
-            if (!implementations.TryGetValue(definition.Name, out Delegate? implementation))
-                throw new InvalidOperationException(
-                    $"alembic.json declares tool '{definition.Name}' for '{PromptId}', but CoherenceApplyTools has no method by that name.");
-
-            toolAdapter.AddTool(definition.Name, implementation, definition);
-        }
+        // Offered by name from alembic.json: a name that the class does not declare throws here
+        // instead of reaching the model as a tool that nothing implements.
+        MorganaToolAdapter toolAdapter = alembicPromptService.OfferTools(PromptId, tools);
 
         IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);
 

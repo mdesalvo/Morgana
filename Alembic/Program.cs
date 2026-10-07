@@ -95,6 +95,22 @@ builder.Services.AddSingleton<ILLMService>(sp =>
 
 WebApplication app = builder.Build();
 
+// Alembic's tools are declared on their classes the way a domain's are, so the framework's own check
+// weighs them here: a tool left without its description, its approval or its scope, or one answering
+// with anything but a typed record, is a fault that nothing downstream can notice. It is asked at
+// startup because left to the first pass it reaches the client as an interview that never answers on
+// a host that passed its health probe. The names that each pass offers are read against the same
+// classes for the same reason.
+List<string> toolErrors =
+[
+    .. HandlesIntentAgentRegistryService.ValidateToolContract("interview", typeof(InterviewTools)),
+    .. HandlesIntentAgentRegistryService.ValidateToolContract("coherence", typeof(CoherenceApplyTools)),
+    .. app.Services.GetRequiredService<IAlembicPromptService>().ValidateOfferedTools()
+];
+
+if (toolErrors.Count > 0)
+    throw new InvalidOperationException($"Alembic's tools are not declared completely: {string.Join("; ", toolErrors)}");
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);

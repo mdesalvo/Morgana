@@ -25,6 +25,27 @@ public class ToolMockService : IToolMockService
     /// </summary>
     private const string MockPromptId = "CodeMocker";
 
+    /// <summary>The value of the agent's Target, spliced into the <c>AgentPurpose</c> message.</summary>
+    private const string TargetPlaceholder = "((target))";
+
+    /// <summary>The value of the agent's Formatting, spliced into the <c>AgentPresentation</c> message.</summary>
+    private const string FormattingPlaceholder = "((formatting))";
+
+    /// <summary>The name of the tool that a contract message is about.</summary>
+    private const string ToolPlaceholder = "((tool))";
+
+    /// <summary>The name of the result record that the generated half declares for a tool.</summary>
+    private const string TypePlaceholder = "((type))";
+
+    /// <summary>The name of the tool class that the two halves share.</summary>
+    private const string ClassPlaceholder = "((class))";
+
+    /// <summary>The result records that the authored source declared a second time.</summary>
+    private const string RecordsPlaceholder = "((records))";
+
+    /// <summary>The types that a returned field names and that the authored source left undeclared.</summary>
+    private const string TypesPlaceholder = "((types))";
+
     private readonly IAlembicPromptService alembicPromptService;
     private readonly ICodeEmitService codeEmitService;
     private readonly ILLMService llmService;
@@ -78,18 +99,18 @@ public class ToolMockService : IToolMockService
             .First(f => f.Path.Contains("/Tools/", StringComparison.Ordinal) || f.Path.StartsWith("Tools/", StringComparison.Ordinal));
 
         StringBuilder request = new StringBuilder();
-        request.AppendLine("This is the generated half of the tool class. Write the other half.");
+        request.AppendLine(Said(mock, "Request"));
         request.AppendLine();
         request.AppendLine(signatures.Content);
-        AppendArgumentContract(request, agent);
-        AppendReturnContract(request, agent);
+        AppendArgumentContract(request, mock, agent);
+        AppendReturnContract(request, mock, agent);
         request.AppendLine();
-        request.AppendLine(CultureInfo.InvariantCulture, $"The agent this toolkit belongs to exists for: {agent.Target}");
+        request.AppendLine(Said(mock, "AgentPurpose", (TargetPlaceholder, agent.Target ?? string.Empty)));
 
         if (!string.IsNullOrWhiteSpace(agent.Formatting))
         {
             request.AppendLine();
-            request.AppendLine(CultureInfo.InvariantCulture, $"It presents what these tools return like this, so return data that makes it possible: {agent.Formatting}");
+            request.AppendLine(Said(mock, "AgentPresentation", (FormattingPlaceholder, agent.Formatting)));
         }
 
         // The class the two halves share, named by the fact the emit already carries rather than
@@ -133,25 +154,19 @@ public class ToolMockService : IToolMockService
             if (wroteConstructor)
             {
                 request.AppendLine();
-                request.AppendLine($"Your previous answer declared a constructor for {className}. That class already has "
-                                   + "one, in the half generated beside yours, and it is the only place its dependencies are "
-                                   + "taken. Write the same file again with no constructor of any kind.");
+                request.AppendLine(Said(mock, "ConstructorWritten", (ClassPlaceholder, className)));
             }
 
             if (redeclaredRecords.Count > 0)
             {
                 request.AppendLine();
-                request.AppendLine($"Your previous answer declared {string.Join(", ", redeclaredRecords)}. Each method returns the record "
-                                   + "its signature names and that record is already declared in the generated half, nested inside the class. "
-                                   + "Write the same file again with none of them declared.");
+                request.AppendLine(Said(mock, "RecordsRedeclared", (RecordsPlaceholder, string.Join(", ", redeclaredRecords))));
             }
 
             if (missingTypes.Count > 0)
             {
                 request.AppendLine();
-                request.AppendLine($"Your previous answer did not declare {string.Join(", ", missingTypes)}. The generated half names "
-                                   + "each of them as the type of a field and declares none, so each is declared in your half, nested inside the class. "
-                                   + "Write the same file again with every one of them declared.");
+                request.AppendLine(Said(mock, "TypesUndeclared", (TypesPlaceholder, string.Join(", ", missingTypes))));
             }
 
             authored = await StreamedCompletion.RunAsync(
@@ -188,6 +203,28 @@ public class ToolMockService : IToolMockService
         return StripDuplicateToolAttribute(authored);
     }
 
+    /// <summary>
+    /// Fetches a text that the mock author reads from the prompt's <c>Messages</c>, with its values spliced in.
+    /// </summary>
+    /// <remarks>
+    /// A missing message throws: an author handed a request with a sentence absent would write the wrong file without any sign of it.
+    /// </remarks>
+    /// <param name="mock">The <c>CodeMocker</c> prompt, which carries the message.</param>
+    /// <param name="name">Which message.</param>
+    /// <param name="values">Placeholder to the value that it stands for.</param>
+    private static string Said(Records.Prompt mock, string name, params (string Placeholder, string Value)[] values)
+    {
+        string text = mock.GetMessage(name);
+
+        if (text.Length == 0)
+            throw new InvalidOperationException($"The {MockPromptId} prompt in alembic.json declares no '{name}' message.");
+
+        foreach ((string placeholder, string value) in values)
+            text = text.Replace(placeholder, value, StringComparison.Ordinal);
+
+        return text;
+    }
+
     /// <summary>Whether authored source declares a constructor of the class it is one half of.</summary>
     /// <remarks>
     /// A declaration is recognised where a method never could be: a member named after its own class,
@@ -202,7 +239,7 @@ public class ToolMockService : IToolMockService
     /// <summary>
     /// Restates each tool's parameters to the mock author in the words the running model will read.
     /// </summary>
-    private static void AppendArgumentContract(StringBuilder request, AgentDraft agent)
+    private static void AppendArgumentContract(StringBuilder request, Records.Prompt mock, AgentDraft agent)
     {
         foreach (ToolDraft tool in agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name)))
         {
@@ -215,7 +252,7 @@ public class ToolMockService : IToolMockService
                 continue;
 
             request.AppendLine();
-            request.AppendLine(CultureInfo.InvariantCulture, $"{tool.Name} — what the model is told to pass and therefore what arrives:");
+            request.AppendLine(Said(mock, "ArgumentContract", (ToolPlaceholder, tool.Name!)));
 
             foreach (ToolParameterDraft parameter in described)
                 request.AppendLine(CultureInfo.InvariantCulture, $"  {parameter.Name}: {parameter.Description}");
@@ -225,18 +262,18 @@ public class ToolMockService : IToolMockService
     /// <summary>
     /// States to the mock author the fields each result record carries, in the words the model reads.
     /// </summary>
-    private static void AppendReturnContract(StringBuilder request, AgentDraft agent)
+    private static void AppendReturnContract(StringBuilder request, Records.Prompt mock, AgentDraft agent)
     {
         HashSet<(string Tool, string Field)> readByWorkflows = FieldsReadByWorkflows(agent);
 
         foreach (ToolDraft tool in agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name) && t.Returns.Count > 0))
         {
             request.AppendLine();
-            request.AppendLine(CultureInfo.InvariantCulture, $"{tool.Name} returns {CodeEmitService.ResultTypeName(tool.Name!)}, which the generated half declares with exactly these fields:");
+            request.AppendLine(Said(mock, "ReturnContract", (ToolPlaceholder, tool.Name!), (TypePlaceholder, CodeEmitService.ResultTypeName(tool.Name!))));
 
             foreach (ToolReturnDraft field in tool.Returns.Where(r => !string.IsNullOrWhiteSpace(r.Name)))
                 request.AppendLine(CultureInfo.InvariantCulture,
-                    $"  {field.Name} ({field.Type}): {field.Description}{(field.Name == Constants.Workflows.FailureField ? " (the failure: null whenever the call succeeds)" : string.Empty)}{(readByWorkflows.Contains((tool.Name!, field.Name!)) ? " (read by a later step of a workflow: always filled when the call succeeds)" : string.Empty)}");
+                    $"  {field.Name} ({field.Type}): {field.Description}{(field.Name == Constants.Workflows.FailureField ? Said(mock, "FailureFieldNote") : string.Empty)}{(readByWorkflows.Contains((tool.Name!, field.Name!)) ? Said(mock, "WorkflowFieldNote") : string.Empty)}");
         }
     }
 
