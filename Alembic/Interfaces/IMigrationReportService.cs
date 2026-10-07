@@ -3,7 +3,7 @@ using Alembic.Model;
 namespace Alembic.Interfaces;
 
 /// <summary>
-/// States what this Draft changes against the configuration that was uploaded into it.
+/// States what this Draft changes against the archive that was last emitted from it.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -31,7 +31,7 @@ public interface IMigrationReportService
 /// <summary>
 /// What changed and what has to be done about it.
 /// </summary>
-/// <param name="BaselineName">The uploaded file this is diffed against, or <c>null</c> for greenfield.</param>
+/// <param name="BaselineName">What this is diffed against: the archive last emitted or an imported file; <c>null</c> for greenfield.</param>
 /// <param name="Entries">Every change, most consequential first.</param>
 /// <param name="Markdown">The same content as <c>MIGRATION.md</c> in the archive.</param>
 public sealed record MigrationReport(

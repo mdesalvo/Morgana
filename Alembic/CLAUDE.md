@@ -109,25 +109,23 @@ she claims to do**: a ledger may be gazed into, an invoice may not be conjured.
 
 | File | Owner | Rule |
 |---|---|---|
-| `X.g.cs` | Alembic | attributes, constructor, `partial` signatures — **always overwritten** |
+| `X.g.cs` | Alembic | attributes, constructor, `partial` signatures, result records — **always overwritten** |
 | `X.cs` | the client | the working mock, then their real integration — **written once, never touched again** |
 
 The split does double duty: non-destructive regeneration, *and* the line between what is templated
 (deterministic, so a re-run produces no spurious diff) and what the LLM authors (a plausible mock,
 which a template writes badly).
 
-The seam for a tool class is `partial` **methods**, declared from the same `ToolDefinition` that goes
-into `agents.json`. Two things come free: the pair `MorganaToolAdapter.AddTool` validates at startup
-is correct by construction and a tool added to the configuration but forgotten in the code **does not
-compile**. Every emitted parameter is a `string`, which is a statement about the configuration rather
-than a shortcut: `Records.ToolParameter` carries no type, so the type lives in the C# and only there.
-**The record a tool returns is the client's, for the same reason**: its fields are `Returns` and
-startup verifies them, its types are C# — so the generated half only names it and the half the client
-owns declares it, first written by the mock.
+The seam for a tool class is `partial` **methods**. The generated half is the tool's whole
+declaration, since Morgana reads a tool off its method: the description, the approval and each
+parameter's description and scope as attributes, plus the record the tool returns with each field's
+type and description. A tool added to the draft but forgotten in the code **does not compile**. Every
+emitted parameter is a `string`, which a `Context` parameter has to be anyway. The half the client
+owns writes the method bodies and the types a returned field names, first written by the mock.
 
 Because Alembic never sees the client's tree, the convention travels **inside the archive** and needs
-no enforcing: a drifted signature is already a startup failure. Alembic's job is to surface it
-earlier, through an unconditional **migration report** against the uploaded `agents.json`.
+no enforcing: a drifted signature is already a build failure. Alembic's job is to surface it
+earlier, through an unconditional **migration report** against the baseline.
 
 ### The emit
 
@@ -147,8 +145,9 @@ file that looks like success.
 
 Unconditional, greenfield included: a report that only appears when something is wrong is a report
 nobody has learned to read on the day it matters. It diffs the Draft against `DomainDraft.Baseline`,
-the domain frozen at import and kept as a Draft so the comparison is like with like. `Provenance`
-alone could not serve: it says an element was revised, never what it was.
+the domain as the last archive emitted it — what the client's own half was written against — kept as a
+Draft so the comparison is like with like. `Provenance` alone could not serve: it says an element was
+revised, never what it was.
 
 ### Two files, one gesture
 
@@ -167,8 +166,10 @@ document rather than reported from the interview's own state: the worst bug this
 save handing back an empty file while the interview on screen was perfectly healthy. Only the file can
 say what is in the file.
 
-A save file and a configuration arrive through the **same upload control**, told apart **by reading
-the file, never by its name**.
+Alembic opens **only its own files**: the save file or the archive it emitted, which carries one.
+Both arrive through the same upload control, told apart **by reading the file, never by its name**. A
+bare `agents.json` is refused: without the draft its tools are only in the client's C#, which Alembic
+never sees.
 
 ### The framework layer is the embedded one
 
@@ -195,16 +196,20 @@ sentence recycled and two agents publishing the same territory are one agent as 
 
 ### Alembic is an agent and its tools are declared the way an agent's are
 
-Assembled with the framework's own machinery, not an imitation: `MorganaToolAdapter` binds each tool
-declaration in `alembic.json` to its delegate and `IChatClient.AsAIAgent` makes the agent. Not
+Assembled with the framework's own machinery, not an imitation. Alembic is a domain of agents whose
+domain is modelling domains, so `InterviewTools` and `CoherenceApplyTools` declare their tools on their
+methods exactly as a plugin does, projected by the framework's catalog and refused at startup by its
+own check; `alembic.json` keeps only which tools each pass is offered (`OfferedTools`) and
+`IChatClient.AsAIAgent` makes the agent. Not
 `MorganaAgent` via `MorganaAgentAdapter`, which belongs to the routed world of `agents.json`,
 `[HandlesIntent]`, base tools and per-conversation persistence Alembic has none of. **The reuse stops
 exactly where the resemblance does.**
 
 Tools rather than a structured reply: Alembic simply **talks** to the client and carries the
 configuration out of band, so a malformed answer stops costing the client a turn. **A tool answers
-back** — every method in `InterviewTools` returns a sentence *to the model*, so a `Target` arriving too
-short is told so and corrects itself in the same turn. **What a pass may write is which tools exist**:
+back** — every tool returns a `ToolReply` whose text is a sentence *to the model*, so a `Target`
+arriving too short is told so and corrects itself in the same turn; its `Error` holds the reason
+instead when the call recorded nothing. **What a pass may write is which tools exist**:
 the constraint is the absence of a tool rather than a sentence asking for restraint.
 
 Several tools stop Alembic writing blind — **it is the last reader of an agent before it exists**: the
@@ -224,7 +229,9 @@ is literally the shape their own agents will emit. The doctrine is nearly the in
 
 **There is exactly one button and it carries the answer that adds nothing.** A second would carry the
 opposite, which is never an answer: *something's missing* still has to be typed. The count is enforced
-in the **signature**, so a second is not expressible.
+in the **signature**, so a second is not expressible. When a question earns it is stated once, in
+the shared `Formatting` and no pass narrows it: the button is a shortcut for the happy path, never a
+gate.
 
 ### The interview: C# owns the state, the model owns the conducting
 
@@ -404,11 +411,9 @@ tool whose description has not been asked for is a different state from one whos
 deliberately empty and only a nullable field distinguishes them. **Every nullable string in
 `DomainDraft.cs` means "not asked yet."**
 
-**What survives that Alembic does not understand.** `AdditionalProperties` keys other than `Tools` are kept
-verbatim in `AgentDraft.UnmodelledProperties` and written back untouched — the round-trip invariant must not
-depend on Alembic having a use for every key it meets. The `Tools` key is matched **ordinally**,
-deliberately: the framework looks it up in a plain dictionary, so a differently-cased key is invisible there
-and must stay invisible here.
+**What survives that Alembic does not understand.** `AdditionalProperties` keys Alembic does not model
+are kept verbatim in `AgentDraft.UnmodelledProperties` and written back untouched — the round-trip
+invariant must not depend on Alembic having a use for every key it meets.
 
 **Provenance** (`Imported` / `Revised` / `Authored`) exists so Alembic rewrites only what it owns and can
 *report* honestly. It is not what preserves untouched content — that is the round-trip invariant, which
@@ -416,34 +421,34 @@ holds regardless.
 
 ## The round-trip invariant
 
-**A configuration that goes in comes back out equivalent.** A client uploading ten agents to add an
-eleventh gets the other ten back untouched and Alembic does not need to understand them to promise it.
+**A draft that goes in comes back out equivalent.** A client resuming ten agents to add an eleventh
+gets the other ten back untouched and Alembic does not need to understand them to promise it.
 
 Equivalent, not byte-identical and the difference is what the format means: `AdditionalProperties` is a
 *list* Morgana looks keys up **across**, so the grouping carries no information; defaults are written
-explicitly; emoji come back as escaped surrogate pairs. Exporting a re-imported Draft is byte-for-byte
+explicitly; emoji come back as escaped surrogate pairs. Exporting a resumed Draft is byte-for-byte
 stable — a fixed point, so a file that has been through Alembic once stops moving.
 
 `AgentCodeFacts` holds what `agents.json` cannot: namespace, class names, tier, MCP servers and the
 colleagues an agent may consult — each a `Records.PeerReference`, the framework's own type (a second
-vocabulary for one thing is what makes two projects drift). On import all of it is unknown, so Alembic
-proposes class names from the naming convention and flags the record `Inferred`; namespace and tier are left
-null rather than guessed, since a confident wrong value is worse than an empty one the interview will ask
-about.
+vocabulary for one thing is what makes two projects drift). Where it is not known yet Alembic proposes
+class names from the naming convention and flags the record `Inferred`; namespace and tier are left null
+rather than guessed, since a confident wrong value is worse than an empty one the interview will ask about.
 
 ## Why the project reference is Morgana.AI, not Morgana.Contracts
 
 The channels reference `Morgana.Contracts` because they exchange wire DTOs. Alembic exchanges none. What it
 needs is the **domain model of a Morgana configuration** — `Records.Prompt`, `Records.ToolDefinition`,
-`Records.ToolParameter`, `Records.Intent` — plus `IPromptComposerService`. Parsing an uploaded `agents.json`
-is therefore free: there is no parallel representation to maintain.
+`Records.ToolParameter`, `Records.Intent` — plus `IPromptComposerService` and the tool catalog that
+reads its own tools. Writing an `agents.json` is therefore free: there is no parallel representation to
+maintain.
 
 ## Traps worth knowing before you meet them
 
 - `IInterviewService` and `IDraftStateService` are **scoped**, everything else singleton: one interview and
   one Draft per circuit.
 - `IAgentConfigurationService` is `AgentlessConfigurationService`, empty **by construction**: the domain
-  Alembic works on is the **uploaded** one, never one compiled into this process.
+  Alembic works on is the one in the **draft**, never one compiled into this process.
 - `ILLMService` is a factory **never resolved during startup**, so a working copy without credentials still
   builds, boots and serves the shell; the failure surfaces on the first call.
 - `MagicDust` in the `Performance` tier cannot be shortened to `{}` — the JSON provider reads an empty

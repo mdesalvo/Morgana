@@ -22,9 +22,9 @@ A conversational AI framework on **.NET 10**, **Akka.NET** (actor model) and **M
 It orchestrates specialized agents that classify, route and resolve user inquiries, with content
 moderation, shared context, tool calling and channel adaptation.
 
-Domain experts model agents **declaratively** — prompt and tool contracts in JSON, a thin C# class —
-package them as plugin DLLs and the framework handles orchestration, streaming, persistence, guard
-rails and observability.
+Domain experts model agents **declaratively** — prose in JSON, tools as attributed methods of a thin
+C# class — package them as plugin DLLs and the framework handles orchestration, streaming,
+persistence, guard rails and observability.
 
 ## Design Philosophy — agents are prose, not code
 
@@ -94,7 +94,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Abstractions/` | `MorganaActor`, `MorganaAgent`, `MorganaLLM`, `MorganaTool`, `MorganaHostedAgent` (the `AIAgent` publishing an intent over A2A) |
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
-| `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
+| `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[RequiresApproval]`, `[ToolParameter]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
 | `ChatClients/` | `IChatClient` decorators: `TierDefaultsChatClient`, `DustAccountingChatClient`, `MorganaAnthropicClient`, `ApprovalTurnChatClient` (drops `Reply` from a response asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model wrote without `Reply`: a forced tool call, structured output where the provider cannot force one), `WorkflowToolsChatClient` (offers the model only the tools that a running workflow's current step allows) |
 | `Workflows/` | `WorkflowEngine`: an agent's workflows on Microsoft.Agents.AI.Workflows, rebuilt at every call from the checkpoint kept in the agent's session |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
@@ -171,8 +171,8 @@ stay or leave are the framework's (`ServiceButtons` in `morgana.json`), chosen f
 `TurnReply.ToDelivery`: the agent stays `activeAgent` — later messages skip classification — until the
 user leaves.
 
-Tool parameters marked `Shared: true` route their values into a conversation-scoped `shared_context`
-registry (first-write-wins, `INSERT OR IGNORE`). Every agent merges it at the start of each turn, so
+Tool parameters declared `[ToolParameter(ToolScope.Context, shared: true)]` route their values into a
+conversation-scoped `shared_context` registry (first-write-wins, `INSERT OR IGNORE`). Every agent merges it at the start of each turn, so
 a `customerCode` given to Billing reaches Contract without re-asking.
 
 ### Inter-agent consultation (A2A)
@@ -233,7 +233,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Merges every plugin's `agents.json`. Refuses a duplicated intent or prompt id and the reserved names `other` and `Morgana`. Its refusals are fatal |
 | `HandlesIntentAgentRegistryService` | `IAgentRegistryService` | Discovers agents by attribute; bidirectional intent validation; validates `[ConsultsAgent]` |
 | `RequiresLLMTierValidationService` | `ILLMTierValidationService` | Every agent must declare a tier the active provider configures |
-| `ProvidesToolForIntentRegistryService` | `IToolRegistryService` | Discovers tools; warns on orphans; errors on duplicates |
+| `ProvidesToolForIntentRegistryService` | `IToolRegistryService` | Discovers tool classes and projects each into its tool definitions; warns on orphans; errors on duplicates |
 | `MCPClientRegistryService` | `IMCPClientRegistryService` | MCP connection pool keyed by URI or `stdio:{command}`. A client the library reports ended is replaced; only discovery is retried, never a tool call |
 | `SQLiteConversationPersistenceService` | `IConversationPersistenceService` | Per-conversation SQLite: encrypted session BLOBs, the shared-context registry |
 | `SQLiteRateLimitService` | `IRateLimitService` | Sliding window per minute, hour and day. **Fails open** |
@@ -268,33 +268,36 @@ tier) and `GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
 
 1. **Intent** in `agents.json`, Intents array: Name, Description, Label, DefaultValue
 2. **Prompt** in `agents.json`, Agents array: ID matching the intent, Target, Instructions,
-   Personality, Formatting, Territory, Tools
+   Personality, Formatting, Territory
 3. **Agent class** extending `MorganaAgent`, with `[HandlesIntent("x")]` **and** `[RequiresLLMTier]`
    (mandatory, validated at startup). The constructor calls `MorganaAgentAdapter.CreateAgent()`
-4. **Tool class** (optional) extending `MorganaTool`, with `[ProvidesToolForIntent("x")]`. Method
-   names must match the JSON `Name` exactly and each returns a typed record that the tool declares as
-   `Returns` in agents.json, verified at startup. Constructor `(ILogger, Func<ToolContext>)`. A tool that
-   changes something real declares `"RequiresExecutionApproval": true`: it runs only once the user has
-   approved that exact call, through MEAI's own `ApprovalRequiredAIFunction`. The framework offers the
-   approval buttons; pressing an action button that leads to the tool is that approval already
+4. **Tool class** (optional) extending `MorganaTool`, with `[ProvidesToolForIntent("x")]`: the one
+   declaration of the agent's tools. Every public instance method it declares is a tool, carrying
+   `[Description]` and `[RequiresApproval]`; every parameter carries `[Description]` and
+   `[ToolParameter]`; the method returns a typed record whose properties carry `[Description]` and
+   whose nullable `Error`, where present, marks a failed call. Constructor `(ILogger, Func<ToolContext>)`.
+   A tool declaring `[RequiresApproval(true)]` runs only once the user has approved that exact call,
+   through MEAI's own `ApprovalRequiredAIFunction`. The framework offers the approval buttons; pressing
+   an action button that leads to the tool is that approval already
 5. **Or MCP** — `[UsesMCPServer(...)]`, repeatable, tools discovered at runtime
 6. **Colleagues** — `[ConsultsAgent("otherintent")]`, once each, validated at startup
-7. **Workflows** (optional) — `Workflows` beside `Tools` in agents.json: ordered steps, each naming its tools, where each call leads (`Next`, `OnFailure`, `End`) and the parameters bound from an earlier step's result (`Arguments`). The agent gets `LaunchWorkflow`; the order is the framework's, so no prose restates it
+7. **Workflows** (optional) — `Workflows` in the agent's prompt in agents.json: ordered steps, each naming its tools, where each call leads (`Next`, `OnFailure`, `End`) and the parameters bound from an earlier step's result (`Arguments`). The agent gets `LaunchWorkflow`; the order is the framework's, so no prose restates it
 8. **Package as a plugin DLL** into `plugins/`
 
 ## Tool System
 
 Every agent gets the **base tool** `Reply` from `morgana.json` plus its domain tools; an agent declaring workflows also gets `LaunchWorkflow`.
 
-A parameter resolving an *input* declares a `Scope`: `context` or `request` (asked of the user). A
-parameter carrying a value the model itself authors declares none. **A `context` parameter is the
-framework's, not the model's**: `MorganaToolAdapter` drops it from the schema's required list, stores
+Every parameter declares its scope: `Context` or `Request` (asked of the user). Required is the
+signature's alone. Only a `Context` value is shared and a `Context` parameter is a required `string`.
+**A `context` parameter is the framework's, not the model's**: `MorganaToolAdapter` drops it from the schema's required list, stores
 a value the model passes, reads one it omits from the session and keeps the tool from running when
 nobody holds it. No prose tells the model any of this beyond one sentence of `ToolUsage`.
 
 Parameter descriptions reach the model **only** through the JSON schema, via
-`AIJsonSchemaCreateOptions.ParameterDescriptionProvider`. MCP tools never pass through
-`MorganaToolAdapter`: they arrive carrying their server's schema and Morgana adapts nothing.
+`AIJsonSchemaCreateOptions.ParameterDescriptionProvider`. A tool definition read from JSON exists only
+for `morgana.json`'s own `Reply` and `LaunchWorkflow`, which are framework prose. MCP tools never pass
+through `MorganaToolAdapter`: they arrive carrying their server's schema and Morgana adapts nothing.
 
 **What a tool RETURNS is prose too and it is the one layer with no declared precedence** — it
 arrives mid-turn from outside the composed prompt. So a return value states **facts** (what was
@@ -436,14 +439,14 @@ fails or opens, silently.**
 1. Every configured intent has an agent and every agent an intent
 2. Every agent declares `[RequiresLLMTier]` and that tier is configured
 3. Every `[ConsultsAgent]` names a reachable colleague and no two fold to one function name
-4. Tools: warn on orphans, error on duplicates for one intent; a tool whose declared `Returns` and returned record disagree is refused
+4. Tools: warn on orphans, error on duplicates for one intent; every tool method and parameter carries its attributes, every scope combination is one the framework can honour, the record returned is typed with a nullable `error`, no tool is overloaded and no agents.json prompt still declares `Tools`
 5. Plugin `agents.json` files merge with no duplicated intent or prompt id and none declares `other`
    or `Morgana`
 6. No `Tiers` entry left on its override placeholder, no empty `Tiers` map
 7. Every admitted issuer — channel, partner and the ring alike — carries a name and a key of at least 256 bits and no name is admitted twice
 8. `ValidateTrustConfiguration`: each `Partners[]` entry names somebody once, does something, is coherent per open direction and carries a key that can sign
 9. `ValidatePublishedAddress`: `PublicUrl`, where declared, is absolute, on a bearer-carrying scheme and names one interface
-10. Every declared workflow names only tools its agent declares, links only to its own steps or `End`, reaches every step from the first and binds only fields that an earlier step's tools declare in `Returns`
+10. Every declared workflow names only tools its agent declares, links only to its own steps or `End`, reaches every step from the first and binds only fields that an earlier step's tools return
 
 **Where they run matters**: a refusal is a *startup* refusal only because `Program.cs` resolves the
 configuration and registry services immediately after building the container. Left lazy, the same
@@ -484,7 +487,7 @@ or environment variables.
 
 - Actor messages are immutable records in `Records.cs`; every cross-party literal is a `Constants` member
 - Actors use `Tell`, never `Ask` (streaming) and `Become()` for FSM transitions
-- Tool method names match the JSON `Name` exactly
+- A domain tool is its method: no prose about it lives anywhere else
 - Prompts resolve by ID: the five framework ids or an intent name
 - Rich cards use polymorphic JSON with a `type` discriminator
 - A turn is closed out-of-band by `Reply`, never by a token inside the response text

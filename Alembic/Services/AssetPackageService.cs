@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using Alembic.Interfaces;
@@ -75,6 +76,18 @@ public class AssetPackageService : IAssetPackageService
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        // The report below reads the draft's current baseline, which is the previous archive; the
+        // snapshot taken here becomes the baseline only once this archive has been built.
+        DateTimeOffset emittedAt = DateTimeOffset.UtcNow;
+        DomainDraft snapshot = await CloneAsync(draft, cancellationToken);
+        snapshot.Baseline = null;
+        snapshot.Sitting = null;
+        snapshot.ImportedFrom = string.Create(CultureInfo.InvariantCulture, $"the archive of {emittedAt.UtcDateTime:yyyy-MM-dd HH:mm} UTC");
+
+        // The saved copy keeps the sitting and carries the snapshot, so the next resume diffs against this archive.
+        DomainDraft saved = await CloneAsync(draft, cancellationToken);
+        saved.Baseline = snapshot;
+
         using MemoryStream buffer = new MemoryStream();
 
         // The archive lives entirely in this using block: ZipArchive buffers entries and writes the
@@ -88,7 +101,7 @@ public class AssetPackageService : IAssetPackageService
                 progress, cancellationToken);
 
             await WriteAsync(archive, "agents.json", Encoding.UTF8.GetString(draftExportService.Export(draft)), progress, cancellationToken);
-            await WriteAsync(archive, "alembic-draft.json", Encoding.UTF8.GetString(draftSerializationService.Serialize(draft)), progress, cancellationToken);
+            await WriteAsync(archive, "alembic-draft.json", Encoding.UTF8.GetString(draftSerializationService.Serialize(saved)), progress, cancellationToken);
             await WriteAsync(archive, "MIGRATION.md", migrationReportService.Build(draft).Markdown, progress, cancellationToken);
             await WriteAsync(archive, "README.md", Readme, progress, cancellationToken);
 
@@ -133,7 +146,20 @@ public class AssetPackageService : IAssetPackageService
             }
         }
 
+        // Set only here: a build that threw above leaves the draft diffing against the archive the client last received.
+        draft.Baseline = snapshot;
+
         return buffer.ToArray();
+    }
+
+    /// <summary>
+    /// Deep-copies a Draft through its own save format, so the copy is exactly what a resume would read.
+    /// </summary>
+    private async Task<DomainDraft> CloneAsync(DomainDraft draft, CancellationToken cancellationToken)
+    {
+        using MemoryStream bytes = new MemoryStream(draftSerializationService.Serialize(draft));
+        return await draftSerializationService.DeserializeAsync(bytes, cancellationToken)
+               ?? throw new InvalidOperationException("The Draft could not be copied through its own save format.");
     }
 
     /// <summary>
@@ -171,7 +197,7 @@ public class AssetPackageService : IAssetPackageService
         | `Agents/*.g.cs` | Alembic's. Regenerated in full every time |
         | `Tools/*.g.cs` | Alembic's. Attributes, constructor, one attributed `partial` signature per tool and the record it returns |
         | `Tools/*.cs` | **yours.** Written once as a working mock, never written again |
-        | `MIGRATION.md` | what this differs from, if anything was uploaded |
+        | `MIGRATION.md` | what this differs from: the archive you received before this one, if there was one |
         | `alembic-draft.json` | the interview's save file — upload it to carry on |
         | `alembic-emit.marker` | Alembic's own — lets a re-upload of this archive be recognised as one, nothing else |
 

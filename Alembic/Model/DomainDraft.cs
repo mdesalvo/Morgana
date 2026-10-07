@@ -47,22 +47,23 @@ public sealed class DomainDraft
     public List<AgentDraft> Agents { get; set; } = [];
 
     /// <summary>
-    /// Name of the configuration that this Draft was imported from, or <c>null</c> where it was not. Only a save file made before Alembic stopped importing configurations carries one; kept for the migration report, which has to name what it is diffing against.
+    /// What the migration report names its baseline by: a label for the archive that emitted it or the file name of a configuration imported by an earlier Alembic. Set on <see cref="Baseline"/> and <c>null</c> where there is none.
     /// </summary>
     public string? ImportedFrom { get; set; }
 
     /// <summary>
-    /// When this Draft was created or last imported into, UTC.
+    /// When this Draft was created, UTC.
     /// </summary>
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     /// <summary>
-    /// The domain exactly as it was when a configuration was imported into the Draft, frozen then. <c>null</c> where none was, which is every Draft started here.
+    /// The domain exactly as the last archive emitted it, which is what the client's own C# was written against. <c>null</c> until an archive has been built or where none was resumed.
     /// </summary>
     /// <remarks>
     /// The migration report has to diff against something and <see cref="Provenance"/> alone cannot
     /// serve: it says an element was revised, never what it used to be and "the parameter list
-    /// changed" is only useful next to the list it changed from. Kept as a Draft rather than as the
+    /// changed" is only useful next to the list it changed from. A domain resumed from an archive
+    /// therefore has something behind it, while one never emitted has not. Kept as a Draft rather than as the
     /// uploaded bytes so the diff compares like with like — two Drafts, one projection, no chance of
     /// reporting a difference that is really a parsing artefact.
     /// <para>

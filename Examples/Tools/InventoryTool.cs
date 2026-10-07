@@ -299,12 +299,11 @@ public class InventoryTool : MorganaTool
     }
 
     /// <summary>
-    /// Commits a Pending order: this is the only tool that actually decrements stock.
-    /// Re-validates availability at commit time (stock may have moved since the quote).
+    /// Commits a Pending order: decrements stock and bills the customer.
     /// </summary>
-    /// <param name="orderId">Identifier of the order to confirm. Tracked from the conversation itself, NOT a single stored context value: a customer may have more than one order in flight.</param>
-    /// <param name="sealWord">One-time seal word returned by CreatePurchaseOrder for this exact orderId. Tracked from the conversation itself, one per order — a customer with multiple orders in flight has a different seal word for each.</param>
-    /// <returns>The confirmed order and remaining stock, or the error saying why the order was not confirmed.</returns>
+    /// <param name="orderId">Identifier of the order to confirm, as returned by CreatePurchaseOrder.</param>
+    /// <param name="sealWord">One-time seal word from CreatePurchaseOrder for this exact orderId.</param>
+    /// <returns>The confirmed order with its remaining stock and invoiceId; the error instead when the order was not confirmed.</returns>
     [Description("Commits a Pending order: the ONLY tool that actually decrements stock AND the ONLY tool that bills the customer. Requires the exact orderId AND sealWord pair returned by CreatePurchaseOrder — a mismatch on either is reported identically as 'no order matches', to avoid confirming or denying whether an orderId exists. Re-validates availability at commit time and returns structured JSON: orderId, sku, quantity, status ('Confirmed'), confirmedAt, remainingStock, invoiceId, note. invoiceId identifies the invoice this order was just billed to — the accounts agent (Billing), never you, is where the customer sees its total or line items. This tool has dispositive capabilities: it commits a real, persistent change to greenhouse stock and to the customer's account.")]
     [RequiresApproval(true)]
     public async Task<ConfirmOrderResult> ConfirmOrder(
@@ -557,11 +556,9 @@ public class InventoryTool : MorganaTool
     }
 
     /// <summary>
-    /// Lists the orders placed during THIS conversation, using the real Akka conversationId
-    /// (never exposed to the LLM, never spoofable via a context variable) — no sealWord needed
-    /// since the caller is, by construction, the same conversation that created them.
+    /// Lists the orders placed during this conversation.
     /// </summary>
-    /// <returns>This conversation's orders (no sealWord included).</returns>
+    /// <returns>This conversation's orders (without sealWords).</returns>
     [Description("Lists the orders placed during THIS conversation as structured JSON: totalOrders and an array of order summaries (orderId, sku, quantity, status, createdAt, confirmedAt, cancelledAt). Does NOT include sealWord (shown only once, by CreatePurchaseOrder) so this listing alone is never enough to confirm or cancel anything. This tool has only informative capabilities.")]
     [RequiresApproval(false)]
     public async Task<OrdersResult> GetOrders()
@@ -597,13 +594,10 @@ public class InventoryTool : MorganaTool
     }
 
     /// <summary>
-    /// Lists every order ever placed by a given customer, across ALL conversations/sessions —
-    /// the full history behind a customerCode, not just the current chat. Summary only: sealWord is
-    /// never included here (it is shown exactly once, by CreatePurchaseOrder), so seeing this
-    /// list is not enough to act on any of the orders it names.
+    /// Lists every order a customer has placed across all conversations and sessions.
     /// </summary>
-    /// <param name="customerCode">Identifier of the customer whose order history to retrieve (retrieved from shared context).</param>
-    /// <returns>That customer's orders across every conversation (no sealWord included).</returns>
+    /// <param name="customerCode">Customer code (retrieved from shared context).</param>
+    /// <returns>That customer's order history across all conversations (without sealWords).</returns>
     [Description("Lists EVERY order a customer has ever placed, across ALL conversations/sessions — not just this one — as structured JSON: customerCode, customerName, totalOrders and an array of order summaries (orderId, sku, quantity, status, createdAt, confirmedAt, cancelledAt). Does NOT include sealWord (shown only once, by CreatePurchaseOrder) so this listing alone is never enough to confirm or cancel any order it names — that pair is what ConfirmOrder and CancelOrder require. To re-read one single order by its identifier, use GetOrderStatus. This tool has only informative capabilities.")]
     [RequiresApproval(false)]
     public async Task<OrderHistoryResult> GetOrderHistory(

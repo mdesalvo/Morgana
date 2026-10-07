@@ -21,9 +21,9 @@ public class MigrationReportService : IMigrationReportService
     /// <inheritdoc />
     /// <remarks>
     /// <paramref name="draft"/> is compared against its own <see cref="DomainDraft.Baseline"/> — the
-    /// domain as it stood at import, frozen the moment it arrived — never against the uploaded bytes
+    /// domain as the last archive emitted it — never against the archive's bytes
     /// directly, so the comparison is Draft-to-Draft and every field means the same thing on both
-    /// sides. An empty baseline (nothing was uploaded this sitting) still compares cleanly: every
+    /// sides. An empty baseline (no archive yet) still compares cleanly: every
     /// intent and agent in <paramref name="draft"/> reads as newly added.
     /// </remarks>
     public MigrationReport Build(DomainDraft draft)
@@ -277,18 +277,18 @@ public class MigrationReportService : IMigrationReportService
 
         if (draft.Baseline is null)
         {
-            sb.AppendLine("No earlier configuration came with this sitting, so there is nothing to compare against:");
+            sb.AppendLine("No earlier archive came with this domain, so there is nothing to compare against:");
             sb.AppendLine("everything in this archive is new. Drop it into a plugin project, point Morgana's");
             sb.AppendLine("`Morgana:Plugins:Directories` at the build output and start.");
             return sb.ToString();
         }
 
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Against `{draft.Baseline.ImportedFrom}`, as uploaded.");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"Against {draft.Baseline.ImportedFrom}.");
         sb.AppendLine();
 
         if (entries.Count == 0)
         {
-            sb.AppendLine("Nothing changed. The `agents.json` in this archive is equivalent to the one you uploaded,");
+            sb.AppendLine("Nothing changed. The `agents.json` in this archive is equivalent to that one,");
             sb.AppendLine("and the generated sources match the code you already have.");
             return sb.ToString();
         }

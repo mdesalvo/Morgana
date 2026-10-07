@@ -47,11 +47,11 @@
 
 @code {
     /// <summary>
-    /// Enters the shell for a new domain, leaving behind an imported one still held in this circuit.
+    /// Enters the shell for a new domain, leaving behind a domain with an archive behind it that is still held in this circuit.
     /// </summary>
     /// <remarks>
-    /// Only an imported domain is dropped: a greenfield interview already under way is resumed rather
-    /// than thrown away, since it has nothing behind it to leave.
+    /// Only a domain with a baseline is dropped: a greenfield interview already under way is resumed rather
+    /// than thrown away, since it has no archive behind it to leave.
     /// </remarks>
     private void StartFresh()
     {

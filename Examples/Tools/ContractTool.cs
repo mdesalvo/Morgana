@@ -229,19 +229,17 @@ public class ContractTool : MorganaTool
     // =========================================================================
 
     /// <summary>
-    /// Retrieves the Green Care Plan's own terms — no customer code, no
-    /// existing schedule required. What GetContractDetails cannot be for a prospect: every other
-    /// read tool in this class needs a CarePlans row to hang off, which a customer deciding
-    /// whether to sign up does not have yet. This is the ONE thing SubscribeToGreenCarePlan's
-    /// restate-then-confirm step can ground its numbers in without already having enrolled them.
+    /// Retrieves the Green Care Plan's terms for a prospect or existing customer.
     /// </summary>
-    /// <returns>The plan's name, coverage, guarantee, fee and included features.</returns>
+    /// <returns>The plan details including name, features, fees, termination terms and notice period.</returns>
     [Description("Retrieves the Green Care Plan's own terms as structured JSON — planCode, name, visitFrequency, coverage, guarantee, monthlyFee, includedFeatures, noticePeriodDays, earlyTerminationFee. Needs no customer code and no existing schedule: this is the ONE tool that answers what the plan itself offers and costs, for a prospect who does not hold one yet as much as for a customer who already does. Never answer a 'what does it include / what does it cost' question from GetContractDetails or from memory: always call this tool first.")]
     [RequiresApproval(false)]
     public async Task<PlanOverviewResult> GetPlanOverview()
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
+        // Read from the catalog and never from a customer's CarePlans row: a prospect deciding whether
+        // to enrol has none yet and these are the numbers the enrolment's confirmation is grounded in.
         PlanProduct product = await GetPlanProductAsync(connection, DefaultPlanCode);
         List<string> features = await GetFeaturesAsync(connection, DefaultPlanCode);
 
@@ -258,12 +256,10 @@ public class ContractTool : MorganaTool
     }
 
     /// <summary>
-    /// Enrolls a customer in the Green Care Plan: opens a new CarePlans schedule and bills the
-    /// first month's fee immediately, atomically with it — see GreenhouseDatabaseHelper.BillCustomerAsync,
-    /// the same backoffice write path InventoryTool.ConfirmOrder bills a confirmed order through.
+    /// Enrolls a customer in the Green Care Plan and bills the first month's fee.
     /// </summary>
     /// <param name="customerCode">Customer code enrolling (retrieved from shared context).</param>
-    /// <returns>The new contractId, the plan's terms and the invoice it was billed to, or the error saying that a plan is already held.</returns>
+    /// <returns>The new contract with its dates and invoiceId; the error instead when a plan is already held.</returns>
     [Description("Enrolls a customer in the Green Care Plan: opens a new contract and bills its first month's fee in the same action. Returns structured JSON: contractId, planCode, planName, status ('Active'), startDate, endDate, monthlyFee, visitDays, invoiceId, note. invoiceId identifies the invoice this enrollment was just billed to — the accounts agent (Billing), never you, is where the customer sees its total or line items. Fails with an error and the existingContractId if the customer already holds an Active or PendingRenewal plan — no code is ever rejected for being unregistered. This tool has dispositive capabilities: it commits a real, persistent change to the shop's books and to the customer's account.")]
     [RequiresApproval(true)]
     public async Task<SubscriptionResult> SubscribeToGreenCarePlan(
