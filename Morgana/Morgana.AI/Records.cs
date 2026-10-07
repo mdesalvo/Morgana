@@ -256,6 +256,19 @@ public static class Records
     }
 
     /// <summary>
+    /// Where a tool parameter's value comes from, declared on the parameter with
+    /// <see cref="Attributes.ToolParameterAttribute"/>.
+    /// </summary>
+    public enum ToolScope
+    {
+        /// <summary>Resolved by the framework from the session's context variables, never required of the model.</summary>
+        Context,
+
+        /// <summary>Obtained from the user, on the turn it is needed.</summary>
+        Request
+    }
+
+    /// <summary>
     /// Single provider die (E-core/P-core) with own dust pricing. Tier IS the unit deployer configures + agent binds to.
     /// Lives under Morgana:LLM:{Provider}:Tiers as JSON object (keyed by name) not array: allows per-layer overrides to merge
     /// by key. TierConfiguration is deliberate ChatOptions subset (ModelId, MaxOutputTokens only); MagicDust is tier-specific.
@@ -1138,26 +1151,26 @@ public static class Records
 
     /// <summary>
     /// Tool definition specifying a callable tool method with parameters.
-    /// Loaded from agents.json and used by MorganaToolAdapter to create AIFunction instances.
+    /// For a native domain tool it is projected from the tool's method on the <see cref="Abstractions.MorganaTool"/>
+    /// subclass, for a framework tool it is read from morgana.json. MorganaToolAdapter turns it into an AIFunction.
     /// </summary>
-    /// <param name="Name">Tool method name (must match actual method name in MorganaTool class)</param>
+    /// <param name="Name">Tool method name (the actual method name in the MorganaTool class)</param>
     /// <param name="Description">Tool description for LLM understanding</param>
     /// <param name="Parameters">List of tool parameter definitions</param>
     /// <param name="Returns">
-    /// The fields of the record that the tool method returns, verified against that record at startup.
-    /// Required of every native domain tool; absent for the base tool and for tools acquired over MCP.
+    /// The fields of the record that the tool method returns, projected from that record.
+    /// Present for every native domain tool; absent for the base tool and for tools acquired over MCP.
     /// </param>
     /// <param name="RequiresExecutionApproval">
     /// True when the tool changes something real and runs only once the user has approved that exact
-    /// call. Declared in agents.json; the approval itself is Microsoft.Extensions.AI's, through
-    /// <c>ApprovalRequiredAIFunction</c>.
+    /// call. Declared with <see cref="Attributes.RequiresApprovalAttribute"/>; the approval itself is
+    /// Microsoft.Extensions.AI's, through <c>ApprovalRequiredAIFunction</c>.
     /// </param>
     /// <param name="Reserved">
-    /// True for the morgana.json base tool (Reply). Never set from configuration: a domain
-    /// tool declaring this in agents.json has it forced back to false by MorganaAgentAdapter —
-    /// it is stamped true only where MorganaAgentAdapter reads morgana.json's own Tools array,
-    /// so no JSON a plugin author writes can ever make it stick. Consumers (e.g. the reverse
-    /// guard-rail wrapper) use it to skip tools whose output the framework itself controls.
+    /// True for the morgana.json base tool (Reply). It is stamped true only where MorganaAgentAdapter
+    /// reads morgana.json's own Tools array, while the projection of a domain tool's class always
+    /// leaves it false. Consumers (e.g. the reverse guard-rail wrapper) use it to skip tools whose
+    /// output the framework itself controls.
     /// </param>
     public record ToolDefinition(
         string Name,
@@ -1168,9 +1181,10 @@ public static class Records
         IReadOnlyList<ToolReturn>? Returns = null);
 
     /// <summary>
-    /// Tool parameter: name (must match method param), description, Required flag. Scope: "context" (resolved by
+    /// Tool parameter: name (the method parameter's), description, Required flag (the signature's: no default value). Scope: "context" (resolved by
     /// the framework from the session, never required of the model) or "request" (user input). Shared: whether to persist in conversation-scoped shared_context registry for
     /// cross-agent hydration. Only applies when Scope="context". Default: false.
+    /// For a native domain tool it is projected from the method parameter, its <c>[Description]</c> and its <see cref="Attributes.ToolParameterAttribute"/>.
     /// </summary>
     public record ToolParameter(
         string Name,
@@ -1181,7 +1195,8 @@ public static class Records
 
     /// <summary>
     /// One field of what a tool returns: its name, what it holds and whether holding a value means
-    /// the call failed. At most one field of a tool is the failure marker and its property is nullable.
+    /// the call failed. Projected from the returned record's properties and their <c>[Description]</c>:
+    /// the failure marker is the nullable property serialized as <see cref="Constants.Workflows.FailureField"/>.
     /// </summary>
     public record ToolReturn(
         string Name,

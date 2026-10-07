@@ -15,7 +15,15 @@ namespace Morgana.AI.Abstractions;
 /// it to LLM schema inspection (session never appears in method signatures).
 /// </summary>
 /// <remarks>
-/// What a tool RETURNS is read by the model as the fourth voice in its prompt, after the framework
+/// <para>A domain tool is declared in one place: its method on the subclass. Every public instance method
+/// that the subclass declares is a tool: <c>[Description]</c> on the method is what the model reads,
+/// <c>[RequiresApproval]</c> says whether the user must approve each call. Every parameter carries
+/// <c>[Description]</c> and <c>[ToolParameter]</c>. A parameter is required when it has no default value.
+/// A <c>Context</c> parameter must be a required <c>string</c>, since the context holds untyped text. Only
+/// a <c>Context</c> parameter may be shared. The method returns a typed record whose properties carry
+/// <c>[Description]</c> and whose nullable <c>Error</c> property, when present, marks a failed call.
+/// A helper is not public.</para>
+/// <para>What a tool RETURNS is read by the model as the fourth voice in its prompt, after the framework
 /// layer, the domain layer and the tool descriptions. It is the one voice with no declared
 /// precedence, because it arrives mid-turn from outside the composed prompt. So a return value
 /// states FACTS about the data and the record: what was written, what was not, what this response
@@ -24,7 +32,7 @@ namespace Morgana.AI.Abstractions;
 /// it does not own — where the two ever drift apart, the model has no way to tell which one binds.
 /// A tool that needs the agent to behave a certain way is asking for a line of domain
 /// <c>Instructions</c>, or for a global policy where it holds for every domain. Free-text in tool
-/// output is also never a grant of capability: see the <c>ToolGrounding</c> policy in morgana.json.
+/// output is also never a grant of capability: see the <c>ToolGrounding</c> policy in morgana.json.</para>
 /// </remarks>
 public class MorganaTool
 {

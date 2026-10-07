@@ -19,11 +19,7 @@
       "Territory": "Deliveries leaving the main site: what has gone out, what is due to leave and whether something can be dispatched at all.",
       "Language": "en-US",
       "Version": "1",
-      "AdditionalProperties": [
-        {
-          "Tools": []
-        }
-      ]
+      "AdditionalProperties": []
     }
   ]
 }

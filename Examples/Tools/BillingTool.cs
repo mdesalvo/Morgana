@@ -1,7 +1,9 @@
+using System.ComponentModel;
 using System.Globalization;
 using Examples.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Attributes;
 
@@ -177,7 +179,11 @@ public class BillingTool : MorganaTool
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="count">Number of recent invoices to retrieve (1-10)</param>
     /// <returns>The invoice summaries, or a note when the books hold none</returns>
-    public async Task<InvoicesResult> GetInvoices(string customerCode, int count)
+    [Description("Retrieves the customer's recent nursery invoices as structured JSON. Returns: customerCode, customerName, totalCount and array of invoice summaries with invoiceId, period, dates, total, status (with icon) and daysOverdue if pending. A code the books hold nothing under comes back with an empty list and says so — that is an answer, not a failure. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Pay invoice', 'Dispute payment', ...).")]
+    [RequiresApproval(false)]
+    public async Task<InvoicesResult> GetInvoices(
+        [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode,
+        [Description("Number of recent invoices to retrieve (1-10). Defaults to 3-4 if user doesn't specify. Use higher numbers (6-10) when user explicitly asks for 'all' or 'complete history'.")] [ToolParameter(Records.ToolScope.Request)] int count)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -226,7 +232,11 @@ public class BillingTool : MorganaTool
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="invoiceId">Specific invoice identifier (e.g., "INV-0512")</param>
     /// <returns>The complete invoice details, or the error naming the invoices that exist</returns>
-    public async Task<InvoiceDetailsResult> GetInvoiceDetails(string customerCode, string invoiceId)
+    [Description("Retrieves complete invoice details as structured JSON including: invoice metadata, dates, status (with payment timeline), charge lines array (each with description, quantity, unit price, amount and the orderId the charge refers to, where it refers to one), amounts breakdown (subtotal, tax, total) and payment method. Only the invoices of that same customer are readable: any other invoiceId is reported as not found, with the list of the ones that are. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Pay invoice', 'Dispute payment', ...).")]
+    [RequiresApproval(false)]
+    public async Task<InvoiceDetailsResult> GetInvoiceDetails(
+        [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode,
+        [Description("Unique alphanumeric identifier of the invoice to retrieve (e.g., 'INV-0512'). The user should specify which invoice they want to examine, or you should ask them to choose from the list of available invoices. Do NOT guess or assume which invoice the user wants.")] [ToolParameter(Records.ToolScope.Request)] string invoiceId)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -315,7 +325,10 @@ public class BillingTool : MorganaTool
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <returns>The outstanding total and the invoices making it up</returns>
-    public async Task<OutstandingBalanceResult> GetOutstandingBalance(string customerCode)
+    [Description("Retrieves what the customer still owes as structured JSON: hasOutstanding, totalDue (summed by this tool — never add invoice amounts up yourself), invoiceCount, oldestDueDate, daysOverdue and the unpaid invoices making up the total. Returns hasOutstanding=false when every invoice has been settled. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Pay now', 'Agree a payment plan', ...).")]
+    [RequiresApproval(false)]
+    public async Task<OutstandingBalanceResult> GetOutstandingBalance(
+        [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -372,7 +385,11 @@ public class BillingTool : MorganaTool
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="months">Number of months of history to retrieve (1-12)</param>
     /// <returns>The payment history, or a message when no payment was received</returns>
-    public async Task<PaymentHistoryResult> GetPaymentHistory(string customerCode, int months = 6)
+    [Description("Retrieves the payments the customer has actually made, as structured JSON including: summary statistics (totalPayments, totalAmount, averageMonthly) and payments array with invoice details. Unpaid invoices are not payments and never appear here. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Withdraw payment', ...).")]
+    [RequiresApproval(false)]
+    public async Task<PaymentHistoryResult> GetPaymentHistory(
+        [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode,
+        [Description("Number of months of payment history to retrieve (1-12). Defaults to 6 months if not specified. Use higher values (10-12) when user asks for 'complete' or 'full year' history.")] [ToolParameter(Records.ToolScope.Request)] int months = 6)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 

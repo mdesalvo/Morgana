@@ -319,9 +319,13 @@ public static class Constants
 
     /// <summary>
     /// What a workflow declaration and its launch tool agree on across agents.json and morgana.json.
+    /// Also what a plugin's returned record and the workflow engine reading its result agree on.
     /// </summary>
     public static class Workflows
     {
+        /// <summary>The wire name of the nullable property of a tool's returned record that holds a value only when the call failed.</summary>
+        public const string FailureField = "error";
+
         /// <summary>The step target that closes the workflow as concluded; no step may bear this name.</summary>
         public const string End = "End";
 

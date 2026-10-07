@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json.Serialization;
 
 namespace Examples.Tools;
@@ -5,11 +6,11 @@ namespace Examples.Tools;
 /// <summary>What <see cref="BillingTool.GetInvoices"/> returns: the recent invoices of a customer, or a note saying the books hold none.</summary>
 /// <remarks>The customer name is written even when null, since a null says that the shop does not know the code.</remarks>
 public record InvoicesResult(
-    string CustomerCode,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? CustomerName,
-    int TotalCount,
-    List<InvoiceSummary> Invoices,
-    string? Note = null);
+    [Description("The customer code the books were asked about")] string CustomerCode,
+    [Description("The customer's name when the shop knows the code")] [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? CustomerName,
+    [Description("How many invoices are listed")] int TotalCount,
+    [Description("The invoices, most recent first, each with period, dates, total, status and days overdue")] List<InvoiceSummary> Invoices,
+    [Description("Says that the books hold nothing under the code")] string? Note = null);
 
 /// <summary>One invoice in a list, as <see cref="InvoicesResult"/> carries it.</summary>
 /// <remarks>The paid date and the days overdue are written even when null, since a null says that the invoice is not paid or not late.</remarks>
@@ -26,19 +27,19 @@ public record InvoiceSummary(
 
 /// <summary>What <see cref="BillingTool.GetInvoiceDetails"/> returns: one invoice in full, or the error naming what was asked and what exists.</summary>
 public record InvoiceDetailsResult(
-    string? Error = null,
-    string? InvoiceId = null,
-    string? CustomerCode = null,
-    string? CustomerName = null,
-    string? Period = null,
-    InvoiceDates? Dates = null,
-    InvoiceStatus? Status = null,
-    List<InvoiceLineItem>? LineItems = null,
-    InvoiceAmounts? Amounts = null,
-    PaymentMethodInfo? PaymentMethod = null,
-    string? RequestedInvoiceId = null,
-    List<string>? AvailableInvoices = null,
-    string? Note = null);
+    [Description("Why no invoice is returned, present only when the invoice was not found")] string? Error = null,
+    [Description("The invoice identifier")] string? InvoiceId = null,
+    [Description("The customer the invoice was issued to")] string? CustomerCode = null,
+    [Description("The customer's name when the shop knows the code")] string? CustomerName = null,
+    [Description("The period the invoice covers")] string? Period = null,
+    [Description("Issue date, due date and paid date")] InvoiceDates? Dates = null,
+    [Description("Status with icon, description and days until due or overdue")] InvoiceStatus? Status = null,
+    [Description("The charge lines, each with description, order reference, unit price, quantity and amount")] List<InvoiceLineItem>? LineItems = null,
+    [Description("Subtotal, tax, tax rate and total")] InvoiceAmounts? Amounts = null,
+    [Description("How the invoice was paid, absent while it is unpaid")] PaymentMethodInfo? PaymentMethod = null,
+    [Description("The invoice identifier that was asked for, on an error")] string? RequestedInvoiceId = null,
+    [Description("The invoice identifiers the customer does have, on an error")] List<string>? AvailableInvoices = null,
+    [Description("Says that the books hold nothing under the code")] string? Note = null);
 
 /// <summary>The dates of an invoice.</summary>
 /// <remarks>The paid date is written even when null, since a null says that the invoice is not paid.</remarks>
@@ -84,15 +85,15 @@ public record PaymentMethodInfo(
 /// <summary>What <see cref="BillingTool.GetOutstandingBalance"/> returns: what the customer still owes, or a message saying that nothing is outstanding.</summary>
 /// <remarks>The customer name is written even when null, since a null says that the shop does not know the code.</remarks>
 public record OutstandingBalanceResult(
-    string CustomerCode,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? CustomerName,
-    bool HasOutstanding,
-    decimal TotalDue,
-    int? InvoiceCount = null,
-    string? OldestDueDate = null,
-    int? DaysOverdue = null,
-    List<OutstandingInvoice>? Invoices = null,
-    string? Message = null);
+    [Description("The customer code the books were asked about")] string CustomerCode,
+    [Description("The customer's name when the shop knows the code")] [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? CustomerName,
+    [Description("Whether any invoice is left unpaid")] bool HasOutstanding,
+    [Description("The sum of the unpaid invoices")] decimal TotalDue,
+    [Description("How many invoices are unpaid")] int? InvoiceCount = null,
+    [Description("The earliest due date among the unpaid invoices")] string? OldestDueDate = null,
+    [Description("The longest delay among the unpaid invoices, absent when none is late")] int? DaysOverdue = null,
+    [Description("The unpaid invoices, oldest due first")] List<OutstandingInvoice>? Invoices = null,
+    [Description("Says that nothing is outstanding")] string? Message = null);
 
 /// <summary>One unpaid invoice of an outstanding balance.</summary>
 public record OutstandingInvoice(
@@ -107,13 +108,13 @@ public record OutstandingInvoice(
 /// <summary>What <see cref="BillingTool.GetPaymentHistory"/> returns: the payments received in a window of months, or a message saying that there were none.</summary>
 /// <remarks>The customer name is written even when null, since a null says that the shop does not know the code.</remarks>
 public record PaymentHistoryResult(
-    string CustomerCode,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? CustomerName,
-    int Months,
-    bool HasData,
-    PaymentSummary? Summary = null,
-    List<PaymentEntry>? Payments = null,
-    string? Message = null);
+    [Description("The customer code the books were asked about")] string CustomerCode,
+    [Description("The customer's name when the shop knows the code")] [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? CustomerName,
+    [Description("The number of months of history that was read")] int Months,
+    [Description("Whether any payment was received in that window")] bool HasData,
+    [Description("Payment count, total amount and monthly average")] PaymentSummary? Summary = null,
+    [Description("The payments received, most recent first")] List<PaymentEntry>? Payments = null,
+    [Description("Says that no payment was received in the window")] string? Message = null);
 
 /// <summary>The totals of a payment history.</summary>
 public record PaymentSummary(

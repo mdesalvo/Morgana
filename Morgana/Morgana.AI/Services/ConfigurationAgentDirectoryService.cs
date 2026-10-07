@@ -43,8 +43,11 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
     /// <summary>Source of the intents, which carry each agent's name and purpose.</summary>
     private readonly IAgentConfigurationService agentConfigurationService;
 
-    /// <summary>Source of the agent prompts, whose tool definitions become the card's skills.</summary>
+    /// <summary>Source of the agent prompts, whose Territory becomes the card's description.</summary>
     private readonly IPromptResolverService promptResolverService;
+
+    /// <summary>Source of the tool definitions that an agent's tool class declares, which become the card's skills.</summary>
+    private readonly IToolRegistryService toolRegistryService;
 
     /// <summary>Application configuration, read for the partners this installation federates with.</summary>
     private readonly IConfiguration configuration;
@@ -119,7 +122,8 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
 
     /// <summary>Builds the directory over the configuration it projects cards from.</summary>
     /// <param name="agentConfigurationService">Loads the configured intents.</param>
-    /// <param name="promptResolverService">Resolves an agent's prompt and with it its tool definitions.</param>
+    /// <param name="promptResolverService">Resolves an agent's prompt.</param>
+    /// <param name="toolRegistryService">Projects the tool definitions that an agent's tool class declares.</param>
     /// <param name="configuration">Application configuration.</param>
     /// <param name="hostAddressService">Reports the address this instance answers on.</param>
     /// <param name="peerRingKeyService">Holds the secret this installation's own consultations are signed with.</param>
@@ -127,6 +131,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
     public ConfigurationAgentDirectoryService(
         IAgentConfigurationService agentConfigurationService,
         IPromptResolverService promptResolverService,
+        IToolRegistryService toolRegistryService,
         IConfiguration configuration,
         IHostAddressService hostAddressService,
         PeerRingKeyService peerRingKeyService,
@@ -134,6 +139,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
     {
         this.agentConfigurationService = agentConfigurationService;
         this.promptResolverService = promptResolverService;
+        this.toolRegistryService = toolRegistryService;
         this.configuration = configuration;
         this.hostAddressService = hostAddressService;
         this.peerRingKeyService = peerRingKeyService;
@@ -839,8 +845,8 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         if (definition is null)
             return null;
 
-        // The prose the agent was authored with: its Territory becomes the card's description and its
-        // tool definitions become the skills, so nothing about this agent is written twice.
+        // The prose the agent was authored with: its Territory becomes the card's description and the
+        // tools of its class become the skills, so nothing about this agent is written twice.
         Records.Prompt prompt = await promptResolverService.ResolveAsync(intent);
 
         // Left empty when the server has not bound yet, which is the normal case: cards are projected
@@ -857,7 +863,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
             // caller which user utterances land here, never what this agent answers for.
             Description = string.IsNullOrWhiteSpace(prompt.Territory) ? definition.Description : prompt.Territory,
             Version = LocalCardVersion,
-            Skills = ProjectSkills(prompt),
+            Skills = ProjectSkills(intent),
 
             Capabilities = new AgentCapabilities
             {
@@ -901,18 +907,18 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
 
     /// <summary>Turns an agent's declared domain tools into the skills its card advertises.</summary>
     /// <remarks>
-    /// Reserved framework tools are absent by construction, being declared in <c>morgana.json</c>
-    /// rather than in the agent's own prompt. An MCP-only agent advertises no skills, honestly: its
-    /// competences are known only once its servers answer. These reach an external consumer of the
+    /// Reserved framework tools are absent by construction, since the catalog projects only the agent's
+    /// own tool class. An MCP-only agent advertises no skills, honestly: its competences are known only
+    /// once its servers answer. These reach an external consumer of the
     /// card and nobody else: a sibling agent is offered its colleague's Territory, never this
     /// inventory, which invites the caller to rule out a question the colleague has never seen.
     /// </remarks>
-    /// <param name="prompt">The agent's already-resolved prompt.</param>
-    private static List<A2A.AgentSkill> ProjectSkills(Records.Prompt prompt)
+    /// <param name="intent">The intent whose tool class is projected.</param>
+    private List<A2A.AgentSkill> ProjectSkills(string intent)
     {
         return
         [
-            .. prompt.GetAdditionalPropertyOrDefault<Records.ToolDefinition[]>(Constants.PromptProperties.Tools, [])
+            .. toolRegistryService.GetToolDefinitions(intent)
                 .Select(tool => new A2A.AgentSkill
                 {
                     Id = tool.Name,

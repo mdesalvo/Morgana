@@ -1,6 +1,10 @@
-﻿using System.Reflection;
+﻿using System.Collections.Concurrent;
+using System.ComponentModel;
+using System.Reflection;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
+using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 
@@ -25,6 +29,12 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     /// Case-insensitive string comparison for intent matching.
     /// </summary>
     private readonly Lazy<Dictionary<string, Type>> intentToToolType;
+
+    /// <summary>
+    /// The projected definitions per intent, kept because agents are created per conversation while a
+    /// tool class does not change under a running process.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, IReadOnlyList<Records.ToolDefinition>> toolDefinitionsByIntent = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Initializes a new instance of ProvidesToolForIntentRegistryService.
@@ -201,6 +211,97 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         return string.IsNullOrWhiteSpace(intent)
             ? null
             : intentToToolType.Value.GetValueOrDefault(intent.ToLowerInvariant());
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<Records.ToolDefinition> GetToolDefinitions(string intent)
+    {
+        if (FindToolTypeForIntent(intent) is not { } toolType)
+            return [];
+
+        return toolDefinitionsByIntent.GetOrAdd(intent, _ => ProjectToolDefinitions(toolType));
+    }
+
+    /// <summary>
+    /// Lists the methods of a tool class that are tools: the public instance methods that it declares
+    /// itself, in declaration order.
+    /// </summary>
+    /// <remarks>
+    /// An override and a property accessor are not declared tools, so <c>Reply</c> and the members of
+    /// <c>object</c> stay out; a helper is left out by not being public.
+    /// </remarks>
+    /// <param name="toolType">The <see cref="MorganaTool"/> subclass to read.</param>
+    public static IReadOnlyList<MethodInfo> GetToolMethods(Type toolType)
+    {
+        // The metadata token follows the source order, which reflection does not promise to preserve.
+        return
+        [
+            .. toolType
+                .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .Where(method => !method.IsSpecialName && method.GetBaseDefinition().DeclaringType == method.DeclaringType)
+                .OrderBy(method => method.MetadataToken)
+        ];
+    }
+
+    /// <summary>
+    /// Projects the definitions that a tool class declares through its methods, parameters and returned records.
+    /// </summary>
+    /// <remarks>
+    /// Projects what the class carries and never throws on one that is malformed: an absent attribute
+    /// leaves its field at the default, since refusing the class is the startup check's job.
+    /// </remarks>
+    /// <param name="toolType">The <see cref="MorganaTool"/> subclass to project.</param>
+    public static IReadOnlyList<Records.ToolDefinition> ProjectToolDefinitions(Type toolType)
+    {
+        return [.. GetToolMethods(toolType).Select(ProjectToolDefinition)];
+    }
+
+    /// <summary>Projects one tool method into the definition that the adapter and the composer read.</summary>
+    /// <param name="method">A tool method as <see cref="GetToolMethods"/> lists it.</param>
+    private static Records.ToolDefinition ProjectToolDefinition(MethodInfo method)
+    {
+        List<Records.ToolParameter> parameters =
+        [
+            .. method.GetParameters().Select(parameter => new Records.ToolParameter(
+                parameter.Name ?? string.Empty,
+                parameter.GetCustomAttribute<DescriptionAttribute>()?.Description ?? string.Empty,
+                !parameter.HasDefaultValue,
+                parameter.GetCustomAttribute<ToolParameterAttribute>()?.Scope == Records.ToolScope.Context
+                    ? Constants.Scopes.Context
+                    : Constants.Scopes.Request,
+                parameter.GetCustomAttribute<ToolParameterAttribute>()?.Shared ?? false))
+        ];
+
+        return new Records.ToolDefinition(
+            method.Name,
+            method.GetCustomAttribute<DescriptionAttribute>()?.Description ?? string.Empty,
+            parameters,
+            Reserved: false,
+            RequiresExecutionApproval: method.GetCustomAttribute<RequiresApprovalAttribute>()?.Required ?? false,
+            Returns: ProjectReturns(method.ReturnType));
+    }
+
+    /// <summary>
+    /// Projects the top-level fields of the record a tool returns; null when the method returns no record.
+    /// </summary>
+    /// <param name="methodReturnType">The return type as the method declares it.</param>
+    private static List<Records.ToolReturn>? ProjectReturns(Type methodReturnType)
+    {
+        Type? returnType = HandlesIntentAgentRegistryService.UnwrapReturnType(methodReturnType);
+        if (returnType is null)
+            return null;
+
+        JsonElement schema = MorganaToolAdapter.CreateReturnSchema(returnType);
+        if (!schema.TryGetProperty("properties", out JsonElement properties))
+            return null;
+
+        return
+        [
+            .. properties.EnumerateObject().Select(property => new Records.ToolReturn(
+                property.Name,
+                property.Value.TryGetProperty("description", out JsonElement description) ? description.GetString() ?? string.Empty : string.Empty,
+                property.Name == Constants.Workflows.FailureField))
+        ];
     }
 
     /// <summary>All registered tool types keyed by intent — diagnostics/validation/testing enumeration.</summary>

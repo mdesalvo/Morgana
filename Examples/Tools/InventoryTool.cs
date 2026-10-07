@@ -1,7 +1,9 @@
+using System.ComponentModel;
 using System.Globalization;
 using Examples.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
+using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Attributes;
 
@@ -147,6 +149,8 @@ public class InventoryTool : MorganaTool
     /// Lists every plant in the greenhouse catalog with its current stock status.
     /// </summary>
     /// <returns>The products with their stock status icons.</returns>
+    [Description("Retrieves the full greenhouse/nursery catalog as structured JSON: totalProducts and an array of plants with sku, name, category, quantityOnHand, unitPrice, stockStatus (InStock/LowStock/OutOfStock) and statusIcon. This tool has only informative capabilities: it does NOT reserve, order, or modify anything.")]
+    [RequiresApproval(false)]
     public async Task<ProductCatalogResult> GetProductCatalog()
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
@@ -181,7 +185,10 @@ public class InventoryTool : MorganaTool
     /// </summary>
     /// <param name="sku">Product SKU to inspect (e.g. "RSE-100").</param>
     /// <returns>The quantity, threshold, price and stock status, or the error listing the SKUs that exist.</returns>
-    public async Task<StockLevelResult> CheckStockLevel(string sku)
+    [Description("Retrieves the current stock level for a single plant as structured JSON: sku, name, category, quantityOnHand, reorderThreshold, unitPrice, stockStatus, statusIcon, maxOrderableQuantity. Returns an error with the list of valid SKUs if the sku is unknown. This tool has only informative capabilities: it does NOT reserve, order, or modify anything.")]
+    [RequiresApproval(false)]
+    public async Task<StockLevelResult> CheckStockLevel(
+        [Description("Product SKU to inspect (e.g. 'RSE-100'). The user should specify which plant they mean, or you should present the catalog and let them choose. Do NOT guess or assume which plant the user wants.")] [ToolParameter(Records.ToolScope.Request)] string sku)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -215,7 +222,12 @@ public class InventoryTool : MorganaTool
     /// <param name="quantity">Quantity requested (must not exceed current stock).</param>
     /// <param name="customerCode">Identifier of the requesting customer (retrieved from shared context).</param>
     /// <returns>The new orderId, one-time sealWord, quote and pending status, or the error saying why no order was created.</returns>
-    public async Task<PurchaseOrderResult> CreatePurchaseOrder(string sku, int quantity, string customerCode)
+    [Description("Creates a new purchase order in 'Pending' status and returns a quote as structured JSON: orderId, sealWord, sku, productName, quantity, unitPrice, totalPrice, status, note. This is a QUOTE ONLY: stock is validated but NOT decremented. sealWord is shown ONLY this once and is required, together with orderId, by ConfirmOrder/CancelOrder — including in a future session. It has dispositive potential only once ConfirmOrder is called afterwards — on its own it commits nothing.")]
+    [RequiresApproval(false)]
+    public async Task<PurchaseOrderResult> CreatePurchaseOrder(
+        [Description("Product SKU to order (e.g. 'RSE-100').")] [ToolParameter(Records.ToolScope.Request)] string sku,
+        [Description("Quantity requested. Must not exceed the product's current quantityOnHand.")] [ToolParameter(Records.ToolScope.Request)] int quantity,
+        [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode)
     {
         if (quantity <= 0)
             return new PurchaseOrderResult(Error: "Quantity must be a positive number", RequestedQuantity: quantity);
@@ -293,7 +305,11 @@ public class InventoryTool : MorganaTool
     /// <param name="orderId">Identifier of the order to confirm. Tracked from the conversation itself, NOT a single stored context value: a customer may have more than one order in flight.</param>
     /// <param name="sealWord">One-time seal word returned by CreatePurchaseOrder for this exact orderId. Tracked from the conversation itself, one per order — a customer with multiple orders in flight has a different seal word for each.</param>
     /// <returns>The confirmed order and remaining stock, or the error saying why the order was not confirmed.</returns>
-    public async Task<ConfirmOrderResult> ConfirmOrder(string orderId, string sealWord)
+    [Description("Commits a Pending order: the ONLY tool that actually decrements stock AND the ONLY tool that bills the customer. Requires the exact orderId AND sealWord pair returned by CreatePurchaseOrder — a mismatch on either is reported identically as 'no order matches', to avoid confirming or denying whether an orderId exists. Re-validates availability at commit time and returns structured JSON: orderId, sku, quantity, status ('Confirmed'), confirmedAt, remainingStock, invoiceId, note. invoiceId identifies the invoice this order was just billed to — the accounts agent (Billing), never you, is where the customer sees its total or line items. This tool has dispositive capabilities: it commits a real, persistent change to greenhouse stock and to the customer's account.")]
+    [RequiresApproval(true)]
+    public async Task<ConfirmOrderResult> ConfirmOrder(
+        [Description("Identifier of the Pending order to confirm, exactly as returned by CreatePurchaseOrder.")] [ToolParameter(Records.ToolScope.Request)] string orderId,
+        [Description("One-time seal word returned by CreatePurchaseOrder alongside this exact orderId. If the customer does not have it, tell them plainly you need the seal word they were given when that specific order was created — never ask for a plausible-sounding guess.")] [ToolParameter(Records.ToolScope.Request)] string sealWord)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -423,7 +439,10 @@ public class InventoryTool : MorganaTool
     /// </summary>
     /// <param name="orderId">Identifier of the order to inspect. Tracked from the conversation itself, NOT a single stored context value: a customer may have more than one order in flight.</param>
     /// <returns>The order status and timestamps, or the error saying that no order matches.</returns>
-    public async Task<OrderStatusResult> GetOrderStatus(string orderId)
+    [Description("Retrieves the current status and lifecycle timestamps of an existing order as structured JSON: orderId, sku, quantity, status (Pending/Confirmed/Cancelled), createdAt, confirmedAt, cancelledAt. Keyed on the orderId alone: NO seal word is required, because reading a status commits nothing — the same fields are already listed by GetOrders and GetOrderHistory. An orderId nothing is filed under is reported as 'no order matches'. This tool has only informative capabilities: it does NOT modify the order.")]
+    [RequiresApproval(false)]
+    public async Task<OrderStatusResult> GetOrderStatus(
+        [Description("Identifier of the order to inspect, as originally returned by CreatePurchaseOrder. May belong to a past session — always trust this tool's answer over what you remember.")] [ToolParameter(Records.ToolScope.Request)] string orderId)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -449,7 +468,12 @@ public class InventoryTool : MorganaTool
     /// <param name="sealWord">One-time seal word returned by CreatePurchaseOrder for this exact orderId. Tracked from the conversation itself, one per order — a customer with multiple orders in flight has a different seal word for each.</param>
     /// <param name="reason">Optional free-text cancellation reason, recorded for logging only.</param>
     /// <returns>The cancellation outcome, or the error saying why the order was not cancelled.</returns>
-    public async Task<CancelOrderResult> CancelOrder(string orderId, string sealWord, string? reason = null)
+    [Description("Cancels a Pending or Confirmed order and returns structured JSON: orderId, previousStatus, status ('Cancelled'), cancelledAt, stockRestored, reason. Requires the exact orderId AND sealWord pair returned by CreatePurchaseOrder — a mismatch on either is reported identically as 'no order matches'. If the order had been Confirmed, stock is restored; a Pending order never touched stock so none is restored. This tool has dispositive capabilities: it commits a real, persistent change to an order and possibly to greenhouse stock.")]
+    [RequiresApproval(true)]
+    public async Task<CancelOrderResult> CancelOrder(
+        [Description("Identifier of the order to cancel, exactly as returned by CreatePurchaseOrder or previously discussed.")] [ToolParameter(Records.ToolScope.Request)] string orderId,
+        [Description("One-time seal word returned by CreatePurchaseOrder for this exact orderId.")] [ToolParameter(Records.ToolScope.Request)] string sealWord,
+        [Description("Optional reason for the cancellation (e.g., 'changed my mind', 'found a better price'). Recorded for internal purposes but not required. Ask the user if they'd like to provide one, but make it clear it's optional.")] [ToolParameter(Records.ToolScope.Request)] string? reason = null)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -538,6 +562,8 @@ public class InventoryTool : MorganaTool
     /// since the caller is, by construction, the same conversation that created them.
     /// </summary>
     /// <returns>This conversation's orders (no sealWord included).</returns>
+    [Description("Lists the orders placed during THIS conversation as structured JSON: totalOrders and an array of order summaries (orderId, sku, quantity, status, createdAt, confirmedAt, cancelledAt). Does NOT include sealWord (shown only once, by CreatePurchaseOrder) so this listing alone is never enough to confirm or cancel anything. This tool has only informative capabilities.")]
+    [RequiresApproval(false)]
     public async Task<OrdersResult> GetOrders()
     {
         // ctx.ConversationId, not a parameter: this scoping is intentionally NOT something the LLM
@@ -578,7 +604,10 @@ public class InventoryTool : MorganaTool
     /// </summary>
     /// <param name="customerCode">Identifier of the customer whose order history to retrieve (retrieved from shared context).</param>
     /// <returns>That customer's orders across every conversation (no sealWord included).</returns>
-    public async Task<OrderHistoryResult> GetOrderHistory(string customerCode)
+    [Description("Lists EVERY order a customer has ever placed, across ALL conversations/sessions — not just this one — as structured JSON: customerCode, customerName, totalOrders and an array of order summaries (orderId, sku, quantity, status, createdAt, confirmedAt, cancelledAt). Does NOT include sealWord (shown only once, by CreatePurchaseOrder) so this listing alone is never enough to confirm or cancel any order it names — that pair is what ConfirmOrder and CancelOrder require. To re-read one single order by its identifier, use GetOrderStatus. This tool has only informative capabilities.")]
+    [RequiresApproval(false)]
+    public async Task<OrderHistoryResult> GetOrderHistory(
+        [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code. It scopes the listing to that one customer and is not a selector for choosing whose history to read.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode)
     {
         // customerCode is a shared context variable the LLM itself can write by passing it to a tool —
         // unlike GetOrders()'s ConversationId, it is not a trust boundary, which is exactly why

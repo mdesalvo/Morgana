@@ -653,7 +653,7 @@ public sealed class WorkflowTests
     private static Records.WorkflowDefinition WithSteps(params Records.WorkflowStep[] steps)
         => new("PlaceOrder", "Placing an order.", steps);
 
-    /// <summary>The tools of the sample agent as agents.json declares them.</summary>
+    /// <summary>The tools of the sample agent as the catalog projects them.</summary>
     private static Records.ToolDefinition[] DeclaredTools() =>
     [
         new("CreatePurchaseOrder", "Quotes an order.", [new("item", "The plant.", true, Constants.Scopes.Request)],
@@ -765,7 +765,7 @@ public sealed class WorkflowTests
             InventoryTools.Calls.Clear();
             AgentUnderTest under = new AgentUnderTest();
 
-            List<Dictionary<string, object>> properties = [new() { [Constants.PromptProperties.Tools] = JsonSerializer.SerializeToElement(DeclaredTools()) }];
+            List<Dictionary<string, object>> properties = [];
             if (workflows.Length > 0)
                 properties.Add(new() { [Constants.PromptProperties.Workflows] = JsonSerializer.SerializeToElement(workflows) });
             Records.Prompt prompt = new("inventory", "INTENT", "AGENT", "Sell plants.", "Answer plainly.", "Plain text.", null, "en-US", "1", properties);
@@ -900,12 +900,14 @@ public sealed class WorkflowTests
             => throw new InvalidOperationException("No model is reached by this group");
     }
 
-    /// <summary>Finds the sample tools for the sample intent.</summary>
+    /// <summary>Finds the sample tools for the sample intent and declares them as the catalog would project them.</summary>
     private sealed class SampleToolRegistry : IToolRegistryService
     {
         public Type? FindToolTypeForIntent(string intent) => intent == "inventory" ? typeof(InventoryTools) : null;
 
         public IReadOnlyDictionary<string, Type> GetAllRegisteredTools() => new Dictionary<string, Type> { ["inventory"] = typeof(InventoryTools) };
+
+        public IReadOnlyList<Records.ToolDefinition> GetToolDefinitions(string intent) => intent == "inventory" ? DeclaredTools() : [];
     }
 
     /// <summary>A budget that is never spent.</summary>

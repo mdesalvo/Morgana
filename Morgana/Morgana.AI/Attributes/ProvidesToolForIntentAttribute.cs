@@ -8,8 +8,8 @@ namespace Morgana.AI.Attributes;
 /// Enables automatic tool discovery for intents. When MorganaAgentAdapter creates an agent
 /// for an intent, it queries IToolRegistryService to find the tool class decorated with this
 /// attribute for that intent. Intent name must match [HandlesIntent] on corresponding agent
-/// and agents.json Name. Tool class must inherit from MorganaTool and have matching public
-/// methods for each tool defined in agents.json.
+/// and agents.json Name. Tool class must inherit from MorganaTool: every public instance method that it
+/// declares is a tool of the agent, described by the method's own attributes.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 public class ProvidesToolForIntentAttribute : Attribute

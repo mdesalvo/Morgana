@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+﻿using System.ComponentModel;
 using System.Reflection;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
@@ -264,7 +264,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     }
 
     /// <summary>
-    /// Refuses a native tool whose returned record and <c>Returns</c> declaration in agents.json do not describe the same thing.
+    /// Refuses a tool class that does not declare its tools completely and a prompt that still declares them in JSON.
     /// </summary>
     /// <param name="registry">The discovered intent-to-agent map, which is the roster of intents to weigh.</param>
     /// <returns>One message per violation, empty when every contract holds.</returns>
@@ -273,19 +273,39 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         List<string> errors = [];
         List<Records.Prompt> prompts = agentConfigService.GetAgentPromptsAsync().GetAwaiter().GetResult();
 
+        // Every domain prompt is weighed, including those of intents with no tool type: a leftover
+        // declaration there is ignored all the same.
+        errors.AddRange(ValidateNoDeclaredTools(prompts));
+
         foreach (string intent in registry.Keys)
         {
-            // An intent without a tool type is the registry's own warning path. An intent without a
-            // prompt is already refused by the coverage check. Neither has a contract to weigh here.
+            // An intent without a tool type is the registry's own warning path: no class, no contract to weigh.
             Type? toolType = toolRegistryService.FindToolTypeForIntent(intent);
-            Records.Prompt? prompt = prompts.FirstOrDefault(candidate => string.Equals(candidate.ID, intent, StringComparison.OrdinalIgnoreCase));
-            if (toolType is null || prompt is null)
+            if (toolType is null)
                 continue;
 
-            errors.AddRange(ValidateToolContract(intent, toolType, prompt.GetAdditionalPropertyOrDefault<Records.ToolDefinition[]>(Constants.PromptProperties.Tools, [])));
+            errors.AddRange(ValidateToolContract(intent, toolType));
         }
 
         return errors;
+    }
+
+    /// <summary>
+    /// Refuses a domain prompt that still carries a <c>Tools</c> declaration.
+    /// </summary>
+    /// <remarks>
+    /// Tools are declared on the class, so a declaration left in JSON would be silently ignored.
+    /// </remarks>
+    /// <param name="prompts">The domain prompts that agents.json files declare.</param>
+    /// <returns>One message per prompt that carries the key, empty when none does.</returns>
+    public static List<string> ValidateNoDeclaredTools(IEnumerable<Records.Prompt> prompts)
+    {
+        return
+        [
+            .. prompts
+                .Where(prompt => (prompt.AdditionalProperties ?? []).Any(properties => properties.ContainsKey(Constants.PromptProperties.Tools)))
+                .Select(prompt => $"Prompt '{prompt.ID}' declares \"{Constants.PromptProperties.Tools}\" in agents.json: tools are declared on the tool class and the declaration would be ignored")
+        ];
     }
 
     /// <summary>
@@ -311,7 +331,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             errors.AddRange(ValidateWorkflows(
                 intent,
                 workflows,
-                prompt.GetAdditionalPropertyOrDefault<Records.ToolDefinition[]>(Constants.PromptProperties.Tools, []),
+                toolRegistryService.GetToolDefinitions(intent),
                 agentType.GetCustomAttributes<UsesMCPServerAttribute>().Any()));
         }
 
@@ -327,7 +347,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// </remarks>
     /// <param name="intent">The intent that owns the workflows, named in the messages.</param>
     /// <param name="workflows">The workflows that agents.json declares for the intent.</param>
-    /// <param name="declaredTools">The domain tools that agents.json declares for the intent.</param>
+    /// <param name="declaredTools">The domain tools that the intent's tool class declares.</param>
     /// <param name="usesMcpServer">Whether the agent acquires tools from an MCP server.</param>
     /// <returns>One message per violation, empty when every workflow holds.</returns>
     public static List<string> ValidateWorkflows(
@@ -515,80 +535,115 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     }
 
     /// <summary>
-    /// Weighs each declared tool of one intent against the record its method returns.
+    /// Weighs a tool class on its own: every tool method and parameter declared completely and the record each returns usable.
     /// </summary>
     /// <remarks>
-    /// The record is what the model reads and the declaration is what Alembic and a workflow engine read:
-    /// the two are one contract only while the same fields stand on both sides.
+    /// The class is the only declaration of its tools, so what the model reads and what a workflow engine
+    /// reads is only as complete as the attributes found here.
     /// </remarks>
     /// <param name="intent">The intent that owns the tools, named in the messages.</param>
     /// <param name="toolType">The class implementing the tools.</param>
-    /// <param name="declaredTools">The tools that agents.json declares for the intent.</param>
     /// <returns>One message per violation, empty when every contract holds.</returns>
-    public static List<string> ValidateToolContract(string intent, Type toolType, IEnumerable<Records.ToolDefinition> declaredTools)
+    public static List<string> ValidateToolContract(string intent, Type toolType)
     {
         List<string> errors = [];
+        IReadOnlyList<MethodInfo> methods = ProvidesToolForIntentRegistryService.GetToolMethods(toolType);
 
-        foreach (Records.ToolDefinition tool in declaredTools)
+        // Two methods under one name reach the model as one tool declared twice.
+        foreach (string duplicated in methods.GroupBy(method => method.Name, StringComparer.Ordinal).Where(group => group.Count() > 1).Select(group => group.Key))
+            errors.Add($"Tool '{duplicated}' of intent '{intent}' is declared by more than one method of '{toolType.Name}': a tool name is unique");
+
+        foreach (MethodInfo method in methods)
         {
-            // A declared tool with no method is the adapter's warning, not a contract violation.
-            MethodInfo? method = toolType.GetMethod(tool.Name);
-            if (method is null)
-                continue;
+            string subject = $"Tool '{method.Name}' of intent '{intent}'";
 
-            string subject = $"Tool '{tool.Name}' of intent '{intent}'";
-            Type? returnType = UnwrapReturnType(method.ReturnType);
+            if (string.IsNullOrWhiteSpace(method.GetCustomAttribute<DescriptionAttribute>()?.Description))
+                errors.Add($"{subject} has no [Description]: the model reads it to know what the tool does");
 
-            // A string or an object tells the schema nothing: the model would read a document that nobody declared.
-            if (returnType is null || returnType == typeof(string) || returnType == typeof(object))
-            {
-                errors.Add($"{subject} returns '{method.ReturnType.Name}': a native tool returns a typed record");
-                continue;
-            }
+            if (method.GetCustomAttribute<RequiresApprovalAttribute>() is null)
+                errors.Add($"{subject} has no [RequiresApproval]: whether the user must approve each call is always declared");
 
-            JsonElement schema = MorganaToolAdapter.CreateReturnSchema(returnType);
-            if (!schema.TryGetProperty("properties", out JsonElement properties))
-            {
-                errors.Add($"{subject} returns '{returnType.Name}', which has no properties: a native tool returns a typed record");
-                continue;
-            }
+            foreach (ParameterInfo parameter in method.GetParameters())
+                ValidateToolParameter(subject, parameter, errors);
 
-            if (tool.Returns is null || tool.Returns.Count == 0)
-            {
-                errors.Add($"{subject} declares no \"Returns\" in agents.json while its method returns '{returnType.Name}'");
-                continue;
-            }
-
-            HashSet<string> recordFields = [.. properties.EnumerateObject().Select(property => property.Name)];
-            HashSet<string> declaredFields = [.. tool.Returns.Select(field => field.Name)];
-
-            foreach (string missing in declaredFields.Except(recordFields, StringComparer.Ordinal))
-                errors.Add($"{subject} declares the returned field '{missing}', which '{returnType.Name}' does not have");
-
-            foreach (string undeclared in recordFields.Except(declaredFields, StringComparer.Ordinal))
-                errors.Add($"{subject} returns the field '{undeclared}' in '{returnType.Name}', which its \"Returns\" does not declare");
-
-            List<Records.ToolReturn> failureFields = [.. tool.Returns.Where(field => field.Failure)];
-            if (failureFields.Count > 1)
-                errors.Add($"{subject} marks {failureFields.Count.ToString(CultureInfo.InvariantCulture)} fields as the failure ({string.Join(", ", failureFields.Select(field => $"'{field.Name}'"))}): at most one may be");
-
-            // The failure field is the one whose holding a value means the call failed, so a record that
-            // cannot leave it empty would report every call as failed.
-            foreach (Records.ToolReturn failure in failureFields.Take(1))
-            {
-                if (properties.TryGetProperty(failure.Name, out JsonElement failureSchema) && !AllowsNull(failureSchema))
-                    errors.Add($"{subject} marks the field '{failure.Name}' as the failure but '{returnType.Name}' does not allow it to be null");
-            }
+            ValidateToolReturn(subject, method, errors);
         }
 
         return errors;
     }
 
     /// <summary>
+    /// Weighs one parameter of a tool method: its prose, its scope and the combinations that the framework cannot honour.
+    /// </summary>
+    /// <param name="subject">The tool, named in the messages.</param>
+    /// <param name="parameter">The parameter to weigh.</param>
+    /// <param name="errors">Receives one message per violation.</param>
+    private static void ValidateToolParameter(string subject, ParameterInfo parameter, List<string> errors)
+    {
+        string parameterSubject = $"Parameter '{parameter.Name}' of {subject}";
+
+        if (string.IsNullOrWhiteSpace(parameter.GetCustomAttribute<DescriptionAttribute>()?.Description))
+            errors.Add($"{parameterSubject} has no [Description]: the model reads it to know what to pass");
+
+        ToolParameterAttribute? declaration = parameter.GetCustomAttribute<ToolParameterAttribute>();
+        if (declaration is null)
+        {
+            errors.Add($"{parameterSubject} has no [ToolParameter]: its scope is always declared");
+            return;
+        }
+
+        // Only what the context holds can be shared, so a value asked of the user has nothing to share.
+        if (declaration is { Scope: Records.ToolScope.Request, Shared: true })
+            errors.Add($"{parameterSubject} is a request parameter marked as shared: only what the context holds is shared");
+
+        if (declaration.Scope != Records.ToolScope.Context)
+            return;
+
+        // A context value that nobody holds stops the tool, so a default would never be used.
+        if (parameter.HasDefaultValue)
+            errors.Add($"{parameterSubject} is a context parameter with a default value: a context value that nobody holds stops the tool, so the default would never be used");
+
+        // The context and the shared registry keep untyped text, so a value written as text by one agent
+        // could reach another that declares a different type.
+        if (parameter.ParameterType != typeof(string))
+            errors.Add($"{parameterSubject} is a context parameter of type '{parameter.ParameterType.Name}': the context holds text, so it is a string");
+    }
+
+    /// <summary>
+    /// Weighs the record that a tool method returns: a typed record, whose failure field when present allows null.
+    /// </summary>
+    /// <param name="subject">The tool, named in the messages.</param>
+    /// <param name="method">The tool method.</param>
+    /// <param name="errors">Receives one message per violation.</param>
+    private static void ValidateToolReturn(string subject, MethodInfo method, List<string> errors)
+    {
+        Type? returnType = UnwrapReturnType(method.ReturnType);
+
+        // A string or an object tells the schema nothing: the model would read a document that nobody declared.
+        if (returnType is null || returnType == typeof(string) || returnType == typeof(object))
+        {
+            errors.Add($"{subject} returns '{method.ReturnType.Name}': a native tool returns a typed record");
+            return;
+        }
+
+        JsonElement schema = MorganaToolAdapter.CreateReturnSchema(returnType);
+        if (!schema.TryGetProperty("properties", out JsonElement properties))
+        {
+            errors.Add($"{subject} returns '{returnType.Name}', which has no properties: a native tool returns a typed record");
+            return;
+        }
+
+        // The failure field is the one whose holding a value means the call failed, so a record that
+        // cannot leave it empty would report every call as failed.
+        if (properties.TryGetProperty(Constants.Workflows.FailureField, out JsonElement failureSchema) && !AllowsNull(failureSchema))
+            errors.Add($"{subject} returns '{returnType.Name}' whose '{Constants.Workflows.FailureField}' property does not allow null: the failure field is nullable");
+    }
+
+    /// <summary>
     /// Takes the result type out of a <c>Task</c> or a <c>ValueTask</c>; null when the method returns no value.
     /// </summary>
     /// <param name="methodReturnType">The return type as the method declares it.</param>
-    private static Type? UnwrapReturnType(Type methodReturnType)
+    internal static Type? UnwrapReturnType(Type methodReturnType)
     {
         if (methodReturnType == typeof(void) || methodReturnType == typeof(Task) || methodReturnType == typeof(ValueTask))
             return null;

@@ -258,6 +258,7 @@ public sealed class PeerFederationTests
         return new ConfigurationAgentDirectoryService(
             new UnreadAgentConfiguration(),
             new UnreadPromptResolver(),
+            new UnreadToolRegistry(),
             configuration,
             new FixedHostAddress(),
             new PeerRingKeyService(),
@@ -336,6 +337,16 @@ public sealed class PeerFederationTests
 
         public Task<Records.Prompt> ResolveAsync(string promptID)
             => throw new InvalidOperationException($"Prompt '{promptID}' was resolved while consulting a colleague published elsewhere.");
+    }
+
+    /// <summary>Stands in for the tool registry, whose catalog no path toward a colleague elsewhere reads.</summary>
+    private sealed class UnreadToolRegistry : IToolRegistryService
+    {
+        public Type? FindToolTypeForIntent(string intent) => null;
+
+        public IReadOnlyDictionary<string, Type> GetAllRegisteredTools() => new Dictionary<string, Type>();
+
+        public IReadOnlyList<Records.ToolDefinition> GetToolDefinitions(string intent) => [];
     }
 
     /// <summary>Reports an address for this installation, which only a colleague of its own ring is reached at.</summary>
