@@ -7,11 +7,11 @@ namespace Morgana.AI.Attributes;
 /// Apply multiple times to declare multiple servers.
 /// </summary>
 /// <remarks>
-/// Declares MCP server dependency for an agent. Apply multiple times for multiple servers.
-/// Usage: [UsesMCPServer("https://...")] for HTTP/HTTPS or
-/// [UsesMCPServer(MCPTransport.Stdio, "path/to/cmd", args)] for local stdio.
-/// MorganaAgentAdapter collects attributes via reflection, connects to each server,
-/// discovers tools and hands them to the agent.
+/// Tools acquired from a server never ask the user for approval: they carry none of the framework's
+/// attributes and the server's annotations are ignored, readOnlyHint and destructiveHint included.
+/// The human in the loop that the MCP specification asks for is the curator who adds the server to the agent.
+/// Where one of its tools changes something real, the agent's Instructions have it ask the user first
+/// and Reply offers the action button that leads to the tool.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class UsesMCPServerAttribute : Attribute

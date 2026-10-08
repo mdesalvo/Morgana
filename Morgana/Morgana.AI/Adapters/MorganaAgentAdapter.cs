@@ -233,9 +233,24 @@ public class MorganaAgentAdapter
         Records.ToolDefinition[] domainTools = [.. toolRegistryService.GetToolDefinitions(intentAttribute.Intent)];
         Records.ToolDefinition[] agentTools = [.. morganaTools.Union(domainTools)];
 
+        // 3b) Collect the tools of every [UsesMCPServer] on the agent. Best-effort by design: a server
+        //     that is down or misconfigured is logged per-server and skipped, never aborting agent
+        //     creation. They come before the workflows because a workflow may cite them. They stay
+        //     apart from the native adapter because each one arrives already an AIFunction.
+        List<AIFunction> mcpTools = await RegisterMCPToolsAsync(
+            agentType,
+            [.. agentTools.Select(tool => tool.Name), Constants.Tools.LaunchWorkflow]);
+        Records.ToolDefinition[] mcpToolDefinitions = [.. mcpTools.Select(ProjectMCPTool)];
+
+        // 3c) The workflows the agent keeps. Startup could not weigh a tool that arrives from a server, so
+        //     an agent with MCP tools has its workflows weighed here against the tools it really holds. A
+        //     workflow that does not hold is withdrawn from this agent and the agent lives on.
+        IReadOnlyList<Records.WorkflowDefinition> workflowDefinitions = agentType.GetCustomAttributes<UsesMCPServerAttribute>().Any()
+            ? KeepSoundWorkflows(intentAttribute.Intent, agentType, toolRegistryService.GetWorkflowDefinitions(intentAttribute.Intent), [.. domainTools, .. mcpToolDefinitions])
+            : toolRegistryService.GetWorkflowDefinitions(intentAttribute.Intent);
+
         // 4) Per-agent context provider (the variable store that the context-scoped parameters are
         //    resolved from); sharedContextCallback wires Shared:true writes into the cross-agent registry.
-        IReadOnlyList<Records.WorkflowDefinition> workflowDefinitions = toolRegistryService.GetWorkflowDefinitions(intentAttribute.Intent);
         MorganaAIContextProvider morganaAIContextProvider = CreateAIContextProvider(
             intentAttribute.Intent,
             agentTools,
@@ -258,7 +273,8 @@ public class MorganaAgentAdapter
             : new AgentWorkflows(
                 new WorkflowEngine(workflowDefinitions),
                 workflowDefinitions,
-                domainTools.GroupBy(tool => tool.Name, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal),
+                domainTools.Concat(mcpToolDefinitions).GroupBy(tool => tool.Name, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal),
+                mcpTools.Select(tool => tool.Name).ToHashSet(StringComparer.Ordinal),
                 morganaAIContextProvider,
                 sessionAccessor);
 
@@ -290,13 +306,6 @@ public class MorganaAgentAdapter
             intentAttribute.Intent,
             agentTools,
             toolContextFactory);
-
-        // 6b) Collect the tools of every [UsesMCPServer] on the agent. Best-effort by
-        //     design — a server that is down or misconfigured is logged per-server and skipped, never aborting
-        //     agent creation (an MCP-only agent simply ends up with no tools rather than
-        //     failing to exist). They stay apart from the native adapter because they need
-        //     nothing from it: each one arrives already an AIFunction.
-        List<AIFunction> mcpTools = await RegisterMCPToolsAsync(agentType);
 
         // An action leads to something this agent does itself: its domain tools and its MCP tools.
         // Reply closes turns and a colleague is consulted, never pressed for, so neither is listed.
@@ -509,24 +518,22 @@ public class MorganaAgentAdapter
         string workflowName,
         object? result)
     {
-        string resultJson = result switch
+        string resultText = result switch
         {
             string text => text,
             JsonElement element => element.GetRawText(),
+            // A plain-text MCP result arrives as a content block: the model reads its text, not the block's serialization.
+            TextContent content => content.Text,
             _ => JsonSerializer.Serialize(result)
         };
 
-        // The call failed when the tool's failure field holds a value; a tool declaring none, an MCP tool
-        // included, never fails.
-        string? failureField = workflows.Tools.TryGetValue(toolName, out Records.ToolDefinition? declared)
-            ? declared.Returns?.FirstOrDefault(field => field.Failure)?.Name
-            : null;
-        bool failed = failureField is not null && WorkflowEngine.ReadField(resultJson, failureField) is not null;
+        // Where the failure marker and the fields sit depends on the tool's origin, never on the shape of its result.
+        Records.StepOutcome outcome = WorkflowEngine.ReadOutcome(toolName, resultText, workflows.MCPToolNames.Contains(toolName));
 
         Records.WorkflowPosition? next;
         try
         {
-            next = await workflows.Engine.AdvanceAsync(position, new Records.StepOutcome(toolName, failed, resultJson));
+            next = await workflows.Engine.AdvanceAsync(position, outcome);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -542,7 +549,7 @@ public class MorganaAgentAdapter
         else
             workflows.ContextProvider.SetWorkflowPosition(session, next);
 
-        return await promptComposerService.ComposeWorkflowResultAsync(workflowName, next?.Step, resultJson) ?? result;
+        return await promptComposerService.ComposeWorkflowResultAsync(workflowName, next?.Step, resultText) ?? result;
     }
 
     /// <summary>The values of <see cref="Constants.ToolResults.ToolNotAtThisStep"/>.</summary>
@@ -1145,8 +1152,9 @@ public class MorganaAgentAdapter
     /// McpClientTool instances are already AIFunctions; no schema conversion applied.
     /// </summary>
     /// <param name="agentType">Agent type to inspect for [UsesMCPServer] attributes</param>
+    /// <param name="takenNames">The names that the agent's other tools already hold, which an MCP tool may not take</param>
     /// <returns>Discovered tools as AIFunctions, empty if no servers declared</returns>
-    private async Task<List<AIFunction>> RegisterMCPToolsAsync(Type agentType)
+    private async Task<List<AIFunction>> RegisterMCPToolsAsync(Type agentType, IEnumerable<string> takenNames)
     {
         // An agent may declare several [UsesMCPServer] (multiple servers, mixed
         // Http/Stdio) — collect them all, not just the first.
@@ -1163,6 +1171,7 @@ public class MorganaAgentAdapter
         logger.LogInformation("Agent {AgentTypeName} declares {AttributesLength} MCP server(s)", agentType.Name, attributes.Length);
 
         List<AIFunction> mcpTools = [];
+        HashSet<string> heldNames = new(takenNames, StringComparer.Ordinal);
 
         foreach (UsesMCPServerAttribute attribute in attributes)
         {
@@ -1173,7 +1182,21 @@ public class MorganaAgentAdapter
             // server costs that server's tools, nothing more.
             try
             {
-                mcpTools.AddRange(await DiscoverMCPToolsFromServerAsync(attribute));
+                foreach (AIFunction discovered in await DiscoverMCPToolsFromServerAsync(attribute))
+                {
+                    // The tool loop refuses a tool list that names two tools alike, which would fail every turn of the agent.
+                    if (heldNames.Contains(discovered.Name)
+                        || discovered.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
+                    {
+                        logger.LogError(
+                            "Agent {AgentTypeName} drops tool '{McpToolName}' of MCP server '{ServerCommand}': its name is taken by another tool or reserved for colleagues",
+                            agentType.Name, discovered.Name, attribute.Command);
+                        continue;
+                    }
+
+                    heldNames.Add(discovered.Name);
+                    mcpTools.Add(discovered);
+                }
             }
             catch (Exception ex)
             {
@@ -1182,6 +1205,81 @@ public class MorganaAgentAdapter
         }
 
         return mcpTools;
+    }
+
+    /// <summary>
+    /// Projects a discovered MCP tool into the definition that workflow validation and the engine read.
+    /// </summary>
+    /// <remarks>
+    /// The MCP layer never asks the user for approval, so the definition never requires it.
+    /// </remarks>
+    private static Records.ToolDefinition ProjectMCPTool(AIFunction mcpTool)
+    {
+        IReadOnlyList<Records.ToolParameter> parameters = [];
+        if (mcpTool.JsonSchema.ValueKind == JsonValueKind.Object && mcpTool.JsonSchema.TryGetProperty("properties", out JsonElement properties) && properties.ValueKind == JsonValueKind.Object)
+        {
+            HashSet<string> required = mcpTool.JsonSchema.TryGetProperty("required", out JsonElement requiredNames) && requiredNames.ValueKind == JsonValueKind.Array
+                ? [.. requiredNames.EnumerateArray().Select(name => name.GetString() ?? string.Empty)]
+                : [];
+
+            parameters = [.. properties.EnumerateObject().Select(property => new Records.ToolParameter(
+                property.Name,
+                DescriptionOf(property.Value),
+                required.Contains(property.Name),
+                Constants.Scopes.Request))];
+        }
+
+        // A server declaring no output schema leaves Returns absent: nothing can be carried out of such a tool.
+        IReadOnlyList<Records.ToolReturn>? returns = null;
+        if (mcpTool.ReturnJsonSchema is { ValueKind: JsonValueKind.Object } returnSchema
+            && returnSchema.TryGetProperty("properties", out JsonElement returnProperties)
+            && returnProperties.ValueKind == JsonValueKind.Object)
+        {
+            returns = [.. returnProperties.EnumerateObject().Select(property => new Records.ToolReturn(
+                property.Name,
+                DescriptionOf(property.Value),
+                string.Equals(property.Name, Constants.Workflows.FailureField, StringComparison.OrdinalIgnoreCase)))];
+        }
+
+        return new Records.ToolDefinition(mcpTool.Name, mcpTool.Description, parameters, Returns: returns);
+    }
+
+    /// <summary>The description that a JSON schema property carries; empty when it has none.</summary>
+    private static string DescriptionOf(JsonElement schemaProperty)
+        => schemaProperty.ValueKind == JsonValueKind.Object
+           && schemaProperty.TryGetProperty("description", out JsonElement description)
+           && description.ValueKind == JsonValueKind.String
+            ? description.GetString() ?? string.Empty
+            : string.Empty;
+
+    /// <summary>
+    /// Weighs the workflows of an agent that holds MCP tools against the tools it really holds.
+    /// </summary>
+    /// <returns>The workflows that hold; each other one is logged with every reason and left out.</returns>
+    private List<Records.WorkflowDefinition> KeepSoundWorkflows(
+        string intent,
+        Type agentType,
+        IReadOnlyList<Records.WorkflowDefinition> workflows,
+        IReadOnlyList<Records.ToolDefinition> heldTools)
+    {
+        List<Records.WorkflowDefinition> kept = [];
+
+        foreach (Records.WorkflowDefinition workflow in workflows)
+        {
+            List<string> errors = HandlesIntentAgentRegistryService.ValidateWorkflows(intent, [workflow], heldTools, usesMcpServer: false);
+            if (errors.Count == 0)
+            {
+                kept.Add(workflow);
+                continue;
+            }
+
+            // A server that was down at birth leaves its tools unheld, so its workflows fall here as lacking a tool: that is intended.
+            logger.LogError(
+                "Workflow '{Workflow}' of intent '{Intent}' (agent {AgentTypeName}) is withdrawn for this conversation: {Reasons}",
+                workflow.Name, intent, agentType.Name, string.Join("; ", errors));
+        }
+
+        return kept;
     }
 
     /// <summary>
@@ -1220,13 +1318,15 @@ public class MorganaAgentAdapter
     /// </summary>
     /// <param name="Engine">The state machine of the agent's workflows.</param>
     /// <param name="Definitions">The workflows the agent declares.</param>
-    /// <param name="Tools">The agent's domain tools by name, which say which need approval and which field marks a failure.</param>
+    /// <param name="Tools">The agent's domain tools and MCP tools by name, which say which need approval.</param>
+    /// <param name="MCPToolNames">The names of the tools that come from an MCP server, whose results are read as the protocol's envelope.</param>
     /// <param name="ContextProvider">The store the position is written to.</param>
     /// <param name="SessionAccessor">Returns the agent's current session.</param>
     private sealed record AgentWorkflows(
         WorkflowEngine Engine,
         IReadOnlyList<Records.WorkflowDefinition> Definitions,
         IReadOnlyDictionary<string, Records.ToolDefinition> Tools,
+        IReadOnlySet<string> MCPToolNames,
         MorganaAIContextProvider ContextProvider,
         Func<AgentSession?> SessionAccessor);
 

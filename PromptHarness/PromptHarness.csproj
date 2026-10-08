@@ -75,6 +75,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      The MCP test server is an executable the workflow group starts as a child process, as it would
+      start any stdio server. It belongs to the project below it: compiled in here its sources would
+      become part of the harness, which is the one thing a server under test must never be.
+    -->
+    <Compile Remove="MCPTestServer\**" />
+    <None Remove="MCPTestServer\**" />
+    <EmbeddedResource Remove="MCPTestServer\**" />
+    <Content Remove="MCPTestServer\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="xunit.v3" Version="3.*" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.*" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.*" />
@@ -99,6 +111,14 @@
       domain of the asking instance and no other group ever sees the intent it declares.
     -->
     <ProjectReference Include="FederationPlugin\FederationPlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The deterministic MCP server, built but never referenced as an assembly: an agent under test
+      reaches it over stdio exactly as it would reach a server of its own deployment.
+    -->
+    <ProjectReference Include="MCPTestServer\MCPTestServer.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -149,6 +169,25 @@
     </MSBuild>
     <MakeDir Directories="$(OutDir)federation-plugins" Condition="!Exists('$(OutDir)federation-plugins')" />
     <Copy SourceFiles="@(FederationPluginAssembly)" DestinationFolder="$(OutDir)federation-plugins" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!--
+    The server lands in a directory of its own with its whole output: it is started as a process, so
+    its apphost needs the runtime configuration and dependency manifest beside it and a lone assembly
+    would not run. An agent names it by the relative path mcp-test-server/MCPTestServer.
+  -->
+  <Target Name="CopyMCPTestServerToHarness" AfterTargets="Build">
+    <MSBuild Projects="MCPTestServer\MCPTestServer.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="MCPTestServerAssembly" />
+    </MSBuild>
+    <ItemGroup>
+      <MCPTestServerFile Include="%(MCPTestServerAssembly.RootDir)%(MCPTestServerAssembly.Directory)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(MCPTestServerFile)"
+          DestinationFiles="@(MCPTestServerFile->'$(OutDir)mcp-test-server\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

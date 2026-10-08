@@ -76,6 +76,45 @@ public sealed class WorkflowEngine
     }
 
     /// <summary>
+    /// Reads how a call ended from the text of the tool's result.
+    /// </summary>
+    /// <param name="tool">The tool that was called.</param>
+    /// <param name="resultText">The result as the text the model reads.</param>
+    /// <param name="isMCPTool">Whether the tool comes from an MCP server: the origin decides how the result is read, whatever its shape.</param>
+    /// <returns>The outcome, whose fields are where an edge reads the values that it carries.</returns>
+    public static Records.StepOutcome ReadOutcome(string tool, string resultText, bool isMCPTool)
+    {
+        if (!isMCPTool)
+            return new Records.StepOutcome(tool, ReadField(resultText, Constants.Workflows.FailureField) is not null, resultText);
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(resultText);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                return new Records.StepOutcome(tool, false, null);
+
+            // An MCP result is the protocol's envelope: the record sits one level down, under structuredContent.
+            string? fields = null;
+            foreach (JsonProperty property in document.RootElement.EnumerateObject())
+            {
+                if (string.Equals(property.Name, Constants.Workflows.MCPStructuredContent, StringComparison.Ordinal) && property.Value.ValueKind == JsonValueKind.Object)
+                    fields = property.Value.GetRawText();
+            }
+
+            // A server reports a failure either on the envelope or, like a native tool, in the record's failure field.
+            bool reportedByServer = document.RootElement.TryGetProperty(Constants.Workflows.MCPIsError, out JsonElement isError) && isError.ValueKind == JsonValueKind.True;
+            bool failed = reportedByServer || (fields is not null && ReadField(fields, Constants.Workflows.FailureField) is not null);
+
+            return new Records.StepOutcome(tool, failed, fields);
+        }
+        catch (JsonException)
+        {
+            // A text that is not JSON holds neither a failure marker nor a field.
+            return new Records.StepOutcome(tool, false, null);
+        }
+    }
+
+    /// <summary>
     /// Reads one field of a tool's result, however the record cased it.
     /// </summary>
     /// <param name="resultJson">The tool's result as the JSON text the model read.</param>
@@ -158,7 +197,7 @@ public sealed class WorkflowEngine
         foreach (string name in edge.Carrying)
         {
             // A result that lacks the field leaves the parameter unbound: the model supplies it.
-            if (ReadField(outcome.ResultJson, name) is { } value)
+            if (outcome.FieldsJson is not null && ReadField(outcome.FieldsJson, name) is { } value)
                 arguments[name] = value;
         }
 

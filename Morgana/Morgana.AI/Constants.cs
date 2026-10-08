@@ -319,7 +319,7 @@ public static class Constants
 
     /// <summary>
     /// What a workflow class and its launch tool agree on across the plugin and morgana.json.
-    /// Also what a plugin's returned record and the workflow engine reading its result agree on.
+    /// Also what a plugin's returned record or an MCP server's result and the workflow engine reading it agree on.
     /// </summary>
     public static class Workflows
     {
@@ -331,6 +331,12 @@ public static class Constants
 
         /// <summary>The parameter of <see cref="Tools.LaunchWorkflow"/> that names the workflow to start.</summary>
         public const string WorkflowParameter = "workflow";
+
+        /// <summary>The member of an MCP tool's result that holds the returned record, as the MCP specification names it.</summary>
+        public const string MCPStructuredContent = "structuredContent";
+
+        /// <summary>The member of an MCP tool's result that is true when the server reports the call failed, as the MCP specification names it.</summary>
+        public const string MCPIsError = "isError";
     }
 
     /// <summary>

@@ -279,9 +279,9 @@ tier) and `GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
    A tool declaring `[RequiresApproval(true)]` runs only once the user has approved that exact call,
    through MEAI's own `ApprovalRequiredAIFunction`. The framework offers the approval buttons; pressing
    an action button that leads to the tool is that approval already
-5. **Or MCP** — `[UsesMCPServer(...)]`, repeatable, tools discovered at runtime
+5. **Or MCP** — `[UsesMCPServer(...)]`, repeatable, tools discovered at runtime. They never ask for approval: where one changes something real, the agent's `Instructions` have it ask first
 6. **Colleagues** — `[ConsultsAgent("otherintent")]`, once each, validated at startup
-7. **Workflows** (optional) — a `MorganaWorkflow` class with `[ProvidesWorkflowForIntent("x")]`, shaped like a MAAI graph: steps are nodes holding their tools, each transition is one `AddEdge` or `AddFailureEdge` and a call with no edge ends the workflow. The class's public properties are the values that an edge carries by name. The agent gets `LaunchWorkflow`; the order is the framework's, so no prose restates it
+7. **Workflows** (optional) — a `MorganaWorkflow` class with `[ProvidesWorkflowForIntent("x")]`, shaped like a MAAI graph: steps are nodes holding their tools, each transition is one `AddEdge` or `AddFailureEdge` and a call with no edge ends the workflow. The class's public properties are the values that an edge carries by name. The agent gets `LaunchWorkflow`; the order is the framework's, so no prose restates it. A step names an MCP tool by string and such a workflow is checked when the agent is born, withdrawn from it if it does not hold
 8. **Package as a plugin DLL** into `plugins/`
 
 ## Tool System
@@ -298,6 +298,8 @@ Parameter descriptions reach the model **only** through the JSON schema, via
 `AIJsonSchemaCreateOptions.ParameterDescriptionProvider`. A tool definition read from JSON exists only
 for `morgana.json`'s own `Reply` and `LaunchWorkflow`, which are framework prose. MCP tools never pass
 through `MorganaToolAdapter`: they arrive carrying their server's schema and Morgana adapts nothing.
+A workflow reads an MCP step's outcome from `isError` and `structuredContent` and carries only the
+fields that the server's `outputSchema` declares.
 
 **What a tool RETURNS is prose too and it is the one layer with no declared precedence** — it
 arrives mid-turn from outside the composed prompt. So a return value states **facts** (what was
@@ -446,7 +448,7 @@ fails or opens, silently.**
 7. Every admitted issuer — channel, partner and the ring alike — carries a name and a key of at least 256 bits and no name is admitted twice
 8. `ValidateTrustConfiguration`: each `Partners[]` entry names somebody once, does something, is coherent per open direction and carries a key that can sign
 9. `ValidatePublishedAddress`: `PublicUrl`, where declared, is absolute, on a bearer-carrying scheme and names one interface
-10. Every workflow class names only tools its agent declares, leads each edge from a tool of its source step, reaches every step from the first and carries only its own public properties, each returned by the edge's tool and taken by a tool of the step it leads to
+10. Every workflow class names only tools its agent declares, leads each edge from a tool of its source step, reaches every step from the first and carries only its own public properties, each returned by the edge's tool and taken by a tool of the step it leads to. A tool from an MCP server is checked at the agent's birth instead
 
 **Where they run matters**: a refusal is a *startup* refusal only because `Program.cs` resolves the
 configuration and registry services immediately after building the container. Left lazy, the same

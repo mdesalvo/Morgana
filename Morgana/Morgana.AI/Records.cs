@@ -1157,7 +1157,8 @@ public static class Records
     /// <param name="Parameters">List of tool parameter definitions</param>
     /// <param name="Returns">
     /// The fields of the record that the tool method returns, projected from that record.
-    /// Present for every native domain tool; absent for the base tool and for tools acquired over MCP.
+    /// Present for every native domain tool; for a tool acquired over MCP it is projected from the server's
+    /// output schema when the server declares one and absent otherwise; absent for the base tool.
     /// </param>
     /// <param name="RequiresExecutionApproval">
     /// True when the tool changes something real and runs only once the user has approved that exact
@@ -1264,12 +1265,15 @@ public static class Records
     /// What the agent answers at a step: the tool it called and how that call ended.
     /// </summary>
     /// <param name="Tool">The tool that was called.</param>
-    /// <param name="Failed">True when the result held a value in the tool's failure field.</param>
-    /// <param name="ResultJson">The tool's result as the JSON text the model read.</param>
+    /// <param name="Failed">True when the call failed: its failure field held a value or, for an MCP tool, the server reported an error.</param>
+    /// <param name="FieldsJson">
+    /// The JSON text of the object that holds the result's fields: the returned record for a native tool, the
+    /// structured content for an MCP tool. <c>null</c> when the result holds none.
+    /// </param>
     public record StepOutcome(
         string Tool,
         bool Failed,
-        string ResultJson);
+        string? FieldsJson);
 
     /// <summary>
     /// Where a running workflow stands, kept in the agent's session so that it survives the turn and a restart.

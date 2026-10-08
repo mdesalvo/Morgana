@@ -506,6 +506,171 @@ public sealed class WorkflowTests
     }
 
     // =========================================================================
+    // MCP TOOLS INSIDE WORKFLOWS
+    // =========================================================================
+
+    [Fact]
+    public void An_MCP_result_is_read_from_its_structured_content_and_fails_on_the_envelope_or_the_error_field()
+    {
+        Records.StepOutcome succeeded = WorkflowEngine.ReadOutcome("ReserveStock", """{"content":[],"structuredContent":{"orderId":"RSV-rose","quantity":1}}""", isMCPTool: true);
+        Records.StepOutcome domainFailure = WorkflowEngine.ReadOutcome("ReserveStock", """{"content":[],"structuredContent":{"error":"out of stock","quantity":0}}""", isMCPTool: true);
+        Records.StepOutcome envelopeFailure = WorkflowEngine.ReadOutcome("FailHard", """{"content":[{"type":"text","text":"boom"}],"isError":true}""", isMCPTool: true);
+        Records.StepOutcome plainText = WorkflowEngine.ReadOutcome("ReadNote", "noted", isMCPTool: true);
+
+        Assert.False(succeeded.Failed);
+        Assert.Equal("""{"orderId":"RSV-rose","quantity":1}""", succeeded.FieldsJson);
+        Assert.True(domainFailure.Failed);
+        Assert.True(envelopeFailure.Failed);
+        Assert.Null(envelopeFailure.FieldsJson);
+        Assert.False(plainText.Failed);
+        Assert.Null(plainText.FieldsJson);
+    }
+
+    [Fact]
+    public void The_origin_of_a_tool_decides_how_its_result_is_read_never_the_shape()
+    {
+        // A native record that happens to have the envelope's property names is still a native record.
+        Records.StepOutcome native = WorkflowEngine.ReadOutcome("CreatePurchaseOrder", """{"isError":true,"structuredContent":{"error":"x"},"orderId":"ORD-1"}""", isMCPTool: false);
+
+        Assert.False(native.Failed);
+        Assert.Equal("\"ORD-1\"", WorkflowEngine.ReadField(native.FieldsJson!, "orderId"));
+        Assert.True(WorkflowEngine.ReadOutcome("CreatePurchaseOrder", """{"error":"No such plant"}""", isMCPTool: false).Failed);
+    }
+
+    [Fact]
+    public async Task A_native_step_hands_its_value_to_an_MCP_step()
+    {
+        await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance, Mixed());
+        agent.Model.Enqueue([Call("LaunchWorkflow", """{"workflow":"Mixed"}""")]);
+        agent.Model.Enqueue([Call("CreatePurchaseOrder", """{"item":"rose"}""")]);
+        agent.Model.Enqueue([Call("ShipOrder", "{}")]);
+        agent.Model.Enqueue(Closing("Shipped."));
+
+        await agent.TurnAsync("ship a rose");
+
+        Assert.Contains(agent.FunctionResults(), result => result.Contains("TRK-ORD-1", StringComparison.Ordinal));
+        Assert.Null(agent.Provider.GetWorkflowPosition(agent.Session));
+    }
+
+    [Fact]
+    public async Task An_MCP_step_binds_the_field_of_its_structured_content_into_the_next_step()
+    {
+        await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance, Reserve());
+        agent.Model.Enqueue([Call("LaunchWorkflow", """{"workflow":"Reserve"}""")]);
+        agent.Model.Enqueue([Call("ReserveStock", """{"item":"rose"}""")]);
+        agent.Model.Enqueue([Call("ShipOrder", "{}")]);
+        agent.Model.Enqueue(Closing("Shipped."));
+
+        await agent.TurnAsync("reserve a rose and ship it");
+
+        Assert.Contains(agent.FunctionResults(), result => result.Contains("TRK-RSV-rose", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task An_MCP_step_whose_record_holds_an_error_follows_the_failure_edge()
+    {
+        await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance, Reserve());
+        agent.Model.Enqueue([Call("LaunchWorkflow", """{"workflow":"Reserve"}""")]);
+        agent.Model.Enqueue([Call("ReserveStock", """{"item":"unavailable"}""")]);
+        agent.Model.Enqueue(Closing("It is out of stock."));
+
+        await agent.TurnAsync("reserve the unavailable item");
+
+        Assert.Equal(("Reserve", "Reserve"), (agent.Provider.GetWorkflowPosition(agent.Session)!.Workflow, agent.Provider.GetWorkflowPosition(agent.Session)!.Step));
+    }
+
+    [Fact]
+    public async Task An_MCP_step_that_the_server_reports_as_an_error_follows_the_failure_edge_and_a_plain_text_result_is_read_as_text()
+    {
+        await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance, Fragile());
+        agent.Model.Enqueue([Call("LaunchWorkflow", """{"workflow":"Fragile"}""")]);
+        agent.Model.Enqueue([Call("FailHard", "{}")]);
+        agent.Model.Enqueue([Call("ReadNote", "{}")]);
+        agent.Model.Enqueue(Closing("Done."));
+
+        await agent.TurnAsync("try it");
+
+        // FailHard led to Note, where ReadNote ran: a failure that no edge followed would have ended the workflow before it.
+        string[] results = agent.FunctionResults();
+        Assert.Contains(results, result => result.Contains("noted", StringComparison.Ordinal));
+        Assert.DoesNotContain(results, result => result.Contains("$type", StringComparison.Ordinal));
+        Assert.Null(agent.Provider.GetWorkflowPosition(agent.Session));
+    }
+
+    [Fact]
+    public async Task A_workflow_carrying_a_field_out_of_a_tool_with_no_output_schema_is_withdrawn_and_LaunchWorkflow_is_not_offered()
+    {
+        CapturingLogger logger = new CapturingLogger();
+        await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), logger, Blind());
+        agent.Model.Enqueue(Closing("Hello."));
+
+        await agent.TurnAsync("hi");
+
+        Assert.DoesNotContain(agent.Model.ToolsPerCall[0], tool => tool.Name == "LaunchWorkflow");
+        Assert.Contains(logger.Errors, error => error.Contains("Blind", StringComparison.Ordinal) && error.Contains("withdrawn", StringComparison.Ordinal)
+            && error.Contains("does not declare the returned field 'OrderId'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_workflow_citing_a_tool_that_no_server_offers_is_withdrawn_and_a_sound_one_beside_it_stays()
+    {
+        await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance, Phantom(), Mixed(), Blind());
+        agent.Model.Enqueue(Closing("Hello."));
+
+        await agent.TurnAsync("hi");
+
+        AIFunction launch = Assert.IsAssignableFrom<AIFunction>(Assert.Single(agent.Model.ToolsPerCall[0], tool => tool.Name == "LaunchWorkflow"));
+        Assert.Equal(["Mixed"], launch.JsonSchema.GetProperty("properties").GetProperty("workflow").GetProperty("enum").EnumerateArray().Select(name => name.GetString()));
+    }
+
+    [Fact]
+    public async Task An_agent_whose_server_is_down_lives_on_with_its_native_tools_and_without_the_workflows_that_cite_the_server()
+    {
+        CapturingLogger logger = new CapturingLogger();
+        await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(DownServerAgentMarker), logger, Mixed());
+        agent.Model.Enqueue(Closing("Hello."));
+
+        await agent.TurnAsync("hi");
+
+        string[] offered = Names(agent.Model.ToolsPerCall[0]);
+        Assert.Contains("CreatePurchaseOrder", offered);
+        Assert.DoesNotContain("LaunchWorkflow", offered);
+        Assert.DoesNotContain("ShipOrder", offered);
+        Assert.Contains(logger.Errors, error => error.Contains("the agent has no tool 'ShipOrder'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task An_MCP_tool_named_like_a_native_one_is_dropped_and_the_native_one_answers()
+    {
+        CapturingLogger logger = new CapturingLogger();
+        await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(ClashingServerAgentMarker), logger);
+        agent.Model.Enqueue([Call("Stock", """{"item":"rose"}""")]);
+        agent.Model.Enqueue(Closing("Twelve."));
+
+        await agent.TurnAsync("how many roses");
+
+        Assert.Single(agent.Model.ToolsPerCall[0], tool => tool.Name == "Stock");
+        Assert.Contains("ReadNote", Names(agent.Model.ToolsPerCall[0]));
+        Assert.Contains("Stock:rose", InventoryTools.Calls);
+        Assert.Contains(logger.Errors, error => error.Contains("'Stock'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task No_tool_of_an_MCP_server_asks_for_approval_even_when_the_server_declares_it_destructive()
+    {
+        await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance);
+        agent.Model.Enqueue(Closing("Hello."));
+
+        await agent.TurnAsync("hi");
+
+        foreach (string name in new[] { "ReserveStock", "ShipOrder", "ReadNote", "FailHard", "WipeCatalog" })
+        {
+            AITool tool = Assert.Single(agent.Model.ToolsPerCall[0], offered => offered.Name == name);
+            Assert.IsNotType<ApprovalRequiredAIFunction>(tool);
+        }
+    }
+
+    // =========================================================================
     // THE CLASS
     // =========================================================================
 
@@ -699,6 +864,21 @@ public sealed class WorkflowTests
     /// <summary>A workflow carrying the order and its price straight from the quote to the payment.</summary>
     private static Records.WorkflowDefinition Settle() => new SettleWorkflow().ToDefinition();
 
+    /// <summary>A workflow handing a native tool's order to an MCP tool.</summary>
+    private static Records.WorkflowDefinition Mixed() => new MixedWorkflow().ToDefinition();
+
+    /// <summary>A workflow handing an MCP tool's order to another MCP tool.</summary>
+    private static Records.WorkflowDefinition Reserve() => new ReserveWorkflow().ToDefinition();
+
+    /// <summary>A workflow whose first tool fails on the server.</summary>
+    private static Records.WorkflowDefinition Fragile() => new FragileWorkflow().ToDefinition();
+
+    /// <summary>A workflow carrying a field that its source tool does not declare.</summary>
+    private static Records.WorkflowDefinition Blind() => new BlindWorkflow().ToDefinition();
+
+    /// <summary>A workflow citing a tool that does not exist.</summary>
+    private static Records.WorkflowDefinition Phantom() => new PhantomWorkflow().ToDefinition();
+
     /// <summary>A definition written out by hand, for the shapes that a class cannot declare.</summary>
     private static Records.WorkflowDefinition Ad(string name, Records.WorkflowStep[] steps, Records.WorkflowEdge[] edges, string[] parameters)
         => new(name, "Placing an order.", steps, edges, parameters);
@@ -759,6 +939,70 @@ public sealed class WorkflowTests
 
         public SettleWorkflow() : base(start: Quote)
             => AddEdge(Quote, Pay, nameof(InventoryTools.CreatePurchaseOrder), carrying: [nameof(OrderId), nameof(Total)]);
+    }
+
+    /// <summary>Quote with a native tool, then ship the order with an MCP tool.</summary>
+    [Description("Quoting then shipping.")]
+    public sealed class MixedWorkflow : MorganaWorkflow
+    {
+        public string? OrderId { get; init; }
+
+        private static readonly Records.WorkflowStep Quote = new("Quote", [nameof(InventoryTools.CreatePurchaseOrder)]);
+        private static readonly Records.WorkflowStep Ship = new("Ship", ["ShipOrder"]);
+
+        public MixedWorkflow() : base(start: Quote)
+            => AddEdge(Quote, Ship, nameof(InventoryTools.CreatePurchaseOrder), carrying: [nameof(OrderId)]);
+    }
+
+    /// <summary>Reserve with an MCP tool, then ship what it reserved; a failed reservation stays at the reservation.</summary>
+    [Description("Reserving then shipping.")]
+    public sealed class ReserveWorkflow : MorganaWorkflow
+    {
+        public string? OrderId { get; init; }
+
+        private static readonly Records.WorkflowStep Reserve = new("Reserve", ["ReserveStock"]);
+        private static readonly Records.WorkflowStep Ship = new("Ship", ["ShipOrder"]);
+
+        public ReserveWorkflow() : base(start: Reserve)
+        {
+            AddEdge(Reserve, Ship, "ReserveStock", carrying: [nameof(OrderId)]);
+            AddFailureEdge(Reserve, Reserve, "ReserveStock");
+        }
+    }
+
+    /// <summary>A tool that always fails, then a note read once it has.</summary>
+    [Description("Trying then noting.")]
+    public sealed class FragileWorkflow : MorganaWorkflow
+    {
+        private static readonly Records.WorkflowStep Try = new("Try", ["FailHard"]);
+        private static readonly Records.WorkflowStep Note = new("Note", ["ReadNote"]);
+
+        public FragileWorkflow() : base(start: Try)
+            => AddFailureEdge(Try, Note, "FailHard");
+    }
+
+    /// <summary>Carries a field out of a tool whose server declares no output schema.</summary>
+    [Description("Reading then shipping.")]
+    public sealed class BlindWorkflow : MorganaWorkflow
+    {
+        public string? OrderId { get; init; }
+
+        private static readonly Records.WorkflowStep Read = new("Read", ["ReadNote"]);
+        private static readonly Records.WorkflowStep Ship = new("Ship", ["ShipOrder"]);
+
+        public BlindWorkflow() : base(start: Read)
+            => AddEdge(Read, Ship, "ReadNote", carrying: [nameof(OrderId)]);
+    }
+
+    /// <summary>Cites a tool that no server offers.</summary>
+    [Description("Calling a ghost.")]
+    public sealed class PhantomWorkflow : MorganaWorkflow
+    {
+        private static readonly Records.WorkflowStep Haunt = new("Haunt", ["NoSuchTool"]);
+
+        public PhantomWorkflow() : base(start: Haunt)
+        {
+        }
     }
 
     /// <summary>Declares its edge from the later step first, so that the start has to be put in front.</summary>
@@ -847,12 +1091,33 @@ public sealed class WorkflowTests
     [RequiresLLMTier(Records.LLMTier.Efficiency)]
     private sealed class InventoryAgentMarker;
 
+    /// <summary>The sample agent that also acquires tools from the deterministic MCP server.</summary>
+    [HandlesIntent("inventory")]
+    [RequiresLLMTier(Records.LLMTier.Efficiency)]
+    [UsesMCPServer(Records.MCPTransport.Stdio, "mcp-test-server/MCPTestServer")]
+    private sealed class MCPAgentMarker;
+
+    /// <summary>The sample agent whose server also offers a tool named like a native one.</summary>
+    [HandlesIntent("inventory")]
+    [RequiresLLMTier(Records.LLMTier.Efficiency)]
+    [UsesMCPServer(Records.MCPTransport.Stdio, "mcp-test-server/MCPTestServer", "--clash")]
+    private sealed class ClashingServerAgentMarker;
+
+    /// <summary>The sample agent whose server does not exist.</summary>
+    [HandlesIntent("inventory")]
+    [RequiresLLMTier(Records.LLMTier.Efficiency)]
+    [UsesMCPServer(Records.MCPTransport.Stdio, "mcp-test-server/NoSuchServer")]
+    private sealed class DownServerAgentMarker;
+
     /// <summary>
     /// The sample agent as the adapter really builds it: its prompt and tools resolved from a declaration made
     /// here, its model replaced by a script that records the tools each call was offered.
     /// </summary>
-    private sealed class AgentUnderTest
+    private sealed class AgentUnderTest : IAsyncDisposable
     {
+        /// <summary>The registry of MCP clients that this agent alone uses, closed with it.</summary>
+        private readonly MCPClientRegistryService mcpRegistry = new MCPClientRegistryService(NullLogger.Instance);
+
         /// <summary>The script standing where the model would.</summary>
         public ScriptedModel Model { get; } = new ScriptedModel();
 
@@ -871,7 +1136,13 @@ public sealed class WorkflowTests
         /// <summary>
         /// Builds the sample agent declaring the given workflows; none builds an agent without any.
         /// </summary>
-        public static async Task<AgentUnderTest> CreateAsync(params Records.WorkflowDefinition[] workflows)
+        public static Task<AgentUnderTest> CreateAsync(params Records.WorkflowDefinition[] workflows)
+            => CreateAsync(typeof(InventoryAgentMarker), NullLogger.Instance, workflows);
+
+        /// <summary>
+        /// Builds the sample agent as the given marker declares it, logging to the given logger.
+        /// </summary>
+        public static async Task<AgentUnderTest> CreateAsync(Type agentMarker, ILogger logger, params Records.WorkflowDefinition[] workflows)
         {
             InventoryTools.Calls.Clear();
             AgentUnderTest under = new AgentUnderTest();
@@ -888,15 +1159,15 @@ public sealed class WorkflowTests
                 resolver,
                 new ConfigurationPromptComposerService(resolver),
                 new SampleToolRegistry(workflows),
-                null!,
+                under.mcpRegistry,
                 new HistoryReducerService(configuration, NullLogger.Instance),
                 new NoDust(),
                 null!,
                 configuration,
-                NullLogger.Instance);
+                logger);
 
             (AIAgent builtAgent, MorganaAIContextProvider provider, MorganaChatHistoryProvider history) =
-                await adapter.CreateAgentAsync(typeof(InventoryAgentMarker), "conversation-1", () => under.Session);
+                await adapter.CreateAgentAsync(agentMarker, "conversation-1", () => under.Session);
 
             under.agent = builtAgent;
             under.Provider = provider;
@@ -905,6 +1176,9 @@ public sealed class WorkflowTests
 
             return under;
         }
+
+        /// <summary>Closes the MCP clients, which ends the server processes they started.</summary>
+        public async ValueTask DisposeAsync() => await mcpRegistry.DisposeAsync();
 
         /// <summary>
         /// Replaces this agent's session by the saved and reloaded copy of another's, as a restart does.
@@ -969,6 +1243,23 @@ public sealed class WorkflowTests
         public object? GetService(Type serviceType, object? serviceKey = null) => null;
 
         public void Dispose() { }
+    }
+
+    /// <summary>A logger that keeps the text of every error it is given.</summary>
+    private sealed class CapturingLogger : ILogger
+    {
+        /// <summary>The formatted errors, in order.</summary>
+        public List<string> Errors { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Error)
+                Errors.Add(formatter(state, exception));
+        }
     }
 
     /// <summary>The model of an agent that is only ever asked for a session.</summary>
