@@ -1345,33 +1345,33 @@ public static class Records
     /// Offered when the turn asks to run a tool that needs the user's approval: the first approves it,
     /// the second declines it. Pressing anything else or typing declines it too.
     /// </param>
-    public record ServiceButtons(
+    public record FrameworkReplies(
         List<QuickReply> Closure,
         List<QuickReply> Escape,
         List<QuickReply>? Approval = null)
     {
         /// <summary>Gathers the authored sets by name; a set that the prompt does not declare is empty (null for the approval pair).</summary>
-        /// <param name="sets">The prompt's <c>ServiceButtons</c> array.</param>
-        public static ServiceButtons From(IEnumerable<ServiceButtonSet> sets)
+        /// <param name="sets">The prompt's <c>FrameworkReplies</c> array.</param>
+        public static FrameworkReplies From(IEnumerable<FrameworkReplySet> sets)
         {
-            List<ServiceButtonSet> declared = [.. sets];
+            List<FrameworkReplySet> declared = [.. sets];
 
             List<QuickReply>? Find(string name)
-                => declared.FirstOrDefault(set => string.Equals(set.Name, name, StringComparison.OrdinalIgnoreCase))?.Buttons;
+                => declared.FirstOrDefault(set => string.Equals(set.Name, name, StringComparison.OrdinalIgnoreCase))?.Replies;
 
-            return new ServiceButtons(
-                Find(Constants.ServiceButtonSets.Closure) ?? [],
-                Find(Constants.ServiceButtonSets.Escape) ?? [],
-                Find(Constants.ServiceButtonSets.Approval));
+            return new FrameworkReplies(
+                Find(Constants.FrameworkReplySets.Closure) ?? [],
+                Find(Constants.FrameworkReplySets.Escape) ?? [],
+                Find(Constants.FrameworkReplySets.Approval));
         }
     }
 
-    /// <summary>One named set of buttons as authored in morgana.json (see <see cref="Constants.ServiceButtonSets"/>).</summary>
+    /// <summary>One named set of buttons as authored in morgana.json (see <see cref="Constants.FrameworkReplySets"/>).</summary>
     /// <param name="Name">Which set.</param>
-    /// <param name="Buttons">The buttons of the set, in the order they are offered.</param>
-    public record ServiceButtonSet(
+    /// <param name="Replies">The buttons of the set, in the order they are offered.</param>
+    public record FrameworkReplySet(
         string Name,
-        List<QuickReply> Buttons);
+        List<QuickReply> Replies);
 
     /// <summary>
     /// How an agent closed its turn: the one structured decision beside its free text, recorded by the
@@ -1453,8 +1453,8 @@ public static class Records
         /// request carries the closure pair, through which the user stays or leaves. Without authored
         /// closure buttons an answered request has no way to be left, so it hands the conversation back.
         /// </remarks>
-        /// <param name="serviceButtons">The authored closure and escape pairs.</param>
-        public (List<QuickReply>? QuickReplies, bool HandsBack) ToDelivery(ServiceButtons serviceButtons)
+        /// <param name="frameworkReplies">The authored closure and escape pairs.</param>
+        public (List<QuickReply>? QuickReplies, bool HandsBack) ToDelivery(FrameworkReplies frameworkReplies)
         {
             if (UserIsLeaving)
                 return (null, true);
@@ -1465,9 +1465,9 @@ public static class Records
             // Numbered per turn, so two actions leading to one tool stay two distinct buttons.
             if (Actions.Count > 0)
                 return ([.. Actions.Select((action, index) => new QuickReply($"{action.Tool}{ActionIdSeparator}{index + 1}", action.Label, action.Value)),
-                         .. serviceButtons.Escape], false);
+                         .. frameworkReplies.Escape], false);
 
-            return serviceButtons.Closure.Count > 0 ? ([.. serviceButtons.Closure], false) : (null, true);
+            return frameworkReplies.Closure.Count > 0 ? ([.. frameworkReplies.Closure], false) : (null, true);
         }
     }
 

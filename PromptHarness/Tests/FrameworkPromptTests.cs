@@ -8,7 +8,7 @@ namespace PromptHarness.Tests;
 /// <summary>
 /// The group asserting that the morgana.json shipped inside Morgana.AI carries every entry the
 /// framework fetches by name: the sections an agent's prompt is composed of, the templates, the tool
-/// results, the service buttons and the messages Morgana says in her own voice.
+/// results, the framework replies and the messages Morgana says in her own voice.
 /// </summary>
 /// <remarks>
 /// <para>Deterministic and free. The framework reads these entries by name at the moment it needs them,
@@ -54,14 +54,14 @@ public sealed class FrameworkPromptTests
     }
 
     [Fact]
-    public async Task Morgana_prompt_authors_the_service_buttons_by_the_ids_the_channels_act_on()
+    public async Task Morgana_prompt_authors_the_framework_replies_by_the_ids_the_channels_act_on()
     {
-        List<Records.ServiceButtonSet> sets = (await resolver.ResolveAsync("Morgana"))
-            .GetAdditionalProperty<List<Records.ServiceButtonSet>>(Constants.PromptProperties.ServiceButtons);
+        List<Records.FrameworkReplySet> sets = (await resolver.ResolveAsync("Morgana"))
+            .GetAdditionalProperty<List<Records.FrameworkReplySet>>(Constants.PromptProperties.FrameworkReplies);
         Assert.Equal(
-            [Constants.ServiceButtonSets.Closure, Constants.ServiceButtonSets.Escape, Constants.ServiceButtonSets.Approval],
+            [Constants.FrameworkReplySets.Closure, Constants.FrameworkReplySets.Escape, Constants.FrameworkReplySets.Approval],
             sets.Select(set => set.Name));
-        Records.ServiceButtons buttons = Records.ServiceButtons.From(sets);
+        Records.FrameworkReplies buttons = Records.FrameworkReplies.From(sets);
 
         Assert.Equal(["continue_agent", "exit_agent"], buttons.Closure.Select(button => button.Id));
         Assert.Equal(["continue_agent", "exit_agent"], buttons.Escape.Select(button => button.Id));

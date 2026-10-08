@@ -168,7 +168,7 @@ Every endpoint but `health` authenticates through `ChannelAuthenticationFilter` 
 Every turn closes with one `Reply` call carrying what it awaits from the user (`nothing`,
 `typed_answer`, `action_choice`), whether the user is leaving, the actions offered as buttons and the
 card — a typed argument whose schema is derived from `Morgana.Contracts`. The buttons that let the user
-stay or leave are the framework's (`ServiceButtons` in `morgana.json`), chosen from that closure by
+stay or leave are the framework's (`FrameworkReplies` in `morgana.json`), chosen from that closure by
 `TurnReply.ToDelivery`: the agent stays `activeAgent` — later messages skip classification — until the
 user leaves.
 
@@ -351,7 +351,7 @@ from the array that it lives in**, never from a field inside it:
 - **`ToolResults`** — the texts that the framework's own tools return to the model (`Reply`, the
   context wrapper, the consultation guards and fallbacks), fetched by name with their values as
   `((…))` placeholders. A domain tool's return is the domain's own and Morgana never authors it.
-- **`ServiceButtons`** — the buttons the framework adds to let the user stay, leave or approve, as data.
+- **`FrameworkReplies`** — the buttons the framework adds to let the user stay, leave or approve, as data.
 - **`Messages`** — on any framework prompt, what Morgana says to the user in her own voice (the agent
   exit, the approval question, the errors, the presenter's fallbacks, the classifier's answers), each
   read by name through `Prompt.GetMessage`.

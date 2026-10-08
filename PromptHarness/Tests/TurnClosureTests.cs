@@ -29,8 +29,8 @@ namespace PromptHarness.Tests;
 /// </remarks>
 public sealed class TurnClosureTests
 {
-    /// <summary>The service buttons as morgana.json authors them, ids being what the channels act on.</summary>
-    private static readonly Records.ServiceButtons ServiceButtons = new Records.ServiceButtons(
+    /// <summary>The framework replies as morgana.json authors them, ids being what the channels act on.</summary>
+    private static readonly Records.FrameworkReplies FrameworkReplies = new Records.FrameworkReplies(
         [new QuickReply("continue_agent", "🔮 I still need you", "I have another question for you"),
          new QuickReply("exit_agent", "✨ We're done, thanks", "We're done, thanks", true)],
         [new QuickReply("continue_agent", "💬 Ask me something else", "I want to ask you something else"),
@@ -49,14 +49,14 @@ public sealed class TurnClosureTests
     // An answered request carries the closure pair and the agent stays until the user leaves.
     [InlineData("nothing", false, false, "continue_agent,exit_agent", false)]
     [InlineData("action_choice", false, false, "continue_agent,exit_agent", false)]
-    public void Framework_decides_the_service_buttons_from_the_closure(
+    public void Framework_decides_the_framework_replies_from_the_closure(
         string awaits, bool userIsLeaving, bool withAction, string buttonIds, bool handsBack)
     {
         string actions = withAction ? """[{"tool":"GetInvoices","label":"📄 Invoices","value":"Show my invoices"}]""" : "[]";
         Records.TurnReply turnReply = Deserialize(
             $$"""{"awaits":"{{awaits}}","userIsLeaving":{{(userIsLeaving ? "true" : "false")}},"actions":{{actions}},"card":null}""");
 
-        (List<QuickReply>? quickReplies, bool handsBackConversation) = turnReply.ToDelivery(ServiceButtons);
+        (List<QuickReply>? quickReplies, bool handsBackConversation) = turnReply.ToDelivery(FrameworkReplies);
 
         Assert.Equal(buttonIds, string.Join(",", quickReplies?.Select(button => button.Id) ?? []));
         Assert.Equal(handsBack, handsBackConversation);
@@ -67,7 +67,7 @@ public sealed class TurnClosureTests
     {
         Records.TurnReply turnReply = Deserialize("""{"awaits":"nothing","userIsLeaving":false,"actions":[],"card":null}""");
 
-        (List<QuickReply>? quickReplies, bool handsBack) = turnReply.ToDelivery(new Records.ServiceButtons([], []));
+        (List<QuickReply>? quickReplies, bool handsBack) = turnReply.ToDelivery(new Records.FrameworkReplies([], []));
 
         // With no button to leave by, staying in service would trap the user with this agent.
         Assert.Null(quickReplies);
@@ -83,7 +83,7 @@ public sealed class TurnClosureTests
               {"tool":"ConfirmOrder","label":"✅ Confirm both","value":"Confirm both orders"}]}
             """);
 
-        List<QuickReply> buttons = turnReply.ToDelivery(ServiceButtons).QuickReplies!;
+        List<QuickReply> buttons = turnReply.ToDelivery(FrameworkReplies).QuickReplies!;
 
         Assert.Equal(["ConfirmOrder#1", "ConfirmOrder#2", "continue_agent", "exit_agent"], buttons.Select(button => button.Id));
         Assert.Equal("Confirm my order", buttons[0].Value);

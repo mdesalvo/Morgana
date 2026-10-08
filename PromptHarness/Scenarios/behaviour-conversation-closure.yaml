@@ -1,6 +1,6 @@
 id: behaviour-conversation-closure
 description: >-
-  The service buttons the framework adds from the agent's closure, in both wordings: escape appended
+  The replies the framework adds from the agent's closure, in both wordings: escape appended
   to a choice list so the user is never trapped and nothing at all once the user has said goodbye.
   What the model owns here is the closure itself: recognising a goodbye as one.
 

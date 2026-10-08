@@ -246,8 +246,8 @@ public class MorganaAgent : MorganaActor
             // agent's own session chronologically: a message without a timestamp cannot be placed.
             // The buttons that let the user stay, leave or approve are the framework's, worded in morgana.json.
             Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
-            Records.ServiceButtons serviceButtons = Records.ServiceButtons.From(
-                morganaPrompt.GetAdditionalPropertyOrDefault<List<Records.ServiceButtonSet>>(Constants.PromptProperties.ServiceButtons, []));
+            Records.FrameworkReplies frameworkReplies = Records.FrameworkReplies.From(
+                morganaPrompt.GetAdditionalPropertyOrDefault<List<Records.FrameworkReplySet>>(Constants.PromptProperties.FrameworkReplies, []));
 
             // A tool still waiting for the user's approval is answered by this very message: approved only
             // when it is the approval button, declined by anything else, which then reads as an ordinary
@@ -256,7 +256,7 @@ public class MorganaAgent : MorganaActor
             List<ToolApprovalRequestContent> pendingApprovals = GetPendingApprovals(aiAgentSession);
             if (pendingApprovals.Count > 0)
             {
-                bool approved = serviceButtons.Approval is [QuickReply approveButton, ..]
+                bool approved = frameworkReplies.Approval is [QuickReply approveButton, ..]
                                 && string.Equals(req.Content?.Trim(), approveButton.Value, StringComparison.OrdinalIgnoreCase);
                 userContents.AddRange(pendingApprovals.Select(request => (AIContent)request.CreateResponse(approved)));
 
@@ -454,8 +454,8 @@ public class MorganaAgent : MorganaActor
             // A turn waiting for an approval offers exactly the two answers to it; any other turn gets the
             // buttons its closure calls for.
             (List<QuickReply>? quickReplies, bool isCompleted) = awaitsApproval
-                ? (serviceButtons.Approval is { Count: > 0 } approvalButtons ? [.. approvalButtons] : null, false)
-                : turnReply.ToDelivery(serviceButtons);
+                ? (frameworkReplies.Approval is { Count: > 0 } approvalButtons ? [.. approvalButtons] : null, false)
+                : turnReply.ToDelivery(frameworkReplies);
             RichCard? richCard = awaitsApproval ? null : turnReply.Card;
             bool hasQuickReplies = quickReplies is not null;
 
@@ -611,7 +611,7 @@ public class MorganaAgent : MorganaActor
 
             // The colleague's own actions and nothing of the framework's: staying or leaving is the
             // asking agent's user's choice, never the colleague's.
-            List<QuickReply>? quickReplies = turnReply?.ToDelivery(new Records.ServiceButtons([], [])).QuickReplies;
+            List<QuickReply>? quickReplies = turnReply?.ToDelivery(new Records.FrameworkReplies([], [])).QuickReplies;
             RichCard? richCard = turnReply?.Card;
 
             // A baseline of 0 where a user turn passes its own: this session was created for the

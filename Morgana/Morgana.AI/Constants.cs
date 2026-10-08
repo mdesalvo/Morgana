@@ -147,7 +147,7 @@ public static class Constants
         public const string ToolResults = "ToolResults";
 
         /// <summary>The buttons the framework adds to let the user stay with an agent or leave it, authored as data.</summary>
-        public const string ServiceButtons = "ServiceButtons";
+        public const string FrameworkReplies = "FrameworkReplies";
 
         /// <summary>The texts that the framework says to the user in its own voice, each fetched by name (see <see cref="Constants.Messages"/>).</summary>
         public const string Messages = "Messages";
@@ -204,10 +204,10 @@ public static class Constants
     }
 
     /// <summary>
-    /// Names of the entries in the framework prompt's <c>ServiceButtons</c> array, each read into the
-    /// matching member of <c>Records.ServiceButtons</c>.
+    /// Names of the entries in the framework prompt's <c>FrameworkReplies</c> array, each read into the
+    /// matching member of <c>Records.FrameworkReplies</c>.
     /// </summary>
-    public static class ServiceButtonSets
+    public static class FrameworkReplySets
     {
         /// <summary>Offered when the turn answered the request and awaits nothing.</summary>
         public const string Closure = "Closure";
