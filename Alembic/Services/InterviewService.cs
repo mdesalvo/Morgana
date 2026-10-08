@@ -954,7 +954,7 @@ public class InterviewService : IInterviewService
         // needs, below, to tell "begin" from "reopen".
         bool correcting = interviewState.Revision is not null;
 
-        await BuildAgentAsync(interviewState, PassPromptIds[interviewPass], correcting);
+        await BuildAgentAsync(interviewState, interviewPass, correcting);
 
         // The opening question of the whole interview is nobody's to phrase but the client's own:
         // there is nothing yet for a model to be reading back, so a model asked for it is either
@@ -1234,7 +1234,7 @@ public class InterviewService : IInterviewService
     /// Assembles the agent for one pass: its prompt and only the tools that pass is allowed.
     /// </summary>
     /// <remarks>
-    /// The toolset comes from the pass's own <c>OfferedTools</c> list in <c>alembic.json</c>, so
+    /// The toolset comes from the pass's own step in <see cref="InterviewSteps"/>, so
     /// what a pass may write is settled by which tools exist rather than by a sentence asking it to
     /// abstain. The functional pass has no tool for an agent's instructions or formatting and that
     /// is the whole of the constraint.
@@ -1245,14 +1245,15 @@ public class InterviewService : IInterviewService
     /// correcting would be a pass that cannot do the one thing it was reopened for.
     /// </para>
     /// </remarks>
-    private async Task BuildAgentAsync(InterviewState interviewState, string interviewerId, bool correcting)
+    private async Task BuildAgentAsync(InterviewState interviewState, InterviewStep interviewPass, bool correcting)
     {
+        string interviewerId = PassPromptIds[interviewPass];
         InterviewTools tools = new InterviewTools(interviewState, draftStateService, draftValidationService, recapService);
 
-        // The pass is offered the tools its OfferedTools names and nothing else: the constraint on
+        // The pass is offered the tools its step names and nothing else: the constraint on
         // what it may write is the absence of a tool. A name the class does not declare throws here,
         // never reaching the model as a tool that nothing implements.
-        MorganaToolAdapter toolAdapter = alembicPromptService.OfferTools(interviewerId, tools);
+        MorganaToolAdapter toolAdapter = alembicPromptService.OfferTools(InterviewSteps.Of(interviewPass), tools);
 
         // Performance, resolved directly rather than through CompleteWithSystemPromptAsync, which
         // always runs on the cheapest configured tier. Writing non-contradictory dispositive prose

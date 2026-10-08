@@ -199,8 +199,9 @@ sentence recycled and two agents publishing the same territory are one agent as 
 Assembled with the framework's own machinery, not an imitation. Alembic is a domain of agents whose
 domain is modelling domains, so `InterviewTools` and `CoherenceApplyTools` declare their tools on their
 methods exactly as a plugin does, projected by the framework's catalog and refused at startup by its
-own check; `alembic.json` keeps only which tools each pass is offered (`OfferedTools`) and
-`IChatClient.AsAIAgent` makes the agent. Not
+own check. Each pass is a step that declares the tools it needs, `InterviewSteps` holding them as the
+framework's `Records.WorkflowStep`: a common base that every pass extends by adding, never by removing,
+so a tool name that does not exist fails the build. `IChatClient.AsAIAgent` makes the agent. Not
 `MorganaAgent` via `MorganaAgentAdapter`, which belongs to the routed world of `agents.json`,
 `[HandlesIntent]`, base tools and per-conversation persistence Alembic has none of. **The reuse stops
 exactly where the resemblance does.**

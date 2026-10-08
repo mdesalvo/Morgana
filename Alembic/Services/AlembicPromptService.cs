@@ -183,30 +183,20 @@ public class AlembicPromptService : IAlembicPromptService
         return sb.ToString().TrimEnd();
     }
 
-    /// <summary>
-    /// The key under which a pass lists, by name, the tools that it is offered.
-    /// </summary>
-    private const string OfferedToolsProperty = "OfferedTools";
-
-    /// <summary>
-    /// The pass that applies a coherence finding, the one that draws its tools from its own class.
-    /// </summary>
-    private const string CoherenceApplierPromptId = "CoherenceApplier";
-
     /// <inheritdoc />
-    public MorganaToolAdapter OfferTools(string promptId, object toolInstance)
+    public MorganaToolAdapter OfferTools(Records.WorkflowStep step, object toolInstance)
     {
         MorganaToolAdapter toolAdapter = new MorganaToolAdapter();
-        Type toolClass = ToolClassOf(promptId);
+        Type toolClass = toolInstance.GetType();
         IReadOnlyList<MethodInfo> methods = ProvidesToolForIntentRegistryService.GetToolMethods(toolClass);
         IReadOnlyList<Records.ToolDefinition> catalog = ProvidesToolForIntentRegistryService.ProjectToolDefinitions(toolClass);
 
-        foreach (string toolName in OfferedToolNames(Resolve(promptId)))
+        foreach (string toolName in step.Tools)
         {
             // A name that the class does not declare is refused here so that the model is never offered a tool nothing implements.
             MethodInfo method = methods.FirstOrDefault(candidate => candidate.Name == toolName)
                 ?? throw new InvalidOperationException(
-                    $"alembic.json offers tool '{toolName}' to '{promptId}', but {toolClass.Name} has no tool by that name.");
+                    $"Step '{step.Name}' offers tool '{toolName}', but {toolClass.Name} has no tool by that name.");
 
             Delegate implementation = Delegate.CreateDelegate(
                 System.Linq.Expressions.Expression.GetDelegateType(
@@ -222,38 +212,6 @@ public class AlembicPromptService : IAlembicPromptService
 
         return toolAdapter;
     }
-
-    /// <inheritdoc />
-    public List<string> ValidateOfferedTools()
-    {
-        List<string> errors = [];
-
-        foreach (Records.Prompt prompt in alembicPrompts.Value)
-        {
-            Type toolClass = ToolClassOf(prompt.ID);
-            HashSet<string> declared = [.. ProvidesToolForIntentRegistryService.GetToolMethods(toolClass).Select(method => method.Name)];
-
-            errors.AddRange(OfferedToolNames(prompt)
-                .Where(toolName => !declared.Contains(toolName))
-                .Select(toolName => $"alembic.json offers tool '{toolName}' to '{prompt.ID}', but {toolClass.Name} has no tool by that name"));
-        }
-
-        return errors;
-    }
-
-    /// <summary>
-    /// The class that a pass draws its tools from.
-    /// </summary>
-    private static Type ToolClassOf(string promptId) =>
-        string.Equals(promptId, CoherenceApplierPromptId, StringComparison.OrdinalIgnoreCase)
-            ? typeof(CoherenceApplyTools)
-            : typeof(InterviewTools);
-
-    /// <summary>
-    /// The tool names that a pass lists as offered, empty for one that lists none.
-    /// </summary>
-    private static List<string> OfferedToolNames(Records.Prompt prompt) =>
-        prompt.GetAdditionalPropertyOrDefault<List<string>>(OfferedToolsProperty, []);
 
     /// <summary>
     /// The two policies where the exception below applies: their MECHANIC is fixed above the agent,

@@ -86,22 +86,14 @@ public interface IAlembicPromptService
     Task<string> ComposeFrameworkPrimerAsync();
 
     /// <summary>
-    /// Binds the tools that a pass offers to the instance that implements them.
+    /// Binds the tools that a step offers to the instance that implements them.
     /// </summary>
     /// <remarks>
-    /// Which tools a pass holds is its <c>OfferedTools</c> list in <c>alembic.json</c>; what each one is stays on the
-    /// tool class, which the pass draws from: the coherence applier from <see cref="Services.CoherenceApplyTools"/>
-    /// and every interview pass from <see cref="Services.InterviewTools"/>.
+    /// Which tools a pass holds is its <see cref="Records.WorkflowStep"/>; what each one is stays on the class of the instance.
     /// </remarks>
-    /// <param name="promptId">The pass whose <c>OfferedTools</c> are bound.</param>
-    /// <param name="toolInstance">The tool class instance that the pass writes through.</param>
-    /// <returns>An adapter holding one tool per offered name, in the order that the pass lists them.</returns>
-    /// <exception cref="InvalidOperationException">An offered name matches no tool of the class.</exception>
-    MorganaToolAdapter OfferTools(string promptId, object toolInstance);
-
-    /// <summary>
-    /// Reads every pass's <c>OfferedTools</c> against the class that the pass draws its tools from.
-    /// </summary>
-    /// <returns>One message per offered name that matches no tool, empty when every pass offers only tools that exist.</returns>
-    List<string> ValidateOfferedTools();
+    /// <param name="step">The step whose tools are bound.</param>
+    /// <param name="toolInstance">The tool class instance that the step writes through.</param>
+    /// <returns>An adapter holding one tool per name of the step, in the order that the step lists them.</returns>
+    /// <exception cref="InvalidOperationException">A name of the step matches no tool of the instance's class.</exception>
+    MorganaToolAdapter OfferTools(Records.WorkflowStep step, object toolInstance);
 }

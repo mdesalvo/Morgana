@@ -25,6 +25,24 @@ public class CoherenceApplyService : ICoherenceApplyService
     /// </summary>
     private const string PromptId = "CoherenceApplier";
 
+    /// <summary>
+    /// The tools of this pass: the ones that read and correct one agent, then the one that declares the fix applied.
+    /// </summary>
+    private static readonly Records.WorkflowStep CoherenceApplierStep = new(
+        PromptId,
+        [
+            nameof(CoherenceApplyTools.GetAgent),
+            nameof(CoherenceApplyTools.SetAgentTarget),
+            nameof(CoherenceApplyTools.SetAgentInstructions),
+            nameof(CoherenceApplyTools.SetAgentFormatting),
+            nameof(CoherenceApplyTools.SetIntentDescription),
+            nameof(CoherenceApplyTools.DeclareTool),
+            nameof(CoherenceApplyTools.SetToolParameter),
+            nameof(CoherenceApplyTools.DropToolParameter),
+            nameof(CoherenceApplyTools.DropTool),
+            nameof(CoherenceApplyTools.ApplyCompleted)
+        ]);
+
     private readonly IAlembicPromptService alembicPromptService;
     private readonly ILLMService llmService;
     private readonly ILogger logger;
@@ -59,9 +77,8 @@ public class CoherenceApplyService : ICoherenceApplyService
         Records.Prompt prompt = alembicPromptService.Resolve(PromptId);
         CoherenceApplyTools tools = new CoherenceApplyTools(draft);
 
-        // Offered by name from alembic.json: a name that the class does not declare throws here
-        // instead of reaching the model as a tool that nothing implements.
-        MorganaToolAdapter toolAdapter = alembicPromptService.OfferTools(PromptId, tools);
+        // A name that the class does not declare throws here instead of reaching the model as a tool that nothing implements.
+        MorganaToolAdapter toolAdapter = alembicPromptService.OfferTools(CoherenceApplierStep, tools);
 
         IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);
 
