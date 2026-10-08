@@ -4,10 +4,11 @@ using Azure.AI.OpenAI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using OpenAI;
 
-namespace Morgana.AI.Abstractions.LLMs;
+namespace Morgana.AI.LLMs;
 
 /// <summary>
 /// Azure OpenAI implementation of ILLMService.<br/>

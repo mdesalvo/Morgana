@@ -92,6 +92,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | Folder | Purpose |
 |---|---|
 | `Abstractions/` | `MorganaActor`, `MorganaAgent`, `MorganaLLM`, `MorganaTool`, `MorganaWorkflow`, `MorganaHostedAgent` (the `AIAgent` publishing an intent over A2A) |
+| `LLMs/` | `Anthropic`, `AzureOpenAI`, `OpenAI`, `Ollama`: the implementations of `MorganaLLM`, one per provider |
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[ProvidesWorkflowForIntent]`, `[RequiresApproval]`, `[ToolParameter]`, `[UsesMCPServer]`, `[ConsultsAgent]` |

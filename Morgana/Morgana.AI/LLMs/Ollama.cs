@@ -2,10 +2,11 @@ using System.Globalization;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using OllamaSharp;
 
-namespace Morgana.AI.Abstractions.LLMs;
+namespace Morgana.AI.LLMs;
 
 /// <summary>
 /// Ollama implementation of ILLMService.<br/>
