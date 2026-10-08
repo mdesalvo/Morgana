@@ -341,24 +341,25 @@ from the array that it lives in**, never from a field inside it:
   `PeerConsultation` (P8) is the
   **only conditionally rendered** one (an agent outside the A2A topology never pays for it) and
   sits last so it names the policies it suspends instead of forward-referencing them.
-- **`Injections`** — templates, not rules: prose with a single splice site each, never rendered among
-  the policies where they would instruct against nothing. No `Priority`: each is fetched by name.
-  `ColleaguesDeclaration` (closing a peer-capable agent's instructions),
-  `PeerConsultationDeclaration` and `PeerConsultationGuardrail` (in front of a colleague's question),
-  `TurnClosureRequest` (after a turn the model wrote without `Reply`), `ReplyNotAccepted` (in place of
-  a refused `Reply`'s result, its reason as datum), `EarlierToolResult` (around a tool result of an
-  earlier turn, as the model reads its history).
-- **`ToolResults`** — the texts that the framework's own tools return to the model (`Reply`, the
-  context wrapper, the consultation guards and fallbacks), fetched by name with their values as
-  `((…))` placeholders. A domain tool's return is the domain's own and Morgana never authors it.
+- **`PromptInjections`** — texts spliced into the instructions or the conversation's messages, one
+  splice site each, never rendered among the policies where they would instruct against nothing:
+  `ColleaguesDeclaration` (closing a peer-capable agent's instructions), `PeerConsultationDeclaration`
+  and `PeerConsultationGuardrail` (in front of a colleague's question), `TurnClosureRequest` (after a
+  turn the model wrote without `Reply`).
+- **`ToolInjections`** — everything the model reads as part of a tool: what the framework's own tools
+  return (`Reply`, the context wrapper, the consultation guards and fallbacks, the workflow results),
+  `ReplyNotAccepted`, `EarlierToolResult`, `WorkflowStepReached` and `WorkflowEnded` around a result,
+  `ExecutionApprovalGuidance` after an approval tool's description. They hold the voice with no declared
+  precedence, so they state facts and never instruct. A domain tool's return is the domain's own.
 - **`FrameworkReplies`** — the buttons the framework adds to let the user stay, leave or approve, as data.
 - **`Messages`** — on any framework prompt, what Morgana says to the user in her own voice (the agent
   exit, the approval question, the errors, the presenter's fallbacks, the classifier's answers), each
   read by name through `Prompt.GetMessage`.
 
-Every injection opens with a **bracketed all-caps label at the head of its first line** — the idiom
-the prompt layers already use for `[TARGET]`. A template arrives spliced into somebody else's text,
-so where it begins has to be visible without being read. Everything else goes under the label.
+Both arrays are `{Name, Content}`, fetched by name with their values as `((…))` placeholders. Every
+text that wraps somebody else's opens with a **bracketed all-caps label at the head of its first
+line** — the idiom the prompt layers already use for `[TARGET]` — so where it begins is visible
+without being read; a whole text like "Turn closed." needs none.
 
 The other framework prompts: **Classifier** (JSON `{intents:[{intent,confidence}]}`, ranked; owns the
 `other` complement, which no domain declares), **Guard** (`{compliant, violation}`),

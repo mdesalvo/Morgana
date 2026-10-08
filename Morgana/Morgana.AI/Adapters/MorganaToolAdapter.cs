@@ -346,7 +346,7 @@ public class MorganaToolAdapter
             // Run on a missing value the tool would answer about nobody: the model is told which
             // values are lacking, which are exactly what the user has to be asked for.
             if (missingParameters.Count > 0)
-                return new Records.FrameworkToolResult(Constants.ToolResults.ContextValueMissing, new Dictionary<string, string>
+                return new Records.FrameworkToolResult(Constants.ToolInjections.ContextValueMissing, new Dictionary<string, string>
                 {
                     [Constants.Placeholders.ToolName] = Name,
                     [Constants.Placeholders.MissingValues] = string.Join(", ", missingParameters)

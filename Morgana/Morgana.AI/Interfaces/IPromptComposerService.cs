@@ -102,7 +102,7 @@ public interface IPromptComposerService
     /// <summary>
     /// Produces the text a framework tool returns to the model, by name and with its values spliced in.
     /// </summary>
-    /// <param name="name">Which result (see <c>Constants.ToolResults</c>).</param>
+    /// <param name="name">Which result (see <c>Constants.ToolInjections</c>).</param>
     /// <param name="values">Placeholder to the value that it stands for, if the text carries any.</param>
     Task<string> ComposeToolResultAsync(string name, IReadOnlyDictionary<string, string>? values = null);
 }

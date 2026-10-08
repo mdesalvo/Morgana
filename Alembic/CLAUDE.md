@@ -70,7 +70,7 @@ no account of what the framework rules are, decides by resemblance.
 in the imperative to an agent taking a turn; handed over as they stand they are orders Alembic has no
 turn to carry out, which is how the non-local contradictions get manufactured. Restated in the
 descriptive third person the same facts stop being orders and become knowledge of the world the
-authored agents will live in. That is also why `Injections` reach the primer as *facts* (a
+authored agents will live in. That is also why `PromptInjections` reach the primer as *facts* (a
 colleague's territory is read by another agent) and never as the splice templates they are.
 
 **The second layer is stored deduplicated, read as one.** The passes differ only in which tools they

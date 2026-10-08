@@ -190,7 +190,7 @@ public sealed class MorganaHostedAgent : AIAgent
                 && await peerAdmissionService.TryAdmitNewConversationAsync(openingIssuer) is { IsAdmitted: false } refusal)
             {
                 return BuildAgentResponseFromMessage(
-                    refusal.RefusalMessage ?? await ComposeFallbackAsync(Constants.ToolResults.PeerAtCapacity));
+                    refusal.RefusalMessage ?? await ComposeFallbackAsync(Constants.ToolInjections.PeerAtCapacity));
             }
 
             // Opened before the turn, because a partner's exchange has none until now: the ledger is
@@ -207,7 +207,7 @@ public sealed class MorganaHostedAgent : AIAgent
                     "Hosted agent '{Intent}' refused a request from '{CallerIntent}': conversation '{ConversationId}' is over budget",
                     intent, callerIntent, hostedAgentSession.ConversationId);
 
-                return BuildAgentResponseFromMessage(await ComposeFallbackAsync(Constants.ToolResults.PeerOutOfBudget));
+                return BuildAgentResponseFromMessage(await ComposeFallbackAsync(Constants.ToolInjections.PeerOutOfBudget));
             }
 
             // Resolve the actor system
@@ -261,8 +261,8 @@ public sealed class MorganaHostedAgent : AIAgent
             // slow colleague when what it had was a broken one, which is a different thing to decide
             // against. Either way the instruction is the same: this answer is not coming.
             return BuildAgentResponseFromMessage(await ComposeFallbackAsync(ex is AskTimeoutException or OperationCanceledException
-                ? Constants.ToolResults.PeerTimedOut
-                : Constants.ToolResults.PeerFailed));
+                ? Constants.ToolInjections.PeerTimedOut
+                : Constants.ToolInjections.PeerFailed));
         }
     }
 

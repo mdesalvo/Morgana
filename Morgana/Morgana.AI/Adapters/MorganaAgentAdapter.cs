@@ -360,7 +360,7 @@ public class MorganaAgentAdapter
         TurnClosingChatClient turnClosingChatClient = new TurnClosingChatClient(
             toolLoopChatClient,
             await promptComposerService.ComposeTurnClosureRequestAsync(),
-            await promptComposerService.ComposeToolResultAsync(Constants.ToolResults.TurnClosed),
+            await promptComposerService.ComposeToolResultAsync(Constants.ToolInjections.TurnClosed),
             llmService.CanForceToolCall,
             logger);
 
@@ -443,7 +443,7 @@ public class MorganaAgentAdapter
             {
                 logger.LogWarning("Agent called '{Tool}', which workflow '{Workflow}' does not offer at its step '{Step}'", toolName, active.Definition.Name, active.Step.Name);
                 return await promptComposerService.ComposeToolResultAsync(
-                    Constants.ToolResults.ToolNotAtThisStep,
+                    Constants.ToolInjections.ToolNotAtThisStep,
                     ToolNotAtThisStepValues(toolName, active.Definition.Name));
             }
 
@@ -471,7 +471,7 @@ public class MorganaAgentAdapter
                 : result;
 
         string text = await promptComposerService.ComposeToolResultAsync(named.Name, named.Values);
-        if (!isReply || named.Name == Constants.ToolResults.TurnClosed)
+        if (!isReply || named.Name == Constants.ToolInjections.TurnClosed)
             return text;
 
         // The turn stays open: the model reads why and closes again without narrating it to the user.
@@ -547,7 +547,7 @@ public class MorganaAgentAdapter
         return await promptComposerService.ComposeWorkflowResultAsync(workflowName, next?.Step, resultText) ?? result;
     }
 
-    /// <summary>The values of <see cref="Constants.ToolResults.ToolNotAtThisStep"/>.</summary>
+    /// <summary>The values of <see cref="Constants.ToolInjections.ToolNotAtThisStep"/>.</summary>
     private static Dictionary<string, string> ToolNotAtThisStepValues(string toolName, string workflowName)
         => new()
         {
@@ -574,13 +574,13 @@ public class MorganaAgentAdapter
         bool isRunning = running?.Resolve(workflows.Definitions) is not null;
         if (isRunning || servingConsultation)
             return new Records.FrameworkToolResult(
-                Constants.ToolResults.ToolNotAtThisStep,
+                Constants.ToolInjections.ToolNotAtThisStep,
                 ToolNotAtThisStepValues(launcherName, isRunning ? running!.Workflow : definition.Name));
 
         Records.WorkflowPosition position = await workflows.Engine.LaunchAsync(definition.Name);
         workflows.ContextProvider.SetWorkflowPosition(session, position);
 
-        return new Records.FrameworkToolResult(Constants.ToolResults.WorkflowStarted, new Dictionary<string, string>
+        return new Records.FrameworkToolResult(Constants.ToolInjections.WorkflowStarted, new Dictionary<string, string>
         {
             [Constants.Placeholders.Workflow] = definition.Name,
             [Constants.Placeholders.Step] = position.Step
@@ -978,7 +978,7 @@ public class MorganaAgentAdapter
         if (contextProvider.GetVariable(callerSession, Constants.ContextKeys.ServingConsultation) is not null)
         {
             logger.LogWarning("Agent '{CallerIntent}' attempted to consult '{PeerIntent}' while itself answering a colleague", callerIntent, peerIntent);
-            return RefusalEnvelope(await promptComposerService.ComposeToolResultAsync(Constants.ToolResults.ConsultationChained));
+            return RefusalEnvelope(await promptComposerService.ComposeToolResultAsync(Constants.ToolInjections.ConsultationChained));
         }
 
         // The second rule: a cap on how many rounds one user turn may spend talking to colleagues.
@@ -989,7 +989,7 @@ public class MorganaAgentAdapter
         {
             logger.LogWarning("Agent '{CallerIntent}' exhausted its {MaxRounds} consultation round(s) for this turn", callerIntent, maxRoundsPerTurn);
             return RefusalEnvelope(await promptComposerService.ComposeToolResultAsync(
-                Constants.ToolResults.ConsultationRoundsExhausted,
+                Constants.ToolInjections.ConsultationRoundsExhausted,
                 new Dictionary<string, string> { [Constants.Placeholders.ConsultationRounds] = roundsSoFar.ToString(CultureInfo.InvariantCulture) }));
         }
 

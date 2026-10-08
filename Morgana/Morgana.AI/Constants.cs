@@ -93,11 +93,11 @@ public static class Constants
     }
 
     /// <summary>
-    /// Names of the entries in the framework prompt's <c>Injections</c> array, the sibling of its
-    /// policies. They are templates, not rules: each is spliced at exactly one site instead of being
-    /// rendered among the policies and each is resolved by name through <c>Injection.ResolveTemplate</c>.
+    /// Names of the entries in the framework prompt's <c>PromptInjections</c> array: the texts spliced into
+    /// the instructions or the conversation's messages. Each is spliced at exactly one site and is resolved
+    /// by name through <c>Injection.ResolveTemplate</c>.
     /// </summary>
-    public static class Injections
+    public static class PromptInjections
     {
         /// <summary>Placed in front of a colleague's question, telling the answering agent who its reader is.</summary>
         public const string PeerConsultationDeclaration = "PeerConsultationDeclaration";
@@ -110,21 +110,6 @@ public static class Constants
 
         /// <summary>Follows a turn that the model wrote without Reply, asking for that turn's closure alone.</summary>
         public const string TurnClosureRequest = "TurnClosureRequest";
-
-        /// <summary>Answers a Reply the framework refused, with the reason it was refused.</summary>
-        public const string ReplyNotAccepted = "ReplyNotAccepted";
-
-        /// <summary>Closes the description of a tool requiring execution approval, telling the model that the user approves it.</summary>
-        public const string ExecutionApprovalGuidance = "ExecutionApprovalGuidance";
-
-        /// <summary>Wraps a tool result of an earlier turn, as the model reads it back in its history.</summary>
-        public const string EarlierToolResult = "EarlierToolResult";
-
-        /// <summary>Wraps the result of a workflow tool that left the workflow standing at a step.</summary>
-        public const string WorkflowStepReached = "WorkflowStepReached";
-
-        /// <summary>Wraps the result of the workflow tool that ended the workflow.</summary>
-        public const string WorkflowEnded = "WorkflowEnded";
     }
 
     /// <summary>
@@ -137,14 +122,14 @@ public static class Constants
         /// <summary>The framework rules rendered into every agent's system prompt.</summary>
         public const string GlobalPolicies = "GlobalPolicies";
 
-        /// <summary>The framework templates spliced where each has a referent (see <see cref="Constants.Injections"/>).</summary>
-        public const string Injections = "Injections";
+        /// <summary>The framework templates spliced into the instructions or the conversation's messages (see <see cref="Constants.PromptInjections"/>).</summary>
+        public const string PromptInjections = "PromptInjections";
 
         /// <summary>The callable tools a prompt declares, framework base tools and domain tools alike.</summary>
         public const string Tools = "Tools";
 
-        /// <summary>The texts that framework tools return to the model, authored rather than hard-coded.</summary>
-        public const string ToolResults = "ToolResults";
+        /// <summary>The texts that the model reads as part of a tool, authored rather than hard-coded (see <see cref="Constants.ToolInjections"/>).</summary>
+        public const string ToolInjections = "ToolInjections";
 
         /// <summary>The buttons the framework adds to let the user stay with an agent or leave it, authored as data.</summary>
         public const string FrameworkReplies = "FrameworkReplies";
@@ -254,9 +239,10 @@ public static class Constants
     }
 
     /// <summary>
-    /// Names of the texts that framework tools return, authored under <c>ToolResults</c> in morgana.json.
+    /// Names of the entries in the framework prompt's <c>ToolInjections</c> array: everything the model reads
+    /// as part of a tool, be it what the tool returns or what is added to its description.
     /// </summary>
-    public static class ToolResults
+    public static class ToolInjections
     {
         /// <summary>Reply accepted the closure.</summary>
         public const string TurnClosed = "TurnClosed";
@@ -302,6 +288,21 @@ public static class Constants
 
         /// <summary>A Reply at a choice step did not offer exactly the step's tools, one action each.</summary>
         public const string StepActionsRequired = "StepActionsRequired";
+
+        /// <summary>Answers a Reply the framework refused, with the reason it was refused.</summary>
+        public const string ReplyNotAccepted = "ReplyNotAccepted";
+
+        /// <summary>Closes the description of a tool requiring execution approval, telling the model that the user approves it.</summary>
+        public const string ExecutionApprovalGuidance = "ExecutionApprovalGuidance";
+
+        /// <summary>Wraps a tool result of an earlier turn, as the model reads it back in its history.</summary>
+        public const string EarlierToolResult = "EarlierToolResult";
+
+        /// <summary>Wraps the result of a workflow tool that left the workflow standing at a step.</summary>
+        public const string WorkflowStepReached = "WorkflowStepReached";
+
+        /// <summary>Wraps the result of the workflow tool that ended the workflow.</summary>
+        public const string WorkflowEnded = "WorkflowEnded";
     }
 
     /// <summary>
@@ -421,28 +422,28 @@ public static class Constants
     /// </summary>
     public static class Placeholders
     {
-        /// <summary>In <see cref="Injections.PeerConsultationDeclaration"/> — the intent of the agent asking.</summary>
+        /// <summary>In <see cref="PromptInjections.PeerConsultationDeclaration"/> — the intent of the agent asking.</summary>
         public const string ConsultationCaller = "((caller))";
 
-        /// <summary>In <see cref="Injections.PeerConsultationGuardrail"/> — the colleague's question, inside the fence that marks it as data.</summary>
+        /// <summary>In <see cref="PromptInjections.PeerConsultationGuardrail"/> — the colleague's question, inside the fence that marks it as data.</summary>
         public const string ConsultationQuestion = "((question))";
 
         /// <summary>In a tool result — the framework tool or colleague the text is about.</summary>
         public const string ToolName = "((tool))";
 
-        /// <summary>In <see cref="ToolResults.ContextValueMissing"/> — the context-scoped values no one holds yet.</summary>
+        /// <summary>In <see cref="ToolInjections.ContextValueMissing"/> — the context-scoped values no one holds yet.</summary>
         public const string MissingValues = "((missing))";
 
-        /// <summary>In <see cref="ToolResults.CardTooDeep"/> — how many levels the refused card nests.</summary>
+        /// <summary>In <see cref="ToolInjections.CardTooDeep"/> — how many levels the refused card nests.</summary>
         public const string CardDepth = "((depth))";
 
-        /// <summary>In <see cref="ToolResults.CardTooLarge"/> — how many components the refused card holds.</summary>
+        /// <summary>In <see cref="ToolInjections.CardTooLarge"/> — how many components the refused card holds.</summary>
         public const string CardComponents = "((count))";
 
         /// <summary>In the card refusals — the limit the card broke.</summary>
         public const string Limit = "((max))";
 
-        /// <summary>In <see cref="ToolResults.ConsultationRoundsExhausted"/> — the rounds already spent.</summary>
+        /// <summary>In <see cref="ToolInjections.ConsultationRoundsExhausted"/> — the rounds already spent.</summary>
         public const string ConsultationRounds = "((rounds))";
 
         /// <summary>In the colleague fallbacks — the intent of the colleague that did not answer.</summary>
@@ -454,16 +455,16 @@ public static class Constants
         /// <summary>In the workflow texts — the step at which the workflow stands.</summary>
         public const string Step = "((step))";
 
-        /// <summary>In <see cref="ToolResults.StepActionsRequired"/> — the tools of the step, comma-joined.</summary>
+        /// <summary>In <see cref="ToolInjections.StepActionsRequired"/> — the tools of the step, comma-joined.</summary>
         public const string Tools = "((tools))";
 
-        /// <summary>In <see cref="Injections.EarlierToolResult"/> and the workflow injections — the result as the tool returned it.</summary>
+        /// <summary>In <see cref="ToolInjections.EarlierToolResult"/> and the workflow injections — the result as the tool returned it.</summary>
         public const string EarlierToolResultContent = "((result))";
 
-        /// <summary>In <see cref="Injections.ReplyNotAccepted"/> — why the closure was refused.</summary>
+        /// <summary>In <see cref="ToolInjections.ReplyNotAccepted"/> — why the closure was refused.</summary>
         public const string ReplyNotAcceptedReason = "((reason))";
 
-        /// <summary>In <see cref="Injections.ColleaguesDeclaration"/> — one line per colleague: function name and territory.</summary>
+        /// <summary>In <see cref="PromptInjections.ColleaguesDeclaration"/> — one line per colleague: function name and territory.</summary>
         public const string Colleagues = "((colleagues))";
 
         /// <summary>In the <see cref="Prompts.Classifier"/> prompt — the configured intents, formatted for ranking.</summary>

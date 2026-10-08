@@ -67,8 +67,8 @@ public class ConfigurationPromptComposerService : IPromptComposerService
             return new FrameworkLayer(
                 prompt,
                 prompt.GetAdditionalProperty<List<Records.GlobalPolicy>>(Constants.PromptProperties.GlobalPolicies),
-                prompt.GetAdditionalProperty<List<Records.Injection>>(Constants.PromptProperties.Injections),
-                prompt.GetAdditionalPropertyOrDefault<List<Records.ToolResult>>(Constants.PromptProperties.ToolResults, []));
+                prompt.GetAdditionalProperty<List<Records.Injection>>(Constants.PromptProperties.PromptInjections),
+                prompt.GetAdditionalPropertyOrDefault<List<Records.Injection>>(Constants.PromptProperties.ToolInjections, []));
         });
     }
 
@@ -123,7 +123,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
             return toolDefinition.Description;
 
         FrameworkLayer framework = await frameworkLayer.Value;
-        string guidance = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.ExecutionApprovalGuidance);
+        string guidance = Records.Injection.ResolveTemplate(framework.ToolInjections, Constants.ToolInjections.ExecutionApprovalGuidance);
         return guidance.Length == 0 ? toolDefinition.Description : $"{toolDefinition.Description}\n\n{guidance}";
     }
 
@@ -146,7 +146,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // The rung that closes a peer-capable agent's instructions. Undeclared by a deployment wanting
         // no such rung, which leaves those instructions exactly as the two layers composed them.
         FrameworkLayer framework = await frameworkLayer.Value;
-        string declaration = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.ColleaguesDeclaration);
+        string declaration = Records.Injection.ResolveTemplate(framework.PromptInjections, Constants.PromptInjections.ColleaguesDeclaration);
         if (declaration.Length == 0)
             return null;
 
@@ -168,13 +168,13 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // the answering agent's prompt: that prompt is composed once, while whether a turn serves a
         // colleague changes turn by turn.
         string declaration = Records.Injection.ResolveTemplate(
-            framework.Injections, Constants.Injections.PeerConsultationDeclaration);
+            framework.PromptInjections, Constants.PromptInjections.PeerConsultationDeclaration);
 
         // What the question may not claim and what asking cannot obtain, kept apart from the note on
         // how to answer: two rules of one length dilute each other, while only this one has to hold
         // against text somebody else wrote. It also carries the fence the question is read inside.
         string guardrail = Records.Injection.ResolveTemplate(
-            framework.Injections, Constants.Injections.PeerConsultationGuardrail);
+            framework.PromptInjections, Constants.PromptInjections.PeerConsultationGuardrail);
 
         // The caller names itself or it does not and the wording of what an unnamed one is called
         // belongs here, with the rest of the prose this layer authors, rather than at the call site
@@ -196,7 +196,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     public async Task<string?> ComposeTurnClosureRequestAsync()
     {
         FrameworkLayer framework = await frameworkLayer.Value;
-        string request = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.TurnClosureRequest);
+        string request = Records.Injection.ResolveTemplate(framework.PromptInjections, Constants.PromptInjections.TurnClosureRequest);
         return request.Length == 0 ? null : request;
     }
 
@@ -206,7 +206,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // Spliced at the one moment it is true, in place of the refused call's result, rather than
         // carried by every prompt for an event most turns never meet.
         FrameworkLayer framework = await frameworkLayer.Value;
-        string template = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.ReplyNotAccepted);
+        string template = Records.Injection.ResolveTemplate(framework.ToolInjections, Constants.ToolInjections.ReplyNotAccepted);
         return template.Length == 0 ? reason : template.Replace(Constants.Placeholders.ReplyNotAcceptedReason, reason);
     }
 
@@ -215,7 +215,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     {
         // The result is spliced last: it is the tool's text and is never read for placeholders of this layer.
         FrameworkLayer framework = await frameworkLayer.Value;
-        string template = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.EarlierToolResult);
+        string template = Records.Injection.ResolveTemplate(framework.ToolInjections, Constants.ToolInjections.EarlierToolResult);
         return template.Length == 0 ? null : template.Replace(Constants.Placeholders.EarlierToolResultContent, result);
     }
 
@@ -224,8 +224,8 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     {
         FrameworkLayer framework = await frameworkLayer.Value;
         string template = Records.Injection.ResolveTemplate(
-            framework.Injections,
-            step is null ? Constants.Injections.WorkflowEnded : Constants.Injections.WorkflowStepReached);
+            framework.ToolInjections,
+            step is null ? Constants.ToolInjections.WorkflowEnded : Constants.ToolInjections.WorkflowStepReached);
 
         // The result is spliced last: it is the tool's text and is never read for placeholders of this layer.
         return template.Length == 0
@@ -238,7 +238,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
 
     /// <inheritdoc />
     public async Task<string> ComposeToolResultAsync(string name, IReadOnlyDictionary<string, string>? values = null)
-        => Records.ToolResult.Resolve((await frameworkLayer.Value).ToolResults, name, values);
+        => Records.Injection.Resolve((await frameworkLayer.Value).ToolInjections, name, values);
 
     /// <summary>
     /// Renders the global policies into the fenced block that opens the framework layer.
@@ -272,12 +272,12 @@ public class ConfigurationPromptComposerService : IPromptComposerService
 
     /// <summary>
     /// The framework prompt and the lists that it declares beside its four sections, resolved once and
-    /// reused: the rules rendered into every agent's prompt, the templates spliced elsewhere and the
-    /// texts its tools return.
+    /// reused: the rules rendered into every agent's prompt, the templates spliced into the instructions or the messages and the
+    /// texts that the model reads as part of a tool.
     /// </summary>
     private sealed record FrameworkLayer(
         Records.Prompt Prompt,
         List<Records.GlobalPolicy> Policies,
-        List<Records.Injection> Injections,
-        List<Records.ToolResult> ToolResults);
+        List<Records.Injection> PromptInjections,
+        List<Records.Injection> ToolInjections);
 }

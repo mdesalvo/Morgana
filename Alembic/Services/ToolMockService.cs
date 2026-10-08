@@ -204,7 +204,7 @@ public class ToolMockService : IToolMockService
     }
 
     /// <summary>
-    /// Fetches a text that the mock author reads from the prompt's <c>Messages</c>, with its values spliced in.
+    /// Fetches a text that the mock author reads from the prompt's <c>PromptInjections</c>, with its values spliced in.
     /// </summary>
     /// <remarks>
     /// A missing message throws: an author handed a request with a sentence absent would write the wrong file without any sign of it.
@@ -214,7 +214,8 @@ public class ToolMockService : IToolMockService
     /// <param name="values">Placeholder to the value that it stands for.</param>
     private static string Said(Records.Prompt mock, string name, params (string Placeholder, string Value)[] values)
     {
-        string text = mock.GetMessage(name);
+        string text = Records.Injection.ResolveTemplate(
+            mock.GetAdditionalProperty<List<Records.Injection>>(Constants.PromptProperties.PromptInjections), name);
 
         if (text.Length == 0)
             throw new InvalidOperationException($"The {MockPromptId} prompt in alembic.json declares no '{name}' message.");

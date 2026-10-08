@@ -31,26 +31,29 @@ public sealed class FrameworkPromptTests
         Assert.NotEmpty(morgana.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies"));
         Assert.DoesNotContain(morgana.AdditionalProperties, properties => properties.ContainsKey(Constants.PromptProperties.Tools));
 
-        string[] injections = [.. morgana.GetAdditionalProperty<List<Records.Injection>>("Injections").Select(injection => injection.Name)];
+        Assert.DoesNotContain(morgana.AdditionalProperties, properties => properties.ContainsKey("Injections"));
+        Assert.DoesNotContain(morgana.AdditionalProperties, properties => properties.ContainsKey("ToolResults"));
+
+        string[] promptInjections = [.. morgana.GetAdditionalProperty<List<Records.Injection>>("PromptInjections").Select(injection => injection.Name)];
         Assert.Equivalent(new[]
         {
-            "ColleaguesDeclaration", "PeerConsultationDeclaration", "PeerConsultationGuardrail", "TurnClosureRequest",
-            "ReplyNotAccepted", "EarlierToolResult", "ExecutionApprovalGuidance", "WorkflowStepReached", "WorkflowEnded"
-        }, injections);
+            "ColleaguesDeclaration", "PeerConsultationDeclaration", "PeerConsultationGuardrail", "TurnClosureRequest"
+        }, promptInjections);
     }
 
     [Fact]
-    public async Task Morgana_prompt_words_every_tool_result_the_framework_returns()
+    public async Task Morgana_prompt_words_every_text_the_model_reads_as_part_of_a_tool()
     {
-        string[] toolResults = [.. (await resolver.ResolveAsync("Morgana"))
-            .GetAdditionalProperty<List<Records.ToolResult>>("ToolResults").Select(toolResult => toolResult.Name)];
+        string[] toolInjections = [.. (await resolver.ResolveAsync("Morgana"))
+            .GetAdditionalProperty<List<Records.Injection>>("ToolInjections").Select(injection => injection.Name)];
 
         Assert.Equivalent(new[]
         {
             "TurnClosed", "ContextValueMissing", "ReplyWithoutText", "CardTooDeep", "CardTooLarge", "ConsultationChained",
             "ConsultationRoundsExhausted", "ColleagueCouldNotAnswer", "PeerAtCapacity", "PeerOutOfBudget", "PeerTimedOut", "PeerFailed",
-            "WorkflowStarted", "ToolNotAtThisStep"
-        }, toolResults);
+            "WorkflowStarted", "ToolNotAtThisStep", "StepActionsRequired",
+            "ReplyNotAccepted", "EarlierToolResult", "ExecutionApprovalGuidance", "WorkflowStepReached", "WorkflowEnded"
+        }, toolInjections);
     }
 
     [Fact]

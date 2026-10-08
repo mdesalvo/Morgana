@@ -643,9 +643,9 @@ public class MorganaAgent : MorganaActor
             // What the asking agent's model reads in place of an answer, worded in morgana.json.
             Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
             senderRef.Tell(new Records.PeerConsultationResponse(
-                Records.ToolResult.Resolve(
-                    morganaPrompt.GetAdditionalPropertyOrDefault<List<Records.ToolResult>>(Constants.PromptProperties.ToolResults, []),
-                    Constants.ToolResults.ColleagueCouldNotAnswer,
+                Records.Injection.Resolve(
+                    morganaPrompt.GetAdditionalPropertyOrDefault<List<Records.Injection>>(Constants.PromptProperties.ToolInjections, []),
+                    Constants.ToolInjections.ColleagueCouldNotAnswer,
                     new Dictionary<string, string> { [Constants.Placeholders.AgentIntent] = AgentIntent }),
                 false));
         }

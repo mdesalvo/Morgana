@@ -106,7 +106,7 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         bool closed = turnMessages
             .SelectMany(message => message.Contents)
             .OfType<FunctionResultContent>()
-            .Any(result => result.Result is Records.FrameworkToolResult { Name: Constants.ToolResults.TurnClosed }
+            .Any(result => result.Result is Records.FrameworkToolResult { Name: Constants.ToolInjections.TurnClosed }
                            || string.Equals(ResultText(result.Result), turnClosedResult, StringComparison.Ordinal));
         if (closed)
             return;

@@ -1073,30 +1073,6 @@ public static class Records
         string Description,
         int Priority);
 
-    /// <summary>
-    /// One framework-level template, spliced at the single site where it has a referent — a tool
-    /// description, an agent's own instructions, the turn serving a colleague. Never rendered among
-    /// the policies, where it would instruct against nothing.
-    /// </summary>
-    /// <remarks>
-    /// It is the array an entry lives in that says which of the two it is, so a rule and a template
-    /// cannot be confused for one another by anything anybody writes inside an entry. Carries no
-    /// priority: each is fetched by name and no two are ever read together.
-    /// </remarks>
-    public record Injection(
-        string Name,
-        string Description)
-    {
-        /// <summary>
-        /// Resolves a template's text by name (see <see cref="Constants.Injections"/>); returns an
-        /// empty string when the prompt layer declares none, which every splice site reads as
-        /// "inject nothing".
-        /// </summary>
-        public static string ResolveTemplate(IEnumerable<Injection> injections, string name)
-            => injections.FirstOrDefault(injection =>
-                   string.Equals(injection.Name, name, StringComparison.OrdinalIgnoreCase))?.Description ?? "";
-    }
-
     /// <summary>A text that the framework says to the user in its own voice, fetched by name (see <see cref="Constants.Messages"/>).</summary>
     /// <param name="Name">Identifier the framework fetches the text by.</param>
     /// <param name="Content">The text as the user reads it.</param>
@@ -1105,26 +1081,39 @@ public static class Records
         string Content);
 
     /// <summary>
-    /// A text that a framework tool returns to the model, authored in morgana.json and fetched by name (see
-    /// <see cref="Constants.ToolResults"/>). Domain tools return their own text, which Morgana never authors.
+    /// A text of the framework prompt that the model reads, authored in morgana.json and fetched by name
+    /// (see <see cref="Constants.PromptInjections"/> and <see cref="Constants.ToolInjections"/>).
+    /// Domain tools return their own text, which Morgana never authors.
     /// </summary>
+    /// <remarks>
+    /// What an entry is follows from the array it lives in: a <c>PromptInjections</c> entry is spliced into
+    /// the instructions or the conversation's messages, a <c>ToolInjections</c> entry is read as part of a tool.
+    /// </remarks>
     /// <param name="Name">Identifier the framework fetches the text by.</param>
     /// <param name="Content">The text, carrying its values as <c>((…))</c> placeholders.</param>
-    public record ToolResult(
+    public record Injection(
         string Name,
         string Content)
     {
         /// <summary>
-        /// Resolves a result by name with its values spliced in; the bare name when the prompt layer
+        /// Resolves a prompt injection's text by name; returns an empty string when the prompt layer
+        /// declares none, which every splice site reads as "inject nothing".
+        /// </summary>
+        public static string ResolveTemplate(IEnumerable<Injection> injections, string name)
+            => injections.FirstOrDefault(injection =>
+                   string.Equals(injection.Name, name, StringComparison.OrdinalIgnoreCase))?.Content ?? "";
+
+        /// <summary>
+        /// Resolves a tool injection by name with its values spliced in; the bare name when the prompt layer
         /// declares none, so a missing entry shows up in the transcript instead of failing the turn.
         /// </summary>
-        /// <param name="toolResults">The prompt layer's tool results.</param>
-        /// <param name="name">Which result.</param>
+        /// <param name="injections">The prompt layer's tool injections.</param>
+        /// <param name="name">Which injection.</param>
         /// <param name="values">Placeholder (see <see cref="Constants.Placeholders"/>) to the value that it stands for.</param>
-        public static string Resolve(IEnumerable<ToolResult> toolResults, string name, IReadOnlyDictionary<string, string>? values = null)
+        public static string Resolve(IEnumerable<Injection> injections, string name, IReadOnlyDictionary<string, string>? values = null)
         {
-            string content = toolResults.FirstOrDefault(toolResult =>
-                string.Equals(toolResult.Name, name, StringComparison.OrdinalIgnoreCase))?.Content ?? name;
+            string content = injections.FirstOrDefault(injection =>
+                string.Equals(injection.Name, name, StringComparison.OrdinalIgnoreCase))?.Content ?? name;
 
             foreach ((string placeholder, string value) in values ?? new Dictionary<string, string>())
                 content = content.Replace(placeholder, value, StringComparison.Ordinal);
@@ -1135,9 +1124,9 @@ public static class Records
 
     /// <summary>
     /// A framework tool's result named rather than written: the tool loop turns it into the authored text
-    /// of <see cref="ToolResult"/>, which a tool holding no prompt layer cannot reach itself.
+    /// of a <see cref="Injection"/> of <c>ToolInjections</c>, which a tool holding no prompt layer cannot reach itself.
     /// </summary>
-    /// <param name="Name">Which result (see <see cref="Constants.ToolResults"/>).</param>
+    /// <param name="Name">Which result (see <see cref="Constants.ToolInjections"/>).</param>
     /// <param name="Values">Placeholder to the value that it stands for, if the text carries any.</param>
     public record FrameworkToolResult(
         string Name,

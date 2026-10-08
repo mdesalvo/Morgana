@@ -61,7 +61,7 @@ public class ReplyTool : MorganaTool
         // Closed before a word of it was written, the turn would end mute: the model is sent back to
         // write first. Absent when the framework records a closure itself, which it does only after text.
         if (FunctionInvokingChatClient.CurrentContext is { } invocation && !HasTurnText(invocation.Messages))
-            return new Records.FrameworkToolResult(Constants.ToolResults.ReplyWithoutText);
+            return new Records.FrameworkToolResult(Constants.ToolInjections.ReplyWithoutText);
 
         // A card the channel could not lay out is refused and the turn stays open, so the model calls
         // Reply again with a card that fits.
@@ -69,7 +69,7 @@ public class ReplyTool : MorganaTool
         {
             int depth = CalculateMaxDepth(card.Components, 1);
             if (depth > MaxCardDepth)
-                return new Records.FrameworkToolResult(Constants.ToolResults.CardTooDeep, new Dictionary<string, string>
+                return new Records.FrameworkToolResult(Constants.ToolInjections.CardTooDeep, new Dictionary<string, string>
                 {
                     [Constants.Placeholders.CardDepth] = depth.ToString(CultureInfo.InvariantCulture),
                     [Constants.Placeholders.Limit] = MaxCardDepth.ToString(CultureInfo.InvariantCulture)
@@ -77,7 +77,7 @@ public class ReplyTool : MorganaTool
 
             int totalComponents = CountComponents(card.Components);
             if (totalComponents > MaxCardComponents)
-                return new Records.FrameworkToolResult(Constants.ToolResults.CardTooLarge, new Dictionary<string, string>
+                return new Records.FrameworkToolResult(Constants.ToolInjections.CardTooLarge, new Dictionary<string, string>
                 {
                     [Constants.Placeholders.CardComponents] = totalComponents.ToString(CultureInfo.InvariantCulture),
                     [Constants.Placeholders.Limit] = MaxCardComponents.ToString(CultureInfo.InvariantCulture)
@@ -96,7 +96,7 @@ public class ReplyTool : MorganaTool
             bool isExactSet = offeredActions.Count == choice.Tools.Count
                 && choice.Tools.All(tool => offeredActions.Count(action => string.Equals(action.Tool, tool, StringComparison.Ordinal)) == 1);
             if (!isExactSet)
-                return new Records.FrameworkToolResult(Constants.ToolResults.StepActionsRequired, new Dictionary<string, string>
+                return new Records.FrameworkToolResult(Constants.ToolInjections.StepActionsRequired, new Dictionary<string, string>
                 {
                     [Constants.Placeholders.Step] = choice.Step,
                     [Constants.Placeholders.Workflow] = choice.Workflow,
@@ -132,7 +132,7 @@ public class ReplyTool : MorganaTool
             "LLM closed its turn via Reply: awaits={Awaits}, userIsLeaving={UserIsLeaving}, actions={Actions}, card={Card}",
             awaits, userIsLeaving, turnReply.Actions.Count, card?.Title ?? "(none)");
 
-        return new Records.FrameworkToolResult(Constants.ToolResults.TurnClosed);
+        return new Records.FrameworkToolResult(Constants.ToolInjections.TurnClosed);
     }
 
     /// <summary>
