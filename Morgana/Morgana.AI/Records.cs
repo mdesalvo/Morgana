@@ -508,7 +508,7 @@ public static class Records
         /// as an error code.
         /// </summary>
         public string ErrorMessagePerHour { get; set; } =
-            "This agent cannot take on further conversations right now. Proceed without it.";
+            "This agent cannot take on further conversations right now.";
     }
 
     /// <summary>

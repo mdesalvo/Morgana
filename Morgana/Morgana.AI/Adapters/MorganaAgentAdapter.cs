@@ -350,7 +350,7 @@ public class MorganaAgentAdapter
         // framework's to close, with the approval buttons.
         // Between the loop and the approval client, the tools that the workflow state allows are what the model is offered.
         FunctionInvokingChatClient toolLoopChatClient = new FunctionInvokingChatClient(
-            new WorkflowToolsChatClient(new ApprovalTurnChatClient(agentChatClient), sessionAccessor, morganaAIContextProvider, workflowDefinitions))
+            new WorkflowToolsChatClient(new ApprovalTurnChatClient(agentChatClient), sessionAccessor, morganaAIContextProvider, workflowDefinitions, MaxConsultationRoundsPerTurn))
         {
             FunctionInvoker = (context, cancellationToken) => InvokeToolAsync(context, agentWorkflows, cancellationToken)
         };
@@ -760,6 +760,13 @@ public class MorganaAgentAdapter
         => configuration.GetValue("Morgana:AgentToAgent:Enabled", true);
 
     /// <summary>
+    /// The consultations that one user turn may spend: the guard refuses a further one and the model-call
+    /// filter stops offering the colleagues once they are spent.
+    /// </summary>
+    private int MaxConsultationRoundsPerTurn
+        => configuration.GetValue("Morgana:AgentToAgent:MaxRoundsPerTurn", 4);
+
+    /// <summary>
     /// Composes the agent's two-layer instructions and closes them with the colleagues it holds.
     /// </summary>
     /// <remarks>
@@ -822,7 +829,7 @@ public class MorganaAgentAdapter
             return [];
         }
 
-        int maxRoundsPerTurn = configuration.GetValue("Morgana:AgentToAgent:MaxRoundsPerTurn", 4);
+        int maxRoundsPerTurn = MaxConsultationRoundsPerTurn;
 
         // Every colleague is reached for at once. They are independent agents, often at different
         // systems. Asking them one after another would make this agent's first turn wait out the
@@ -974,17 +981,17 @@ public class MorganaAgentAdapter
             return null;
 
         // A colleague may not consult a colleague of its own: the chain stops at one hop, so the call
-        // graph cannot contain a cycle and no caller chain has to travel with the request.
+        // graph cannot contain a cycle and no caller chain has to travel with the request. The colleagues
+        // are not offered while a consultation is served, so this refusal answers only a call made all the same.
         if (contextProvider.GetVariable(callerSession, Constants.ContextKeys.ServingConsultation) is not null)
         {
             logger.LogWarning("Agent '{CallerIntent}' attempted to consult '{PeerIntent}' while itself answering a colleague", callerIntent, peerIntent);
             return RefusalEnvelope(await promptComposerService.ComposeToolResultAsync(Constants.ToolInjections.ConsultationChained));
         }
 
-        // The second rule: a cap on how many rounds one user turn may spend talking to colleagues.
-        // It is a safety net and not the mechanism — convergence is asked of the prose, in the
-        // PeerConsultation policy — so hitting it is a warning rather than a fault.
-        int roundsSoFar = ReadConsultationRounds(callerSession, contextProvider);
+        // The second rule: a cap on how many rounds one user turn may spend talking to colleagues. Once it
+        // is reached the colleagues are no longer offered, so this refusal answers only a call made all the same.
+        int roundsSoFar = contextProvider.GetConsultationRounds(callerSession);
         if (roundsSoFar >= maxRoundsPerTurn)
         {
             logger.LogWarning("Agent '{CallerIntent}' exhausted its {MaxRounds} consultation round(s) for this turn", callerIntent, maxRoundsPerTurn);
@@ -1019,19 +1026,6 @@ public class MorganaAgentAdapter
 
         return declaredOptions;
     }
-
-    /// <summary>
-    /// Reads the asking agent's consultation counter for the current turn, tolerating the
-    /// <see cref="JsonElement"/> form a value takes once its session has been persisted and reloaded.
-    /// </summary>
-    private static int ReadConsultationRounds(AgentSession callerSession, MorganaAIContextProvider contextProvider)
-        => contextProvider.GetVariable(callerSession, Constants.ContextKeys.ConsultationRounds) switch
-        {
-            int rounds => rounds,
-            JsonElement { ValueKind: JsonValueKind.Number } element => element.GetInt32(),
-            string text when int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed) => parsed,
-            _ => 0
-        };
 
     /// <summary>
     /// Takes what a colleague reports having spent off its answer and charges it home when that

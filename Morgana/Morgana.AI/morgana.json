@@ -133,31 +133,31 @@
             },
             {
               "Name": "ConsultationChained",
-              "Content": "You are currently answering a colleague and a colleague may not consult a further colleague. Answer with what you know."
+              "Content": "You are currently answering a colleague and a colleague may not consult a further colleague."
             },
             {
               "Name": "ConsultationRoundsExhausted",
-              "Content": "This exchange has run for ((rounds)) rounds and must end now. Answer with what you already have."
+              "Content": "This exchange has run for ((rounds)) rounds, the most that one turn allows."
             },
             {
               "Name": "ColleagueCouldNotAnswer",
-              "Content": "Your colleague for '((agent))' could not answer. Proceed without them."
+              "Content": "Your colleague for '((agent))' could not answer."
             },
             {
               "Name": "PeerAtCapacity",
-              "Content": "The agent for '((agent))' cannot take on further conversations right now. Proceed without it."
+              "Content": "The agent for '((agent))' cannot take on further conversations right now."
             },
             {
               "Name": "PeerOutOfBudget",
-              "Content": "The agent for '((agent))' has no budget left on this conversation. Proceed without it."
+              "Content": "The agent for '((agent))' has no budget left on this conversation."
             },
             {
               "Name": "PeerTimedOut",
-              "Content": "The agent for '((agent))' did not answer in time. Proceed without it."
+              "Content": "The agent for '((agent))' did not answer in time."
             },
             {
               "Name": "PeerFailed",
-              "Content": "The agent for '((agent))' could not answer. Proceed without it."
+              "Content": "The agent for '((agent))' could not answer."
             },
             {
               "Name": "WorkflowStarted",

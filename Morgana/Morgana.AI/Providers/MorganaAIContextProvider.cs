@@ -180,6 +180,24 @@ public class MorganaAIContextProvider : AIContextProvider
         => DropVariable(session, Constants.ContextKeys.WorkflowPosition);
 
     /// <summary>
+    /// Reads how many consultations the current turn has spent; zero when it has spent none.
+    /// </summary>
+    /// <remarks>
+    /// Read without the per-variable access line: the model-call filter reads it before every call.
+    /// </remarks>
+    public int GetConsultationRounds(AgentSession session)
+        => sessionState.GetOrInitializeState(session).Variables.TryGetValue(Constants.ContextKeys.ConsultationRounds, out object? stored)
+            ? stored switch
+            {
+                int rounds => rounds,
+
+                // Restored from a saved session the count is JSON.
+                JsonElement { ValueKind: JsonValueKind.Number } element => element.GetInt32(),
+                _ => 0
+            }
+            : 0;
+
+    /// <summary>
     /// Merges shared context variables received from a sibling agent.
     /// Applies first-write-wins: variables already present in local context are not overwritten.
     /// </summary>

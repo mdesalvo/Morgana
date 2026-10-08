@@ -9,8 +9,8 @@ namespace Morgana.AI.ChatClients;
 
 /// <summary>
 /// DelegatingChatClient sitting between the model and the tool loop. On every model call it presents the
-/// tools that the session's workflow state allows: it is what keeps the steps of a workflow in order by the
-/// absence of the tools that do not belong to the current one.
+/// tools that the session's state allows: it keeps the steps of a workflow in order and the colleagues out of
+/// reach where a consultation may not happen, by the absence of the tools that do not belong there.
 /// </summary>
 /// <remarks>
 /// Below the tool loop because the tools that a single run is given add to the agent's own instead of
@@ -18,14 +18,17 @@ namespace Morgana.AI.ChatClients;
 /// </remarks>
 public sealed class WorkflowToolsChatClient : DelegatingChatClient
 {
-    /// <summary>Returns the agent's current session, the one whose workflow state decides the tools.</summary>
+    /// <summary>Returns the agent's current session, the one whose state decides the tools.</summary>
     private readonly Func<AgentSession?> sessionAccessor;
 
-    /// <summary>The store that the workflow position and the consultation mark are read from.</summary>
+    /// <summary>The store that the workflow position, the consultation mark and the rounds spent are read from.</summary>
     private readonly MorganaAIContextProvider contextProvider;
 
     /// <summary>The workflows the agent declares.</summary>
     private readonly IReadOnlyList<Records.WorkflowDefinition> workflows;
+
+    /// <summary>The consultations that one user turn may spend, after which no colleague is offered.</summary>
+    private readonly int maxConsultationRoundsPerTurn;
 
     /// <summary>
     /// Wraps the model the agent's tool loop calls.
@@ -33,16 +36,19 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
     /// <param name="innerClient">The client below, which sends the tools to the model.</param>
     /// <param name="sessionAccessor">Returns the agent's current session.</param>
     /// <param name="contextProvider">The agent's context store.</param>
-    /// <param name="workflows">The workflows the agent declares; none leaves every call untouched.</param>
+    /// <param name="workflows">The workflows the agent declares.</param>
+    /// <param name="maxConsultationRoundsPerTurn">The consultations that one user turn may spend.</param>
     public WorkflowToolsChatClient(
         IChatClient innerClient,
         Func<AgentSession?> sessionAccessor,
         MorganaAIContextProvider contextProvider,
-        IReadOnlyList<Records.WorkflowDefinition> workflows) : base(innerClient)
+        IReadOnlyList<Records.WorkflowDefinition> workflows,
+        int maxConsultationRoundsPerTurn) : base(innerClient)
     {
         this.sessionAccessor = sessionAccessor;
         this.contextProvider = contextProvider;
         this.workflows = workflows;
+        this.maxConsultationRoundsPerTurn = maxConsultationRoundsPerTurn;
     }
 
     /// <inheritdoc/>
@@ -60,28 +66,33 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         => base.GetStreamingResponseAsync(chatMessages, Present(options), cancellationToken);
 
     /// <summary>
-    /// Rewrites the options' tools for the workflow state of the session; the caller's options are never mutated.
+    /// Rewrites the options' tools for the state of the session; the caller's options are never mutated.
     /// </summary>
     private ChatOptions? Present(ChatOptions? options)
     {
-        // An agent declaring no workflow is offered exactly the tools it was given.
-        if (workflows.Count == 0 || options?.Tools is not { Count: > 0 } tools)
+        AgentSession? session = sessionAccessor();
+        if (session is null || options?.Tools is not { Count: > 0 } tools)
             return options;
 
-        AgentSession? session = sessionAccessor();
-        Records.WorkflowPosition? position = session is null ? null : contextProvider.GetWorkflowPosition(session);
+        bool servingConsultation = contextProvider.GetVariable(session, Constants.ContextKeys.ServingConsultation) is not null;
+
+        // A colleague is not consulted by an agent that is answering one, since the chain stops at one hop,
+        // nor by a turn that has spent its rounds.
+        bool colleaguesOutOfReach = servingConsultation
+            || contextProvider.GetConsultationRounds(session) >= maxConsultationRoundsPerTurn;
+
+        Records.WorkflowPosition? position = workflows.Count == 0 ? null : contextProvider.GetWorkflowPosition(session);
         (Records.WorkflowDefinition Definition, Records.WorkflowStep Step)? running = position?.Resolve(workflows);
+
+        // With no workflow running and every colleague within reach the agent is offered exactly the tools it was given.
+        if (running is null && !colleaguesOutOfReach)
+            return options;
 
         List<AITool> presented;
         if (running is null)
         {
             // A consultation answers a colleague and never takes the user's turn, so it never opens a wizard.
-            bool servingConsultation = session is not null
-                && contextProvider.GetVariable(session, Constants.ContextKeys.ServingConsultation) is not null;
-            if (!servingConsultation)
-                return options;
-
-            presented = [.. tools.Where(tool => tool is not WorkflowLauncherFunction)];
+            presented = [.. tools.Where(tool => !servingConsultation || tool is not WorkflowLauncherFunction)];
         }
         else
         {
@@ -90,7 +101,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
 
             foreach (AITool tool in tools)
             {
-                // Closing the turn and consulting a colleague belong to no step: they are always offered.
+                // Closing the turn and consulting a colleague belong to no step: they are offered at every one.
                 if (tool.Name == Constants.Tools.Reply && running.Value.Step.Tools.Count > 1)
                     presented.Add(WithStepActions(tool, running.Value.Step.Tools));
                 else if (tool.Name == Constants.Tools.Reply
@@ -111,6 +122,9 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
                     presented.Add(tool);
             }
         }
+
+        if (colleaguesOutOfReach)
+            presented.RemoveAll(tool => tool.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal));
 
         ChatOptions presentedOptions = options.Clone();
         presentedOptions.Tools = presented;

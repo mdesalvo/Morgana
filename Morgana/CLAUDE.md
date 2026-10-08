@@ -96,7 +96,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[ProvidesWorkflowForIntent]`, `[RequiresApproval]`, `[ToolParameter]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
-| `ChatClients/` | `IChatClient` decorators: `TierDefaultsChatClient`, `DustAccountingChatClient`, `MorganaAnthropicClient`, `ApprovalTurnChatClient` (drops `Reply` from a response asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model wrote without `Reply`: a forced tool call, structured output where the provider cannot force one), `WorkflowToolsChatClient` (offers the model only the tools that a running workflow's current step allows) |
+| `ChatClients/` | `IChatClient` decorators: `TierDefaultsChatClient`, `DustAccountingChatClient`, `MorganaAnthropicClient`, `ApprovalTurnChatClient` (drops `Reply` from a response asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model wrote without `Reply`: a forced tool call, structured output where the provider cannot force one), `WorkflowToolsChatClient` (offers the model only the tools that a running workflow's current step allows; no colleague while one is being answered or once the turn's consultation rounds are spent) |
 | `Workflows/` | `WorkflowEngine`: an agent's workflows on Microsoft.Agents.AI.Workflows, rebuilt at every call from the checkpoint kept in the agent's session. `WorkflowLauncherFunction`: the function that starts one workflow, recognised by its type |
 | `Tools/` | `ReplyTool`: the framework's own tool, declared on its method as a domain tool is |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
@@ -349,8 +349,8 @@ from the array that it lives in**, never from a field inside it:
 - **`ToolInjections`** — everything the model reads as part of a tool: what the framework's own tools
   return (`Reply`, the context wrapper, the consultation guards and fallbacks, the workflow results),
   `ReplyNotAccepted`, `EarlierToolResult`, `WorkflowStepReached` and `WorkflowEnded` around a result,
-  `ExecutionApprovalGuidance` after an approval tool's description. They hold the voice with no declared
-  precedence, so they state facts and never instruct. A domain tool's return is the domain's own.
+  `ExecutionApprovalGuidance` after an approval tool's description. Where the framework knows the model's
+  next move, the code enforces it and the text only states the fact. A domain tool's return is the domain's own.
 - **`FrameworkReplies`** — the buttons the framework adds to let the user stay, leave or approve, as data.
 - **`Messages`** — on any framework prompt, what Morgana says to the user in her own voice (the agent
   exit, the approval question, the errors, the presenter's fallbacks, the classifier's answers), each

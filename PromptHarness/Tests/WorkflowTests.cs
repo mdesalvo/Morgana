@@ -9,6 +9,7 @@ using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
+using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 using Morgana.AI.Services;
@@ -218,6 +219,30 @@ public sealed class WorkflowTests
         string[] offered = [.. serving.Model.ToolsPerCall[0].Select(tool => tool.Name)];
         Assert.DoesNotContain("StartPlaceOrder", offered);
         Assert.Contains("CreatePurchaseOrder", offered);
+    }
+
+    [Theory]
+    [InlineData(false, 3, new[] { "Stock", "consult_billing" })]
+    [InlineData(true, 0, new[] { "Stock" })]
+    [InlineData(false, 4, new[] { "Stock" })]
+    public async Task A_colleague_is_offered_only_outside_a_consultation_and_while_the_turn_has_rounds_left(bool serving, int roundsSpent, string[] expected)
+    {
+        ScriptedModel model = new ScriptedModel();
+        model.Enqueue([new TextContent("Hello.")]);
+        MorganaAIContextProvider provider = new MorganaAIContextProvider(NullLogger.Instance);
+        AgentSession session = await new ChatClientAgent(new SilentModel()).CreateSessionAsync();
+        if (serving)
+            await provider.SetVariableAsync(session, Constants.ContextKeys.ServingConsultation, true);
+        if (roundsSpent > 0)
+            await provider.SetVariableAsync(session, Constants.ContextKeys.ConsultationRounds, roundsSpent);
+
+        // An agent declaring no workflow, whose turn may spend four consultations.
+        WorkflowToolsChatClient client = new WorkflowToolsChatClient(model, () => session, provider, [], maxConsultationRoundsPerTurn: 4);
+        await client.GetResponseAsync(
+            [new ChatMessage(ChatRole.User, "hi")],
+            new ChatOptions { Tools = [AIFunctionFactory.Create(() => "answer", "consult_billing"), AIFunctionFactory.Create(() => "12", "Stock")] });
+
+        Assert.Equal(expected.Order(StringComparer.Ordinal), model.ToolsPerCall[0].Select(tool => tool.Name).Order(StringComparer.Ordinal));
     }
 
     [Fact]
