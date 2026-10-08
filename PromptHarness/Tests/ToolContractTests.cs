@@ -446,7 +446,7 @@ public sealed class ToolContractTests
             => Task.FromResult(new DescribedResult());
     }
 
-    /// <summary>A tool class inheriting <c>Reply</c> and carrying a helper and a property beside its one tool.</summary>
+    /// <summary>A tool class inheriting the base and carrying a helper and a property beside its one tool.</summary>
     public sealed class DerivedTool(ILogger logger, Func<MorganaTool.ToolContext> context) : MorganaTool(logger, context)
     {
         /// <summary>A property whose accessors are public methods.</summary>

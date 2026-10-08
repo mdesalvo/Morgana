@@ -501,7 +501,7 @@ public sealed class ToolReturnDraft
 public sealed class WorkflowDraft
 {
     /// <summary>
-    /// What the model passes to <c>LaunchWorkflow</c> to start it; unique per agent.
+    /// What names the function that starts it, <c>Start</c> followed by this name; unique per agent.
     /// </summary>
     /// <remarks><c>null</c> until the <c>AgentWorkflows</c> pass declares this workflow via
     /// <c>DeclareWorkflow</c>.</remarks>

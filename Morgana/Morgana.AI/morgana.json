@@ -79,47 +79,6 @@
           ]
         },
         {
-          "Tools": [
-            {
-              "Name": "Reply",
-              "Description": "Closes your turn. Call it exactly once, as your very last action, after your text to the user is written: nothing you write after it reaches the user. It carries everything of the turn that is not text: what it awaits from the user, whether the user is leaving, the actions offered as buttons and the card.",
-              "Parameters": [
-                {
-                  "Name": "awaits",
-                  "Description": "What the turn ends waiting for from the user. 'nothing': the request is answered. 'typed_answer': you asked for a value the user types in their own words. 'action_choice': you offer actions to pick from. A turn inviting the user to continue awaits them. A request naming one of several items without saying which is not answered yet: ask which, as a typed_answer or as an action_choice.",
-                  "Required": true
-                },
-                {
-                  "Name": "userIsLeaving",
-                  "Description": "True when the user's own message was a goodbye: thanks, we're done, declining further help, wanting to return to the main assistant.",
-                  "Required": true
-                },
-                {
-                  "Name": "actions",
-                  "Description": "The actions offered as buttons; omit when none. 'tool' is the name of your own tool the action leads to, 'label' the button text (an emoji is welcome), 'value' the message sent on the user's behalf when the button is pressed, written as the user would type it.",
-                  "Required": false
-                },
-                {
-                  "Name": "card",
-                  "Description": "A card presenting the turn's structured data; omit when none. Pick each component by the nature of the datum: key_value for one labeled field, grid for several homogeneous pairs, list for an enumeration, text_block for prose, badge for a status, image for a picture URL, section to group related components, divider between groups. At most 50 components and 3 levels of nesting.",
-                  "Required": false
-                }
-              ]
-            },
-            {
-              "Name": "LaunchWorkflow",
-              "Description": "Starts one of your workflows: a procedure whose steps are kept in order for you. Call it as soon as the user asks for what one of them does. While it runs, your actions are those of its current step.",
-              "Parameters": [
-                {
-                  "Name": "workflow",
-                  "Description": "The workflow to start.",
-                  "Required": true
-                }
-              ]
-            }
-          ]
-        },
-        {
           "ServiceButtons": [
             {
               "Name": "Closure",

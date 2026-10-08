@@ -647,7 +647,7 @@ public class InterviewTools
         if (cleanName.Length == 0)
             return ToolReply.Refused("No workflow recorded: a workflow must have a name, because the model starts it by that name.");
 
-        // The name is what the model passes to LaunchWorkflow, so a workflow kept under one that has
+        // The name is what the launcher function is named after, so a workflow kept under one that has
         // to change would survive the corrected call as a second workflow.
         string complaint = IdentifierComplaint(cleanName, "workflow name", pascalCase: true);
 

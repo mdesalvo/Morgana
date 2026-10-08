@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Morgana.AI.Providers;
+using Morgana.AI.Workflows;
 
 namespace Morgana.AI.ChatClients;
 
@@ -80,7 +81,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
             if (!servingConsultation)
                 return options;
 
-            presented = [.. tools.Where(tool => tool.Name != Constants.Tools.LaunchWorkflow)];
+            presented = [.. tools.Where(tool => tool is not WorkflowLauncherFunction)];
         }
         else
         {
@@ -95,7 +96,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
                 else if (tool.Name == Constants.Tools.Reply
                     || tool.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
                     presented.Add(tool);
-                else if (tool.Name == Constants.Tools.LaunchWorkflow)
+                else if (tool is WorkflowLauncherFunction)
                     continue;
                 else if (signature.Contains(tool.Name))
                 {

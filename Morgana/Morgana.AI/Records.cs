@@ -1149,8 +1149,9 @@ public static class Records
 
     /// <summary>
     /// Tool definition specifying a callable tool method with parameters.
-    /// For a native domain tool it is projected from the tool's method on the <see cref="Abstractions.MorganaTool"/>
-    /// subclass, for a framework tool it is read from morgana.json. MorganaToolAdapter turns it into an AIFunction.
+    /// It is projected from the tool's method: on the <see cref="Abstractions.MorganaTool"/> subclass for a native
+    /// domain tool, on <c>ReplyTool</c> for the framework's own tool.
+    /// MorganaToolAdapter turns a method's definition into an AIFunction.
     /// </summary>
     /// <param name="Name">Tool method name (the actual method name in the MorganaTool class)</param>
     /// <param name="Description">Tool description for LLM understanding</param>
@@ -1166,8 +1167,8 @@ public static class Records
     /// Microsoft.Extensions.AI's, through <c>ApprovalRequiredAIFunction</c>.
     /// </param>
     /// <param name="Reserved">
-    /// True for the morgana.json base tool (Reply). It is stamped true only where MorganaAgentAdapter
-    /// reads morgana.json's own Tools array, while the projection of a domain tool's class always
+    /// True for the framework's base tool (Reply). It is stamped true only where MorganaAgentAdapter
+    /// projects <c>ReplyTool</c>, while the projection of a domain tool's class always
     /// leaves it false. Consumers (e.g. the reverse guard-rail wrapper) use it to skip tools whose
     /// output the framework itself controls.
     /// </param>
@@ -1210,7 +1211,7 @@ public static class Records
     /// A procedure of one agent whose steps are kept in order by the framework: declared by a
     /// <c>MorganaWorkflow</c> class beside the agent's tools and run by the workflow engine.
     /// </summary>
-    /// <param name="Name">What the model passes to <c>LaunchWorkflow</c> to start it; unique per agent.</param>
+    /// <param name="Name">What names the function that starts it, <c>Start{Name}</c>; unique per agent.</param>
     /// <param name="Description">What the procedure does, offered to the model beside its name.</param>
     /// <param name="Steps">The steps of the procedure; the first one is where it starts.</param>
     /// <param name="Edges">Every transition of the procedure, in the order the class declared them.</param>

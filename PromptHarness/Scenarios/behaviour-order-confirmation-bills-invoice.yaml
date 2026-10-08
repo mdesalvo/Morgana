@@ -19,7 +19,7 @@ turns:
     expect:
       agent: InventoryAgent
       agentCompleted: false
-      toolsCalled: [LaunchWorkflow, CreatePurchaseOrder]
+      toolsCalled: [StartPlaceOrder, CreatePurchaseOrder]
       toolsNotCalled: [ConfirmOrder]
       textNotEmpty: true
       # Structural, not judged: the seal word is delivered on the quote's card and this asserts the

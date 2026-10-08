@@ -308,7 +308,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     /// itself, in declaration order.
     /// </summary>
     /// <remarks>
-    /// An override and a property accessor are not declared tools, so <c>Reply</c> and the members of
+    /// An override and a property accessor are not declared tools, so the members of
     /// <c>object</c> stay out; a helper is left out by not being public.
     /// </remarks>
     /// <param name="toolType">The <see cref="MorganaTool"/> subclass to read.</param>

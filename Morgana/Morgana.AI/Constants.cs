@@ -294,7 +294,7 @@ public static class Constants
         /// <summary>A published agent failed while answering.</summary>
         public const string PeerFailed = "PeerFailed";
 
-        /// <summary>LaunchWorkflow started a workflow.</summary>
+        /// <summary>A workflow launcher started a workflow.</summary>
         public const string WorkflowStarted = "WorkflowStarted";
 
         /// <summary>A tool was called that the running workflow does not offer at its current step.</summary>
@@ -312,13 +312,10 @@ public static class Constants
     {
         /// <summary>Closes the agent's turn: whether it awaits the user, the actions that it offers and its card.</summary>
         public const string Reply = "Reply";
-
-        /// <summary>Starts one of the agent's workflows; offered only to an agent that declares one.</summary>
-        public const string LaunchWorkflow = "LaunchWorkflow";
     }
 
     /// <summary>
-    /// What a workflow class and its launch tool agree on across the plugin and morgana.json.
+    /// What a workflow class and its launcher agree on across the plugin and the framework.
     /// Also what a plugin's returned record or an MCP server's result and the workflow engine reading it agree on.
     /// </summary>
     public static class Workflows
@@ -329,8 +326,11 @@ public static class Constants
         /// <summary>The suffix of a workflow class name that the workflow's name drops: <c>PlaceOrderWorkflow</c> is launched as <c>PlaceOrder</c>.</summary>
         public const string ClassNameSuffix = "Workflow";
 
-        /// <summary>The parameter of <see cref="Tools.LaunchWorkflow"/> that names the workflow to start.</summary>
-        public const string WorkflowParameter = "workflow";
+        /// <summary>
+        /// Prefixed to a workflow's name to name the function that starts it, as <c>StartPlaceOrder</c> does for <c>PlaceOrder</c>.
+        /// It is for the model to read: code builds names with it only to rule out collisions and never to recognise a launcher.
+        /// </summary>
+        public const string LauncherPrefix = "Start";
 
         /// <summary>The member of an MCP tool's result that holds the returned record, as the MCP specification names it.</summary>
         public const string MCPStructuredContent = "structuredContent";

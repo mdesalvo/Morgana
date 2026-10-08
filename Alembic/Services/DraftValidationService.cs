@@ -22,13 +22,6 @@ public class DraftValidationService : IDraftValidationService
         ["Morgana", "Classifier", "Guard", "Presentation", "ChannelAdapter"];
 
     /// <summary>
-    /// The base tools every agent receives from <c>morgana.json</c>. A domain tool sharing one of
-    /// these names would be registered twice against the same agent.
-    /// </summary>
-    private static readonly string[] BaseToolNames =
-        [Constants.Tools.Reply, Constants.Tools.LaunchWorkflow];
-
-    /// <summary>
     /// The scopes a parameter may declare: every parameter declares one of the two.
     /// </summary>
     private static readonly string[] KnownScopes = [Constants.Scopes.Context, Constants.Scopes.Request];
@@ -327,8 +320,18 @@ public class DraftValidationService : IDraftValidationService
 
         HashSet<string> toolNames = new(StringComparer.Ordinal);
 
+        // Reply is every agent's and each workflow of this agent has a launcher: a domain tool sharing one of
+        // these names would be offered twice to the same agent.
+        HashSet<string> reservedToolNames =
+        [
+            Constants.Tools.Reply,
+            .. agent.Workflows
+                .Where(workflow => !string.IsNullOrWhiteSpace(workflow.Name))
+                .Select(workflow => Constants.Workflows.LauncherPrefix + workflow.Name)
+        ];
+
         foreach (ToolDraft tool in agent.Tools)
-            ValidateTool(agent, tool, toolNames, findings);
+            ValidateTool(agent, tool, toolNames, reservedToolNames, findings);
 
         ValidateWorkflows(agent, where, findings);
     }
@@ -380,7 +383,7 @@ public class DraftValidationService : IDraftValidationService
     /// <summary>
     /// Checks one tool's name, description and parameter list.
     /// </summary>
-    private static void ValidateTool(AgentDraft agent, ToolDraft tool, HashSet<string> toolNames, List<ValidationFinding> toolkit)
+    private static void ValidateTool(AgentDraft agent, ToolDraft tool, HashSet<string> toolNames, IReadOnlySet<string> reservedToolNames, List<ValidationFinding> toolkit)
     {
         // Every finding about a tool is rewritten in the Toolkit step.
         ToolkitFindings findings = new(toolkit);
@@ -400,10 +403,10 @@ public class DraftValidationService : IDraftValidationService
                 "This agent declares two tools with this name.",
                 "Tools are registered by name per agent, so the second registration replaces or collides with the first."));
 
-        if (BaseToolNames.Contains(tool.Name, StringComparer.Ordinal))
+        if (reservedToolNames.Contains(tool.Name))
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
-                $"'{tool.Name}' is one of the base tools every agent already receives.",
-                "morgana.json declares Reply and LaunchWorkflow as base tools; a domain tool cannot share either name."));
+                $"'{tool.Name}' is a function that this agent already receives.",
+                $"Every agent receives {Constants.Tools.Reply} and a function named {Constants.Workflows.LauncherPrefix} followed by the name of each of its workflows; a domain tool cannot share any of these names."));
 
         ValidateIdentifier(tool.Name, where, "tool name", findings);
 

@@ -10,6 +10,7 @@ using Morgana.AI.Adapters;
 using Morgana.AI.ChatClients;
 using Morgana.AI.Providers;
 using Morgana.AI.Services;
+using Morgana.AI.Tools;
 using Morgana.Contracts;
 using Xunit;
 
@@ -355,12 +356,12 @@ public sealed class TurnClosureTests
                 new Records.ToolParameter("card", "The card.", false, "")
             ]);
 
-            MorganaTool baseTool = new MorganaTool(NullLogger.Instance,
+            ReplyTool baseTool = new ReplyTool(NullLogger.Instance,
                 () => new MorganaTool.ToolContext(reply.provider, reply.session, "turn-closure", actionableToolNames));
             MorganaToolAdapter adapter = new MorganaToolAdapter(NullLogger.Instance,
                 () => new MorganaTool.ToolContext(reply.provider, reply.session, "turn-closure"));
 
-            Func<Records.AwaitedFromUser, bool, List<Records.ReplyAction>?, RichCard?, Task<object>> implementation = baseTool.Reply;
+            Func<Records.AwaitedFromUser, bool, List<Records.ReplyAction>?, RichCard?, Task<Records.FrameworkToolResult>> implementation = baseTool.Reply;
             adapter.AddTool(definition.Name, implementation, definition);
             reply.Function = await adapter.CreateFunctionAsync(definition.Name);
 

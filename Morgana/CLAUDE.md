@@ -96,7 +96,8 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[ProvidesWorkflowForIntent]`, `[RequiresApproval]`, `[ToolParameter]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
 | `ChatClients/` | `IChatClient` decorators: `TierDefaultsChatClient`, `DustAccountingChatClient`, `MorganaAnthropicClient`, `ApprovalTurnChatClient` (drops `Reply` from a response asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model wrote without `Reply`: a forced tool call, structured output where the provider cannot force one), `WorkflowToolsChatClient` (offers the model only the tools that a running workflow's current step allows) |
-| `Workflows/` | `WorkflowEngine`: an agent's workflows on Microsoft.Agents.AI.Workflows, rebuilt at every call from the checkpoint kept in the agent's session |
+| `Workflows/` | `WorkflowEngine`: an agent's workflows on Microsoft.Agents.AI.Workflows, rebuilt at every call from the checkpoint kept in the agent's session. `WorkflowLauncherFunction`: the function that starts one workflow, recognised by its type |
+| `Tools/` | `ReplyTool`: the framework's own tool, declared on its method as a domain tool is |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
 | `Providers/` | `MorganaAIContextProvider` (context variables plus the shared registry), `MorganaChatHistoryProvider` (stores the whole history, hands the model the current episode only — since the user last left — with earlier tool results marked) |
 | `SessionStores/` | `MorganaHostedAgentSessionStore` — which conversation an inbound A2A request is served on |
@@ -281,12 +282,12 @@ tier) and `GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
    an action button that leads to the tool is that approval already
 5. **Or MCP** — `[UsesMCPServer(...)]`, repeatable, tools discovered at runtime. They never ask for approval: where one changes something real, the agent's `Instructions` have it ask first
 6. **Colleagues** — `[ConsultsAgent("otherintent")]`, once each, validated at startup
-7. **Workflows** (optional) — a `MorganaWorkflow` class with `[ProvidesWorkflowForIntent("x")]`, shaped like a MAAI graph: steps are nodes holding their tools, each transition is one `AddEdge` or `AddFailureEdge` and a call with no edge ends the workflow. The class's public properties are the values that an edge carries by name. The agent gets `LaunchWorkflow`; the order is the framework's, so no prose restates it. A step names an MCP tool by string and such a workflow is checked when the agent is born, withdrawn from it if it does not hold
+7. **Workflows** (optional) — a `MorganaWorkflow` class with `[ProvidesWorkflowForIntent("x")]`, shaped like a MAAI graph: steps are nodes holding their tools, each transition is one `AddEdge` or `AddFailureEdge` and a call with no edge ends the workflow. The class's public properties are the values that an edge carries by name. The agent gets one launcher per workflow, `Start{Name}`, described by the class; the order is the framework's, so no prose restates it. A step names an MCP tool by string and such a workflow is checked when the agent is born, withdrawn from it if it does not hold
 8. **Package as a plugin DLL** into `plugins/`
 
 ## Tool System
 
-Every agent gets the **base tool** `Reply` from `morgana.json` plus its domain tools; an agent declaring workflows also gets `LaunchWorkflow`.
+Every agent gets the **base tool** `Reply` (`ReplyTool`) plus its domain tools; an agent declaring workflows also gets one launcher per workflow.
 
 Every parameter declares its scope: `Context` or `Request` (asked of the user). Required is the
 signature's alone. Only a `Context` value is shared and a `Context` parameter is a required `string`.
@@ -295,8 +296,8 @@ a value the model passes, reads one it omits from the session and keeps the tool
 nobody holds it. No prose tells the model any of this beyond one sentence of `ToolUsage`.
 
 Parameter descriptions reach the model **only** through the JSON schema, via
-`AIJsonSchemaCreateOptions.ParameterDescriptionProvider`. A tool definition read from JSON exists only
-for `morgana.json`'s own `Reply` and `LaunchWorkflow`, which are framework prose. MCP tools never pass
+`AIJsonSchemaCreateOptions.ParameterDescriptionProvider`. No tool is declared in JSON: the framework's
+`Reply` is a method like any domain tool and a launcher is projected from its workflow's class. MCP tools never pass
 through `MorganaToolAdapter`: they arrive carrying their server's schema and Morgana adapts nothing.
 A workflow reads an MCP step's outcome from `isError` and `structuredContent` and carries only the
 fields that the server's `outputSchema` declares.

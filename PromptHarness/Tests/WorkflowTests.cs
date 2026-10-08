@@ -12,6 +12,7 @@ using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 using Morgana.AI.Services;
+using Morgana.AI.Tools;
 using Morgana.AI.Workflows;
 using Xunit;
 
@@ -168,7 +169,7 @@ public sealed class WorkflowTests
     // =========================================================================
 
     [Fact]
-    public async Task LaunchWorkflow_is_one_required_enum_of_the_workflows_each_described()
+    public async Task Each_workflow_has_a_launcher_with_no_parameter_described_by_its_class()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder(), Settle());
         ScriptedModel model = agent.Model;
@@ -176,42 +177,37 @@ public sealed class WorkflowTests
 
         await agent.TurnAsync("hi");
 
-        AIFunction launch = Assert.IsAssignableFrom<AIFunction>(Assert.Single(model.ToolsPerCall[0], tool => tool.Name == "LaunchWorkflow"));
-        JsonElement schema = launch.JsonSchema;
+        AIFunction placeOrder = Assert.IsAssignableFrom<AIFunction>(Assert.Single(model.ToolsPerCall[0], tool => tool.Name == "StartPlaceOrder"));
+        AIFunction settle = Assert.IsAssignableFrom<AIFunction>(Assert.Single(model.ToolsPerCall[0], tool => tool.Name == "StartSettle"));
 
-        Assert.Equal(["workflow"], schema.GetProperty("properties").EnumerateObject().Select(property => property.Name));
-        Assert.Equal(["workflow"], schema.GetProperty("required").EnumerateArray().Select(name => name.GetString()));
-        JsonElement workflow = schema.GetProperty("properties").GetProperty("workflow");
-        Assert.Equal(["PlaceOrder", "Settle"], workflow.GetProperty("enum").EnumerateArray().Select(name => name.GetString()));
-
-        // The parameter's authored text first and then each workflow beside its own description.
-        string description = workflow.GetProperty("description").GetString()!;
-        Assert.StartsWith("The workflow to start.", description, StringComparison.Ordinal);
-        Assert.Contains("PlaceOrder: Placing an order.", description, StringComparison.Ordinal);
-        Assert.Contains("Settle: Settling an order.", description, StringComparison.Ordinal);
+        Assert.Equal("Placing an order.", placeOrder.Description);
+        Assert.Equal("Settling an order.", settle.Description);
+        Assert.Empty(placeOrder.JsonSchema.GetProperty("properties").EnumerateObject());
+        Assert.False(placeOrder.JsonSchema.TryGetProperty("required", out _));
+        Assert.DoesNotContain(model.ToolsPerCall[0], tool => tool.Name == "LaunchWorkflow");
     }
 
     [Fact]
-    public async Task An_agent_declaring_no_workflow_is_never_offered_LaunchWorkflow()
+    public async Task An_agent_declaring_no_workflow_is_never_offered_a_launcher()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync();
         agent.Model.Enqueue(Closing("Hello."));
 
         await agent.TurnAsync("hi");
 
-        Assert.DoesNotContain(agent.Model.ToolsPerCall[0], tool => tool.Name == "LaunchWorkflow");
+        Assert.DoesNotContain(agent.Model.ToolsPerCall[0], tool => tool.Name.StartsWith("Start", StringComparison.Ordinal));
         Assert.Contains(agent.Model.ToolsPerCall[0], tool => tool.Name == "CreatePurchaseOrder");
     }
 
     [Fact]
-    public async Task Outside_a_workflow_every_tool_is_offered_and_a_consultation_is_never_offered_the_launch()
+    public async Task Outside_a_workflow_every_tool_is_offered_and_a_consultation_is_never_offered_a_launcher()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         agent.Model.Enqueue(Closing("Hello."));
         await agent.TurnAsync("hi");
 
         Assert.Equal(
-            ["CancelOrder", "ConfirmOrder", "CreatePurchaseOrder", "LaunchWorkflow", "Refund", "Reply", "Stock"],
+            ["CancelOrder", "ConfirmOrder", "CreatePurchaseOrder", "Refund", "Reply", "StartPlaceOrder", "Stock"],
             Names(agent.Model.ToolsPerCall[0]));
 
         AgentUnderTest serving = await AgentUnderTest.CreateAsync(PlaceOrder());
@@ -220,7 +216,7 @@ public sealed class WorkflowTests
         await serving.TurnAsync("a colleague's question");
 
         string[] offered = [.. serving.Model.ToolsPerCall[0].Select(tool => tool.Name)];
-        Assert.DoesNotContain("LaunchWorkflow", offered);
+        Assert.DoesNotContain("StartPlaceOrder", offered);
         Assert.Contains("CreatePurchaseOrder", offered);
     }
 
@@ -235,7 +231,7 @@ public sealed class WorkflowTests
         string[] atQuote = Names(agent.Model.ToolsPerCall[1]);
         string[] atDecide = Names(agent.Model.ToolsPerCall[2]);
 
-        Assert.Contains("LaunchWorkflow", atLaunch);
+        Assert.Contains("StartPlaceOrder", atLaunch);
         Assert.Equal(["CreatePurchaseOrder", "Reply", "Stock"], atQuote);
         Assert.Equal(["CancelOrder", "ConfirmOrder", "Reply", "Stock"], atDecide);
     }
@@ -388,16 +384,16 @@ public sealed class WorkflowTests
     public async Task A_tool_of_the_workflow_called_out_of_turn_is_not_run_and_is_told_so()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
-        agent.Model.Enqueue([new TextContent("Starting."), Call("LaunchWorkflow", """{"workflow":"PlaceOrder"}""")]);
+        agent.Model.Enqueue([new TextContent("Starting."), Call("StartPlaceOrder", "{}")]);
         agent.Model.Enqueue([Call("CancelOrder", """{"orderId":"ORD-1"}""")]);
-        agent.Model.Enqueue([Call("LaunchWorkflow", """{"workflow":"PlaceOrder"}""")]);
+        agent.Model.Enqueue([Call("StartPlaceOrder", "{}")]);
         agent.Model.Enqueue(Closing("Which plant?"));
 
         await agent.TurnAsync("I want a rose");
 
         string[] results = agent.FunctionResults();
         Assert.Contains("CancelOrder is not available at this step of PlaceOrder.", results);
-        Assert.Contains("LaunchWorkflow is not available at this step of PlaceOrder.", results);
+        Assert.Contains("StartPlaceOrder is not available at this step of PlaceOrder.", results);
         Assert.DoesNotContain(InventoryTools.Calls, call => call.StartsWith("CancelOrder", StringComparison.Ordinal));
         Assert.Equal("Quote", agent.Provider.GetWorkflowPosition(agent.Session)!.Step);
     }
@@ -406,7 +402,7 @@ public sealed class WorkflowTests
     public async Task A_tool_outside_the_workflow_runs_untouched_and_advances_nothing()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
-        agent.Model.Enqueue([new TextContent("Starting."), Call("LaunchWorkflow", """{"workflow":"PlaceOrder"}""")]);
+        agent.Model.Enqueue([new TextContent("Starting."), Call("StartPlaceOrder", "{}")]);
         agent.Model.Enqueue([Call("Stock", """{"item":"rose"}""")]);
         agent.Model.Enqueue(Closing("Twelve in stock."));
 
@@ -418,15 +414,14 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_launch_for_an_unknown_workflow_changes_nothing()
+    public async Task A_workflow_that_the_agent_does_not_declare_has_no_launcher()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
-        agent.Model.Enqueue([new TextContent("Starting."), Call("LaunchWorkflow", """{"workflow":"Nothing"}""")]);
-        agent.Model.Enqueue(Closing("I cannot."));
+        agent.Model.Enqueue(Closing("Hello."));
 
-        await agent.TurnAsync("do it");
+        await agent.TurnAsync("hi");
 
-        Assert.Contains("LaunchWorkflow is not available at this step of Nothing.", agent.FunctionResults());
+        Assert.DoesNotContain(agent.Model.ToolsPerCall[0], tool => tool.Name == "StartNothing");
         Assert.Null(agent.Provider.GetWorkflowPosition(agent.Session));
     }
 
@@ -541,7 +536,7 @@ public sealed class WorkflowTests
     public async Task A_native_step_hands_its_value_to_an_MCP_step()
     {
         await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance, Mixed());
-        agent.Model.Enqueue([Call("LaunchWorkflow", """{"workflow":"Mixed"}""")]);
+        agent.Model.Enqueue([Call("StartMixed", "{}")]);
         agent.Model.Enqueue([Call("CreatePurchaseOrder", """{"item":"rose"}""")]);
         agent.Model.Enqueue([Call("ShipOrder", "{}")]);
         agent.Model.Enqueue(Closing("Shipped."));
@@ -556,7 +551,7 @@ public sealed class WorkflowTests
     public async Task An_MCP_step_binds_the_field_of_its_structured_content_into_the_next_step()
     {
         await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance, Reserve());
-        agent.Model.Enqueue([Call("LaunchWorkflow", """{"workflow":"Reserve"}""")]);
+        agent.Model.Enqueue([Call("StartReserve", "{}")]);
         agent.Model.Enqueue([Call("ReserveStock", """{"item":"rose"}""")]);
         agent.Model.Enqueue([Call("ShipOrder", "{}")]);
         agent.Model.Enqueue(Closing("Shipped."));
@@ -570,7 +565,7 @@ public sealed class WorkflowTests
     public async Task An_MCP_step_whose_record_holds_an_error_follows_the_failure_edge()
     {
         await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance, Reserve());
-        agent.Model.Enqueue([Call("LaunchWorkflow", """{"workflow":"Reserve"}""")]);
+        agent.Model.Enqueue([Call("StartReserve", "{}")]);
         agent.Model.Enqueue([Call("ReserveStock", """{"item":"unavailable"}""")]);
         agent.Model.Enqueue(Closing("It is out of stock."));
 
@@ -583,7 +578,7 @@ public sealed class WorkflowTests
     public async Task An_MCP_step_that_the_server_reports_as_an_error_follows_the_failure_edge_and_a_plain_text_result_is_read_as_text()
     {
         await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance, Fragile());
-        agent.Model.Enqueue([Call("LaunchWorkflow", """{"workflow":"Fragile"}""")]);
+        agent.Model.Enqueue([Call("StartFragile", "{}")]);
         agent.Model.Enqueue([Call("FailHard", "{}")]);
         agent.Model.Enqueue([Call("ReadNote", "{}")]);
         agent.Model.Enqueue(Closing("Done."));
@@ -598,7 +593,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_workflow_carrying_a_field_out_of_a_tool_with_no_output_schema_is_withdrawn_and_LaunchWorkflow_is_not_offered()
+    public async Task A_workflow_carrying_a_field_out_of_a_tool_with_no_output_schema_is_withdrawn_and_its_launcher_is_not_offered()
     {
         CapturingLogger logger = new CapturingLogger();
         await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), logger, Blind());
@@ -606,7 +601,7 @@ public sealed class WorkflowTests
 
         await agent.TurnAsync("hi");
 
-        Assert.DoesNotContain(agent.Model.ToolsPerCall[0], tool => tool.Name == "LaunchWorkflow");
+        Assert.DoesNotContain(agent.Model.ToolsPerCall[0], tool => tool.Name == "StartBlind");
         Assert.Contains(logger.Errors, error => error.Contains("Blind", StringComparison.Ordinal) && error.Contains("withdrawn", StringComparison.Ordinal)
             && error.Contains("does not declare the returned field 'OrderId'", StringComparison.Ordinal));
     }
@@ -619,8 +614,7 @@ public sealed class WorkflowTests
 
         await agent.TurnAsync("hi");
 
-        AIFunction launch = Assert.IsAssignableFrom<AIFunction>(Assert.Single(agent.Model.ToolsPerCall[0], tool => tool.Name == "LaunchWorkflow"));
-        Assert.Equal(["Mixed"], launch.JsonSchema.GetProperty("properties").GetProperty("workflow").GetProperty("enum").EnumerateArray().Select(name => name.GetString()));
+        Assert.Equal(["StartMixed"], Names(agent.Model.ToolsPerCall[0]).Where(name => name.StartsWith("Start", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -634,7 +628,7 @@ public sealed class WorkflowTests
 
         string[] offered = Names(agent.Model.ToolsPerCall[0]);
         Assert.Contains("CreatePurchaseOrder", offered);
-        Assert.DoesNotContain("LaunchWorkflow", offered);
+        Assert.DoesNotContain("StartMixed", offered);
         Assert.DoesNotContain("ShipOrder", offered);
         Assert.Contains(logger.Errors, error => error.Contains("the agent has no tool 'ShipOrder'", StringComparison.Ordinal));
     }
@@ -746,10 +740,24 @@ public sealed class WorkflowTests
 
     [Theory]
     [InlineData("Reply")]
-    [InlineData("LaunchWorkflow")]
+    [InlineData("StartPlaceOrder")]
     [InlineData("consult_billing")]
     public void A_step_naming_a_framework_tool_or_a_colleague_is_refused(string tool)
         => AssertRefused([Ad("PlaceOrder", [new("Quote", ["CreatePurchaseOrder", tool])], [], [])], "belongs to the framework");
+
+    [Fact]
+    public void A_launcher_named_like_a_tool_of_the_agent_is_refused()
+    {
+        Records.ToolDefinition[] tools = [.. DeclaredTools(), new("StartPlaceOrder", "A tool.", [])];
+
+        List<string> errors = HandlesIntentAgentRegistryService.ValidateWorkflows("sample", [PlaceOrder()], tools, usesMcpServer: false);
+
+        Assert.Contains(errors, error => error.Contains("PlaceOrder", StringComparison.Ordinal) && error.Contains("launcher 'StartPlaceOrder' has the name of a tool", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void The_reply_tool_passes_the_contract_that_a_domain_tool_is_held_to()
+        => Assert.Empty(HandlesIntentAgentRegistryService.ValidateToolContract(Constants.Morgana, typeof(ReplyTool)));
 
     [Fact]
     public void An_edge_followed_by_a_tool_the_source_step_does_not_hold_is_refused()
@@ -1199,7 +1207,7 @@ public sealed class WorkflowTests
         /// </summary>
         public async Task RunQuoteTurnAsync(params string[] replies)
         {
-            Model.Enqueue([new TextContent("Starting."), Call("LaunchWorkflow", """{"workflow":"PlaceOrder"}""")]);
+            Model.Enqueue([new TextContent("Starting."), Call("StartPlaceOrder", "{}")]);
             Model.Enqueue([Call("CreatePurchaseOrder", """{"item":"rose"}""")]);
             Model.Enqueue([new TextContent("Here is the quote."), Call("Reply", replies.Length > 0 ? replies[0] : ExactReply)]);
             foreach (string reply in replies.Skip(1))

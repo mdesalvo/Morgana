@@ -6,6 +6,7 @@ using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
+using Morgana.AI.Tools;
 
 namespace Morgana.AI.Services;
 
@@ -277,6 +278,9 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         // declaration there is ignored all the same.
         errors.AddRange(ValidateNoDeclarationsInJson(prompts));
 
+        // The framework's own tool is held to the contract that a domain tool is.
+        errors.AddRange(ValidateToolContract(Constants.Morgana, typeof(ReplyTool)));
+
         foreach (string intent in registry.Keys)
         {
             // An intent without a tool type is the registry's own warning path: no class, no contract to weigh.
@@ -369,6 +373,9 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         HashSet<string> workflowNames = new(StringComparer.Ordinal);
 
+        // The launchers of the agent belong to no step, like the other functions of the framework.
+        HashSet<string> launcherNames = [.. workflows.Select(workflow => Constants.Workflows.LauncherPrefix + workflow.Name)];
+
         foreach (Records.WorkflowDefinition workflow in workflows)
         {
             string subject = $"Workflow '{workflow.Name}' of intent '{intent}'";
@@ -388,7 +395,12 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 continue;
             }
 
-            ValidateWorkflowSteps(subject, workflow, tools, usesMcpServer, errors);
+            // MAAI would fail the turn on two functions of one name, so a launcher may not share one with a tool.
+            string launcherName = Constants.Workflows.LauncherPrefix + workflow.Name;
+            if (launcherName == Constants.Tools.Reply || tools.ContainsKey(launcherName))
+                errors.Add($"{subject}: its launcher '{launcherName}' has the name of a tool of the agent");
+
+            ValidateWorkflowSteps(subject, workflow, launcherNames, tools, usesMcpServer, errors);
             ValidateWorkflowEdges(subject, workflow, tools, usesMcpServer, errors);
         }
 
@@ -401,6 +413,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     private static void ValidateWorkflowSteps(
         string subject,
         Records.WorkflowDefinition workflow,
+        IReadOnlySet<string> launcherNames,
         Dictionary<string, Records.ToolDefinition> tools,
         bool usesMcpServer,
         List<string> errors)
@@ -425,9 +438,10 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
             foreach (string tool in stepTools)
             {
-                // The framework's own tools belong to no step: Reply closes every turn and a colleague is a
-                // private method of the workflow, never one of its steps.
-                if (tool is Constants.Tools.Reply or Constants.Tools.LaunchWorkflow
+                // The framework's own tools belong to no step: Reply closes every turn, a launcher starts a workflow
+                // and a colleague is a private method of the workflow, never one of its steps.
+                if (tool == Constants.Tools.Reply
+                    || launcherNames.Contains(tool)
                     || tool.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
                     errors.Add($"{stepSubject}: '{tool}' belongs to the framework and cannot be a step's tool");
                 else if (!tools.ContainsKey(tool) && !usesMcpServer)

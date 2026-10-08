@@ -29,7 +29,7 @@ public sealed class FrameworkPromptTests
         Records.Prompt morgana = await resolver.ResolveAsync("Morgana");
 
         Assert.NotEmpty(morgana.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies"));
-        Assert.Equal(["Reply", "LaunchWorkflow"], morgana.GetAdditionalProperty<List<Records.ToolDefinition>>("Tools").Select(tool => tool.Name));
+        Assert.DoesNotContain(morgana.AdditionalProperties, properties => properties.ContainsKey(Constants.PromptProperties.Tools));
 
         string[] injections = [.. morgana.GetAdditionalProperty<List<Records.Injection>>("Injections").Select(injection => injection.Name)];
         Assert.Equivalent(new[]
