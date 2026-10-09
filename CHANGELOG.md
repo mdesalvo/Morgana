@@ -13,6 +13,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### 🐛 Fixed
 
 ### 📦 Dependencies
+- Updated `Microsoft.Agents.AI` to 1.24.0
+- Updated `OllamaSharp` to 5.5.0
 
 ### 🚀 Future Enablement
 
