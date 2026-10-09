@@ -58,7 +58,7 @@ public sealed class TurnObserver : IDisposable
     /// <param name="template">The framework's own message template.</param>
     /// <param name="groups">Placeholder (as written in the template) to the sub-pattern replacing it.</param>
     /// <returns>A pattern matching the rendered line.</returns>
-    private static string PatternFrom(string template, params (string Placeholder, string Pattern)[] groups)
+    internal static string PatternFrom(string template, params (string Placeholder, string Pattern)[] groups)
     {
         string pattern = Regex.Escape(template);
 

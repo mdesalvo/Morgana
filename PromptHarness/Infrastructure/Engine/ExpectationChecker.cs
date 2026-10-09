@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Markdig;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
+using Morgana.AI;
 using Morgana.Contracts;
 using PromptHarness.Infrastructure.Wiring;
 
@@ -20,12 +21,15 @@ public static partial class ExpectationChecker
         new HashSet<string>(["continue_agent", "exit_agent"], StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Matches <c>MorganaChatHistoryProvider</c>'s per-turn log line, which fires every turn a
-    /// reducer is configured regardless of whether it actually shrank anything this time — the two
-    /// counts are what distinguish "reducer present" from "reduction happened".
+    /// Matches the reducer's line for a history folded into its summary, written only on the turn a fold
+    /// happens. Derived from the framework's own template, so a reworded line fails here at the same commit.
     /// </summary>
-    [GeneratedRegex(@"PROVIDING reduced view \((?<full>\d+) → (?<reduced>\d+) messages\)", RegexOptions.CultureInvariant)]
-    private static partial Regex SummarizationLogPattern { get; }
+    private static readonly Regex SummarizationLogPattern = new Regex(
+        TurnObserver.PatternFrom(
+            Constants.ObservableLogs.HistorySummarized,
+            ("{SummarizedCount}", @"(?<summarized>\d+)"),
+            ("{KeptCount}", @"(?<kept>\d+)")),
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     /// <summary>Returns one message per violated expectation; empty when the turn conforms.</summary>
     /// <param name="history">
@@ -121,31 +125,21 @@ public static partial class ExpectationChecker
     }
 
     /// <summary>
-    /// Whether <c>MorganaChatHistoryProvider</c>'s reducer actually shrank the conversation before
-    /// this turn — the log line fires every turn a reducer is configured, so "occurred" means the
-    /// two counts in the last such line for this turn differ, not merely that the line exists.
+    /// Whether the reducer folded the conversation into its summary before the model read it this turn,
+    /// which its line says by being there at all.
     /// </summary>
     private static void CheckSummarization(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
         if (expect.SummarizationOccurred is not { } expectedOccurred)
             return;
 
-        // Take the last match, not the first: a turn can carry the line more than once if the
-        // agent's own tool-loop causes ProvideChatHistoryAsync to be called via a nested path — the
-        // most recent read is the one that decided what the LLM actually saw this turn.
-        Match? match = null;
-        foreach (string line in turn.LogLines)
-        {
-            Match candidate = SummarizationLogPattern.Match(line);
-            if (candidate.Success)
-                match = candidate;
-        }
-
-        bool occurred = match is not null
-            && int.Parse(match.Groups["full"].Value, CultureInfo.InvariantCulture) > int.Parse(match.Groups["reduced"].Value, CultureInfo.InvariantCulture);
+        Match? fold = turn.LogLines.Select(line => SummarizationLogPattern.Match(line)).LastOrDefault(match => match.Success);
+        bool occurred = fold is not null;
 
         if (occurred != expectedOccurred)
-            failures.Add($"summarizationOccurred: expected {expectedOccurred}, got {occurred}" + (match is null ? " (no reducer log line seen — is a reducer configured?)" : $" ({match.Groups["full"].Value} → {match.Groups["reduced"].Value} messages)"));
+            failures.Add($"summarizationOccurred: expected {expectedOccurred}, got {occurred}" + (fold is null
+                ? " (no fold logged this turn)"
+                : $" ({fold.Groups["summarized"].Value} message(s) summarized, {fold.Groups["kept"].Value} kept)"));
     }
 
     /// <summary>Cardinality and identity of the quick replies delivered with the message.</summary>

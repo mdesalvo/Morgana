@@ -564,8 +564,8 @@ public static class Constants
 
     /// <summary>
     /// Log lines somebody OUTSIDE the process reads. Ordinary logging is prose for an operator and
-    /// belongs nowhere near this file; these three lines are different — they are the only place a
-    /// context variable's NAME becomes observable and the PromptHarness parses them to assert how a
+    /// belongs nowhere near this file; these lines are different — the three context accesses are the only
+    /// place a context variable's NAME becomes observable and the PromptHarness parses them to assert how a
     /// context-scoped parameter was resolved, which no span attribute carries (a name is data and spans carry
     /// none). That makes their shape a contract with a reader that cannot be recompiled with them.
     /// </summary>
@@ -598,6 +598,12 @@ public static class Constants
 
         /// <summary>Write of a variable, with the value stored.</summary>
         public const string ContextSet = ContextAccessHead + " into agent context. Value is: {Value}";
+
+        /// <summary>
+        /// A history folded into its summary before the model read it. Written only on the turn a fold
+        /// happens and nowhere else observable: the summary reaches neither a span nor the channel.
+        /// </summary>
+        public const string HistorySummarized = "MorganaChatReducer summarizing the first {SummarizedCount} unsummarized message(s), keeping {KeptCount}";
     }
 
     /// <summary>

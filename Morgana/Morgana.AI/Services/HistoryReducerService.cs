@@ -180,7 +180,7 @@ public sealed class MorganaChatReducer : IChatReducer
             return conversation.ToChatMessages();
 
         logger.LogInformation(
-            "MorganaChatReducer summarizing the first {SummarizedCount} unsummarized message(s), keeping {KeptCount}",
+            Constants.ObservableLogs.HistorySummarized,
             indexOfFirstMessageToKeep, conversation.UnsummarizedCount - indexOfFirstMessageToKeep);
 
         // Reassigned rather than mutated — the struct is readonly and folding produces a different

@@ -113,8 +113,7 @@ public sealed class SummarizationTests
         // The fold opens the row and the turn's answer follows it; the agent reads it back at its next turn
         IReadOnlyList<ChatMessage> afterTurn = await record.LoadParticipantMessagesAsync(conversationId, "billing");
         Assert.Equal(fold.Text, afterTurn[0].Text);
-        Assert.Equal(ChatRole.Assistant, afterTurn[^1].Role);
-        Assert.True(afterTurn.Count > 1, "The turn that ran over the fold left nothing of its own on record.");
+        Assert.Contains(afterTurn.Skip(1), message => message.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(message.Text));
         Assert.Equal(1L, await new ChannelApiClient(fixture).QueryRecordAsync(conversationId, "SELECT is_dirty FROM morgana WHERE agent_name = 'billing';"));
 
         await fixture.Channel.SendAsync(conversationId, "Grazie, per ora è tutto", TimeSpan.FromSeconds(180));
