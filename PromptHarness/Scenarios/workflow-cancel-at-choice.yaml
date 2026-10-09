@@ -1,0 +1,33 @@
+id: workflow-cancel-at-choice
+description: >-
+  The other branch of PlaceOrder's choice step. The quote leaves the workflow at Decide with the
+  confirm and cancel actions offered; pressing cancel is the approval of CancelOrder, so the order is
+  cancelled with nothing typed and no approval buttons: ConfirmOrder never runs. Uses DAF-401 so it
+  never competes for stock with the confirmation scenario; a cancelled Pending order restores nothing,
+  so five replays leave the stock where it was. The seal word is pinned by Harness:DeterministicSealWord.
+
+turns:
+  - say: "Hi, I'd like to order 1 daffodil bulb pack, my customer code is T780C"
+    expect:
+      agent: InventoryAgent
+      agentCompleted: false
+      toolsCalled: [StartPlaceOrder, CreatePurchaseOrder]
+      toolsNotCalled: [ConfirmOrder, CancelOrder]
+      richCard: present
+      richCardContains: ["534LW03D"]
+      quickReplyIds: ["ConfirmOrder#1", "CancelOrder#2"]
+      textNotEmpty: true
+
+  - press: CancelOrder
+    expect:
+      agent: InventoryAgent
+      toolsCalled: [CancelOrder]
+      toolsNotCalled: [ConfirmOrder]
+      # Pressing the action was the approval: no second confirmation is asked.
+      noQuickReplyIds: [approve_action, reject_action]
+      textNotEmpty: true
+      textNotContains: ["#INT#"]
+    judge:
+      - "The response says the order has been cancelled."
+    judgeNot:
+      - "The response says the order has been confirmed or billed."

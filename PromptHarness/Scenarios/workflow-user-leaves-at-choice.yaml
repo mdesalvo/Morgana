@@ -1,0 +1,24 @@
+id: workflow-user-leaves-at-choice
+description: >-
+  A customer who leaves while the workflow waits at its choice step is not held to its actions: the
+  agent lets them go, nothing is confirmed or cancelled on their behalf and the farewell carries no
+  buttons. The order stays Pending, which is the honest outcome of a decision nobody took.
+
+turns:
+  - say: "Hi, I'd like to order 1 pack of the wildflower seed mix, my customer code is T780C"
+    expect:
+      agent: InventoryAgent
+      agentCompleted: false
+      toolsCalled: [StartPlaceOrder, CreatePurchaseOrder]
+      quickReplyIds: ["ConfirmOrder#1", "CancelOrder#2"]
+      textNotEmpty: true
+
+  - say: "I'll think about it and come back later. That's all for now, thanks."
+    expect:
+      agent: InventoryAgent
+      agentCompleted: true
+      toolsNotCalled: [ConfirmOrder, CancelOrder]
+      quickReplies: none
+      textNotEmpty: true
+    judgeNot:
+      - "The response says the order has been confirmed, billed or cancelled."

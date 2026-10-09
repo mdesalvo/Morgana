@@ -1,0 +1,36 @@
+id: workflow-typed-confirmation
+description: >-
+  The customer confirms the quote in words instead of pressing the action. Only a pressed action is
+  an approval, so the typed confirmation makes the agent call ConfirmOrder and the framework hold it
+  for the approval buttons; the order is confirmed and billed only on the turn that answers them.
+  It fails on an agent that asks again in its own prose and leaves no buttons. It fails as well on a
+  call that runs without approval. Uses SEED-400 with the confirmation scenario: 500 units cover every replay.
+
+turns:
+  - say: "Hi, I'd like to order 1 pack of the wildflower seed mix, my customer code is T780C"
+    expect:
+      agent: InventoryAgent
+      agentCompleted: false
+      toolsCalled: [StartPlaceOrder, CreatePurchaseOrder]
+      toolsNotCalled: [ConfirmOrder]
+      quickReplyIds: ["ConfirmOrder#1", "CancelOrder#2"]
+      textNotEmpty: true
+
+  - say: "Yes, please confirm it"
+    expect:
+      agent: InventoryAgent
+      agentCompleted: false
+      # Asked, never run: a typed confirmation is not the press that approves.
+      toolsNotCalled: [ConfirmOrder]
+      quickReplyIds: [approve_action, reject_action]
+      textNotEmpty: true
+
+  - say: "Go ahead"
+    expect:
+      agent: InventoryAgent
+      toolsCalled: [ConfirmOrder]
+      noQuickReplyIds: [approve_action, reject_action]
+      textNotEmpty: true
+      textNotContains: ["#INT#", "invoiceId", "InvoiceLines"]
+    judge:
+      - "The response says the purchase has been billed to the customer."

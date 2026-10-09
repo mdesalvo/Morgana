@@ -1,0 +1,37 @@
+id: approval-declined
+description: >-
+  The answer to an approval request that the plan-enrollment scenario never gives: no. The enrolment
+  is asked for, the framework holds SubscribeToGreenCarePlan for the approval buttons and the customer
+  declines in words, so the tool never runs and the agent says nothing was opened. Uses T780C, a
+  seeded customer with no plan that the enrolment scenario never enrols, so every replay asks the same
+  question of the same prospect.
+
+turns:
+  - say: "Hi, my customer code is T780C. What does the Green Care Plan include and how much would it cost me?"
+    expect:
+      agent: ContractAgent
+      agentCompleted: false
+      toolsCalled: [GetPlanOverview]
+      toolsNotCalled: [SubscribeToGreenCarePlan]
+      textNotEmpty: true
+
+  - say: "I'd like to sign up for the Green Care Plan"
+    expect:
+      agent: ContractAgent
+      agentCompleted: false
+      # Asked, never run: the call is held for the approval buttons.
+      toolsNotCalled: [SubscribeToGreenCarePlan]
+      quickReplyIds: [approve_action, reject_action]
+      textNotEmpty: true
+
+  - say: "No, I've changed my mind. Don't sign me up."
+    expect:
+      agent: ContractAgent
+      toolsNotCalled: [SubscribeToGreenCarePlan]
+      noQuickReplyIds: [approve_action, reject_action]
+      textNotEmpty: true
+      textNotContains: ["#INT#", "contractId"]
+    judge:
+      - "The response says the customer has not been enrolled or that nothing was done."
+    judgeNot:
+      - "The response says the plan is active or that its first month has been billed."

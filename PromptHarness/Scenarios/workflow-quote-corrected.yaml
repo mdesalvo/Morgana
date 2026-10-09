@@ -1,0 +1,33 @@
+id: workflow-quote-corrected
+description: >-
+  A request that cannot be quoted as asked leaves PlaceOrder standing at its quote, so the corrected request
+  completes it on the next turn without the workflow being started again. LAV-300 holds 3 bundles and the
+  customer asks for 10: the agent may find that out from the catalog or from a refused quote, both lawful,
+  and what holds either way is that nothing reaches the choice step until a quantity can be quoted. The
+  failure edge itself, a refused quote leading back to Quote, is asserted deterministically by WorkflowTests.
+
+turns:
+  - say: "Hi, I'd like to order 10 lavender bundles, my customer code is T780C"
+    expect:
+      agent: InventoryAgent
+      agentCompleted: false
+      toolsCalled: [StartPlaceOrder]
+      toolsNotCalled: [ConfirmOrder, CancelOrder]
+      # No quote exists, so neither the choice nor its seal word may reach the customer.
+      noQuickReplyIds: ["ConfirmOrder#1", "CancelOrder#2"]
+      textNotContains: ["534LW03D", "#INT#"]
+      textNotEmpty: true
+    judge:
+      - "The response says that 10 bundles cannot be ordered or states how many are available."
+
+  - say: "Then I'll take 3"
+    expect:
+      agent: InventoryAgent
+      agentCompleted: false
+      # Still at Quote: the corrected quote is the step's own tool, with no new launch.
+      toolsCalled: [CreatePurchaseOrder]
+      toolsNotCalled: [StartPlaceOrder, ConfirmOrder]
+      richCard: present
+      richCardContains: ["534LW03D"]
+      quickReplyIds: ["ConfirmOrder#1", "CancelOrder#2"]
+      textNotEmpty: true

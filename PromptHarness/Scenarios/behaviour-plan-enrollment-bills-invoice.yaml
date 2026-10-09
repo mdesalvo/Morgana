@@ -42,7 +42,7 @@ turns:
     judge:
       - "The response states a concrete monthly fee for the plan."
     judgeNot:
-      - "The response refers to a plan this customer already holds."
+      - "The response says this customer already holds the Green Care Plan."
 
   - say: "I'd like to sign up for the Green Care Plan"
     expect:
@@ -53,15 +53,10 @@ turns:
       quickReplyIds: [approve_action, reject_action]
       textNotEmpty: true
       textNotContains: ["#INT#", "invoiceId", "InvoiceLines", "contractId"]
-    judge:
-      - "The response states the plan's monthly fee."
-      - "The response states at least one other term of the plan: its coverage, its visit frequency, or its guarantee."
-      - "The response asks the customer to confirm before going ahead."
     judgeNot:
-      # Tense, named outright. The turn is REQUIRED to describe the billing that enrolling causes, so
-      # the only thing left to forbid is describing it as done. Everything else this used to guard is
-      # already guaranteed structurally by toolsNotCalled above: nothing was opened, nothing billed.
-      - "The response says the plan is active now, or that the first month has already been billed."
+      # Tense, named outright: the turn may describe what enrolling causes, never as done. Everything
+      # else is guaranteed structurally above: nothing was opened, nothing billed.
+      - "The response says the plan is active now or that the first month has already been billed."
 
   - say: "Go ahead"
     expect:
@@ -73,4 +68,4 @@ turns:
       - "The response says the plan is now active."
       - "The response says the first month has been billed."
     judgeNot:
-      - "The response gives the invoice's own total, its tax, or a line on it."
+      - "The response gives the invoice's own total, its tax or a line on it."

@@ -46,4 +46,4 @@ turns:
     judgeNot:
       # Judged against everything the customer sees, card included. Naming the invoice is allowed and
       # required; reading its money out is what this forbids, wherever it would be rendered.
-      - "The response gives the invoice's own total, its tax, or a line on it."
+      - "The response gives the invoice's own total, its tax or a line on it."
