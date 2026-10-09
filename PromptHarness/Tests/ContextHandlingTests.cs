@@ -25,6 +25,7 @@ public sealed class ContextHandlingTests
     [InlineData("context-cycle-on-miss")]
     [InlineData("context-cycle-on-hit")]
     [InlineData("context-cross-agent")]
+    [InlineData("context-episode-return-same-agent")]
     public async Task Context_handling_scenario_holds(string scenarioId)
     {
         // The scenario's own runs/minPasses (5/5 for this blocking group, by convention — see the

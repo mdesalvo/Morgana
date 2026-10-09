@@ -1,0 +1,36 @@
+id: context-episode-return-same-agent
+description: >-
+  A customer who leaves an agent and comes back to it opens a new episode: the model reads only what
+  happened since, so the customer code given in the first episode is no longer in front of it. It
+  must still not be asked for again, because the shared registry holds it: the third turn reads it as
+  a Hit, which is what an agent that no longer sees the earlier exchange looks like. The cross-agent
+  scenario proves the same hydration for an agent that never ran; this one proves it for an agent
+  whose own past is out of view.
+runs: 5
+minPasses: 5
+
+turns:
+  - say: "Hi, my customer code is P994E — show me my last 3 invoices"
+    expect:
+      agent: BillingAgent
+      contextWrites: [customerCode]
+      toolsCalled: [GetInvoices]
+      textNotEmpty: true
+
+  - say: "We're done, thanks"
+    expect:
+      agent: BillingAgent
+      agentCompleted: true
+      quickReplies: none
+      textNotEmpty: true
+
+  - say: "Actually, show me my payment history for the last 6 months"
+    expect:
+      agent: BillingAgent
+      toolsCalled: [GetPaymentHistory]
+      contextReads: [Hit:customerCode]
+      historyUserMessages: 3
+      textNotEmpty: true
+      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache"]
+    judgeNot:
+      - "The response asks the user for their customer code or identifier."
