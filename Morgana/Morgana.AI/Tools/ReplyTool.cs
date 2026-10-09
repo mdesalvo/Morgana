@@ -159,7 +159,7 @@ public class ReplyTool : MorganaTool
     /// True when the turn under way has already written text to the user: an assistant message with
     /// text after the message that opened the turn.
     /// </summary>
-    private static bool HasTurnText(IList<ChatMessage> messages)
+    internal static bool HasTurnText(IList<ChatMessage> messages)
     {
         int turnStart = messages.Count - 1;
         while (turnStart >= 0 && messages[turnStart].Role != ChatRole.User)

@@ -121,7 +121,7 @@
             },
             {
               "Name": "ReplyWithoutText",
-              "Content": "no text has reached the user yet this turn"
+              "Content": "the turn has no text yet: a call that closes it comes after its words, never in their place"
             },
             {
               "Name": "CardTooDeep",
@@ -173,7 +173,7 @@
             },
             {
               "Name": "ReplyNotAccepted",
-              "Content": "[REPLY NOT ACCEPTED] ((reason))\nYour turn is still open. Any text you already wrote this turn has reached the user as it stands: write only what the user is still owed, never a word about this, then call Reply again with the closure corrected."
+              "Content": "[CALL NOT ACCEPTED] ((reason))\nYour turn is still open. Text you already wrote this turn has reached the user as it stands: write only what the user is still owed, never a word about this. Then make the call again, changing only what the reason names."
             },
             {
               "Name": "EarlierToolResult",
@@ -181,7 +181,7 @@
             },
             {
               "Name": "ExecutionApprovalGuidance",
-              "Content": "[THE USER APPROVES THIS TOOL ITSELF]\nCalling this tool does not run it: the user is shown this very call and approves or declines it, so never ask for their go-ahead yourself. Call it as soon as the user asks for what it does, with your text saying what it will do."
+              "Content": "[THE USER APPROVES THIS TOOL ITSELF]\nCalling this tool does not run it: the user is shown this very call and approves or declines it, so never ask for their go-ahead yourself. The call closes your turn: your text saying what it will do goes before it, in the same response. Call it as soon as the user asks for what it does."
             },
             {
               "Name": "WorkflowStepReached",

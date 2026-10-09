@@ -346,11 +346,14 @@ public class MorganaAgentAdapter
         // The tool loop the agent runs on. Reply's argument errors go back to the model in full, so a
         // card breaking its schema is repaired on the next call rather than lost; every other tool
         // fails as tersely as before, keeping a domain tool's internals out of the model's sight.
-        // Below the loop, a response asking for the user's approval loses its Reply: that turn is the
-        // framework's to close, with the approval buttons.
+        // Below the loop, a response asking for the user's approval waits for the turn's text and loses its
+        // Reply: that turn is the framework's to close, with the approval buttons.
         // Between the loop and the approval client, the tools that the workflow state allows are what the model is offered.
         FunctionInvokingChatClient toolLoopChatClient = new FunctionInvokingChatClient(
-            new WorkflowToolsChatClient(new ApprovalTurnChatClient(agentChatClient), sessionAccessor, morganaAIContextProvider, workflowDefinitions, MaxConsultationRoundsPerTurn))
+            new WorkflowToolsChatClient(
+                new ApprovalTurnChatClient(agentChatClient, await promptComposerService.ComposeReplyNotAcceptedAsync(
+                    await promptComposerService.ComposeToolResultAsync(Constants.ToolInjections.ReplyWithoutText))),
+                sessionAccessor, morganaAIContextProvider, workflowDefinitions, MaxConsultationRoundsPerTurn))
         {
             FunctionInvoker = (context, cancellationToken) => InvokeToolAsync(context, agentWorkflows, cancellationToken)
         };

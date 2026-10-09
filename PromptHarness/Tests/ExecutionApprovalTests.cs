@@ -85,6 +85,45 @@ public sealed class ExecutionApprovalTests
         Assert.Contains(response.Messages.SelectMany(message => message.Contents), content => content is FunctionCallContent { Name: "Reply" });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Approval_asked_before_the_turn_has_text_is_refused_until_it_is_written(bool streaming)
+    {
+        FunctionCallContent Confirm(string callId) => new FunctionCallContent(callId, "ConfirmOrder", new Dictionary<string, object?> { ["orderId"] = "ORD-1" });
+        ScriptedModel model = new ScriptedModel(
+            [Confirm("c1")],
+            [new TextContent("I'll confirm ORD-1 for you."), Confirm("c2")]);
+        ApprovalTurnChatClient client = new ApprovalTurnChatClient(model, "REFUSED: no text yet");
+        List<ChatMessage> turn = [new ChatMessage(ChatRole.User, "Confirm ORD-1")];
+        ChatOptions options = new ChatOptions { Tools = [new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string orderId) => "", "ConfirmOrder"))] };
+
+        List<AIContent> delivered = streaming
+            ? [.. (await client.GetStreamingResponseAsync(turn, options).ToListAsync()).SelectMany(update => update.Contents)]
+            : [.. (await client.GetResponseAsync(turn, options)).Messages.SelectMany(message => message.Contents)];
+
+        // The text-less call was answered with the refusal and never reached the tool loop; the one written after the text did.
+        FunctionResultContent refusal = Assert.IsType<FunctionResultContent>(Assert.Single(model.Requests[1][^1].Contents));
+        Assert.Equal(("c1", "REFUSED: no text yet"), (refusal.CallId, refusal.Result as string));
+        Assert.Equal("c2", Assert.Single(delivered.OfType<FunctionCallContent>()).CallId);
+        Assert.Contains(delivered, content => content is TextContent { Text: "I'll confirm ORD-1 for you." });
+    }
+
+    [Fact]
+    public async Task Approval_asked_with_no_text_goes_through_once_the_refusals_are_spent()
+    {
+        FunctionCallContent Confirm(string callId) => new FunctionCallContent(callId, "ConfirmOrder", new Dictionary<string, object?> { ["orderId"] = "ORD-1" });
+        ScriptedModel model = new ScriptedModel([Confirm("c1")], [Confirm("c2")], [Confirm("c3")]);
+        ApprovalTurnChatClient client = new ApprovalTurnChatClient(model, "REFUSED: no text yet");
+
+        ChatResponse response = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "Confirm ORD-1")],
+            new ChatOptions { Tools = [new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string orderId) => "", "ConfirmOrder"))] });
+
+        // Bounded, so a model that never writes cannot hold the turn: the framework's own question then speaks for it.
+        Assert.Equal(3, model.Requests.Count);
+        Assert.Equal("c3", Assert.Single(response.Messages.SelectMany(message => message.Contents).OfType<FunctionCallContent>()).CallId);
+    }
+
     /// <summary>
     /// An agent over the chain that Morgana gives its agents, minus metering and turn closure: the
     /// approval-aware model client under the tool loop, with ConfirmOrder requiring approval. Messages
@@ -145,19 +184,31 @@ public sealed class ExecutionApprovalTests
     }
 
     /// <summary>
-    /// Stands where the model would, answering each request with the next scripted contents.
+    /// Stands where the model would, answering each request with the next scripted contents and
+    /// keeping every request it received.
     /// </summary>
     private sealed class ScriptedModel(params List<AIContent>[] responses) : IChatClient
     {
         /// <summary>The scripted answers still to give.</summary>
         private readonly Queue<List<AIContent>> pending = new(responses);
 
-        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-            => Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant,
-                pending.Count > 0 ? pending.Dequeue() : [new TextContent("")])));
+        /// <summary>The messages of every request received, in order.</summary>
+        public List<List<ChatMessage>> Requests { get; } = [];
 
-        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-            => throw new InvalidOperationException("No streaming is scripted in this group");
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
+        {
+            Requests.Add([.. messages]);
+            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant,
+                pending.Count > 0 ? pending.Dequeue() : [new TextContent("")])));
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            // The same scripted answer as a stream: each of its contents arrives as an update of its own.
+            ChatResponse response = await GetResponseAsync(messages, options, cancellationToken);
+            foreach (ChatResponseUpdate update in response.ToChatResponseUpdates())
+                yield return update;
+        }
 
         public object? GetService(Type serviceType, object? serviceKey = null) => null;
 
