@@ -70,6 +70,20 @@ public sealed class ContextResolutionTests
     }
 
     [Fact]
+    public async Task Value_read_from_the_session_leaves_the_model_s_call_as_written()
+    {
+        ToolUnderTest tool = await ToolUnderTest.CreateAsync();
+        tool.Provider.MergeSharedContext(tool.Session, new Dictionary<string, object> { [CustomerCode] = "P994E" });
+        AIFunctionArguments modelCall = new AIFunctionArguments { [InvoiceId] = "INV-0247" };
+
+        await tool.Function.InvokeAsync(modelCall);
+
+        // The call is what the model reads back on later turns: a value it never wrote would read as one it made up.
+        Assert.Equal(("P994E", "INV-0247"), tool.ReceivedCall);
+        Assert.False(modelCall.ContainsKey(CustomerCode));
+    }
+
+    [Fact]
     public async Task Value_restored_from_a_persisted_session_reaches_the_tool_as_text()
     {
         ToolUnderTest tool = await ToolUnderTest.CreateAsync();

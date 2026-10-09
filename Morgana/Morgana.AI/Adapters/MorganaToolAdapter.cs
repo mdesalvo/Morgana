@@ -301,6 +301,14 @@ public class MorganaToolAdapter
             MorganaTool.ToolContext toolContext = toolContextFactory();
             List<string> missingParameters = [];
 
+            // The model's call stays on the record as the model wrote it: a value the session supplies reaches
+            // the tool alone. Written into the call, it would read on a later turn as a value the model made up.
+            AIFunctionArguments argumentsForTool = new AIFunctionArguments(new Dictionary<string, object?>(arguments))
+            {
+                Services = arguments.Services,
+                Context = arguments.Context
+            };
+
             // A colleague's answer must leave the conversation as it found it, so a value it was
             // handed is used and never stored where the shared registry would keep it.
             bool servingConsultation =
@@ -313,7 +321,7 @@ public class MorganaToolAdapter
                 string? supplied = AsText(arguments.TryGetValue(parameter, out object? argument) ? argument : null);
                 if (supplied is not null)
                 {
-                    arguments[parameter] = supplied;
+                    argumentsForTool[parameter] = supplied;
                     if (servingConsultation)
                         continue;
 
@@ -329,7 +337,7 @@ public class MorganaToolAdapter
                 string? held = AsText(toolContext.Provider.GetVariable(toolContext.Session, parameter));
                 if (held is not null)
                 {
-                    arguments[parameter] = held;
+                    argumentsForTool[parameter] = held;
 
                     logger.LogInformation(
                         Constants.ObservableLogs.ContextHit,
@@ -352,7 +360,7 @@ public class MorganaToolAdapter
                     [Constants.Placeholders.MissingValues] = string.Join(", ", missingParameters)
                 });
 
-            return await base.InvokeCoreAsync(arguments, cancellationToken);
+            return await base.InvokeCoreAsync(argumentsForTool, cancellationToken);
         }
 
         /// <summary>
