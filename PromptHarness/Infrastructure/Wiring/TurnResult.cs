@@ -69,6 +69,7 @@ public sealed record ConsultationObservation(
 /// checking "has this happened by now" against the whole conversation is the only way to assert on it
 /// without pinning to a turn index that variance can invalidate. See <c>ExpectationChecker.CheckDust</c>.
 /// </param>
+/// <param name="ModelCalls">Every LLM call of the turn as the model saw it, classification included; the forensic record of a failing run.</param>
 public sealed record TurnResult(
     string ConversationId,
     string UserMessage,
@@ -83,13 +84,41 @@ public sealed record TurnResult(
     string? ClassifierIntent = null,
     double? ClassifierConfidence = null,
     IReadOnlyList<ConsultationObservation>? Consultations = null,
-    IReadOnlyList<string>? CumulativeLogLines = null)
+    IReadOnlyList<string>? CumulativeLogLines = null,
+    IReadOnlyList<ModelCall>? ModelCalls = null)
 {
     /// <summary>Consultations served during the turn, never null.</summary>
     public IReadOnlyList<ConsultationObservation> Consulted => Consultations ?? [];
 
     /// <summary>Never null even when the caller didn't ask for cumulative tracking — see the parameter's own remarks.</summary>
     public IReadOnlyList<string> Cumulative => CumulativeLogLines ?? [];
+
+    /// <summary>The turn's LLM calls as the model saw them, never null.</summary>
+    public IReadOnlyList<ModelCall> Calls => ModelCalls ?? [];
+
+    /// <summary>The host's error and critical entries during the turn, each with its message and exception lines.</summary>
+    public IReadOnlyList<string> HostErrors
+    {
+        get
+        {
+            // The console logger opens an entry with its level and writes the message and the exception
+            // on the indented lines below it, so an error entry runs until the next unindented line.
+            List<string> errors = [];
+            bool insideError = false;
+            foreach (string line in LogLines)
+            {
+                if (line.StartsWith("fail:", StringComparison.Ordinal) || line.StartsWith("crit:", StringComparison.Ordinal))
+                    insideError = true;
+                else if (line.Length > 0 && !char.IsWhiteSpace(line[0]))
+                    insideError = false;
+
+                if (insideError)
+                    errors.Add(line);
+            }
+
+            return errors;
+        }
+    }
 
     /// <summary>Names read from the session, whether the read hit or missed.</summary>
     public IReadOnlyList<string> ContextReads
@@ -116,6 +145,6 @@ public sealed record TurnResult(
             {(Consultations is not { Count: > 0 } ? "" : string.Join("\n            ", Consultations.Select(c => $"consulted {c.Target}: tools={(c.ToolsInvoked.Count == 0 ? "(none)" : string.Join("/", c.ToolsInvoked))} | awaitingReply={c.AwaitingReply}\n              asked: {c.Question}\n              replied: {c.Answer}")) + "\n            ")}
             tokens: {Tokens}
             context: {(ContextAccesses.Count == 0 ? "(none)" : string.Join(", ", ContextAccesses.Select(a => $"{a.Operation}:{a.VariableName}")))}
-            text: {Text}
+            text: {Text}{(HostErrors.Count == 0 ? "" : "\nhost errors:\n" + string.Join("\n", HostErrors))}
             """;
 }

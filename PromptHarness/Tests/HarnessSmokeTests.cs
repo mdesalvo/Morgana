@@ -60,6 +60,12 @@ public sealed class HarnessSmokeTests
             // asked before calling its tool would be a prompt regression and that verdict belongs to
             // the context-handling scenarios, not here.
             Assert.NotEmpty(turn.LogLines);
+
+            // The model observer: every call of the turn carries what the model was handed and answered,
+            // or a failing run would be left with nothing but its words to be diagnosed from.
+            Assert.NotEmpty(turn.Calls);
+            Assert.All(turn.Calls, call => Assert.False(string.IsNullOrEmpty(call.InputMessages), "A model call was observed without its input messages."));
+            Assert.Contains(turn.Calls, call => !string.IsNullOrEmpty(call.Instructions));
         }
         finally
         {

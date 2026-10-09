@@ -1,5 +1,7 @@
 using System.Globalization;
+using System.Text;
 using PromptHarness.Infrastructure.Engine;
+using PromptHarness.Infrastructure.Wiring;
 
 namespace PromptHarness.Infrastructure.Reporting;
 
@@ -42,12 +44,14 @@ public static class FailureLog
             // HarnessDirectory points.
             string directory = Path.Combine(HarnessWriter.ResolveDirectory(harnessDirectory), "failures");
             string path = Path.Combine(directory, $"{outcome.Scenario.Id}.log");
+            string modelPath = Path.Combine(directory, $"{outcome.Scenario.Id}.model.log");
 
             // Not outcome.Passed: a scenario can clear its threshold with a failing run inside it;
             // that run is the one worth reading. Delete only when there is nothing to report.
             if (outcome.Passes == outcome.Runs.Count)
             {
                 File.Delete(path);
+                File.Delete(modelPath);
                 return;
             }
 
@@ -66,6 +70,10 @@ public static class FailureLog
               + verdict
               + "\n"
               + outcome.Report());
+
+            // What the model was handed and answered, beside the transcript: why it acted as it did is
+            // read here, never inferred from its words or bought again with another run.
+            File.WriteAllText(modelPath, ModelReport(outcome));
         }
         catch (IOException)
         {
@@ -76,5 +84,68 @@ public static class FailureLog
         {
             // Same reasoning: a read-only checkout is not a test failure.
         }
+    }
+
+    /// <summary>
+    /// Renders every LLM call of the failing runs: instructions, tools, the messages read and the answer.
+    /// </summary>
+    private static string ModelReport(ScenarioOutcome outcome)
+    {
+        StringBuilder report = new StringBuilder();
+
+        foreach (RunOutcome run in outcome.Runs.Where(run => !run.Passed))
+        {
+            report.AppendLine(CultureInfo.InvariantCulture, $"=== run {run.Index} ===");
+
+            // Instructions and tools repeat on every call of the same caller and alternate between agent,
+            // guard and classifier: each distinct text is written once per run and later cited by number.
+            List<string> instructionTexts = [];
+            List<string> toolTexts = [];
+
+            for (int turnIndex = 0; turnIndex < run.Turns.Count; turnIndex++)
+            {
+                TurnResult turn = run.Turns[turnIndex];
+                report.AppendLine();
+                report.AppendLine(CultureInfo.InvariantCulture, $"--- turn {turnIndex + 1}: {turn.UserMessage}");
+
+                for (int callIndex = 0; callIndex < turn.Calls.Count; callIndex++)
+                {
+                    ModelCall call = turn.Calls[callIndex];
+                    report.AppendLine();
+                    report.AppendLine(CultureInfo.InvariantCulture, $"[call {callIndex + 1}] {call.Usage}");
+                    AppendNumbered(report, "instructions", call.Instructions, instructionTexts);
+                    AppendNumbered(report, "tools", call.ToolDefinitions, toolTexts);
+                    report.AppendLine("input:");
+                    report.AppendLine(call.InputMessages ?? "(none recorded)");
+                    report.AppendLine("output:");
+                    report.AppendLine(call.OutputMessages ?? "(none recorded)");
+                }
+            }
+
+            report.AppendLine();
+        }
+
+        return report.ToString();
+    }
+
+    /// <summary>Writes a repeating text in full the first time it appears in a run, by its number afterwards.</summary>
+    private static void AppendNumbered(StringBuilder report, string label, string? text, List<string> seen)
+    {
+        if (text is null)
+        {
+            report.AppendLine(CultureInfo.InvariantCulture, $"{label}: (none recorded)");
+            return;
+        }
+
+        int number = seen.IndexOf(text) + 1;
+        if (number > 0)
+        {
+            report.AppendLine(CultureInfo.InvariantCulture, $"{label}: as {label} #{number}");
+            return;
+        }
+
+        seen.Add(text);
+        report.AppendLine(CultureInfo.InvariantCulture, $"{label} #{seen.Count}:");
+        report.AppendLine(text);
     }
 }

@@ -84,12 +84,12 @@ public sealed class TurnObserver : IDisposable
     private readonly ConcurrentDictionary<string, List<ClassifierSpan>> classifierSpans = new ConcurrentDictionary<string, List<ClassifierSpan>>();
 
     /// <summary>
-    /// Token usage of every closed LLM span, in completion order. Not keyed by conversation: the
-    /// MEAI spans carry <c>gen_ai.*</c> attributes and no conversation id, so they are attributed
-    /// to a turn by position in this list — sound for the same reason the log correlation is and
-    /// no more.
+    /// Every closed LLM span, in completion order: its token usage and what the model read and wrote. Not
+    /// keyed by conversation: the MEAI spans carry <c>gen_ai.*</c> attributes and no conversation id, so
+    /// they are attributed to a turn by position in this list — sound for the same reason the log
+    /// correlation is and no more.
     /// </summary>
-    private readonly List<TokenUsage> llmSpans = [];
+    private readonly List<ModelCall> llmSpans = [];
 
     /// <summary>Guards <see cref="llmSpans"/>.</summary>
     private readonly Lock llmGate = new Lock();
@@ -213,9 +213,10 @@ public sealed class TurnObserver : IDisposable
         // LLM spans are process-wide, not per-conversation (see the field's own remarks on why),
         // so isolating this turn's usage means skipping every span that existed before BeginTurn's
         // mark and summing whatever landed after — sound only because the suite runs serially.
-        TokenUsage usage;
+        List<ModelCall> modelCalls;
         lock (llmGate)
-            usage = llmSpans.Skip(scope.LlmSpanCount).Aggregate(TokenUsage.Zero, (total, next) => total + next);
+            modelCalls = [.. llmSpans.Skip(scope.LlmSpanCount)];
+        TokenUsage usage = modelCalls.Aggregate(TokenUsage.Zero, (total, next) => total + next.Usage);
 
         return new TurnResult(
             scope.ConversationId,
@@ -231,7 +232,8 @@ public sealed class TurnObserver : IDisposable
             classifier?.Intent,
             classifier?.Confidence,
             consulted,
-            conversationLogMark is { } mark ? output.Since(mark) : []);
+            conversationLogMark is { } mark ? output.Since(mark) : [],
+            modelCalls);
     }
 
     /// <inheritdoc />
@@ -245,6 +247,13 @@ public sealed class TurnObserver : IDisposable
         // accordingly — the two branches below populate entirely different collections.
         if (activity.Source.Name == "Morgana.AI.LLM")
         {
+            // Only a chat span is a round trip to the model. The same source also closes a span per tool
+            // executed and one per tool loop that sums the usage of its own chat calls: counted, they would
+            // inflate the calls and bill the loop's tokens twice.
+            string operation = activity.GetTagItem("gen_ai.operation.name") as string ?? activity.OperationName;
+            if (!string.Equals(operation, "chat", StringComparison.Ordinal))
+                return;
+
             // One MEAI-decorated LLM call just completed; its gen_ai.* tags carry token usage per
             // the OpenTelemetry semantic conventions. Recorded with Calls: 1 so that summing a
             // list of these later also yields the call count, not just token totals.
@@ -255,8 +264,17 @@ public sealed class TurnObserver : IDisposable
                 ReadTokenTag(activity, "gen_ai.usage.cache_write.input_tokens"),
                 Calls: 1);
 
+            // The content tags are there because the fixture turns sensitive data on for the host: what the
+            // model was handed and what it answered is the evidence a failing run is diagnosed from.
+            ModelCall call = new ModelCall(
+                usage,
+                activity.GetTagItem("gen_ai.system_instructions") as string,
+                activity.GetTagItem("gen_ai.tool.definitions") as string,
+                activity.GetTagItem("gen_ai.input.messages") as string,
+                activity.GetTagItem("gen_ai.output.messages") as string);
+
             lock (llmGate)
-                llmSpans.Add(usage);
+                llmSpans.Add(call);
 
             return;
         }
@@ -387,6 +405,15 @@ public sealed record TokenUsage(
     public override string ToString()
         => $"{Calls} call(s), in={InputTokens}, out={OutputTokens}, cacheRead={CacheReadTokens}, cacheWrite={CacheWriteTokens}";
 }
+
+/// <summary>One LLM call as the model saw it: its cost, its instructions, its tools, the messages it read and its answer.</summary>
+/// <remarks>The texts are the OpenTelemetry <c>gen_ai.*</c> content attributes, as JSON; null when the host records no content.</remarks>
+public sealed record ModelCall(
+    TokenUsage Usage,
+    string? Instructions,
+    string? ToolDefinitions,
+    string? InputMessages,
+    string? OutputMessages);
 
 /// <summary>
 /// Marks the start of a turn's observation window: where the log stood and how many agent, guard

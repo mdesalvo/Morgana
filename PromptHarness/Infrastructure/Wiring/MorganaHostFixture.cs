@@ -341,6 +341,10 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("Morgana__Plugins__Directories__0", "domain-plugins");
         Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableGuardrail", Options.EnableGuardrail ? "true" : "false");
 
+        // Every LLM span carries what the model was handed and answered, so a failing run keeps its own
+        // evidence. The exporters are off, so none of it leaves the process.
+        Environment.SetEnvironmentVariable("Morgana__OpenTelemetry__EnableSensitiveData", "true");
+
         // Unset by default: only RateLimitTests sets it, in its own filtered dotnet test invocation, so no
         // other group's conversation is ever refused for calling too often
         Environment.SetEnvironmentVariable("Morgana__RateLimiting__Enabled", Options.RateLimitPerMinute is null ? "false" : "true");
