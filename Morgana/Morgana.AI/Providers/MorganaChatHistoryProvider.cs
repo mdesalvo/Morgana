@@ -156,7 +156,17 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
                 lastEpisodeEnd = index;
         }
 
-        return [.. history.Skip(lastEpisodeEnd + 1)];
+        if (lastEpisodeEnd < 0)
+            return [.. history];
+
+        // The farewell is stamped on the message that wrote it, while the results of the calls closing that
+        // turn are filed after it. The episode opens at the returning user's message: a result handed over
+        // without its call is refused by the provider.
+        int episodeStart = lastEpisodeEnd + 1;
+        while (episodeStart < history.Count && history[episodeStart].Role != ChatRole.User)
+            episodeStart++;
+
+        return [.. history.Skip(episodeStart)];
     }
 
     /// <summary>

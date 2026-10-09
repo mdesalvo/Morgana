@@ -36,6 +36,24 @@ public sealed class HistoryViewTests
     }
 
     [Fact]
+    public async Task Returning_user_opens_the_episode_past_the_results_closing_the_farewell()
+    {
+        ViewUnderTest agent = await ViewUnderTest.CreateAsync();
+        agent.File(new ChatMessage(ChatRole.User, "We're done, thanks"));
+        ChatMessage farewell = new ChatMessage(ChatRole.Assistant,
+            [new TextContent("Farewell!"), new FunctionCallContent("c1", "Reply")]);
+        farewell.AdditionalProperties = new AdditionalPropertiesDictionary { ["morgana:episode_end"] = true };
+        agent.File(farewell);
+        agent.File(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("c1", "Turn closed.")]));
+
+        IReadOnlyList<ChatMessage> view = await agent.RunTurnAsync("Show my payment history");
+
+        // The farewell's own Reply result belongs to the turn that ended, never to the one that opens.
+        Assert.Equal(["Show my payment history"], view.Select(message => message.Text));
+        Assert.DoesNotContain(view.SelectMany(message => message.Contents), content => content is FunctionResultContent);
+    }
+
+    [Fact]
     public async Task Tool_results_of_earlier_turns_arrive_marked_and_stay_untouched_on_record()
     {
         ViewUnderTest agent = await ViewUnderTest.CreateAsync();
