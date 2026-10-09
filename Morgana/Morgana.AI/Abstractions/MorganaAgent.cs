@@ -752,10 +752,23 @@ public class MorganaAgent : MorganaActor
     /// <param name="historyBaseline">Number of history messages present before the turn ran; everything past it belongs to this turn.</param>
     /// <returns>Comma-separated tool names in call order, repetitions kept since a repeated call is itself a signal; empty when the turn called no tool.</returns>
     protected string GetToolsInvoked(AgentSession session, int historyBaseline)
-        => string.Join(", ", aiChatHistoryProvider.GetMessages(session)
+    {
+        List<AIContent> turnContents = [.. aiChatHistoryProvider.GetMessages(session)
             .Skip(historyBaseline)
-            .SelectMany(m => m.Contents.OfType<FunctionCallContent>())
-            .Select(c => c.Name));
+            .SelectMany(m => m.Contents)];
+
+        // A call the user declined stays in the history beside its rejection but never ran: counted, the span
+        // would report as done the very act that the user refused.
+        HashSet<string> declined = [.. turnContents.OfType<ToolApprovalResponseContent>()
+            .Where(response => !response.Approved)
+            .Select(response => response.ToolCall)
+            .OfType<FunctionCallContent>()
+            .Select(call => call.CallId)];
+
+        return string.Join(", ", turnContents.OfType<FunctionCallContent>()
+            .Where(call => !declined.Contains(call.CallId))
+            .Select(call => call.Name));
+    }
 
     /// <summary>
     /// The tool that the user's message leads to when it is the press of an action button that the
