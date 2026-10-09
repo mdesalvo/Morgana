@@ -73,10 +73,10 @@ public sealed class LLMJudge
         // factory to call into, so a new provider added there has to be added here too.
         ILLMService llmService = provider.ToLowerInvariant() switch
         {
-            "anthropic" => new Morgana.AI.LLMs.Anthropic(configuration, promptResolverService, loggerFactory),
-            "azureopenai" => new Morgana.AI.LLMs.AzureOpenAI(configuration, promptResolverService, loggerFactory),
-            "ollama" => new Morgana.AI.LLMs.Ollama(configuration, promptResolverService, loggerFactory),
-            "openai" => new Morgana.AI.LLMs.OpenAI(configuration, promptResolverService, loggerFactory),
+            "anthropic" => new Morgana.AI.LanguageModels.Anthropic(configuration, promptResolverService, loggerFactory),
+            "azureopenai" => new Morgana.AI.LanguageModels.AzureOpenAI(configuration, promptResolverService, loggerFactory),
+            "ollama" => new Morgana.AI.LanguageModels.Ollama(configuration, promptResolverService, loggerFactory),
+            "openai" => new Morgana.AI.LanguageModels.OpenAI(configuration, promptResolverService, loggerFactory),
             _ => throw new InvalidOperationException($"LLM Provider '{provider}' not supported by the harness judge.")
         };
 

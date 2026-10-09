@@ -6,7 +6,7 @@ using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using OllamaSharp;
 
-namespace Morgana.AI.LLMs;
+namespace Morgana.AI.LanguageModels;
 
 /// <summary>
 /// Ollama implementation of ILLMService.<br/>

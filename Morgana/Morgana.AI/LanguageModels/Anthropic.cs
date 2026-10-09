@@ -10,7 +10,7 @@ using Morgana.AI.Abstractions;
 using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
 
-namespace Morgana.AI.LLMs;
+namespace Morgana.AI.LanguageModels;
 
 /// <summary>
 /// Anthropic implementation of ILLMService.<br/>
