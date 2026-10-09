@@ -217,6 +217,9 @@ public sealed class HarnessChannel : IAsyncDisposable
         return (conversationId, presentation);
     }
 
+    /// <summary>How a message Morgana speaks herself is signed, spelled out: it is read off the wire, not shared code.</summary>
+    private const string MorganaAgentName = "Morgana";
+
     /// <summary>Sends a user turn and waits for the message Morgana delivers in response.</summary>
     public async Task<ChannelMessage> SendAsync(string conversationId, string text, TimeSpan timeout)
     {
@@ -227,6 +230,13 @@ public sealed class HarnessChannel : IAsyncDisposable
         response.EnsureSuccessStatusCode();
 
         ChannelMessage primary = await ReceiveAsync(conversationId, timeout);
+
+        // An agent that finished hands the conversation back to Morgana, who says so in a message of
+        // her own right behind its answer. It belongs to this turn: left queued, the next turn would
+        // read it as its own reply.
+        if (primary.AgentCompleted && !string.Equals(primary.AgentName, MorganaAgentName, StringComparison.Ordinal))
+            await ReceiveAsync(conversationId, timeout);
+
         if (drainTrailingSideMessages)
             await DiscardTrailingSideMessageAsync(conversationId);
 
