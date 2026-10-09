@@ -1,4 +1,4 @@
-id: workflow-cancel-at-choice
+id: behaviour-workflow-cancel-at-choice
 description: >-
   The other branch of PlaceOrder's choice step. The quote leaves the workflow at Decide with the
   confirm and cancel actions offered; pressing cancel is the approval of CancelOrder, so the order is

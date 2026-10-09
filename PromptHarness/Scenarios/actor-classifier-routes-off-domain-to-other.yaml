@@ -1,4 +1,4 @@
-id: classifier-routes-off-domain-to-other
+id: actor-classifier-routes-off-domain-to-other
 description: >-
   A request outside every agent's territory lands the classifier on the complement intent "other",
   which no agent declares: the router reaches nobody and Morgana answers with her own authored line.

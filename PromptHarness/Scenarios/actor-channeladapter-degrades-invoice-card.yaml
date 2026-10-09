@@ -1,4 +1,4 @@
-id: channeladapter-degrades-invoice-card
+id: actor-channeladapter-degrades-invoice-card
 description: >-
   Under a degraded channel profile (no rich cards, no quick replies, no markdown, 500-char budget) the
   invoice flow's rich card and buttons are rewritten into plain, length-capped prose — exercising

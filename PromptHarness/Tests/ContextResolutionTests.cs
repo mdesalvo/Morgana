@@ -32,7 +32,7 @@ public sealed class ContextResolutionTests
     private const string InvoiceId = "invoiceId";
 
     [Fact]
-    public async Task Schema_releases_the_model_from_context_scoped_parameters_only()
+    public async Task ContextResolution_Schema_releases_the_model_from_context_scoped_parameters_only()
     {
         ToolUnderTest tool = await ToolUnderTest.CreateAsync();
 
@@ -45,7 +45,7 @@ public sealed class ContextResolutionTests
     }
 
     [Fact]
-    public async Task Passed_value_is_used_stored_and_shared()
+    public async Task ContextResolution_Passed_value_is_used_stored_and_shared()
     {
         ToolUnderTest tool = await ToolUnderTest.CreateAsync();
 
@@ -57,7 +57,7 @@ public sealed class ContextResolutionTests
     }
 
     [Fact]
-    public async Task Omitted_value_is_read_from_the_session()
+    public async Task ContextResolution_Omitted_value_is_read_from_the_session()
     {
         ToolUnderTest tool = await ToolUnderTest.CreateAsync();
         tool.Provider.MergeSharedContext(tool.Session, new Dictionary<string, object> { [CustomerCode] = "P994E" });
@@ -70,7 +70,7 @@ public sealed class ContextResolutionTests
     }
 
     [Fact]
-    public async Task Value_read_from_the_session_leaves_the_model_s_call_as_written()
+    public async Task ContextResolution_Value_read_from_the_session_leaves_the_model_s_call_as_written()
     {
         ToolUnderTest tool = await ToolUnderTest.CreateAsync();
         tool.Provider.MergeSharedContext(tool.Session, new Dictionary<string, object> { [CustomerCode] = "P994E" });
@@ -84,7 +84,7 @@ public sealed class ContextResolutionTests
     }
 
     [Fact]
-    public async Task Value_restored_from_a_persisted_session_reaches_the_tool_as_text()
+    public async Task ContextResolution_Value_restored_from_a_persisted_session_reaches_the_tool_as_text()
     {
         ToolUnderTest tool = await ToolUnderTest.CreateAsync();
         tool.Provider.MergeSharedContext(tool.Session,
@@ -96,7 +96,7 @@ public sealed class ContextResolutionTests
     }
 
     [Fact]
-    public async Task Missing_value_keeps_the_tool_from_running_and_names_what_is_missing()
+    public async Task ContextResolution_Missing_value_keeps_the_tool_from_running_and_names_what_is_missing()
     {
         ToolUnderTest tool = await ToolUnderTest.CreateAsync();
 
@@ -111,7 +111,7 @@ public sealed class ContextResolutionTests
     }
 
     [Fact]
-    public async Task Colleague_answering_a_consultation_uses_the_value_and_stores_nothing()
+    public async Task ContextResolution_Colleague_answering_a_consultation_uses_the_value_and_stores_nothing()
     {
         ToolUnderTest tool = await ToolUnderTest.CreateAsync();
         await tool.Provider.SetVariableAsync(tool.Session, Constants.ContextKeys.ServingConsultation, true);

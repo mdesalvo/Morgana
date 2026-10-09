@@ -49,7 +49,7 @@ public sealed class TurnClosureTests
     // An answered request carries the closure pair and the agent stays until the user leaves.
     [InlineData("nothing", false, false, "continue_agent,exit_agent", false)]
     [InlineData("action_choice", false, false, "continue_agent,exit_agent", false)]
-    public void Framework_decides_the_framework_replies_from_the_closure(
+    public void TurnClosure_Framework_decides_the_framework_replies_from_the_closure(
         string awaits, bool userIsLeaving, bool withAction, string buttonIds, bool handsBack)
     {
         string actions = withAction ? """[{"tool":"GetInvoices","label":"📄 Invoices","value":"Show my invoices"}]""" : "[]";
@@ -63,7 +63,7 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public void Answered_request_with_no_authored_closure_hands_the_conversation_back()
+    public void TurnClosure_Answered_request_with_no_authored_closure_hands_the_conversation_back()
     {
         Records.TurnReply turnReply = Deserialize("""{"awaits":"nothing","userIsLeaving":false,"actions":[],"card":null}""");
 
@@ -75,7 +75,7 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public void Two_actions_on_one_tool_stay_two_buttons()
+    public void TurnClosure_Two_actions_on_one_tool_stay_two_buttons()
     {
         Records.TurnReply turnReply = Deserialize("""
             {"awaits":"action_choice","userIsLeaving":false,"card":null,"actions":[
@@ -93,11 +93,11 @@ public sealed class TurnClosureTests
     [InlineData("ConfirmOrder#1", "ConfirmOrder")]
     [InlineData("continue_agent", null)]
     [InlineData("approve_action", null)]
-    public void Pressed_button_names_the_tool_its_action_leads_to(string buttonId, string? tool)
+    public void TurnClosure_Pressed_button_names_the_tool_its_action_leads_to(string buttonId, string? tool)
         => Assert.Equal(tool, Records.TurnReply.ActionTool(buttonId));
 
     [Fact]
-    public async Task Reply_discards_an_action_leading_to_a_tool_the_agent_lacks()
+    public async Task TurnClosure_Reply_discards_an_action_leading_to_a_tool_the_agent_lacks()
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
 
@@ -111,7 +111,7 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task Reply_schema_is_a_contract_for_awaits_and_card()
+    public async Task TurnClosure_Reply_schema_is_a_contract_for_awaits_and_card()
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         JsonElement properties = reply.Function.JsonSchema.GetProperty("properties");
@@ -130,7 +130,7 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task Reply_records_the_closure_and_closes_the_turn()
+    public async Task TurnClosure_Reply_records_the_closure_and_closes_the_turn()
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
 
@@ -148,7 +148,7 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task Reply_refuses_a_card_nesting_deeper_than_three_levels()
+    public async Task TurnClosure_Reply_refuses_a_card_nesting_deeper_than_three_levels()
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
 
@@ -167,7 +167,7 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task Reply_before_any_text_is_refused_until_the_turn_is_written()
+    public async Task TurnClosure_Reply_before_any_text_is_refused_until_the_turn_is_written()
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         ScriptedChatClient model = new ScriptedChatClient(
@@ -185,7 +185,7 @@ public sealed class TurnClosureTests
     [Theory]
     [InlineData("""{"title":"t","subtitle":null,"components":[{"type":"chart","content":"x"}]}""")]
     [InlineData("""{"subtitle":null,"components":[]}""")]
-    public async Task Reply_rejects_a_card_breaking_its_schema(string card)
+    public async Task TurnClosure_Reply_rejects_a_card_breaking_its_schema(string card)
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
 
@@ -198,7 +198,7 @@ public sealed class TurnClosureTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task Turn_written_without_Reply_is_closed_on_the_model_s_behalf(bool canForceToolCall)
+    public async Task TurnClosure_Turn_written_without_Reply_is_closed_on_the_model_s_behalf(bool canForceToolCall)
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         const string closure = """{"awaits":"typed_answer","userIsLeaving":false,"actions":[],"card":null}""";
@@ -216,7 +216,7 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task Turn_closed_by_the_model_costs_no_further_call()
+    public async Task TurnClosure_Turn_closed_by_the_model_costs_no_further_call()
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         ScriptedChatClient model = new ScriptedChatClient(
@@ -230,7 +230,7 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task Reply_repeated_in_the_closing_response_is_answered_and_the_first_closure_stands()
+    public async Task TurnClosure_Reply_repeated_in_the_closing_response_is_answered_and_the_first_closure_stands()
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         ScriptedChatClient model = new ScriptedChatClient(
@@ -251,7 +251,7 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task Turn_with_no_text_is_left_to_the_agent_to_run_again()
+    public async Task TurnClosure_Turn_with_no_text_is_left_to_the_agent_to_run_again()
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         ScriptedChatClient model = new ScriptedChatClient(Text(""));
@@ -263,7 +263,7 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task Transcript_reads_back_the_buttons_and_card_the_turn_delivered()
+    public async Task TurnClosure_Transcript_reads_back_the_buttons_and_card_the_turn_delivered()
     {
         string storagePath = Path.Combine(Path.GetTempPath(), $"turn-closure-{Guid.NewGuid():N}");
         SQLiteConversationPersistenceService persistence = new SQLiteConversationPersistenceService(

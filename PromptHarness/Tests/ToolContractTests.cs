@@ -29,11 +29,11 @@ public sealed class ToolContractTests
     private const string Intent = "sample";
 
     [Fact]
-    public void A_completely_declared_class_is_accepted()
+    public void ToolContract_A_completely_declared_class_is_accepted()
         => Assert.Empty(Validate(typeof(HonestTool)));
 
     [Fact]
-    public void A_tool_returning_a_string_is_refused()
+    public void ToolContract_A_tool_returning_a_string_is_refused()
     {
         List<string> errors = Validate(typeof(StringTool));
 
@@ -41,29 +41,29 @@ public sealed class ToolContractTests
     }
 
     [Fact]
-    public void A_tool_returning_a_record_without_properties_is_refused()
+    public void ToolContract_A_tool_returning_a_record_without_properties_is_refused()
         => Assert.Contains(Validate(typeof(EmptyRecordTool)), error => error.Contains("no properties", StringComparison.Ordinal));
 
     [Fact]
-    public void A_tool_method_without_a_description_is_refused()
+    public void ToolContract_A_tool_method_without_a_description_is_refused()
     {
         Assert.Contains(Validate(typeof(NoMethodDescriptionTool)), error => error.Contains("[Description]", StringComparison.Ordinal) && error.Contains("'Run'", StringComparison.Ordinal));
         Assert.Contains(Validate(typeof(BlankMethodDescriptionTool)), error => error.Contains("[Description]", StringComparison.Ordinal) && error.Contains("'Run'", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void A_tool_method_without_an_approval_declaration_is_refused()
+    public void ToolContract_A_tool_method_without_an_approval_declaration_is_refused()
         => Assert.Contains(Validate(typeof(NoApprovalTool)), error => error.Contains("[RequiresApproval]", StringComparison.Ordinal) && error.Contains("'Run'", StringComparison.Ordinal));
 
     [Fact]
-    public void A_parameter_without_a_description_is_refused()
+    public void ToolContract_A_parameter_without_a_description_is_refused()
     {
         Assert.Contains(Validate(typeof(NoParameterDescriptionTool)), error => error.Contains("[Description]", StringComparison.Ordinal) && error.Contains("'code'", StringComparison.Ordinal));
         Assert.Contains(Validate(typeof(BlankParameterDescriptionTool)), error => error.Contains("[Description]", StringComparison.Ordinal) && error.Contains("'code'", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void A_parameter_without_a_scope_declaration_is_refused()
+    public void ToolContract_A_parameter_without_a_scope_declaration_is_refused()
         => Assert.Contains(Validate(typeof(NoScopeTool)), error => error.Contains("[ToolParameter]", StringComparison.Ordinal) && error.Contains("'code'", StringComparison.Ordinal));
 
     [Theory]
@@ -71,33 +71,33 @@ public sealed class ToolContractTests
     [InlineData(typeof(RequestOptionalTool))]
     [InlineData(typeof(ContextRequiredTool))]
     [InlineData(typeof(ContextSharedRequiredTool))]
-    public void An_allowed_parameter_combination_is_accepted(Type toolType)
+    public void ToolContract_An_allowed_parameter_combination_is_accepted(Type toolType)
         => Assert.Empty(Validate(toolType));
 
     [Fact]
-    public void A_shared_request_parameter_is_refused()
+    public void ToolContract_A_shared_request_parameter_is_refused()
         => Assert.Contains(Validate(typeof(RequestSharedTool)), error => error.Contains("'code'", StringComparison.Ordinal) && error.Contains("shared", StringComparison.Ordinal));
 
     [Theory]
     [InlineData(typeof(ContextOptionalTool))]
     [InlineData(typeof(ContextSharedOptionalTool))]
-    public void A_context_parameter_with_a_default_is_refused(Type toolType)
+    public void ToolContract_A_context_parameter_with_a_default_is_refused(Type toolType)
         => Assert.Contains(Validate(toolType), error => error.Contains("'code'", StringComparison.Ordinal) && error.Contains("default", StringComparison.Ordinal));
 
     [Fact]
-    public void A_context_parameter_that_is_not_a_string_is_refused()
+    public void ToolContract_A_context_parameter_that_is_not_a_string_is_refused()
         => Assert.Contains(Validate(typeof(ContextIntegerTool)), error => error.Contains("'count'", StringComparison.Ordinal) && error.Contains("string", StringComparison.Ordinal));
 
     [Fact]
-    public void Two_methods_under_one_tool_name_are_refused()
+    public void ToolContract_Two_methods_under_one_tool_name_are_refused()
         => Assert.Contains(Validate(typeof(OverloadedTool)), error => error.Contains("'Run'", StringComparison.Ordinal) && error.Contains("more than one", StringComparison.Ordinal));
 
     [Fact]
-    public void A_failure_field_that_cannot_be_null_is_refused()
+    public void ToolContract_A_failure_field_that_cannot_be_null_is_refused()
         => Assert.Contains(Validate(typeof(NonNullableFailureTool)), error => error.Contains("'error'", StringComparison.Ordinal) && error.Contains("null", StringComparison.Ordinal));
 
     [Fact]
-    public void A_prompt_still_declaring_tools_is_refused()
+    public void ToolContract_A_prompt_still_declaring_tools_is_refused()
     {
         Records.Prompt leftover = PromptWith(new Dictionary<string, object> { [Constants.PromptProperties.Tools] = JsonSerializer.SerializeToElement(new[] { "any" }) });
         Records.Prompt leftoverEmpty = PromptWith(new Dictionary<string, object> { [Constants.PromptProperties.Tools] = JsonSerializer.SerializeToElement(Array.Empty<string>()) });
@@ -111,7 +111,7 @@ public sealed class ToolContractTests
     }
 
     [Fact]
-    public void A_prompt_still_declaring_workflows_is_refused()
+    public void ToolContract_A_prompt_still_declaring_workflows_is_refused()
     {
         Records.Prompt leftover = PromptWith(new Dictionary<string, object> { [Constants.PromptProperties.Workflows] = JsonSerializer.SerializeToElement(new[] { "any" }) });
         Records.Prompt leftoverEmpty = PromptWith(new Dictionary<string, object> { [Constants.PromptProperties.Workflows] = JsonSerializer.SerializeToElement(Array.Empty<string>()) });
@@ -124,7 +124,7 @@ public sealed class ToolContractTests
     }
 
     [Fact]
-    public void A_prompt_declaring_both_keys_gets_one_message_for_each()
+    public void ToolContract_A_prompt_declaring_both_keys_gets_one_message_for_each()
     {
         Records.Prompt leftover = PromptWith(new Dictionary<string, object>
         {
@@ -140,7 +140,7 @@ public sealed class ToolContractTests
     }
 
     [Fact]
-    public void The_projection_reads_the_class_in_declaration_order()
+    public void ToolContract_The_projection_reads_the_class_in_declaration_order()
     {
         IReadOnlyList<Records.ToolDefinition> definitions = ProvidesToolForIntentRegistryService.ProjectToolDefinitions(typeof(ProjectedTool));
 
@@ -166,11 +166,11 @@ public sealed class ToolContractTests
     }
 
     [Fact]
-    public void The_projection_leaves_out_inherited_overridden_special_and_non_public_members()
+    public void ToolContract_The_projection_leaves_out_inherited_overridden_special_and_non_public_members()
         => Assert.Equal(["Run"], ProvidesToolForIntentRegistryService.GetToolMethods(typeof(DerivedTool)).Select(method => method.Name));
 
     [Fact]
-    public void The_projection_of_a_malformed_class_does_not_throw()
+    public void ToolContract_The_projection_of_a_malformed_class_does_not_throw()
     {
         IReadOnlyList<Records.ToolDefinition> definitions = ProvidesToolForIntentRegistryService.ProjectToolDefinitions(typeof(NoScopeTool));
 
@@ -178,7 +178,7 @@ public sealed class ToolContractTests
     }
 
     [Fact]
-    public async Task The_derived_schema_is_the_one_the_function_publishes()
+    public async Task ToolContract_The_derived_schema_is_the_one_the_function_publishes()
     {
         Func<string, Task<SampleResult>> run = new HonestTool().Run;
         Records.ToolDefinition definition = new("Run", "Runs.", [new Records.ToolParameter("code", "A code", true, Constants.Scopes.Request)], Returns: HonestReturns);
@@ -197,7 +197,7 @@ public sealed class ToolContractTests
     }
 
     [Fact]
-    public void The_serialized_result_keeps_camelCase_names_nested_ones_included()
+    public void ToolContract_The_serialized_result_keeps_camelCase_names_nested_ones_included()
     {
         // MarshalResult writes the record as the text that the model reads: camelCase and compact, since
         // a provider passes a text result through exactly as it receives it.
@@ -211,7 +211,7 @@ public sealed class ToolContractTests
     }
 
     [Fact]
-    public void The_shipped_domain_declares_every_tool_on_its_class()
+    public void ToolContract_The_shipped_domain_declares_every_tool_on_its_class()
     {
         // Read the way the framework does: the prompts that the host loads and the catalog of each tool class.
         List<Records.Prompt> prompts = new EmbeddedAgentConfigurationService(NullLogger.Instance).GetAgentPromptsAsync().GetAwaiter().GetResult();

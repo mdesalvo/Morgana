@@ -17,7 +17,7 @@ public sealed class HarnessSmokeTests
     public HarnessSmokeTests(MorganaHostFixture fixture) => this.fixture = fixture;
 
     [Fact]
-    public async Task Conversation_opens_and_Morgana_presents_itself()
+    public async Task HarnessSmoke_Conversation_opens_and_Morgana_presents_itself()
     {
         // StartConversationAsync itself drains the presentation message off the webhook — this is
         // the whole handshake path (start call, webhook delivery, presentation drain) exercised
@@ -37,7 +37,7 @@ public sealed class HarnessSmokeTests
     }
 
     [Fact]
-    public async Task Structural_observers_see_the_turn()
+    public async Task HarnessSmoke_Structural_observers_see_the_turn()
     {
         TimeSpan timeout = TimeSpan.FromSeconds(fixture.Options.TurnTimeoutSeconds);
         (string conversationId, ChannelMessage _) = await fixture.Channel.StartConversationAsync(timeout);
@@ -74,7 +74,7 @@ public sealed class HarnessSmokeTests
     }
 
     [Fact]
-    public void Every_scenario_file_parses()
+    public void HarnessSmoke_Every_scenario_file_parses()
     {
         // Only a parse-and-shape check — this never talks to the host or runs a single turn, so it
         // catches a malformed YAML file (or a missing/mismatched id) at effectively zero cost,

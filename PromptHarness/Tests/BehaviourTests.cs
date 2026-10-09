@@ -21,12 +21,12 @@ public sealed class BehaviourTests
     [InlineData("behaviour-rich-card")]
     [InlineData("behaviour-order-confirmation-bills-invoice")]
     [InlineData("behaviour-plan-enrollment-bills-invoice")]
-    [InlineData("workflow-cancel-at-choice")]
-    [InlineData("workflow-quote-corrected")]
-    [InlineData("workflow-typed-confirmation")]
-    [InlineData("workflow-user-leaves-at-choice")]
-    [InlineData("approval-declined")]
-    public async Task Behavioural_scenario_holds(string scenarioId)
+    [InlineData("behaviour-workflow-cancel-at-choice")]
+    [InlineData("behaviour-workflow-quote-corrected")]
+    [InlineData("behaviour-workflow-typed-confirmation")]
+    [InlineData("behaviour-workflow-user-leaves-at-choice")]
+    [InlineData("behaviour-approval-declined")]
+    public async Task Behaviour_scenario_holds(string scenarioId)
     {
         // Same shape as the context-handling group's test, but this group runs at the harness's
         // default threshold rather than a mandatory 5/5 — see the class remarks for why that split

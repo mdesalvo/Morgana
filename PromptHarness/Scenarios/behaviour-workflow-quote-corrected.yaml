@@ -1,4 +1,4 @@
-id: workflow-quote-corrected
+id: behaviour-workflow-quote-corrected
 description: >-
   A request that cannot be quoted as asked leaves PlaceOrder standing at its quote, so the corrected request
   completes it on the next turn without the workflow being started again. LAV-300 holds 3 bundles and the

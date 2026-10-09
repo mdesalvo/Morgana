@@ -19,7 +19,7 @@ namespace PromptHarness.Tests;
 public sealed class HistoryViewTests
 {
     [Fact]
-    public async Task Returning_user_opens_a_new_episode()
+    public async Task HistoryView_Returning_user_opens_a_new_episode()
     {
         ViewUnderTest agent = await ViewUnderTest.CreateAsync();
         agent.File(new ChatMessage(ChatRole.User, "Show my invoices"));
@@ -36,7 +36,7 @@ public sealed class HistoryViewTests
     }
 
     [Fact]
-    public async Task Returning_user_opens_the_episode_past_the_results_closing_the_farewell()
+    public async Task HistoryView_Returning_user_opens_the_episode_past_the_results_closing_the_farewell()
     {
         ViewUnderTest agent = await ViewUnderTest.CreateAsync();
         agent.File(new ChatMessage(ChatRole.User, "We're done, thanks"));
@@ -54,7 +54,7 @@ public sealed class HistoryViewTests
     }
 
     [Fact]
-    public async Task Tool_results_of_earlier_turns_arrive_marked_and_stay_untouched_on_record()
+    public async Task HistoryView_Tool_results_of_earlier_turns_arrive_marked_and_stay_untouched_on_record()
     {
         ViewUnderTest agent = await ViewUnderTest.CreateAsync();
         agent.File(new ChatMessage(ChatRole.User, "How many ferns are in stock?"));
@@ -70,7 +70,7 @@ public sealed class HistoryViewTests
     }
 
     [Fact]
-    public async Task Without_a_template_earlier_results_are_handed_back_as_returned()
+    public async Task HistoryView_Without_a_template_earlier_results_are_handed_back_as_returned()
     {
         ViewUnderTest agent = await ViewUnderTest.CreateAsync(markEarlierResults: false);
         agent.File(new ChatMessage(ChatRole.User, "How many ferns are in stock?"));

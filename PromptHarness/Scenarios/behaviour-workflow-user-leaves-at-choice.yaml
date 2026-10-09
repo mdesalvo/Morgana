@@ -1,4 +1,4 @@
-id: workflow-user-leaves-at-choice
+id: behaviour-workflow-user-leaves-at-choice
 description: >-
   A customer who leaves while the workflow waits at its choice step is not held to its actions: the
   agent lets them go, nothing is confirmed or cancelled on their behalf and the farewell carries no

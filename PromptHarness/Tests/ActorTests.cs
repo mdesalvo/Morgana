@@ -18,11 +18,11 @@ public sealed class ActorTests
     public ActorTests(MorganaHostFixture fixture) => this.fixture = fixture;
 
     [Theory]
-    [InlineData("classifier-routes-unambiguous-billing-request")]
-    [InlineData("classifier-routes-catalog-request-to-inventory")]
-    [InlineData("classifier-disambiguates-colliding-billing-contract")]
-    [InlineData("classifier-routes-off-domain-to-other")]
-    [InlineData("channeladapter-degrades-invoice-card")]
+    [InlineData("actor-classifier-routes-unambiguous-billing-request")]
+    [InlineData("actor-classifier-routes-catalog-request-to-inventory")]
+    [InlineData("actor-classifier-disambiguates-colliding-billing-contract")]
+    [InlineData("actor-classifier-routes-off-domain-to-other")]
+    [InlineData("actor-channeladapter-degrades-invoice-card")]
     public async Task Actor_scenario_holds(string scenarioId)
     {
         ScenarioOutcome outcome = await fixture.Runner.RunAsync(scenarioId);
@@ -32,7 +32,7 @@ public sealed class ActorTests
 
     /// <summary>
     /// Judges the Presentation prompt's actual content — distinct from
-    /// <c>HarnessSmokeTests.Conversation_opens_and_Morgana_presents_itself</c>, which only proves
+    /// <c>HarnessSmokeTests.HarnessSmoke_Conversation_opens_and_Morgana_presents_itself</c>, which only proves
     /// the rig is alive (non-empty text, at least one quick reply) and leaves the wording unchecked.
     /// </summary>
     /// <remarks>
@@ -43,7 +43,7 @@ public sealed class ActorTests
     /// scenario later.
     /// </remarks>
     [Fact]
-    public async Task Presentation_introduces_Morgana_and_invites_a_request()
+    public async Task Actor_Presentation_introduces_Morgana_and_invites_a_request()
     {
         (string conversationId, ChannelMessage presentation) =
             await fixture.Channel.StartConversationAsync(TimeSpan.FromSeconds(fixture.Options.TurnTimeoutSeconds));

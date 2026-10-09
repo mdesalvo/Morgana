@@ -44,7 +44,7 @@ public sealed class SummarizationTests
     /// the summary is being composed. The agent's row is never rewritten and no outcome is delivered after it.
     /// </summary>
     [Fact]
-    public async Task Compact_the_channel_gave_up_on_writes_and_tells_nothing()
+    public async Task Summarization_Compact_the_channel_gave_up_on_writes_and_tells_nothing()
     {
         ChannelApiClient api = new ChannelApiClient(fixture);
         (string conversationId, ChannelMessage _) = await fixture.Channel.StartConversationAsync(TimeSpan.FromSeconds(180));
@@ -88,7 +88,7 @@ public sealed class SummarizationTests
     /// written straight to the record, the way a command reaching the conversation over REST would land it.
     /// </summary>
     [Fact]
-    public async Task Fold_written_during_a_turn_survives_the_turn()
+    public async Task Summarization_Fold_written_during_a_turn_survives_the_turn()
     {
         SQLiteConversationPersistenceService record = new ChannelApiClient(fixture).HostPersistenceService();
         (string conversationId, ChannelMessage _) = await fixture.Channel.StartConversationAsync(TimeSpan.FromSeconds(180));

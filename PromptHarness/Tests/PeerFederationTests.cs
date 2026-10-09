@@ -62,7 +62,7 @@ public sealed class PeerFederationTests
     private const string BearerSchemeName = "bearer";
 
     [Fact]
-    public async Task A_colleague_is_signed_for_under_the_name_and_audience_its_partner_agreed()
+    public async Task PeerFederation_A_colleague_is_signed_for_under_the_name_and_audience_its_partner_agreed()
     {
         using WireMockServer peer = StartPeer(out string peerAddress);
         StubCard(peer, peerAddress, RequireBearer());
@@ -84,7 +84,7 @@ public sealed class PeerFederationTests
     }
 
     [Fact]
-    public async Task A_colleague_advertising_an_interface_at_another_host_is_not_reached_at_all()
+    public async Task PeerFederation_A_colleague_advertising_an_interface_at_another_host_is_not_reached_at_all()
     {
         using WireMockServer peer = StartPeer(out string peerAddress);
         using WireMockServer thirdHost = StartPeer(out string thirdHostAddress);
@@ -103,7 +103,7 @@ public sealed class PeerFederationTests
     }
 
     [Fact]
-    public async Task A_colleague_demanding_a_scheme_this_installation_cannot_present_costs_only_itself()
+    public async Task PeerFederation_A_colleague_demanding_a_scheme_this_installation_cannot_present_costs_only_itself()
     {
         using WireMockServer peer = StartPeer(out string peerAddress);
 
@@ -121,7 +121,7 @@ public sealed class PeerFederationTests
     }
 
     [Fact]
-    public async Task A_colleague_requiring_nothing_is_consulted_with_no_token_at_all()
+    public async Task PeerFederation_A_colleague_requiring_nothing_is_consulted_with_no_token_at_all()
     {
         using WireMockServer peer = StartPeer(out string peerAddress);
 
@@ -137,7 +137,7 @@ public sealed class PeerFederationTests
     }
 
     [Fact]
-    public async Task A_colleague_is_described_by_one_reading_of_its_card_however_many_conversations_consult_it()
+    public async Task PeerFederation_A_colleague_is_described_by_one_reading_of_its_card_however_many_conversations_consult_it()
     {
         using WireMockServer peer = StartPeer(out string peerAddress);
         StubCard(peer, peerAddress, RequireBearer());

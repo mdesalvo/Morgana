@@ -122,7 +122,7 @@ public sealed class ConversationPersistenceTests
     public ConversationPersistenceTests(MorganaHostFixture fixture) => this.fixture = fixture;
 
     [Fact]
-    public async Task The_greeting_is_on_record_before_anybody_has_asked_anything()
+    public async Task ConversationPersistence_The_greeting_is_on_record_before_anybody_has_asked_anything()
     {
         DrivenConversation conversation = await ConversationAsync();
         IReadOnlyList<PersistedRow> afterGreeting = conversation.Steps[0].Rows;
@@ -142,7 +142,7 @@ public sealed class ConversationPersistenceTests
     }
 
     [Fact]
-    public async Task Every_turn_ends_the_way_the_script_says_it_does()
+    public async Task ConversationPersistence_Every_turn_ends_the_way_the_script_says_it_does()
     {
         DrivenConversation conversation = await ConversationAsync();
 
@@ -179,7 +179,7 @@ public sealed class ConversationPersistenceTests
     }
 
     [Fact]
-    public async Task Each_phrase_is_kept_by_whoever_the_user_was_talking_to()
+    public async Task ConversationPersistence_Each_phrase_is_kept_by_whoever_the_user_was_talking_to()
     {
         DrivenConversation conversation = await ConversationAsync();
 
@@ -205,7 +205,7 @@ public sealed class ConversationPersistenceTests
     }
 
     [Fact]
-    public async Task A_turn_no_agent_ever_saw_is_answered_by_Morgana_and_kept_by_her()
+    public async Task ConversationPersistence_A_turn_no_agent_ever_saw_is_answered_by_Morgana_and_kept_by_her()
     {
         DrivenConversation conversation = await ConversationAsync();
 
@@ -233,7 +233,7 @@ public sealed class ConversationPersistenceTests
     }
 
     [Fact]
-    public async Task An_agent_reads_the_phrase_that_routed_to_it_without_owning_it()
+    public async Task ConversationPersistence_An_agent_reads_the_phrase_that_routed_to_it_without_owning_it()
     {
         DrivenConversation conversation = await ConversationAsync();
 
@@ -251,7 +251,7 @@ public sealed class ConversationPersistenceTests
     }
 
     [Fact]
-    public async Task Morgana_never_stands_as_the_agent_a_conversation_is_resumed_onto()
+    public async Task ConversationPersistence_Morgana_never_stands_as_the_agent_a_conversation_is_resumed_onto()
     {
         DrivenConversation conversation = await ConversationAsync();
 
@@ -265,7 +265,7 @@ public sealed class ConversationPersistenceTests
     }
 
     [Fact]
-    public async Task The_conversation_settles_as_Morgana_and_the_one_agent_that_served_it()
+    public async Task ConversationPersistence_The_conversation_settles_as_Morgana_and_the_one_agent_that_served_it()
     {
         DrivenConversation conversation = await ConversationAsync();
         IReadOnlyList<PersistedRow> settled = conversation.Steps[^1].Rows;
@@ -285,7 +285,7 @@ public sealed class ConversationPersistenceTests
     }
 
     [Fact]
-    public async Task Every_delivered_line_is_found_again_as_it_was_delivered()
+    public async Task ConversationPersistence_Every_delivered_line_is_found_again_as_it_was_delivered()
     {
         DrivenConversation conversation = await ConversationAsync();
         IReadOnlyList<MorganaChatMessage> history = await fixture.Channel.GetHistoryAsync(conversation.ConversationId);
@@ -304,7 +304,7 @@ public sealed class ConversationPersistenceTests
     }
 
     [Fact]
-    public async Task The_user_reads_the_conversation_back_in_the_order_it_happened()
+    public async Task ConversationPersistence_The_user_reads_the_conversation_back_in_the_order_it_happened()
     {
         DrivenConversation conversation = await ConversationAsync();
         IReadOnlyList<MorganaChatMessage> history = await fixture.Channel.GetHistoryAsync(conversation.ConversationId);
@@ -336,7 +336,7 @@ public sealed class ConversationPersistenceTests
     }
 
     [Fact]
-    public async Task A_phrase_the_user_typed_once_is_read_back_once()
+    public async Task ConversationPersistence_A_phrase_the_user_typed_once_is_read_back_once()
     {
         DrivenConversation conversation = await ConversationAsync();
         IReadOnlyList<MorganaChatMessage> history = await fixture.Channel.GetHistoryAsync(conversation.ConversationId);
@@ -353,7 +353,7 @@ public sealed class ConversationPersistenceTests
     }
 
     [Fact]
-    public async Task The_transcript_is_rebuilt_the_same_way_every_time_it_is_read()
+    public async Task ConversationPersistence_The_transcript_is_rebuilt_the_same_way_every_time_it_is_read()
     {
         DrivenConversation conversation = await ConversationAsync();
 
@@ -376,7 +376,7 @@ public sealed class ConversationPersistenceTests
     }
 
     [Fact]
-    public async Task The_transcript_says_who_spoke_each_line()
+    public async Task ConversationPersistence_The_transcript_says_who_spoke_each_line()
     {
         DrivenConversation conversation = await ConversationAsync();
         IReadOnlyList<MorganaChatMessage> history = await fixture.Channel.GetHistoryAsync(conversation.ConversationId);

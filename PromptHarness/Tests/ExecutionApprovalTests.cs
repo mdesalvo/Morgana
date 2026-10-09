@@ -22,7 +22,7 @@ namespace PromptHarness.Tests;
 public sealed class ExecutionApprovalTests
 {
     [Fact]
-    public async Task Tool_requiring_approval_reaches_the_model_wrapped_for_it()
+    public async Task ExecutionApproval_Tool_requiring_approval_reaches_the_model_wrapped_for_it()
     {
         MorganaToolAdapter adapter = new MorganaToolAdapter();
         Func<string, string> confirmOrder = orderId => $"order {orderId} confirmed";
@@ -34,7 +34,7 @@ public sealed class ExecutionApprovalTests
     }
 
     [Fact]
-    public async Task Approved_call_runs_once_with_the_approved_arguments_across_a_saved_session()
+    public async Task ExecutionApproval_Approved_call_runs_once_with_the_approved_arguments_across_a_saved_session()
     {
         ApprovalUnderTest turn = new ApprovalUnderTest();
 
@@ -50,7 +50,7 @@ public sealed class ExecutionApprovalTests
     }
 
     [Fact]
-    public async Task Declined_call_never_runs()
+    public async Task ExecutionApproval_Declined_call_never_runs()
     {
         ApprovalUnderTest turn = new ApprovalUnderTest();
 
@@ -61,7 +61,7 @@ public sealed class ExecutionApprovalTests
     }
 
     [Fact]
-    public async Task Reply_written_beside_a_call_awaiting_approval_never_runs()
+    public async Task ExecutionApproval_Reply_written_beside_a_call_awaiting_approval_never_runs()
     {
         ApprovalUnderTest turn = new ApprovalUnderTest();
 
@@ -73,7 +73,7 @@ public sealed class ExecutionApprovalTests
     }
 
     [Fact]
-    public async Task Reply_of_a_turn_asking_no_approval_is_left_alone()
+    public async Task ExecutionApproval_Reply_of_a_turn_asking_no_approval_is_left_alone()
     {
         ScriptedModel model = new ScriptedModel(
             [new TextContent("Here is your order."), new FunctionCallContent("r1", "Reply", new Dictionary<string, object?> { ["awaits"] = "nothing" })]);
@@ -88,7 +88,7 @@ public sealed class ExecutionApprovalTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Approval_asked_before_the_turn_has_text_is_refused_until_it_is_written(bool streaming)
+    public async Task ExecutionApproval_Approval_asked_before_the_turn_has_text_is_refused_until_it_is_written(bool streaming)
     {
         FunctionCallContent Confirm(string callId) => new FunctionCallContent(callId, "ConfirmOrder", new Dictionary<string, object?> { ["orderId"] = "ORD-1" });
         ScriptedModel model = new ScriptedModel(
@@ -110,7 +110,7 @@ public sealed class ExecutionApprovalTests
     }
 
     [Fact]
-    public async Task Approval_asked_with_no_text_goes_through_once_the_refusals_are_spent()
+    public async Task ExecutionApproval_Approval_asked_with_no_text_goes_through_once_the_refusals_are_spent()
     {
         FunctionCallContent Confirm(string callId) => new FunctionCallContent(callId, "ConfirmOrder", new Dictionary<string, object?> { ["orderId"] = "ORD-1" });
         ScriptedModel model = new ScriptedModel([Confirm("c1")], [Confirm("c2")], [Confirm("c3")]);

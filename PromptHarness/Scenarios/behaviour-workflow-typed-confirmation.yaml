@@ -1,4 +1,4 @@
-id: workflow-typed-confirmation
+id: behaviour-workflow-typed-confirmation
 description: >-
   The customer confirms the quote in words instead of pressing the action. Only a pressed action is
   an approval, so the typed confirmation makes the agent call ConfirmOrder and the framework hold it

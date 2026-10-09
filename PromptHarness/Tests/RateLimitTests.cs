@@ -42,7 +42,7 @@ public sealed class RateLimitTests
     }
 
     [Fact]
-    public async Task Command_past_the_window_is_answered_429()
+    public async Task RateLimit_Command_past_the_window_is_answered_429()
     {
         int callsPerMinute = CallsPerMinute();
         string conversationId = await SeedConversationWithAgentAsync();
@@ -61,7 +61,7 @@ public sealed class RateLimitTests
     }
 
     [Fact]
-    public async Task Command_refused_before_running_costs_the_user_nothing()
+    public async Task RateLimit_Command_refused_before_running_costs_the_user_nothing()
     {
         int callsPerMinute = CallsPerMinute();
         string conversationId = await SeedConversationWithAgentAsync();
@@ -85,7 +85,7 @@ public sealed class RateLimitTests
     }
 
     [Fact]
-    public async Task Message_meets_the_window_commands_filled()
+    public async Task RateLimit_Message_meets_the_window_commands_filled()
     {
         int callsPerMinute = CallsPerMinute();
         string conversationId = await SeedConversationWithAgentAsync();
@@ -102,7 +102,7 @@ public sealed class RateLimitTests
     }
 
     [Fact]
-    public async Task Command_past_the_window_is_told_as_its_own_outcome()
+    public async Task RateLimit_Command_past_the_window_is_told_as_its_own_outcome()
     {
         int callsPerMinute = CallsPerMinute();
         string conversationId = await SeedConversationWithAgentAsync(deliverToHarnessChannel: true);
@@ -123,7 +123,7 @@ public sealed class RateLimitTests
     }
 
     [Fact]
-    public async Task Message_past_the_window_is_told_as_a_notice()
+    public async Task RateLimit_Message_past_the_window_is_told_as_a_notice()
     {
         int callsPerMinute = CallsPerMinute();
         string conversationId = await SeedConversationWithAgentAsync(deliverToHarnessChannel: true);

@@ -39,7 +39,7 @@ public sealed class WorkflowTests
     // =========================================================================
 
     [Fact]
-    public async Task Launch_stops_at_the_first_step_with_nothing_bound()
+    public async Task Workflow_Launch_stops_at_the_first_step_with_nothing_bound()
     {
         Records.WorkflowPosition position = await new WorkflowEngine([PlaceOrder()]).LaunchAsync("PlaceOrder");
 
@@ -49,7 +49,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_successful_outcome_leads_to_the_next_step_with_its_values_bound()
+    public async Task Workflow_A_successful_outcome_leads_to_the_next_step_with_its_values_bound()
     {
         WorkflowEngine engine = new WorkflowEngine([PlaceOrder()]);
         Records.WorkflowPosition quote = await engine.LaunchAsync("PlaceOrder");
@@ -62,7 +62,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_failed_outcome_follows_the_failure_link()
+    public async Task Workflow_A_failed_outcome_follows_the_failure_link()
     {
         WorkflowEngine engine = new WorkflowEngine([PlaceOrder()]);
         Records.WorkflowPosition decide = await ReachDecideAsync(engine);
@@ -74,7 +74,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_failure_with_no_link_ends_the_workflow()
+    public async Task Workflow_A_failure_with_no_link_ends_the_workflow()
     {
         WorkflowEngine engine = new WorkflowEngine([PlaceOrder()]);
         Records.WorkflowPosition quote = await engine.LaunchAsync("PlaceOrder");
@@ -83,7 +83,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_step_with_no_edge_for_an_outcome_ends_the_workflow()
+    public async Task Workflow_A_step_with_no_edge_for_an_outcome_ends_the_workflow()
     {
         WorkflowEngine engine = new WorkflowEngine([PlaceOrder()]);
         Records.WorkflowPosition decide = await ReachDecideAsync(engine);
@@ -94,7 +94,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_second_pass_through_a_step_binds_the_new_result()
+    public async Task Workflow_A_second_pass_through_a_step_binds_the_new_result()
     {
         WorkflowEngine engine = new WorkflowEngine([PlaceOrder()]);
         Records.WorkflowPosition decide = await ReachDecideAsync(engine);
@@ -106,7 +106,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_carried_value_is_read_from_the_result_exactly_as_the_result_wrote_it()
+    public async Task Workflow_A_carried_value_is_read_from_the_result_exactly_as_the_result_wrote_it()
     {
         WorkflowEngine engine = new WorkflowEngine([Settle()]);
         Records.WorkflowPosition quote = await engine.LaunchAsync("Settle");
@@ -120,7 +120,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_carried_property_that_the_result_lacks_is_left_unbound()
+    public async Task Workflow_A_carried_property_that_the_result_lacks_is_left_unbound()
     {
         WorkflowEngine engine = new WorkflowEngine([PlaceOrder()]);
         Records.WorkflowPosition quote = await engine.LaunchAsync("PlaceOrder");
@@ -131,7 +131,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public void A_field_is_read_whatever_its_casing_and_null_holds_nothing()
+    public void Workflow_A_field_is_read_whatever_its_casing_and_null_holds_nothing()
     {
         Assert.Equal("\"ORD-1\"", WorkflowEngine.ReadField("""{"OrderId":"ORD-1"}""", "orderId"));
         Assert.Null(WorkflowEngine.ReadField("""{"error":null}""", "error"));
@@ -140,7 +140,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_workflow_resumes_from_the_position_as_it_was_saved_with_a_fresh_engine()
+    public async Task Workflow_A_workflow_resumes_from_the_position_as_it_was_saved_with_a_fresh_engine()
     {
         Records.WorkflowPosition quote = await new WorkflowEngine([PlaceOrder()]).LaunchAsync("PlaceOrder");
 
@@ -153,7 +153,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public void Dropping_the_position_leaves_no_workflow_running()
+    public void Workflow_Dropping_the_position_leaves_no_workflow_running()
     {
         MorganaAIContextProvider provider = new MorganaAIContextProvider(NullLogger.Instance);
         AgentSession session = new ChatClientAgent(new SilentModel()).CreateSessionAsync().AsTask().GetAwaiter().GetResult();
@@ -170,7 +170,7 @@ public sealed class WorkflowTests
     // =========================================================================
 
     [Fact]
-    public async Task Each_workflow_has_a_launcher_with_no_parameter_described_by_its_class()
+    public async Task Workflow_Each_workflow_has_a_launcher_with_no_parameter_described_by_its_class()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder(), Settle());
         ScriptedModel model = agent.Model;
@@ -189,7 +189,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task An_agent_declaring_no_workflow_is_never_offered_a_launcher()
+    public async Task Workflow_An_agent_declaring_no_workflow_is_never_offered_a_launcher()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync();
         agent.Model.Enqueue(Closing("Hello."));
@@ -201,7 +201,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task Outside_a_workflow_its_launcher_is_the_only_way_in_and_a_consultation_is_never_offered_one()
+    public async Task Workflow_Outside_a_workflow_its_launcher_is_the_only_way_in_and_a_consultation_is_never_offered_one()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         agent.Model.Enqueue(Closing("Hello."));
@@ -223,7 +223,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_first_step_tool_called_outside_its_workflow_is_not_run_and_is_told_so()
+    public async Task Workflow_A_first_step_tool_called_outside_its_workflow_is_not_run_and_is_told_so()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         agent.Model.Enqueue([Call("CreatePurchaseOrder", """{"item":"rose"}""")]);
@@ -240,7 +240,7 @@ public sealed class WorkflowTests
     [InlineData(false, 3, new[] { "Stock", "consult_billing" })]
     [InlineData(true, 0, new[] { "Stock" })]
     [InlineData(false, 4, new[] { "Stock" })]
-    public async Task A_colleague_is_offered_only_outside_a_consultation_and_while_the_turn_has_rounds_left(bool serving, int roundsSpent, string[] expected)
+    public async Task Workflow_A_colleague_is_offered_only_outside_a_consultation_and_while_the_turn_has_rounds_left(bool serving, int roundsSpent, string[] expected)
     {
         ScriptedModel model = new ScriptedModel();
         model.Enqueue([new TextContent("Hello.")]);
@@ -261,7 +261,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task Inside_a_workflow_only_the_current_step_is_offered_and_it_changes_within_the_turn()
+    public async Task Workflow_Inside_a_workflow_only_the_current_step_is_offered_and_it_changes_within_the_turn()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         await agent.RunQuoteTurnAsync();
@@ -277,7 +277,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_private_tool_needing_approval_is_hidden_inside_a_workflow()
+    public async Task Workflow_A_private_tool_needing_approval_is_hidden_inside_a_workflow()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         await agent.RunQuoteTurnAsync();
@@ -289,7 +289,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_bound_parameter_is_taken_out_of_the_schema_of_the_tool_that_the_step_offers()
+    public async Task Workflow_A_bound_parameter_is_taken_out_of_the_schema_of_the_tool_that_the_step_offers()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         await agent.RunQuoteTurnAsync();
@@ -309,7 +309,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task The_result_of_a_step_tool_reaches_the_model_under_the_label_of_where_the_workflow_stands()
+    public async Task Workflow_The_result_of_a_step_tool_reaches_the_model_under_the_label_of_where_the_workflow_stands()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         await agent.RunQuoteTurnAsync();
@@ -322,7 +322,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task Reply_offers_actions_that_lead_to_the_tools_of_the_current_step_only()
+    public async Task Workflow_Reply_offers_actions_that_lead_to_the_tools_of_the_current_step_only()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         await agent.RunQuoteTurnAsync();
@@ -332,7 +332,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task Reply_is_presented_at_a_choice_step_with_the_actions_required_and_bound_to_the_step_tools()
+    public async Task Workflow_Reply_is_presented_at_a_choice_step_with_the_actions_required_and_bound_to_the_step_tools()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         await agent.RunQuoteTurnAsync();
@@ -358,7 +358,7 @@ public sealed class WorkflowTests
     [InlineData("""{"awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"CancelOrder","label":"Cancel","value":"cancel"},{"tool":"Stock","label":"Stock","value":"stock"}]}""")]
     [InlineData("""{"awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"ConfirmOrder","label":"Again","value":"again"}]}""")]
     [InlineData("""{"awaits":"nothing","userIsLeaving":false}""")]
-    public async Task Reply_at_a_choice_step_is_refused_unless_it_offers_each_step_tool_once(string refused)
+    public async Task Workflow_Reply_at_a_choice_step_is_refused_unless_it_offers_each_step_tool_once(string refused)
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         await agent.RunQuoteTurnAsync(refused, ExactReply);
@@ -369,7 +369,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task Reply_at_a_choice_step_records_the_actions_in_the_step_order_awaiting_an_action_choice()
+    public async Task Workflow_Reply_at_a_choice_step_records_the_actions_in_the_step_order_awaiting_an_action_choice()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         await agent.RunQuoteTurnAsync("""{"awaits":"typed_answer","userIsLeaving":false,"actions":[{"tool":"CancelOrder","label":"Drop it","value":"drop"},{"tool":"ConfirmOrder","label":"Take it","value":"take"}]}""");
@@ -382,7 +382,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_user_who_is_leaving_is_not_held_to_the_step_actions()
+    public async Task Workflow_A_user_who_is_leaving_is_not_held_to_the_step_actions()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         await agent.RunQuoteTurnAsync("""{"awaits":"nothing","userIsLeaving":true}""");
@@ -392,7 +392,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public void A_closure_is_completed_with_a_button_for_each_missing_step_tool_worded_from_its_name()
+    public void Workflow_A_closure_is_completed_with_a_button_for_each_missing_step_tool_worded_from_its_name()
     {
         Records.TurnReply closed = new(Records.AwaitedFromUser.Nothing, false, [], null);
 
@@ -404,7 +404,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public void A_closure_keeps_the_model_wording_drops_foreign_actions_and_orders_the_rest_as_declared()
+    public void Workflow_A_closure_keeps_the_model_wording_drops_foreign_actions_and_orders_the_rest_as_declared()
     {
         Records.TurnReply closed = new(Records.AwaitedFromUser.TypedAnswer, false,
         [
@@ -421,7 +421,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_tool_of_the_workflow_called_out_of_turn_is_not_run_and_is_told_so()
+    public async Task Workflow_A_tool_of_the_workflow_called_out_of_turn_is_not_run_and_is_told_so()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         agent.Model.Enqueue([new TextContent("Starting."), Call("StartPlaceOrder", "{}")]);
@@ -439,7 +439,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_tool_outside_the_workflow_runs_untouched_and_advances_nothing()
+    public async Task Workflow_A_tool_outside_the_workflow_runs_untouched_and_advances_nothing()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         agent.Model.Enqueue([new TextContent("Starting."), Call("StartPlaceOrder", "{}")]);
@@ -454,7 +454,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_workflow_that_the_agent_does_not_declare_has_no_launcher()
+    public async Task Workflow_A_workflow_that_the_agent_does_not_declare_has_no_launcher()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         agent.Model.Enqueue(Closing("Hello."));
@@ -466,7 +466,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task An_approved_call_runs_with_the_bound_values_and_ends_the_workflow_across_a_saved_session()
+    public async Task Workflow_An_approved_call_runs_with_the_bound_values_and_ends_the_workflow_across_a_saved_session()
     {
         AgentUnderTest first = await AgentUnderTest.CreateAsync(PlaceOrder());
         await first.RunQuoteTurnAsync();
@@ -490,7 +490,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_workflow_resumes_on_a_fresh_agent_at_the_step_that_was_pending()
+    public async Task Workflow_A_workflow_resumes_on_a_fresh_agent_at_the_step_that_was_pending()
     {
         AgentUnderTest first = await AgentUnderTest.CreateAsync(PlaceOrder());
         await first.RunQuoteTurnAsync();
@@ -508,7 +508,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_declined_call_never_reaches_the_tool_loop_and_leaves_the_workflow_on_its_step()
+    public async Task Workflow_A_declined_call_never_reaches_the_tool_loop_and_leaves_the_workflow_on_its_step()
     {
         AgentUnderTest first = await AgentUnderTest.CreateAsync(PlaceOrder());
         await first.RunQuoteTurnAsync();
@@ -527,7 +527,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_carried_property_binds_the_tool_parameter_that_spells_its_name_otherwise()
+    public async Task Workflow_A_carried_property_binds_the_tool_parameter_that_spells_its_name_otherwise()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         await agent.RunQuoteTurnAsync();
@@ -545,7 +545,7 @@ public sealed class WorkflowTests
     // =========================================================================
 
     [Fact]
-    public void An_MCP_result_is_read_from_its_structured_content_and_fails_on_the_envelope_or_the_error_field()
+    public void Workflow_An_MCP_result_is_read_from_its_structured_content_and_fails_on_the_envelope_or_the_error_field()
     {
         Records.StepOutcome succeeded = WorkflowEngine.ReadOutcome("ReserveStock", """{"content":[],"structuredContent":{"orderId":"RSV-rose","quantity":1}}""", isMCPTool: true);
         Records.StepOutcome domainFailure = WorkflowEngine.ReadOutcome("ReserveStock", """{"content":[],"structuredContent":{"error":"out of stock","quantity":0}}""", isMCPTool: true);
@@ -562,7 +562,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public void The_origin_of_a_tool_decides_how_its_result_is_read_never_the_shape()
+    public void Workflow_The_origin_of_a_tool_decides_how_its_result_is_read_never_the_shape()
     {
         // A native record that happens to have the envelope's property names is still a native record.
         Records.StepOutcome native = WorkflowEngine.ReadOutcome("CreatePurchaseOrder", """{"isError":true,"structuredContent":{"error":"x"},"orderId":"ORD-1"}""", isMCPTool: false);
@@ -573,7 +573,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_native_step_hands_its_value_to_an_MCP_step()
+    public async Task Workflow_A_native_step_hands_its_value_to_an_MCP_step()
     {
         await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance, Mixed());
         agent.Model.Enqueue([Call("StartMixed", "{}")]);
@@ -588,7 +588,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task An_MCP_step_binds_the_field_of_its_structured_content_into_the_next_step()
+    public async Task Workflow_An_MCP_step_binds_the_field_of_its_structured_content_into_the_next_step()
     {
         await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance, Reserve());
         agent.Model.Enqueue([Call("StartReserve", "{}")]);
@@ -602,7 +602,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task An_MCP_step_whose_record_holds_an_error_follows_the_failure_edge()
+    public async Task Workflow_An_MCP_step_whose_record_holds_an_error_follows_the_failure_edge()
     {
         await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance, Reserve());
         agent.Model.Enqueue([Call("StartReserve", "{}")]);
@@ -615,7 +615,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task An_MCP_step_that_the_server_reports_as_an_error_follows_the_failure_edge_and_a_plain_text_result_is_read_as_text()
+    public async Task Workflow_An_MCP_step_that_the_server_reports_as_an_error_follows_the_failure_edge_and_a_plain_text_result_is_read_as_text()
     {
         await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance, Fragile());
         agent.Model.Enqueue([Call("StartFragile", "{}")]);
@@ -633,7 +633,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_workflow_carrying_a_field_out_of_a_tool_with_no_output_schema_is_withdrawn_and_its_launcher_is_not_offered()
+    public async Task Workflow_A_workflow_carrying_a_field_out_of_a_tool_with_no_output_schema_is_withdrawn_and_its_launcher_is_not_offered()
     {
         CapturingLogger logger = new CapturingLogger();
         await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), logger, Blind());
@@ -647,7 +647,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task A_workflow_citing_a_tool_that_no_server_offers_is_withdrawn_and_a_sound_one_beside_it_stays()
+    public async Task Workflow_A_workflow_citing_a_tool_that_no_server_offers_is_withdrawn_and_a_sound_one_beside_it_stays()
     {
         await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance, Phantom(), Mixed(), Blind());
         agent.Model.Enqueue(Closing("Hello."));
@@ -658,7 +658,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task An_agent_whose_server_is_down_lives_on_with_its_native_tools_and_without_the_workflows_that_cite_the_server()
+    public async Task Workflow_An_agent_whose_server_is_down_lives_on_with_its_native_tools_and_without_the_workflows_that_cite_the_server()
     {
         CapturingLogger logger = new CapturingLogger();
         await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(DownServerAgentMarker), logger, Mixed());
@@ -674,7 +674,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task An_MCP_tool_named_like_a_native_one_is_dropped_and_the_native_one_answers()
+    public async Task Workflow_An_MCP_tool_named_like_a_native_one_is_dropped_and_the_native_one_answers()
     {
         CapturingLogger logger = new CapturingLogger();
         await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(ClashingServerAgentMarker), logger);
@@ -690,7 +690,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task No_tool_of_an_MCP_server_asks_for_approval_even_when_the_server_declares_it_destructive()
+    public async Task Workflow_No_tool_of_an_MCP_server_asks_for_approval_even_when_the_server_declares_it_destructive()
     {
         await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(MCPAgentMarker), NullLogger.Instance);
         agent.Model.Enqueue(Closing("Hello."));
@@ -709,7 +709,7 @@ public sealed class WorkflowTests
     // =========================================================================
 
     [Fact]
-    public void A_workflow_class_projects_into_a_definition_named_without_its_suffix()
+    public void Workflow_A_workflow_class_projects_into_a_definition_named_without_its_suffix()
     {
         Records.WorkflowDefinition definition = new PlaceOrderWorkflow().ToDefinition();
 
@@ -724,7 +724,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public void The_start_step_comes_first_whatever_edge_was_declared_first()
+    public void Workflow_The_start_step_comes_first_whatever_edge_was_declared_first()
     {
         Records.WorkflowDefinition definition = new BackwardsWorkflow().ToDefinition();
 
@@ -733,7 +733,7 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public void A_definition_lists_only_the_properties_that_the_class_declares_itself()
+    public void Workflow_A_definition_lists_only_the_properties_that_the_class_declares_itself()
     {
         Records.WorkflowDefinition definition = new DerivedWorkflow().ToDefinition();
 
@@ -746,31 +746,31 @@ public sealed class WorkflowTests
     // =========================================================================
 
     [Fact]
-    public void A_sound_declaration_is_accepted()
+    public void Workflow_A_sound_declaration_is_accepted()
         => Assert.Empty(Validate([PlaceOrder(), Settle()]));
 
     [Fact]
-    public void A_workflow_name_declared_twice_is_refused()
+    public void Workflow_A_workflow_name_declared_twice_is_refused()
         => AssertRefused([PlaceOrder(), PlaceOrder()], "declared more than once");
 
     [Fact]
-    public void A_workflow_without_a_description_is_refused()
+    public void Workflow_A_workflow_without_a_description_is_refused()
         => AssertRefused([PlaceOrder() with { Description = " " }], "has no description");
 
     [Fact]
-    public void A_workflow_without_a_step_is_refused()
+    public void Workflow_A_workflow_without_a_step_is_refused()
         => AssertRefused([PlaceOrder() with { Steps = [] }], "has no step");
 
     [Fact]
-    public void A_step_name_used_twice_is_refused()
+    public void Workflow_A_step_name_used_twice_is_refused()
         => AssertRefused([Ad("PlaceOrder", [QuoteStep, QuoteStep], [], [])], "step 'Quote': the name is declared more than once");
 
     [Fact]
-    public void A_step_naming_no_tool_is_refused()
+    public void Workflow_A_step_naming_no_tool_is_refused()
         => AssertRefused([Ad("PlaceOrder", [new("Quote", [])], [], [])], "the step offers no tool");
 
     [Fact]
-    public void A_step_naming_an_undeclared_tool_is_refused_unless_the_agent_uses_an_MCP_server()
+    public void Workflow_A_step_naming_an_undeclared_tool_is_refused_unless_the_agent_uses_an_MCP_server()
     {
         Records.WorkflowDefinition workflow = Ad("PlaceOrder", [new("Quote", ["CreatePurchaseOrder", "Mystery"])], [], []);
 
@@ -782,11 +782,11 @@ public sealed class WorkflowTests
     [InlineData("Reply")]
     [InlineData("StartPlaceOrder")]
     [InlineData("consult_billing")]
-    public void A_step_naming_a_framework_tool_or_a_colleague_is_refused(string tool)
+    public void Workflow_A_step_naming_a_framework_tool_or_a_colleague_is_refused(string tool)
         => AssertRefused([Ad("PlaceOrder", [new("Quote", ["CreatePurchaseOrder", tool])], [], [])], "belongs to the framework");
 
     [Fact]
-    public void A_launcher_named_like_a_tool_of_the_agent_is_refused()
+    public void Workflow_A_launcher_named_like_a_tool_of_the_agent_is_refused()
     {
         Records.ToolDefinition[] tools = [.. DeclaredTools(), new("StartPlaceOrder", "A tool.", [])];
 
@@ -796,22 +796,22 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public void The_reply_tool_passes_the_contract_that_a_domain_tool_is_held_to()
+    public void Workflow_The_reply_tool_passes_the_contract_that_a_domain_tool_is_held_to()
         => Assert.Empty(HandlesIntentAgentRegistryService.ValidateToolContract(Constants.Morgana, typeof(ReplyTool)));
 
     [Fact]
-    public void An_edge_followed_by_a_tool_the_source_step_does_not_hold_is_refused()
+    public void Workflow_An_edge_followed_by_a_tool_the_source_step_does_not_hold_is_refused()
     {
         AssertRefused([Ad("PlaceOrder", [QuoteStep], [new("Quote", "Quote", "CancelOrder", false, [])], [])], "'CancelOrder' is not a tool of step 'Quote'");
         AssertRefused([Ad("PlaceOrder", [QuoteStep], [new("Quote", "Quote", "CancelOrder", true, [])], [])], "'CancelOrder' is not a tool of step 'Quote'");
     }
 
     [Fact]
-    public void A_step_that_no_path_from_the_first_reaches_is_refused()
+    public void Workflow_A_step_that_no_path_from_the_first_reaches_is_refused()
         => AssertRefused([Ad("PlaceOrder", [QuoteStep, DecideStep], [], [])], "step 'Decide': no path leads to it from 'Quote'");
 
     [Fact]
-    public void A_transition_declared_twice_is_refused()
+    public void Workflow_A_transition_declared_twice_is_refused()
         => AssertRefused(
             [Ad("PlaceOrder", [QuoteStep, DecideStep],
                 [new("Quote", "Decide", "CreatePurchaseOrder", false, ["OrderId"]), new("Quote", "Quote", "CreatePurchaseOrder", false, [])],
@@ -819,31 +819,31 @@ public sealed class WorkflowTests
             "the same transition is declared more than once");
 
     [Fact]
-    public void A_carried_name_that_is_not_a_public_property_of_the_workflow_is_refused()
+    public void Workflow_A_carried_name_that_is_not_a_public_property_of_the_workflow_is_refused()
         => AssertRefused(
             [Ad("PlaceOrder", [QuoteStep, DecideStep], [new("Quote", "Decide", "CreatePurchaseOrder", false, ["colour"])], [])],
             "'colour' is not a public property of the workflow");
 
     [Fact]
-    public void A_carried_name_that_the_source_tool_does_not_return_is_refused()
+    public void Workflow_A_carried_name_that_the_source_tool_does_not_return_is_refused()
         => AssertRefused(
             [Ad("PlaceOrder", [QuoteStep, DecideStep], [new("Quote", "Decide", "CreatePurchaseOrder", false, ["OrderId", "Status"])], ["OrderId", "Status"])],
             "tool 'CreatePurchaseOrder' does not declare the returned field 'Status'");
 
     [Fact]
-    public void A_carried_name_that_no_tool_of_the_target_step_takes_is_refused()
+    public void Workflow_A_carried_name_that_no_tool_of_the_target_step_takes_is_refused()
         => AssertRefused(
             [Ad("PlaceOrder", [QuoteStep, DecideStep], [new("Quote", "Decide", "CreatePurchaseOrder", false, ["Total"])], ["Total"])],
             "no tool of step 'Decide' takes a parameter 'Total'");
 
     [Fact]
-    public void A_property_that_no_edge_carries_is_refused()
+    public void Workflow_A_property_that_no_edge_carries_is_refused()
         => AssertRefused(
             [Ad("PlaceOrder", [QuoteStep, DecideStep], [new("Quote", "Decide", "CreatePurchaseOrder", false, ["OrderId"])], ["OrderId", "SealWord"])],
             "property 'SealWord' is carried by no edge");
 
     [Fact]
-    public void A_tool_of_an_MCP_server_may_be_a_step_and_the_source_of_an_edge()
+    public void Workflow_A_tool_of_an_MCP_server_may_be_a_step_and_the_source_of_an_edge()
     {
         Records.WorkflowDefinition workflow = Ad(
             "PlaceOrder",

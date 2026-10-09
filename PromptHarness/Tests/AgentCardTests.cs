@@ -37,7 +37,7 @@ public sealed class AgentCardTests
 
     [Theory]
     [MemberData(nameof(PublishedIntents))]
-    public async Task Card_is_served_without_credentials(string intent)
+    public async Task AgentCard_Card_is_served_without_credentials(string intent)
     {
         using HttpClient httpClient = new HttpClient();
 
@@ -67,7 +67,7 @@ public sealed class AgentCardTests
 
     [Theory]
     [MemberData(nameof(PublishedIntents))]
-    public async Task Card_declares_how_a_caller_authenticates(string intent)
+    public async Task AgentCard_Card_declares_how_a_caller_authenticates(string intent)
     {
         using HttpClient httpClient = new HttpClient();
 
@@ -95,7 +95,7 @@ public sealed class AgentCardTests
 
     [Theory]
     [MemberData(nameof(PublishedIntents))]
-    public async Task Agent_endpoint_refuses_a_call_the_card_was_not_read_for(string intent)
+    public async Task AgentCard_Agent_endpoint_refuses_a_call_the_card_was_not_read_for(string intent)
     {
         using HttpClient httpClient = new HttpClient();
 
@@ -111,7 +111,7 @@ public sealed class AgentCardTests
     }
 
     [Fact]
-    public async Task Agent_endpoint_refuses_a_channels_own_credentials()
+    public async Task AgentCard_Agent_endpoint_refuses_a_channels_own_credentials()
     {
         // A caller is a channel or a colleague, never both. The harness authenticates as a channel
         // and its token is entirely valid — signed with a key this host declared, current, addressed
@@ -134,7 +134,7 @@ public sealed class AgentCardTests
     [InlineData("billing")]
     [InlineData("contract")]
     [InlineData("monkeys")]
-    public async Task Agent_endpoint_refuses_a_partner_not_admitted_to_it(string closedAgent)
+    public async Task AgentCard_Agent_endpoint_refuses_a_partner_not_admitted_to_it(string closedAgent)
     {
         // Proven to be a colleague and still turned away: this run declares its partner as admitted
         // to one agent and every other agent of the same installation answers it exactly as it answers
@@ -147,7 +147,7 @@ public sealed class AgentCardTests
     }
 
     [Fact]
-    public async Task Agent_endpoint_admits_a_partner_scoped_to_it()
+    public async Task AgentCard_Agent_endpoint_admits_a_partner_scoped_to_it()
     {
         // The other half and the one that keeps the two above from passing for the wrong reason: a
         // gate refusing everything would satisfy them both. Only the gate is under test here, so the

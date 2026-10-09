@@ -77,7 +77,7 @@ The harness channel declares the **full** capability profile with no length budg
 `MorganaChannelAdapter` short-circuits and most scenarios measure undegraded output. One scenario
 opts into a degraded profile instead (`ScenarioDefinition.DegradedChannel`, mirroring Rune's "poor
 but honest" capabilities under a distinct channel name) specifically to exercise the adapter's
-rewrite path — see `channeladapter-degrades-invoice-card` and `GuardTests`/`ActorTests` below.
+rewrite path — see `actor-channeladapter-degrades-invoice-card` and `GuardTests`/`ActorTests` below.
 
 ## Configuration and secrets
 
@@ -159,14 +159,14 @@ otherwise would mean measuring a configuration nobody runs. With the example plu
 | Scenario | Agent | Tier |
 |---|---|---|
 | `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand` | Billing, Contract | `Efficiency` |
-| `classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
-| `behaviour-rich-card`, `classifier-routes-catalog-request-to-inventory` | Inventory | **`Performance`** |
-| `classifier-disambiguates-colliding-billing-contract` | *(none — diverted before routing)* | `Efficiency` (classifier only) |
+| `actor-classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `actor-channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
+| `behaviour-rich-card`, `actor-classifier-routes-catalog-request-to-inventory` | Inventory | **`Performance`** |
+| `actor-classifier-disambiguates-colliding-billing-contract` | *(none — diverted before routing)* | `Efficiency` (classifier only) |
 
 Everything Morgana runs on its own account — guard, classifier, presenter — plus the judge, always
 goes to the cheapest configured tier. So the two Inventory scenarios dominate the bill: a handful
 of `Performance` turns against a suite that is otherwise `Efficiency` throughout — which is also why
-`classifier-routes-catalog-request-to-inventory` runs 3 times rather than 5, its property being a
+`actor-classifier-routes-catalog-request-to-inventory` runs 3 times rather than 5, its property being a
 routing decision that merely happens to land on a `Performance` agent. Keep them out of the tight
 iteration loop and run them at checkpoints.
 

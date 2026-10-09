@@ -1,4 +1,4 @@
-id: classifier-disambiguates-colliding-billing-contract
+id: actor-classifier-disambiguates-colliding-billing-contract
 description: >-
   A request that genuinely brushes both billing and contract lands the classifier's top two
   candidates within Morgana:ActorSystem:IntentCollisionThreshold of each other. The

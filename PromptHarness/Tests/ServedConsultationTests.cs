@@ -58,7 +58,7 @@ public sealed class ServedConsultationTests
     private const string ForeignConversationSeparator = "~";
 
     [Fact]
-    public async Task A_partner_is_served_on_a_conversation_of_its_own_and_never_on_the_one_it_named()
+    public async Task ServedConsultation_A_partner_is_served_on_a_conversation_of_its_own_and_never_on_the_one_it_named()
     {
         // The name of a conversation a user could be having right now. Behind the A2A door it is a
         // string a stranger wrote: honoured as ours it would reach that user's agents, read the shared
@@ -78,7 +78,7 @@ public sealed class ServedConsultationTests
     }
 
     [Fact]
-    public async Task What_an_answer_cost_travels_back_to_a_caller_that_declared_itself_an_agent()
+    public async Task ServedConsultation_What_an_answer_cost_travels_back_to_a_caller_that_declared_itself_an_agent()
     {
         // The tokens a consultation burns are burned here, on the answering installation, where they would
         // otherwise be invisible to the budget that is supposed to say what a conversation cost.
@@ -92,7 +92,7 @@ public sealed class ServedConsultationTests
     }
 
     [Fact]
-    public async Task What_an_answer_cost_stays_here_when_the_caller_never_declared_itself()
+    public async Task ServedConsultation_What_an_answer_cost_stays_here_when_the_caller_never_declared_itself()
     {
         // Anything else that speaks A2A has no ledger to charge the figure to and would carry a number
         // it cannot read. Unreported, the spend simply stays on this installation's own books.
@@ -103,7 +103,7 @@ public sealed class ServedConsultationTests
     }
 
     [Fact]
-    public async Task A_partner_that_has_opened_its_hour_is_turned_away_in_this_deployment_voice()
+    public async Task ServedConsultation_A_partner_that_has_opened_its_hour_is_turned_away_in_this_deployment_voice()
     {
         // A caller behind this door writes the name of the conversation it is served on, so a partner
         // rotating names would draw a fresh budget with every one. What is bounded is therefore how
@@ -128,7 +128,7 @@ public sealed class ServedConsultationTests
     [InlineData("live/../../etc/passwd")]
     [InlineData("a name with spaces")]
     [InlineData("padded-to-well-past-any-conversation-this-installation-would-ever-name-itself-and-then-some-more-and-still-more-and-more-and-more")]
-    public async Task A_context_id_this_installation_cannot_name_a_conversation_by_is_refused_before_anything_is_opened(string unusableContextId)
+    public async Task ServedConsultation_A_context_id_this_installation_cannot_name_a_conversation_by_is_refused_before_anything_is_opened(string unusableContextId)
     {
         // A context id is a string a stranger wrote and this installation raises an actor and opens a
         // database under it. What cannot be one of those names has to be turned away at the door: met
@@ -151,7 +151,7 @@ public sealed class ServedConsultationTests
     }
 
     [Fact]
-    public async Task An_agent_hands_a_partner_nothing_that_asking_cannot_obtain()
+    public async Task ServedConsultation_An_agent_hands_a_partner_nothing_that_asking_cannot_obtain()
     {
         // The text of a question is the one thing on a served turn that this installation did not
         // write. A partner is onboarded, so the shape this arrives in is not a hostile stranger but a

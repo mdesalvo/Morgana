@@ -38,7 +38,7 @@ public sealed class FederationTests
     /// full per-run transcript on the assertion message when it did not.
     /// </summary>
     [Fact]
-    public async Task An_agent_reaches_its_colleague_at_the_other_installation()
+    public async Task Federation_An_agent_reaches_its_colleague_at_the_other_installation()
     {
         // Without the second installation this run's instance is the ordinary one, whose domain has
         // no agent declaring a colleague abroad: there is nothing here to measure rather than

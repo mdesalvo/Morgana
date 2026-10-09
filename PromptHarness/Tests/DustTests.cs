@@ -115,7 +115,7 @@ public sealed class DustTests
     /// this test's own name as the filter, since the walk above needs a budget to walk through.
     /// </summary>
     [Fact]
-    public async Task Spent_budget_refuses_commands_and_messages_at_the_gate()
+    public async Task Dust_Spent_budget_refuses_commands_and_messages_at_the_gate()
     {
         Assert.SkipWhen(fixture.Options.DustBudgetPerConversation is null,
             "Dust limiting is off: run with Harness__DustBudgetPerConversation set, in this class's own invocation.");

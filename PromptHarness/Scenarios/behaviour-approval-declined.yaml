@@ -1,4 +1,4 @@
-id: approval-declined
+id: behaviour-approval-declined
 description: >-
   The answer to an approval request that the plan-enrollment scenario never gives: no. The enrolment
   is asked for, the framework holds SubscribeToGreenCarePlan for the approval buttons and the customer

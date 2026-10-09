@@ -24,7 +24,7 @@ public sealed class FrameworkPromptTests
     private readonly ConfigurationPromptResolverService resolver = new ConfigurationPromptResolverService(new NoDomain());
 
     [Fact]
-    public async Task Morgana_prompt_carries_every_section_an_agent_is_composed_of()
+    public async Task FrameworkPrompt_Morgana_prompt_carries_every_section_an_agent_is_composed_of()
     {
         Records.Prompt morgana = await resolver.ResolveAsync("Morgana");
 
@@ -42,7 +42,7 @@ public sealed class FrameworkPromptTests
     }
 
     [Fact]
-    public async Task Morgana_prompt_words_every_text_the_model_reads_as_part_of_a_tool()
+    public async Task FrameworkPrompt_Morgana_prompt_words_every_text_the_model_reads_as_part_of_a_tool()
     {
         string[] toolInjections = [.. (await resolver.ResolveAsync("Morgana"))
             .GetAdditionalProperty<List<Records.Injection>>("ToolInjections").Select(injection => injection.Name)];
@@ -57,7 +57,7 @@ public sealed class FrameworkPromptTests
     }
 
     [Fact]
-    public async Task Morgana_prompt_authors_the_framework_replies_by_the_ids_the_channels_act_on()
+    public async Task FrameworkPrompt_Morgana_prompt_authors_the_framework_replies_by_the_ids_the_channels_act_on()
     {
         List<Records.FrameworkReplySet> sets = (await resolver.ResolveAsync("Morgana"))
             .GetAdditionalProperty<List<Records.FrameworkReplySet>>(Constants.PromptProperties.FrameworkReplies);
@@ -81,7 +81,7 @@ public sealed class FrameworkPromptTests
     [InlineData("Presentation", "NoAgents")]
     [InlineData("Classifier", "Disambiguation")]
     [InlineData("Classifier", "UnrecognizedIntent")]
-    public async Task Every_message_morgana_says_in_her_own_voice_is_authored(string promptId, string message)
+    public async Task FrameworkPrompt_Every_message_morgana_says_in_her_own_voice_is_authored(string promptId, string message)
         => Assert.False(string.IsNullOrWhiteSpace((await resolver.ResolveAsync(promptId)).GetMessage(message)));
 
     [Theory]
@@ -90,7 +90,7 @@ public sealed class FrameworkPromptTests
     [InlineData("Guard")]
     [InlineData("Presentation")]
     [InlineData("ChannelAdapter")]
-    public async Task Sections_carry_no_label_of_their_own(string promptId)
+    public async Task FrameworkPrompt_Sections_carry_no_label_of_their_own(string promptId)
     {
         Records.Prompt prompt = await resolver.ResolveAsync(promptId);
 
@@ -101,7 +101,7 @@ public sealed class FrameworkPromptTests
     }
 
     [Fact]
-    public void A_section_is_labeled_once_whether_or_not_it_was_authored_with_its_label()
+    public void FrameworkPrompt_A_section_is_labeled_once_whether_or_not_it_was_authored_with_its_label()
     {
         Assert.Equal("[TARGET] Answer billing questions.", Records.Prompt.Labeled("[TARGET]", "Answer billing questions."));
         Assert.Equal("[TARGET] Answer billing questions.", Records.Prompt.Labeled("[TARGET]", "[TARGET] Answer billing questions."));

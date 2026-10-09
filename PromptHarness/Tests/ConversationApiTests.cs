@@ -59,7 +59,7 @@ public sealed class ConversationApiTests
 
     [Theory]
     [MemberData(nameof(ChannelEndpoints))]
-    public async Task Endpoint_refuses_a_call_without_credentials(string method, string path)
+    public async Task ConversationApi_Endpoint_refuses_a_call_without_credentials(string method, string path)
     {
         HttpResponseMessage response = await api.SendAsync(method, path, ChannelApiClient.NewConversationId(), token: null);
 
@@ -68,7 +68,7 @@ public sealed class ConversationApiTests
 
     [Theory]
     [MemberData(nameof(ChannelEndpoints))]
-    public async Task Endpoint_refuses_a_token_signed_with_another_key(string method, string path)
+    public async Task ConversationApi_Endpoint_refuses_a_token_signed_with_another_key(string method, string path)
     {
         // The harness issuer, the right audience, a current token: only the key is wrong. A channel's
         // name is not its credential, so claiming it proves nothing without the key it was filed under.
@@ -81,7 +81,7 @@ public sealed class ConversationApiTests
 
     [Theory]
     [MemberData(nameof(ChannelEndpoints))]
-    public async Task Endpoint_refuses_a_partners_own_credentials(string method, string path)
+    public async Task ConversationApi_Endpoint_refuses_a_partners_own_credentials(string method, string path)
     {
         // The mirror of AgentCardTests' channel refused at the A2A door: a partner's token is valid and
         // still not a channel's. A partner carries agent work, never people, so it opens no conversation.
@@ -107,7 +107,7 @@ public sealed class ConversationApiTests
 
     [Theory]
     [MemberData(nameof(RefusedHandshakes))]
-    public async Task Start_refuses_an_incomplete_handshake(string missing, string body)
+    public async Task ConversationApi_Start_refuses_an_incomplete_handshake(string missing, string body)
     {
         string conversationId = ChannelApiClient.NewConversationId();
 
@@ -130,7 +130,7 @@ public sealed class ConversationApiTests
 
     [Theory]
     [MemberData(nameof(ConversationEndpoints))]
-    public async Task Endpoint_answers_404_for_a_conversation_never_started(string method, string path)
+    public async Task ConversationApi_Endpoint_answers_404_for_a_conversation_never_started(string method, string path)
     {
         string conversationId = ChannelApiClient.NewConversationId();
 
@@ -143,7 +143,7 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
-    public async Task Start_answers_once_the_conversation_is_on_record()
+    public async Task ConversationApi_Start_answers_once_the_conversation_is_on_record()
     {
         string conversationId = ChannelApiClient.NewConversationId();
 
@@ -160,7 +160,7 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
-    public async Task Start_refuses_an_id_already_on_record()
+    public async Task ConversationApi_Start_refuses_an_id_already_on_record()
     {
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing", callbackUrl: "http://127.0.0.1:1/owner");
@@ -175,7 +175,7 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
-    public async Task Resume_reports_the_state_to_redraw()
+    public async Task ConversationApi_Resume_reports_the_state_to_redraw()
     {
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
@@ -195,7 +195,7 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
-    public async Task End_can_be_called_twice()
+    public async Task ConversationApi_End_can_be_called_twice()
     {
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: null);
@@ -212,7 +212,7 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
-    public async Task Health_answers_without_credentials()
+    public async Task ConversationApi_Health_answers_without_credentials()
     {
         // The liveness probe is asked by infrastructure holding no channel key
         HttpResponseMessage response = await api.SendAsync("GET", "/api/morgana/health", ChannelApiClient.NewConversationId(), token: null);
@@ -221,7 +221,7 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
-    public async Task Command_catalogue_publishes_compact()
+    public async Task ConversationApi_Command_catalogue_publishes_compact()
     {
         HttpResponseMessage response = await api.SendAsync("GET", "/api/morgana/commands", ChannelApiClient.NewConversationId(), api.HarnessToken());
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -247,7 +247,7 @@ public sealed class ConversationApiTests
 
     [Theory]
     [MemberData(nameof(RefusedCommandRequests))]
-    public async Task Command_refuses_a_request_it_could_not_run(string reason, string body, string? activeAgent)
+    public async Task ConversationApi_Command_refuses_a_request_it_could_not_run(string reason, string body, string? activeAgent)
     {
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent);
@@ -260,7 +260,7 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
-    public async Task Record_left_at_schema_5_is_served_then_brought_up_to_6()
+    public async Task ConversationApi_Record_left_at_schema_5_is_served_then_brought_up_to_6()
     {
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
@@ -290,7 +290,7 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
-    public async Task Command_runs_on_the_agent_carrying_the_conversation()
+    public async Task ConversationApi_Command_runs_on_the_agent_carrying_the_conversation()
     {
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
@@ -309,7 +309,7 @@ public sealed class ConversationApiTests
     /// is what lets a channel tell this run's outcome from a late one of an earlier run of the same command.
     /// </summary>
     [Fact]
-    public async Task Command_outcome_names_the_run_the_channel_asked_for()
+    public async Task ConversationApi_Command_outcome_names_the_run_the_channel_asked_for()
     {
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing", fixture.Channel.CallbackUrl);
@@ -330,7 +330,7 @@ public sealed class ConversationApiTests
     /// on its own: the status is what a channel would read.
     /// </summary>
     [Fact]
-    public async Task Command_needing_a_yes_is_refused_without_one()
+    public async Task ConversationApi_Command_needing_a_yes_is_refused_without_one()
     {
         (ActionExecutingContext context, bool ran) = await AdmitAsync(new ExecuteCommandRequest("wipe"));
 
@@ -344,7 +344,7 @@ public sealed class ConversationApiTests
 
     /// <summary>The same command carrying the Yes its channel obtained passes the gate untouched.</summary>
     [Fact]
-    public async Task Command_needing_a_yes_is_admitted_with_one()
+    public async Task ConversationApi_Command_needing_a_yes_is_admitted_with_one()
     {
         (ActionExecutingContext context, bool ran) = await AdmitAsync(new ExecuteCommandRequest("wipe", Confirmed: true));
 
