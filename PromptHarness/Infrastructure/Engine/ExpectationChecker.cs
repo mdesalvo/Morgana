@@ -43,7 +43,13 @@ public static partial class ExpectationChecker
         if (expect.AgentCompleted is { } expectedCompleted && turn.Message.AgentCompleted != expectedCompleted)
             failures.Add($"agentCompleted: expected {expectedCompleted}, got {turn.Message.AgentCompleted}");
 
-        if (expect.Agent is { Length: > 0 } expectedAgent
+        // "none" is a turn that Morgana answered herself, with no morgana.agent span: an intent no agent handles.
+        if (string.Equals(expect.Agent, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            if (turn.AgentName is not null)
+                failures.Add($"agent: expected none, got {turn.AgentName}");
+        }
+        else if (expect.Agent is { Length: > 0 } expectedAgent
             && !string.Equals(turn.AgentName, expectedAgent, StringComparison.OrdinalIgnoreCase))
             failures.Add($"agent: expected {expectedAgent}, got {turn.AgentName ?? "(none)"}");
 

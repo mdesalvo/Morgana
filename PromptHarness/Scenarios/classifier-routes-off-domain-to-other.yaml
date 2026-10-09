@@ -1,0 +1,13 @@
+id: classifier-routes-off-domain-to-other
+description: >-
+  A request outside every agent's territory lands the classifier on the complement intent "other",
+  which no agent declares: the router reaches nobody and Morgana answers with her own authored line.
+  Both halves are asserted structurally, the classifier's output on its span and the absence of any
+  agent span, so the turn needs no judge.
+
+turns:
+  - say: "What's the weather going to be like in Rome tomorrow?"
+    expect:
+      agent: none
+      classifierIntent: other
+      textNotEmpty: true

@@ -21,6 +21,7 @@ public sealed class ActorTests
     [InlineData("classifier-routes-unambiguous-billing-request")]
     [InlineData("classifier-routes-catalog-request-to-inventory")]
     [InlineData("classifier-disambiguates-colliding-billing-contract")]
+    [InlineData("classifier-routes-off-domain-to-other")]
     [InlineData("channeladapter-degrades-invoice-card")]
     public async Task Actor_scenario_holds(string scenarioId)
     {

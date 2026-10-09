@@ -157,7 +157,7 @@ public sealed class ExpectSpec
     /// <summary>Substrings that must not occur in the response text, case-insensitively.</summary>
     public List<string>? TextNotContains { get; init; }
 
-    /// <summary>Expected agent class name, e.g. <c>BillingAgent</c>.</summary>
+    /// <summary>Expected agent class name such as <c>BillingAgent</c> or <c>none</c> for a turn no agent took.</summary>
     public string? Agent { get; init; }
 
     /// <summary>Expected <c>guard.compliant</c> verdict from the <c>morgana.guard</c> span.</summary>
