@@ -201,14 +201,15 @@ public sealed class WorkflowTests
     }
 
     [Fact]
-    public async Task Outside_a_workflow_every_tool_is_offered_and_a_consultation_is_never_offered_a_launcher()
+    public async Task Outside_a_workflow_its_launcher_is_the_only_way_in_and_a_consultation_is_never_offered_one()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         agent.Model.Enqueue(Closing("Hello."));
         await agent.TurnAsync("hi");
 
+        // The first step's tool is entered through the launcher; the later steps' tools still act on orders from elsewhere.
         Assert.Equal(
-            ["CancelOrder", "ConfirmOrder", "CreatePurchaseOrder", "Refund", "Reply", "StartPlaceOrder", "Stock"],
+            ["CancelOrder", "ConfirmOrder", "Refund", "Reply", "StartPlaceOrder", "Stock"],
             Names(agent.Model.ToolsPerCall[0]));
 
         AgentUnderTest serving = await AgentUnderTest.CreateAsync(PlaceOrder());
@@ -218,7 +219,21 @@ public sealed class WorkflowTests
 
         string[] offered = [.. serving.Model.ToolsPerCall[0].Select(tool => tool.Name)];
         Assert.DoesNotContain("StartPlaceOrder", offered);
-        Assert.Contains("CreatePurchaseOrder", offered);
+        Assert.DoesNotContain("CreatePurchaseOrder", offered);
+    }
+
+    [Fact]
+    public async Task A_first_step_tool_called_outside_its_workflow_is_not_run_and_is_told_so()
+    {
+        AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
+        agent.Model.Enqueue([Call("CreatePurchaseOrder", """{"item":"rose"}""")]);
+        agent.Model.Enqueue(Closing("Which plant?"));
+
+        await agent.TurnAsync("I want a rose");
+
+        Assert.Contains("CreatePurchaseOrder is not available at this step of PlaceOrder.", agent.FunctionResults());
+        Assert.DoesNotContain(InventoryTools.Calls, call => call.StartsWith("CreatePurchaseOrder", StringComparison.Ordinal));
+        Assert.Null(agent.Provider.GetWorkflowPosition(agent.Session));
     }
 
     [Theory]

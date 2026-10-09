@@ -9,8 +9,8 @@ namespace Morgana.AI.ChatClients;
 
 /// <summary>
 /// DelegatingChatClient sitting between the model and the tool loop. On every model call it presents the
-/// tools that the session's state allows: it keeps the steps of a workflow in order and the colleagues out of
-/// reach where a consultation may not happen, by the absence of the tools that do not belong there.
+/// tools that the session's state allows: it keeps a workflow's entry behind its launcher, its steps in order and
+/// the colleagues out of reach where a consultation may not happen, by the absence of the tools that do not belong there.
 /// </summary>
 /// <remarks>
 /// Below the tool loop because the tools that a single run is given add to the agent's own instead of
@@ -84,15 +84,20 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         Records.WorkflowPosition? position = workflows.Count == 0 ? null : contextProvider.GetWorkflowPosition(session);
         (Records.WorkflowDefinition Definition, Records.WorkflowStep Step)? running = position?.Resolve(workflows);
 
-        // With no workflow running and every colleague within reach the agent is offered exactly the tools it was given.
-        if (running is null && !colleaguesOutOfReach)
+        // A procedure is entered through its launcher alone: outside it, the tools of its first step are not offered,
+        // so a model cannot open the procedure halfway and leave the framework out of it.
+        HashSet<string> entryTools = running is null ? [.. workflows.SelectMany(workflow => workflow.EntryTools)] : [];
+
+        // With no workflow running, no workflow to enter and every colleague within reach the agent is offered exactly the tools it was given.
+        if (running is null && entryTools.Count == 0 && !colleaguesOutOfReach)
             return options;
 
         List<AITool> presented;
         if (running is null)
         {
             // A consultation answers a colleague and never takes the user's turn, so it never opens a wizard.
-            presented = [.. tools.Where(tool => !servingConsultation || tool is not WorkflowLauncherFunction)];
+            presented = [.. tools.Where(tool => !entryTools.Contains(tool.Name)
+                && (!servingConsultation || tool is not WorkflowLauncherFunction))];
         }
         else
         {

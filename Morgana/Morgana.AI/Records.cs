@@ -1215,6 +1215,10 @@ public static class Records
         /// <summary>Every tool that a step of the workflow names.</summary>
         public HashSet<string> ToolSignature()
             => [.. (Steps ?? []).SelectMany(step => step.Tools ?? [])];
+
+        /// <summary>The tools of the first step: the procedure is entered through its launcher alone, so they are never offered or run outside it.</summary>
+        public IReadOnlyList<string> EntryTools
+            => Steps is { Count: > 0 } ? Steps[0].Tools ?? [] : [];
     }
 
     /// <summary>

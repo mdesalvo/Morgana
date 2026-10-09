@@ -450,6 +450,16 @@ public class MorganaAgentAdapter
             if (isCurrentStepTool)
                 BindStepArguments(context, position!);
         }
+        else if (session is not null
+            && workflows!.Definitions.FirstOrDefault(definition => definition.EntryTools.Contains(context.Function.Name)) is { } entered)
+        {
+            // Outside its workflow a first-step tool is not run, whatever the model was shown: the procedure is
+            // entered through its launcher alone: run otherwise, it would leave the framework out of it.
+            logger.LogWarning("Agent called '{Tool}' outside workflow '{Workflow}', which is entered through its launcher only", context.Function.Name, entered.Name);
+            return await promptComposerService.ComposeToolResultAsync(
+                Constants.ToolInjections.ToolNotAtThisStep,
+                ToolNotAtThisStepValues(context.Function.Name, entered.Name));
+        }
 
         object? result;
         try
