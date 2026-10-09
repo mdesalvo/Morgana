@@ -230,6 +230,27 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
+    public async Task Reply_repeated_in_the_closing_response_is_answered_and_the_first_closure_stands()
+    {
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
+        ScriptedChatClient model = new ScriptedChatClient(
+            Merge(Merge(Text("Here are your invoices."),
+                        Call("Reply", """{"awaits":"typed_answer","userIsLeaving":false,"card":{"components":[{"content":"Overdue","type":"text_block"}],"title":"Invoices","subtitle":null}}""")),
+                  Call("Reply", """{"awaits":"nothing","userIsLeaving":false}""")));
+
+        ChatResponse turn = await RunTurnAsync(model, reply, canForceToolCall: true);
+
+        // Every call of the response has its result: without one the next turn's history would be refused.
+        List<AIContent> contents = [.. turn.Messages.SelectMany(message => message.Contents)];
+        Assert.Equal(
+            contents.OfType<FunctionCallContent>().Select(call => call.CallId).Order(),
+            contents.OfType<FunctionResultContent>().Select(result => result.CallId).Order());
+        Assert.Single(model.Requests);
+        Assert.Equal(Records.AwaitedFromUser.TypedAnswer, reply.Recorded()!.Awaits);
+        Assert.Equal("Invoices", reply.Recorded()!.Card!.Title);
+    }
+
+    [Fact]
     public async Task Turn_with_no_text_is_left_to_the_agent_to_run_again()
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
@@ -311,7 +332,7 @@ public sealed class TurnClosureTests
     /// <summary>
     /// Runs one turn through the chain that an agent runs on: the tool loop, then the turn-closing client.
     /// </summary>
-    private static async Task RunTurnAsync(ScriptedChatClient model, ReplyUnderTest reply, bool canForceToolCall)
+    private static async Task<ChatResponse> RunTurnAsync(ScriptedChatClient model, ReplyUnderTest reply, bool canForceToolCall)
     {
         TurnClosingChatClient chain = new TurnClosingChatClient(
             new FunctionInvokingChatClient(model),
@@ -320,7 +341,7 @@ public sealed class TurnClosureTests
             canForceToolCall,
             NullLogger.Instance);
 
-        await chain.GetResponseAsync(
+        return await chain.GetResponseAsync(
             [new ChatMessage(ChatRole.User, "Show me an invoice")],
             new ChatOptions { Instructions = "You are a billing assistant.", Tools = [reply.Function] });
     }

@@ -58,6 +58,18 @@ public class ReplyTool : MorganaTool
         [Description("A card presenting the turn's structured data; omit when none. Pick each component by the nature of the datum: key_value for one labeled field, grid for several homogeneous pairs, list for an enumeration, text_block for prose, badge for a status, image for a picture URL, section to group related components, divider between groups. At most 50 components and 3 levels of nesting.")]
         [ToolParameter(Records.ToolScope.Request)] RichCard? card = null)
     {
+        ToolContext ctx = getToolContext();
+
+        // A turn closes once. A second Reply in the same turn is a stray duplicate: the closure already
+        // recorded stands and this call is only told so, which still gives it the result its call is owed.
+        if (ctx.Provider.GetVariable(ctx.Session, Constants.ContextKeys.TurnReply) is not null)
+        {
+            toolLogger.LogWarning("Reply called again in a turn already closed: the first closure stands");
+            EndToolLoopOnceResponseIsAnswered();
+
+            return new Records.FrameworkToolResult(Constants.ToolInjections.TurnClosed);
+        }
+
         // Closed before a word of it was written, the turn would end mute: the model is sent back to
         // write first. Absent when the framework records a closure itself, which it does only after text.
         if (FunctionInvokingChatClient.CurrentContext is { } invocation && !HasTurnText(invocation.Messages))
@@ -83,8 +95,6 @@ public class ReplyTool : MorganaTool
                     [Constants.Placeholders.Limit] = MaxCardComponents.ToString(CultureInfo.InvariantCulture)
                 });
         }
-
-        ToolContext ctx = getToolContext();
 
         List<Records.ReplyAction> offeredActions = actions ?? [];
 
@@ -123,16 +133,26 @@ public class ReplyTool : MorganaTool
         await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.TurnReply,
             JsonSerializer.Serialize(turnReply, Records.DefaultJsonSerializerOptions));
 
-        // Nothing is left for the model to do once the turn is closed, so the tool loop ends here
-        // instead of spending another call. Absent when the framework records a closure itself.
-        if (FunctionInvokingChatClient.CurrentContext is { } closingInvocation)
-            closingInvocation.Terminate = true;
+        EndToolLoopOnceResponseIsAnswered();
 
         toolLogger.LogInformation(
             "LLM closed its turn via Reply: awaits={Awaits}, userIsLeaving={UserIsLeaving}, actions={Actions}, card={Card}",
             awaits, userIsLeaving, turnReply.Actions.Count, card?.Title ?? "(none)");
 
         return new Records.FrameworkToolResult(Constants.ToolInjections.TurnClosed);
+    }
+
+    /// <summary>
+    /// Ends the tool loop of a closed turn without spending another call, once every call of the
+    /// response that closed it has its result.
+    /// </summary>
+    private static void EndToolLoopOnceResponseIsAnswered()
+    {
+        // Ending the loop at an earlier call leaves the later ones of the same response unanswered and the
+        // provider refuses the next turn's history over a call with no result. Absent when the framework
+        // records a closure itself.
+        if (FunctionInvokingChatClient.CurrentContext is { } invocation && invocation.FunctionCallIndex == invocation.FunctionCount - 1)
+            invocation.Terminate = true;
     }
 
     /// <summary>
