@@ -226,34 +226,81 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Closed set of LLM power/cost tiers an agent can declare itself against via
-    /// <see cref="Attributes.RequiresLLMTierAttribute"/>. Modeled on the Intel E-core/P-core
-    /// die split rather than a graduated price ladder: there are exactly two physical
-    /// "core types" an agent can be built on, not a spectrum. Ordinal order (Efficiency &lt;
-    /// Performance) is load-bearing: it is used to pick the framework-actor default (the
-    /// cheapest configured tier). Cross-tier pricing is deliberately NOT assumed to be
-    /// monotonic — see <c>Services.RequiresLLMTierValidationService</c> remarks.
+    /// Closed set of LLM tiers an agent can declare itself against via
+    /// <see cref="Attributes.RequiresLLMTierAttribute"/>: an agent declares the tier its work needs
+    /// and each tier is served by the provider and model that the deployment configures for it.
     /// </summary>
     public enum LLMTier
     {
-        /// <summary>
-        /// The E-core die: Morgana's own framework actors (Guard, Classifier, Presenter,
-        /// ChannelAdapter) and any domain agent handling routine work run here. Default for
-        /// framework actors — always the cheapest configured tier. An agent belongs on
-        /// Efficiency unless its author can point to a genuine, existential need for the
-        /// expressive or computational headroom only Performance provides; "it might do a
-        /// bit better" is not that bar.
-        /// </summary>
+        /// <summary>The cheapest model: routine work that needs no deliberate reasoning.</summary>
+        Economy,
+
+        /// <summary>The default for Morgana's own framework actors (Guard, Classifier, Presenter, ChannelAdapter) when <c>Morgana:ActorSystem:Tier</c> names none.</summary>
         Efficiency,
 
-        /// <summary>
-        /// The P-core die: reserved exclusively for agents whose domain author declares an
-        /// existential need for deep reasoning or high expressive power — not a "nicer to
-        /// have" upgrade from Efficiency, a hard requirement the agent cannot function
-        /// without. Most capable/expensive tier.
-        /// </summary>
+        /// <summary>The most capable model: reserved for agents whose domain author declares an existential need for deep reasoning.</summary>
         Performance
     }
+
+    /// <summary>The LLM providers that a tier can be served by.</summary>
+    public enum LLMProvider
+    {
+        /// <summary>Anthropic's Claude models.</summary>
+        Anthropic,
+
+        /// <summary>GPT models served by Azure OpenAI or Azure AI Foundry.</summary>
+        AzureOpenAI,
+
+        /// <summary>GPT models served by OpenAI.</summary>
+        OpenAI,
+
+        /// <summary>Local models served by Ollama.</summary>
+        Ollama
+    }
+
+    /// <summary>The <c>Morgana:LLM</c> section: the three tiers, each served by its own provider.</summary>
+    public record LLMConfiguration(LLMTiers Tiers);
+
+    /// <summary>The definitions of the three tiers, all of them mandatory.</summary>
+    public record LLMTiers(
+        TierDefinition Economy,
+        TierDefinition Efficiency,
+        TierDefinition Performance)
+    {
+        /// <summary>Returns the definition declared for <paramref name="tier"/>.</summary>
+        public TierDefinition For(LLMTier tier) => tier switch
+        {
+            LLMTier.Economy => Economy,
+            LLMTier.Efficiency => Efficiency,
+            LLMTier.Performance => Performance,
+            _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, null)
+        };
+    }
+
+    /// <summary>
+    /// One tier with its own provider, connection, model and dust pricing.
+    /// Lives under Morgana:LLM:Tiers:{tier} as JSON object (keyed by name) not array: allows per-layer overrides to merge
+    /// by key. TierConfiguration is deliberate ChatOptions subset (ModelId, MaxOutputTokens only); MagicDust is tier-specific.
+    /// </summary>
+    public record TierDefinition(
+        LLMProvider Provider,
+        TierConnection Connection,
+        TierConfiguration Options,
+        MagicDustPricing MagicDust);
+
+    /// <summary>
+    /// How a tier reaches its provider. Each provider reads the fields it uses and ignores the others,
+    /// which may therefore be left out of the configuration altogether.
+    /// </summary>
+    /// <param name="ApiKey">Credential of the provider account.</param>
+    /// <param name="Endpoint">Address of the provider service where it is not fixed.</param>
+    /// <param name="MaxRetries">Retries of a refused call.</param>
+    /// <param name="TimeoutSeconds">Ceiling of one attempt.</param>
+    public record TierConnection(
+        string? ApiKey = null,
+        string? Endpoint = null,
+        int MaxRetries = 2,
+        int TimeoutSeconds = 60);
 
     /// <summary>
     /// Where a tool parameter's value comes from, declared on the parameter with
@@ -267,15 +314,6 @@ public static class Records
         /// <summary>Obtained from the user, on the turn it is needed.</summary>
         Request
     }
-
-    /// <summary>
-    /// Single provider die (E-core/P-core) with own dust pricing. Tier IS the unit deployer configures + agent binds to.
-    /// Lives under Morgana:LLM:{Provider}:Tiers as JSON object (keyed by name) not array: allows per-layer overrides to merge
-    /// by key. TierConfiguration is deliberate ChatOptions subset (ModelId, MaxOutputTokens only); MagicDust is tier-specific.
-    /// </summary>
-    public record TierDefinition(
-        TierConfiguration Options,
-        MagicDustPricing MagicDust);
 
     /// <summary>
     /// Deliberately minimal JSON-bindable DTO of tier-configurable ChatOptions subset.

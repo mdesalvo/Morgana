@@ -172,6 +172,17 @@ public sealed class StartupValidationTests
         Assert.Contains("PublicUrl", refusal.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void StartupValidation_Boot_is_refused_when_a_tier_has_no_provider()
+    {
+        // Nothing else resolves the LLM service before a turn does, so a tier left unusable would reach
+        // a user as a conversation that never answers instead of stopping the boot.
+        Exception refusal = AssertRefusesToBoot(
+            ("Morgana__LLM__Tiers__Performance__Provider", string.Empty));
+
+        Assert.Contains("Morgana:LLM:Tiers:Performance:Provider", refusal.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// Boots the host with the given declarations replaced, expecting it to refuse.
     /// </summary>

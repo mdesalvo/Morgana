@@ -16,7 +16,7 @@ public class LLMPresenterService : IPresenterService
 {
     /// <summary>
     /// LLM used to author the welcome message and its quick replies. Consumed through the
-    /// stateless completion path, so it always runs on the cheapest configured tier.
+    /// stateless completion path, so it always runs on the framework tier.
     /// </summary>
     private readonly ILLMService llmService;
 
@@ -53,7 +53,7 @@ public class LLMPresenterService : IPresenterService
     /// </summary>
     private readonly ConcurrentDictionary<string, Lazy<Task<Records.PresentationResult>>> cache = new();
 
-    /// <param name="llmService">LLM service used to generate the presentation; always runs on the cheapest configured tier.</param>
+    /// <param name="llmService">LLM service used to generate the presentation; always runs on the framework tier.</param>
     /// <param name="promptResolverService">Prompt resolver used to load the <c>Presentation</c> prompt (message template, <c>Fallback</c> and <c>NoAgents</c> messages).</param>
     /// <param name="channelMetadataStore">Resolves the originating channel's name/capabilities, so callers only pass conversationId.</param>
     /// <param name="channelAdapter">Same capability-driven degradation chain any outbound message goes through.</param>

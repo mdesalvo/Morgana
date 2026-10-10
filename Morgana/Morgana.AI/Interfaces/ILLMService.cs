@@ -9,8 +9,8 @@ namespace Morgana.AI.Interfaces;
 /// <remarks>
 /// <para><strong>Purpose:</strong></para>
 /// <para>This service abstracts LLM provider specifics (Anthropic, Azure OpenAI, Ollama, OpenAI, ...) and provides
-/// a unified interface for all LLM interactions in the Morgana framework. It manages conversation
-/// history, prompt formatting and provider-specific API calls.</para>
+/// a unified interface for all LLM interactions in the Morgana framework. Each tier is served by its own
+/// provider, so one installation can mix them.</para>
 /// <para><strong>Usage Patterns:</strong></para>
 /// <list type="bullet">
 /// <item><term>Actors</term><description>GuardActor, ClassifierActor use CompleteWithSystemPromptAsync for stateless operations</description></item>
@@ -20,7 +20,7 @@ namespace Morgana.AI.Interfaces;
 public interface ILLMService
 {
     /// <summary>
-    /// Performs a completion with an explicit system prompt and user prompt.
+    /// Performs a completion with an explicit system prompt and user prompt, on the <see cref="FrameworkTier"/>.
     /// Commonly used by actors for stateless LLM operations (classification, guard checks, etc.).
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation (used for logging, not history)</param>
@@ -44,16 +44,13 @@ public interface ILLMService
     /// </summary>
     /// <param name="tier">Power/cost tier to resolve a client for.</param>
     /// <returns>IChatClient instance for the requested tier.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown if the active provider has no <c>Tiers</c> entry configured for <paramref name="tier"/>.
-    /// </exception>
     IChatClient GetChatClient(Records.LLMTier tier);
 
     /// <summary>
-    /// True when the provider honours a request naming the one tool that the model must call. When it
-    /// does not, a turn that the model closed without Reply is closed by asking for structured output instead.
+    /// True when the provider that serves <paramref name="tier"/> honours a request naming the one tool that the model
+    /// must call. When it does not, a turn that the model closed without Reply is closed by asking for structured output instead.
     /// </summary>
-    bool CanForceToolCall { get; }
+    bool CanForceToolCall(Records.LLMTier tier);
 
     /// <summary>
     /// Gets the dust pricing for a specific <see cref="Records.LLMTier"/> — the pricing embedded
@@ -61,16 +58,11 @@ public interface ILLMService
     /// </summary>
     /// <param name="tier">Power/cost tier to resolve pricing for.</param>
     /// <returns>MagicDustPricing for the requested tier's model.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown if the active provider has no <c>Tiers</c> entry configured for <paramref name="tier"/>.
-    /// </exception>
     Records.MagicDustPricing GetPricing(Records.LLMTier tier);
 
     /// <summary>
-    /// Gets the set of tiers actually configured (via <c>Tiers</c>) for the active provider.
-    /// Used at startup by agent/tier validation to check every agent's declared tier actually
-    /// exists, without relying on catching exceptions from
-    /// <see cref="GetChatClient(Records.LLMTier)"/>/<see cref="GetPricing(Records.LLMTier)"/>.
+    /// The tier that Morgana's own actors (Guard, Classifier, Presenter, ChannelAdapter) run on,
+    /// named by <c>Morgana:ActorSystem:Tier</c> and <see cref="Records.LLMTier.Efficiency"/> where it names none.
     /// </summary>
-    IReadOnlyCollection<Records.LLMTier> ConfiguredTiers { get; }
+    Records.LLMTier FrameworkTier { get; }
 }

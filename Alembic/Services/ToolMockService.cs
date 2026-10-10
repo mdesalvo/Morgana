@@ -10,7 +10,7 @@ using Morgana.AI.Interfaces;
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="IToolMockService"/>: one completion per agent, on the Performance tier.
+/// Default <see cref="IToolMockService"/>: one completion per agent, on the Efficiency tier.
 /// </summary>
 /// <remarks>
 /// A single completion rather than an agent with tools, because nothing here is a conversation:
@@ -56,7 +56,7 @@ public class ToolMockService : IToolMockService
     /// </summary>
     /// <param name="alembicPromptService">Resolves the <c>CodeMocker</c> prompt from <c>alembic.json</c>.</param>
     /// <param name="codeEmitService">Supplies the generated tool signatures the mock must implement.</param>
-    /// <param name="llmService">Supplies the chat client, always on the Performance tier.</param>
+    /// <param name="llmService">Supplies the chat client, always on the Efficiency tier.</param>
     /// <param name="logger">Records a resumed (cut-off) generation — the caller's own progress signal.</param>
     public ToolMockService(
         IAlembicPromptService alembicPromptService,
@@ -117,7 +117,7 @@ public class ToolMockService : IToolMockService
         // guessed: what the generated half declares is what a second declaration would collide with.
         string className = agent.Code.ToolClassName ?? intentName;
 
-        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);
+        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 
         string authored = await StreamedCompletion.RunAsync(
             chatClient, system, request.ToString(),

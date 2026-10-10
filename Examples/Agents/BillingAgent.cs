@@ -10,7 +10,7 @@ namespace Examples.Agents;
 
 [HandlesIntent("billing")]
 [ConsultsAgent("inventory")]
-[RequiresLLMTier(LLMTier.Efficiency)]
+[RequiresLLMTier(LLMTier.Economy)]
 public class BillingAgent : MorganaAgent
 {
     public BillingAgent(

@@ -56,31 +56,28 @@ services:
       - Morgana__ConversationPersistence__EncryptionKey=${ENCRYPTIONKEY}
       - Morgana__ConversationPersistence__StoragePath=/app/data
 
-      # LLM Provider (anthropic, azureopenai, ollama, openai)
-      # Tiers are keyed by name: "Efficiency" (E-core — Morgana's own framework actors and
-      # any agent handling routine work) and "Performance" (P-core — reserved for agents
-      # whose author declares an existential need for deep reasoning/expressive power).
-      # Ollama defaults to a single Efficiency entry (see Morgana.Web/appsettings.json) — add a
-      # Performance entry too only if you actually keep two distinct local models loaded.
-      # See Morgana.Web/appsettings.json for the MagicDust pricing baked into the image per
-      # tier; these env vars only override the tier -> model/deployment name mapping and
-      # provider credentials. Every value falls back to its appsettings.json sentinel
-      # placeholder when the env var is unset: an unset variable would otherwise inject an
-      # EMPTY string, silently defeating Morgana's fail-fast placeholder check at startup and
-      # deferring the failure to the first real LLM call.
-      - Morgana__LLM__Provider=${LLM_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Anthropic__ApiKey=${ANTHROPIC_APIKEY:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Anthropic__Tiers__Efficiency__Options__ModelId=${ANTHROPIC_MODEL_EFFICIENCY:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Anthropic__Tiers__Performance__Options__ModelId=${ANTHROPIC_MODEL_PERFORMANCE:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__AzureOpenAI__ApiKey=${AZUREOPENAI_APIKEY:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__AzureOpenAI__Endpoint=${AZUREOPENAI_ENDPOINT:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__AzureOpenAI__Tiers__Efficiency__Options__ModelId=${AZUREOPENAI_DEPLOYMENTNAME_EFFICIENCY:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__AzureOpenAI__Tiers__Performance__Options__ModelId=${AZUREOPENAI_DEPLOYMENTNAME_PERFORMANCE:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Ollama__Endpoint=${OLLAMA_ENDPOINT:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Ollama__Tiers__Efficiency__Options__ModelId=${OLLAMA_MODEL:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__OpenAI__ApiKey=${OPENAI_APIKEY:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__OpenAI__Tiers__Efficiency__Options__ModelId=${OPENAI_MODEL_EFFICIENCY:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__OpenAI__Tiers__Performance__Options__ModelId=${OPENAI_MODEL_PERFORMANCE:-_FUNCTIONAL_OVERRIDE_}
+      # LLM tiers: Economy, Efficiency and Performance each name their own provider
+      # (Anthropic, AzureOpenAI, OpenAI or Ollama). All three are mandatory: an agent declares
+      # its tier with [RequiresLLMTier] and no tier falls back to another.
+      # ApiKey is read by Anthropic, OpenAI and AzureOpenAI, Endpoint by AzureOpenAI and Ollama.
+      # Every value falls back to its appsettings.json sentinel placeholder when the variable is
+      # unset: an unset variable would otherwise inject an EMPTY string, silently defeating
+      # Morgana's fail-fast placeholder check at startup. A provider ignores a field it does not
+      # read, so the placeholder left there is harmless.
+      # ActorSystem:Tier is the tier on which Morgana's own framework actors run.
+      - Morgana__LLM__Tiers__Economy__Provider=${LLM_ECONOMY_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Economy__Connection__ApiKey=${LLM_ECONOMY_APIKEY:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__Tiers__Economy__Connection__Endpoint=${LLM_ECONOMY_ENDPOINT:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__Tiers__Economy__Options__ModelId=${LLM_ECONOMY_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Efficiency__Provider=${LLM_EFFICIENCY_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Efficiency__Connection__ApiKey=${LLM_EFFICIENCY_APIKEY:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__Tiers__Efficiency__Connection__Endpoint=${LLM_EFFICIENCY_ENDPOINT:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__Tiers__Efficiency__Options__ModelId=${LLM_EFFICIENCY_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Performance__Provider=${LLM_PERFORMANCE_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Performance__Connection__ApiKey=${LLM_PERFORMANCE_APIKEY:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__Tiers__Performance__Connection__Endpoint=${LLM_PERFORMANCE_ENDPOINT:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__Tiers__Performance__Options__ModelId=${LLM_PERFORMANCE_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__ActorSystem__Tier=${ACTORSYSTEM_TIER:-Economy}
     volumes:
       # Persistent volume for SQLite databases
       - morgana-data:/app/data
@@ -223,10 +220,9 @@ services:
   # Usage:
   #   docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
   #
-  # Note the LLM block below declares Performance only: Alembic writes dispositive
-  # prose, which is exactly where the Efficiency die fails and it runs once per
-  # onboarding rather than per turn. A single-tier deployment therefore does not
-  # serve it (no cross-tier fallback, by design).
+  # Alembic declares the three tiers like Morgana does and runs its authoring on Efficiency:
+  # it writes dispositive prose once per onboarding, not per turn. No tier falls back to
+  # another, so all three must be configured.
   alembic:
     profiles: ["authoring"]
     build:
@@ -243,21 +239,23 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5005
 
-      # LLM Provider — same section name as Morgana's (Morgana:LLM), because Alembic
-      # consumes the framework's own provider abstraction rather than reimplementing it.
-      # Same unset-variable caveat as the morgana service above: every value falls back
-      # to its appsettings.json sentinel placeholder so a missing override fails fast
-      # instead of injecting an empty string.
-      - Morgana__LLM__Provider=${LLM_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Anthropic__ApiKey=${ANTHROPIC_APIKEY:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Anthropic__Tiers__Performance__Options__ModelId=${ANTHROPIC_MODEL_PERFORMANCE:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__AzureOpenAI__ApiKey=${AZUREOPENAI_APIKEY:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__AzureOpenAI__Endpoint=${AZUREOPENAI_ENDPOINT:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__AzureOpenAI__Tiers__Performance__Options__ModelId=${AZUREOPENAI_DEPLOYMENTNAME_PERFORMANCE:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Ollama__Endpoint=${OLLAMA_ENDPOINT:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Ollama__Tiers__Performance__Options__ModelId=${OLLAMA_MODEL:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__OpenAI__ApiKey=${OPENAI_APIKEY:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__OpenAI__Tiers__Performance__Options__ModelId=${OPENAI_MODEL_PERFORMANCE:-_FUNCTIONAL_OVERRIDE_}
+      # LLM tiers, same section name as Morgana's (Morgana:LLM), because Alembic consumes
+      # the framework's own provider abstraction rather than reimplementing it. The same
+      # unset-variable caveat as the morgana service applies: every value falls back to its
+      # appsettings.json sentinel placeholder so a missing override fails fast instead of
+      # injecting an empty string.
+      - Morgana__LLM__Tiers__Economy__Provider=${LLM_ECONOMY_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Economy__Connection__ApiKey=${LLM_ECONOMY_APIKEY:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__Tiers__Economy__Connection__Endpoint=${LLM_ECONOMY_ENDPOINT:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__Tiers__Economy__Options__ModelId=${LLM_ECONOMY_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Efficiency__Provider=${LLM_EFFICIENCY_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Efficiency__Connection__ApiKey=${LLM_EFFICIENCY_APIKEY:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__Tiers__Efficiency__Connection__Endpoint=${LLM_EFFICIENCY_ENDPOINT:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__Tiers__Efficiency__Options__ModelId=${LLM_EFFICIENCY_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Performance__Provider=${LLM_PERFORMANCE_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Performance__Connection__ApiKey=${LLM_PERFORMANCE_APIKEY:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__Tiers__Performance__Connection__Endpoint=${LLM_PERFORMANCE_ENDPOINT:-_SECURE_OVERRIDE_}
+      - Morgana__LLM__Tiers__Performance__Options__ModelId=${LLM_PERFORMANCE_MODEL:-_FUNCTIONAL_OVERRIDE_}
 
 # ==============================================================================
 # VOLUMES

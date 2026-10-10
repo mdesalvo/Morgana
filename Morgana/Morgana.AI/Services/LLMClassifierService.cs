@@ -16,7 +16,7 @@ public class LLMClassifierService : IClassifierService
 {
     /// <summary>
     /// LLM used for every classification call. Consumed through the stateless completion path:
-    /// classification keeps no per-conversation memory, so it always runs on the cheapest tier.
+    /// classification keeps no per-conversation memory, so it always runs on the framework tier.
     /// </summary>
     private readonly ILLMService llmService;
 
@@ -51,7 +51,7 @@ public class LLMClassifierService : IClassifierService
             });
 
     /// <summary>Loads intent definitions and builds the classifier system prompt eagerly.</summary>
-    /// <param name="llmService">LLM service used for every classification call; always runs on the cheapest configured tier.</param>
+    /// <param name="llmService">LLM service used for every classification call; always runs on the framework tier.</param>
     /// <param name="promptResolverService">Prompt resolver used to load the <c>Classifier</c> prompt, whose <c>((formattedIntents))</c> placeholder is interpolated once here.</param>
     /// <param name="agentConfigService">Source of the intent definitions from <c>agents.json</c>; an empty list is legal and means agentless mode.</param>
     /// <param name="configuration">Read for <c>Morgana:ActorSystem:IntentCollisionThreshold</c>.</param>
@@ -115,7 +115,7 @@ public class LLMClassifierService : IClassifierService
 
         try
         {
-            // The only model call of a classification, always on the cheapest configured tier: choosing
+            // The only model call of a classification, always on the framework tier: choosing
             // which agent a sentence belongs to is a routing decision, not domain reasoning.
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,

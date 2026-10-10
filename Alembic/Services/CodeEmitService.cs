@@ -28,10 +28,8 @@ public class CodeEmitService : ICodeEmitService
     /// The tier assumed when the Draft carries none.
     /// </summary>
     /// <remarks>
-    /// <c>Efficiency</c> and deliberately the cheap one: the framework reserves
-    /// <c>Performance</c> for an agent whose author declares an existential need for deep
-    /// reasoning and a default that quietly picks it would spend a client's budget on a decision
-    /// nobody made.
+    /// <c>Efficiency</c> is the middle tier. The author picks <c>Economy</c> or <c>Performance</c>
+    /// deliberately, so a default must not quietly spend a client's budget on a decision nobody made.
     /// </remarks>
     public const Records.LLMTier DefaultTier = Records.LLMTier.Efficiency;
 

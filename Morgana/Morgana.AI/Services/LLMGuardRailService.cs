@@ -13,7 +13,7 @@ public class LLMGuardRailService : IGuardRailService
 {
     /// <summary>
     /// LLM used for the policy check. Consumed through the stateless completion path — each
-    /// message is judged on its own text, on the cheapest configured tier.
+    /// message is judged on its own text, on the framework tier.
     /// </summary>
     private readonly ILLMService llmService;
 
@@ -62,7 +62,7 @@ public class LLMGuardRailService : IGuardRailService
     {
         try
         {
-            // The first call of every turn, on the cheapest configured tier: it stands between the user
+            // The first call of every turn, on the framework tier: it stands between the user
             // and the whole pipeline, so nothing downstream runs until it has answered.
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,

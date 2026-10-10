@@ -609,7 +609,7 @@ public sealed class AgentCodeFacts
     public string? ToolClassName { get; set; }
 
     /// <summary>
-    /// The die the agent runs on, declared in C# via <c>[RequiresLLMTier]</c>.
+    /// The tier the agent runs on, declared in C# via <c>[RequiresLLMTier]</c>.
     /// </summary>
     public Morgana.AI.Records.LLMTier? Tier { get; set; }
 

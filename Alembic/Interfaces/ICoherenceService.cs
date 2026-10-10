@@ -47,7 +47,7 @@ public interface ICoherenceService
     /// others — a surgical question about one class costs a fraction of the whole pass and, more to
     /// the point, comes back with an answer about the thing that was asked rather than a table the
     /// client has to sift. An empty selection is refused rather than read as "everything": a pass
-    /// nobody asked a question of is a Performance call spent on a list.
+    /// nobody asked a question of is an Efficiency call spent on a list.
     /// </param>
     /// <param name="resolved">
     /// Findings already applied earlier this sitting, if any. Each run is otherwise a one-shot read

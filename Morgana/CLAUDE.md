@@ -42,8 +42,8 @@ instances of it. That shrinks the contradiction surface instead of chasing sympt
 
 Two things *outside* the prose can sabotage a correct prompt and are worth ruling out first because
 they are invisible from `agents.json`:
-- **Model tier** — a dense, layered prompt needs a capable model; `Efficiency` amplifies
-  contradiction-following failures where `Performance` would not.
+- **Model tier** — a dense, layered prompt needs a capable model; a cheaper tier amplifies
+  contradiction-following failures where a more capable one would not.
 - **Rendering / channel code** — a rich-card leaf showing raw `**` is a Razor bug in Cauldron,
   unfixable from any prompt.
 
@@ -91,8 +91,8 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 
 | Folder | Purpose |
 |---|---|
-| `Abstractions/` | `MorganaActor`, `MorganaAgent`, `MorganaLLM`, `MorganaTool`, `MorganaWorkflow`, `MorganaHostedAgent` (the `AIAgent` publishing an intent over A2A, with its session and the session store that decides which conversation an inbound A2A request is served on) |
-| `LanguageModels/` | `Anthropic`, `AzureOpenAI`, `OpenAI`, `Ollama`: the implementations of `MorganaLLM`, one per provider |
+| `Abstractions/` | `MorganaActor`, `MorganaAgent`, `MorganaLanguageModel`, `MorganaTool`, `MorganaWorkflow`, `MorganaHostedAgent` (the `AIAgent` publishing an intent over A2A, with its session and the session store that decides which conversation an inbound A2A request is served on) |
+| `LanguageModels/` | `Anthropic`, `AzureOpenAI`, `OpenAI`, `Ollama`: the implementations of `MorganaLanguageModel`, each building the client of one tier |
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[ProvidesWorkflowForIntent]`, `[RequiresApproval]`, `[ToolParameter]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
@@ -228,12 +228,12 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `LLMPresenterService` | `IPresenterService` | Welcome message and quick replies. Never throws |
 | `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
 | `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
+| `ConfigurationLLMService` | `ILLMService` | Builds the three tiers, each on the provider it declares; the framework actors run on `ActorSystem:Tier` |
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json`, domain from `agents.json`. Throws if one ID is declared in both |
 | `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads: the fenced two-layer prompt, tool descriptions, the per-turn held-context declaration, the colleagues declaration, a colleague's question |
 | `ConfigurationAgentDirectoryService` | `IAgentDirectoryService` | Both halves of A2A discovery, plus `ValidateTrustConfiguration` and `ValidatePublishedAddress` |
 | `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Merges every plugin's `agents.json`. Refuses a duplicated intent or prompt id and the reserved names `other` and `Morgana`. Its refusals are fatal |
-| `HandlesIntentAgentRegistryService` | `IAgentRegistryService` | Discovers agents by attribute; bidirectional intent validation; validates `[ConsultsAgent]` |
-| `RequiresLLMTierValidationService` | `ILLMTierValidationService` | Every agent must declare a tier the active provider configures |
+| `HandlesIntentAgentRegistryService` | `IAgentRegistryService` | Discovers agents by attribute; bidirectional intent validation; requires `[RequiresLLMTier]`; validates `[ConsultsAgent]` |
 | `ProvidesToolForIntentRegistryService` | `IToolRegistryService` | Discovers tool classes and projects each into its tool definitions; warns on orphans; errors on duplicates |
 | `MCPClientRegistryService` | `IMCPClientRegistryService` | MCP connection pool keyed by URI or `stdio:{command}`. A client the library reports ended is replaced; only discovery is retried, never a tool call |
 | `SQLiteConversationPersistenceService` | `IConversationPersistenceService` | Per-conversation SQLite: encrypted session BLOBs, the shared-context registry |
@@ -248,22 +248,17 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 
 ## LLM providers and tiers
 
-`MorganaLLM` implements `ILLMService`; four providers (`Anthropic`, `AzureOpenAI`, `OpenAI`,
-`Ollama`) selected by `Morgana:LLM:Provider`, all wrapped into `IChatClient`.
+`ConfigurationLLMService` is the one `ILLMService`. **Three tiers, each with its own provider**
+(`Anthropic`, `AzureOpenAI`, `OpenAI`, `Ollama`): `Economy`, `Efficiency`, `Performance`, from the
+cheapest model to the most capable. All three are always declared and filled, whether or not an agent
+uses them. **There is no cross-tier fallback**. Validation never asks which agents use which tier.
 
-**Exactly two dies**, modelled on Intel's E-core/P-core split. `Efficiency` is the default and serves
-every framework actor; `Performance` is reserved for agents whose author declares an existential need
-for deep reasoning, never a nice-to-have upgrade. **There is no cross-tier fallback**: a single-model
-deployment declares only `Efficiency` and any agent requiring `Performance` fails startup until a
-second entry exists.
+`Morgana:LLM:Tiers` is a JSON **object keyed by tier name**, so env-var overrides merge per tier. Each
+entry carries `Provider`, `Connection` (each provider reads only the fields it uses), `Options` — a
+deliberately narrow mirror of `ChatOptions`, see `Records.TierConfiguration` — plus its own `MagicDust`.
 
-`Tiers` is a JSON **object keyed by tier name**, not an array, so env-var overrides merge per tier.
-Each entry carries `Options` — a deliberately narrow, JSON-bindable mirror of `ChatOptions`:
-`ModelId` and `MaxOutputTokens` only, see `Records.TierConfiguration` for the census and the reason —
-plus its own `MagicDust` pricing.
-
-Two consumption modes: `CompleteWithSystemPromptAsync` (stateless, always on the cheapest configured
-tier) and `GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
+Two consumption modes: `CompleteWithSystemPromptAsync` (stateless, on `Morgana:ActorSystem:Tier`) and
+`GetChatClient(tier)` / `GetPricing(tier)` (an agent's own `[RequiresLLMTier]`).
 
 ## Agent Authoring
 
@@ -441,12 +436,12 @@ Ten checks, each fatal, all guarding one failure shape: **a topology that valida
 fails or opens, silently.**
 
 1. Every configured intent has an agent and every agent an intent
-2. Every agent declares `[RequiresLLMTier]` and that tier is configured
+2. Every agent declares `[RequiresLLMTier]`
 3. Every `[ConsultsAgent]` names a reachable colleague and no two fold to one function name
 4. Tools: warn on orphans, error on duplicates for one intent; every tool method and parameter carries its attributes, every scope combination is one the framework can honour, the record returned is typed with a nullable `error`, no tool is overloaded and no agents.json prompt still declares `Tools` or `Workflows`
 5. Plugin `agents.json` files merge with no duplicated intent or prompt id and none declares `other`
    or `Morgana`
-6. No `Tiers` entry left on its override placeholder, no empty `Tiers` map
+6. All three tiers declared, none with a provider, model or used connection field left on its placeholder, `ActorSystem:Tier` naming a tier
 7. Every admitted issuer — channel, partner and the ring alike — carries a name and a key of at least 256 bits and no name is admitted twice
 8. `ValidateTrustConfiguration`: each `Partners[]` entry names somebody once, does something, is coherent per open direction and carries a key that can sign
 9. `ValidatePublishedAddress`: `PublicUrl`, where declared, is absolute, on a bearer-carrying scheme and names one interface
@@ -460,9 +455,9 @@ fault reaches a user as a conversation that never answers, on a host that passed
 
 | Section | Purpose |
 |---|---|
-| `Morgana:LLM:Provider` · `:{Provider}` | Provider choice, credentials, the `Tiers` map |
+| `Morgana:LLM:Tiers` | The three tiers: provider, connection, model and `MagicDust` of each |
 | `Morgana:AgentToAgent` | `Enabled`, `MaxRoundsPerTurn`, `PublicUrl` (declared only where a binding cannot answer for the address), `Partners[]`. Consultation waits are one **ladder** derived from `ActorSystem:TimeoutSeconds`, stated once in `Records.PeerConsultationWaits` |
-| `Morgana:ActorSystem` | `TimeoutSeconds`, `EnableGuardrail`, `IntentCollisionThreshold` |
+| `Morgana:ActorSystem` | `TimeoutSeconds`, `EnableGuardrail`, `IntentCollisionThreshold`, `Tier` (the framework actors') |
 | `Morgana:AdaptiveMessaging` | `EnableStreamingResponse`, `RichFeaturesMinLength` |
 | `Morgana:ConversationPersistence` | `StoragePath`, `EncryptionKey` (AES-256, base64, 32 bytes) |
 | `Morgana:RateLimiting` · `:DustLimiting` | Limits and their authored error messages. `MagicDust` pricing lives per tier |

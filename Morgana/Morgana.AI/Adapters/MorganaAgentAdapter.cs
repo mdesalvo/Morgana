@@ -209,8 +209,8 @@ public class MorganaAgentAdapter
         // 1b) Tier: the agent's fixed, "existential" declaration of which model class it runs
         //     on. Mandatory alongside [HandlesIntent] — see RequiresLLMTierAttribute remarks.
         //     Startup validation (HandlesIntentAgentRegistryService) already guarantees this
-        //     attribute is present and its tier is configured for the active provider before
-        //     any agent is ever created, so both lookups below are safe.
+        //     attribute is present before any agent is ever created. Every tier always has
+        //     a provider, so both lookups below are safe.
         RequiresLLMTierAttribute tierAttribute = agentType.GetCustomAttribute<RequiresLLMTierAttribute>()
             ?? throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [RequiresLLMTier] attribute");
 
@@ -364,7 +364,7 @@ public class MorganaAgentAdapter
             toolLoopChatClient,
             await promptComposerService.ComposeTurnClosureRequestAsync(),
             await promptComposerService.ComposeToolResultAsync(Constants.ToolInjections.TurnClosed),
-            llmService.CanForceToolCall,
+            llmService.CanForceToolCall(tierAttribute.Tier),
             logger);
 
         // A launcher exists only for a workflow that the agent keeps.

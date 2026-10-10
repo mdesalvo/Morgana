@@ -180,9 +180,8 @@ public sealed class CompactHistoryCommand : ICommand
             ?.GetCustomAttributes(typeof(RequiresLLMTierAttribute), inherit: false)
             .OfType<RequiresLLMTierAttribute>()
             .FirstOrDefault()?.Tier
-            // A row left by an agent this installation no longer serves is still summarizable, on the tier
-            // every framework call falls back to
-            ?? Records.LLMTier.Efficiency;
+            // A row of an agent this installation no longer serves is summarized on the framework's tier
+            ?? llmService.FrameworkTier;
 
         // Charged under the agent whose history is being folded, beside that agent's own turns on the ledger
         return new DustAccountingChatClient(

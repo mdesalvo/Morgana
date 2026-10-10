@@ -35,7 +35,7 @@ process's working directory has to stay the output directory.
 
 ## Commands
 
-Twenty-three test classes. **Never combine filters**: six groups carry a process-wide boot knob the
+Twenty-four test classes. **Never combine filters**: six groups carry a process-wide boot knob the
 others must not see and two of those five share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
@@ -54,6 +54,7 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ExecutionApprovalT
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~WorkflowTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ToolContractTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~FrameworkPromptTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~LanguageModelTests"
 
 # blocking
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ContextHandlingTests"
@@ -86,8 +87,9 @@ or the listener heard nothing.
 
 **Cost discipline.** Every turn is a live call, multiplied by the run count (default 5), plus one
 judge call per proposition on structurally-passing turns. An agent's `[RequiresLLMTier]` decides its
-cost — the suite does not get to choose it — so the Inventory scenarios run on `Performance` while
-the rest run on `Efficiency`. Keep those out of the tight loop. Before running anything, check
+cost — the suite does not get to choose it — so the Inventory scenarios run on `Efficiency` while
+the rest run on `Economy`, the framework actors included (`ActorSystem:Tier`). Keep the Inventory
+scenarios out of the tight loop. Before running anything, check
 whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harness/<id>.md` row.
 
 ## The groups and what a failure in each means
@@ -107,6 +109,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `TurnClosureTests` | none | How a turn closes — what `Reply` records and refuses, the schema the card is held to, the framework closing a turn the model left open, the transcript reading back what was delivered — with a scripted model |
 | `ExecutionApprovalTests` | none | A tool requiring approval: never run on the model's call, run once with the approved arguments across a saved session, never closed by a Reply that would outlive its turn |
 | `FrameworkPromptTests` | none | The morgana.json shipped in Morgana.AI carries every entry that the framework fetches by name — sections, templates, tool results, framework replies, messages |
+| `LanguageModelTests` | none | The three tiers built from configuration, each by the provider it declares; a missing tier, a placeholder in a field the provider uses and a framework tier that names no tier refused. No model is reached |
 | `HistoryViewTests` | none | What a model reads of its own history: the current episode only, earlier tool results marked, the record left whole |
 | `ContextResolutionTests` | none | How the framework resolves a context-scoped parameter — passed and stored, omitted and read, missing and the tool not run — on the real adapter with no model |
 | `AgentCardTests` · `StartupValidationTests` · `PeerFederationTests` · `ConversationApiTests` | none | Wire contracts and boot refusals, asserted deterministically. **Every literal is spelled out in the test** rather than read from `Constants`: a test comparing a constant against itself asserts that a constant equals a constant, while the point is to notice a published document changing shape under whoever consumes it |

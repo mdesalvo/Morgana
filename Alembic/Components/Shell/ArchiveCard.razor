@@ -304,10 +304,10 @@
     public EventCallback<Notice> OnNotify { get; set; }
 
     /// <summary>
-    /// The two tiers an agent can think on.
+    /// The tiers an agent can think on.
     /// </summary>
     private static readonly Morgana.AI.Records.LLMTier[] Tiers =
-        [Morgana.AI.Records.LLMTier.Performance, Morgana.AI.Records.LLMTier.Efficiency];
+        [Morgana.AI.Records.LLMTier.Performance, Morgana.AI.Records.LLMTier.Efficiency, Morgana.AI.Records.LLMTier.Economy];
 
     /// <summary>
     /// One MCP server address as typed.

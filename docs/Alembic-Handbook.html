@@ -456,11 +456,11 @@
         <thead><tr><th>Component</th><th>Role</th><th>Technology</th><th>Default Port</th></tr></thead>
         <tbody>
           <tr><td><strong>Alembic</strong></td><td>The workbench itself: the interview, the colleagues, validation, emit</td><td>ASP.NET 10, Blazor Server, Microsoft Fluent UI Blazor 5</td><td>5005</td></tr>
-          <tr><td><strong>LLM</strong></td><td>Language model provider, <code>Performance</code> tier only</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>n/a</td></tr>        </tbody>
+          <tr><td><strong>LLM</strong></td><td>Language model tiers, all its work on <code>Efficiency</code></td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>n/a</td></tr>        </tbody>
       </table>
 
       <div class="info-box">
-        <strong>Performance tier, non-negotiable:</strong> Alembic's whole job is writing dispositive prose that does not contradict itself: exactly the task where a cheaper die amplifies contradiction-following failures. It runs once, at onboarding, not per conversational turn: this is the wrong place to save.
+        <strong>Efficiency tier, never Economy:</strong> Alembic's whole job is writing dispositive prose that does not contradict itself: exactly the task where a cheaper tier amplifies contradiction-following failures. It runs once, at onboarding, not per conversational turn: this is the wrong place to save.
       </div>
 
       <div class="page-footer">
@@ -650,14 +650,13 @@
       <table>
         <thead><tr><th>Setting</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td>Morgana:LLM:Provider</td><td>LLM backend: <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>Ollama</code>, <code>OpenAI</code></td></tr>
-          <tr><td>Morgana:LLM:{Provider}:Tiers:Performance</td><td>The <strong>only</strong> tier Alembic declares: it never uses the Efficiency die. <code>MagicDust</code> carries both axes at zero: pricing is never read, since Alembic calls <code>GetChatClient(Performance)</code> directly rather than going through the metered agent adapter</td></tr>
+          <tr><td>Morgana:LLM:Tiers:{Tier}:*</td><td>The three tiers (<code>Economy</code>, <code>Efficiency</code>, <code>Performance</code>), each with its <code>Provider</code> (<code>Anthropic</code>, <code>AzureOpenAI</code>, <code>Ollama</code>, <code>OpenAI</code>), <code>Connection</code>, <code>Options</code> and <code>MagicDust</code>. All three are declared, as in Morgana. <code>MagicDust</code> carries both axes at zero: pricing is never read, since Alembic calls <code>GetChatClient(Efficiency)</code> directly rather than going through the metered agent adapter</td></tr>
           <tr><td>Alembic:Work:AutosaveSeconds</td><td>How often the Draft in the circuit is snapshotted as a fallback for &ldquo;Save my work&rdquo;: never a resumption path on its own, only a floor under that one button (default: 30)</td></tr>
         </tbody>
       </table>
 
       <div class="info-box">
-        <strong>No single-tier deployment:</strong> because Alembic declares only <code>Performance</code>, it does not run against a single-tier deployment (Ollama being the canonical case) until a <code>Performance</code> entry is configured: the same &ldquo;no cross-tier fallback&rdquo; rule the framework itself enforces.
+        <strong>Three tiers, no fallback:</strong> Alembic reads the same <code>Morgana:LLM:Tiers</code> section as Morgana and resolves it at its first model call, so a deployment missing a tier boots and is refused there: the same &ldquo;no cross-tier fallback&rdquo; rule the framework itself enforces.
       </div>
 
       <h3>Running Alembic</h3>

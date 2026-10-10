@@ -13,7 +13,8 @@ namespace Morgana.AI.Services;
 /// <summary>
 /// Discovers agents via [HandlesIntent] attribute with bidirectional validation.
 /// Scans assemblies for MorganaAgent classes; validates that intents in config have agents, that agents in code have
-/// config and that every declared peer consultation names an existing colleague. Performs LLM tier validation; throws on any mismatch.
+/// config, that every declared peer consultation names an existing colleague and that every agent declares its LLM tier.
+/// Throws on any mismatch.
 /// </summary>
 public class HandlesIntentAgentRegistryService : IAgentRegistryService
 {
@@ -22,13 +23,6 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// intent it declares must be matched by a <c>[HandlesIntent]</c> agent and vice versa.
     /// </summary>
     private readonly IAgentConfigurationService agentConfigService;
-
-    /// <summary>
-    /// Validates each discovered agent's <c>[RequiresLLMTier]</c> against the active provider's
-    /// configured tiers. A separate collaborator because tier validation is a distinct concern
-    /// from intent↔agent matching, even though both run in the same startup pass.
-    /// </summary>
-    private readonly ILLMTierValidationService llmTierValidationService;
 
     /// <summary>
     /// Application configuration, read for the instances a consultation may name. Held here because a
@@ -52,18 +46,15 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
     /// <summary>Discovers agents and runs bidirectional intent↔agent validation (lazily — see field above).</summary>
     /// <param name="agentConfigService">Loads intent configuration from agents.json.</param>
-    /// <param name="llmTierValidationService">Validates each agent's [RequiresLLMTier], delegated as a separate concern.</param>
     /// <param name="configuration">Application configuration, read for the declared instances.</param>
     /// <param name="toolRegistryService">Finds the native tool type of each intent, for the check of what its tools return.</param>
     /// <exception cref="InvalidOperationException">Validation fails: missing agents or missing configuration.</exception>
     public HandlesIntentAgentRegistryService(
         IAgentConfigurationService agentConfigService,
-        ILLMTierValidationService llmTierValidationService,
         IConfiguration configuration,
         IToolRegistryService toolRegistryService)
     {
         this.agentConfigService = agentConfigService;
-        this.llmTierValidationService = llmTierValidationService;
         this.configuration = configuration;
         this.toolRegistryService = toolRegistryService;
 
@@ -189,22 +180,24 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     }
 
     /// <summary>
-    /// Collects what the tier validator refuses, as messages rather than as a thrown exception.
+    /// Refuses an agent that does not declare the tier it runs on.
     /// </summary>
     /// <param name="registry">The discovered intent-to-type map.</param>
-    /// <returns>The validator's own message, or nothing when every declared tier is configured.</returns>
-    private List<string> ValidateDeclaredTiers(Dictionary<string, Type> registry)
+    /// <returns>One message listing the agents without <c>[RequiresLLMTier]</c>, empty when every agent declares one.</returns>
+    private static List<string> ValidateDeclaredTiers(Dictionary<string, Type> registry)
     {
-        try
-        {
-            llmTierValidationService.ValidateAgentTiers(registry);
-            return [];
-        }
-        catch (InvalidOperationException ex)
-        {
-            // Turned into a message so a tier problem cannot hide an intent problem: both are reported.
-            return [ex.Message];
-        }
+        // Undeclared, so nobody chose. Defaulting would put an agent on a model its author never
+        // weighed, which is the silent wrong-model failure this check exists to prevent.
+        List<string> missingAttribute =
+        [
+            .. registry
+                .Where(entry => entry.Value.GetCustomAttribute<RequiresLLMTierAttribute>() is null)
+                .Select(entry => $"{entry.Value.Name} (intent '{entry.Key}')")
+        ];
+
+        return missingAttribute.Count > 0
+            ? [$"The following Morgana agents are missing the mandatory [RequiresLLMTier] attribute: {string.Join(", ", missingAttribute)}"]
+            : [];
     }
 
     /// <summary>

@@ -554,9 +554,7 @@
           <tr><td>IDustLimitService</td><td>SQLiteDustLimitService</td><td>Per-conversation token budget protection</td></tr>
           <tr><td>IGuardRailService</td><td>LLMGuardRailService</td><td>Content moderation &amp; policy enforcement</td></tr>
           <tr><td>IHostAddressService</td><td>KestrelHostAddressService</td><td>Address this instance publishes on its A2A cards</td></tr>
-          <tr><td>ILLMService</td><td>Anthropic / AzureOpenAI / Ollama / OpenAI</td><td>LLM provider abstraction</td></tr>
-          <tr><td>ILLMTierValidationService</td><td>RequiresLLMTierValidationService</td><td>Agent LLM-tier declaration validation</td></tr>
-          <tr><td>IMCPClientRegistryService</td><td>MCPClientRegistryService</td><td>MCP connection pool (Http / Stdio)</td></tr>
+          <tr><td>ILLMService</td><td>Anthropic / AzureOpenAI / Ollama / OpenAI</td><td>LLM provider abstraction</td></tr>          <tr><td>IMCPClientRegistryService</td><td>MCPClientRegistryService</td><td>MCP connection pool (Http / Stdio)</td></tr>
           <tr><td>IPeerAdmissionService</td><td>SQLitePeerAdmissionService</td><td>Conversations a partner may open per hour (fails closed)</td></tr>
           <tr><td>IPresenterService</td><td>LLMPresenterService</td><td>Welcome presentation &amp; first engagement</td></tr>
           <tr><td>IPromptComposerService</td><td>ConfigurationPromptComposerService</td><td>Everything the model reads, assembled into one prompt</td></tr>
@@ -587,7 +585,7 @@
         <thead><tr><th>#</th><th>Check</th><th>What it prevents</th></tr></thead>
         <tbody>
           <tr><td>1</td><td>Every configured intent has an agent and every agent an intent</td><td>A classified intent routed nowhere, or a desk nobody can reach</td></tr>
-          <tr><td>2</td><td>Every agent declares <code>[RequiresLLMTier]</code> and that tier is configured</td><td>An agent needing deep reasoning silently served by the cheap die: there is no cross-tier fallback</td></tr>
+          <tr><td>2</td><td>Every agent declares <code>[RequiresLLMTier]</code> and that tier is configured</td><td>An agent needing deep reasoning silently served by a cheaper tier: there is no cross-tier fallback</td></tr>
           <tr><td>3</td><td>Every <code>[ConsultsAgent]</code> names a reachable colleague and no two fold to one function name</td><td>A consultation that fails at the first question, or two colleagues answering under one name</td></tr>
           <tr><td>4</td><td>Tools: orphans warn, duplicates for one intent are refused</td><td>Two implementations claiming the same tool, with the winner decided by scan order</td></tr>
           <tr><td>5</td><td>Every plugin's <code>agents.json</code> merges with no duplicated intent or prompt id, none declaring the reserved <code>other</code></td><td>One deployment's plugins silently overwriting each other's domain</td></tr>
@@ -619,14 +617,14 @@
       <table>
         <thead><tr><th>Setting</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td>Morgana:LLM:Provider</td><td>LLM backend: <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>Ollama</code>, <code>OpenAI</code></td></tr>
-          <tr><td>Morgana:LLM:{Provider}:*</td><td>Provider credentials (ApiKey, Endpoint, ...) + <code>Tiers</code> map keyed by die (<code>Efficiency</code>/<code>Performance</code>)</td></tr>
-          <tr><td>Morgana:LLM:{Provider}:Tiers:{Tier}:Options:*</td><td>Narrow, JSON-bindable mirror of <code>ChatOptions</code> for this tier: <code>ModelId</code> (required), optional <code>MaxOutputTokens</code></td></tr>
-          <tr><td>Morgana:LLM:{Provider}:Tiers:{Tier}:MagicDust:*</td><td>Per-tier token pricing: <code>InputTokensPerDustUnit</code>, <code>OutputTokensPerDustUnit</code>, <code>CachedInputWeight</code>, <code>CacheCreationWeight</code></td></tr>
+          <tr><td>Morgana:LLM:Tiers:{Tier}:*</td><td>Three tiers, <code>Economy</code>, <code>Efficiency</code> and <code>Performance</code>, from the cheapest model to the most capable. Each declares its own <code>Provider</code> (<code>Anthropic</code>, <code>AzureOpenAI</code>, <code>OpenAI</code> or <code>Ollama</code>) and <code>Connection</code> (ApiKey, Endpoint, MaxRetries, TimeoutSeconds). All three are mandatory: there is no cross-tier fallback</td></tr>
+          <tr><td>Morgana:LLM:Tiers:{Tier}:Options:*</td><td>Narrow, JSON-bindable mirror of <code>ChatOptions</code> for this tier: <code>ModelId</code> (required), optional <code>MaxOutputTokens</code></td></tr>
+          <tr><td>Morgana:LLM:Tiers:{Tier}:MagicDust:*</td><td>Per-tier token pricing: <code>InputTokensPerDustUnit</code>, <code>OutputTokensPerDustUnit</code>, <code>CachedInputWeight</code>, <code>CacheCreationWeight</code></td></tr>
           <tr><td>Morgana:Authentication:Audience</td><td>Expected JWT audience (default: <code>morgana.ai</code>)</td></tr>
           <tr><td>Morgana:Authentication:Issuers[]</td><td><strong>Channels only</strong>: array of <code>{ Name, SymmetricKey }</code> entries, one per channel (e.g. <code>cauldron</code>, <code>grimoire</code>, <code>rune</code>, <code>harness</code>). Partners live in <code>Morgana:AgentToAgent:Partners[]</code> and a name declared in both lists is startup-fatal. Nothing is authored for <code>morgana</code>, the reserved name this installation's own agents consult each other under: that key is coined at every start</td></tr>
           <tr><td>Morgana:ConversationPersistence:EncryptionKey</td><td>AES-256 key for SQLite encryption (base64)</td></tr>
           <tr><td>Morgana:ConversationPersistence:StoragePath</td><td>Directory for SQLite database files</td></tr>
+          <tr><td>Morgana:ActorSystem:Tier</td><td>Tier of the framework actors (guard, classifier, presenter, channel adapter): <code>Economy</code>, <code>Efficiency</code> or <code>Performance</code>. <code>Efficiency</code> when absent</td></tr>
           <tr><td>Morgana:ActorSystem:TimeoutSeconds</td><td>Actor/agent timeout (default: 180)</td></tr>
           <tr><td>Morgana:ActorSystem:EnableGuardrail</td><td>Toggle content moderation guard</td></tr>
           <tr><td>Morgana:ActorSystem:IntentCollisionThreshold</td><td>How close two candidate intents must rank before the turn asks the user which one it is, instead of routing</td></tr>
@@ -759,7 +757,7 @@
       <div class="code-block"><span class="comment">// The declaration in code. A colleague published elsewhere is offered under a</span>
       <span class="comment">// function name carrying its partner, so two desks of the same name never collide.</span>
 <span class="attr">[HandlesIntent(</span><span class="string">"billing"</span><span class="attr">)]</span>
-<span class="attr">[RequiresLLMTier(</span>Records.LLMTier.Efficiency<span class="attr">)]</span>
+<span class="attr">[RequiresLLMTier(</span>Records.LLMTier.Economy<span class="attr">)]</span>
 <span class="attr">[ConsultsAgent(</span><span class="string">"inventory"</span><span class="attr">)]</span>            <span class="comment">// a colleague here    → consult_inventory</span>
 <span class="attr">[ConsultsAgent(</span><span class="string">"shipping"</span>, <span class="string">"acme"</span><span class="attr">)]</span>   <span class="comment">// a colleague at acme → consult_acme_shipping</span>
 <span class="keyword">public class</span> BillingAgent : MorganaAgent { <span class="comment">/* ... */</span> }</div>
@@ -798,8 +796,11 @@
         <tbody>
           <tr><td>ENCRYPTIONKEY</td><td>AES-256 encryption for SQLite</td><td><code>openssl rand -base64 32</code></td></tr>
           <tr><td>JWT_SYMMETRIC_KEY</td><td>JWT signing key shared between each channel and its <code>Issuers[]</code> entry on Morgana. Nothing to set for peer traffic between an installation's own agents: that key is coined at startup</td><td><code>openssl rand -base64 32</code></td></tr>
-          <tr><td>LLM_PROVIDER</td><td>Active LLM backend</td><td>One of: anthropic, azureopenai, ollama, openai</td></tr>
-          <tr><td>{PROVIDER}_APIKEY</td><td>LLM provider API key</td><td>From your provider dashboard (if cloud-based)</td></tr>
+          <tr><td>LLM_{TIER}_PROVIDER</td><td>Provider of a tier, where TIER is <code>ECONOMY</code>, <code>EFFICIENCY</code> or <code>PERFORMANCE</code></td><td>One of: anthropic, azureopenai, ollama, openai</td></tr>
+          <tr><td>LLM_{TIER}_APIKEY</td><td>LLM provider API key of a tier</td><td>From your provider dashboard (if cloud-based)</td></tr>
+          <tr><td>LLM_{TIER}_ENDPOINT</td><td>Endpoint of a tier, where its provider uses one</td><td>From your provider dashboard (if cloud-based)</td></tr>
+          <tr><td>LLM_{TIER}_MODEL</td><td>Model ID of a tier</td><td>From your provider's model list</td></tr>
+          <tr><td>ACTORSYSTEM_TIER</td><td>Tier of the framework actors</td><td>One of: Economy, Efficiency, Performance</td></tr>
         </tbody>
       </table>
     

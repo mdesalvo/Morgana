@@ -69,24 +69,15 @@ builder.Services.AddSingleton<IAssetPackageService, AssetPackageService>();
 // ==============================================================================
 // 4. LLM
 // ==============================================================================
-// Performance tier, resolved on first use so a working copy without credentials still boots.
+// Efficiency tier, resolved on first use so a working copy without credentials still boots.
 
 builder.Services.AddSingleton<ILLMService>(sp =>
 {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-    string llmProvider = config["Morgana:LLM:Provider"]
-        ?? throw new InvalidOperationException("Morgana:LLM:Provider is not configured.");
 
-    return llmProvider.ToLowerInvariant() switch
-    {
-        "anthropic"   => new Morgana.AI.LanguageModels.Anthropic(config, promptResolver, loggerFactory),
-        "azureopenai" => new Morgana.AI.LanguageModels.AzureOpenAI(config, promptResolver, loggerFactory),
-        "ollama"      => new Morgana.AI.LanguageModels.Ollama(config, promptResolver, loggerFactory),
-        "openai"      => new Morgana.AI.LanguageModels.OpenAI(config, promptResolver, loggerFactory),
-        _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' not supported. Valid values: 'Anthropic', 'AzureOpenAI', 'Ollama', 'OpenAI'")
-    };
+    return new ConfigurationLLMService(config, promptResolver, loggerFactory);
 });
 
 // ============================================================================

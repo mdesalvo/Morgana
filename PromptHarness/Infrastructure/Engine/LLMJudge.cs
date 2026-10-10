@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
@@ -18,9 +19,9 @@ public sealed record JudgeVerdict(bool Holds, string Reason);
 /// assertion can reach, such as "asks for the operand in prose without enumerating options".
 /// </summary>
 /// <remarks>
-/// <para>The judge runs through <see cref="ILLMService.CompleteWithSystemPromptAsync"/>, which by
-/// construction uses the cheapest configured tier. That keeps the suite's judging cost proportional
-/// to the deployment it is testing and adds no provider, key or dependency of its own.</para>
+/// <para>The judge runs on the <see cref="Morgana.AI.Records.LLMTier.Efficiency"/> client, whatever tier the framework
+/// actors of the deployment under test run on, so a verdict never changes with <c>Morgana:ActorSystem:Tier</c>.
+/// It reuses the tiers of that deployment and adds no provider, key or dependency of its own.</para>
 ///
 /// <para>It is deliberately given exactly what a user would see (the text, the button labels and
 /// the card as rendered) and nothing else. Feeding it the tool trace would let it justify a verdict
@@ -46,16 +47,15 @@ public sealed class LLMJudge
         {"holds": true|false, "reason": "<one short sentence>"}
         """;
 
-    /// <summary>LLM used for judging, on the cheapest configured tier.</summary>
+    /// <summary>LLM used for judging, always on the Efficiency tier.</summary>
     private readonly ILLMService llmService;
 
     private LLMJudge(ILLMService llmService) => this.llmService = llmService;
 
     /// <summary>
-    /// Builds a judge over the same provider and credentials the instance under test uses, mirroring
-    /// the provider switch in <c>Morgana.Web/Program.cs</c>.
+    /// Builds a judge over the same tiers and credentials the instance under test uses.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown when the configured provider is unknown.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when a tier is not configured.</exception>
     public static LLMJudge Create(IConfiguration configuration, ILoggerFactory loggerFactory)
     {
         // These two exist only to satisfy the LLM classes' constructors — the judge never resolves
@@ -66,21 +66,7 @@ public sealed class LLMJudge
         IPromptResolverService promptResolverService =
             new ConfigurationPromptResolverService(agentConfigurationService);
 
-        string provider = configuration["Morgana:LLM:Provider"]
-            ?? throw new InvalidOperationException("Morgana:LLM:Provider is not configured.");
-
-        // Mirrors the provider switch in Morgana.Web/Program.cs by hand — there is no shared
-        // factory to call into, so a new provider added there has to be added here too.
-        ILLMService llmService = provider.ToLowerInvariant() switch
-        {
-            "anthropic" => new Morgana.AI.LanguageModels.Anthropic(configuration, promptResolverService, loggerFactory),
-            "azureopenai" => new Morgana.AI.LanguageModels.AzureOpenAI(configuration, promptResolverService, loggerFactory),
-            "ollama" => new Morgana.AI.LanguageModels.Ollama(configuration, promptResolverService, loggerFactory),
-            "openai" => new Morgana.AI.LanguageModels.OpenAI(configuration, promptResolverService, loggerFactory),
-            _ => throw new InvalidOperationException($"LLM Provider '{provider}' not supported by the harness judge.")
-        };
-
-        return new LLMJudge(llmService);
+        return new LLMJudge(new Morgana.AI.Services.ConfigurationLLMService(configuration, promptResolverService, loggerFactory));
     }
 
     /// <summary>
@@ -161,10 +147,13 @@ public sealed class LLMJudge
         {
             try
             {
-                string answer = await llmService.CompleteWithSystemPromptAsync(
-                    $"harness-judge-{Guid.NewGuid():N}", SystemPrompt, userPrompt);
+                // Resolved by tier rather than through CompleteWithSystemPromptAsync, which follows
+                // Morgana:ActorSystem:Tier: the judge's model must not move with the deployment under test.
+                ChatResponse response = await llmService.GetChatClient(Morgana.AI.Records.LLMTier.Efficiency).GetResponseAsync(
+                    [new ChatMessage(ChatRole.System, SystemPrompt), new ChatMessage(ChatRole.User, userPrompt)],
+                    new ChatOptions { ConversationId = $"harness-judge-{Guid.NewGuid():N}" });
 
-                return Parse(answer);
+                return Parse(response.Text);
             }
             // Every attempt is caught, the last one included. Filtering on the first let the last
             // exception escape into ScenarioRunner, which aborts the whole run — so an unusable

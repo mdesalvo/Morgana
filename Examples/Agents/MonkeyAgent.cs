@@ -13,7 +13,7 @@ namespace Examples.Agents;
 /// Retrieves information about monkeys from the public MonkeyMCP server.
 /// </summary>
 [HandlesIntent("monkeys")]
-[RequiresLLMTier(LLMTier.Efficiency)]
+[RequiresLLMTier(LLMTier.Economy)]
 [UsesMCPServer("https://func-monkeymcp-3t4eixuap5dfm.azurewebsites.net/")]
 public class MonkeyAgent : MorganaAgent
 {

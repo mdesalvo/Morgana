@@ -206,7 +206,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
 
         // PATH 2 — chatOptions.Instructions was empty, so this isn't an Microsoft.Agents.AI agent
         // call: the caller (Guard, Classifier, Presenter, ChannelAdapter via
-        // MorganaLLM.CompleteWithSystemPromptAsync) put its system prompt directly in chatMessages
+        // ConfigurationLLMService.CompleteWithSystemPromptAsync) put its system prompt directly in chatMessages
         // instead. Find the run of leading System messages — walk from the start and stop at the
         // first non-System message, since a System message appearing later (e.g. a mid-conversation
         // summarization note) is not part of the prefix and must never be marked.

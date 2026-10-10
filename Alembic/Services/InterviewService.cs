@@ -90,7 +90,7 @@ public class InterviewService : IInterviewService
     private readonly IRecapService recapService;
 
     /// <summary>
-    /// Resolves the chat client every pass runs on — always <see cref="Records.LLMTier.Performance"/>,
+    /// Resolves the chat client every pass runs on — always <see cref="Records.LLMTier.Efficiency"/>,
     /// never the tier a domain agent itself will run on.
     /// </summary>
     private readonly ILLMService llmService;
@@ -125,7 +125,7 @@ public class InterviewService : IInterviewService
     /// A provider that stalls answers nothing and reports nothing, so without this the client sits
     /// in front of three breathing dots with no way to tell a slow turn from a dead one and no way
     /// back: the page is waiting on a task that will never complete. Generous rather than tight —
-    /// a Performance-tier turn that reads a whole composed prompt is legitimately slow — because
+    /// an Efficiency-tier turn that reads a whole composed prompt is legitimately slow — because
     /// what this exists to end is the wait with no end, not the wait that is long.
     /// </remarks>
     private readonly TimeSpan turnCeiling;
@@ -1255,10 +1255,10 @@ public class InterviewService : IInterviewService
         // never reaching the model as a tool that nothing implements.
         MorganaToolAdapter toolAdapter = alembicPromptService.OfferTools(InterviewSteps.Of(interviewPass), tools);
 
-        // Performance, resolved directly rather than through CompleteWithSystemPromptAsync, which
-        // always runs on the cheapest configured tier. Writing non-contradictory dispositive prose
-        // is the exact task the Efficiency die is weakest at.
-        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);
+        // Efficiency, resolved directly rather than through CompleteWithSystemPromptAsync, which
+        // runs on whichever tier Morgana:ActorSystem:Tier names. Writing non-contradictory
+        // dispositive prose needs a model that is certainly not the cheapest.
+        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 
         agent = chatClient.AsAIAgent(new ChatClientAgentOptions
         {

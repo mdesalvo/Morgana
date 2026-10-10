@@ -144,7 +144,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
 // - ICommandRegistryService: Publishes the commands channels may run on a conversation (every ICommand registered here)
-// - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI, OpenAI), two-tier Efficiency/Performance via each provider's Tiers{} configuration
+// - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI, Ollama, OpenAI), three tiers Economy/Efficiency/Performance each served by its own provider (Morgana:LLM:Tiers)
 // - ICommand: One per command a channel may run on a conversation
 
 builder.Services.AddSingleton<IMCPClientRegistryService, MCPClientRegistryService>();
@@ -154,7 +154,6 @@ builder.Services.AddSingleton<IHostAddressService, KestrelHostAddressService>();
 builder.Services.AddSingleton<IAgentDirectoryService, ConfigurationAgentDirectoryService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
 builder.Services.AddSingleton<IPromptComposerService, ConfigurationPromptComposerService>();
-builder.Services.AddSingleton<ILLMTierValidationService, RequiresLLMTierValidationService>();
 builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryService>();
 builder.Services.AddSingleton<IGuardRailService, LLMGuardRailService>();
 builder.Services.AddSingleton<IClassifierService, LLMClassifierService>();
@@ -165,16 +164,8 @@ builder.Services.AddSingleton<ILLMService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-    string llmProvider = builder.Configuration["Morgana:LLM:Provider"]!;
 
-    MorganaLLM llm = llmProvider.ToLowerInvariant() switch
-    {
-        "anthropic"   => new Morgana.AI.LanguageModels.Anthropic(config, promptResolver, loggerFactory),
-        "azureopenai" => new Morgana.AI.LanguageModels.AzureOpenAI(config, promptResolver, loggerFactory),
-        "ollama"      => new Morgana.AI.LanguageModels.Ollama(config, promptResolver, loggerFactory),
-        "openai"      => new Morgana.AI.LanguageModels.OpenAI(config, promptResolver, loggerFactory),
-        _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' not supported. Valid values: 'Anthropic', 'AzureOpenAI', 'Ollama', 'OpenAI'")
-    };
+    ConfigurationLLMService llm = new ConfigurationLLMService(config, promptResolver, loggerFactory);
 
     // Wire dust accounting for the framework-actor path (CompleteWithSystemPromptAsync).
     // Done post-construction because the dust limiter depends on conversation persistence,
@@ -231,10 +222,10 @@ builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
 // conversation's lifetime. Shares the per-conversation SQLite database.
 //
 // - DustLimitingOptions: policy (budget + warning/error message templates)
-// - Per-model pricing now lives inline on each Tiers{} entry (Morgana:LLM:{Provider}:Tiers{}.MagicDust)
+// - Per-model pricing lives inline on each tier (Morgana:LLM:Tiers:{tier}:MagicDust)
 //   and is resolved per-tier by ILLMService.GetPricing(tier) — no single process-wide pricing singleton.
 //
-// Configuration: Morgana:DustLimiting + Morgana:LLM:{Provider}:Tiers{}.MagicDust in appsettings.json
+// Configuration: Morgana:DustLimiting + Morgana:LLM:Tiers:{tier}:MagicDust in appsettings.json
 
 builder.Services.Configure<Records.DustLimitingOptions>(
     builder.Configuration.GetSection("Morgana:DustLimiting"));
@@ -356,6 +347,8 @@ await app.Services.GetRequiredService<IAgentConfigurationService>().GetIntentsAs
 // The registry validates when it is first asked for an intent, never when it is merely resolved.
 _ = app.Services.GetRequiredService<IAgentRegistryService>().GetAllIntents();
 app.Services.GetRequiredService<ICommandRegistryService>();
+// Builds the three tiers at startup, so that a tier left unconfigured refuses the boot rather than the first turn.
+app.Services.GetRequiredService<ILLMService>();
 
 app.UseCors("Channel");                 // Open CORS; trust gate is JWT, not origin
 app.UseHttpsRedirection();              // Redirect HTTP to HTTPS

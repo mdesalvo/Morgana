@@ -1335,9 +1335,9 @@ public sealed class WorkflowTests
     /// <summary>Hands the adapter the scripted model on whichever tier it asks.</summary>
     private sealed class SampleLlm(IChatClient model) : ILLMService
     {
-        public bool CanForceToolCall => false;
+        public bool CanForceToolCall(Records.LLMTier tier) => false;
 
-        public IReadOnlyCollection<Records.LLMTier> ConfiguredTiers => [Records.LLMTier.Efficiency];
+        public Records.LLMTier FrameworkTier => Records.LLMTier.Efficiency;
 
         public IChatClient GetChatClient(Records.LLMTier tier) => model;
 

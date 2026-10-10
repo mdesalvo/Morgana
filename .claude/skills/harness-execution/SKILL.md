@@ -1,12 +1,12 @@
 ---
 name: harness-execution
-description: Runs PromptHarness on demand against the currently configured LLM provider, over a user-chosen scope and run/pass threshold. Live LLM calls, real cost. Use when the user says "run the harness", "execute the prompt harness", "launch the harness".
+description: Runs PromptHarness on demand against the currently configured LLM tiers, over a user-chosen scope and run/pass threshold. Live LLM calls, real cost. Use when the user says "run the harness", "execute the prompt harness", "launch the harness".
 ---
 
 # HarnessExecution
 
 Runs the PromptHarness (`PromptHarness/PromptHarness.csproj`) on demand against whichever LLM
-provider is currently configured in User Secrets (`Morgana:LLM:Provider`), against a user-chosen
+tiers are currently configured in User Secrets (`Morgana:LLM:Tiers`), against a user-chosen
 scope and a user-chosen global run/pass threshold. Live LLM calls, real cost — never runs without
 the two questions below being answered first.
 
@@ -16,14 +16,15 @@ Activated when the user says things like:
 - "run the harness"
 - "execute the prompt harness"
 - "launch the harness"
-- Any request to run PromptHarness scenarios against the current provider
+- Any request to run PromptHarness scenarios against the current tiers
 
 ## Procedure
 
-1. **Confirm the active provider** before anything else: read `Morgana:LLM:Provider` from the shared
+1. **Confirm the configured tiers** before anything else: read `Morgana:LLM:Tiers` from the shared
    User Secrets store (`UserSecretsId 374228be-4f26-4382-a3ef-7500a0b829dd`, same as `Morgana.Web`)
-   without printing the ApiKey/Endpoint values and tell the user which provider/tier models
-   (`Tiers.Efficiency.Options.ModelId` / `Tiers.Performance.Options.ModelId`) this run will hit. This
+   without printing the ApiKey/Endpoint values. Tell the user, for each of `Economy`, `Efficiency`
+   and `Performance`, its `Provider` and `Options:ModelId`, plus `Morgana:ActorSystem:Tier` (from
+   `Morgana.Web/appsettings.json` or the same store), this run will hit. This
    is the harness's own design (`PromptHarness/README.md`): it never has its own `Morgana:` config,
    it inherits the host's. The same file is where `Harness:HarnessDirectory` lives when the user has
    overridden it (see step 7), so read both in one pass. Note the store is written with a UTF-8 BOM:
@@ -32,7 +33,7 @@ Activated when the user says things like:
 2. **Ask the target scope** with `AskUserQuestion`, multi-select. **Enumerate `PromptHarness/Tests/`
    first and offer what is actually there** — the class list below is a description of a moving
    directory, not a contract, and a `--filter` naming a class that no longer exists runs zero tests
-   and exits 0: a green nobody asked for. Fifteen classes at the time of writing, in four families:
+   and exits 0: a green nobody asked for. Twenty-four classes at the time of writing:
 
    *Deterministic — no model, no cost. Run them first: they are the cheapest way to learn the
    topology under test is sane before any billed turn.*
@@ -40,6 +41,14 @@ Activated when the user says things like:
    - Agent card (`AgentCardTests` — the published card and how far the gate behind it reaches)
    - Peer federation (`PeerFederationTests` — the outbound half: which cards this side accepts, what it signs, where a credential may go)
    - Conversation API (`ConversationApiTests` — who the channel API lets in, what a start must announce, how an unknown conversation is answered. The conversations it needs on record are synthesised into the run's storage; its one model call is the presentation of its single real start)
+   - Context resolution (`ContextResolutionTests` — how a context-scoped parameter is passed, stored, omitted or missing, on the real adapter with no model)
+   - Turn closure (`TurnClosureTests` — what `Reply` records and refuses, the framework closing a turn the model left open, with a scripted model)
+   - History view (`HistoryViewTests` — what a model reads of its own history: the current episode only, earlier tool results marked)
+   - Execution approval (`ExecutionApprovalTests` — a tool requiring approval is never run on the model's call alone)
+   - Workflows (`WorkflowTests` — a workflow's steps, edges and launcher, including one driven by an MCP server)
+   - Tool contract (`ToolContractTests` — the attributes and the schema each tool is declared with, refused where they break the contract)
+   - Framework prompts (`FrameworkPromptTests` — every framework prompt entry the framework fetches by name is present in `morgana.json`)
+   - Language models (`LanguageModelTests` — the three tiers built from configuration, each by the provider it declares; a missing tier refused. No model is reached)
 
    *Blocking — a silent failure mode, which is why these two are the ones a revision stops on.*
    - Context (`ContextHandlingTests` — the context cycle, the closed vocabulary, cross-agent)
@@ -56,6 +65,7 @@ Activated when the user says things like:
    - Conversation persistence (`ConversationPersistenceTests` — `Harness__EnableGuardrail=true`, the same knob as the guard group but its own invocation: it stages one refused turn among the five it drives and follows the database after each one)
    - Summarizer (`SummarizationTests` — `Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4`)
    - Dust (`DustTests` — `Harness__DustBudgetPerConversation=15`; 3 and 8 both let one turn jump past 90% straight into exhaustion, which reads as "90% never appeared")
+   - Rate limit (`RateLimitTests` — `Harness__RateLimitPerMinute=3`; deterministic, skipped without the knob)
    - Federation (`FederationTests` — `Harness__FederatedPeer=true`, which stands a **second Morgana** up and **replaces the whole domain** of the instance under test with one toolless agent. Every other group would find its own agents missing, so this one never shares an invocation with anything)
 
    Plus `HarnessSmokeTests`, which is not a choice: step 4 runs it regardless.
@@ -88,7 +98,7 @@ Activated when the user says things like:
 
 4. **Run `HarnessSmokeTests` first, always**, before any selected group, with no env var overrides:
    ```
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~HarnessSmokeTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.HarnessSmokeTests"
    ```
    If it fails, stop and report — do not spend a single live LLM call on the selected groups until
    the wiring itself is healthy (see `PromptHarness/README.md`: "a broken observer reads exactly like a
@@ -103,28 +113,37 @@ Activated when the user says things like:
    concurrent runs fight over the same `bin`/`obj`.
    ```
    # Deterministic — no model, no cost
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~StartupValidationTests"
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~AgentCardTests"
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PeerFederationTests"
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ConversationApiTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.StartupValidationTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.AgentCardTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.PeerFederationTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ConversationApiTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ContextResolutionTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.TurnClosureTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.HistoryViewTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ExecutionApprovalTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.WorkflowTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ToolContractTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.FrameworkPromptTests"
+   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.LanguageModelTests"
 
    # Blocking
-   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ContextHandlingTests"
+   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ContextHandlingTests"
 
    # Consulting — no extra flag: A2A is on by default and the host coins its own ring key
-   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ConsultingTests"
+   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ConsultingTests"
 
    # Behavioural
-   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~BehaviourTests"
-   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ActorTests"
-   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ServedConsultationTests"
+   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.BehaviourTests"
+   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ActorTests"
+   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ServedConsultationTests"
 
    # Boot-flagged — one knob each, never together
-   Harness__EnableGuardrail=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~GuardTests"
-   Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~SummarizationTests"
-   Harness__DustBudgetPerConversation=15 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~DustTests"
-   Harness__FederatedPeer=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"
-   Harness__EnableGuardrail=true dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ConversationPersistenceTests"
+   Harness__EnableGuardrail=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.GuardTests"
+   Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.SummarizationTests"
+   Harness__DustBudgetPerConversation=15 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.DustTests"
+   Harness__FederatedPeer=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.FederationTests"
+   Harness__EnableGuardrail=true dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ConversationPersistenceTests"
+   Harness__RateLimitPerMinute=3 dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.RateLimitTests"
    ```
 
    **Read the test count in every summary line, not only the pass/fail verdict.** A filter matching
@@ -178,7 +197,7 @@ Activated when the user says things like:
 
 - Every run is billed — live LLM calls, no mocking. Never run without both questions (scope,
   threshold) answered first and never assume a repeat of a previous scope/threshold.
-- The judge (`LLMJudge`) always runs on the same provider under test, on its cheapest tier, with a
+- The judge (`LLMJudge`) always runs on the `Efficiency` tier of the deployment under test, whatever `ActorSystem:Tier` names, with a
   deliberately strict system prompt ("do not be charitable"). A judge-proposition failure is not
   automatically a prompt defect — check whether the proposition itself is well-calibrated before
   concluding the agent is wrong (see the `behaviour-conversation-closure` / `context-cross-agent`

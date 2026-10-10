@@ -101,13 +101,13 @@ Agents in Morgana are **domain specialists** that self-register through **declar
 
 ```csharp
 [HandlesIntent("billing")]
-[RequiresLLMTier(LLMTier.Efficiency)]
+[RequiresLLMTier(LLMTier.Economy)]
 [ConsultsAgent("inventory")] // A2A agent discovery (local)
 [ConsultsAgent("shipping", "acme")] // A2A agent discovery (partner)
 public class BillingAgent : MorganaAgent { ... }
 
 [HandlesIntent("monkeys")]
-[RequiresLLMTier(LLMTier.Efficiency)]
+[RequiresLLMTier(LLMTier.Economy)]
 [UsesMCPServer("https://func-monkeymcp-3t4eixuap5dfm.azurewebsites.net/")] // MCP tool discovery
 public class MonkeyAgent : MorganaAgent { ... }
 ```

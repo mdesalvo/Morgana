@@ -21,7 +21,7 @@ namespace FederationPlugin;
 /// consulted nobody would look exactly like a turn whose consultation silently failed.</para>
 /// </remarks>
 [HandlesIntent("dispatch")]
-[RequiresLLMTier(Records.LLMTier.Efficiency)]
+[RequiresLLMTier(Records.LLMTier.Economy)]
 [ConsultsAgent("inventory", "annex")]
 public class DispatchAgent : MorganaAgent
 {

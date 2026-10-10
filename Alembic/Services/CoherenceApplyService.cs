@@ -51,7 +51,7 @@ public class CoherenceApplyService : ICoherenceApplyService
     /// Initializes the apply service.
     /// </summary>
     /// <param name="alembicPromptService">Resolves the <c>CoherenceApplier</c> prompt and its tool declarations from <c>alembic.json</c>.</param>
-    /// <param name="llmService">Supplies the chat client, always on the Performance tier.</param>
+    /// <param name="llmService">Supplies the chat client, always on the Efficiency tier.</param>
     /// <param name="logger">Records a failed apply — the caller also sees it, via the returned result.</param>
     public CoherenceApplyService(
         IAlembicPromptService alembicPromptService,
@@ -80,7 +80,7 @@ public class CoherenceApplyService : ICoherenceApplyService
         // A name that the class does not declare throws here instead of reaching the model as a tool that nothing implements.
         MorganaToolAdapter toolAdapter = alembicPromptService.OfferTools(CoherenceApplierStep, tools);
 
-        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);
+        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 
         AIAgent agent = chatClient.AsAIAgent(new ChatClientAgentOptions
         {

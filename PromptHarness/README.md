@@ -45,7 +45,7 @@ PromptHarness (test process)
   │                          REST out (JWT iss=harness) · webhook in (own ephemeral port)
   ├── TurnObserver      ──► ActivityListener on morgana.agent  → agent.tools_invoked
   │                          Console.Out tee on MorganaToolAdapter logs → context reads/writes
-  ├── LlmJudge          ──► ILLMService.CompleteWithSystemPromptAsync (cheapest configured tier)
+  ├── LlmJudge          ──► GetChatClient(Efficiency)
   └── ScenarioRunner    ──► replays a YAML scenario N times, reports passes against a threshold
 ```
 
@@ -152,25 +152,25 @@ onto the current month on first deployment, which is what keeps `GetPaymentHisto
 the pending invoice actually pending; the harness gives each run its own throwaway `StoragePath`,
 so every run starts from a freshly deployed shop.
 
-**The tier is not the suite's to choose.** Each agent binds to its die through
+**The tier is not the suite's to choose.** Each agent binds to its tier through
 `[RequiresLLMTier]`, so a scenario costs whatever the agent it exercises costs — and forcing it
 otherwise would mean measuring a configuration nobody runs. With the example plugin that means:
 
 | Scenario | Agent | Tier |
 |---|---|---|
-| `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand` | Billing, Contract | `Efficiency` |
-| `actor-classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `actor-channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
-| `behaviour-rich-card`, `actor-classifier-routes-catalog-request-to-inventory` | Inventory | **`Performance`** |
-| `actor-classifier-disambiguates-colliding-billing-contract` | *(none — diverted before routing)* | `Efficiency` (classifier only) |
+| `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand` | Billing, Contract | `Economy` |
+| `actor-classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `actor-channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Economy` |
+| `behaviour-rich-card`, `actor-classifier-routes-catalog-request-to-inventory` | Inventory | **`Efficiency`** |
+| `actor-classifier-disambiguates-colliding-billing-contract` | *(none — diverted before routing)* | `Economy` (classifier only) |
 
-Everything Morgana runs on its own account — guard, classifier, presenter — plus the judge, always
-goes to the cheapest configured tier. So the two Inventory scenarios dominate the bill: a handful
-of `Performance` turns against a suite that is otherwise `Efficiency` throughout — which is also why
-`actor-classifier-routes-catalog-request-to-inventory` runs 3 times rather than 5, its property being a
-routing decision that merely happens to land on a `Performance` agent. Keep them out of the tight
-iteration loop and run them at checkpoints.
+Everything Morgana runs on its own account — guard, classifier, presenter — runs on the framework tier
+named by `ActorSystem:Tier` (`Economy` in this repository). The judge always goes to `Efficiency`,
+for every scenario. The two Inventory scenarios are the only ones whose agent turns run on `Efficiency`
+too — which is also why `actor-classifier-routes-catalog-request-to-inventory`
+runs 3 times rather than 5, its property being a routing decision that merely happens to land on an
+`Efficiency` agent. Keep them out of the tight iteration loop and run them at checkpoints.
 
-Running the rest against `Efficiency` is also a useful stress test in its own right: it is the tier
+Running the rest on `Economy` is also a useful stress test in its own right: it is the tier
 that amplifies contradiction-following failures.
 
 ## The journey

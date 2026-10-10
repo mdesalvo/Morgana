@@ -48,7 +48,7 @@ public class CoherenceService : ICoherenceService
     /// Initializes the coherence service.
     /// </summary>
     /// <param name="alembicPromptService">Resolves the <c>DomainValidator</c> prompt from <c>alembic.json</c>.</param>
-    /// <param name="llmService">Supplies the chat client, always on the Performance tier.</param>
+    /// <param name="llmService">Supplies the chat client, always on the Efficiency tier.</param>
     /// <param name="logger">Used to record parse and provider failures — both surface to the caller too.</param>
     public CoherenceService(
         IAlembicPromptService alembicPromptService,
@@ -125,7 +125,7 @@ public class CoherenceService : ICoherenceService
                 Records.Prompt.Labeled(Constants.SectionLabels.Formatting, formatting)
             }.Where(section => !string.IsNullOrWhiteSpace(section)));
 
-        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);
+        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 
         try
         {

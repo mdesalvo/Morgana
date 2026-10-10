@@ -277,20 +277,18 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
     /// <summary>
     /// Renders the provider and the model bound to each tier, e.g.
-    /// <c>Anthropic (Efficiency=claude-haiku-4-5, Performance=claude-sonnet-5)</c>. Recorded in
+    /// <c>Economy=Anthropic/claude-haiku-5-5, Efficiency=Anthropic/claude-sonnet-5-5, Performance=Anthropic/claude-opus-5-5</c>. Recorded in
     /// every harness file: a token count is only comparable against the same models.
     /// </summary>
     private string DescribeLlm()
     {
-        string provider = Configuration["Morgana:LLM:Provider"] ?? "(unknown)";
+        // Walk the three tiers and read the provider and model id bound to each — the same shape
+        // ScenarioRunner reports per-scenario cost against, so a harness row is always legible
+        // without cross-referencing appsettings.
+        IEnumerable<string> tiers = Enum.GetValues<Morgana.AI.Records.LLMTier>()
+            .Select(tier => $"{tier}={Configuration[$"Morgana:LLM:Tiers:{tier}:Provider"] ?? "(unknown)"}/{Configuration[$"Morgana:LLM:Tiers:{tier}:Options:ModelId"] ?? "(unset)"}");
 
-        // Walk every tier configured under the active provider (e.g. Efficiency, Performance) and
-        // read the model id bound to each — the same shape ScenarioRunner reports per-scenario cost
-        // against, so a harness row is always legible without cross-referencing appsettings.
-        IEnumerable<string> tiers = Configuration.GetSection($"Morgana:LLM:{provider}:Tiers").GetChildren()
-            .Select(tier => $"{tier.Key}={tier["Options:ModelId"] ?? "(unset)"}");
-
-        return $"{provider} ({string.Join(", ", tiers)})";
+        return string.Join(", ", tiers);
     }
 
     /// <summary>
@@ -559,7 +557,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             // immediately rather than waiting out the rest of the timeout for nothing.
             if (hostFailure is not null)
                 throw new InvalidOperationException(
-                    "Morgana failed to start. Startup validation is fail-fast: check the LLM provider, its Tiers map and " +
+                    "Morgana failed to start. Startup validation is fail-fast: check the three tiers under Morgana:LLM:Tiers and " +
                     $"the agent/intent registry against the shared user-secrets store.{FormatHostOutput()}", hostFailure);
 
             try
