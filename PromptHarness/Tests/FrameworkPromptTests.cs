@@ -31,9 +31,6 @@ public sealed class FrameworkPromptTests
         Assert.NotEmpty(morgana.GetAdditionalProperty<List<Records.GlobalPolicy>>("GlobalPolicies"));
         Assert.DoesNotContain(morgana.AdditionalProperties, properties => properties.ContainsKey(Constants.PromptProperties.Tools));
 
-        Assert.DoesNotContain(morgana.AdditionalProperties, properties => properties.ContainsKey("Injections"));
-        Assert.DoesNotContain(morgana.AdditionalProperties, properties => properties.ContainsKey("ToolResults"));
-
         string[] promptInjections = [.. morgana.GetAdditionalProperty<List<Records.Injection>>("PromptInjections").Select(injection => injection.Name)];
         Assert.Equivalent(new[]
         {

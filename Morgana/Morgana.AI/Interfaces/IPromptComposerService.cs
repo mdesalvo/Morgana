@@ -94,9 +94,9 @@ public interface IPromptComposerService
     Task<string?> ComposeWorkflowResultAsync(string workflow, string? step, string result);
 
     /// <summary>
-    /// Produces the text a framework tool returns to the model, by name and with its values spliced in.
+    /// Produces one of the ToolInjections texts, by name and with its values spliced in.
     /// </summary>
-    /// <param name="name">Which result (see <c>Constants.ToolInjections</c>).</param>
+    /// <param name="name">Which text (see <c>Constants.ToolInjections</c>).</param>
     /// <param name="values">Placeholder to the value that it stands for, if the text carries any.</param>
-    Task<string> ComposeToolResultAsync(string name, IReadOnlyDictionary<string, string>? values = null);
+    Task<string> ComposeToolInjectionAsync(string name, IReadOnlyDictionary<string, string>? values = null);
 }

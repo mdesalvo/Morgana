@@ -272,8 +272,8 @@ public class MorganaAgentAdapter
 
             // A step naming several tools is a choice: Reply holds the turn's buttons to exactly those tools.
             (string Workflow, string Step, IReadOnlyList<string> Tools)? choiceStep = agentWorkflows is not null
-                && morganaAIContextProvider.GetWorkflowPosition(session)?.Resolve(workflowDefinitions) is { Step.Tools.Count: > 1 } choosing
-                    ? (choosing.Definition.Name, choosing.Step.Name, choosing.Step.Tools)
+                && morganaAIContextProvider.GetWorkflowPosition(session)?.Resolve(workflowDefinitions) is { Step.Tools.Count: > 1 } choicePosition
+                    ? (choicePosition.Definition.Name, choicePosition.Step.Name, choicePosition.Step.Tools)
                     : null;
 
             return new MorganaTool.ToolContext(morganaAIContextProvider, session, conversationId, actionable, choiceStep);
@@ -301,16 +301,14 @@ public class MorganaAgentAdapter
             morganaAIContextProvider,
             peerTerritories);
 
-        string intent = intentAttribute.Intent;
-
         // The ledger and the traces name the consumer as "Morgana (Billing/Efficiency)": the framework
         // role that the pipeline charges under, so a ledger grouped by prefix keeps one installation together.
-        string dustRole = $"{Constants.Morgana} ({char.ToUpperInvariant(intent[0])}{intent[1..]}/{tierAttribute.Tier})";
+        string dustRole = $"{Constants.Morgana} ({char.ToUpperInvariant(intentAttribute.Intent[0])}{intentAttribute.Intent[1..]}/{tierAttribute.Tier})";
+
         // The agent runs on the client and the price of its own tier, metered per agent and conversation.
         IChatClient tierChatClient = llmService.GetChatClient(tierAttribute.Tier);
         Records.MagicDustPricing tierPricing = llmService.GetPricing(tierAttribute.Tier);
-        IChatClient agentChatClient =
-            new DustAccountingChatClient(tierChatClient, dustLimitService, tierPricing, dustRole, conversationId);
+        IChatClient agentChatClient = new DustAccountingChatClient(tierChatClient, dustLimitService, tierPricing, dustRole, conversationId);
 
         // The reducer shares the metered client, so its summarization calls are charged too.
         // A null reducer hands the model the whole history.
@@ -327,7 +325,7 @@ public class MorganaAgentAdapter
         FunctionInvokingChatClient toolLoopChatClient = new FunctionInvokingChatClient(
             new WorkflowToolsChatClient(
                 new ApprovalTurnChatClient(agentChatClient, await promptComposerService.ComposeReplyNotAcceptedAsync(
-                    await promptComposerService.ComposeToolResultAsync(Constants.ToolInjections.ReplyWithoutText))),
+                    await promptComposerService.ComposeToolInjectionAsync(Constants.ToolInjections.ReplyWithoutText))),
                 sessionAccessor, morganaAIContextProvider, workflowDefinitions, MaxConsultationRoundsPerTurn))
         {
             FunctionInvoker = (context, cancellationToken) => InvokeToolAsync(context, agentWorkflows, cancellationToken)
@@ -338,7 +336,7 @@ public class MorganaAgentAdapter
         TurnClosingChatClient turnClosingChatClient = new TurnClosingChatClient(
             toolLoopChatClient,
             await promptComposerService.ComposeTurnClosureRequestAsync(),
-            await promptComposerService.ComposeToolResultAsync(Constants.ToolInjections.TurnClosed),
+            await promptComposerService.ComposeToolInjectionAsync(Constants.ToolInjections.TurnClosed),
             llmService.CanForceToolCall(tierAttribute.Tier),
             logger);
 
@@ -399,11 +397,11 @@ public class MorganaAgentAdapter
         bool isCurrentStepTool = false;
 
         // A workflow at a step holds the call to that step's tools.
-        if (running is { } active)
+        if (running is { } runningWorkflow)
         {
             string toolName = context.Function.Name;
-            HashSet<string> signature = active.Definition.ToolSignature();
-            isCurrentStepTool = active.Step.Tools.Contains(toolName);
+            HashSet<string> signature = runningWorkflow.Definition.ToolSignature();
+            isCurrentStepTool = runningWorkflow.Step.Tools.Contains(toolName);
 
             // A colleague is consulted at any step: it is a private method of the workflow, never part of it.
             bool isHidden = !toolName.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal)
@@ -414,10 +412,10 @@ public class MorganaAgentAdapter
 
             if (isHidden)
             {
-                logger.LogWarning("Agent called '{Tool}', which workflow '{Workflow}' does not offer at its step '{Step}'", toolName, active.Definition.Name, active.Step.Name);
-                return await promptComposerService.ComposeToolResultAsync(
+                logger.LogWarning("Agent called '{Tool}', which workflow '{Workflow}' does not offer at its step '{Step}'", toolName, runningWorkflow.Definition.Name, runningWorkflow.Step.Name);
+                return await promptComposerService.ComposeToolInjectionAsync(
                     Constants.ToolInjections.ToolNotAtThisStep,
-                    ToolNotAtThisStepValues(toolName, active.Definition.Name));
+                    ToolNotAtThisStepValues(toolName, runningWorkflow.Definition.Name));
             }
 
             // The values that the previous step carried are written into the call, over what the model passed.
@@ -425,14 +423,14 @@ public class MorganaAgentAdapter
                 BindStepArguments(context, position!);
         }
         else if (session is not null
-            && workflows!.Definitions.FirstOrDefault(definition => definition.EntryTools.Contains(context.Function.Name)) is { } entered)
+                  && workflows!.Definitions.FirstOrDefault(definition => definition.EntryTools.Contains(context.Function.Name)) is { } enteredWorkflow)
         {
             // Outside its workflow a first-step tool is not run, whatever the model was shown: the procedure is
             // entered through its launcher alone: run otherwise, it would leave the framework out of it.
-            logger.LogWarning("Agent called '{Tool}' outside workflow '{Workflow}', which is entered through its launcher only", context.Function.Name, entered.Name);
-            return await promptComposerService.ComposeToolResultAsync(
+            logger.LogWarning("Agent called '{Tool}' outside workflow '{Workflow}', which is entered through its launcher only", context.Function.Name, enteredWorkflow.Name);
+            return await promptComposerService.ComposeToolInjectionAsync(
                 Constants.ToolInjections.ToolNotAtThisStep,
-                ToolNotAtThisStepValues(context.Function.Name, entered.Name));
+                ToolNotAtThisStepValues(context.Function.Name, enteredWorkflow.Name));
         }
 
         // The call runs here, so a failure of Reply can be answered instead of aborting the turn.
@@ -450,16 +448,16 @@ public class MorganaAgentAdapter
 
         // Anything but a framework tool's named result reaches the model as the tool returned it, a
         // current-step tool's one under the label of where the workflow stands now.
-        if (result is not Records.FrameworkToolResult named)
+        if (result is not Records.FrameworkToolResult frameworkToolResult)
             return isCurrentStepTool
                 ? await AdvanceWorkflowAsync(context.Function.Name, workflows!, session!, position!, running!.Value.Definition.Name, result)
                 : result;
 
         // The framework's result is worded in morgana.json under the name it carries.
-        string text = await promptComposerService.ComposeToolResultAsync(named.Name, named.Values);
+        string text = await promptComposerService.ComposeToolInjectionAsync(frameworkToolResult.Name, frameworkToolResult.Values);
 
         // Only a Reply that the framework refused keeps the turn open: any other result is the answer as worded.
-        if (!isReply || named.Name == Constants.ToolInjections.TurnClosed)
+        if (!isReply || frameworkToolResult.Name == Constants.ToolInjections.TurnClosed)
             return text;
 
         // The turn stays open: the model reads why and closes again without narrating it to the user.
@@ -563,12 +561,12 @@ public class MorganaAgentAdapter
             ?? throw new InvalidOperationException($"{launcherName} was called with no active session");
 
         Records.WorkflowPosition? running = workflows.ContextProvider.GetWorkflowPosition(session);
-        bool servingConsultation = workflows.ContextProvider.GetVariable(session, Constants.ContextKeys.ServingConsultation) is not null;
+        bool isServingConsultation = workflows.ContextProvider.GetVariable(session, Constants.ContextKeys.ServingConsultation) is not null;
 
         // One workflow at a time and never for a colleague: the call changes nothing and is told so.
         // A stored position that no declaration serves any more does not count as a workflow running.
         bool isRunning = running?.Resolve(workflows.Definitions) is not null;
-        if (isRunning || servingConsultation)
+        if (isRunning || isServingConsultation)
             return new Records.FrameworkToolResult(
                 Constants.ToolInjections.ToolNotAtThisStep,
                 ToolNotAtThisStepValues(launcherName, isRunning ? running!.Workflow : definition.Name));
@@ -965,7 +963,7 @@ public class MorganaAgentAdapter
         if (contextProvider.GetVariable(callerSession, Constants.ContextKeys.ServingConsultation) is not null)
         {
             logger.LogWarning("Agent '{CallerIntent}' attempted to consult '{PeerIntent}' while itself answering a colleague", callerIntent, peerIntent);
-            return RefusalEnvelope(await promptComposerService.ComposeToolResultAsync(Constants.ToolInjections.ConsultationChained));
+            return RefusalEnvelope(await promptComposerService.ComposeToolInjectionAsync(Constants.ToolInjections.ConsultationChained));
         }
 
         // The second rule: a cap on how many rounds one user turn may spend talking to colleagues. Once it
@@ -974,7 +972,7 @@ public class MorganaAgentAdapter
         if (roundsSoFar >= maxRoundsPerTurn)
         {
             logger.LogWarning("Agent '{CallerIntent}' exhausted its {MaxRounds} consultation round(s) for this turn", callerIntent, maxRoundsPerTurn);
-            return RefusalEnvelope(await promptComposerService.ComposeToolResultAsync(
+            return RefusalEnvelope(await promptComposerService.ComposeToolInjectionAsync(
                 Constants.ToolInjections.ConsultationRoundsExhausted,
                 new Dictionary<string, string> { [Constants.Placeholders.ConsultationRounds] = roundsSoFar.ToString(CultureInfo.InvariantCulture) }));
         }

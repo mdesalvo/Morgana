@@ -192,10 +192,10 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
     private static AITool WithStepActions(AITool reply, IReadOnlyList<string> stepTools)
     {
         // A Reply that is not a function has no schema to edit.
-        if (reply is not AIFunction function)
+        if (reply is not AIFunction replyFunction)
             return reply;
 
-        JsonObject schema = SchemaOf(function);
+        JsonObject schema = SchemaOf(replyFunction);
 
         // The actions property is where Reply offers buttons; its schema becomes the proposal of the step's choices.
         JsonObject actions = schema["properties"]!["actions"]!.AsObject();
@@ -216,7 +216,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         schema["required"] = required;
 
         // The model reads Reply with its actions fixed to the step's tools.
-        return Rewritten(function, schema);
+        return Rewritten(replyFunction, schema);
     }
 
     /// <summary>The schema of a tool, parsed for editing.</summary>

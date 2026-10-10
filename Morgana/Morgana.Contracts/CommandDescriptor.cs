@@ -33,16 +33,16 @@ public record CommandDescriptor(
         IReadOnlyList<CommandOption> declared = Options ?? [];
 
         // Options are matched ignoring case, so two spelled alike would hand the typed value to whichever came first
-        if (declared.GroupBy(option => option.Name, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1) is { } clash)
-            return $"/{Name} declares the option '{clash.Key}' more than once";
+        if (declared.GroupBy(option => option.Name, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1) is { } clashingOptions)
+            return $"/{Name} declares the option '{clashingOptions.Key}' more than once";
 
         // An empty list would refuse every value, leaving an option nobody can give
-        if (declared.FirstOrDefault(option => option.AllowedValues is { Count: 0 }) is { } closed)
-            return $"/{Name} declares no value the option '{closed.Name}' takes";
+        if (declared.FirstOrDefault(option => option.AllowedValues is { Count: 0 }) is { } optionAllowingNothing)
+            return $"/{Name} declares no value the option '{optionAllowingNothing.Name}' takes";
 
         // A default is what the command runs on unasked, so one it would refuse makes every run without it fail
-        if (declared.FirstOrDefault(option => option.DefaultValue is { } fallback && !option.Allows(fallback)) is { } misfit)
-            return $"/{Name} defaults the option '{misfit.Name}' to '{misfit.DefaultValue}', which it does not take";
+        if (declared.FirstOrDefault(option => option.DefaultValue is { } fallback && !option.Allows(fallback)) is { } optionWithDisallowedDefault)
+            return $"/{Name} defaults the option '{optionWithDisallowedDefault.Name}' to '{optionWithDisallowedDefault.DefaultValue}', which it does not take";
 
         return null;
     }
@@ -58,8 +58,8 @@ public record CommandDescriptor(
 
         // An option nobody declared is a typo or a memory of another command, never something to run on
         if (options is not null && options.Keys.FirstOrDefault(
-                given => !declared.Any(option => string.Equals(option.Name, given, StringComparison.OrdinalIgnoreCase))) is { } unknown)
-            return $"/{Name} takes no option named '{unknown}'";
+                given => !declared.Any(option => string.Equals(option.Name, given, StringComparison.OrdinalIgnoreCase))) is { } unknownOptionName)
+            return $"/{Name} takes no option named '{unknownOptionName}'";
 
         // A value the command cannot use is the user's to correct, so it is refused with the values that would do.
         // Every name given is a declared one by now, so each finds its option
@@ -72,8 +72,8 @@ public record CommandDescriptor(
 
         // What the command cannot work without is asked for before anything happens, not discovered halfway
         // through. An option carrying a default is never missing: the default is what the command runs on
-        if (declared.FirstOrDefault(option => option is { Required: true, DefaultValue: null } && !WasGiven(option, options)) is { } missing)
-            return $"/{Name} needs {missing.Name}: {missing.Description}";
+        if (declared.FirstOrDefault(option => option is { Required: true, DefaultValue: null } && !WasGiven(option, options)) is { } missingRequiredOption)
+            return $"/{Name} needs {missingRequiredOption.Name}: {missingRequiredOption.Description}";
 
         return null;
     }

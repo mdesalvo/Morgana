@@ -88,6 +88,7 @@ public class MorganaChannelAdapter
         // Any failure falls through to the template below, because a message must always reach the user.
         try
         {
+            // How a message is rewritten for a poorer channel is authored in morgana.json, under its own prompt.
             Records.Prompt adapterPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.ChannelAdapter);
 
             // The model reads the channel's budget as data, in the placeholder the prompt names.
@@ -104,6 +105,7 @@ public class MorganaChannelAdapter
             // The whole message travels as the model's input, so that the rewrite sees the card and the buttons it must absorb.
             string userPrompt = JsonSerializer.Serialize(channelMessage, Records.DefaultJsonSerializerOptions);
 
+            // A single stateless call on the framework's tier, charged to the conversation whose message it adapts.
             string llmResponse = await llmService.CompleteWithSystemPromptAsync(
                 channelMessage.ConversationId, systemPrompt, userPrompt);
 
@@ -111,6 +113,7 @@ public class MorganaChannelAdapter
             Records.ChannelAdapterResponse? channelAdapterResponse =
                 JsonSerializer.Deserialize<Records.ChannelAdapterResponse>(llmResponse, Records.DefaultJsonSerializerOptions);
 
+            // Only a rewrite with text to read is delivered: buttons alone would leave the user without the answer.
             if (channelAdapterResponse != null && !string.IsNullOrWhiteSpace(channelAdapterResponse.Text))
             {
                 // The LLM prompt instructs it to respect maxMessageLength, but we cannot trust it:
@@ -219,8 +222,10 @@ public class MorganaChannelAdapter
         if (!channelCapabilities.SupportsMarkdown)
             text = StripMarkdown(text);
 
+        // The template is held to the same hard limit as the model's rewrite.
         text = EnforceLengthBudget(text, channelCapabilities);
 
+        // Nothing rewrote the buttons, so the original ones go wherever the channel still carries them.
         return Degrade(channelMessage, text, channelMessage.QuickReplies, channelCapabilities);
     }
 
@@ -249,9 +254,10 @@ public class MorganaChannelAdapter
             Progress = channelMessage.Progress
         };
 
-    // Walks Markdig parse tree, collects literal text, preserves block structure as line breaks.
+    // The text as a channel without markdown shows it: the words of every block, with the markup gone.
     private static string StripMarkdown(string text)
     {
+        // The whole document is rendered block by block into the plain text the channel receives.
         StringBuilder sb = new StringBuilder();
         RenderContainerBlock(Markdown.Parse(text), sb);
 
@@ -259,30 +265,34 @@ public class MorganaChannelAdapter
         return sb.ToString().TrimEnd();
     }
 
-    // Walks Markdig ContainerBlock (document or nested): paragraphs/headings flattened via RenderContainerInline,
-    // code blocks emitted verbatim, other containers recursed. Results separated by blank lines.
+    // Renders each block of a document, list or quote as plain text, a blank line apart from the next.
     private static void RenderContainerBlock(ContainerBlock containerBlock, StringBuilder sb)
     {
         foreach (Block block in containerBlock)
         {
+            // A block with no words to keep, such as a thematic break or raw HTML, leaves nothing behind.
             switch (block)
             {
+                // A paragraph keeps its words and stands as a block of its own.
                 case ParagraphBlock paragraph:
                     RenderContainerInline(paragraph.Inline, sb);
                     sb.AppendLine().AppendLine();
                     break;
 
+                // A heading loses its marker and reads as a paragraph.
                 case HeadingBlock heading:
                     RenderContainerInline(heading.Inline, sb);
                     sb.AppendLine().AppendLine();
                     break;
 
+                // Code keeps every line as written, since its layout is part of what it says.
                 case CodeBlock code:
                     foreach (var line in code.Lines.Lines)
                         sb.AppendLine(line.ToString());
                     sb.AppendLine();
                     break;
 
+                // A list or a quote loses its markers and its content is rendered where it stands.
                 case ContainerBlock nested:
                     RenderContainerBlock(nested, sb);
                     break;
@@ -290,35 +300,44 @@ public class MorganaChannelAdapter
         }
     }
 
-    // Walks Markdig ContainerInline: literals/code as-is, line breaks→newlines, links/containers recursed.
+    // Renders the inline content of a paragraph, a heading or a link as plain text.
     private static void RenderContainerInline(ContainerInline? containerInline, StringBuilder sb)
     {
         // A paragraph or heading may have no inline content.
-        if (containerInline == null) return;
+        if (containerInline == null)
+            return;
+
         foreach (Inline inline in containerInline)
         {
+            // An inline with nothing to read, such as raw HTML, leaves nothing behind.
             switch (inline)
             {
+                // Plain words go through as written.
                 case LiteralInline literal:
                     sb.Append(literal.Content.ToString());
                     break;
 
+                // Inline code keeps its content and loses its backticks.
                 case CodeInline code:
                     sb.Append(code.Content);
                     break;
 
+                // A line break of the source, soft or hard, stays a line break for the reader.
                 case LineBreakInline:
                     sb.AppendLine();
                     break;
 
+                // A bare address is all an autolink has to say, so the address is what the reader gets.
                 case AutolinkInline autolink:
                     sb.Append(autolink.Url);
                     break;
 
+                // A link keeps its label: the address behind it cannot be followed from plain text.
                 case LinkInline link:
                     RenderContainerInline(link, sb);
                     break;
 
+                // Emphasis loses its markers and keeps its words.
                 case ContainerInline nested:
                     RenderContainerInline(nested, sb);
                     break;

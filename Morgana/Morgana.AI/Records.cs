@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Akka.Actor;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Morgana.AI.Attributes;
@@ -1517,6 +1518,18 @@ public static class Records
             return frameworkReplies.Closure.Count > 0 ? ([.. frameworkReplies.Closure], false) : (null, true);
         }
     }
+
+    /// <summary>The turn as filed before the model runs.</summary>
+    /// <param name="Session">The agent's own session that the turn is served on, loaded or created by the opening.</param>
+    /// <param name="HistoryBaseline">History length before the turn, from which the turn's own messages are counted.</param>
+    /// <param name="PressedActionTool">The tool that the pressed action button leads to; null when the message is not such a press.</param>
+    public record TurnOpening(AgentSession Session, int HistoryBaseline, string? PressedActionTool);
+
+    /// <summary>What the model's passes left of the turn.</summary>
+    public record TurnOutcome(string Text, bool AwaitsApproval);
+
+    /// <summary>The turn as delivered to the user.</summary>
+    public record TurnClosure(string Text, List<QuickReply>? QuickReplies, RichCard? Card, bool IsCompleted, bool UserIsLeaving);
 
     // ==========================================================================
     // MODEL CONTEXT PROTOCOL

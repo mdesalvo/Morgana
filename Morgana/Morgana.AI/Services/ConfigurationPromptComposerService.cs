@@ -250,8 +250,8 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
-    /// <summary>Resolves one text that the framework's own tools return, filling its placeholders from the values.</summary>
-    public async Task<string> ComposeToolResultAsync(string name, IReadOnlyDictionary<string, string>? values = null)
+    /// <summary>Resolves one ToolInjections text by name, filling its placeholders from the values.</summary>
+    public async Task<string> ComposeToolInjectionAsync(string name, IReadOnlyDictionary<string, string>? values = null)
         => Records.Injection.Resolve((await frameworkLayer.Value).ToolInjections, name, values);
 
     /// <summary>

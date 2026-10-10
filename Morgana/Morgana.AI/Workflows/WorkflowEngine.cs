@@ -108,14 +108,13 @@ public sealed class WorkflowEngine
 
             // An MCP result is the protocol's envelope: the record sits one level down, under structuredContent.
             string? fields = envelope.TryGetProperty(Constants.Workflows.MCPStructuredContent, out JsonElement record)
-                             && record.ValueKind == JsonValueKind.Object
-                ? record.GetRawText()
-                : null;
+                               && record.ValueKind == JsonValueKind.Object ? record.GetRawText() : null;
 
             // A server reports a failure either on the envelope or, like a native tool, in the record's failure field.
             bool reportedByServer = envelope.TryGetProperty(Constants.Workflows.MCPIsError, out JsonElement isError)
-                                    && isError.ValueKind == JsonValueKind.True;
-            bool failed = reportedByServer || (fields is not null && ReadField(fields, Constants.Workflows.FailureField) is not null);
+                                      && isError.ValueKind == JsonValueKind.True;
+            bool failed = reportedByServer
+                            || (fields is not null && ReadField(fields, Constants.Workflows.FailureField) is not null);
 
             return new Records.StepOutcome(tool, failed, fields);
         }

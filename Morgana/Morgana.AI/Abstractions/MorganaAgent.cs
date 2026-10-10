@@ -198,352 +198,22 @@ public class MorganaAgent : MorganaActor
 
         try
         {
-            // Read from the database on first activation, or when the row was rewritten since this actor read it.
-            // Otherwise the field holds the live session, which is exactly what the row says at a turn's start.
-            // The agent hands itself over because deserializing a session is its own responsibility.
-            if (aiAgentSession is null || await persistenceService.IsDirtyAsync(AgentIdentifier))
-            {
-                aiAgentSession = await persistenceService.LoadAgentConversationAsync(AgentIdentifier, this);
-
-                // Reported only when the record was actually read: a turn served from the live session resumes nothing
-                if (aiAgentSession != null)
-                {
-                    agentLogger.LogInformation("Loaded existing conversation session for {AgentIdentifier}", AgentIdentifier);
-
-                    agentSpan?.AddEvent(new ActivityEvent(Telemetry.ResumeAgentConversation));
-                }
-            }
-            if (aiAgentSession is null)
-            {
-                // No row under this identifier: first time this agent is activated in the conversation.
-                // It starts with an empty history — the shared registry below is all it inherits.
-                aiAgentSession = await aiAgent.CreateSessionAsync();
-
-                agentLogger.LogInformation("Created new conversation session for {AgentIdentifier}", AgentIdentifier);
-
-                agentSpan?.AddEvent(new ActivityEvent(Telemetry.CreateAgentConversation));
-            }
-
-            // Tagged after the session exists, so a trace names the row that the turn was served from.
-            agentSpan?.SetTag(Telemetry.AgentIdentifier, AgentIdentifier);
-
-            // Hydrate the agent's local context from the conversation-scoped shared_context
-            // registry. Shared variables produced by any other agent of this conversation —
-            // whether currently alive, dormant, dead-and-rehydrated, or never yet activated —
-            // are stored centrally in the per-conversation DB and pulled here at turn start.
-            // First-write-wins is enforced at two levels:
-            //   1. Storage layer: UpsertSharedVariableAsync uses INSERT OR IGNORE, so once a
-            //      variable name has a value it cannot be replaced by a later writer.
-            //   2. Local merge: MergeSharedContext skips variables already present in this
-            //      agent's own session, so an agent that has set its own value never sees it
-            //      overwritten by a registry entry.
-            Dictionary<string, object> sharedFromRegistry = await persistenceService.LoadSharedVariablesAsync(conversationId);
-            if (sharedFromRegistry.Count > 0)
-            {
-                agentLogger.LogInformation(
-                    "Agent '{AgentIntent}' hydrating {Count} shared variable(s) from registry: {Keys}",
-                    AgentIntent, sharedFromRegistry.Count, string.Join(", ", sharedFromRegistry.Keys));
-
-                // Merged into the agent's own session, so the values survive the turn and are persisted
-                // with it — unlike a consultation, which merges the same registry into a session that dies.
-                aiContextProvider.MergeSharedContext(aiAgentSession, sharedFromRegistry);
-            }
-
-            // Stamped server-side because the history of a conversation is reassembled by merging every
-            // agent's own session chronologically: a message without a timestamp cannot be placed.
             // The buttons that let the user stay, leave or approve are the framework's, worded in morgana.json.
             Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
             Records.FrameworkReplies frameworkReplies = Records.FrameworkReplies.From(
                 morganaPrompt.GetAdditionalPropertyOrDefault<List<Records.FrameworkReplySet>>(Constants.PromptProperties.FrameworkReplies, []));
 
-            // A tool still waiting for the user's approval is answered by this very message: approved only
-            // when it is the approval button, declined by anything else, which then reads as an ordinary
-            // request. Read from the stored history, so a turn resumed after a restart is answered alike.
-            List<AIContent> userContents = [new TextContent(req.Content!)];
-            List<ToolApprovalRequestContent> pendingApprovals = GetPendingApprovals(aiAgentSession);
-            if (pendingApprovals.Count > 0)
-            {
-                bool approved = frameworkReplies.Approval is [QuickReply approveButton, ..]
-                                && string.Equals(req.Content?.Trim(), approveButton.Value, StringComparison.OrdinalIgnoreCase);
-                userContents.AddRange(pendingApprovals.Select(request => (AIContent)request.CreateResponse(approved)));
-
-                agentLogger.LogInformation(
-                    "Agent '{AgentIntent}' {Outcome} {Count} tool call(s) on the user's answer",
-                    AgentIntent, approved ? "runs the approved" : "declines", pendingApprovals.Count);
-            }
-
-            // Dated here because the history is merged chronologically across agents.
-            ChatMessage userMessage = new ChatMessage(ChatRole.User, userContents) { CreatedAt = DateTimeOffset.UtcNow };
-
-            // A press on a button leading to one of the agent's tools is already the user's consent to it,
-            // read before this message joins the history it is compared against.
-            string? pressedActionTool = PressedActionTool(aiAgentSession, req.Content);
-
-            // A phrase that arrived while no agent was active is already saved as Morgana's own.
-            // This agent keeps it because its model has to read it, marked as somebody else's so a
-            // transcript shows the user their own words once.
-            if (req.ContentAlreadyStored)
-            {
-                userMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
-                userMessage.AdditionalProperties[Constants.MessageProperties.ContextOnly] = true;
-            }
-
-            // History length before this turn runs: everything appended past this point belongs to
-            // the turn, which is what agent.tools_invoked must report — the span is per-turn, so
-            // reporting the whole session would attribute every past tool call to this one.
-            int historyBaseline = aiChatHistoryProvider.GetMessages(aiAgentSession).Count;
-
-            // The phrase enters the session before a single token is spent on it. The turn below runs
-            // on the session alone, so nothing reaches the model twice. Written out too, because
-            // when this agent was already active nobody else saved the phrase: its own row is the
-            // only record. A client reloading mid-turn reads it back from here instead of
-            // watching it vanish. The row is left active on purpose: a turn interrupted here resumes
-            // at the agent that was working on it.
-            aiChatHistoryProvider.AppendMessage(aiAgentSession, userMessage);
-            await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted: false);
-
-            // Streaming is gated on two independent signals:
-            //   1. Global config flag (Morgana:AdaptiveMessaging:EnableStreamingResponse)
-            //   2. Channel capability — we don't even attach to the LLM streaming endpoint
-            //      when the outbound channel can't deliver chunks to the user. When Capabilities
-            //      is null (legacy/test paths) we assume the channel supports streaming.
-            // Both signals are read once per turn: a channel cannot change its capabilities mid-turn.
-            bool streamingConfigEnabled = configuration.GetValue("Morgana:AdaptiveMessaging:EnableStreamingResponse", true);
-            bool channelSupportsStreaming = req.Capabilities?.SupportsStreaming ?? true;
-            bool useStreaming = streamingConfigEnabled && channelSupportsStreaming;
-
-            // Said once per turn so that a batched answer on a streaming-capable deployment is explained.
-            if (!channelSupportsStreaming)
-                agentLogger.LogInformation("Agent '{AgentIntent}' bypassing LLM streaming: channel does not advertise SupportsStreaming", AgentIntent);
-
-            // The text the user will read, whichever way the model delivers it.
-            StringBuilder fullResponse = new StringBuilder();
-
-            // One pass of the model over the session, its text streamed or batched into fullResponse.
-            async Task RunModelAsync()
-            {
-                if (useStreaming)
-                {
-                    // Time to first token is what the user waits before seeing the agent answer.
-                    Stopwatch firstChunkStopwatch = Stopwatch.StartNew();
-                    bool firstChunkEmitted = false;
-                    string? lastTextMessageId = null;
-
-                    // The whole turn runs here — tool calls included, which surface as chunks carrying no text.
-                    // The phrase being answered is the one already filed above, so nothing is handed in here.
-                    await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(aiAgentSession))
-                    {
-                        if (!string.IsNullOrEmpty(chunk.Text))
-                        {
-                            // Two text chunks with different MessageIds come from different messages and that
-                            // is where the separator belongs. Within one message the chunks are tokens and must
-                            // stay welded, so only text-carrying chunks update the id. A provider that never
-                            // sets MessageId reports no boundary and nothing is inserted.
-                            if (lastTextMessageId is not null
-                                 && !string.Equals(chunk.MessageId, lastTextMessageId, StringComparison.Ordinal)
-                                 && NeedsMessageSeparator(fullResponse, chunk.Text))
-                            {
-                                fullResponse.Append(Constants.Markers.MessageSeparator);
-
-                                // Streamed too, so the live text matches the final one the client is about to
-                                // overwrite it with, instead of showing the weld for the rest of the turn.
-                                senderRef.Tell(new Records.AgentStreamChunk(Constants.Markers.MessageSeparator));
-                            }
-
-                            lastTextMessageId = chunk.MessageId;
-
-                            fullResponse.Append(chunk.Text);
-                            senderRef.Tell(new Records.AgentStreamChunk(chunk.Text));
-
-                            // The first text chunk closes the wait the user experienced.
-                            if (!firstChunkEmitted)
-                            {
-                                firstChunkEmitted = true;
-                                long ttft = firstChunkStopwatch.ElapsedMilliseconds;
-                                firstChunkStopwatch.Stop();
-                                agentSpan?.AddEvent(new ActivityEvent(Telemetry.EventFirstChunk));
-                                agentSpan?.SetTag(Telemetry.AgentTtftMs, ttft);
-                                Telemetry.AgentTtftHistogram.Record(ttft);
-                            }
-                        }
-                        else
-                        {
-                            // The turn is advancing on something with no text in it — a tool being called
-                            // or a colleague being asked. The supervisor's wait counts silence and a
-                            // consultation is a whole turn at another agent: unannounced, it reads as an
-                            // agent that has died and the user's turn is abandoned while its answer is
-                            // still being written.
-                            senderRef.Tell(new Records.AgentStillWorking());
-                        }
-                    }
-                }
-                else
-                {
-                    // Without streaming the user waits for the whole answer, which is what the span records as first token.
-                    Stopwatch responseStopwatch = Stopwatch.StartNew();
-                    // Same turn as the streaming branch, answering the same already-filed phrase: nothing
-                    // reaches the channel until the model and every tool it decided to call, are done.
-                    AgentResponse response = await aiAgent.RunAsync(aiAgentSession);
-                    responseStopwatch.Stop();
-
-                    // Assembled message by message rather than through AgentResponse.Text, which is
-                    // documented to concatenate every message's text and so produces exactly the weld
-                    // Markers.MessageSeparator exists to prevent. Here every element is a whole message, so the
-                    // boundary needs no detecting — unlike the streaming path above.
-                    foreach (ChatMessage responseMessage in response.Messages)
-                    {
-                        if (string.IsNullOrEmpty(responseMessage.Text))
-                            continue;
-
-                        if (NeedsMessageSeparator(fullResponse, responseMessage.Text))
-                            fullResponse.Append(Constants.Markers.MessageSeparator);
-
-                        fullResponse.Append(responseMessage.Text);
-                    }
-
-                    // The batched answer reaches the user as one piece, so its latency is the time to first token.
-                    long ttft = responseStopwatch.ElapsedMilliseconds;
-                    agentSpan?.AddEvent(new ActivityEvent(Telemetry.EventFirstChunk));
-                    agentSpan?.SetTag(Telemetry.AgentTtftMs, ttft);
-                    Telemetry.AgentTtftHistogram.Record(ttft);
-                }
-            }
-
-            // The first pass answers the user's phrase.
-            await RunModelAsync();
-
-            // A call that needs approval, to the very tool whose button opened this turn, was approved by
-            // that press: it runs now and the user is never asked to confirm the same thing twice.
-            List<ToolApprovalRequestContent> approvedByPress = [.. GetPendingApprovals(aiAgentSession)
-                .Where(request => request.ToolCall is FunctionCallContent call && call.Name == pressedActionTool)];
-            if (approvedByPress.Count > 0)
-            {
-                agentLogger.LogInformation(
-                    "Agent '{AgentIntent}' runs {Tool}: the user approved it by pressing its button", AgentIntent, pressedActionTool);
-
-                aiChatHistoryProvider.AppendMessage(aiAgentSession, new ChatMessage(ChatRole.User,
-                    [.. approvedByPress.Select(request => (AIContent)request.CreateResponse(true))]) { CreatedAt = DateTimeOffset.UtcNow });
-                await RunModelAsync();
-            }
-
-            // A turn that asks the user to approve a tool ends here, whatever the model wrote: running it
-            // again would only meet the same request still unanswered.
-            bool awaitsApproval = GetPendingApprovals(aiAgentSession).Count > 0;
-
-            // A turn the user would receive as an empty bubble is run once more: the session already
-            // holds whatever the first pass did, so the model picks up from there and writes its text.
-            if (string.IsNullOrWhiteSpace(fullResponse.ToString()) && !awaitsApproval)
-            {
-                agentLogger.LogWarning("Agent '{AgentIntent}' ended its turn with no text: running it once more", AgentIntent);
-                await RunModelAsync();
-            }
-
-            // Still nothing to say: the turn has failed and the user is told so, rather than left facing silence.
-            if (string.IsNullOrWhiteSpace(fullResponse.ToString()) && !awaitsApproval)
-                throw new InvalidOperationException($"Agent '{AgentIntent}' produced no text in two passes");
-
-            // An approval asked with no word of the model's own is asked in Morgana's words.
-            string llmResponseText = fullResponse.ToString().Trim();
-            if (llmResponseText.Length == 0)
-                llmResponseText = morganaPrompt.GetMessage(Constants.Messages.Approval);
-
-            // How the turn closes, recorded by Reply whether the model called it or the framework closed
-            // the turn on its behalf. A turn that still declares nothing is answered and ends.
-            Records.TurnReply turnReply = GetTurnReplyFromContext(aiAgentSession)
-                                          ?? new Records.TurnReply(Records.AwaitedFromUser.Nothing, false, [], null);
-
-            // The closure belongs to this turn alone: left in the session it would close the next turn too.
-            aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnReply);
-
-            // A user who leaves abandons the workflow where it stands, undoing nothing. Silence, a disconnection
-            // or a restart leave it in place, so the next message resumes at the pending step.
-            if (turnReply.UserIsLeaving)
-                aiContextProvider.DropWorkflowPosition(aiAgentSession);
-
-            // A workflow that still stands at a choice step offers its tools as the buttons, whatever the model
-            // closed with: a model that never complied, the framework's own closure and a missing Reply all end here.
-            if (!turnReply.UserIsLeaving && !awaitsApproval)
-            {
-                if (aiContextProvider.GetWorkflowPosition(aiAgentSession)?.Resolve(aiContextProvider.Workflows) is { Step.Tools.Count: > 1 } choosing)
-                    turnReply = turnReply.WithStepActions(choosing.Step.Tools);
-            }
-
-            // A turn waiting for an approval offers exactly the two answers to it; any other turn gets the
-            // buttons its closure calls for.
-            (List<QuickReply>? quickReplies, bool isCompleted) = awaitsApproval
-                ? (frameworkReplies.Approval is { Count: > 0 } approvalButtons ? [.. approvalButtons] : null, false)
-                : turnReply.ToDelivery(frameworkReplies);
-            // An approval question carries no card: the user is asked one thing.
-            RichCard? richCard = awaitsApproval ? null : turnReply.Card;
-            bool hasQuickReplies = quickReplies is not null;
-
-            // The line the harness and the operator read to see how the turn closed.
-            agentLogger.LogInformation(
-                "Agent response analysis: Awaits={Awaits}, UserIsLeaving={UserIsLeaving}, QuickReplies={QuickReplies}, HasRichCard={HasRichCard}, IsCompleted={IsCompleted}",
-                turnReply.Awaits, turnReply.UserIsLeaving, quickReplies?.Count ?? 0, richCard is not null, isCompleted);
-
-            // The span carries the turn's outcome and nothing of the user's content beyond a short preview.
-            string responsePreview = Preview(llmResponseText);
-            agentSpan?.SetTag(Telemetry.AgentIsCompleted, isCompleted);
-            agentSpan?.SetTag(Telemetry.AgentHasQuickReplies, hasQuickReplies);
-            agentSpan?.SetTag(Telemetry.AgentToolsInvoked, GetToolsInvoked(aiAgentSession, historyBaseline));
-            agentSpan?.SetTag(Telemetry.AgentResponsePreview, responsePreview);
-            agentSpan?.Dispose();
-
-            // The exchange with a colleague is spent once it has been read. Clearing it here keeps
-            // it out of the caller's own session (see StripPeerConsultations) and is done after
-            // the span has been tagged, so telemetry still records that the colleague was consulted.
-            StripPeerConsultations(aiAgentSession, historyBaseline);
-
-            // The last assistant message that carries text is the one the user reads: it receives the delivery marks.
-            ChatMessage? finalAssistantMessage = aiChatHistoryProvider
-                .GetMessages(aiAgentSession)
-                .Skip(historyBaseline)
-                .LastOrDefault(m => m.Role == ChatRole.Assistant
-                                     && m.Contents.OfType<TextContent>().Any(t => !string.IsNullOrWhiteSpace(t.Text)));
-
-            // Text that Morgana supplied for the model has no message of its own yet: it gets one, so the
-            // transcript read back on resume shows it with its buttons.
-            if (finalAssistantMessage is null && llmResponseText.Length > 0)
-            {
-                finalAssistantMessage = new ChatMessage(ChatRole.Assistant, llmResponseText) { CreatedAt = DateTimeOffset.UtcNow };
-                aiChatHistoryProvider.AppendMessage(aiAgentSession, finalAssistantMessage);
-            }
-            // The marks make the message appear in the transcript with the text, buttons and card that were delivered.
-            if (finalAssistantMessage is not null)
-            {
-                finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
-                finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.UserFacing] = true;
-                finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnText] = llmResponseText;
-
-                // What the user was offered beside the text, kept as delivered so a transcript shows the
-                // same buttons and card whoever composed them.
-                if (quickReplies is not null)
-                    finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnQuickReplies] =
-                        JsonSerializer.Serialize(quickReplies, Records.DefaultJsonSerializerOptions);
-                if (richCard is not null)
-                    finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnRichCard] =
-                        JsonSerializer.Serialize(richCard, Records.DefaultJsonSerializerOptions);
-
-                // The user left on this turn: whatever they bring next opens a new episode, read on its own.
-                if (turnReply.UserIsLeaving)
-                    finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.EpisodeEnd] = true;
-            }
-
-            // Written last, so what lands in the database is the history already stripped of the
-            // consultations and already carrying the user-facing marks the history endpoint reads
-            // back. Before the sender is answered: a turn the caller was told about but whose state
-            // never persisted would come back missing on resume. The completion flag travels with
-            // it as the row's active state, which is what a resumed conversation restores.
-            await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted);
-            agentLogger.LogInformation("Saved conversation state for {AgentIdentifier}", AgentIdentifier);
+            // The turn is filed before the model runs, then run, then closed and recorded.
+            Records.TurnOpening opening = await OpenTurnAsync(req, frameworkReplies, agentSpan);
+            Records.TurnOutcome outcome = await RunTurnAsync(opening.Session, req, opening.PressedActionTool, senderRef, agentSpan);
+            Records.TurnClosure closure = CloseTurn(opening.Session, outcome, morganaPrompt, frameworkReplies);
+            DateTime? recordedAt = await RecordTurnAsync(opening.Session, closure, opening.HistoryBaseline, agentSpan);
 
             // Dated as the history keeps it, so a client catching up recognises the reply it was pushed.
-            senderRef.Tell(new Records.AgentResponse(
-                llmResponseText, isCompleted, quickReplies, richCard, finalAssistantMessage?.CreatedAt?.UtcDateTime));
+            senderRef.Tell(new Records.AgentResponse(closure.Text, closure.IsCompleted, closure.QuickReplies, closure.Card, recordedAt));
         }
-        catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } cre
-                                     && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
+        catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } clientResultException
+                                     && clientResultException.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
         {
             // The provider refused the content itself: the user is told so by the supervisor and no retry would pass.
             agentLogger.LogWarning(ex, "Content filter rejection in {Name} for conversation {ConversationId}", GetType().Name, conversationId);
@@ -572,6 +242,362 @@ public class MorganaAgent : MorganaActor
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ConsultationRounds);
             }
         }
+    }
+
+    /// <summary>Files the user's phrase in the agent's session and the record before the model reads it.</summary>
+    private async Task<Records.TurnOpening> OpenTurnAsync(Records.AgentRequest req, Records.FrameworkReplies frameworkReplies, Activity? agentSpan)
+    {
+        // Read from the database on first activation, or when the row was rewritten since this actor read it.
+        // Otherwise the field holds the live session, which is exactly what the row says at a turn's start.
+        // The agent hands itself over because deserializing a session is its own responsibility.
+        if (aiAgentSession is null || await persistenceService.IsDirtyAsync(AgentIdentifier))
+        {
+            aiAgentSession = await persistenceService.LoadAgentConversationAsync(AgentIdentifier, this);
+
+            // Reported only when the record was actually read: a turn served from the live session resumes nothing
+            if (aiAgentSession != null)
+            {
+                agentLogger.LogInformation("Loaded existing conversation session for {AgentIdentifier}", AgentIdentifier);
+
+                agentSpan?.AddEvent(new ActivityEvent(Telemetry.ResumeAgentConversation));
+            }
+        }
+        if (aiAgentSession is null)
+        {
+            // No row under this identifier: first time this agent is activated in the conversation.
+            // It starts with an empty history — the shared registry below is all it inherits.
+            aiAgentSession = await aiAgent.CreateSessionAsync();
+
+            agentLogger.LogInformation("Created new conversation session for {AgentIdentifier}", AgentIdentifier);
+
+            agentSpan?.AddEvent(new ActivityEvent(Telemetry.CreateAgentConversation));
+        }
+
+        // Tagged after the session exists, so a trace names the row that the turn was served from.
+        agentSpan?.SetTag(Telemetry.AgentIdentifier, AgentIdentifier);
+
+        // Hydrate the agent's local context from the conversation-scoped shared_context
+        // registry. Shared variables produced by any other agent of this conversation —
+        // whether currently alive, dormant, dead-and-rehydrated, or never yet activated —
+        // are stored centrally in the per-conversation DB and pulled here at turn start.
+        // First-write-wins is enforced at two levels:
+        //   1. Storage layer: UpsertSharedVariableAsync uses INSERT OR IGNORE, so once a
+        //      variable name has a value it cannot be replaced by a later writer.
+        //   2. Local merge: MergeSharedContext skips variables already present in this
+        //      agent's own session, so an agent that has set its own value never sees it
+        //      overwritten by a registry entry.
+        Dictionary<string, object> sharedFromRegistry = await persistenceService.LoadSharedVariablesAsync(conversationId);
+        if (sharedFromRegistry.Count > 0)
+        {
+            agentLogger.LogInformation(
+                "Agent '{AgentIntent}' hydrating {Count} shared variable(s) from registry: {Keys}",
+                AgentIntent, sharedFromRegistry.Count, string.Join(", ", sharedFromRegistry.Keys));
+
+            // Merged into the agent's own session, so the values survive the turn and are persisted
+            // with it — unlike a consultation, which merges the same registry into a session that dies.
+            aiContextProvider.MergeSharedContext(aiAgentSession, sharedFromRegistry);
+        }
+
+        // A tool still waiting for the user's approval is answered by this very message: approved only
+        // when it is the approval button, declined by anything else, which then reads as an ordinary
+        // request. Read from the stored history, so a turn resumed after a restart is answered alike.
+        List<AIContent> userContents = [new TextContent(req.Content!)];
+        List<ToolApprovalRequestContent> pendingApprovals = GetPendingApprovals(aiAgentSession);
+        if (pendingApprovals.Count > 0)
+        {
+            bool approved = frameworkReplies.Approval is [QuickReply approveButton, ..]
+                            && string.Equals(req.Content?.Trim(), approveButton.Value, StringComparison.OrdinalIgnoreCase);
+            userContents.AddRange(pendingApprovals.Select(request => (AIContent)request.CreateResponse(approved)));
+
+            agentLogger.LogInformation(
+                "Agent '{AgentIntent}' {Outcome} {Count} tool call(s) on the user's answer",
+                AgentIntent, approved ? "runs the approved" : "declines", pendingApprovals.Count);
+        }
+
+        // Dated here because the history is merged chronologically across agents.
+        ChatMessage userMessage = new ChatMessage(ChatRole.User, userContents) { CreatedAt = DateTimeOffset.UtcNow };
+
+        // A press on a button leading to one of the agent's tools is already the user's consent to it,
+        // read before this message joins the history it is compared against.
+        string? pressedActionTool = PressedActionTool(aiAgentSession, req.Content);
+
+        // A phrase that arrived while no agent was active is already saved as Morgana's own.
+        // This agent keeps it because its model has to read it, marked as somebody else's so a
+        // transcript shows the user their own words once.
+        if (req.ContentAlreadyStored)
+        {
+            userMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
+            userMessage.AdditionalProperties[Constants.MessageProperties.ContextOnly] = true;
+        }
+
+        // History length before this turn runs: everything appended past this point belongs to
+        // the turn, which is what agent.tools_invoked must report — the span is per-turn, so
+        // reporting the whole session would attribute every past tool call to this one.
+        int historyBaseline = aiChatHistoryProvider.GetMessages(aiAgentSession).Count;
+
+        // The phrase enters the session before a single token is spent on it. The turn below runs
+        // on the session alone, so nothing reaches the model twice. Written out too, because
+        // when this agent was already active nobody else saved the phrase: its own row is the
+        // only record. A client reloading mid-turn reads it back from here instead of
+        // watching it vanish. The row is left active on purpose: a turn interrupted here resumes
+        // at the agent that was working on it.
+        aiChatHistoryProvider.AppendMessage(aiAgentSession, userMessage);
+        await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted: false);
+
+        return new Records.TurnOpening(aiAgentSession, historyBaseline, pressedActionTool);
+    }
+
+    /// <summary>Runs the model over the session until the turn has text to deliver or awaits the user's approval.</summary>
+    private async Task<Records.TurnOutcome> RunTurnAsync(AgentSession session, Records.AgentRequest req, string? pressedActionTool, IActorRef senderRef, Activity? agentSpan)
+    {
+        // Streaming is gated on two independent signals:
+        //   1. Global config flag (Morgana:AdaptiveMessaging:EnableStreamingResponse)
+        //   2. Channel capability — we don't even attach to the LLM streaming endpoint
+        //      when the outbound channel can't deliver chunks to the user. When Capabilities
+        //      is null (legacy/test paths) we assume the channel supports streaming.
+        // Both signals are read once per turn: a channel cannot change its capabilities mid-turn.
+        bool streamingConfigEnabled = configuration.GetValue("Morgana:AdaptiveMessaging:EnableStreamingResponse", true);
+        bool channelSupportsStreaming = req.Capabilities?.SupportsStreaming ?? true;
+        bool useStreaming = streamingConfigEnabled && channelSupportsStreaming;
+
+        // Said once per turn so that a batched answer on a streaming-capable deployment is explained.
+        if (!channelSupportsStreaming)
+            agentLogger.LogInformation("Agent '{AgentIntent}' bypassing LLM streaming: channel does not advertise SupportsStreaming", AgentIntent);
+
+        // The text the user will read, whichever way the model delivers it.
+        StringBuilder fullResponse = new StringBuilder();
+
+        // One pass of the model over the session, its text streamed or batched into fullResponse.
+        async Task RunModelAsync()
+        {
+            if (useStreaming)
+            {
+                // Time to first token is what the user waits before seeing the agent answer.
+                Stopwatch firstChunkStopwatch = Stopwatch.StartNew();
+                bool firstChunkEmitted = false;
+                string? lastTextMessageId = null;
+
+                // The whole turn runs here — tool calls included, which surface as chunks carrying no text.
+                // The phrase being answered is the one already filed above, so nothing is handed in here.
+                await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(session))
+                {
+                    if (!string.IsNullOrEmpty(chunk.Text))
+                    {
+                        // Two text chunks with different MessageIds come from different messages and that
+                        // is where the separator belongs. Within one message the chunks are tokens and must
+                        // stay welded, so only text-carrying chunks update the id. A provider that never
+                        // sets MessageId reports no boundary and nothing is inserted.
+                        if (lastTextMessageId is not null
+                             && !string.Equals(chunk.MessageId, lastTextMessageId, StringComparison.Ordinal)
+                             && NeedsMessageSeparator(fullResponse, chunk.Text))
+                        {
+                            fullResponse.Append(Constants.Markers.MessageSeparator);
+
+                            // Streamed too, so the live text matches the final one the client is about to
+                            // overwrite it with, instead of showing the weld for the rest of the turn.
+                            senderRef.Tell(new Records.AgentStreamChunk(Constants.Markers.MessageSeparator));
+                        }
+
+                        lastTextMessageId = chunk.MessageId;
+
+                        fullResponse.Append(chunk.Text);
+                        senderRef.Tell(new Records.AgentStreamChunk(chunk.Text));
+
+                        // The first text chunk closes the wait the user experienced.
+                        if (!firstChunkEmitted)
+                        {
+                            firstChunkEmitted = true;
+                            long ttft = firstChunkStopwatch.ElapsedMilliseconds;
+                            firstChunkStopwatch.Stop();
+                            agentSpan?.AddEvent(new ActivityEvent(Telemetry.EventFirstChunk));
+                            agentSpan?.SetTag(Telemetry.AgentTtftMs, ttft);
+                            Telemetry.AgentTtftHistogram.Record(ttft);
+                        }
+                    }
+                    else
+                    {
+                        // The turn is advancing on something with no text in it — a tool being called
+                        // or a colleague being asked. The supervisor's wait counts silence and a
+                        // consultation is a whole turn at another agent: unannounced, it reads as an
+                        // agent that has died and the user's turn is abandoned while its answer is
+                        // still being written.
+                        senderRef.Tell(new Records.AgentStillWorking());
+                    }
+                }
+            }
+            else
+            {
+                // Without streaming the user waits for the whole answer, which is what the span records as first token.
+                Stopwatch responseStopwatch = Stopwatch.StartNew();
+                // Same turn as the streaming branch, answering the same already-filed phrase: nothing
+                // reaches the channel until the model and every tool it decided to call, are done.
+                AgentResponse response = await aiAgent.RunAsync(session);
+                responseStopwatch.Stop();
+
+                // Assembled message by message rather than through AgentResponse.Text, which is
+                // documented to concatenate every message's text and so produces exactly the weld
+                // Markers.MessageSeparator exists to prevent. Here every element is a whole message, so the
+                // boundary needs no detecting — unlike the streaming path above.
+                foreach (ChatMessage responseMessage in response.Messages)
+                {
+                    if (string.IsNullOrEmpty(responseMessage.Text))
+                        continue;
+
+                    if (NeedsMessageSeparator(fullResponse, responseMessage.Text))
+                        fullResponse.Append(Constants.Markers.MessageSeparator);
+
+                    fullResponse.Append(responseMessage.Text);
+                }
+
+                // The batched answer reaches the user as one piece, so its latency is the time to first token.
+                long ttft = responseStopwatch.ElapsedMilliseconds;
+                agentSpan?.AddEvent(new ActivityEvent(Telemetry.EventFirstChunk));
+                agentSpan?.SetTag(Telemetry.AgentTtftMs, ttft);
+                Telemetry.AgentTtftHistogram.Record(ttft);
+            }
+        }
+
+        // The first pass answers the user's phrase.
+        await RunModelAsync();
+
+        // A call that needs approval, to the very tool whose button opened this turn, was approved by
+        // that press: it runs now and the user is never asked to confirm the same thing twice.
+        List<ToolApprovalRequestContent> approvedByPress = [.. GetPendingApprovals(session)
+            .Where(request => request.ToolCall is FunctionCallContent call && call.Name == pressedActionTool)];
+        if (approvedByPress.Count > 0)
+        {
+            agentLogger.LogInformation(
+                "Agent '{AgentIntent}' runs {Tool}: the user approved it by pressing its button", AgentIntent, pressedActionTool);
+
+            aiChatHistoryProvider.AppendMessage(session, new ChatMessage(ChatRole.User,
+                [.. approvedByPress.Select(request => (AIContent)request.CreateResponse(true))]) { CreatedAt = DateTimeOffset.UtcNow });
+            await RunModelAsync();
+        }
+
+        // A turn that asks the user to approve a tool ends here, whatever the model wrote: running it
+        // again would only meet the same request still unanswered.
+        bool awaitsApproval = GetPendingApprovals(session).Count > 0;
+
+        // A turn the user would receive as an empty bubble is run once more: the session already
+        // holds whatever the first pass did, so the model picks up from there and writes its text.
+        if (string.IsNullOrWhiteSpace(fullResponse.ToString()) && !awaitsApproval)
+        {
+            agentLogger.LogWarning("Agent '{AgentIntent}' ended its turn with no text: running it once more", AgentIntent);
+            await RunModelAsync();
+        }
+
+        // Still nothing to say: the turn has failed and the user is told so, rather than left facing silence.
+        if (string.IsNullOrWhiteSpace(fullResponse.ToString()) && !awaitsApproval)
+            throw new InvalidOperationException($"Agent '{AgentIntent}' produced no text in two passes");
+
+        return new Records.TurnOutcome(fullResponse.ToString().Trim(), awaitsApproval);
+    }
+
+    /// <summary>Decides the text, buttons and card that the user receives, from what the model wrote and how Reply closed the turn.</summary>
+    private Records.TurnClosure CloseTurn(AgentSession session, Records.TurnOutcome outcome, Records.Prompt morganaPrompt, Records.FrameworkReplies frameworkReplies)
+    {
+        // An approval asked with no word of the model's own is asked in Morgana's words.
+        string llmResponseText = outcome.Text;
+        if (llmResponseText.Length == 0)
+            llmResponseText = morganaPrompt.GetMessage(Constants.Messages.Approval);
+
+        // How the turn closes, recorded by Reply whether the model called it or the framework closed
+        // the turn on its behalf. A turn that still declares nothing is answered and ends.
+        Records.TurnReply turnReply = GetTurnReplyFromContext(session)
+                                      ?? new Records.TurnReply(Records.AwaitedFromUser.Nothing, false, [], null);
+
+        // The closure belongs to this turn alone: left in the session it would close the next turn too.
+        aiContextProvider.DropVariable(session, Constants.ContextKeys.TurnReply);
+
+        // A user who leaves abandons the workflow where it stands, undoing nothing. Silence, a disconnection
+        // or a restart leave it in place, so the next message resumes at the pending step.
+        if (turnReply.UserIsLeaving)
+            aiContextProvider.DropWorkflowPosition(session);
+
+        // A workflow that still stands at a choice step offers its tools as the buttons, whatever the model
+        // closed with: a model that never complied, the framework's own closure and a missing Reply all end here.
+        if (!turnReply.UserIsLeaving && !outcome.AwaitsApproval)
+        {
+            if (aiContextProvider.GetWorkflowPosition(session)?.Resolve(aiContextProvider.Workflows) is { Step.Tools.Count: > 1 } choicePosition)
+                turnReply = turnReply.WithStepActions(choicePosition.Step.Tools);
+        }
+
+        // A turn waiting for an approval offers exactly the two answers to it; any other turn gets the
+        // buttons its closure calls for.
+        (List<QuickReply>? quickReplies, bool isCompleted) = outcome.AwaitsApproval
+            ? (frameworkReplies.Approval is { Count: > 0 } approvalButtons ? [.. approvalButtons] : null, false)
+            : turnReply.ToDelivery(frameworkReplies);
+        // An approval question carries no card: the user is asked one thing.
+        RichCard? richCard = outcome.AwaitsApproval ? null : turnReply.Card;
+
+        // The line the harness and the operator read to see how the turn closed.
+        agentLogger.LogInformation(
+            "Agent response analysis: Awaits={Awaits}, UserIsLeaving={UserIsLeaving}, QuickReplies={QuickReplies}, HasRichCard={HasRichCard}, IsCompleted={IsCompleted}",
+            turnReply.Awaits, turnReply.UserIsLeaving, quickReplies?.Count ?? 0, richCard is not null, isCompleted);
+
+        return new Records.TurnClosure(llmResponseText, quickReplies, richCard, isCompleted, turnReply.UserIsLeaving);
+    }
+
+    /// <summary>Writes the delivered turn into the history and the record then closes the turn's span.</summary>
+    private async Task<DateTime?> RecordTurnAsync(AgentSession session, Records.TurnClosure closure, int historyBaseline, Activity? agentSpan)
+    {
+        // The span carries the turn's outcome and nothing of the user's content beyond a short preview.
+        string responsePreview = Preview(closure.Text);
+        agentSpan?.SetTag(Telemetry.AgentIsCompleted, closure.IsCompleted);
+        agentSpan?.SetTag(Telemetry.AgentHasQuickReplies, closure.QuickReplies is not null);
+        agentSpan?.SetTag(Telemetry.AgentToolsInvoked, GetToolsInvoked(session, historyBaseline));
+        agentSpan?.SetTag(Telemetry.AgentResponsePreview, responsePreview);
+        agentSpan?.Dispose();
+
+        // The exchange with a colleague is spent once it has been read. Clearing it here keeps
+        // it out of the caller's own session (see StripPeerConsultations) and is done after
+        // the span has been tagged, so telemetry still records that the colleague was consulted.
+        StripPeerConsultations(session, historyBaseline);
+
+        // The last assistant message that carries text is the one the user reads: it receives the delivery marks.
+        ChatMessage? finalAssistantMessage = aiChatHistoryProvider
+            .GetMessages(session)
+            .Skip(historyBaseline)
+            .LastOrDefault(m => m.Role == ChatRole.Assistant
+                                 && m.Contents.OfType<TextContent>().Any(t => !string.IsNullOrWhiteSpace(t.Text)));
+
+        // Text that Morgana supplied for the model has no message of its own yet: it gets one, so the
+        // transcript read back on resume shows it with its buttons.
+        if (finalAssistantMessage is null && closure.Text.Length > 0)
+        {
+            finalAssistantMessage = new ChatMessage(ChatRole.Assistant, closure.Text) { CreatedAt = DateTimeOffset.UtcNow };
+            aiChatHistoryProvider.AppendMessage(session, finalAssistantMessage);
+        }
+        // The marks make the message appear in the transcript with the text, buttons and card that were delivered.
+        if (finalAssistantMessage is not null)
+        {
+            finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
+            finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.UserFacing] = true;
+            finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnText] = closure.Text;
+
+            // What the user was offered beside the text, kept as delivered so a transcript shows the
+            // same buttons and card whoever composed them.
+            if (closure.QuickReplies is not null)
+                finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnQuickReplies] =
+                    JsonSerializer.Serialize(closure.QuickReplies, Records.DefaultJsonSerializerOptions);
+            if (closure.Card is not null)
+                finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnRichCard] =
+                    JsonSerializer.Serialize(closure.Card, Records.DefaultJsonSerializerOptions);
+
+            // The user left on this turn: whatever they bring next opens a new episode, read on its own.
+            if (closure.UserIsLeaving)
+                finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.EpisodeEnd] = true;
+        }
+
+        // Written last, so what lands in the database is the history already stripped of the
+        // consultations and already carrying the user-facing marks the history endpoint reads
+        // back. Before the sender is answered: a turn the caller was told about but whose state
+        // never persisted would come back missing on resume. The completion flag travels with
+        // it as the row's active state, which is what a resumed conversation restores.
+        await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, session, closure.IsCompleted);
+        agentLogger.LogInformation("Saved conversation state for {AgentIdentifier}", AgentIdentifier);
+
+        return finalAssistantMessage?.CreatedAt?.UtcDateTime;
     }
 
     /// <summary>

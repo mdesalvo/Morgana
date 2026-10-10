@@ -267,9 +267,9 @@ public sealed class MorganaHostedAgent : AIAgent
     /// The answer that a caller's model reads when this agent does not serve its request, worded in
     /// morgana.json and naming the agent that did not answer.
     /// </summary>
-    private Task<string> ComposeFallbackAsync(string toolResultName)
-        => promptComposerService.ComposeToolResultAsync(
-            toolResultName, new Dictionary<string, string> { [Constants.Placeholders.AgentIntent] = intent });
+    private Task<string> ComposeFallbackAsync(string toolInjectionName)
+        => promptComposerService.ComposeToolInjectionAsync(
+            toolInjectionName, new Dictionary<string, string> { [Constants.Placeholders.AgentIntent] = intent });
 
     /// <summary>Streaming form of <see cref="RunCoreAsync"/>, emitting the answer as a single update.</summary>
     /// <remarks>
