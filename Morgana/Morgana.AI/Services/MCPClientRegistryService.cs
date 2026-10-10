@@ -59,6 +59,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     /// <param name="logger">Logger for pool diagnostics.</param>
     public MCPClientRegistryService(ILogger logger)
     {
+        // Both pools start empty: a server is connected when the first agent declaring it is built.
         this.logger = logger;
         mcpClients = new ConcurrentDictionary<string, MCPClient>();
         reconnectGates = new ConcurrentDictionary<string, SemaphoreSlim>();
@@ -78,6 +79,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     /// </summary>
     public async Task<MCPClient> GetOrCreateClientAsync(UsesMCPServerAttribute serverAttribute)
     {
+        // A registry being shut down opens no new session.
         ObjectDisposedException.ThrowIf(disposed, this);
 
         // What identifies one server across every agent that declares it: two agents naming the same
@@ -92,12 +94,14 @@ public class MCPClientRegistryService : IMCPClientRegistryService
             if (pooledMCPClient.IsSessionEnded)
                 return await ReconnectAsync(serverAttribute, pooledMCPClient);
 
+            // The common case: the session of an earlier agent serves this one.
             logger.LogDebug("Reusing existing MCP client for: {Key}", poolKey);
             return pooledMCPClient;
         }
 
         try
         {
+            // Marks the one agent per server that pays for the handshake.
             logger.LogInformation("Creating new MCP client for: {Key}", poolKey);
 
             // Reaches the server for real, handshake included: an unreachable endpoint fails here, while
@@ -108,6 +112,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
             // atomic add drops the transport it just opened rather than leaking an unpooled session.
             if (mcpClients.TryAdd(poolKey, mcpClient))
             {
+                // This session is now the one every agent declaring the server will share.
                 logger.LogInformation("Successfully connected to MCP server: {Key}", poolKey);
                 return mcpClient;
             }
@@ -115,10 +120,13 @@ public class MCPClientRegistryService : IMCPClientRegistryService
             // The session this call opened is closed again: the winner's is the one every agent will
             // share, so keeping a second open would leave a connection nobody can reach.
             await mcpClient.DisposeAsync();
+
+            // The key is pooled, as the failed add proves, so the lookup cannot miss.
             return mcpClients[poolKey];
         }
         catch (Exception ex)
         {
+            // The agent that declared this server cannot be built without it, so the failure carries the server's name upward.
             logger.LogError(ex, "Failed to connect to MCP server: {Key}", poolKey);
             throw new InvalidOperationException($"Failed to connect to MCP server '{poolKey}'", ex);
         }
@@ -134,6 +142,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
             return discoveredTools.Select(discoveredTool => new ToolBinding(discoveredTool, mcpClient)).ToArray();
         });
 
+        // The agent holds these tools for its whole conversation and they follow the server across sessions.
         return [.. toolBindings.Select(toolBinding => new ReconnectingMCPTool(toolBinding, serverAttribute, this))];
     }
 
@@ -145,6 +154,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     /// </summary>
     private async Task<T> ExecuteWithReconnectAsync<T>(UsesMCPServerAttribute serverAttribute, Func<MCPClient, Task<T>> operation)
     {
+        // The pooled session the operation first runs on.
         MCPClient mcpClient = await GetOrCreateClientAsync(serverAttribute);
         try
         {
@@ -155,6 +165,8 @@ public class MCPClientRegistryService : IMCPClientRegistryService
             // Only the first caller meeting the ended session sees the server's 404, the others see their call
             // cancelled: the ended session is the signal, whatever the exception.
             logger.LogWarning(ex, "MCP session ended for {Key}; reconnecting and retrying once", PoolKey(serverAttribute));
+
+            // The single retry runs on the replacement session; a failure of its own is not retried again.
             MCPClient reconnectedMCPClient = await ReconnectAsync(serverAttribute, mcpClient);
             return await operation(reconnectedMCPClient);
         }
@@ -167,8 +179,11 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     private async Task<MCPClient> ReconnectAsync(UsesMCPServerAttribute serverAttribute, MCPClient endedMCPClient)
     {
         string poolKey = PoolKey(serverAttribute);
+
+        // One gate per server, so the replacement of one server's session never waits on another's.
         SemaphoreSlim reconnectGate = reconnectGates.GetOrAdd(poolKey, _ => new SemaphoreSlim(1, 1));
 
+        // Conversations meeting the same ended session queue here and only the first opens a new one.
         await reconnectGate.WaitAsync();
         try
         {
@@ -200,6 +215,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         }
         finally
         {
+            // The next conversation waiting on this server may now adopt the replacement.
             reconnectGate.Release();
         }
     }
@@ -229,10 +245,12 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         /// <summary>Captures the declaration the model sees from the tool as first discovered.</summary>
         public ReconnectingMCPTool(ToolBinding discoveredToolBinding, UsesMCPServerAttribute serverAttribute, MCPClientRegistryService registry)
         {
+            // The tool starts bound to the session it was discovered on.
             toolBinding = discoveredToolBinding;
             this.serverAttribute = serverAttribute;
             this.registry = registry;
 
+            // The model keeps seeing the declaration of the tool as first discovered, whatever session serves the call.
             Name = discoveredToolBinding.Tool.Name;
             Description = discoveredToolBinding.Tool.Description;
             JsonSchema = discoveredToolBinding.Tool.JsonSchema;
@@ -262,10 +280,12 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         /// </summary>
         protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
         {
+            // A call goes out on a session known to be alive: sending on an ended one would fail for the user.
             ToolBinding liveToolBinding = toolBinding.MCPClient.IsSessionEnded
                 ? await RebindToLiveSessionAsync(cancellationToken)
                 : toolBinding;
 
+            // Sent once: the call may take effect on the server, so a failure is never retried.
             return await liveToolBinding.Tool.InvokeAsync(arguments, cancellationToken);
         }
 
@@ -275,13 +295,18 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         /// </summary>
         private async Task<ToolBinding> RebindToLiveSessionAsync(CancellationToken cancellationToken)
         {
+            // Discovery has no effect on the server, so it may be retried on a replaced session.
             toolBinding = await registry.ExecuteWithReconnectAsync(serverAttribute, async mcpClient =>
             {
                 IList<McpClientTool> discoveredTools = await mcpClient.DiscoverToolsAsync(cancellationToken);
+
+                // A server that dropped the tool since leaves this call nothing to run.
                 McpClientTool discoveredTool = discoveredTools.FirstOrDefault(tool => string.Equals(tool.Name, Name, StringComparison.Ordinal))
                     ?? throw new InvalidOperationException($"MCP server '{serverAttribute.Command}' no longer advertises tool '{Name}'.");
                 return new ToolBinding(discoveredTool, mcpClient);
             });
+
+            // The call that triggered the rebinding runs on this binding.
             return toolBinding;
         }
     }
@@ -306,6 +331,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
             }
             catch (Exception ex)
             {
+                // A server that will not close cleanly is logged and left: the pool no longer holds it.
                 logger.LogError(ex, "Error disconnecting MCP client: {Key}", poolKey);
             }
         }
@@ -314,6 +340,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     /// <summary>Disconnects all MCP clients and clears the pool (idempotent).</summary>
     public async Task DisconnectAllAsync()
     {
+        // Reports how many sessions the shutdown has to close.
         logger.LogInformation("Disconnecting {McpClientsCount} MCP clients...", mcpClients.Count);
 
         // Disconnect in parallel (network I/O may block); failures caught per-client to avoid cascading
@@ -323,6 +350,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         // instead of receiving one already being torn down.
         mcpClients.Clear();
 
+        // Marks the end of the shutdown for the operator.
         logger.LogInformation("All MCP clients disconnected");
     }
 
@@ -338,6 +366,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         }
         catch (Exception ex)
         {
+            // Absorbed so that one failing server does not stop the others from being closed.
             logger.LogError(ex, "Error disconnecting MCP client: {Key}", key);
         }
     }
@@ -347,6 +376,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     /// <summary>Synchronously disconnects all pooled clients via sync-over-async (idempotent).</summary>
     public void Dispose()
     {
+        // A second disposal finds the pool already closed and does nothing.
         if (!disposed)
         {
             DisconnectAllAsync().GetAwaiter().GetResult();
@@ -362,6 +392,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     /// </summary>
     public async ValueTask DisposeAsync()
     {
+        // A second disposal finds the pool already closed and does nothing.
         if (!disposed)
         {
             await DisconnectAllAsync();
@@ -405,6 +436,7 @@ public class MCPClient : IAsyncDisposable
     /// </summary>
     private MCPClient(McpClient mcpClient, string serverLabel, ILogger logger)
     {
+        // The wrapper takes over a session that is already open and is labelled as the pool keys it.
         this.mcpClient   = mcpClient;
         this.ServerLabel = serverLabel;
         this.logger      = logger;
@@ -504,12 +536,14 @@ public class MCPClient : IAsyncDisposable
     {
         try
         {
+            // Traces each discovery, since one runs at every agent creation.
             logger.LogDebug("Discovering tools from: {ServerLabel}", ServerLabel);
 
             // Asked of the server on every agent creation, never cached: what a server offers is its own
             // to change. An agent built now must see what it offers now.
             IList<McpClientTool> tools = await mcpClient.ListToolsAsync(cancellationToken: cancellationToken);
 
+            // Reports what the server offers this agent.
             logger.LogInformation("Discovered {ToolsCount} tools from: {ServerLabel}", tools.Count, ServerLabel);
 
             // Handed back as the server described them, schemas and prose included: their author is
@@ -535,21 +569,22 @@ public class MCPClient : IAsyncDisposable
     {
         try
         {
+            // Traces each call with the tool's name and never its arguments, which may carry personal data.
             logger.LogDebug("Calling tool '{ToolName}' on: {ServerLabel}", toolName, ServerLabel);
 
-            // The SDK expects IReadOnlyDictionary<string, object?> but callers build a plain
-            // Dictionary<string, object>. The 'as' cast is safe: Dictionary implements the
-            // interface and null is a valid sentinel meaning "no arguments".
+            // A call without arguments sends none.
             CallToolResult result = await mcpClient.CallToolAsync(
                 toolName,
                 arguments as IReadOnlyDictionary<string, object?>,
                 cancellationToken: cancellationToken);
 
+            // Records that the server answered, whatever the answer says.
             logger.LogDebug("Tool '{ToolName}' executed successfully", toolName);
             return result;
         }
         catch (Exception ex)
         {
+            // Logged where the server has a name then rethrown: the caller decides what the user is told.
             logger.LogError(ex, "Failed to call tool '{ToolName}' on: {ServerLabel}", toolName, ServerLabel);
             throw;
         }
@@ -562,11 +597,13 @@ public class MCPClient : IAsyncDisposable
     {
         try
         {
+            // Names the server whose session is closing.
             logger.LogInformation("Disconnecting from: {ServerLabel}", ServerLabel);
             await mcpClient.DisposeAsync();
         }
         catch (Exception ex)
         {
+            // A session that will not close cleanly is logged and left: nothing can be done with it.
             logger.LogError(ex, "Error disconnecting from: {ServerLabel}", ServerLabel);
         }
     }

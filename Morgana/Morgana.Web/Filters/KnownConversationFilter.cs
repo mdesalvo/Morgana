@@ -27,6 +27,7 @@ public sealed class KnownConversationFilter(
             return;
         }
 
+        // The conversation is on record: the action may serve it.
         await next();
     }
 }

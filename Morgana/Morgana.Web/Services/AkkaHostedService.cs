@@ -9,6 +9,7 @@ namespace Morgana.Web.Services;
 /// </summary>
 public class AkkaHostedService : IHostedService
 {
+    /// <summary>The process-wide actor system, created by the container and stopped here.</summary>
     private readonly ActorSystem _actorSystem;
 
     /// <summary>
@@ -34,7 +35,7 @@ public class AkkaHostedService : IHostedService
     /// </remarks>
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        // Actor system already initialized in DI container
+        // The container created the actor system when it was first resolved: the host has nothing to start.
         return Task.CompletedTask;
     }
 
@@ -55,6 +56,7 @@ public class AkkaHostedService : IHostedService
     /// </remarks>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        // Conversations stop with the host: their actors end instead of being cut off with the process.
         await _actorSystem.Terminate();
     }
 }

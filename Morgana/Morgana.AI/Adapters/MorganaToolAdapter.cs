@@ -89,6 +89,7 @@ public class MorganaToolAdapter
     /// <param name="promptComposerService">Composes the tool descriptions; null presents them as authored</param>
     public MorganaToolAdapter(ILogger logger, Func<MorganaTool.ToolContext> toolContextFactory, IPromptComposerService? promptComposerService = null)
     {
+        // The three collaborators together are what let a tool's context parameters come from the session.
         this.logger = logger;
         this.toolContextFactory = toolContextFactory;
         this.promptComposerService = promptComposerService;
@@ -104,12 +105,15 @@ public class MorganaToolAdapter
     /// <returns>This adapter for method chaining</returns>
     public MorganaToolAdapter AddTool(string toolName, Delegate toolMethod, Records.ToolDefinition definition)
     {
+        // A name serves one tool: a second registration would silently replace the first.
         if (!toolMethods.TryAdd(toolName, toolMethod))
             throw new InvalidOperationException($"Tool '{toolName}' already registered");
 
+        // A definition that disagrees with its method is refused when the agent is built, not on the first call.
         ValidateToolDefinition(toolMethod, definition);
         toolDefinitions[toolName] = definition;
 
+        // Registrations chain.
         return this;
     }
 
@@ -134,18 +138,17 @@ public class MorganaToolAdapter
     /// <exception cref="InvalidOperationException">Thrown if tool or definition not found or if a context-scoped tool reaches an adapter holding no session</exception>
     public async Task<AIFunction> CreateFunctionAsync(string toolName)
     {
+        // The method and the definition were registered together, so a name that finds one finds the other.
         Delegate implementation = ResolveTool(toolName);
         Records.ToolDefinition definition = toolDefinitions.TryGetValue(toolName, out Records.ToolDefinition? def)
             ? def
             : throw new InvalidOperationException($"Tool definition '{toolName}' not found");
 
-        // Build parameter name → description map; fed to AIFunctionFactory's ParameterDescriptionProvider hook,
-        // which resolves each parameter's description keyword in the generated JSON schema
+        // The model reads a parameter's description only through the schema, so each one is looked up by name there.
         Dictionary<string, string> parameterDescriptions =
             definition.Parameters.ToDictionary(p => p.Name, p => p.Description);
 
-        // Create AIFunction with custom ParameterDescriptionProvider that looks up each parameter's description
-        // from the map; unknown parameters fall back to null, which lets AIFunctionFactory use [Description] attributes (none here)
+        // The tool as the model sees it: the composed description when a composer is present and the authored one otherwise.
         AIFunction function = AIFunctionFactory.Create(implementation,
             new AIFunctionFactoryOptions
             {
@@ -175,6 +178,7 @@ public class MorganaToolAdapter
                 }
             });
 
+        // The parameters that the framework fills from the session instead of asking the model for them.
         string[] contextParameters = [.. definition.Parameters
             .Where(p => string.Equals(p.Scope?.Trim(), Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
             .Select(p => p.Name)];
@@ -225,17 +229,17 @@ public class MorganaToolAdapter
         ParameterInfo[] methodParams = implementation.Method.GetParameters();
         List<Records.ToolParameter> definitionParams = [.. definition.Parameters];
 
+        // The model is shown the definition and the call lands on the method, so the two must list the same parameters.
         if (methodParams.Length != definitionParams.Count)
             throw new ArgumentException($"Parameter count mismatch: method has {methodParams.Length}, definition has {definitionParams.Count}");
 
         foreach (ParameterInfo methodParam in methodParams)
         {
-            ParameterInfo param = methodParam;
-            Records.ToolParameter defParam = definitionParams.FirstOrDefault(p => p.Name == param.Name)
+            Records.ToolParameter defParam = definitionParams.FirstOrDefault(p => p.Name == methodParam.Name)
                                              ?? throw new ArgumentException($"Parameter '{methodParam.Name}' not found in definition");
 
-            bool isOptional = methodParam.HasDefaultValue;
-            if (defParam.Required && isOptional)
+            // A parameter that the model must supply cannot be one that the method lets it omit.
+            if (defParam.Required && methodParam.HasDefaultValue)
                 throw new ArgumentException($"Parameter '{methodParam.Name}' is required in definition but optional in method");
         }
     }
@@ -276,17 +280,20 @@ public class MorganaToolAdapter
             Func<MorganaTool.ToolContext> toolContextFactory,
             ILogger logger) : base(innerFunction)
         {
+            // The wrapper keeps what it needs to resolve the parameters at each invocation.
             this.contextParameters = contextParameters;
             this.toolContextFactory = toolContextFactory;
             this.logger = logger;
 
             // The C# method still requires every one of them: the framework fills them in before
             // the method is reached, so only the model is released from supplying them.
+            // The schema is a generated object, so it always parses as one.
             JsonObject schema = JsonNode.Parse(innerFunction.JsonSchema.GetRawText())!.AsObject();
             if (schema["required"] is JsonArray required)
                 schema["required"] = new JsonArray([.. required
                     .Where(name => !contextParameters.Contains(name!.GetValue<string>(), StringComparer.Ordinal))
                     .Select(name => name!.DeepClone())]);
+            // The relaxed schema is what the model is shown for the tool's whole life.
             jsonSchema = JsonSerializer.SerializeToElement(schema);
         }
 
@@ -298,7 +305,10 @@ public class MorganaToolAdapter
         /// </summary>
         protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
         {
+            // The factory is read at the call, since the session it points to belongs to the turn in flight.
             MorganaTool.ToolContext toolContext = toolContextFactory();
+
+            // The values that neither the model nor the session could supply, which the user has to be asked for.
             List<string> missingParameters = [];
 
             // The model's call stays on the record as the model wrote it: a value the session supplies reaches
@@ -318,15 +328,18 @@ public class MorganaToolAdapter
             {
                 // A value that the model passes came from the user on this turn or an earlier one: it is
                 // stored before use, so every later turn and every agent sharing it finds it held.
-                string? supplied = AsText(arguments.TryGetValue(parameter, out object? argument) ? argument : null);
+                string? supplied = AsText(arguments.GetValueOrDefault(parameter));
                 if (supplied is not null)
                 {
                     argumentsForTool[parameter] = supplied;
+
+                    // A colleague's answer uses the value without leaving it behind.
                     if (servingConsultation)
                         continue;
 
                     await toolContext.Provider.SetVariableAsync(toolContext.Session, parameter, supplied);
 
+                    // The harness reads this line to observe that the value was stored.
                     logger.LogInformation(
                         Constants.ObservableLogs.ContextSet,
                         Constants.ObservableLogs.ToolName, Name, Constants.ObservableLogs.Set, parameter, supplied);
@@ -339,12 +352,14 @@ public class MorganaToolAdapter
                 {
                     argumentsForTool[parameter] = held;
 
+                    // The harness reads this line to observe that the session answered.
                     logger.LogInformation(
                         Constants.ObservableLogs.ContextHit,
                         Constants.ObservableLogs.ToolName, Name, Constants.ObservableLogs.Hit, parameter, held);
                     continue;
                 }
 
+                // Neither the model nor the session holds it: the harness reads this line and the user is asked below.
                 logger.LogInformation(
                     Constants.ObservableLogs.ContextMiss,
                     Constants.ObservableLogs.ToolName, Name, Constants.ObservableLogs.Miss, parameter);
@@ -360,6 +375,7 @@ public class MorganaToolAdapter
                     [Constants.Placeholders.MissingValues] = string.Join(", ", missingParameters)
                 });
 
+            // Every parameter holds a value: the tool runs on the resolved arguments.
             return await base.InvokeCoreAsync(argumentsForTool, cancellationToken);
         }
 

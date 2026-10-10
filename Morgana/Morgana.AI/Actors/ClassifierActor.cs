@@ -36,9 +36,10 @@ public class ClassifierActor : MorganaActor
         IClassifierService classifierService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
+        // The service owns the whole strategy, so the actor stays a relay between the supervisor and it.
         this.classifierService = classifierService;
 
-        // Requests the classification of the user message to the classifier service (see ClassifyMessageAsync)
+        // The supervisor asks for the intent of each message that arrives while no agent is active.
         ReceiveAsync<Records.UserMessage>(ClassifyMessageAsync);
     }
 
@@ -48,6 +49,7 @@ public class ClassifierActor : MorganaActor
     /// <param name="msg">User message to classify.</param>
     private async Task ClassifyMessageAsync(Records.UserMessage msg)
     {
+        // The supervisor waits for the answer: the sender is captured before the first await.
         IActorRef originalSender = Sender;
 
         try
@@ -57,6 +59,7 @@ public class ClassifierActor : MorganaActor
             Records.ClassificationResult classificationResult =
                 await classifierService.ClassifyAsync(msg.ConversationId, msg.Text);
 
+            // The log line shows how sure the classifier was, which is what an operator reads when a message is misrouted.
             actorLogger.Info(
                 "Classification complete for conversation {0}: intent='{1}', confidence={2}",
                 msg.ConversationId,
@@ -71,7 +74,7 @@ public class ClassifierActor : MorganaActor
         {
             actorLogger.Error(ex, "ClassifierActor: unexpected error during classification");
 
-            // Replies the supervisor with a specific technical failure
+            // The supervisor owns the fallback to "other": the actor only reports that classification failed.
             originalSender.Tell(new Status.Failure(ex));
         }
     }

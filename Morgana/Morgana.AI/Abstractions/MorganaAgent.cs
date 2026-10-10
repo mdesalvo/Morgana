@@ -104,6 +104,7 @@ public class MorganaAgent : MorganaActor
         ILogger agentLogger,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
+        // Persistence and logger are the agent's own; the base class already holds everything an actor shares.
         this.persistenceService = persistenceService;
         this.agentLogger = agentLogger;
 
@@ -138,6 +139,7 @@ public class MorganaAgent : MorganaActor
 
         agentLogger.LogInformation("Deserialized AgentSession for conversation {ConversationId}", conversationId);
 
+        // The caller receives the same instance that the actor holds, so both act on one session.
         return aiAgentSession;
     }
 
@@ -158,8 +160,7 @@ public class MorganaAgent : MorganaActor
         // conversation — an exchange that leaves no trace legislating for the whole shop.
         if (consultationSession is not null)
         {
-            agentLogger.LogInformation(
-                "Agent {AgentIntent} is serving a consultation: shared context variable '{Key}' stays local to the exchange", AgentIntent, key);
+            agentLogger.LogInformation("Agent {AgentIntent} is serving a consultation: shared context variable '{Key}' stays local to the exchange", AgentIntent, key);
             return;
         }
 
@@ -178,6 +179,8 @@ public class MorganaAgent : MorganaActor
     /// <param name="req">Agent request containing the user's message, optional classification and OTel TurnContext</param>
     protected virtual async Task ExecuteAgentAsync(Records.AgentRequest req)
     {
+        // The sender is captured before the first await: it is the router waiting for this turn's answer
+        // and the actor's Sender does not name it once the turn has yielded.
         IActorRef? senderRef = Sender;
 
         // Open morgana.agent span as child of the turn span propagated from the supervisor.
@@ -187,6 +190,7 @@ public class MorganaAgent : MorganaActor
             ActivityKind.Internal,
             req.TurnContext);
 
+        // The tags let a trace be found by conversation and by the agent that served the turn.
         agentSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
         agentSpan?.SetTag(MorganaTelemetry.AgentName, GetType().Name);
         agentSpan?.SetTag(MorganaTelemetry.AgentIntent, AgentIntent);
@@ -218,6 +222,8 @@ public class MorganaAgent : MorganaActor
 
                 agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.CreateAgentConversation));
             }
+
+            // Tagged after the session exists, so a trace names the row that the turn was served from.
             agentSpan?.SetTag(MorganaTelemetry.AgentIdentifier, AgentIdentifier);
 
             // Hydrate the agent's local context from the conversation-scoped shared_context
@@ -265,6 +271,7 @@ public class MorganaAgent : MorganaActor
                     AgentIntent, approved ? "runs the approved" : "declines", pendingApprovals.Count);
             }
 
+            // Dated here because the history is merged chronologically across agents.
             ChatMessage userMessage = new ChatMessage(ChatRole.User, userContents) { CreatedAt = DateTimeOffset.UtcNow };
 
             // A press on a button leading to one of the agent's tools is already the user's consent to it,
@@ -299,13 +306,16 @@ public class MorganaAgent : MorganaActor
             //   2. Channel capability — we don't even attach to the LLM streaming endpoint
             //      when the outbound channel can't deliver chunks to the user. When Capabilities
             //      is null (legacy/test paths) we assume the channel supports streaming.
+            // Both signals are read once per turn: a channel cannot change its capabilities mid-turn.
             bool streamingConfigEnabled = configuration.GetValue("Morgana:AdaptiveMessaging:EnableStreamingResponse", true);
             bool channelSupportsStreaming = req.Capabilities?.SupportsStreaming ?? true;
             bool useStreaming = streamingConfigEnabled && channelSupportsStreaming;
 
+            // Said once per turn so that a batched answer on a streaming-capable deployment is explained.
             if (!channelSupportsStreaming)
                 agentLogger.LogInformation("Agent '{AgentIntent}' bypassing LLM streaming: channel does not advertise SupportsStreaming", AgentIntent);
 
+            // The text the user will read, whichever way the model delivers it.
             StringBuilder fullResponse = new StringBuilder();
 
             // One pass of the model over the session, its text streamed or batched into fullResponse.
@@ -313,6 +323,7 @@ public class MorganaAgent : MorganaActor
             {
                 if (useStreaming)
                 {
+                    // Time to first token is what the user waits before seeing the agent answer.
                     Stopwatch firstChunkStopwatch = Stopwatch.StartNew();
                     bool firstChunkEmitted = false;
                     string? lastTextMessageId = null;
@@ -343,7 +354,7 @@ public class MorganaAgent : MorganaActor
                             fullResponse.Append(chunk.Text);
                             senderRef.Tell(new Records.AgentStreamChunk(chunk.Text));
 
-                            // Record time-to-first-token on the very first chunk
+                            // The first text chunk closes the wait the user experienced.
                             if (!firstChunkEmitted)
                             {
                                 firstChunkEmitted = true;
@@ -367,6 +378,7 @@ public class MorganaAgent : MorganaActor
                 }
                 else
                 {
+                    // Without streaming the user waits for the whole answer, which is what the span records as first token.
                     Stopwatch responseStopwatch = Stopwatch.StartNew();
                     // Same turn as the streaming branch, answering the same already-filed phrase: nothing
                     // reaches the channel until the model and every tool it decided to call, are done.
@@ -388,6 +400,7 @@ public class MorganaAgent : MorganaActor
                         fullResponse.Append(responseMessage.Text);
                     }
 
+                    // The batched answer reaches the user as one piece, so its latency is the time to first token.
                     long ttft = responseStopwatch.ElapsedMilliseconds;
                     agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.EventFirstChunk));
                     agentSpan?.SetTag(MorganaTelemetry.AgentTtftMs, ttft);
@@ -395,6 +408,7 @@ public class MorganaAgent : MorganaActor
                 }
             }
 
+            // The first pass answers the user's phrase.
             await RunModelAsync();
 
             // A call that needs approval, to the very tool whose button opened this turn, was approved by
@@ -436,6 +450,8 @@ public class MorganaAgent : MorganaActor
             // the turn on its behalf. A turn that still declares nothing is answered and ends.
             Records.TurnReply turnReply = GetTurnReplyFromContext(aiAgentSession)
                                           ?? new Records.TurnReply(Records.AwaitedFromUser.Nothing, false, [], null);
+
+            // The closure belongs to this turn alone: left in the session it would close the next turn too.
             aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnReply);
 
             // A user who leaves abandons the workflow where it stands, undoing nothing. Silence, a disconnection
@@ -456,14 +472,16 @@ public class MorganaAgent : MorganaActor
             (List<QuickReply>? quickReplies, bool isCompleted) = awaitsApproval
                 ? (frameworkReplies.Approval is { Count: > 0 } approvalButtons ? [.. approvalButtons] : null, false)
                 : turnReply.ToDelivery(frameworkReplies);
+            // An approval question carries no card: the user is asked one thing.
             RichCard? richCard = awaitsApproval ? null : turnReply.Card;
             bool hasQuickReplies = quickReplies is not null;
 
+            // The line the harness and the operator read to see how the turn closed.
             agentLogger.LogInformation(
                 "Agent response analysis: Awaits={Awaits}, UserIsLeaving={UserIsLeaving}, QuickReplies={QuickReplies}, HasRichCard={HasRichCard}, IsCompleted={IsCompleted}",
                 turnReply.Awaits, turnReply.UserIsLeaving, quickReplies?.Count ?? 0, richCard is not null, isCompleted);
 
-            // Finalize agent span with outcome attributes
+            // The span carries the turn's outcome and nothing of the user's content beyond a short preview.
             string responsePreview = Preview(llmResponseText);
             agentSpan?.SetTag(MorganaTelemetry.AgentIsCompleted, isCompleted);
             agentSpan?.SetTag(MorganaTelemetry.AgentHasQuickReplies, hasQuickReplies);
@@ -476,8 +494,7 @@ public class MorganaAgent : MorganaActor
             // the span has been tagged, so telemetry still records that the colleague was consulted.
             StripPeerConsultations(aiAgentSession, historyBaseline);
 
-            // Tag this turn's user-facing assistant message — the LAST assistant message that
-            // actually carries text content.
+            // The last assistant message that carries text is the one the user reads: it receives the delivery marks.
             ChatMessage? finalAssistantMessage = aiChatHistoryProvider
                 .GetMessages(aiAgentSession)
                 .Skip(historyBaseline)
@@ -491,6 +508,7 @@ public class MorganaAgent : MorganaActor
                 finalAssistantMessage = new ChatMessage(ChatRole.Assistant, llmResponseText) { CreatedAt = DateTimeOffset.UtcNow };
                 aiChatHistoryProvider.AppendMessage(aiAgentSession, finalAssistantMessage);
             }
+            // The marks make the message appear in the transcript with the text, buttons and card that were delivered.
             if (finalAssistantMessage is not null)
             {
                 finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
@@ -519,13 +537,14 @@ public class MorganaAgent : MorganaActor
             await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted);
             agentLogger.LogInformation("Saved conversation state for {AgentIdentifier}", AgentIdentifier);
 
-            // Dated as the history keeps it, so a client catching up recognises the reply it was pushed
+            // Dated as the history keeps it, so a client catching up recognises the reply it was pushed.
             senderRef.Tell(new Records.AgentResponse(
                 llmResponseText, isCompleted, quickReplies, richCard, finalAssistantMessage?.CreatedAt?.UtcDateTime));
         }
         catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } cre
                                      && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
         {
+            // The provider refused the content itself: the user is told so by the supervisor and no retry would pass.
             agentLogger.LogWarning(ex, "Content filter rejection in {Name} for conversation {ConversationId}", GetType().Name, conversationId);
             agentSpan?.SetStatus(ActivityStatusCode.Error, "content_filter");
             agentSpan?.AddException(ex);
@@ -535,6 +554,7 @@ public class MorganaAgent : MorganaActor
         }
         catch (Exception ex)
         {
+            // The failure is handed to the actor's own mailbox: the waiting sender is answered from a handler that can await.
             agentLogger.LogError(ex, "Error in {Name}", GetType().Name);
             agentSpan?.SetStatus(ActivityStatusCode.Error, ex.Message);
             agentSpan?.AddException(ex);
@@ -559,6 +579,7 @@ public class MorganaAgent : MorganaActor
     /// </summary>
     protected virtual async Task ServeConsultationAsync(Records.PeerConsultation consultation)
     {
+        // The sender is the hosted agent waiting for the answer: captured before the turn yields.
         IActorRef senderRef = Sender;
 
         // Parented on the caller's turn context, which travelled with the question: the answer shows in
@@ -568,6 +589,7 @@ public class MorganaAgent : MorganaActor
             ActivityKind.Internal,
             consultation.TurnContext);
 
+        // The tags let a trace tell who asked whom and what.
         consultationSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
         consultationSpan?.SetTag(MorganaTelemetry.ConsultationCaller, consultation.CallerIntent);
         consultationSpan?.SetTag(MorganaTelemetry.ConsultationTarget, AgentIntent);
@@ -626,6 +648,7 @@ public class MorganaAgent : MorganaActor
             // wrote dies with the session it wrote it on and the agent's own row — if it has one —
             // is left exactly as the user's last turn left it.
 
+            // The answer, its buttons and its card travel back as one response for the asking agent to read.
             senderRef.Tell(new Records.PeerConsultationResponse(
                 response.Text.Trim(),
                 awaitsReply || quickReplies?.Count > 0,
@@ -658,11 +681,15 @@ public class MorganaAgent : MorganaActor
         }
     }
 
+    /// <summary>Answers the waiting sender with Morgana's generic error after a turn threw.</summary>
     private async Task HandleAgentFailureAsync(Records.FailureContext failure)
     {
         agentLogger.LogError(failure.Failure.Cause, "Agent execution failed in {Name}", GetType().Name);
 
+        // The error is worded in morgana.json, in Morgana's own voice.
         Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
+
+        // The turn is closed as completed: the user is not left in a conversation that is waiting on a dead turn.
         failure.OriginalSender.Tell(new Records.AgentResponse(morganaPrompt.GetMessage(Constants.Messages.GenericError), true, null));
     }
 
@@ -753,6 +780,7 @@ public class MorganaAgent : MorganaActor
     /// <returns>Comma-separated tool names in call order, repetitions kept since a repeated call is itself a signal; empty when the turn called no tool.</returns>
     protected string GetToolsInvoked(AgentSession session, int historyBaseline)
     {
+        // Everything appended since the baseline is this turn's work.
         List<AIContent> turnContents = [.. aiChatHistoryProvider.GetMessages(session)
             .Skip(historyBaseline)
             .SelectMany(m => m.Contents)];
@@ -765,6 +793,7 @@ public class MorganaAgent : MorganaActor
             .OfType<FunctionCallContent>()
             .Select(call => call.CallId)];
 
+        // The calls that ran, in the order the model made them.
         return string.Join(", ", turnContents.OfType<FunctionCallContent>()
             .Where(call => !declined.Contains(call.CallId))
             .Select(call => call.Name));
@@ -779,23 +808,27 @@ public class MorganaAgent : MorganaActor
     protected string? PressedActionTool(AgentSession session, string? userText)
     {
         // The buttons that the last turn delivered, as it recorded them on its user-facing message.
-        object? recorded = null;
-        aiChatHistoryProvider.GetMessages(session)
+        object? recorded = aiChatHistoryProvider.GetMessages(session)
             .LastOrDefault(message => message.AdditionalProperties?.ContainsKey(Constants.MessageProperties.UserFacing) == true)?
-            .AdditionalProperties?.TryGetValue(Constants.MessageProperties.TurnQuickReplies, out recorded);
+            .AdditionalProperties?.GetValueOrDefault(Constants.MessageProperties.TurnQuickReplies);
+
+        // A saved session hands the recorded buttons back as JSON, a live one as the string that was stored.
         string? offered = recorded switch
         {
             string text => text,
             JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
             _ => null
         };
+        // No buttons were offered or nothing was typed: the message cannot be a press.
         if (string.IsNullOrEmpty(offered) || string.IsNullOrWhiteSpace(userText))
             return null;
 
+        // A press sends the button's own value, so the text that matches an offered value is that button.
         List<QuickReply>? buttons = JsonSerializer.Deserialize<List<QuickReply>>(offered, Records.DefaultJsonSerializerOptions);
         QuickReply? pressed = buttons?.FirstOrDefault(button =>
             string.Equals(button.Value, userText.Trim(), StringComparison.OrdinalIgnoreCase));
 
+        // Only an action button leads to a tool: any other button, or none, leaves the message an ordinary request.
         return pressed is null ? null : Records.TurnReply.ActionTool(pressed.Id);
     }
 
@@ -805,6 +838,7 @@ public class MorganaAgent : MorganaActor
     /// <param name="session">Active agent session.</param>
     protected List<ToolApprovalRequestContent> GetPendingApprovals(AgentSession session)
     {
+        // A request is pending until a response with its id exists anywhere in the stored history.
         List<AIContent> contents = [.. aiChatHistoryProvider.GetMessages(session).SelectMany(message => message.Contents)];
         HashSet<string> answered = [.. contents.OfType<ToolApprovalResponseContent>().Select(response => response.RequestId)];
 
@@ -831,10 +865,12 @@ public class MorganaAgent : MorganaActor
 
         try
         {
+            // The closure is the record that Reply serialized.
             return JsonSerializer.Deserialize<Records.TurnReply>(turnReplyJson, Records.DefaultJsonSerializerOptions);
         }
         catch (JsonException ex)
         {
+            // An unreadable closure is treated as none: the turn is answered and ends instead of failing after the model has spoken.
             agentLogger.LogError(ex, "Failed to read the turn's closure from context");
             return null;
         }

@@ -33,8 +33,8 @@ public class ConfigurationPromptComposerService : IPromptComposerService
 
     /// <summary>
     /// Names the asking party when the request declares no intent. Only an agent of a Morgana declares
-    /// one and the A2A door admits only declared systems, so an unnamed caller is precisely that — and
-    /// saying so is a fact. A phrase where every other caller is a bare word, which is why every caller
+    /// one and the A2A door admits only declared systems, so an unnamed caller is precisely that.
+    /// Saying so is a fact. A phrase where every other caller is a bare word, which is why every caller
     /// is quoted before it reaches the prose.
     /// </summary>
     private const string UnnamedCaller = "an external system";
@@ -61,9 +61,13 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// <param name="promptResolverService">Resolves the <c>Morgana</c> framework prompt.</param>
     public ConfigurationPromptComposerService(IPromptResolverService promptResolverService)
     {
+        // Deferred to the first composition so that building the composer never reads the prompt source.
         frameworkLayer = new Lazy<Task<FrameworkLayer>>(async () =>
         {
+            // The Morgana prompt carries the four framework sections and every list of policies and templates.
             Records.Prompt prompt = await promptResolverService.ResolveAsync(Constants.Morgana);
+
+            // Tool injections are optional: a framework layer declaring none leaves the model's tools undecorated.
             return new FrameworkLayer(
                 prompt,
                 prompt.GetAdditionalProperty<List<Records.GlobalPolicy>>(Constants.PromptProperties.GlobalPolicies),
@@ -81,7 +85,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
 
         StringBuilder sb = new StringBuilder();
 
-        // Framework
+        // The framework layer opens the prompt and is fenced, so the model reads it as the law over the domain below.
         sb.AppendLine(FrameworkLayerHeader);
         sb.AppendLine();
         sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Target, framework.Prompt.Target));
@@ -97,7 +101,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         sb.AppendLine(FrameworkLayerFooter);
         sb.AppendLine();
 
-        // Domain
+        // The domain layer follows, fenced as subordinate: it carries no policies of its own.
         sb.AppendLine(DomainLayerHeader);
         sb.AppendLine();
         sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Target, domainPrompt.Target));
@@ -111,6 +115,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         sb.AppendLine(DomainLayerFooter);
         sb.AppendLine();
 
+        // The agent's whole instructions, composed once at its creation.
         return sb.ToString();
     }
 
@@ -122,18 +127,18 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         if (!toolDefinition.RequiresExecutionApproval)
             return toolDefinition.Description;
 
+        // The approval guidance is the framework's text and follows the tool's own description.
         FrameworkLayer framework = await frameworkLayer.Value;
         string guidance = Records.Injection.ResolveTemplate(framework.ToolInjections, Constants.ToolInjections.ExecutionApprovalGuidance);
         return guidance.Length == 0 ? toolDefinition.Description : $"{toolDefinition.Description}\n\n{guidance}";
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Describes a colleague's function by the colleague's own words and nothing of the framework's: how to consult one
+    /// is carried by the policy that every peer-capable agent reads and the card's skills are absent on purpose, since
+    /// an inventory of functions is what a caller audits to rule a question out.
+    /// </summary>
     public Task<string> ComposePeerDescriptionAsync(A2A.AgentCard peerCard)
-        // The colleague's own words and nothing of the framework's: how to consult one is already
-        // carried by the policy every peer-capable agent reads and repeating it per colleague would
-        // pay for it once per function. The card's skills are deliberately absent too — an inventory
-        // of the colleague's functions is what a caller audits to rule a question out and what falls
-        // to that agent is the colleague's own to state.
         => Task.FromResult(peerCard.Description ?? "");
 
     /// <inheritdoc />
@@ -162,6 +167,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// <inheritdoc />
     public async Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question)
     {
+        // Both templates are the framework's: the question is the only text here that somebody else wrote.
         FrameworkLayer framework = await frameworkLayer.Value;
 
         // How to answer a colleague. It is spliced in front of the incoming question instead of into
@@ -195,8 +201,10 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// <inheritdoc />
     public async Task<string?> ComposeTurnClosureRequestAsync()
     {
+        // The request that follows a turn which the model wrote without closing it.
         FrameworkLayer framework = await frameworkLayer.Value;
         string request = Records.Injection.ResolveTemplate(framework.PromptInjections, Constants.PromptInjections.TurnClosureRequest);
+        // A deployment declaring no request has the turn closed without one.
         return request.Length == 0 ? null : request;
     }
 
@@ -207,6 +215,8 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // carried by every prompt for an event most turns never meet.
         FrameworkLayer framework = await frameworkLayer.Value;
         string template = Records.Injection.ResolveTemplate(framework.ToolInjections, Constants.ToolInjections.ReplyNotAccepted);
+
+        // A deployment declaring no text has the model told the bare reason.
         return template.Length == 0 ? reason : template.Replace(Constants.Placeholders.ReplyNotAcceptedReason, reason);
     }
 
@@ -216,12 +226,15 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // The result is spliced last: it is the tool's text and is never read for placeholders of this layer.
         FrameworkLayer framework = await frameworkLayer.Value;
         string template = Records.Injection.ResolveTemplate(framework.ToolInjections, Constants.ToolInjections.EarlierToolResult);
+
+        // A deployment declaring no text leaves the earlier result unmarked.
         return template.Length == 0 ? null : template.Replace(Constants.Placeholders.EarlierToolResultContent, result);
     }
 
     /// <inheritdoc />
     public async Task<string?> ComposeWorkflowResultAsync(string workflow, string? step, string result)
     {
+        // A result with a step is the workflow reaching it: one with none is the workflow ending.
         FrameworkLayer framework = await frameworkLayer.Value;
         string template = Records.Injection.ResolveTemplate(
             framework.ToolInjections,
@@ -237,6 +250,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
+    /// <summary>Resolves one text that the framework's own tools return, filling its placeholders from the values.</summary>
     public async Task<string> ComposeToolResultAsync(string name, IReadOnlyDictionary<string, string>? values = null)
         => Records.Injection.Resolve((await frameworkLayer.Value).ToolInjections, name, values);
 
@@ -251,6 +265,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
 
         sb.AppendLine(GlobalPoliciesHeader);
 
+        // One line per policy: its name and what it requires, in the order the model must read them.
         foreach (Records.GlobalPolicy policy in policies
                      // The one rule whose subject may not exist. An agent outside the A2A topology is
                      // never asked by a colleague, so it would carry this on every turn of its life.
@@ -267,6 +282,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
 
         sb.AppendLine(GlobalPoliciesFooter);
 
+        // The trailing newline is dropped so that the caller decides the spacing around the block.
         return sb.ToString().TrimEnd();
     }
 

@@ -22,7 +22,7 @@ public sealed class ChannelAuthenticationFilter(
     /// <inheritdoc />
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
-        // The liveness probe is asked by infrastructure holding no channel key
+        // The liveness probe is asked by infrastructure holding no channel key.
         if (context.ActionDescriptor.EndpointMetadata.OfType<IAllowAnonymous>().Any())
             return;
 

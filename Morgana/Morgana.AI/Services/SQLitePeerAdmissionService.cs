@@ -91,9 +91,11 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
 
         try
         {
+            // The ledger is shared by every conversation of every partner, hence a file of its own.
             await using SqliteConnection connection = new SqliteConnection($"Data Source={ResolveDatabasePath()}");
             await connection.OpenAsync();
 
+            // No conversation creates this schema, so the first admission does.
             await EnsureLedgerAsync(connection);
 
             // Counting and recording are one act: two requests weighed at once would otherwise each
@@ -111,11 +113,13 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
                 "DELETE FROM peer_conversation_log WHERE opened_at < $horizon;",
                 ("$horizon", ToIso(utcNow - Window)));
 
+            // How many conversations this partner opened within the window.
             await using SqliteCommand countCommand = connection.CreateCommand();
             countCommand.Transaction = transaction;
             countCommand.CommandText = "SELECT COUNT(*) FROM peer_conversation_log WHERE issuer = $issuer;";
             countCommand.Parameters.AddWithValue("$issuer", issuer);
 
+            // The count always has a value: a COUNT aggregate answers zero for a partner with no rows.
             long opened = Convert.ToInt64(await countCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 
             // A refusal leaves no trace: counting it would push the system further past its limit on
@@ -131,6 +135,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
                 return new Records.PeerAdmissionResult(IsAdmitted: false, RefusalMessage: refusalMessageByIssuer.GetValueOrDefault(issuer));
             }
 
+            // The opening is admitted and counts against the partner's next request.
             await ExecuteAsync(
                 connection, transaction,
                 "INSERT INTO peer_conversation_log (issuer, opened_at) VALUES ($issuer, $openedAt);",
@@ -140,6 +145,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
             // past one limit.
             await transaction.CommitAsync();
 
+            // The partner may open the conversation.
             return new Records.PeerAdmissionResult(IsAdmitted: true);
         }
         catch (Exception ex)
@@ -152,8 +158,8 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
             // drawing a budget of its own.
             logger.LogError(ex, "Could not weigh the conversations '{Issuer}' has opened; it is turned away", issuer);
 
-            // Answered in the words a partner over its allowance would read, its own entry having
-            // nothing to say about a ledger this installation could not open.
+            // No message accompanies the refusal: the partner's own entry words only the case of an
+            // allowance spent, which is not the case of a ledger this installation could not open.
             return new PeerAdmissionResult(IsAdmitted: false, RefusalMessage: null);
         }
     }
@@ -164,6 +170,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
     {
         await using SqliteCommand command = connection.CreateCommand();
 
+        // Idempotent, since every admission calls it.
         // Indexed by issuer because every question asked of this table is about one partner. Indexed by
         // the instant because the window is what decides which of its rows still count.
         command.CommandText = """
@@ -206,6 +213,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
     /// <summary>Where the ledger file sits, beside the conversations of this installation.</summary>
     private string ResolveDatabasePath()
     {
+        // The directory may not exist on a fresh installation before the first conversation is stored.
         Directory.CreateDirectory(persistenceOptions.StoragePath);
 
         return Path.Combine(persistenceOptions.StoragePath, DatabaseFileName);

@@ -9,6 +9,7 @@ namespace Morgana.Web.Hubs;
 /// </summary>
 public class MorganaHub : Hub
 {
+    /// <summary>Records which connection joined or left which conversation.</summary>
     private readonly ILogger logger;
 
     /// <summary>
@@ -32,6 +33,7 @@ public class MorganaHub : Hub
     /// </remarks>
     public async Task JoinConversation(string conversationId)
     {
+        // The group is named after the conversation: every push for that conversation reaches this connection from now on.
         await Groups.AddToGroupAsync(Context.ConnectionId, conversationId);
 
         logger.LogInformation("Client {ContextConnectionId} joined conversation {ConversationId}", Context.ConnectionId, conversationId);
@@ -44,6 +46,7 @@ public class MorganaHub : Hub
     /// </summary>
     public async Task LeaveConversation(string conversationId)
     {
+        // This connection stops receiving the conversation's pushes while staying connected for others.
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, conversationId);
 
         logger.LogInformation("Client {ContextConnectionId} left conversation {ConversationId}", Context.ConnectionId, conversationId);
@@ -56,6 +59,8 @@ public class MorganaHub : Hub
     public override async Task OnConnectedAsync()
     {
         logger.LogInformation("Client connected: {ContextConnectionId}", Context.ConnectionId);
+
+        // The hub's own connection bookkeeping runs after the line is logged.
         await base.OnConnectedAsync();
     }
 
@@ -67,6 +72,8 @@ public class MorganaHub : Hub
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         logger.LogInformation("Client disconnected: {ContextConnectionId}", Context.ConnectionId);
+
+        // The hub's own connection bookkeeping runs after the line is logged.
         await base.OnDisconnectedAsync(exception);
     }
 }

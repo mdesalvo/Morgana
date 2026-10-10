@@ -50,6 +50,7 @@ public class Anthropic(ILoggerFactory? loggerFactory = null) : MorganaLanguageMo
                 Handlers = [new AttemptLogger(loggerFactory?.CreateLogger<Anthropic>())]
             });
 
+        // The decorator is what the framework talks to: it keeps requests inside Claude's API rules and marks the system prompt for caching.
         return new MorganaAnthropicClient(anthropicClient.AsIChatClient(options.ModelId), loggerFactory);
     }
 
@@ -69,12 +70,14 @@ public class Anthropic(ILoggerFactory? loggerFactory = null) : MorganaLanguageMo
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
+            // The clock covers the single attempt on the wire so that the log can tell a slow answer from a throttled one.
             long startedAt = Stopwatch.GetTimestamp();
 
             HttpResponseMessage response = await base.SendAsync(request, cancellationToken);
 
             double elapsed = Stopwatch.GetElapsedTime(startedAt).TotalSeconds;
 
+            // A throttled or overloaded answer is a warning because the SDK is about to wait and retry; any other answer is routine.
             if (response.StatusCode is HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError)
                 logger?.LogWarning(
                     "Anthropic refused a call with {Status} after {Elapsed:0.0}s and asks to wait {RetryAfter}s; the SDK will retry it",
@@ -83,6 +86,7 @@ public class Anthropic(ILoggerFactory? loggerFactory = null) : MorganaLanguageMo
             else
                 logger?.LogInformation("Anthropic answered {Status} in {Elapsed:0.0}s", (int)response.StatusCode, elapsed);
 
+            // The response travels on untouched: the handler only observes the attempt.
             return response;
         }
     }

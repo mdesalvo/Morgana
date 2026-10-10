@@ -101,9 +101,12 @@ public class ConfigurationLLMService : ILLMService
         foreach (Records.LLMTier tier in Enum.GetValues<Records.LLMTier>())
         {
             IConfigurationSection tierSection = configuration.GetSection($"Morgana:LLM:Tiers:{tier}");
+
+            // The three tiers are all mandatory: an agent or a framework actor may be served by any of them.
             if (!tierSection.Exists())
                 throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier} is missing. All three tiers (Economy, Efficiency, Performance) must be declared.");
 
+            // The provider decides which client the tier is built on, so a tier without one cannot be served.
             if (string.IsNullOrWhiteSpace(tierSection["Provider"]))
                 throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier}:Provider is missing.");
 
@@ -118,19 +121,23 @@ public class ConfigurationLLMService : ILLMService
             if (string.IsNullOrWhiteSpace(maxOutputTokens))
                 throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier}:Options:MaxOutputTokens is missing.");
 
+            // A placeholder left in the ceiling would bind as nothing and let the tier run unbounded.
             if (Constants.SecretOverrides.All.Contains(maxOutputTokens))
                 throw new InvalidOperationException(
                     $"Morgana:LLM:Tiers:{tier}:Options:MaxOutputTokens is still the placeholder '{maxOutputTokens}'. " +
                     $"Override it via User Secrets or environment variables before starting.");
 
+            // The ceiling bounds what one answer may cost: zero or a sign would remove or invert the bound.
             if (!int.TryParse(maxOutputTokens, NumberStyles.None, CultureInfo.InvariantCulture, out int ceiling) || ceiling <= 0)
                 throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier}:Options:MaxOutputTokens must be a positive integer but is '{maxOutputTokens}'.");
         }
 
+        // Every key is now known to be present and well formed, so the binder cannot fail on a missing one.
         Records.LLMTiers tiers = configuration.GetSection("Morgana:LLM").Get<Records.LLMConfiguration>()!.Tiers;
 
         foreach (Records.LLMTier tier in Enum.GetValues<Records.LLMTier>())
         {
+            // The tier as the deployer declared it: provider, connection, options and pricing.
             Records.TierDefinition definition = tiers.For(tier);
 
             // A tier left on its placeholder would otherwise bind and build just fine, then fail
@@ -141,6 +148,7 @@ public class ConfigurationLLMService : ILLMService
                     $"Morgana:LLM:Tiers:{tier}:Options:ModelId is still the placeholder '{definition.Options.ModelId}'. " +
                     $"Override it via User Secrets or environment variables before starting.");
 
+            // Each tier is served by the provider it declares, so a deployment may mix providers across tiers.
             MorganaLanguageModel languageModel = definition.Provider switch
             {
                 Records.LLMProvider.Anthropic => new LanguageModels.Anthropic(loggerFactory),
@@ -150,6 +158,7 @@ public class ConfigurationLLMService : ILLMService
                 _ => throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier}:Provider '{definition.Provider}' is not a known provider.")
             };
 
+            // A connection that cannot work is refused at startup rather than at the first user turn.
             try
             {
                 languageModel.ValidateConnection(definition.Connection);
@@ -167,9 +176,11 @@ public class ConfigurationLLMService : ILLMService
                 WrapWithTelemetry(languageModel.CreateChatClient(definition.Connection, definition.Options)),
                 definition.Options.ToChatOptions());
 
+            // The tier is served from here on: its client, its price and whether a tool call can be forced on it.
             tierClients[tier] = (client, definition.MagicDust, languageModel.CanForceToolCall);
         }
 
+        // The tier that serves the guard, the classifier, the presenter and the channel adapter.
         string? frameworkTierName = configuration["Morgana:ActorSystem:Tier"];
 
         // Absent means the default. A numeric string would parse to a value that names no tier, hence IsDefined.
@@ -206,9 +217,11 @@ public class ConfigurationLLMService : ILLMService
     /// </returns>
     private IChatClient WrapWithTelemetry(IChatClient innerChatClient)
     {
+        // Without a logger factory or with telemetry switched off the tier is served bare.
         if (loggerFactory is null || !configuration.GetValue("Morgana:OpenTelemetry:Enabled", true))
             return innerChatClient;
 
+        // Prompt and response bodies reach the exporters only where the deployer opted in.
         bool enableSensitiveData = configuration.GetValue("Morgana:OpenTelemetry:EnableSensitiveData", false);
         return new ChatClientBuilder(innerChatClient)
             .UseOpenTelemetry(loggerFactory, MorganaTelemetry.LLMChatClientSourceName, otel => otel.EnableSensitiveData = enableSensitiveData)
@@ -259,7 +272,7 @@ public class ConfigurationLLMService : ILLMService
                     ConversationId = conversationId
                 });
 
-            // Strip markdown code fences from JSON responses
+            // The framework actors parse JSON, which a model sometimes wraps in a markdown fence.
             return response.Text
                 .Replace("```json", string.Empty)
                 .Replace("```", string.Empty);
@@ -276,7 +289,7 @@ public class ConfigurationLLMService : ILLMService
         }
         catch (Exception)
         {
-            // Return user-friendly error message from Morgana prompt
+            // Any other failure is answered in Morgana's voice: the framework actors cannot act on a provider error.
             return morganaPrompt.GetMessage(Constants.Messages.LLMServiceError);
         }
     }

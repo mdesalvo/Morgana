@@ -30,6 +30,7 @@ public abstract class MorganaLanguageModel
     /// <summary>Refuses a value that is missing, empty or still a placeholder, naming <paramref name="field"/> first.</summary>
     protected static void RequireField(string? value, string field)
     {
+        // A blank value or a shipped placeholder means the deployment never supplied the secret: the host must not start on it.
         if (string.IsNullOrWhiteSpace(value) || Constants.SecretOverrides.All.Contains(value))
             throw new InvalidOperationException($"{field} is missing or still a placeholder. Override it via User Secrets or environment variables.");
     }

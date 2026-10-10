@@ -57,17 +57,19 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
         this.logger = logger;
         this.options = options.Value;
 
+        // Without a storage path or a key no conversation could be recorded or read back, so the host refuses to start.
         if (string.IsNullOrWhiteSpace(this.options.StoragePath))
             throw new ArgumentException("StoragePath must be configured in appsettings.json");
         if (string.IsNullOrWhiteSpace(this.options.EncryptionKey))
             throw new ArgumentException("EncryptionKey must be configured in appsettings.json");
 
-        // Ensure storage directory exists
+        // The first conversation's database is created here, so its directory has to exist before any save.
         Directory.CreateDirectory(this.options.StoragePath);
 
-        // Derive encryption key from configured key
+        // The configured key is the AES key itself, decoded once for every row written or read.
         encryptionKey = Convert.FromBase64String(this.options.EncryptionKey);
 
+        // AES-256 takes exactly 32 bytes: a shorter key would not encrypt and a longer one would be silently misread.
         if (encryptionKey.Length != 32)
             throw new ArgumentException("EncryptionKey must be a 256-bit (32-byte) key encoded as Base64");
 
@@ -77,10 +79,12 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     /// <inheritdoc/>
     public async Task EnsureDatabaseInitializedAsync(string conversationId)
     {
+        // Opening the file creates the conversation's database when it does not exist yet.
         string connectionString = GetConnectionString(conversationId);
         await using SqliteConnection connection = new SqliteConnection(connectionString);
         await connection.OpenAsync();
 
+        // The schema is brought to the current version before the first agent or channel writes to it.
         await EnsureDatabaseInitializedAsync(connection);
     }
 
@@ -92,6 +96,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
         bool isCompleted,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
+        // The agent framework's own options read back a session that the same options wrote.
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
 
         try
@@ -109,7 +114,8 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             JsonElement agentSessionJsonElement = await agent.SerializeSessionAsync(agentSession, jsonSerializerOptions);
             string agentSessionJsonString = JsonSerializer.Serialize(agentSessionJsonElement, jsonSerializerOptions);
 
-            // The history the agent holds in memory, read the way a row is read back
+            // The history the agent holds in memory, read the way a row is read back so that it can be
+            // compared with what the row holds when a rewrite has landed behind the agent.
             IReadOnlyList<ChatMessage> agentMessages = ReadRowMessages(agentSessionJsonString, agentName, conversationId, jsonSerializerOptions);
 
             // One database per conversation, so every agent of it writes to the same file and nothing
@@ -126,11 +132,13 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
             await using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
             try
             {
+                // The row as it stands now tells whether a rewrite landed behind the agent since its last read.
                 await using SqliteCommand readCommand = sqliteConnection.CreateCommand();
                 readCommand.Transaction = sqliteTransaction;
                 readCommand.CommandText = "SELECT agent_session, is_dirty, agent_message_count FROM morgana WHERE agent_identifier = @agent_identifier;";
                 readCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
 
+                // A row nobody rewrote is replaced by the agent's own session and leaves the dirty state clean.
                 string rowToWrite = agentSessionJsonString;
                 bool staysDirty = false;
                 await using (SqliteDataReader rowReader = await readCommand.ExecuteReaderAsync())
@@ -167,6 +175,8 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
                 // It is a BLOB on disk for that reason and the key never leaves configuration.
                 byte[] encryptedAgentSessionJsonString = Encrypt(rowToWrite);
 
+                // One row per participant: a first save creates it and every later save of the same
+                // agent replaces its session while the row keeps its creation date.
                 await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
                 sqliteCommand.Transaction = sqliteTransaction;
                 sqliteCommand.CommandText =
@@ -196,6 +206,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 sqliteCommand.Parameters.AddWithValue("@is_dirty", staysDirty ? 1 : 0);
                 sqliteCommand.Parameters.AddWithValue("@agent_message_count", agentMessages.Count);
 
+                // The read above and this write share one transaction: a rewrite landing meanwhile is either seen above or waits.
                 await sqliteCommand.ExecuteNonQueryAsync();
                 await sqliteTransaction.CommitAsync();
 
@@ -203,12 +214,14 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             }
             catch
             {
+                // A failed write leaves the row exactly as the transaction found it.
                 await sqliteTransaction.RollbackAsync();
                 throw;
             }
         }
         catch (Exception ex)
         {
+            // The caller decides what a turn that cannot be saved means: the failure is recorded and handed on.
             logger.LogError(ex, "Failed to save conversation {AgentIdentifier}", agentIdentifier);
             throw;
         }
@@ -220,22 +233,23 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
         MorganaAgent agent,
         JsonSerializerOptions? jsonSerializerOptions = null)
     {
+        // The agent framework's own options read back a session that the same options wrote.
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
 
         try
         {
-            // Extract conversation_id from agent_identifier
+            // The conversation id selects the database; the split is at the first dash since the id carries dashes.
             string[] agentIdentifierParts = agentIdentifier.Split('-', 2);
             if (agentIdentifierParts.Length != 2)
                 throw new ArgumentException($"Invalid agent_identifier format: '{agentIdentifier}'. Expected format: '{{agent_name}}-{{conversation_id}}'");
 
             string conversationId = agentIdentifierParts[1];
 
-            // Get database connection
+            // One database per conversation: its path both locates the file and tells whether it exists.
             string sqliteConnectionString = GetConnectionString(conversationId);
             string sqliteDbPath = GetDatabasePath(conversationId);
 
-            // Check if database file exists
+            // A conversation never saved has no database: its agent starts from an empty session and nothing is created here.
             if (!File.Exists(sqliteDbPath))
             {
                 logger.LogInformation("Conversation SQLite database for {AgentIdentifier} not found, returning null", agentIdentifier);
@@ -245,7 +259,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
             await sqliteConnection.OpenAsync();
 
-            // A conversation opened before the dirty flag existed gains its column before the read clears it
+            // A database at an earlier schema version gains the dirty column before the read clears it
             await EnsureDatabaseInitializedAsync(sqliteConnection);
 
             // Reading the row is what brings the agent back in line with it, so the flag is cleared by the same
@@ -254,9 +268,11 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             sqliteCommand.CommandText = "UPDATE morgana SET is_dirty = 0 WHERE agent_identifier = @agent_identifier RETURNING agent_session;";
             sqliteCommand.Parameters.AddWithValue("@agent_identifier", agentIdentifier);
 
+            // The row is read once: its BLOB is the session the agent is resurrected from.
             byte[] agentSessionEncryptedJsonString;
             await using (SqliteDataReader sqliteDataReader = await sqliteCommand.ExecuteReaderAsync())
             {
+                // An agent that never took a turn here has no row: it starts from an empty session.
                 if (!await sqliteDataReader.ReadAsync())
                 {
                     logger.LogInformation("Agent session {AgentIdentifier} not found in SQLite database, returning null", agentIdentifier);
@@ -266,6 +282,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 agentSessionEncryptedJsonString = (byte[])sqliteDataReader["agent_session"];
             }
 
+            // The session is decrypted in memory only: nothing readable is written back to disk.
             string agentSessionJsonString = Decrypt(agentSessionEncryptedJsonString);
 
             // The agent's memory is now exactly this row, which is what a rewrite landing before its next save
@@ -278,18 +295,20 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 ReadRowMessages(agentSessionJsonString, agentIdentifierParts[0], conversationId, jsonSerializerOptions).Count);
             await countCommand.ExecuteNonQueryAsync();
 
-            // Deserialize JSON to JsonElement
+            // The agent framework deserializes from a JSON element, so the decrypted text is parsed once here.
             JsonElement agentSessionJsonElement = JsonSerializer.Deserialize<JsonElement>(agentSessionJsonString, jsonSerializerOptions);
 
-            // Deserialize session via MorganaAgent
+            // The agent rebuilds its own session from the row, which is the only way its provider state is restored.
             AgentSession agentSession = await agent.DeserializeSessionAsync(agentSessionJsonElement, jsonSerializerOptions);
 
             logger.LogInformation("Loaded conversation {AgentIdentifier} from SQLite database ({Length} bytes decrypted)", agentIdentifier, agentSessionEncryptedJsonString.Length);
 
+            // The session the agent continues the conversation on.
             return agentSession;
         }
         catch (Exception ex)
         {
+            // An unreadable session must not pass as an empty one: the failure is recorded and handed on.
             logger.LogError(ex, "Failed to load conversation {AgentIdentifier}", agentIdentifier);
             throw;
         }
@@ -303,6 +322,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             string sqliteConnectionString = GetConnectionString(conversationId);
             string sqliteDbPath = GetDatabasePath(conversationId);
 
+            // A conversation never saved has no active agent. The lookup must not create its database.
             if (!File.Exists(sqliteDbPath))
             {
                 logger.LogInformation("SQLite database for conversation {ConversationId} not found", conversationId);
@@ -317,6 +337,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             // the most recently updated of those is the one the user was talking to.
             sqliteCommand.CommandText = "SELECT agent_name FROM morgana WHERE is_active = 1 ORDER BY last_update DESC LIMIT 1;";
 
+            // No active row means every agent closed its turn: the conversation resumes on Morgana.
             object? result = await sqliteCommand.ExecuteScalarAsync();
 
             string? agentName = result?.ToString();
@@ -330,6 +351,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
         }
         catch (Exception ex)
         {
+            // A lookup that fails is absorbed as "no active agent": resuming on Morgana is safe, a crash on resume is not.
             logger.LogError(ex, "Failed to get most recent agent for conversation {ConversationId}", conversationId);
             return null;
         }
@@ -347,7 +369,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             string sqliteConnectionString = GetConnectionString(conversationId);
             string sqliteDbPath = GetDatabasePath(conversationId);
 
-            // Early return if database doesn't exist
+            // A conversation never saved has no transcript to redraw.
             if (!File.Exists(sqliteDbPath))
             {
                 logger.LogInformation("SQLite database for conversation {ConversationId} not found, returning empty history", conversationId);
@@ -357,16 +379,18 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
             await sqliteConnection.OpenAsync();
 
+            // Every participant's row is read: the transcript is the merge of all of them.
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             sqliteCommand.CommandText = "SELECT agent_name, agent_session, is_active FROM morgana ORDER BY creation_date ASC;";
 
             await using SqliteDataReader sqliteDataReader = await sqliteCommand.ExecuteReaderAsync();
 
-            // Collect all messages from all agents with their completion status
+            // Each message keeps its author and whether that author closed its turn, which the channels render.
             List<(string agentName, bool agentCompleted, ChatMessage message)> allMessages = [];
 
             while (await sqliteDataReader.ReadAsync())
             {
+                // The completion flag is the inverse of is_active, as SaveAgentConversationAsync writes it.
                 string agentName = (string)sqliteDataReader["agent_name"];
                 bool agentCompleted = (long)sqliteDataReader["is_active"] == 0;
 
@@ -382,10 +406,8 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                     chatMessages.Select(message => (agentName, agentCompleted, message)));
             }
 
-            // Delegate filtering and processing to specialized method
-            // (ensure to present messages in their effective temporal order,
-            //  since they comes from database in agent's appearance order;
-            //  also ensure to filter out tool messages)
+            // The rows come in the order their agents first appeared while the dialogue interleaves them,
+            // so the messages are put back in the order they were said and tool traffic is left out.
             return ProcessMessagesForHistory(
                 conversationId, 
                 allMessages: [
@@ -395,6 +417,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
         }
         catch (Exception ex)
         {
+            // A history that cannot be read is an error for the caller: an empty one would look like a new conversation.
             logger.LogError(ex, "Failed to retrieve conversation history for {ConversationId}", conversationId);
             throw;
         }
@@ -405,9 +428,11 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
         string conversationId,
         IReadOnlyList<ChatMessage> messages)
     {
+        // Nothing to record leaves the row and its last_update untouched.
         if (messages.Count == 0)
             return;
 
+        // Morgana's row is keyed like an agent's so every participant is reached the same way.
         string orchestratorIdentifier = $"{Constants.Morgana}-{conversationId}";
 
         try
@@ -425,6 +450,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             await using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
             try
             {
+                // Morgana's transcript so far: the new lines are added to it, never written over it.
                 await using SqliteCommand readCommand = sqliteConnection.CreateCommand();
                 readCommand.Transaction = sqliteTransaction;
                 readCommand.CommandText = "SELECT agent_session FROM morgana WHERE agent_identifier = @agent_identifier;";
@@ -435,9 +461,11 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                     ? [.. ReadRowMessages(Decrypt(encryptedStoredRow), Constants.Morgana, conversationId)]
                     : [];
 
+                // The first line ever spoken by Morgana starts from an empty transcript.
                 storedMessages.AddRange(messages);
                 byte[] encryptedRow = Encrypt(WriteRowMessages(storedMessages));
 
+                // Morgana never holds a turn open, so her row is inactive and clean whatever else is recorded.
                 await using SqliteCommand writeCommand = sqliteConnection.CreateCommand();
                 writeCommand.Transaction = sqliteTransaction;
                 writeCommand.CommandText =
@@ -461,12 +489,14 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             }
             catch
             {
+                // A failed write leaves the row exactly as the transaction found it.
                 await sqliteTransaction.RollbackAsync();
                 throw;
             }
         }
         catch (Exception ex)
         {
+            // A line that is not recorded would vanish from the history, so the caller is told.
             logger.LogError(ex, "Failed to append orchestrator messages to conversation {ConversationId}", conversationId);
             throw;
         }
@@ -479,6 +509,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
         if (!ConversationExists(conversationId))
             return [];
 
+        // The participant's row lives in the conversation's own database.
         await using SqliteConnection sqliteConnection = new SqliteConnection(GetConnectionString(conversationId));
         await sqliteConnection.OpenAsync();
 
@@ -511,7 +542,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             await using SqliteConnection sqliteConnection = new SqliteConnection(GetConnectionString(conversationId));
             await sqliteConnection.OpenAsync();
 
-            // A conversation opened before the dirty flag existed gains its column before the rewrite raises it
+            // A database at an earlier schema version gains the dirty column before the rewrite raises it
             await EnsureDatabaseInitializedAsync(sqliteConnection);
 
             // Read and write are one step: the agent this row belongs to may be writing its own turn
@@ -534,6 +565,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 IReadOnlyList<ChatMessage> storedMessages = ReadRowMessages(storedRow, agentName, conversationId);
                 if (storedMessages.Count < messagesReadCount)
                 {
+                    // The caller is told to read the row again: nothing is written from a stale picture of it.
                     await sqliteTransaction.RollbackAsync();
                     logger.LogWarning(
                         "The row of '{AgentName}' in conversation {ConversationId} holds {StoredCount} message(s) where the caller read {ReadCount}; leaving it alone",
@@ -561,22 +593,26 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 writeCommand.Parameters.AddWithValue("@agent_session", Encrypt(rewrittenRow));
                 writeCommand.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture));
 
+                // The rewrite and the dirty flag commit together, so the agent can never read the new history as clean.
                 await writeCommand.ExecuteNonQueryAsync();
                 await sqliteTransaction.CommitAsync();
 
                 logger.LogInformation(
                     "Rewrote the {Count} message(s) of '{AgentName}' in conversation {ConversationId}, keeping {KeptCount} written since",
                     messages.Count, agentName, conversationId, storedMessages.Count - messagesReadCount);
+                // The caller's picture matched the row and the rewrite is on record.
                 return true;
             }
             catch
             {
+                // A failed write leaves the row exactly as the transaction found it.
                 await sqliteTransaction.RollbackAsync();
                 throw;
             }
         }
         catch (Exception ex)
         {
+            // A rewrite that fails must not be mistaken for a stale picture, which answers false: the caller is told.
             logger.LogError(ex, "Failed to rewrite the messages of '{AgentName}' in conversation {ConversationId}", agentName, conversationId);
             throw;
         }
@@ -595,6 +631,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
             // so we must guarantee the schema exists before the upsert.
             await EnsureDatabaseInitializedAsync(sqliteConnection);
 
+            // The conversation has one channel: the handshake is the single row 1, replaced whenever it is repeated.
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             sqliteCommand.CommandText =
 """
@@ -612,6 +649,8 @@ ON CONFLICT(id) DO UPDATE SET
     supports_markdown      = excluded.supports_markdown,
     max_message_length     = excluded.max_message_length;
 """;
+            // SQLite has no boolean: capabilities are stored as 0 or 1 and an absent callback or length as NULL,
+            // which is the channel declaring none rather than an empty one.
             sqliteCommand.Parameters.AddWithValue("@channel_name", metadata.Coordinates.ChannelName);
             sqliteCommand.Parameters.AddWithValue("@delivery_mode", metadata.Coordinates.DeliveryMode);
             sqliteCommand.Parameters.AddWithValue("@callback_url",
@@ -639,6 +678,7 @@ ON CONFLICT(id) DO UPDATE SET
         }
         catch (Exception ex)
         {
+            // A conversation without its channel could not deliver a reply, so the failure reaches the caller.
             logger.LogError(ex, "Failed to save channel metadata for conversation {ConversationId}", conversationId);
             throw;
         }
@@ -649,6 +689,7 @@ ON CONFLICT(id) DO UPDATE SET
     {
         try
         {
+            // A conversation never started has no handshake on record.
             string sqliteDbPath = GetDatabasePath(conversationId);
             if (!File.Exists(sqliteDbPath))
             {
@@ -668,6 +709,7 @@ FROM channel_metadata
 WHERE id = 1;
 """;
 
+            // A database whose handshake was never recorded reads as a conversation with no channel yet.
             await using SqliteDataReader reader = await sqliteCommand.ExecuteReaderAsync();
             if (!await reader.ReadAsync())
             {
@@ -684,6 +726,7 @@ WHERE id = 1;
                 SupportsMarkdown: (long)reader["supports_markdown"] == 1,
                 MaxMessageLength: reader["max_message_length"] is DBNull ? null : (int?)(long)reader["max_message_length"]);
 
+            // Coordinates and capabilities come back as the channel announced them, already normalised when saved.
             ChannelMetadata metadata = new ChannelMetadata
             {
                 Coordinates = new ChannelCoordinates
@@ -698,13 +741,15 @@ WHERE id = 1;
             logger.LogInformation("Loaded persisted channel metadata for conversation {ConversationId}", conversationId);
             return metadata;
         }
-        catch (SqliteException ex) when (ex.SqliteErrorCode == 1) // SQLITE_ERROR (e.g. table missing on legacy DB)
+        // SQLITE_ERROR: a database created before the table existed has no handshake on record.
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 1)
         {
             logger.LogInformation("channel_metadata table missing for conversation {ConversationId} (legacy DB), returning null", conversationId);
             return null;
         }
         catch (Exception ex)
         {
+            // An unreadable handshake must not pass as an absent one: the failure reaches the caller.
             logger.LogError(ex, "Failed to load channel metadata for conversation {ConversationId}", conversationId);
             throw;
         }
@@ -746,6 +791,7 @@ WHERE id = 1;
             sqliteCommand.Parameters.AddWithValue("@source_agent_intent", sourceAgentIntent);
             sqliteCommand.Parameters.AddWithValue("@last_update", DateTime.UtcNow.ToString("O"));
 
+            // Zero rows means an earlier writer already claimed the name, which is not an error.
             int rowsAffected = await sqliteCommand.ExecuteNonQueryAsync();
 
             logger.LogInformation(
@@ -756,6 +802,7 @@ WHERE id = 1;
         }
         catch (Exception ex)
         {
+            // A variable that is not shared would be asked of the user again by the next agent, so the caller is told.
             logger.LogError(ex, "Failed to upsert shared variable '{VariableName}' for conversation {ConversationId}", variableName, conversationId);
             throw;
         }
@@ -777,6 +824,7 @@ WHERE id = 1;
             await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
             await sqliteConnection.OpenAsync();
 
+            // The whole registry is read: an agent merges every variable at the start of its turn.
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             sqliteCommand.CommandText = "SELECT variable_name, variable_value FROM shared_context;";
 
@@ -801,19 +849,22 @@ WHERE id = 1;
                     JsonValueKind.Null   => null,
                     _                    => element // arrays/objects: keep as JsonElement
                 };
+                // A variable stored as null holds no value for an agent to hydrate, so it is left out.
                 if (value is not null)
                     sharedVariables[variableName] = value;
             }
 
             return sharedVariables;
         }
-        catch (SqliteException ex) when (ex.SqliteErrorCode == 1) // SQLITE_ERROR (table missing on legacy DB)
+        // SQLITE_ERROR: a database created before the registry existed shares no variables.
+        catch (SqliteException ex) when (ex.SqliteErrorCode == 1)
         {
             logger.LogInformation("shared_context table missing for conversation {ConversationId} (legacy DB), returning empty registry", conversationId);
             return [];
         }
         catch (Exception ex)
         {
+            // An unreadable registry must not pass as an empty one: agents would ask again what the user already gave.
             logger.LogError(ex, "Failed to load shared variables for conversation {ConversationId}", conversationId);
             throw;
         }
@@ -829,6 +880,7 @@ WHERE id = 1;
     /// <returns>SQLite connection string</returns>
     private string GetConnectionString(string conversationId)
     {
+        // The connection string names the file alone: one database per conversation needs no further setting.
         string sqliteDbPath = GetDatabasePath(conversationId);
         return $"Data Source={sqliteDbPath}";
     }
@@ -836,6 +888,7 @@ WHERE id = 1;
     /// <inheritdoc />
     public async Task<bool> IsDirtyAsync(string agentIdentifier)
     {
+        // The conversation id selects the database; the split is at the first dash since the id carries dashes.
         string[] agentIdentifierParts = agentIdentifier.Split('-', 2);
         if (agentIdentifierParts.Length != 2)
             throw new ArgumentException($"Invalid agent_identifier format: '{agentIdentifier}'. Expected format: '{{agent_name}}-{{conversation_id}}'");
@@ -847,7 +900,7 @@ WHERE id = 1;
         await using SqliteConnection sqliteConnection = new SqliteConnection(GetConnectionString(agentIdentifierParts[1]));
         await sqliteConnection.OpenAsync();
 
-        // A conversation opened before the dirty flag existed gains its column, clean, before it is asked
+        // A database at an earlier schema version gains the dirty column, clean, before it is asked
         await EnsureDatabaseInitializedAsync(sqliteConnection);
 
         await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
@@ -870,7 +923,8 @@ WHERE id = 1;
     /// <returns>Full path to the database file</returns>
     private string GetDatabasePath(string conversationId)
     {
-        // Sanitize conversationId to prevent directory traversal attacks
+        // A conversation id arrives from the client: characters that are invalid in a file name are replaced
+        // so that no id can address a file outside the storage directory.
         string sanitizedConversationId = string.Join("_", conversationId.Split(Path.GetInvalidFileNameChars()));
         return Path.Combine(options.StoragePath, $"morgana-{sanitizedConversationId}.db");
     }
@@ -882,18 +936,17 @@ WHERE id = 1;
     /// <param name="connection">Open SQLite connection</param>
     private async Task EnsureDatabaseInitializedAsync(SqliteConnection connection)
     {
-        // Check user_version to see if database is already initialized
+        // The schema version lives in the database file itself, so a conversation is migrated at most once.
         await using SqliteCommand checkCommand = connection.CreateCommand();
         checkCommand.CommandText = "PRAGMA user_version;";
         long currentVersion = (long)(await checkCommand.ExecuteScalarAsync() ?? 0L);
 
+        // A database at the current version pays this one pragma read and nothing else.
         if (currentVersion >= 6)
-            return; // Already initialized
+            return;
 
-        // Create schema. CREATE TABLE IF NOT EXISTS makes this safe to run on databases that
-        // are already at an earlier version — existing tables are left intact and only the
-        // tables introduced by later versions (shared_context in v4; dust_budget +
-        // dust_usage_log in v5) are created.
+        // The script is safe on a database at an earlier version: tables that exist are left intact and
+        // only the missing ones are created (shared_context in v4; dust_budget and dust_usage_log in v5).
         await using SqliteCommand schemaCommand = connection.CreateCommand();
         schemaCommand.CommandText =
 """
@@ -948,8 +1001,8 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 """;
         await schemaCommand.ExecuteNonQueryAsync();
 
-        // v6 added is_dirty and agent_message_count to a table an older database already holds, which the
-        // script above leaves as it was: the columns are added there, every existing row clean and its count
+        // Version 6 holds is_dirty and agent_message_count in the morgana table, which the script above leaves
+        // as an older database has it: the columns are added there, every existing row clean and its count
         // unknown until its agent next reads or writes it, since none was rewritten behind its agent
         foreach ((string column, string declaration) in (IEnumerable<(string, string)>)
                  [("is_dirty", "INTEGER NOT NULL DEFAULT 0"), ("agent_message_count", "INTEGER NULL")])
@@ -964,7 +1017,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             }
         }
 
-        // Mark database as initialized (version 6)
+        // The version is stamped last, so a schema step that failed is run again at the next open.
         await using SqliteCommand versionCommand = connection.CreateCommand();
         versionCommand.CommandText = "PRAGMA user_version = 6;";
         await versionCommand.ExecuteNonQueryAsync();
@@ -982,24 +1035,29 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     {
         using Aes aes = Aes.Create();
         aes.Key = encryptionKey;
+
         // A fresh random IV every single call, never reused across rows or across saves of the
         // same row: CBC mode leaks patterns between ciphertexts that share both key and IV, so
         // reuse would be the actual vulnerability, not just a decrypt-time inconvenience.
         aes.GenerateIV();
 
         using ICryptoTransform encryptor = aes.CreateEncryptor(aes.Key, aes.IV);
+
+        // The blob is built in memory: IV first, then the ciphertext that follows it.
         using MemoryStream msEncrypt = new MemoryStream();
 
         // The IV isn't secret, only unique — prepending it in the clear is standard practice and
         // is exactly what Decrypt below expects to find at the start of every stored blob.
         msEncrypt.Write(aes.IV, 0, aes.IV.Length);
 
+        // Disposing the writer flushes the final cipher block, so the blob is complete only after this scope.
         using (CryptoStream csEncrypt = new CryptoStream(msEncrypt, encryptor, CryptoStreamMode.Write))
         using (StreamWriter swEncrypt = new StreamWriter(csEncrypt))
         {
             swEncrypt.Write(plaintext);
         }
 
+        // IV and ciphertext, the shape that Decrypt reads.
         return msEncrypt.ToArray();
     }
 
@@ -1013,7 +1071,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         using Aes aes = Aes.Create();
         aes.Key = encryptionKey;
 
-        // Extract IV from beginning of ciphertext
+        // The IV that Encrypt prepended is read from the start of the blob; the ciphertext follows it.
         byte[] iv = new byte[aes.IV.Length];
         Array.Copy(ciphertext, 0, iv, 0, iv.Length);
         aes.IV = iv;
@@ -1023,6 +1081,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         using CryptoStream csDecrypt = new CryptoStream(msDecrypt, decryptor, CryptoStreamMode.Read);
         using StreamReader srDecrypt = new StreamReader(csDecrypt);
 
+        // The decrypted text is the JSON that the row was written from.
         return srDecrypt.ReadToEnd();
     }
 
@@ -1048,6 +1107,8 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 
         JsonElement rowElement = JsonSerializer.Deserialize<JsonElement>(rowJson, jsonSerializerOptions);
 
+        // Each level of the layout may be absent in a row that holds no history yet: the participant then
+        // contributes no lines and the others are still read.
         if (!rowElement.TryGetProperty(RowStateBagProperty, out JsonElement stateBagElement))
         {
             logger.LogWarning("Conversation row for {AuthorName} missing '{Property}', skipping", authorName, RowStateBagProperty);
@@ -1064,6 +1125,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             return [];
         }
 
+        // A history slot that is present but null is a corrupt row, which is reported rather than read as empty.
         return JsonSerializer.Deserialize<ChatMessage[]>(messagesElement.GetRawText(), jsonSerializerOptions)
                ?? throw new InvalidOperationException(
                    $"Failed to deserialize messages for '{authorName}' in conversation {conversationId}");
@@ -1080,6 +1142,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     {
         jsonSerializerOptions ??= AgentAbstractionsJsonUtilities.DefaultOptions;
 
+        // The nesting mirrors the agent framework's session so that ReadRowMessages finds the messages at one address.
         return JsonSerializer.Serialize(
             new Dictionary<string, object>
             {
@@ -1137,11 +1200,9 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     {
         List<MorganaChatMessage> historyMessages = [];
 
-        // Set of agents whose persisted history carries at least one user_facing marker. Within
-        // those agents we filter out intermediate (non-user-facing) assistant messages so the
-        // tool-use scratchpad doesn't appear in the rendered transcript on resume. Agents whose
-        // sessions have no marker (e.g. persisted before this feature shipped) follow the legacy
-        // path: every assistant message is rendered, just like before.
+        // The agents whose history carries at least one user-facing marker. Their intermediate assistant
+        // messages are the tool-use scratchpad and stay out of the transcript on resume. An agent with no
+        // marker has every assistant message rendered, since nothing tells its answers from its scratchpad.
         HashSet<string> markedAgents =
         [
             .. allMessages
@@ -1152,7 +1213,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 
         foreach ((string agentName, bool agentCompleted, ChatMessage chatMessage) in allMessages)
         {
-            // Skip tool messages
+            // Tool traffic is the agent's working, not a line of the dialogue.
             if (chatMessage.Role == ChatRole.Tool)
                 continue;
 
@@ -1168,12 +1229,11 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             bool isUserFacing = chatMessage.Role == ChatRole.Assistant
                              && chatMessage.AdditionalProperties?.ContainsKey(Constants.MessageProperties.UserFacing) == true;
 
-            // Skip intermediate assistant messages (no marker) for agents whose session contains
-            // at least one user_facing marker: they are the tool-use scratchpad of a turn.
+            // An unmarked assistant message of a marking agent is the tool-use scratchpad of a turn.
             if (chatMessage.Role == ChatRole.Assistant && markedAgents.Contains(agentName) && !isUserFacing)
                 continue;
 
-            // Process messages with text content
+            // A message with no text shows nothing, so it takes no place in the transcript.
             string messageText = ExtractTextFromMessage(chatMessage);
             if (string.IsNullOrWhiteSpace(messageText))
                 continue;
@@ -1186,13 +1246,13 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
                 ? TryReadRecorded<RichCard>(chatMessage, Constants.MessageProperties.TurnRichCard, jsonSerializerOptions)
                 : null;
 
+            // The message joins the transcript as the channels render it; the last one is marked below.
             historyMessages.Add(
                 MapToMorganaChatMessage(conversationId, agentName, agentCompleted, chatMessage, isLastHistoryMessage: false, quickReplies, richCard));
         }
 
-        // Mark the last emitted message (the one actually rendered in the UI) as the last
-        // history message, so trailing quick replies/rich cards on it stay interactive after
-        // a resume/refresh instead of being frozen because the raw session tail was empty.
+        // The last message that is rendered carries the flag, so that its buttons and card stay interactive
+        // after a resume or refresh instead of being frozen because the raw session tail was empty.
         if (historyMessages.Count > 0)
         {
             int lastIndex = historyMessages.Count - 1;
@@ -1202,6 +1262,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         logger.LogInformation(
             "Processed {HistoryMessagesCount} messages (filtered from {AllMessagesCount} raw messages) for {ConversationId}", historyMessages.Count, allMessages.Count, conversationId);
 
+        // The transcript the channel redraws.
         return [.. historyMessages];
     }
 
@@ -1211,6 +1272,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     /// </summary>
     private T? TryReadRecorded<T>(ChatMessage chatMessage, string propertyName, JsonSerializerOptions jsonSerializerOptions) where T : class
     {
+        // A turn that delivered no buttons or card recorded nothing under this name.
         string? recorded = TryGetRecordedString(chatMessage, propertyName);
         if (string.IsNullOrWhiteSpace(recorded))
             return null;
@@ -1221,6 +1283,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         }
         catch (JsonException ex)
         {
+            // Buttons and card are an embellishment of the reply: the user still reads the text without them.
             logger.LogWarning(ex, "Failed to read the recorded {PropertyName} of a turn", propertyName);
             return null;
         }
@@ -1235,7 +1298,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     /// its answer across several assistant messages and only the last survives the filter above, so
     /// extracting from this message alone would silently drop everything written before the tool call
     /// — see <see cref="Constants.MessageProperties.TurnText"/>. Messages that carry no recorded turn
-    /// text (user turns, sessions persisted before this shipped) fall through to the original path.
+    /// text (user turns) fall through to their own text content.
     /// </remarks>
     private string ExtractTextFromMessage(ChatMessage chatMessage)
     {
@@ -1249,14 +1312,12 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             return string.Empty;
 
         // Every text fragment joined into one line: a model may split an answer across several content
-        // parts, while a transcript shows one message per turn.
+        // parts, while a transcript shows one message per turn. Text alone, because that is what a
+        // transcript is: an image or a data part would need a shape on MorganaChatMessage that no channel asks for.
         return string.Join(" ", chatMessage.Contents
             .OfType<TextContent>()
             .Where(tc => !string.IsNullOrEmpty(tc.Text))
             .Select(tc => tc.Text.Trim()));
-
-        // Text alone, because that is what a transcript is. An image or a data part would need a shape
-        // on MorganaChatMessage that no channel is asking for yet.
     }
 
     /// <summary>

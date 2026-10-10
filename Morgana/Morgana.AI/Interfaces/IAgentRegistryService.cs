@@ -1,21 +1,18 @@
 ﻿namespace Morgana.AI.Interfaces;
 
 /// <summary>
-/// Runtime discovery of agent types via [HandlesIntent] attribute scanning. Builds intent→Type mapping.
-/// RouterActor queries for routing. Enables plugin discovery without hardcoding. HandlesIntentAgentRegistryService
-/// scans AppDomain at startup; alternatives could use lazy/dynamic loading.
+/// Maps each intent to the agent type that handles it, so that plugin agents are routable without the host naming them.
 /// </summary>
 public interface IAgentRegistryService
 {
     /// <summary>
-    /// Resolves agent type for intent name from [HandlesIntent] registry. Returns Type if found, null otherwise.
-    /// Allows RouterActor to provide user-friendly error messages on null (unrecognized intents).
+    /// Returns the agent type that handles <paramref name="intent"/>, or <c>null</c> when none does.
+    /// Callers treat <c>null</c> as an unrecognized intent to report to the user, never as a fault.
     /// </summary>
     Type? ResolveAgentFromIntent(string intent);
 
     /// <summary>
-    /// Returns all registered intent names from [HandlesIntent] agents. Used for RouterActor initialization,
-    /// config validation, startup diagnostics. Compare results with agents.json to detect config mismatches.
+    /// Returns every intent that has a handling agent, so that the configured intents can be compared with the agents that exist.
     /// </summary>
     IEnumerable<string> GetAllIntents();
 }

@@ -1,36 +1,11 @@
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
-/// Service for enforcing rate limits on conversation messages to prevent abuse and control costs.
-/// Implements sliding window rate limiting with configurable thresholds per time window.
+/// Bounds how often a conversation may send messages, over sliding windows with configurable thresholds.
 /// </summary>
 /// <remarks>
-/// <para><strong>Purpose:</strong></para>
-/// <para>Protects the system from:</para>
-/// <list type="bullet">
-/// <item>Accidental spam (user clicking send repeatedly)</item>
-/// <item>Malicious abuse (DoS attempts)</item>
-/// <item>Cost explosion (excessive LLM API calls)</item>
-/// </list>
-/// <para><strong>Rate Limit Strategy:</strong></para>
-/// <para>Uses sliding window algorithm tracking requests in multiple time windows:
-/// - Per minute (prevents burst spam)
-/// - Per hour (prevents sustained abuse)
-/// - Per day (enforces daily quotas)</para>
-/// <para><strong>Configuration Example:</strong></para>
-/// <code>
-/// // appsettings.json
-/// {
-///   "Morgana": {
-///     "RateLimiting": {
-///       "Enabled": true,
-///       "MaxMessagesPerMinute": 5,
-///       "MaxMessagesPerHour": 30,
-///       "MaxMessagesPerDay": 80
-///     }
-///   }
-/// }
-/// </code>
+/// A conversation is limited per minute (burst spam), per hour (sustained abuse) and per day (quota). The limiter protects
+/// the system from accidental spam, deliberate abuse and runaway LLM cost.
 /// </remarks>
 public interface IRateLimitService
 {
@@ -46,14 +21,8 @@ public interface IRateLimitService
     /// - RetryAfterSeconds: suggested wait time before retrying
     /// </returns>
     /// <remarks>
-    /// <para><strong>Atomic Operation:</strong></para>
-    /// <para>This method both checks AND records in a single operation to prevent race conditions.
-    /// If allowed, the request timestamp is immediately recorded.</para>
-    /// <para><strong>Return Values:</strong></para>
-    /// <list type="bullet">
-    /// <item>IsAllowed=true → Request proceeds, timestamp recorded</item>
-    /// <item>IsAllowed=false → Request denied, ViolatedLimit specifies which threshold</item>
-    /// </list>
+    /// Checking and recording are one atomic step so that concurrent requests cannot both slip under a limit.
+    /// A denied request is not recorded.
     /// </remarks>
     Task<Records.RateLimitResult> CheckAndRecordAsync(string conversationId);
 

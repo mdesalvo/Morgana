@@ -23,12 +23,25 @@ namespace Morgana.Web.Controllers;
 [TypeFilter<FailureResponseFilter>]
 public class MorganaController : ControllerBase
 {
+    /// <summary>Hosts the conversation managers that the endpoints address.</summary>
     private readonly ActorSystem actorSystem;
+
+    /// <summary>Records each lifecycle step of a conversation.</summary>
     private readonly ILogger logger;
+
+    /// <summary>Tells whether a delivery mode is served by a registered transport.</summary>
     private readonly IChannelServiceFactory channelServiceFactory;
+
+    /// <summary>Settles the channel handshake on record at start.</summary>
     private readonly IChannelMetadataStore channelMetadataStore;
+
+    /// <summary>The record: existence of a conversation, its history and its active agent.</summary>
     private readonly IConversationPersistenceService conversationPersistenceService;
+
+    /// <summary>Reports the remaining dust level that the client redraws.</summary>
     private readonly IDustLimitService dustLimitService;
+
+    /// <summary>Holds the lockout text that a resumed, spent conversation hands back.</summary>
     private readonly Records.DustLimitingOptions dustLimitingOptions;
 
     /// <summary>
@@ -123,13 +136,16 @@ public class MorganaController : ControllerBase
         // learns it started: a message it sends straight away finds it, on this process or any other.
         await channelMetadataStore.RegisterChannelMetadataAsync(request.ConversationId, request.ChannelMetadata);
 
+        // The manager is the entry point of the conversation's actors; the name ties it to this conversation alone.
         IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
             Constants.Actors.Manager, request.ConversationId);
 
+        // The manager builds the conversation's actors and sends the presentation: the client hears it over its channel.
         manager.Tell(new Records.CreateConversation(request.ConversationId));
 
         logger.LogInformation("Conversation creation queued: {RequestConversationId}", request.ConversationId);
 
+        // Accepted because the presentation follows asynchronously over the channel.
         return Accepted(new StartConversationResponse(
             ConversationId: request.ConversationId,
             Message: "Conversation creation started"));
@@ -148,9 +164,11 @@ public class MorganaController : ControllerBase
     {
         logger.LogInformation("Ending conversation {ConversationId}", conversationId);
 
+        // The manager is looked up by the conversation's name, so the stop reaches the very actor that serves it.
         IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
             Constants.Actors.Manager, conversationId);
 
+        // The manager stops the supervisor and with it every actor of the conversation.
         manager.Tell(new Records.TerminateConversation(conversationId));
 
         logger.LogInformation("Ended conversation {ConversationId}", conversationId);
@@ -218,9 +236,11 @@ public class MorganaController : ControllerBase
     {
         logger.LogInformation("Retrieving conversation history for {ConversationId}", conversationId);
 
+        // The transcript across every participant, in chronological order.
         MorganaChatMessage[] chatMessages = await conversationPersistenceService
             .GetConversationHistoryAsync(conversationId);
 
+        // A conversation with no message on record is reported as not found: there is nothing for a client to redraw.
         if (chatMessages.Length == 0)
         {
             logger.LogWarning("No history found for conversation {ConversationId}", conversationId);
@@ -261,9 +281,11 @@ public class MorganaController : ControllerBase
         // which keeps it open for the full pipeline duration (guard → classifier → agent).
         ActivityContext httpContext = Activity.Current?.Context ?? default;
 
+        // After a restart the manager is created here and serves the conversation from its record.
         IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
             Constants.Actors.Manager, conversationId);
 
+        // The caller id is the one that ChannelAuthenticationFilter proved from the token, never one the body claims.
         manager.Tell(new Records.UserMessage(
             conversationId,
             request.Text,
@@ -274,6 +296,7 @@ public class MorganaController : ControllerBase
 
         logger.LogInformation("Message sent to conversation {ConversationId}", conversationId);
 
+        // Accepted because the answer is produced by the pipeline and delivered over the channel.
         return Accepted(new
         {
             conversationId,
@@ -290,8 +313,10 @@ public class MorganaController : ControllerBase
     [AllowAnonymous]
     public IActionResult Health()
     {
+        // The process is healthy for as long as the actor system that carries every conversation runs.
         bool actorSystemAlive = !actorSystem.WhenTerminated.IsCompleted;
 
+        // A terminated actor system serves no conversation: the probe reports the host as down.
         if (!actorSystemAlive)
             return StatusCode(503, new
             {
@@ -301,6 +326,7 @@ public class MorganaController : ControllerBase
                 uptime = actorSystem.Uptime
             });
 
+        // Alive: the probe gets the system's name and uptime.
         return Ok(new
         {
             status = "healthy",

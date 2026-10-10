@@ -53,6 +53,7 @@ public record CommandDescriptor(
     /// </summary>
     public string? DescribeOptionProblem(IReadOnlyDictionary<string, string>? options)
     {
+        // A command declaring nothing is checked against an empty list, so every given option is unknown
         IReadOnlyList<CommandOption> declared = Options ?? [];
 
         // An option nobody declared is a typo or a memory of another command, never something to run on
@@ -84,16 +85,19 @@ public record CommandDescriptor(
     /// </summary>
     public IReadOnlyDictionary<string, string> ApplyDefaults(IReadOnlyDictionary<string, string>? options)
     {
+        // Option names are matched ignoring case, so the copy keeps that rule for the defaults added below
         Dictionary<string, string> effective = options is null
             ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             : new Dictionary<string, string>(options, StringComparer.OrdinalIgnoreCase);
 
+        // TryAdd leaves a value the user gave untouched: a default only fills what was left out
         foreach (CommandOption option in Options ?? [])
         {
             if (option.DefaultValue is { } fallback)
                 effective.TryAdd(option.Name, fallback);
         }
 
+        // The command reads this complete set, never the raw input
         return effective;
     }
 

@@ -42,11 +42,9 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     /// <returns>Array of framework prompts + domain prompts</returns>
     public async Task<Records.Prompt[]> GetAllPromptsAsync()
     {
-        // Framework prompts first, domain prompts appended after: ResolveAsync below picks the
-        // FIRST id match via SingleOrDefault, so this ordering alone doesn't decide precedence —
-        // see ResolveAsync's own comment for why a domain/framework ID collision is actually an
-        // ambiguity error, not a silent override, despite what "domain prompts override" might imply.
+        // The domain layer is read at every call because the plugins may have been merged since the last one.
         List<Records.Prompt> agentPrompts = await agentConfigService.GetAgentPromptsAsync();
+        // Framework prompts first: an id declared in both layers is not resolved by order but refused by ResolveAsync.
         return [..morganaPrompts.Value, ..agentPrompts];
     }
 
@@ -65,6 +63,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
         Records.Prompt? prompt = allPrompts
             .SingleOrDefault(p => string.Equals(p.ID, promptID, StringComparison.OrdinalIgnoreCase));
 
+        // An unknown id is a topology fault that the caller must see, never an empty prompt.
         return prompt ?? throw new KeyNotFoundException($"Prompt with ID '{promptID}' not found in morgana.json or agents.json.");
     }
 
@@ -76,6 +75,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     /// <exception cref="FileNotFoundException">morgana.json is not embedded in this assembly.</exception>
     private static Records.Prompt[] LoadMorganaPrompts()
     {
+        // The framework layer is embedded in the assembly that this class belongs to.
         Assembly assembly = Assembly.GetExecutingAssembly();
 
         // The manifest name MSBuild generates is namespace-prefixed ("Morgana.AI.morgana.json"), so
@@ -94,11 +94,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
         Records.PromptCollection? promptsCollection = JsonSerializer.Deserialize<Records.PromptCollection>(
             stream, Records.DefaultJsonSerializerOptions);
 
-        // A null collection (empty/malformed JSON body) degrades to an empty prompt array rather
-        // than throwing — every consumer of GetAllPromptsAsync/ResolveAsync already has to handle
-        // "prompt ID not found" as a real, expected outcome (see ResolveAsync's KeyNotFoundException
-        // above), so an empty framework layer surfaces through that exact same, already-handled path
-        // instead of needing a second failure mode of its own.
+        // An empty body leaves the framework layer empty: every lookup then fails as "prompt not found", the one failure that callers already handle.
         return promptsCollection?.Prompts ?? [];
     }
 }

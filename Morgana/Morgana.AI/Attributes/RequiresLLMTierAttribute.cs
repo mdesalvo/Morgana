@@ -19,6 +19,7 @@ public sealed class RequiresLLMTierAttribute : Attribute
     /// <param name="tier">Power/cost tier this agent must run on.</param>
     public RequiresLLMTierAttribute(Records.LLMTier tier)
     {
+        // The tier is the one model die that the agent runs on, checked against the configured tiers at startup.
         Tier = tier;
     }
 }

@@ -18,10 +18,9 @@ public record ChannelCapabilities(
     int? MaxMessageLength = null)
 {
     /// <summary>
-    /// Shared singleton representing the full legacy capability set (all features enabled,
-    /// no length cap). Use this anywhere a "rich" channel needs to be described instead of
-    /// allocating a new instance, both for the reference channel's static budget and for
-    /// fallback paths (e.g. legacy conversations restored without a persisted handshake).
+    /// Shared singleton describing a fully capable channel (all features enabled, no length cap).
+    /// Used wherever a "rich" channel is described, for the reference channel's static budget
+    /// and for fallback paths such as a conversation restored without a persisted handshake.
     /// </summary>
     public static readonly ChannelCapabilities Default = new ChannelCapabilities(
         SupportsRichCards: true,

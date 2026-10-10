@@ -1,35 +1,18 @@
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
-/// Service for discovering native tool implementations based on intent and for projecting the tools that each one declares.
-/// Provides runtime tool discovery via [ProvidesToolForIntent] attribute scanning.
+/// Finds the native tool class of each intent without hardcoded mappings (plugins included) and projects the tools and workflows that the classes declare.
 /// </summary>
 /// <remarks>
-/// <para><strong>Purpose:</strong></para>
-/// <para>This service enables automatic discovery of tool implementations without hardcoded mappings.
-/// It scans loaded assemblies (including plugins) for classes decorated with [ProvidesToolForIntent]
-/// attribute and builds a runtime registry for MorganaAgentAdapter consumption.</para>
-/// <para><strong>Tool Discovery Flow:</strong></para>
-/// <code>
-/// 1. Application startup
-/// 2. PluginLoaderService loads domain assemblies
-/// 3. IToolRegistryService scans all loaded assemblies
-/// 4. Finds classes with [ProvidesToolForIntent] attribute
-/// 5. Builds intent → Type mapping dictionary
-/// 6. MorganaAgentAdapter queries registry during agent creation
-/// 7. Creates tool instances and registers methods in MorganaToolAdapter
-/// </code>
-/// <para><strong>Tool Declaration:</strong></para>
-/// <para>A native domain tool is described by its method on the class: the method's description, its
+/// A native domain tool is described by its method on the class: the method's description, its
 /// approval attribute, each parameter's description and scope, the returned record's property descriptions.
 /// <see cref="GetToolDefinitions"/> projects those into the definitions that the adapter, the composer,
-/// the workflow engine and the A2A card read.</para>
+/// the workflow engine and the A2A card read.
 /// </remarks>
 public interface IToolRegistryService
 {
     /// <summary>
     /// Finds the MorganaTool type that provides native tools for the specified intent.
-    /// Uses [ProvidesToolForIntent] attribute to discover tool implementations.
     /// </summary>
     /// <param name="intent">The intent to find a tool for (e.g., "billing", "contract")</param>
     /// <returns>

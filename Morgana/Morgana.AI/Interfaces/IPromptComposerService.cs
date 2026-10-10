@@ -7,12 +7,6 @@ namespace Morgana.AI.Interfaces;
 /// <em>where prompts come from</em>, this one abstracts <em>how they are assembled into what the
 /// model reads</em>.
 /// </summary>
-/// <remarks>
-/// <para>
-/// Default implementation: <c>ConfigurationPromptComposerService</c>, which reads the framework
-/// layer and the injection templates from <c>morgana.json</c> through <see cref="IPromptResolverService"/>.
-/// </para>
-/// </remarks>
 public interface IPromptComposerService
 {
     /// <summary>
@@ -26,7 +20,7 @@ public interface IPromptComposerService
     /// <param name="peerCapable">
     /// True when this agent consults a colleague or is itself consulted, which is what admits the
     /// peer-consultation policy into the rendered rules. False leaves an agent outside the topology
-    /// reading exactly the prompt it read before peer consultation existed.
+    /// with a prompt that carries no peer-consultation text.
     /// </param>
     /// <returns>The composed instructions, ready for <c>ChatOptions.Instructions</c>.</returns>
     Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false);

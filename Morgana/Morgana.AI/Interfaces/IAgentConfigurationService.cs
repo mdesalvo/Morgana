@@ -1,23 +1,19 @@
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
-/// Loads domain-specific agent configuration (intents+prompts) from external sources (agents.json, DB, API, etc).
-/// Separates framework (morgana.json) from domain (agents.json). EmbeddedAgentConfigurationService loads embedded agents.json.
-/// Used by Classifier (intent classification), Presentation (intent buttons), MorganaAgentAdapter (agent prompts).
+/// Supplies the domain half of the configuration: the intents that users can be routed to and the prompts of the agents that handle them.
+/// The framework's own prompts are not part of it. An implementation may aggregate several sources.
 /// </summary>
 public interface IAgentConfigurationService
 {
     /// <summary>
-    /// Returns intent definitions from agents.json (Name, Description, Label, DefaultValue). Used by ClassifierActor
-    /// for LLM classification and Presentation for quick reply buttons. Returns empty list on missing config; system
-    /// supports graceful degradation with only the <see cref="Constants.Intents.Other"/> intent if needed.
+    /// Returns the domain's intent definitions. An absent configuration yields an empty list, which leaves the
+    /// system able to classify only as <see cref="Constants.Intents.Other"/>.
     /// </summary>
     Task<List<Records.IntentDefinition>> GetIntentsAsync();
 
     /// <summary>
-    /// Returns agent prompts from agents.json (Content, Instructions, Personality, Tools, AdditionalProperties).
-    /// Used by MorganaAgentAdapter to compose full agent instructions. Supports multi-source aggregation (embedded
-    /// resources, files, DB) for modular domain configs. Returns empty list if config missing.
+    /// Returns the domain's agent prompts, one per handled intent. An absent configuration yields an empty list.
     /// </summary>
     Task<List<Records.Prompt>> GetAgentPromptsAsync();
 }

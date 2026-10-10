@@ -50,6 +50,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     {
         this.logger = logger;
 
+        // Discovery is deferred to the first lookup because the plugins may not all be loaded when DI builds this service.
         intentToToolType = new Lazy<Dictionary<string, Type>>(InitializeRegistry);
         workflowsByIntent = new Lazy<Dictionary<string, IReadOnlyList<Records.WorkflowDefinition>>>(DiscoverWorkflows);
     }
@@ -61,32 +62,14 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     /// <exception cref="InvalidOperationException">A workflow class cannot be instantiated.</exception>
     private Dictionary<string, IReadOnlyList<Records.WorkflowDefinition>> DiscoverWorkflows()
     {
+        // Announces the scan, which runs once on first use.
         Console.WriteLine("🔍 Scanning assemblies for MorganaWorkflow implementations...");
 
+        // Grouped by intent: one agent may be served by several workflow classes.
         Dictionary<string, List<Records.WorkflowDefinition>> collected = new(StringComparer.OrdinalIgnoreCase);
 
-        // Every assembly in the process, since a domain's workflows arrive in a plugin DLL that
-        // PluginLoaderService has already loaded by the time this runs.
-        IEnumerable<Type> workflowTypes = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic)
-            .SelectMany(a =>
-            {
-                try
-                {
-                    return a.GetTypes();
-                }
-                catch (ReflectionTypeLoadException ex)
-                {
-                    // An assembly with incomplete dependencies costs only its own types: a half-built
-                    // plugin must not hide the workflows of every other one.
-                    logger.LogWarning("Could not load types from assembly {ArgFullName}: {ExMessage}", a.FullName, ex.Message);
-                    return [];
-                }
-            })
-            // Concrete workflows that declare which agent they belong to. A workflow without the
-            // attribute belongs to no agent, so nothing could ever launch it.
-            .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaWorkflow)))
-            .Where(t => t.GetCustomAttribute<ProvidesWorkflowForIntentAttribute>() != null);
+        // A workflow without the attribute belongs to no agent, so nothing could ever launch it.
+        IEnumerable<Type> workflowTypes = FindConcreteTypesDeclaring<MorganaWorkflow, ProvidesWorkflowForIntentAttribute>();
 
         foreach (Type workflowType in workflowTypes)
         {
@@ -108,16 +91,19 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
                     $"Workflow class '{workflowType.Name}' of intent '{intent}' cannot be instantiated: {(ex.InnerException ?? ex).Message}", ex);
             }
 
+            // The first workflow of an intent opens its list.
             if (!collected.TryGetValue(intent, out List<Records.WorkflowDefinition>? definitions))
                 collected[intent] = definitions = [];
             definitions.Add(workflow.ToDefinition());
 
+            // Lets the operator see at startup which agent each workflow will be launched from.
             Console.WriteLine($"  📦 Registered workflow: {workflowType.Name} for intent '{declaration.Intent}'");
         }
 
         Console.WriteLine($"✅ Workflow registry initialized with {collected.Values.Sum(definitions => definitions.Count)} workflow(s)");
         Console.WriteLine();
 
+        // Handed over read-only: the registry never changes after discovery.
         return collected.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<Records.WorkflowDefinition>)pair.Value, StringComparer.OrdinalIgnoreCase);
     }
 
@@ -128,9 +114,10 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     /// <returns>Dictionary mapping intent names to tool types (case-insensitive)</returns>
     private Dictionary<string, Type> InitializeRegistry()
     {
+        // Announces the scan, which runs once on first use.
         Console.WriteLine("🔍 Scanning assemblies for MorganaTool implementations...");
 
-        Dictionary<string, Type> registry = DiscoverTools(out List<string> registrationErrors);
+        (Dictionary<string, Type> registry, List<string> registrationErrors) = DiscoverTools();
 
         // Printed rather than thrown: none of what it reports stops a deployment, so the operator is
         // told at startup instead of discovering it on the first conversation that lacks a tool.
@@ -146,35 +133,14 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     /// A duplicate is reported rather than resolved: which of two tools reached the scan first depends
     /// on assembly order, so silently keeping one would make the domain's behaviour depend on it.
     /// </remarks>
-    /// <param name="registrationErrors">Filled with one message per intent claimed by two tools.</param>
-    /// <returns>Intent to tool type, lowercased, case-insensitive.</returns>
-    private Dictionary<string, Type> DiscoverTools(out List<string> registrationErrors)
+    /// <returns>Intent to tool type (lowercased, case-insensitive) with one message per intent claimed by two tools.</returns>
+    private (Dictionary<string, Type> Registry, List<string> RegistrationErrors) DiscoverTools()
     {
         Dictionary<string, Type> registry = new(StringComparer.OrdinalIgnoreCase);
-        registrationErrors = [];
+        List<string> registrationErrors = [];
 
-        // Every assembly in the process, since a domain's tools arrive in a plugin DLL that
-        // PluginLoaderService has already loaded by the time this runs.
-        IEnumerable<Type> toolTypes = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic)
-            .SelectMany(a =>
-            {
-                try
-                {
-                    return a.GetTypes();
-                }
-                catch (ReflectionTypeLoadException ex)
-                {
-                    // An assembly with incomplete dependencies costs only its own types: a half-built
-                    // plugin must not hide the tools of every other one.
-                    logger.LogWarning("Could not load types from assembly {ArgFullName}: {ExMessage}", a.FullName, ex.Message);
-                    return [];
-                }
-            })
-            // Concrete tools that declare which agent they belong to. A tool without the attribute
-            // belongs to no agent, so nothing could ever reach it.
-            .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaTool)))
-            .Where(t => t.GetCustomAttribute<ProvidesToolForIntentAttribute>() != null);
+        // A tool without the attribute belongs to no agent, so nothing could ever reach it.
+        IEnumerable<Type> toolTypes = FindConcreteTypesDeclaring<MorganaTool, ProvidesToolForIntentAttribute>();
 
         foreach (Type toolType in toolTypes)
         {
@@ -189,6 +155,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
             // assembly the runtime happened to enumerate last.
             if (registry.TryGetValue(intent, out Type? value))
             {
+                // Collected for the report and logged now, so the duplicate is visible even if nobody reads the report.
                 string error = $"Duplicate tool registration for intent '{intent}': {value.Name} and {toolType.Name}";
                 registrationErrors.Add(error);
                 logger.LogError(error);
@@ -196,14 +163,43 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
             }
 
             registry[intent] = toolType;
+
+            // Lets the operator see at startup which agent each tool serves.
             Console.WriteLine($"  📦 Registered tool: {toolType.Name} for intent '{declaration.Intent}'");
         }
 
         Console.WriteLine($"✅ Tool registry initialized with {registry.Count} tool(s)");
         Console.WriteLine();
 
-        return registry;
+        // The duplicates travel with the registry because the report is where they are surfaced.
+        return (registry, registrationErrors);
     }
+
+    /// <summary>
+    /// Lists the concrete subclasses of <typeparamref name="TBase"/> that carry <typeparamref name="TAttribute"/>, across every loaded assembly.
+    /// </summary>
+    /// <remarks>
+    /// A domain's classes arrive in a plugin DLL that <c>PluginLoaderService</c> has already loaded by the time this runs.
+    /// </remarks>
+    private IEnumerable<Type> FindConcreteTypesDeclaring<TBase, TAttribute>() where TAttribute : Attribute
+        => AppDomain.CurrentDomain.GetAssemblies()
+            .Where(assembly => !assembly.IsDynamic)
+            .SelectMany(assembly =>
+            {
+                try
+                {
+                    return assembly.GetTypes();
+                }
+                catch (ReflectionTypeLoadException ex)
+                {
+                    // An assembly with incomplete dependencies costs only its own types: a half-built
+                    // plugin must not hide the classes of every other one.
+                    logger.LogWarning("Could not load types from assembly {ArgFullName}: {ExMessage}", assembly.FullName, ex.Message);
+                    return [];
+                }
+            })
+            .Where(type => type is { IsClass: true, IsAbstract: false } && type.IsSubclassOf(typeof(TBase)))
+            .Where(type => type.GetCustomAttribute<TAttribute>() != null);
 
     /// <summary>
     /// Prints how the discovered tools line up against the discovered agents.
@@ -216,6 +212,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     /// <param name="registrationErrors">Intents claimed by two tools, already collected.</param>
     private static void ReportRegistry(IReadOnlyDictionary<string, Type> registry, IReadOnlyList<string> registrationErrors)
     {
+        // The report is a block of its own in the startup output.
         Console.WriteLine("========================================");
         Console.WriteLine("Tool Registry Validation");
         Console.WriteLine("========================================");
@@ -224,6 +221,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         // two scans that can disagree would report a mismatch neither of them causes.
         Dictionary<string, Type> agentsByIntent = HandlesIntentAgentRegistryService.DiscoverAgents();
 
+        // The two sides compared by intent name, whatever the case it was typed in.
         HashSet<string> agentIntents = new(agentsByIntent.Keys, StringComparer.OrdinalIgnoreCase);
         HashSet<string> toolIntents = new(registry.Keys, StringComparer.OrdinalIgnoreCase);
 
@@ -232,6 +230,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         bool warningsHeaderWritten = false;
         void WriteWarningsHeader()
         {
+            // Written once however many warnings follow.
             if (warningsHeaderWritten)
                 return;
 
@@ -270,6 +269,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
                 Console.WriteLine($"  ❌ {error}");
         }
 
+        // Closes the block opened above.
         Console.WriteLine("========================================");
         Console.WriteLine();
     }
@@ -280,18 +280,18 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     /// has no native tool and runs on framework tool alone (Reply) or MCP.
     /// </remarks>
     public Type? FindToolTypeForIntent(string intent)
-    {
-        return string.IsNullOrWhiteSpace(intent)
+        => string.IsNullOrWhiteSpace(intent)
             ? null
             : intentToToolType.Value.GetValueOrDefault(intent.ToLowerInvariant());
-    }
 
     /// <inheritdoc />
     public IReadOnlyList<Records.ToolDefinition> GetToolDefinitions(string intent)
     {
+        // An agent without a tool class has no native tool to project.
         if (FindToolTypeForIntent(intent) is not { } toolType)
             return [];
 
+        // Projected on the first request of the intent and kept: the class does not change while the process runs.
         return toolDefinitionsByIntent.GetOrAdd(intent, _ => ProjectToolDefinitions(toolType));
     }
 
@@ -333,14 +333,13 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     /// </remarks>
     /// <param name="toolType">The <see cref="MorganaTool"/> subclass to project.</param>
     public static IReadOnlyList<Records.ToolDefinition> ProjectToolDefinitions(Type toolType)
-    {
-        return [.. GetToolMethods(toolType).Select(ProjectToolDefinition)];
-    }
+        => [.. GetToolMethods(toolType).Select(ProjectToolDefinition)];
 
     /// <summary>Projects one tool method into the definition that the adapter and the composer read.</summary>
     /// <param name="method">A tool method as <see cref="GetToolMethods"/> lists it.</param>
     private static Records.ToolDefinition ProjectToolDefinition(MethodInfo method)
     {
+        // A parameter is required unless the signature gives it a default. Its scope says whether the user or the context supplies it.
         List<Records.ToolParameter> parameters =
         [
             .. method.GetParameters().Select(parameter => new Records.ToolParameter(
@@ -353,6 +352,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
                 parameter.GetCustomAttribute<ToolParameterAttribute>()?.Shared ?? false))
         ];
 
+        // A tool is its method: the name, the description and the approval flag all come from the declaration.
         return new Records.ToolDefinition(
             method.Name,
             method.GetCustomAttribute<DescriptionAttribute>()?.Description ?? string.Empty,
@@ -368,14 +368,17 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     /// <param name="methodReturnType">The return type as the method declares it.</param>
     private static List<Records.ToolReturn>? ProjectReturns(Type methodReturnType)
     {
+        // A method returning no record has no fields to project.
         Type? returnType = HandlesIntentAgentRegistryService.UnwrapReturnType(methodReturnType);
         if (returnType is null)
             return null;
 
+        // The same schema that the model is shown, so the projection can never list a field the model does not see.
         JsonElement schema = MorganaToolAdapter.CreateReturnSchema(returnType);
         if (!schema.TryGetProperty("properties", out JsonElement properties))
             return null;
 
+        // One entry per field, flagging the one that marks a failed call.
         return
         [
             .. properties.EnumerateObject().Select(property => new Records.ToolReturn(
@@ -387,7 +390,5 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
 
     /// <summary>All registered tool types keyed by intent — diagnostics/validation/testing enumeration.</summary>
     public IReadOnlyDictionary<string, Type> GetAllRegisteredTools()
-    {
-        return intentToToolType.Value;
-    }
+        => intentToToolType.Value;
 }

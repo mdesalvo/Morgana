@@ -20,6 +20,7 @@ public sealed class CommandRegistryService : ICommandRegistryService
     /// <exception cref="InvalidOperationException">Thrown when two commands answer to the same name or one declares itself wrongly.</exception>
     public CommandRegistryService(IEnumerable<ICommand> commands)
     {
+        // Collected in registration order, which becomes the order of the catalogue that channels receive.
         List<CommandDescriptor> descriptors = [];
         foreach (ICommand command in commands)
         {
@@ -35,14 +36,15 @@ public sealed class CommandRegistryService : ICommandRegistryService
             // Registration order is the palette's order: the one who wires the commands decides how they are listed
             descriptors.Add(command.Descriptor);
         }
+
+        // The catalogue is fixed once every command passed its checks: later calls only read it.
         catalog = descriptors;
     }
 
     /// <inheritdoc />
     public IReadOnlyList<CommandDescriptor> GetCatalog() => catalog;
 
-    /// <inheritdoc />
+    /// <summary>Finds a command by its name, whatever the case that its user typed it in; <c>null</c> when none answers to it.</summary>
     public ICommand? ResolveCommand(string name) =>
-        // The index ignores case, so a channel may send the name as its user typed it
         commandsByName.GetValueOrDefault(name);
 }

@@ -55,7 +55,10 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
         CancellationToken cancellationToken = default)
     {
         ChatResponse chatResponse = await base.GetResponseAsync(chatMessages, chatOptions, cancellationToken);
+
+        // The call is charged once it has completed: only then does the provider report what it consumed.
         await ChargeAsync(ResolveConversationId(chatOptions), chatResponse.Usage);
+        // The caller receives the response untouched: metering never alters the answer.
         return chatResponse;
     }
 
@@ -76,9 +79,11 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
             foreach (UsageContent usageContent in chatResponseUpdate.Contents.OfType<UsageContent>())
                 usageDetails = usageContent.Details;
 
+            // The chunk goes on to the user at once: metering never delays the stream.
             yield return chatResponseUpdate;
         }
 
+        // The stream is over, so the last cumulative total is the whole cost of the call.
         await ChargeAsync(ResolveConversationId(chatOptions), usageDetails);
     }
 
@@ -105,12 +110,15 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
     /// </remarks>
     private async Task ChargeAsync(string? convId, UsageDetails? usageDetails)
     {
+        // A call with no conversation to charge or no usage report has no cost to attribute.
         if (string.IsNullOrEmpty(convId) || usageDetails is null)
             return;
 
+        // The provider reports the whole prompt in one count with the two cache components inside it.
         long totalInput = usageDetails.InputTokenCount ?? 0;
         long cacheRead = usageDetails.CachedInputTokenCount ?? 0;
 
+        // Only providers that bill cache writes report them: the others charge none.
         long cacheWrite = 0;
         if (usageDetails.AdditionalCounts is not null &&
             usageDetails.AdditionalCounts.TryGetValue("CacheCreationInputTokens", out long w))
@@ -120,6 +128,7 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
         // adapter that might report the components non-disjointly.
         long freshInput = Math.Max(0, totalInput - cacheRead - cacheWrite);
 
+        // Cache reads and writes weigh differently from fresh tokens: this prices the prompt as the provider bills it.
         double effectiveInput =
             freshInput +
             cacheRead * dustPricing.CachedInputWeight +
@@ -127,6 +136,7 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
 
         long outputTokens = usageDetails.OutputTokenCount ?? 0;
 
+        // A tier priced at zero tokens per unit on an axis (a local model) costs nothing on that axis.
         double dust =
             (dustPricing.InputTokensPerDustUnit > 0
                 ? effectiveInput / dustPricing.InputTokensPerDustUnit
@@ -135,6 +145,7 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
                 ? (double)outputTokens / dustPricing.OutputTokensPerDustUnit
                 : 0.0);
 
+        // A free call leaves no ledger line.
         if (dust <= 0.0)
             return;
 

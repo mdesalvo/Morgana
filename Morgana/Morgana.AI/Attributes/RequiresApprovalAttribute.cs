@@ -18,6 +18,7 @@ public sealed class RequiresApprovalAttribute : Attribute
     /// <param name="required">True when the tool changes something real.</param>
     public RequiresApprovalAttribute(bool required)
     {
+        // The flag is what makes the framework hold the call until the user has approved it.
         Required = required;
     }
 }

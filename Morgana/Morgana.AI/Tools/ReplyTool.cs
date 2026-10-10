@@ -58,6 +58,7 @@ public class ReplyTool : MorganaTool
         [Description("A card presenting the turn's structured data; omit when none. Pick each component by the nature of the datum: key_value for one labeled field, grid for several homogeneous pairs, list for an enumeration, text_block for prose, badge for a status, image for a picture URL, section to group related components, divider between groups. At most 50 components and 3 levels of nesting.")]
         [ToolParameter(Records.ToolScope.Request)] RichCard? card = null)
     {
+        // The context of the turn under way holds the session where the closure is recorded.
         ToolContext ctx = getToolContext();
 
         // A turn closes once. A second Reply in the same turn is a stray duplicate: the closure already
@@ -79,6 +80,7 @@ public class ReplyTool : MorganaTool
         // Reply again with a card that fits.
         if (card is not null)
         {
+            // Nesting beyond what the channels lay out is refused with the limit stated.
             int depth = CalculateMaxDepth(card.Components, 1);
             if (depth > MaxCardDepth)
                 return new Records.FrameworkToolResult(Constants.ToolInjections.CardTooDeep, new Dictionary<string, string>
@@ -87,6 +89,7 @@ public class ReplyTool : MorganaTool
                     [Constants.Placeholders.Limit] = MaxCardDepth.ToString(CultureInfo.InvariantCulture)
                 });
 
+            // A card with more components than the channels lay out is refused the same way.
             int totalComponents = CountComponents(card.Components);
             if (totalComponents > MaxCardComponents)
                 return new Records.FrameworkToolResult(Constants.ToolInjections.CardTooLarge, new Dictionary<string, string>
@@ -96,6 +99,7 @@ public class ReplyTool : MorganaTool
                 });
         }
 
+        // An omitted list means the turn offers no button.
         List<Records.ReplyAction> offeredActions = actions ?? [];
 
         // At a choice step the buttons are the framework's proposal: one per tool of the step, each once.
@@ -103,6 +107,7 @@ public class ReplyTool : MorganaTool
         // A user who is leaving gets no button, so there is nothing to hold to the step.
         if (ctx.ChoiceStep is { } choice && !userIsLeaving)
         {
+            // The set is exact when each tool of the step is offered once and nothing else is.
             bool isExactSet = offeredActions.Count == choice.Tools.Count
                 && choice.Tools.All(tool => offeredActions.Count(action => string.Equals(action.Tool, tool, StringComparison.Ordinal)) == 1);
             if (!isExactSet)
@@ -114,7 +119,8 @@ public class ReplyTool : MorganaTool
                 });
 
             // Recorded in the order the step declares, whatever order the model wrote them in.
-            offeredActions = [.. choice.Tools.Select(tool => offeredActions.First(action => string.Equals(action.Tool, tool, StringComparison.Ordinal)))];
+            List<Records.ReplyAction> replyActions = offeredActions;
+            offeredActions = [.. choice.Tools.Select(tool => replyActions.First(action => string.Equals(action.Tool, tool, StringComparison.Ordinal)))];
             awaits = Records.AwaitedFromUser.ActionChoice;
         }
 
@@ -122,23 +128,29 @@ public class ReplyTool : MorganaTool
         // agent would be a promise nothing keeps, so it never reaches the channel.
         if (ctx.ActionableToolNames is { } actionableToolNames)
         {
+            // The model is not told about the discard: the log is where an agent that offers phantom buttons shows up.
             foreach (Records.ReplyAction discarded in offeredActions.Where(action => !actionableToolNames.Contains(action.Tool)))
                 toolLogger.LogWarning("Reply discarded the action '{Label}': it leads to '{Tool}', which this agent does not have", discarded.Label, discarded.Tool);
 
+            // Only the buttons that lead to a tool of this agent are delivered.
             offeredActions = [.. offeredActions.Where(action => actionableToolNames.Contains(action.Tool))];
         }
 
+        // The closure as the channel will deliver it: the awaited input, the leaving flag and the buttons and card that survived the checks.
         Records.TurnReply turnReply = new Records.TurnReply(awaits, userIsLeaving, offeredActions, card);
 
+        // The agent reads the closure from the session at the end of the turn: this is how Reply hands it over.
         await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.TurnReply,
             JsonSerializer.Serialize(turnReply, Records.DefaultJsonSerializerOptions));
 
+        // The turn is closed: the model gets no further call to talk after the closure.
         EndToolLoopOnceResponseIsAnswered();
 
         toolLogger.LogInformation(
             "LLM closed its turn via Reply: awaits={Awaits}, userIsLeaving={UserIsLeaving}, actions={Actions}, card={Card}",
             awaits, userIsLeaving, turnReply.Actions.Count, card?.Title ?? "(none)");
 
+        // The model is told the turn is closed.
         return new Records.FrameworkToolResult(Constants.ToolInjections.TurnClosed);
     }
 
@@ -161,10 +173,12 @@ public class ReplyTool : MorganaTool
     /// </summary>
     internal static bool HasTurnText(IList<ChatMessage> messages)
     {
+        // The turn opened at the last user message: text from earlier turns does not count.
         int turnStart = messages.Count - 1;
         while (turnStart >= 0 && messages[turnStart].Role != ChatRole.User)
             turnStart--;
 
+        // Only an assistant message carrying words proves the user was written to.
         return messages.Skip(turnStart + 1)
             .Any(message => message.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(message.Text));
     }
@@ -178,8 +192,10 @@ public class ReplyTool : MorganaTool
     /// <returns>Maximum depth found in the component tree</returns>
     private static int CalculateMaxDepth(List<CardComponent> components, int currentDepth)
     {
+        // A card without sections is as deep as the level it sits on.
         int maxDepth = currentDepth;
 
+        // Only a section nests further components: the deepest branch sets the card's depth.
         foreach (CardComponent component in components)
         {
             if (component is SectionComponent section)
@@ -200,8 +216,10 @@ public class ReplyTool : MorganaTool
     /// <returns>Total component count including all nested components</returns>
     private static int CountComponents(List<CardComponent> components)
     {
+        // The components of this level count first.
         int count = components.Count;
 
+        // A section adds its own components to the total.
         foreach (CardComponent component in components)
         {
             if (component is SectionComponent section)

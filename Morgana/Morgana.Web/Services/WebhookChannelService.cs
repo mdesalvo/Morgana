@@ -74,20 +74,24 @@ public class WebhookChannelService : IChannelService
         // The callback this conversation announced at the handshake is where the message goes
         ChannelMetadata channelMetadata = await channelMetadataStore.GetChannelMetadataAsync(channelMessage.ConversationId);
 
+        // The start gate refuses a webhook handshake without a callback, so a conversation with none is a corrupted record.
         string? callbackUrl = channelMetadata.Coordinates.CallbackUrl;
         if (string.IsNullOrWhiteSpace(callbackUrl))
             throw new InvalidOperationException(
                 $"Webhook dispatch for conversation {channelMessage.ConversationId} has no callbackUrl in coordinates; " +
                 "the start-conversation gate should have rejected a deliveryMode=webhook handshake without an absolute callbackUrl.");
 
+        // The attempts follow one another until the callback takes the message or the failure is final.
         HttpClient httpClient = httpClientFactory.CreateClient(HttpClientName);
         for (int failedAttempts = 0; ; failedAttempts++)
         {
+            // What the attempt reports when it fails together with whether another attempt can change the outcome.
             string failure;
             bool mayPass;
             try
             {
                 using HttpResponseMessage response = await httpClient.PostAsJsonAsync(callbackUrl, channelMessage);
+                // The callback took the message: the delivery is complete.
                 if (response.IsSuccessStatusCode)
                 {
                     logger.LogInformation(
@@ -96,6 +100,7 @@ public class WebhookChannelService : IChannelService
                     return;
                 }
 
+                // The callback's own words are kept: they are the only evidence of why it refused.
                 failure = $"{(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}";
                 mayPass = MayPass(response.StatusCode);
             }
@@ -106,6 +111,7 @@ public class WebhookChannelService : IChannelService
                 mayPass = true;
             }
 
+            // A refusal that will not pass, or delays all spent: the message is given up and the turn is not faulted.
             if (!mayPass || failedAttempts == RedeliveryDelays.Length)
             {
                 logger.LogError(
@@ -114,6 +120,7 @@ public class WebhookChannelService : IChannelService
                 return;
             }
 
+            // Not out of range: the exit above fires when every delay has been used.
             TimeSpan redeliveryDelay = RedeliveryDelays[failedAttempts];
             logger.LogWarning(
                 "Webhook to conversation {ConversationId} at {CallbackUrl} failed ({Failure}); delivering again in {RedeliveryDelay}",
@@ -137,6 +144,7 @@ public class WebhookChannelService : IChannelService
         // The callback this conversation announced at the handshake is where the chunk goes
         ChannelMetadata channelMetadata = await channelMetadataStore.GetChannelMetadataAsync(conversationId);
 
+        // The start gate refuses a webhook handshake without a callback, so a conversation with none is a corrupted record.
         string? callbackUrl = channelMetadata.Coordinates.CallbackUrl;
         if (string.IsNullOrWhiteSpace(callbackUrl))
             throw new InvalidOperationException(
@@ -151,9 +159,11 @@ public class WebhookChannelService : IChannelService
 
         try
         {
+            // A single attempt: the final message carries the whole text, so a chunk is never worth delivering again.
             HttpClient httpClient = httpClientFactory.CreateClient(HttpClientName);
             using HttpResponseMessage response = await httpClient.PostAsJsonAsync(
                 chunkUrl, new StreamChunkRequest(conversationId, chunkText));
+            // The callback answered but refused the chunk: logged, since the channel is then misconfigured.
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogError(

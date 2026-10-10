@@ -70,10 +70,14 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
     /// </summary>
     private ChatOptions? Present(ChatOptions? options)
     {
+        // The session is read on every call: a step reached halfway through a turn changes what the next call offers.
         AgentSession? session = sessionAccessor();
+
+        // A call with no session or no tools has nothing to present, so the caller's options go through as they are.
         if (session is null || options?.Tools is not { Count: > 0 } tools)
             return options;
 
+        // An agent answering a colleague carries the consultation mark in its session.
         bool servingConsultation = contextProvider.GetVariable(session, Constants.ContextKeys.ServingConsultation) is not null;
 
         // A colleague is not consulted by an agent that is answering one, since the chain stops at one hop,
@@ -81,6 +85,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         bool colleaguesOutOfReach = servingConsultation
             || contextProvider.GetConsultationRounds(session) >= maxConsultationRoundsPerTurn;
 
+        // The position says whether a workflow is running and at which step; an agent with no workflows holds none.
         Records.WorkflowPosition? position = workflows.Count == 0 ? null : contextProvider.GetWorkflowPosition(session);
         (Records.WorkflowDefinition Definition, Records.WorkflowStep Step)? running = position?.Resolve(workflows);
 
@@ -92,6 +97,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         if (running is null && entryTools.Count == 0 && !colleaguesOutOfReach)
             return options;
 
+        // The tools the model is offered on this call, chosen by whether a workflow is running.
         List<AITool> presented;
         if (running is null)
         {
@@ -101,6 +107,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         }
         else
         {
+            // The tools that the workflow names are the ones that its steps govern; any other tool is the agent's own.
             HashSet<string> signature = running.Value.Definition.ToolSignature();
             presented = [];
 
@@ -128,12 +135,15 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
             }
         }
 
+        // The ban on colleagues holds inside a running workflow as well, whatever the step allows.
         if (colleaguesOutOfReach)
             presented.RemoveAll(tool => tool.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal));
 
+        // The caller's options are shared across turns, so the narrowed tool list goes on a clone.
         ChatOptions presentedOptions = options.Clone();
         presentedOptions.Tools = presented;
 
+        // The model reads only the tools that the session's state allows.
         return presentedOptions;
     }
 
@@ -144,27 +154,33 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
     /// <param name="boundParameters">The parameters that the step binds.</param>
     private static AITool WithoutBoundParameters(AITool tool, IEnumerable<string> boundParameters)
     {
+        // A tool that is not a function has no schema to edit.
         if (tool is not AIFunction function)
             return tool;
 
         JsonObject schema = SchemaOf(function);
+
         // A workflow carries its property's name while a tool spells its parameter its own way, so the
         // schema's own spelling is what is hidden.
         string[] hidden = schema["properties"] is JsonObject properties
             ? [.. properties.Select(property => property.Key)
                 .Where(name => boundParameters.Contains(name, StringComparer.OrdinalIgnoreCase))]
             : [];
+        // A step that binds nothing of this tool leaves its schema as the tool declared it.
         if (hidden.Length == 0)
             return tool;
 
+        // The model never supplies a value that the framework already holds, so the parameter is not offered.
         foreach (string parameter in hidden)
             schema["properties"]!.AsObject().Remove(parameter);
 
+        // A hidden parameter cannot stay required, or the model could never satisfy the schema.
         if (schema["required"] is JsonArray required)
             schema["required"] = new JsonArray([.. required
                 .Where(name => !hidden.Contains(name!.GetValue<string>(), StringComparer.Ordinal))
                 .Select(name => name!.DeepClone())]);
 
+        // The tool goes on offer under the schema without the bound parameters.
         return Rewritten(function, schema);
     }
 
@@ -175,24 +191,31 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
     /// <param name="stepTools">The tools of the choice step, in declared order.</param>
     private static AITool WithStepActions(AITool reply, IReadOnlyList<string> stepTools)
     {
+        // A Reply that is not a function has no schema to edit.
         if (reply is not AIFunction function)
             return reply;
 
         JsonObject schema = SchemaOf(function);
+
+        // The actions property is where Reply offers buttons; its schema becomes the proposal of the step's choices.
         JsonObject actions = schema["properties"]!["actions"]!.AsObject();
 
         // A null in the place of the array would leave the step with no button, so the type is narrowed to the array.
         actions["type"] = "array";
         actions.Remove("default");
+
+        // One button per tool of the step: the user chooses among exactly the moves that the step allows.
         actions["minItems"] = stepTools.Count;
         actions["maxItems"] = stepTools.Count;
         actions["items"]!["properties"]!["tool"]!.AsObject()["enum"] = new JsonArray([.. stepTools.Select(tool => (JsonNode)JsonValue.Create(tool)!)]);
 
+        // Reply declares actions optional, but a choice step cannot be proposed without them.
         JsonArray required = schema["required"] as JsonArray ?? [];
-        if (!required.Any(name => name!.GetValue<string>() == "actions"))
+        if (required.All(name => name!.GetValue<string>() != "actions"))
             required.Add("actions");
         schema["required"] = required;
 
+        // The model reads Reply with its actions fixed to the step's tools.
         return Rewritten(function, schema);
     }
 

@@ -7,7 +7,6 @@ namespace Morgana.AI.Interfaces;
 /// Implementations must refuse, at construction, two commands answering to the same name: a channel
 /// resolving a typed name must never find two candidates. They must refuse a command whose
 /// <see cref="CommandDescriptor.DescribeDeclarationProblem"/> names a fault just the same.
-/// Default implementation: CommandRegistryService collects every command registered in DI.
 /// </summary>
 public interface ICommandRegistryService
 {

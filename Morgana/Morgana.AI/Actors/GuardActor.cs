@@ -32,9 +32,10 @@ public class GuardActor : MorganaActor
         IGuardRailService guardRailService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
+        // The service owns the whole moderation strategy, so the actor stays a relay between the supervisor and it.
         this.guardRailService = guardRailService;
 
-        // Requests the guardrail checking of the user message to the guard service (see CheckComplianceAsync)
+        // The supervisor asks for a verdict on every message before anything else reads it.
         ReceiveAsync<Records.GuardCheckRequest>(CheckComplianceAsync);
     }
 
@@ -44,6 +45,7 @@ public class GuardActor : MorganaActor
     /// <param name="req">Guard check request containing the conversation ID and the message to evaluate.</param>
     private async Task CheckComplianceAsync(Records.GuardCheckRequest req)
     {
+        // The supervisor waits for the verdict: the sender is captured before the first await.
         IActorRef originalSender = Sender;
 
         try
@@ -55,11 +57,12 @@ public class GuardActor : MorganaActor
                     ? await guardRailService.CheckAsync(req.ConversationId, req.Message)
                     : new Records.GuardRailResult(true, null);
 
+            // The log line records the verdict so a rejected message can be traced to its check.
             actorLogger.Info(
                 "Guard check complete for conversation {0}: compliant={1}",
                 req.ConversationId, result.Compliant);
 
-            // Gives the supervisor the response of the message checking
+            // The supervisor continues to classification on a compliant verdict and rejects the message otherwise.
             originalSender.Tell(new Records.GuardCheckResponse(result.Compliant, result.Violation));
         }
         catch (Exception ex)

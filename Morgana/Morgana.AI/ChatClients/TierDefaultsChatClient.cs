@@ -47,14 +47,17 @@ public sealed class TierDefaultsChatClient : DelegatingChatClient
     /// </summary>
     private ChatOptions ResolveEffectiveOptions(ChatOptions? requestOptions)
     {
+        // A caller that already chose both fields needs no default, so its options pass untouched.
         if (requestOptions is not null &&
             requestOptions.ModelId is not null &&
             requestOptions.MaxOutputTokens is not null)
             return requestOptions;
 
+        // The tier's defaults fill a clone: the shared tier instance and the caller's reusable options stay unchanged.
         ChatOptions effectiveOptions = requestOptions?.Clone() ?? new ChatOptions();
         effectiveOptions.ModelId ??= tierDefaultOptions.ModelId;
         effectiveOptions.MaxOutputTokens ??= tierDefaultOptions.MaxOutputTokens;
+        // The clone carries the caller's choices plus the tier's model and output ceiling where the caller gave none.
         return effectiveOptions;
     }
 }

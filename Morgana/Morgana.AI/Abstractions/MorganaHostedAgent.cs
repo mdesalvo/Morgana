@@ -105,6 +105,7 @@ public sealed class MorganaHostedAgent : AIAgent
         IConversationPersistenceService persistenceService,
         ILogger logger)
     {
+        // The agent is a singleton per intent: everything it needs is fixed at registration and nothing is per conversation.
         this.intent = intent;
         this.description = description;
         this.agentRegistryService = agentRegistryService;
@@ -161,10 +162,7 @@ public sealed class MorganaHostedAgent : AIAgent
         // spending the colleague's reading on its own name. Only an agent of this installation
         // declares itself and the endpoint answers anything that speaks A2A — so an unnamed caller
         // is ordinary and what to call it is the composer's word to choose, not this method's.
-        string? callerIntent =
-            options?.AdditionalProperties?.TryGetValue(Constants.MessageProperties.CallerIntent, out object? caller) == true
-                ? caller?.ToString()
-                : null;
+        string? callerIntent = options?.AdditionalProperties?.GetValueOrDefault(Constants.MessageProperties.CallerIntent)?.ToString();
 
         // Asked of the registry per request, never assumed from the fact that this endpoint answers.
         // Publication is decided once at startup, while the endpoint is open to anything that speaks
@@ -209,7 +207,7 @@ public sealed class MorganaHostedAgent : AIAgent
                 return BuildAgentResponseFromMessage(await ComposeFallbackAsync(Constants.ToolInjections.PeerOutOfBudget));
             }
 
-            // Resolve the actor system
+            // The actor system exists only after the host has started, which is later than this singleton's construction.
             ActorSystem actorSystem = actorSystemResolver();
 
             // Deliberately the same resolution the router performs, so an agent reached over A2A is
@@ -353,6 +351,7 @@ public sealed class MorganaHostedAgentSession : AgentSession
     /// <param name="callerIssuer">System that asked.</param>
     public MorganaHostedAgentSession(string conversationId, string? callerIssuer = null)
     {
+        // Both values are fixed by the store from the request: the agent never chooses the conversation it serves.
         ConversationId = conversationId;
         CallerIssuer = callerIssuer;
     }
@@ -390,6 +389,7 @@ public sealed class MorganaHostedAgentSessionStore : AgentSessionStore
     /// <param name="logger">Logger for inbound-request diagnostics.</param>
     public MorganaHostedAgentSessionStore(Func<string?> callerIssuerResolver, ILogger logger)
     {
+        // The issuer is resolved per request because the store is a singleton and serves every partner.
         this.callerIssuerResolver = callerIssuerResolver;
         this.logger = logger;
     }
@@ -397,13 +397,16 @@ public sealed class MorganaHostedAgentSessionStore : AgentSessionStore
     /// <inheritdoc />
     public override ValueTask<AgentSession?> GetSessionAsync(AIAgent agent, AgentSessionStoreKey sessionStoreKey, CancellationToken cancellationToken = default)
     {
+        // The issuer is what the gate in front of the endpoint proved, never what the request claims.
         string? callerIssuer = callerIssuerResolver();
         string conversationId = ResolveConversationId(sessionStoreKey.SessionId, callerIssuer);
 
+        // The line that tells an operator which system reached which conversation.
         logger.LogInformation(
             "Inbound A2A request from '{CallerIssuer}' for agent '{AgentName}' on conversation '{ConversationId}'",
             callerIssuer ?? "an undeclared system", agent.Name, conversationId);
 
+        // A fresh session per request: the conversation's state lives in its actor, not here.
         return ValueTask.FromResult<AgentSession?>(new MorganaHostedAgentSession(conversationId, callerIssuer));
     }
 

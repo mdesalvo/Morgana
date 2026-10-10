@@ -82,6 +82,7 @@ public class LLMClassifierService : IClassifierService
                 ? $"{nameof(LLMClassifierService)}: no intents loaded — Morgana seems to be running in 'agentless' configuration"
                 : $"{nameof(LLMClassifierService)}: loaded {intents.Count} intents for classification");
 
+        // The collection turns the intent list into the name-to-description pairs that the prompt teaches the model.
         Records.IntentCollection intentCollection = new Records.IntentCollection(intents);
 
         // Blocking like the intents above, for the same reason: nothing later rebuilds this prompt.
@@ -109,6 +110,7 @@ public class LLMClassifierService : IClassifierService
     /// <inheritdoc/>
     public async Task<Records.ClassificationResult> ClassifyAsync(string conversationId, string message)
     {
+        // Only a preview of the message is logged: the whole text may carry personal data.
         logger.LogInformation(
             "LLMClassifierService: classifying message '{Preview}...' for conversation {ConversationId}",
             message[..Math.Min(50, message.Length)], conversationId);
@@ -127,7 +129,7 @@ public class LLMClassifierService : IClassifierService
             Records.ClassificationResponse? classificationResponse =
                 JsonSerializer.Deserialize<Records.ClassificationResponse>(response, Records.DefaultJsonSerializerOptions);
 
-            // Sort the candidates by confidence, highest first
+            // The order of the candidates is meaningful downstream: the best candidate leads.
             List<Records.IntentScore> rankedIntentScores =
             [
                 .. (classificationResponse?.Intents ?? [])
@@ -145,9 +147,11 @@ public class LLMClassifierService : IClassifierService
             // ClassificationResult.Intent and is used for normal (non-ambiguous) routing regardless
             // of whether we end up flagging a collision below.
             (string topIntentName, double topIntentScore) = rankedIntentScores[0];
+
             // Read back from telemetry and metadata by whoever consumes them, so it is written the
             // same on every host whatever its locale, as the fallbacks' literal "0.00" already is
             string topIntentConfidence = topIntentScore.ToString("F2", CultureInfo.InvariantCulture);
+            // The metadata travels with the intent to the supervisor and to telemetry.
             Dictionary<string, string> metadata = new()
             {
                 ["intent"] = topIntentName,
@@ -184,14 +188,17 @@ public class LLMClassifierService : IClassifierService
                     topIntentName, topIntentConfidence);
             }
 
+            // The supervisor routes on the top intent and diverts on the ambiguity key if present.
             return new Records.ClassificationResult(topIntentName, metadata);
         }
         catch (Exception ex)
         {
+            // A classification failure routes the turn to the catch-all rather than blocking the user.
             logger.LogError(ex,
                 "LLMClassifierService: classification failed for conversation {ConversationId} — falling back to 'other'",
                 conversationId);
 
+            // The fallback carries the failure reason in its metadata so that telemetry can tell it from a genuine low-confidence pick.
             return FallbackResult with
             {
                 Metadata = new Dictionary<string, string>

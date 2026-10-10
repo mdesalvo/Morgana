@@ -207,7 +207,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
             return card;
 
         // Still unknown, which is the ordinary state until the server binds: the card goes out
-        // saying nothing about where to reach this agent, exactly as it did a moment ago.
+        // saying nothing about where to reach this agent.
         string? baseAddress = hostAddressService.ResolveBaseAddress();
         if (baseAddress is null)
             return card;
@@ -384,6 +384,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
     /// <exception cref="InvalidOperationException">The declared address is relative or on a scheme carrying no bearer.</exception>
     public static void ValidatePublishedAddress(IConfiguration configuration, IReadOnlyCollection<string> publishedIntents)
     {
+        // Nothing published means no card carries the address, so a declaration would name nothing.
         if (publishedIntents.Count == 0)
             return;
 
@@ -403,6 +404,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
                 + "scheme and a host: https://morgana.example.com.");
         }
 
+        // Only the two schemes that carry a bearer token can be advertised to a peer.
         if (!string.Equals(publicAddress.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
             && !string.Equals(publicAddress.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
         {
@@ -523,6 +525,8 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
                     + "least 256 bits (32 bytes), the margin HMAC-SHA256 signs and proves a peer token with.");
             }
 
+            // Each open direction is weighed by its own rules: a consulted partner needs somewhere to be
+            // called and an admitted one needs a bounded reach.
             if (consultable)
                 ValidateConsultableAddress(partnerName, partner.Url);
 
@@ -624,6 +628,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         // putting the same question to the same publisher at the same moment.
         Lazy<Task<PeerCardReading>> reading = peerCardReadings.GetOrAdd(endpoint, StartReading);
 
+        // The shared reading, whoever started it: a caller arriving during the fetch waits for the same answer.
         PeerCardReading peerCard = await reading.Value;
 
         // Still worth trusting, either as what the colleague publishes or as the fact that it is not
@@ -667,6 +672,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
                 new Uri($"{baseAddress}{Constants.AgentToAgent.AgentPathPrefix}/{intent}/"),
                 new HttpClient(connectionPool, disposeHandler: false) { Timeout = CardDiscoveryTimeout });
 
+            // The card and the moment it was read travel together: the moment decides when the reading expires.
             return new PeerCardReading(await resolver.GetAgentCardAsync(), DateTimeOffset.UtcNow);
         }
         catch (Exception ex)
@@ -678,6 +684,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
                 "Could not read the published A2A card of '{Intent}' at '{BaseAddress}'; it stays unreachable for the next {UnreachableSeconds} seconds",
                 intent, baseAddress, PeerCardUnreachableWindow.TotalSeconds);
 
+            // A reading without a card is how an unreachable colleague is remembered for the window.
             return new PeerCardReading(null, DateTimeOffset.UtcNow);
         }
     }
@@ -702,6 +709,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
     /// <param name="peer">The colleague being resolved, named in the diagnostics.</param>
     private bool DeclaresOnlyInterfacesAt(AgentCard card, string baseAddress, Records.PeerReference peer)
     {
+        // The origin the card was fetched from is the only one its interfaces may name.
         Uri trustedOrigin = new Uri(baseAddress);
 
         // Nothing to bind to: this one never said where it answers at all.
@@ -723,6 +731,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
             }
         }
 
+        // Every advertised interface is on the origin the card came from: binding to any of them is safe.
         return true;
     }
 
@@ -817,11 +826,13 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
                     "Consultations of '{Intent}' at '{BaseAddress}' are signed over plaintext HTTP: the bearer token is replayable by anyone on the path",
                     peer.Intent, baseAddress);
 
+            // The client signs each request itself and attaches the token only for the trusted origin.
             return new HttpClient(
                 new MorganaPeerAuthenticationHandler(connectionPool, symmetricKey, issuer, audience, callerIntent, trustedOrigin, logger),
                 disposeHandler: false) { Timeout = peerRequestTimeout };
         }
 
+        // Every demanded scheme was passed over: the colleague is left unresolved rather than called unsigned.
         logger.LogError(
             "Agent '{Intent}' requires security scheme(s) '{SchemeNames}', none of which this installation can satisfy",
             peer.Intent, string.Join(", ", requiredSchemeNames));
@@ -1049,6 +1060,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
                     "A consultation on behalf of '{CallerIntent}' was directed at '{RequestUri}', outside the origin '{TrustedOrigin}' its colleague was resolved at: it travels unsigned",
                     callerIntent, request.RequestUri, trustedOrigin);
 
+                // Sent without the credential, so a card cannot lead this side to leak a token to a third host.
                 return base.SendAsync(request, cancellationToken);
             }
 
@@ -1056,6 +1068,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
             // known to be the colleague's own.
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", MintToken());
 
+            // The signed request goes to the colleague through the shared connection pool.
             return base.SendAsync(request, cancellationToken);
         }
 

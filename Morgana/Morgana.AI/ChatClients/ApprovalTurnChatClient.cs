@@ -36,6 +36,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
+        // The conversation is copied because a refused response is appended to it before the model is asked again.
         List<ChatMessage> messages = [.. chatMessages];
         ChatResponse response = await base.GetResponseAsync(messages, options, cancellationToken);
 
@@ -47,9 +48,11 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
             response = await base.GetResponseAsync(messages, options, cancellationToken);
         }
 
+        // A response that asks for nothing keeps its Reply call: the model closes that turn itself.
         if (!AsksForApproval(response.Messages.SelectMany(message => message.Contents), options))
             return response;
 
+        // The turn is closed by the framework with the approval buttons, so the Reply written beside the request is dropped.
         foreach (ChatMessage message in response.Messages)
             message.Contents = [.. message.Contents.Where(content => !IsReplyCall(content))];
 
@@ -62,6 +65,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
         ChatOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        // The conversation is copied because a refused response is appended to it before the model is asked again.
         List<ChatMessage> messages = [.. chatMessages];
         List<ChatResponseUpdate> heldUpdates;
         List<ChatResponseUpdate> callUpdates;
@@ -77,12 +81,14 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
             // The calls are held to the end of the response, where only then is it known whether one asks for approval.
             await foreach (ChatResponseUpdate update in base.GetStreamingResponseAsync(messages, options, cancellationToken))
             {
+                // Calls are held whole to the end of the response: whether one asks for approval is known only then.
                 if (update.Contents.Any(content => content is FunctionCallContent))
                 {
                     callUpdates.Add(update);
                     continue;
                 }
 
+                // The first word releases what was held, so the user sees the turn from its beginning.
                 if (!textStarted && update.Contents.OfType<TextContent>().Any(text => !string.IsNullOrWhiteSpace(text.Text)))
                 {
                     textStarted = true;
@@ -91,6 +97,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
                     heldUpdates.Clear();
                 }
 
+                // Once the turn has text every update reaches the user as it comes.
                 if (textStarted)
                     yield return update;
                 else
@@ -103,6 +110,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
             }
 
             // Same rule as the non-streaming path: an approval request is let through only once the turn has text.
+            // The refusal is appended so the next attempt sees why its calls were turned down.
             List<ChatMessage> written = [.. heldUpdates.Concat(callUpdates).ToChatResponse().Messages];
             if (textStarted || refusals >= MaxTextlessRefusals || !IsTextlessApprovalRequest(messages, written, options))
                 break;
@@ -110,9 +118,11 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
             messages = [.. messages, .. written, RefusalOf(written)];
         }
 
+        // Whatever was still held belongs to the response that goes through, so it reaches the user now.
         foreach (ChatResponseUpdate held in heldUpdates)
             yield return held;
 
+        // The calls are released with the Reply dropped when the response asks for approval, as in the non-streaming path.
         bool asksForApproval = AsksForApproval(callUpdates.SelectMany(update => update.Contents), options);
         foreach (ChatResponseUpdate update in callUpdates)
         {
@@ -143,6 +153,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
     /// </summary>
     private static bool AsksForApproval(IEnumerable<AIContent> contents, ChatOptions? options)
     {
+        // The agent's tools wrapped for approval are the ones whose calls need the user's consent.
         HashSet<string> approvalRequired =
             [.. (options?.Tools ?? []).OfType<ApprovalRequiredAIFunction>().Select(tool => tool.Name)];
 

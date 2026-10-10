@@ -143,8 +143,8 @@ public sealed class CompactHistoryCommand : ICommand
         }
 
         // The summary is stamped onto the message it stands behind, inside the history just read: that mark
-        // is what a later reduction reads to know where the agent's window opens. Every message stays
-        // Only the current episode is folded: what came before the user last left is never read again.
+        // is what a later reduction reads to know where the agent's window opens. Only the current episode
+        // is folded, since what came before the user last left is never read again.
         int foldedMessages = await reducer.CompactAsync(MorganaChatHistoryProvider.CurrentEpisode(history), cancellationToken);
 
         // A fold that came to nothing leaves the row alone: rewriting it would date a record that did not change
@@ -176,6 +176,7 @@ public sealed class CompactHistoryCommand : ICommand
     /// </summary>
     private IChatClient MeteredChatClientOf(string agent, string conversationId)
     {
+        // The agent's declared tier prices the fold, so the summary costs what the agent's own turns cost.
         Records.LLMTier tier = agentRegistryService.ResolveAgentFromIntent(agent)
             ?.GetCustomAttributes(typeof(RequiresLLMTierAttribute), inherit: false)
             .OfType<RequiresLLMTierAttribute>()

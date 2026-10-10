@@ -32,19 +32,20 @@ public static class TelemetryExtensions
     {
         IConfigurationSection section = configuration.GetSection("Morgana:OpenTelemetry");
 
-        // OTel is globally flaggable
+        // A host that does not enable telemetry pays for none of it: no source is listened to and no exporter is built.
         if (!section.GetValue("Enabled", false))
             return services;
 
-        // OTel is also locally flaggable at exporter level
+        // Exporters are switched on one by one: the OTLP entry carries the endpoint, the console one is a development aid.
         string serviceName = section.GetValue("ServiceName", Constants.Morgana)!;
         ExporterConfig[] exporters = section.GetSection("Exporters").Get<ExporterConfig[]>() ?? [];
         ExporterConfig? otlpExporter = exporters.FirstOrDefault(e => e.Name.Equals("otlp", StringComparison.OrdinalIgnoreCase) && e.Enabled);
         bool consoleEnabled = exporters.Any(e => e.Name.Equals("console", StringComparison.OrdinalIgnoreCase) && e.Enabled);
+        // Telemetry enabled with every exporter off would collect spans nobody reads.
         if (otlpExporter is null && !consoleEnabled)
             return services;
 
-        // Tracing pipeline produces detailed journey logging, which is always meaningful 
+        // Traces follow a conversation's journey and are meaningful with any exporter: both the framework's spans and the LLM client's are collected.
         OpenTelemetryBuilder otel = services
             .AddOpenTelemetry()
             .WithTracing(tracing =>
@@ -55,14 +56,15 @@ public static class TelemetryExtensions
                     .AddSource(MorganaTelemetry.LLMChatClientSourceName) // MEAI OpenTelemetryChatClient activity source
                     .AddAspNetCoreInstrumentation();
 
+                // The conventional local collector address applies when the entry names no endpoint.
                 if (otlpExporter is not null)
                     tracing.AddOtlpExporter(otlp => otlp.Endpoint = new Uri(otlpExporter.Endpoint ?? "http://localhost:4317"));
+                // The console exporter writes spans to stdout for development.
                 if (consoleEnabled)
                     tracing.AddConsoleExporter();
             });
 
-        // Metrics pipeline produces aggregated data like counters and histograms, which is only meaningful
-        // when consumed by an OTLP-compatible backend — skip entirely when OTLP is not configured
+        // Counters and histograms are aggregates that only an OTLP-compatible backend can consume: without one no meter is collected.
         if (otlpExporter is not null)
         {
             otel.WithMetrics(metrics =>
@@ -78,5 +80,6 @@ public static class TelemetryExtensions
         return services;
     }
 
+    /// <summary>One entry of <c>Morgana:OpenTelemetry:Exporters</c>: an exporter by name, its switch and its optional endpoint.</summary>
     private record ExporterConfig(string Name, bool Enabled, string? Endpoint = null);
 }

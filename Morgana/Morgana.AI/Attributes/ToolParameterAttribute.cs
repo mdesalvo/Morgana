@@ -22,6 +22,7 @@ public sealed class ToolParameterAttribute : Attribute
     /// <param name="shared">True for a context value that every agent of the conversation reads.</param>
     public ToolParameterAttribute(Records.ToolScope scope, bool shared = false)
     {
+        // The scope decides whether the value is held context or asked of the user; sharing routes it into the conversation's registry.
         Scope = scope;
         Shared = shared;
     }

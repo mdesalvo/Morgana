@@ -157,6 +157,8 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         List<Records.IntentDefinition> configuredIntents)
     {
         List<string> errors = [];
+
+        // The intents that code answers for, compared below with the ones that configuration offers.
         HashSet<string> registeredIntents = [.. registry.Keys];
 
         // Every configured intent is a modelled agent and is owed an agent. The one intent that is
@@ -176,6 +178,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         if (undeclaredIntents.Count > 0)
             errors.Add($"There are Morgana agents handling an undeclared intent: {string.Join(", ", undeclaredIntents)}");
 
+        // Both directions are reported together, so one pass shows every intent that has lost its other half.
         return errors;
     }
 
@@ -195,6 +198,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 .Select(entry => $"{entry.Value.Name} (intent '{entry.Key}')")
         ];
 
+        // One message naming every offender, empty when each agent has chosen its tier.
         return missingAttribute.Count > 0
             ? [$"The following Morgana agents are missing the mandatory [RequiresLLMTier] attribute: {string.Join(", ", missingAttribute)}"]
             : [];
@@ -254,6 +258,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             }
         }
 
+        // Every unreachable or ambiguous colleague of every agent, so the declarations are fixed in one pass.
         return errors;
     }
 
@@ -265,6 +270,8 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     private List<string> ValidateToolContracts(Dictionary<string, Type> registry)
     {
         List<string> errors = [];
+
+        // The prompts are weighed beside the tool classes because both declare what the agent can do.
         List<Records.Prompt> prompts = agentConfigService.GetAgentPromptsAsync().GetAwaiter().GetResult();
 
         // Every domain prompt is weighed, including those of intents with no tool type: a leftover
@@ -284,6 +291,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             errors.AddRange(ValidateToolContract(intent, toolType));
         }
 
+        // Every class and every prompt is weighed before the list is handed back, so none hides another's fault.
         return errors;
     }
 
@@ -301,6 +309,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
         foreach (Records.Prompt prompt in prompts)
         {
+            // A prompt may carry its extra properties in several blocks, so a key is looked for in each of them.
             bool Declares(string key) => prompt.AdditionalProperties.Any(properties => properties.ContainsKey(key));
 
             if (Declares(Constants.PromptProperties.Tools))
@@ -320,17 +329,23 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// <returns>One message per violation, empty when every workflow holds.</returns>
     private List<string> ValidateWorkflowDeclarations(Dictionary<string, Type> registry)
     {
-        List<string> errors = [];
-
         // A workflow naming an intent that no agent handles can never be launched.
-        foreach (string intent in toolRegistryService.GetAllRegisteredWorkflows().Keys.Where(intent => !registry.ContainsKey(intent)))
-            errors.Add($"A workflow declares intent '{intent}', which no agent handles");
+        List<string> errors =
+        [
+            .. toolRegistryService.GetAllRegisteredWorkflows()
+                .Keys
+                .Where(intent => !registry.ContainsKey(intent))
+                .Select(intent => $"A workflow declares intent '{intent}', which no agent handles")
+        ];
 
         foreach ((string intent, Type agentType) in registry)
         {
+            // An agent that declares no workflow has nothing to weigh here.
             IReadOnlyList<Records.WorkflowDefinition> workflows = toolRegistryService.GetWorkflowDefinitions(intent);
             if (workflows.Count == 0)
                 continue;
+
+            // An agent that acquires tools from an MCP server has steps that startup cannot check by name.
 
             errors.AddRange(ValidateWorkflows(
                 intent,
@@ -361,9 +376,13 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         bool usesMcpServer)
     {
         List<string> errors = [];
+
+        // Tools by name for the lookups of steps and edges; a duplicated name is the tool class's own fault, reported there.
         Dictionary<string, Records.ToolDefinition> tools = declaredTools
             .GroupBy(tool => tool.Name, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+        // Names already taken, so a second workflow under the same name is caught.
         HashSet<string> workflowNames = new(StringComparer.Ordinal);
 
         // The launchers of the agent belong to no step, like the other functions of the framework.
@@ -371,13 +390,16 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
         foreach (Records.WorkflowDefinition workflow in workflows)
         {
+            // How the workflow is named back to whoever has to fix it.
             string subject = $"Workflow '{workflow.Name}' of intent '{intent}'";
 
+            // The name is what the launcher and the diagnostics are called by, so it must exist and be unique.
             if (string.IsNullOrWhiteSpace(workflow.Name))
                 errors.Add($"A workflow of intent '{intent}' has no name");
             else if (!workflowNames.Add(workflow.Name))
                 errors.Add($"{subject} is declared more than once: a workflow name is unique per agent");
 
+            // The launcher is described by the workflow's own description: without one the model cannot choose it.
             if (string.IsNullOrWhiteSpace(workflow.Description))
                 errors.Add($"{subject} has no description");
 
@@ -393,10 +415,12 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             if (launcherName == Constants.Tools.Reply || tools.ContainsKey(launcherName))
                 errors.Add($"{subject}: its launcher '{launcherName}' has the name of a tool of the agent");
 
+            // Steps first, then the edges between them: the edges are weighed against the steps' tools.
             ValidateWorkflowSteps(subject, workflow, launcherNames, tools, usesMcpServer, errors);
             ValidateWorkflowEdges(subject, workflow, tools, usesMcpServer, errors);
         }
 
+        // Every workflow of the intent is weighed, so one pass reports all of their faults.
         return errors;
     }
 
@@ -411,21 +435,25 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         bool usesMcpServer,
         List<string> errors)
     {
+        // A step is addressed by its name from every edge, so a nameless one can never be reached.
         if (workflow.Steps.Any(step => string.IsNullOrWhiteSpace(step.Name)))
             errors.Add($"{subject} has a step with no name");
 
-        foreach (string duplicated in workflow.Steps
-                     .Where(step => !string.IsNullOrWhiteSpace(step.Name))
-                     .GroupBy(step => step.Name, StringComparer.Ordinal)
-                     .Where(group => group.Count() > 1)
-                     .Select(group => group.Key))
-            errors.Add($"{subject}, step '{duplicated}': the name is declared more than once");
+        // Two steps under one name would make an edge ambiguous about where it leads.
+        errors.AddRange(
+            workflow.Steps
+                .Where(step => !string.IsNullOrWhiteSpace(step.Name))
+                .GroupBy(step => step.Name, StringComparer.Ordinal)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key)
+                .Select(duplicated => $"{subject}, step '{duplicated}': the name is declared more than once"));
 
         foreach (Records.WorkflowStep step in workflow.Steps)
         {
             string stepSubject = $"{subject}, step '{step.Name}'";
             IReadOnlyList<string> stepTools = step.Tools ?? [];
 
+            // A step is where the agent calls a tool: with none to offer the workflow would stall there.
             if (stepTools.Count == 0)
                 errors.Add($"{stepSubject}: the step offers no tool");
 
@@ -444,8 +472,11 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
         // Steps that no path from the first one reaches would never be offered: the workflow could not mean them.
         HashSet<string> reached = ReachableFrom(workflow, workflow.Steps[0].Name);
-        foreach (Records.WorkflowStep step in workflow.Steps.Skip(1).Where(step => !reached.Contains(step.Name)))
-            errors.Add($"{subject}, step '{step.Name}': no path leads to it from '{workflow.Steps[0].Name}'");
+        errors.AddRange(
+            workflow.Steps
+                .Skip(1)
+                .Where(step => !reached.Contains(step.Name))
+                .Select(step => $"{subject}, step '{step.Name}': no path leads to it from '{workflow.Steps[0].Name}'"));
     }
 
     /// <summary>
@@ -458,25 +489,31 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         bool usesMcpServer,
         List<string> errors)
     {
+        // Steps by name for the edge lookups; nameless and duplicated steps are reported by the step check.
         Dictionary<string, Records.WorkflowStep> stepsByName = workflow.Steps
             .Where(step => !string.IsNullOrWhiteSpace(step.Name))
             .GroupBy(step => step.Name, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+        // The properties that at least one edge carries, against which unused ones are found at the end.
         HashSet<string> carried = new(StringComparer.Ordinal);
 
         // The engine follows the first edge it finds, so a transition declared twice would leave one of the two dead.
-        foreach (IGrouping<(string Source, string Tool, bool OnFailure), Records.WorkflowEdge> group in workflow.Edges
-                     .GroupBy(edge => (edge.Source, edge.Tool, edge.OnFailure))
-                     .Where(group => group.Count() > 1))
-            errors.Add($"{EdgeSubject(subject, group.First())}: the same transition is declared more than once");
+        errors.AddRange(
+            workflow.Edges
+                .GroupBy(edge => (edge.Source, edge.Tool, edge.OnFailure))
+                .Where(group => group.Count() > 1)
+                .Select(group => $"{EdgeSubject(subject, group.First())}: the same transition is declared more than once"));
 
         foreach (Records.WorkflowEdge edge in workflow.Edges)
         {
             string edgeSubject = EdgeSubject(subject, edge);
 
+            // An edge follows a call made at its source step, so the tool has to be one that step offers.
             if (stepsByName.TryGetValue(edge.Source, out Records.WorkflowStep? source) && !source.Tools.Contains(edge.Tool, StringComparer.Ordinal))
                 errors.Add($"{edgeSubject}: '{edge.Tool}' is not a tool of step '{edge.Source}'");
 
+            // Either may be unknown: a missing tool or step is reported elsewhere and only skips the checks that need it.
             tools.TryGetValue(edge.Tool, out Records.ToolDefinition? sourceTool);
             stepsByName.TryGetValue(edge.Target, out Records.WorkflowStep? target);
 
@@ -487,6 +524,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             {
                 carried.Add(name);
 
+                // The edge hands the next step a value by the name of a property of the workflow.
                 if (!workflow.Parameters.Contains(name, StringComparer.Ordinal))
                 {
                     errors.Add($"{edgeSubject}: '{name}' is not a public property of the workflow");
@@ -498,6 +536,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                     && !(sourceTool.Returns ?? []).Any(field => string.Equals(field.Name, name, StringComparison.OrdinalIgnoreCase)))
                     errors.Add($"{edgeSubject}: tool '{edge.Tool}' does not declare the returned field '{name}'");
 
+                // The value must land somewhere: a tool of the target step has to take a parameter of that name.
                 bool taken = (target?.Tools ?? [])
                     .Where(tools.ContainsKey)
                     .Any(tool => tools[tool].Parameters.Any(parameter => string.Equals(parameter.Name, name, StringComparison.OrdinalIgnoreCase)));
@@ -507,8 +546,10 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         }
 
         // A property that no edge carries would stay empty for ever.
-        foreach (string parameter in workflow.Parameters.Where(parameter => !carried.Contains(parameter)))
-            errors.Add($"{subject}: property '{parameter}' is carried by no edge");
+        errors.AddRange(
+            workflow.Parameters
+                .Where(parameter => !carried.Contains(parameter))
+                .Select(parameter => $"{subject}: property '{parameter}' is carried by no edge"));
     }
 
     /// <summary>Names an edge in a message: where it leaves from and arrives at and the outcome that it follows.</summary>
@@ -522,12 +563,15 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     {
         // The start counts as reached from the outset: the first step is where the workflow stands when launched.
         HashSet<string> reached = new([from], StringComparer.Ordinal);
+
+        // Steps reached whose own edges have not been followed yet.
         Queue<string> pending = new([from]);
 
         while (pending.TryDequeue(out string? current))
         {
             foreach (Records.WorkflowEdge edge in workflow.Edges.Where(candidate => candidate.Source == current))
             {
+                // A step reached for the first time is followed in turn; one reached again is not, so a loop ends.
                 if (reached.Add(edge.Target))
                     pending.Enqueue(edge.Target);
             }
@@ -549,28 +593,38 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     public static List<string> ValidateToolContract(string intent, Type toolType)
     {
         List<string> errors = [];
+
+        // The methods the framework would offer as tools: the same list the adapter projects.
         IReadOnlyList<MethodInfo> methods = ProvidesToolForIntentRegistryService.GetToolMethods(toolType);
 
         // Two methods under one name reach the model as one tool declared twice.
-        foreach (string duplicated in methods.GroupBy(method => method.Name, StringComparer.Ordinal).Where(group => group.Count() > 1).Select(group => group.Key))
-            errors.Add($"Tool '{duplicated}' of intent '{intent}' is declared by more than one method of '{toolType.Name}': a tool name is unique");
+        errors.AddRange(
+            methods.GroupBy(method => method.Name, StringComparer.Ordinal)
+                   .Where(group => group.Count() > 1)
+                   .Select(group => group.Key)
+                   .Select(duplicated => $"Tool '{duplicated}' of intent '{intent}' is declared by more than one method of '{toolType.Name}': a tool name is unique"));
 
         foreach (MethodInfo method in methods)
         {
+            // How the tool is named back to whoever has to fix it.
             string subject = $"Tool '{method.Name}' of intent '{intent}'";
 
+            // The description is the only prose the model has about the tool.
             if (string.IsNullOrWhiteSpace(method.GetCustomAttribute<DescriptionAttribute>()?.Description))
                 errors.Add($"{subject} has no [Description]: the model reads it to know what the tool does");
 
+            // Approval is never defaulted: each tool states whether a user must agree before it runs.
             if (method.GetCustomAttribute<RequiresApprovalAttribute>() is null)
                 errors.Add($"{subject} has no [RequiresApproval]: whether the user must approve each call is always declared");
 
+            // Parameters and return record carry the rest of what the model and the workflow engine read.
             foreach (ParameterInfo parameter in method.GetParameters())
                 ValidateToolParameter(subject, parameter, errors);
 
             ValidateToolReturn(subject, method, errors);
         }
 
+        // Every method of the class is weighed, so one pass reports all of its faults.
         return errors;
     }
 
@@ -582,11 +636,14 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// <param name="errors">Receives one message per violation.</param>
     private static void ValidateToolParameter(string subject, ParameterInfo parameter, List<string> errors)
     {
+        // How the parameter is named back to whoever has to fix it.
         string parameterSubject = $"Parameter '{parameter.Name}' of {subject}";
 
+        // The description reaches the model through the schema and nowhere else.
         if (string.IsNullOrWhiteSpace(parameter.GetCustomAttribute<DescriptionAttribute>()?.Description))
             errors.Add($"{parameterSubject} has no [Description]: the model reads it to know what to pass");
 
+        // Without a scope the framework cannot tell a value asked of the user from one read from the context.
         ToolParameterAttribute? declaration = parameter.GetCustomAttribute<ToolParameterAttribute>();
         if (declaration is null)
         {
@@ -598,6 +655,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         if (declaration is { Scope: Records.ToolScope.Request, Shared: true })
             errors.Add($"{parameterSubject} is a request parameter marked as shared: only what the context holds is shared");
 
+        // The remaining rules concern context parameters only.
         if (declaration.Scope != Records.ToolScope.Context)
             return;
 
@@ -628,6 +686,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             return;
         }
 
+        // The schema the model would read for this record: its properties are what the checks below weigh.
         JsonElement schema = MorganaToolAdapter.CreateReturnSchema(returnType);
         if (!schema.TryGetProperty("properties", out JsonElement properties))
         {
@@ -647,9 +706,11 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// <param name="methodReturnType">The return type as the method declares it.</param>
     internal static Type? UnwrapReturnType(Type methodReturnType)
     {
+        // A method that completes without a value declares no record to weigh.
         if (methodReturnType == typeof(void) || methodReturnType == typeof(Task) || methodReturnType == typeof(ValueTask))
             return null;
 
+        // The record is what the caller of the tool receives, whether the method is asynchronous or not.
         return methodReturnType.IsGenericType
                && (methodReturnType.GetGenericTypeDefinition() == typeof(Task<>) || methodReturnType.GetGenericTypeDefinition() == typeof(ValueTask<>))
             ? methodReturnType.GetGenericArguments()[0]
@@ -662,9 +723,11 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// <param name="propertySchema">The schema the return type derives for the property.</param>
     private static bool AllowsNull(JsonElement propertySchema)
     {
+        // A schema that names no type accepts any value, null included.
         if (!propertySchema.TryGetProperty("type", out JsonElement type))
             return true;
 
+        // A nullable property lists "null" among several types; a lone "null" type accepts nothing else.
         return type.ValueKind == JsonValueKind.Array
             ? type.EnumerateArray().Any(entry => entry.GetString() == "null")
             : type.GetString() == "null";

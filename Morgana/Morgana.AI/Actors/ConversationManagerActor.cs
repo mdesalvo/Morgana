@@ -86,26 +86,22 @@ public class ConversationManagerActor : MorganaActor
         IPromptResolverService promptResolverService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
+        // Everything the manager needs to deliver, record and meter an answer is fixed for the conversation's life.
         this.channelService = channelService;
         this.channelMetadataStore = channelMetadataStore;
         this.dustLimitService = dustLimitService;
         this.conversationPersistenceService = conversationPersistenceService;
         this.dustLimitingOptions = dustLimitingOptions.Value;
 
-        // Handle incoming user messages:
-        // - Ensures supervisor exists (creates if missing)
-        // - Forwards message to supervisor using Tell to support streaming
+        // A user message reaches the supervisor through the manager, which first makes sure that one exists.
         ReceiveAsync<Records.UserMessage>(HandleUserMessageAsync);
 
-        // Handle conversation lifecycle requests:
-        // - CreateConversation: creates supervisor actor, triggers the presentation of a new conversation
-        // - TerminateConversation: stops supervisor actor and clears reference
+        // The conversation starts and ends here: creation presents Morgana to the user and termination stops the pipeline.
         ReceiveAsync<Records.CreateConversation>(HandleCreateConversationAsync);
         ReceiveAsync<Records.TerminateConversation>(HandleTerminateConversationAsync);
-        ReceiveAsync<Records.ConversationResponse>(HandleConversationResponseAsync);
 
-        // Handle supervisor responses:
-        // - ConversationResponse: final response from supervisor → send to client via SignalR
+        // The supervisor's closing answer and its stream chunks leave the actor system through the channel.
+        ReceiveAsync<Records.ConversationResponse>(HandleConversationResponseAsync);
         ReceiveAsync<Records.AgentStreamChunk>(HandleStreamChunkAsync);
 
         // Handle termination of watched actors (supervisor).
@@ -146,6 +142,7 @@ public class ConversationManagerActor : MorganaActor
     /// <returns>True when a supervisor was created, false when one was already there.</returns>
     private async Task<bool> EnsureSupervisorAsync()
     {
+        // A supervisor that is already there holds the conversation's state: creating another would split it.
         if (supervisor is not null)
             return false;
 
@@ -159,6 +156,8 @@ public class ConversationManagerActor : MorganaActor
         Context.Watch(supervisor);
 
         actorLogger.Info("Supervisor created: {0}", supervisor.Path);
+
+        // The caller learns that the conversation has a fresh pipeline, which a start must present.
         return true;
     }
 
@@ -209,6 +208,7 @@ public class ConversationManagerActor : MorganaActor
         // saw the conversation start, as after a restart: either way the turn does not wait on it.
         await EnsureSupervisorAsync();
 
+        // The supervisor exists here: the call above creates it when it is missing.
         actorLogger.Info("Forwarding message to supervisor at {0}", supervisor!.Path);
 
         // Hands the turn to the supervisor with Tell rather than Ask: the answer comes back
@@ -229,11 +229,12 @@ public class ConversationManagerActor : MorganaActor
     {
         try
         {
-            // Forward chunk to client via the active channel for progressive rendering
+            // The chunk goes straight to the user's screen so that the answer renders while it is being written.
             await channelService.SendStreamChunkAsync(conversationId, chunk.Text);
         }
         catch (Exception ex)
         {
+            // A lost chunk costs the live rendering only: the closing response carries the whole text.
             actorLogger.Error(ex, "Failed to send stream chunk to client");
         }
     }
@@ -245,6 +246,7 @@ public class ConversationManagerActor : MorganaActor
     /// <param name="response">ConversationResponse from supervisor</param>
     private async Task HandleConversationResponseAsync(Records.ConversationResponse response)
     {
+        // The first 50 characters are enough to recognise the turn in the log without writing the user's whole answer there.
         actorLogger.Info(
             $"Received response from supervisor (agent: {response.AgentName ?? "unknown"}," +
             $"completed: {response.AgentCompleted}): " +
@@ -267,7 +269,7 @@ public class ConversationManagerActor : MorganaActor
         // make the same answer arrive twice.
         DateTime answerTimestamp = response.RecordedTimestamp ?? DateTime.UtcNow;
 
-        // Two answers can now close one turn (an agent's own, then Morgana taking the conversation
+        // Two answers can close one turn (an agent's own, then Morgana taking the conversation
         // back) while a client discards anything dated no later than what it already has. Sharing an
         // instant with the answer it follows would make the second one vanish on the way out, with
         // no trace anywhere and no catch-up able to recover it. Only an answer dated here can be
@@ -280,7 +282,7 @@ public class ConversationManagerActor : MorganaActor
         // Undated by an agent means no agent wrote it: a refusal, a disambiguation, an intent
         // nobody handles, a turn that ran out of time. Morgana said it, so it goes on her side of
         // the conversation — otherwise a client rereading the history finds its own question with
-        // no answer under it and has to invent one, which is what every channel used to do.
+        // no answer under it.
         if (response.RecordedTimestamp is null)
             await conversationPersistenceService.AppendOrchestratorMessagesAsync(
                 conversationId,
@@ -304,6 +306,7 @@ public class ConversationManagerActor : MorganaActor
                 ConversationMetadata = preSendMetadata
             });
 
+            // Confirms the delivery in the log, with the extras that travelled beside the text.
             actorLogger.Info(
                 $"Response sent successfully to client via channel " +
                 $"(#quickReplies: {response.QuickReplies?.Count ?? 0}," +
@@ -331,6 +334,7 @@ public class ConversationManagerActor : MorganaActor
         }
         catch (Exception ex)
         {
+            // The user is told that the answer did not arrive instead of being left facing silence.
             actorLogger.Error(ex, "Failed to send channel message to client");
 
             // A second channel-level failure here means the client is genuinely unreachable —
@@ -366,11 +370,13 @@ public class ConversationManagerActor : MorganaActor
         if (!dustLimitingOptions.Enabled)
             return;
 
+        // A failed warning must not undo the answer that was just delivered.
         try
         {
             // Asks the limiter which thresholds this turn has just crossed; the call also marks
             // them atomically, so each warning is claimed once and never sent twice.
             (bool send70, bool send90) = await dustLimitService.CheckAndMarkWarningsAsync(conversationId);
+            // No threshold was crossed this turn: the user has nothing new to be told.
             if (!send70 && !send90)
                 return;
 
@@ -446,7 +452,10 @@ public class ConversationManagerActor : MorganaActor
     /// </summary>
     private static string FormatDustMessage(string template, double remaining)
     {
+        // The gauge is clamped because a turn may overrun the budget it was allowed to finish.
         int percent = (int)(Math.Clamp(remaining, 0.0, 1.0) * 100);
+
+        // The template carries the percentage the user reads in the warning.
         return template.Replace("{percent}", percent.ToString(CultureInfo.InvariantCulture));
     }
 
@@ -455,7 +464,6 @@ public class ConversationManagerActor : MorganaActor
     {
         actorLogger.Info($"ConversationManagerActor started for {conversationId}");
 
-        // Lets the base actor run its own startup after the logging.
         base.PreStart();
     }
 
@@ -472,7 +480,6 @@ public class ConversationManagerActor : MorganaActor
 
         actorLogger.Info($"ConversationManagerActor stopped for {conversationId}");
 
-        // Lets the base actor run its own teardown after the cleanup.
         base.PostStop();
     }
 }

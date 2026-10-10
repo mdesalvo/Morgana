@@ -1,10 +1,7 @@
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
-/// Service abstraction for content moderation and policy enforcement on user messages.
-/// Decouples guard-rail logic from the actor infrastructure. GuardActor delegates entirely
-/// to this service and is agnostic of the underlying implementation strategy.
-/// Default implementation: LLMGuardRailService provides LLM-based policy evaluation.
+/// Decides whether a user message complies with the content and policy rules.
 /// Fail-safe contract: on transient errors returns a compliant result rather than blocking legitimate traffic.
 /// </summary>
 public interface IGuardRailService

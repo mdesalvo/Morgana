@@ -60,20 +60,21 @@ public class MorganaActor : ReceiveActor
         IPromptResolverService promptResolverService,
         IConfiguration configuration)
     {
+        // Every collaborator is stored once so that the specialized actors reach them as their own infrastructure.
         this.conversationId = conversationId;
         this.llmService = llmService;
         this.promptResolverService = promptResolverService;
         this.configuration = configuration;
         actorLogger = Context.GetLogger();
 
-        // Global timeout for all MorganaActor instances
+        // One idle budget governs every Morgana actor: it comes from configuration so that a deployment tunes it in one place.
         SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
         Receive<ReceiveTimeout>(HandleReceiveTimeout);
     }
 
     /// <summary>
     /// Handles receive timeout when no message is received within the configured timeout period.
-    /// Default implementation does nothing (commented warning). Override to implement custom timeout behavior.
+    /// Default implementation does nothing. Override to implement custom timeout behavior.
     /// </summary>
     /// <param name="timeout">Timeout message from Akka.NET</param>
     /// <remarks>
@@ -83,7 +84,7 @@ public class MorganaActor : ReceiveActor
     /// </remarks>
     protected virtual void HandleReceiveTimeout(ReceiveTimeout timeout)
     {
-        // actorLogger.Warning($"{GetType().Name} receive timeout");
+        // An actor that is idle between turns is healthy, so the default absorbs the timeout without a log line.
     }
 
     /// <summary>
@@ -102,6 +103,7 @@ public class MorganaActor : ReceiveActor
     /// </remarks>
     protected virtual void RegisterCommonHandlers()
     {
+        // A behavior entered through Become() starts without the constructor's handlers: the timeout would reach dead letters.
         Receive<ReceiveTimeout>(HandleReceiveTimeout);
     }
 }

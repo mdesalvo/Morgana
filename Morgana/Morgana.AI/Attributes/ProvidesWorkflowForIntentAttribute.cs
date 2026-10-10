@@ -31,6 +31,7 @@ public class ProvidesWorkflowForIntentAttribute : Attribute
         if (string.IsNullOrWhiteSpace(intent))
             throw new ArgumentException("Intent cannot be null or empty", nameof(intent));
 
+        // The intent is the key that attaches this class's workflow to its agent.
         Intent = intent;
     }
 }

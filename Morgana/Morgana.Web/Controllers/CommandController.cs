@@ -57,6 +57,7 @@ public class CommandController(
         // the form would have sent it: the values a command reads never depend on who called it
         await command.ExecuteAsync(conversationId, request.InvocationId, command.Descriptor.ApplyDefaults(request.Options), cancellationToken);
 
+        // The command has run: the user hears its outcome over the channel, not in this reply.
         return Accepted(new { conversationId, command = command.Descriptor.Name });
     }
 }

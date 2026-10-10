@@ -47,6 +47,7 @@ public class SignalRChannelService : IChannelService
     /// <returns>Task representing the async send operation</returns>
     public async Task SendMessageAsync(ChannelMessage channelMessage)
     {
+        // One line per message, never per chunk: the log shows the shape of what the user is about to read.
         logger.LogInformation(
             $"Sending structured message to conversation {channelMessage.ConversationId}: " +
             $"type={channelMessage.MessageType}, agent={channelMessage.AgentName}, completed={channelMessage.AgentCompleted}, " +
@@ -84,13 +85,13 @@ public class SignalRChannelService : IChannelService
     {
         try
         {
-            // Send chunk with minimal payload (just the text)
+            // The chunk is the bare text: the final message that follows carries all the metadata.
             await hubContext.Clients.Group(conversationId)
                 .SendAsync("ReceiveStreamChunk", chunkText);
         }
         catch (Exception ex)
         {
-            // Log errors but don't propagate - continue streaming
+            // A lost chunk costs the user only the progressive reveal: the turn goes on and the final message carries the whole text.
             logger.LogError(ex, "Failed to send stream chunk to conversation {ConversationId}", conversationId);
         }
     }

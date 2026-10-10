@@ -31,6 +31,7 @@ public class OpenAI : MorganaLanguageModel
             NetworkTimeout = TimeSpan.FromSeconds(connection.TimeoutSeconds)
         };
 
+        // The key is required by ValidateConnection, so it is present when a client is built.
         return new OpenAIClient(new ApiKeyCredential(connection.ApiKey!), clientOptions)
             .GetChatClient(options.ModelId)
             .AsIChatClient();

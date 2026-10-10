@@ -132,8 +132,10 @@ public class SQLiteRateLimitService : IRateLimitService
                 // request, which is what stops two of them slipping past one cap.
                 await sqliteTransaction.CommitAsync();
 
-                logger.LogDebug("Rate limit ALLOWED for conversation {ConversationId}", conversationId);
+                // Traces admissions at debug level only: they are the common case.
+            logger.LogDebug("Rate limit ALLOWED for conversation {ConversationId}", conversationId);
 
+                // The request counts from now on and the turn may proceed.
                 return new RateLimitResult(IsAllowed: true);
             }
             catch
@@ -146,6 +148,7 @@ public class SQLiteRateLimitService : IRateLimitService
         }
         catch (Exception ex)
         {
+            // Logged because the admission it causes would otherwise leave no trace.
             logger.LogError(ex, "Rate limit check failed for conversation {ConversationId}", conversationId);
 
             // Fail open - allow request if rate limit service has errors
@@ -168,6 +171,7 @@ public class SQLiteRateLimitService : IRateLimitService
     {
         try
         {
+            // The reset addresses the conversation's own database, which already exists for any conversation that was limited.
             string sqliteConnectionString = GetConnectionString(conversationId);
             await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
             await sqliteConnection.OpenAsync();
@@ -184,6 +188,7 @@ public class SQLiteRateLimitService : IRateLimitService
         }
         catch (Exception ex)
         {
+            // Rethrown: a reset that silently did nothing would be worse than a visible failure.
             logger.LogError(ex, "Failed to reset rate limit for conversation {ConversationId}", conversationId);
             throw;
         }
@@ -217,6 +222,7 @@ public class SQLiteRateLimitService : IRateLimitService
         command.CommandText = "DELETE FROM rate_limit_log WHERE request_timestamp < @cutoff;";
         command.Parameters.AddWithValue("@cutoff", cutoffIso);
 
+        // The number of rows removed is of no interest: only the bound on the log matters.
         await command.ExecuteNonQueryAsync();
     }
 
@@ -236,54 +242,32 @@ public class SQLiteRateLimitService : IRateLimitService
         SqliteTransaction transaction,
         DateTime utcNow)
     {
-        // >= not >: count is the number of PRIOR requests already in the window and this one
-        // would be the (count+1)th — so count==limit means this request is the one that breaches
-        // the cap and must be denied, not admitted as the "last allowed" one. A limit of 0 skips
-        // the window entirely (see the `> 0` guards) rather than meaning "zero requests allowed".
-        if (options.MaxMessagesPerMinute > 0)
-        {
-            int count = await CountRequestsAsync(
-                connection, transaction, utcNow.AddMinutes(-1));
+        // The three windows from the narrowest to the widest, so the caller is told the shortest wait.
+        // A cap of 0 skips its window entirely instead of meaning "zero requests allowed".
+        (int Cap, string CapName, TimeSpan Window)[] windows =
+        [
+            (options.MaxMessagesPerMinute, nameof(options.MaxMessagesPerMinute), TimeSpan.FromMinutes(1)),
+            (options.MaxMessagesPerHour, nameof(options.MaxMessagesPerHour), TimeSpan.FromHours(1)),
+            (options.MaxMessagesPerDay, nameof(options.MaxMessagesPerDay), TimeSpan.FromDays(1))
+        ];
 
-            if (count >= options.MaxMessagesPerMinute)
+        foreach ((int cap, string capName, TimeSpan window) in windows.Where(window => window.Cap > 0))
+        {
+            int count = await CountRequestsAsync(connection, transaction, utcNow - window);
+
+            // The count is of prior requests, so reaching the cap means that this one would be the request
+            // that breaches it: it is denied, not admitted as the last allowed one.
+            if (count >= cap)
             {
+                // The wait offered is the window itself: the oldest request leaves it no sooner.
                 return new RateLimitResult(
                     IsAllowed: false,
-                    ViolatedLimit: $"MaxMessagesPerMinute ({options.MaxMessagesPerMinute})",
-                    RetryAfterSeconds: 60);
+                    ViolatedLimit: $"{capName} ({cap})",
+                    RetryAfterSeconds: (int)window.TotalSeconds);
             }
         }
 
-        // Check per-hour limit
-        if (options.MaxMessagesPerHour > 0)
-        {
-            int count = await CountRequestsAsync(
-                connection, transaction, utcNow.AddHours(-1));
-
-            if (count >= options.MaxMessagesPerHour)
-            {
-                return new RateLimitResult(
-                    IsAllowed: false,
-                    ViolatedLimit: $"MaxMessagesPerHour ({options.MaxMessagesPerHour})",
-                    RetryAfterSeconds: 3600);
-            }
-        }
-
-        // Check per-day limit
-        if (options.MaxMessagesPerDay > 0)
-        {
-            int count = await CountRequestsAsync(
-                connection, transaction, utcNow.AddDays(-1));
-
-            if (count >= options.MaxMessagesPerDay)
-            {
-                return new RateLimitResult(
-                    IsAllowed: false,
-                    ViolatedLimit: $"MaxMessagesPerDay ({options.MaxMessagesPerDay})",
-                    RetryAfterSeconds: 86400);
-            }
-        }
-
+        // Every configured window has room: the request may be recorded.
         return null;
     }
 
@@ -299,13 +283,16 @@ public class SQLiteRateLimitService : IRateLimitService
         SqliteTransaction sqliteTransaction,
         DateTime cutoff)
     {
+        // Written in the format the log is stored in, so that the comparison below sorts correctly.
         string cutoffIso = cutoff.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
 
+        // Read inside the check's transaction, so the count includes no request that is not yet visible to the other checks.
         await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
         sqliteCommand.Transaction = sqliteTransaction;
         sqliteCommand.CommandText = "SELECT COUNT(*) FROM rate_limit_log WHERE request_timestamp >= @cutoff;";
         sqliteCommand.Parameters.AddWithValue("@cutoff", cutoffIso);
 
+        // A scalar that comes back empty counts as no request.
         object? result = await sqliteCommand.ExecuteScalarAsync();
         return result != null ? Convert.ToInt32(result, CultureInfo.InvariantCulture) : 0;
     }
@@ -321,6 +308,7 @@ public class SQLiteRateLimitService : IRateLimitService
         SqliteTransaction sqliteTransaction,
         string utcNowIso)
     {
+        // Written inside the check's transaction, so it exists only if the whole check commits.
         await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
         sqliteCommand.Transaction = sqliteTransaction;
         sqliteCommand.CommandText = "INSERT INTO rate_limit_log (request_timestamp) VALUES (@timestamp);";
@@ -341,6 +329,7 @@ public class SQLiteRateLimitService : IRateLimitService
     /// <returns>Connection string pointing at that conversation's SQLite file.</returns>
     private string GetConnectionString(string conversationId)
     {
+        // The file is the one persistence owns: the log is a table of the conversation's own database.
         string sqliteDbPath = GetDatabasePath(conversationId);
         return $"Data Source={sqliteDbPath}";
     }
@@ -358,6 +347,7 @@ public class SQLiteRateLimitService : IRateLimitService
         // path — the same sanitisation SQLiteConversationPersistenceService applies to the exact
         // same id, so both services always agree on which physical file backs a given conversation.
         string sanitized = string.Join("_", conversationId.Split(Path.GetInvalidFileNameChars()));
+        // The same file name that persistence derives for this id.
         return Path.Combine(persistenceOptions.StoragePath, $"morgana-{sanitized}.db");
     }
 

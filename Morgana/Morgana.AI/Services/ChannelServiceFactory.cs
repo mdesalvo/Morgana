@@ -62,18 +62,16 @@ public class ChannelServiceFactory : IChannelServiceFactory
         return service;
     }
 
-    /// <inheritdoc/>
-    // Null/blank guarded explicitly rather than left to Normalise/ContainsKey: an unset
-    // deliveryMode is a common malformed-handshake shape and this keeps that case a plain "false"
-    // instead of an exception thrown from inside a supposedly side-effect-free predicate.
+    /// <summary>
+    /// Tells whether a transport serves the delivery mode; an unset mode is a common malformed-handshake shape and answers <c>false</c> instead of throwing.
+    /// </summary>
     public bool IsRegistered(string deliveryMode) =>
         !string.IsNullOrWhiteSpace(deliveryMode)
             && servicesByDeliveryMode.ContainsKey(Normalise(deliveryMode));
 
-    // The single normalisation rule every key in this factory goes through — both at construction
-    // (building the table) and at lookup (Resolve/IsRegistered) — so "Webhook", "webhook " and
-    // "webhook" all resolve to the same registered service regardless of how a channel capitalises
-    // or pads its own deliveryMode string.
+    /// <summary>
+    /// The one rule that every key goes through at construction and at lookup, so "Webhook", "webhook " and "webhook" reach the same transport.
+    /// </summary>
     private static string Normalise(string deliveryMode) =>
         deliveryMode.Trim().ToLowerInvariant();
 }

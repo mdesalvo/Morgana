@@ -32,6 +32,7 @@ public class HandlesIntentAttribute : Attribute
     /// </remarks>
     public HandlesIntentAttribute(string intent)
     {
+        // The intent is the key that the agent registry binds this class to.
         Intent = intent;
     }
 }

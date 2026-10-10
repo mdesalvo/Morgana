@@ -84,10 +84,11 @@ public class LLMPresenterService : IPresenterService
         // The originating channel decides what the presentation may carry
         ChannelMetadata channelMetadata = await channelMetadataStore.GetChannelMetadataAsync(conversationId);
 
-        // Single-shot per channel. The first caller for `channelName` triggers BuildPresentationResultAsync
-        // through the Lazy<Task<>>; every subsequent caller re-enters the same Task and observes
-        // the same materialised PresentationResult.
+        // The capabilities are the only part of the handshake that shapes the presentation.
         ChannelCapabilities channelCapabilities = channelMetadata.Capabilities;
+
+        // One presentation per channel: the first conversation to arrive pays for it and every later
+        // one, including a concurrent one, receives the same result.
         return await cache.GetOrAdd(
             channelMetadata.Coordinates.ChannelName,
             key => new Lazy<Task<Records.PresentationResult>>(
@@ -108,11 +109,11 @@ public class LLMPresenterService : IPresenterService
         ChannelCapabilities channelCapabilities,
         string channelName)
     {
+        // Marks the one conversation per channel that pays for the presentation.
         logger.LogInformation(
             "LLMPresenterService: building presentation for channel '{ChannelName}' (cache miss)", channelName);
 
-        // Generate the rich presentation message, or the fallback version in case of any blocking issues.
-        // Morgana must always present herself.
+        // Morgana must always present herself: with no agent the prompt's own message stands in for the model's.
         Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Presentation);
         Records.PresentationResult presentationResult = displayableIntents.Count == 0
             ? new Records.PresentationResult(presentationPrompt.GetMessage(Constants.Messages.NoAgents), [])
@@ -130,9 +131,7 @@ public class LLMPresenterService : IPresenterService
                 AgentCompleted = false
             }, channelCapabilities);
 
-        // Unwrap back into the presenter's domain type. RichCard is intentionally ignored here —
-        // the presentation never produces one and the supervisor's send path doesn't read it
-        // off PresentationResult either.
+        // The presentation never carries a rich card and the supervisor's send path does not read one from it.
         return new Records.PresentationResult(channelMessage.Text, channelMessage.QuickReplies ?? []);
     }
 
@@ -150,11 +149,11 @@ public class LLMPresenterService : IPresenterService
     {
         try
         {
-            // Format the intent list as the prompt expects (one bullet per intent, name + description).
+            // The model learns what Morgana can do from one bullet per intent: its name and its description.
             string formattedIntents = string.Join("\n",
                 displayableIntents.Select(i => $"- {i.Name}: {i.Description}"));
 
-            // Compose the system prompt by interpolating the formatted list into the template.
+            // The three authored sections with the intent list spliced into the place that the prompt reserves for it.
             string presentationSystemPrompt =
                 string.Join("\n\n",
                     Records.Prompt.Labeled(Constants.SectionLabels.Target, presentationPrompt.Target),
@@ -162,28 +161,28 @@ public class LLMPresenterService : IPresenterService
                     Records.Prompt.Labeled(Constants.SectionLabels.Formatting, presentationPrompt.Formatting))
                 .Replace(Constants.Placeholders.Intents, formattedIntents);
 
-            // The fixed user message acts as a trigger; the real instructions live in the system prompt.
+            // The user message only triggers the generation: everything the model must know is in the system prompt.
             string llmResponse = await llmService.CompleteWithSystemPromptAsync(
                 "presentation", presentationSystemPrompt, "Generate the presentation");
 
-            // The LLM is asked to return strict JSON; a null result indicates either an unparseable
-            // payload or an empty body — both treated as failure and routed to the fallback.
+            // A null payload carries no presentation: it is treated as a failure so that the fallback answers.
             Records.PresentationResponse? presentation =
                 JsonSerializer.Deserialize<Records.PresentationResponse>(llmResponse, Records.DefaultJsonSerializerOptions)
                  ?? throw new InvalidOperationException("LLM returned null presentation");
 
-            // Map the wire-format DTO into the domain QuickReply records the rest of Morgana speaks.
+            // The model's buttons become the quick replies that every channel receives.
             List<QuickReply> quickReplies = [.. presentation.QuickReplies.Select(qr => new QuickReply(qr.Id, qr.Label, qr.Value))];
 
+            // Distinguishes a generated presentation from the fallback in the log.
             logger.LogInformation(
                 "LLMPresenterService: LLM generated presentation with {Count} quick replies", quickReplies.Count);
 
+            // The welcome the model wrote and the buttons that lead to the agents.
             return new Records.PresentationResult(presentation.Message, quickReplies);
         }
         catch (Exception ex)
         {
-            // Catch-all: any failure (LLM error, JSON parse error, null result) routes to the
-            // deterministic fallback. The exception is logged but never propagated.
+            // Any failure routes to the deterministic fallback: the user must always be greeted and so the error is logged and never propagated.
             logger.LogError(ex, "LLMPresenterService: LLM generation failed — using fallback");
             return BuildFallbackMessage(presentationPrompt, displayableIntents);
         }
@@ -217,9 +216,11 @@ public class LLMPresenterService : IPresenterService
                     intent.DefaultValue ?? $"Help me with {intent.Name}"))
         ];
 
+        // Distinguishes the fallback from a generated presentation in the log.
         logger.LogInformation(
             "LLMPresenterService: fallback presentation with {Count} quick replies", fallbackReplies.Count);
 
+        // The authored greeting with one button per intent: what a user sees when no model wrote one.
         return new Records.PresentationResult(fallbackMessage, fallbackReplies);
     }
 }

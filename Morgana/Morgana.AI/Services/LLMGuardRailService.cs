@@ -43,9 +43,8 @@ public class LLMGuardRailService : IGuardRailService
         this.llmService = llmService;
         this.logger = logger;
 
-        // Built once here, not per-call: unlike LLMClassifierService/EmbeddedAgentConfigurationService
-        // this isn't deferred behind a Lazy<> — the Guard prompt is needed on essentially every
-        // turn (guard check gates every user message), so eager beats lazy for the common case.
+        // The guard gates every user message, so its prompt is needed from the first turn and is
+        // resolved here rather than on first use.
         Records.Prompt guardPrompt =
             promptResolverService.ResolveAsync(Constants.Prompts.Guard).GetAwaiter().GetResult();
 
@@ -77,6 +76,7 @@ public class LLMGuardRailService : IGuardRailService
             // For the log line alone. The answer below is decided on the verdict itself.
             bool compliant = llmResult?.Compliant ?? true;
 
+            // Leaves the verdict on record for every turn so that a refusal can be traced to its message.
             logger.LogInformation(
                 "LLMGuardRailService: LLM policy check result — compliant={Compliant} for conversation {ConversationId}",
                 compliant, conversationId);
@@ -93,10 +93,12 @@ public class LLMGuardRailService : IGuardRailService
         {
             // The provider's own content filter (e.g. Azure Prompt Shields) blocked the prompt before
             // any judgment could run — a genuine violation signal, never fail-open.
+            // Records the block, since the provider's refusal is the only evidence of what was rejected.
             logger.LogWarning(ex,
                 "LLMGuardRailService: provider-level content filter rejected the prompt for conversation {ConversationId} — treating as a compliance violation",
                 conversationId);
 
+            // The user is refused with the framework's closed-door line and the turn goes no further.
             return new Records.GuardRailResult(
                 Compliant: false,
                 Violation: "That is a path closed to you and no phrasing will reopen it.");
@@ -104,10 +106,12 @@ public class LLMGuardRailService : IGuardRailService
         catch (Exception ex)
         {
             // Fail open: a transient LLM error must not block legitimate users.
+            // The error is logged because the admission it causes would otherwise leave no trace.
             logger.LogError(ex,
                 "LLMGuardRailService: LLM policy check failed for conversation {ConversationId} — failing open",
                 conversationId);
 
+            // The message proceeds to classification as if it had passed the check.
             return new Records.GuardRailResult(Compliant: true, Violation: null);
         }
     }

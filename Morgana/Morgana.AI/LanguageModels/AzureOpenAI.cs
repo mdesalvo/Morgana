@@ -30,6 +30,7 @@ public class AzureOpenAI : MorganaLanguageModel
     /// <inheritdoc />
     public override IChatClient CreateChatClient(Records.TierConnection connection, Records.TierConfiguration options)
     {
+        // The endpoint is required by ValidateConnection, so it is present when a client is built.
         Uri endpoint = new Uri(connection.Endpoint!);
 
         // Azure AI Foundry projects expose an OpenAI-compatible unified "v1" API surface
@@ -48,11 +49,13 @@ public class AzureOpenAI : MorganaLanguageModel
                 RetryPolicy = new ClientRetryPolicy(connection.MaxRetries),
                 NetworkTimeout = TimeSpan.FromSeconds(connection.TimeoutSeconds)
             };
+            // The Foundry client carries the same ceiling as the classic one but speaks the plain OpenAI protocol.
             return new OpenAIClient(new ApiKeyCredential(connection.ApiKey!), foundryOptions)
                 .GetChatClient(options.ModelId)
                 .AsIChatClient();
         }
 
+        // A classic Azure OpenAI resource is served by the Azure client, which adds the api-version it requires.
         AzureOpenAIClientOptions azureOptions = new AzureOpenAIClientOptions
         {
             RetryPolicy = new ClientRetryPolicy(connection.MaxRetries),

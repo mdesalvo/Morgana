@@ -37,15 +37,19 @@ public sealed class WorkflowEngine
     /// <returns>Where the workflow stands: its first step.</returns>
     public async Task<Records.WorkflowPosition> LaunchAsync(string workflowName)
     {
+        // A launcher exists only for a workflow that the agent declares, so the name always finds its definition.
         Records.WorkflowDefinition definition = definitions[workflowName];
-        LatestCheckpointStore store = new LatestCheckpointStore();
 
+        // Every launch is a run of its own: a workflow started again after it ended shares nothing with the earlier one.
+        LatestCheckpointStore store = new LatestCheckpointStore();
         await using Run run = await InProcessExecution.RunAsync(
             Build(definition), workflowName, CheckpointManager.CreateJson(store), Guid.NewGuid().ToString("N"));
 
+        // The start executor always hands its prompt to the first port, so a run that raised no request is a broken graph.
         ExternalRequest request = Observe(run).Pending
             ?? throw new InvalidOperationException($"Workflow '{workflowName}' ended without reaching its first step");
 
+        // The session keeps the first step together with the checkpoint that the next outcome resumes from.
         return ToPosition(workflowName, request, store.Export(run.LastCheckpoint!));
     }
 
@@ -57,8 +61,11 @@ public sealed class WorkflowEngine
     /// <returns>Where the workflow stands now; <c>null</c> when the outcome ended it.</returns>
     public async Task<Records.WorkflowPosition?> AdvanceAsync(Records.WorkflowPosition position, Records.StepOutcome outcome)
     {
+        // A position is written only by this engine for one of its workflows, so its name always finds the definition.
         Records.WorkflowDefinition definition = definitions[position.Workflow];
-        LatestCheckpointStore store = LatestCheckpointStore.Import(position.Checkpoint, out CheckpointInfo checkpoint);
+
+        // The run is rebuilt on the checkpoint that the session kept, which is the only memory the workflow has.
+        (LatestCheckpointStore store, CheckpointInfo checkpoint) = LatestCheckpointStore.Import(position.Checkpoint);
 
         await using Run run = await InProcessExecution.ResumeAsync(Build(definition), checkpoint, CheckpointManager.CreateJson(store));
 
@@ -68,6 +75,7 @@ public sealed class WorkflowEngine
         if (!string.Equals(StepOf(waiting), position.Step, StringComparison.Ordinal))
             throw new InvalidOperationException($"Workflow '{position.Workflow}' waits at '{StepOf(waiting)}' while its position says '{position.Step}'");
 
+        // The outcome is the answer to the waiting step: its router picks the edge and the run moves to the next port.
         await run.ResumeAsync([waiting.CreateResponse(outcome)]);
 
         // No pending request after the outcome means the router sent nothing on: the workflow ended.
@@ -84,25 +92,29 @@ public sealed class WorkflowEngine
     /// <returns>The outcome, whose fields are where an edge reads the values that it carries.</returns>
     public static Records.StepOutcome ReadOutcome(string tool, string resultText, bool isMCPTool)
     {
+        // A native tool returns its typed record bare: the record is the fields and its error field marks a failure.
         if (!isMCPTool)
             return new Records.StepOutcome(tool, ReadField(resultText, Constants.Workflows.FailureField) is not null, resultText);
 
         try
         {
+            // The text is the protocol's envelope, as the MCP client handed it to the model.
             using JsonDocument document = JsonDocument.Parse(resultText);
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            JsonElement envelope = document.RootElement;
+
+            // A server that answered with something other than the protocol's envelope reports neither a failure nor a field.
+            if (envelope.ValueKind != JsonValueKind.Object)
                 return new Records.StepOutcome(tool, false, null);
 
             // An MCP result is the protocol's envelope: the record sits one level down, under structuredContent.
-            string? fields = null;
-            foreach (JsonProperty property in document.RootElement.EnumerateObject())
-            {
-                if (string.Equals(property.Name, Constants.Workflows.MCPStructuredContent, StringComparison.Ordinal) && property.Value.ValueKind == JsonValueKind.Object)
-                    fields = property.Value.GetRawText();
-            }
+            string? fields = envelope.TryGetProperty(Constants.Workflows.MCPStructuredContent, out JsonElement record)
+                             && record.ValueKind == JsonValueKind.Object
+                ? record.GetRawText()
+                : null;
 
             // A server reports a failure either on the envelope or, like a native tool, in the record's failure field.
-            bool reportedByServer = document.RootElement.TryGetProperty(Constants.Workflows.MCPIsError, out JsonElement isError) && isError.ValueKind == JsonValueKind.True;
+            bool reportedByServer = envelope.TryGetProperty(Constants.Workflows.MCPIsError, out JsonElement isError)
+                                    && isError.ValueKind == JsonValueKind.True;
             bool failed = reportedByServer || (fields is not null && ReadField(fields, Constants.Workflows.FailureField) is not null);
 
             return new Records.StepOutcome(tool, failed, fields);
@@ -124,16 +136,22 @@ public sealed class WorkflowEngine
     {
         try
         {
+            // The text is the record as the model read it, which is the only copy of the result that the engine sees.
             using JsonDocument document = JsonDocument.Parse(resultJson);
+
+            // Only a record has fields: a bare value or a list carries nothing an edge could name.
             if (document.RootElement.ValueKind != JsonValueKind.Object)
                 return null;
 
+            // An edge names the C# property while the JSON may case it otherwise, so the match ignores case.
             foreach (JsonProperty property in document.RootElement.EnumerateObject())
             {
+                // A field written as null is a value the tool did not produce, the same as a missing one.
                 if (string.Equals(property.Name, field, StringComparison.OrdinalIgnoreCase))
                     return property.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ? null : property.Value.GetRawText();
             }
 
+            // The record does not declare the field: the edge carries nothing for it.
             return null;
         }
         catch (JsonException)
@@ -149,31 +167,37 @@ public sealed class WorkflowEngine
     /// </summary>
     private static Workflow Build(Records.WorkflowDefinition definition)
     {
+        // Each step is a port where the run stops and waits for the outcome of the call that the agent makes there.
         Dictionary<string, RequestPort<Records.StepPrompt, Records.StepOutcome>> ports = definition.Steps.ToDictionary(
             step => step.Name,
             step => RequestPort.Create<Records.StepPrompt, Records.StepOutcome>(PortPrefix + step.Name),
             StringComparer.Ordinal);
 
-        // A lambda executor may only send the types it declares, so each one is typed and returns its message.
+        // The run enters at the first step with nothing bound yet.
         string firstStep = definition.Steps[0].Name;
         ExecutorBinding start = ((Func<string, IWorkflowContext, ValueTask<Records.StepPrompt>>)((_, _) =>
             new ValueTask<Records.StepPrompt>(new Records.StepPrompt(firstStep, new Dictionary<string, string>())))).BindAsExecutor("start");
 
+        // The start leads only to the first step, which is where every launch stops for the first time.
         WorkflowBuilder builder = new WorkflowBuilder(start);
         builder.AddEdge<Records.StepPrompt>(start, ports[firstStep], prompt => prompt!.Step == firstStep);
 
         foreach (Records.WorkflowStep step in definition.Steps)
         {
-            Records.WorkflowStep current = step;
+            // Behind every port sits a router that turns the outcome into the prompt of the next step, or into nothing.
             ExecutorBinding router = ((Func<Records.StepOutcome, IWorkflowContext, ValueTask<Records.StepPrompt?>>)((outcome, _) =>
-                new ValueTask<Records.StepPrompt?>(Route(definition, current, outcome)))).BindAsExecutor(RouterPrefix + step.Name);
+                new ValueTask<Records.StepPrompt?>(Route(definition, step, outcome)))).BindAsExecutor(RouterPrefix + step.Name);
 
+            // The outcome that the agent hands to a port always reaches that step's own router.
             builder.AddEdge(ports[step.Name], router);
 
+            // One graph edge per reachable step: several declared edges may lead to the same target on different tools,
+            // and the router's prompt names the target that the condition lets through.
             foreach (string target in definition.Edges.Where(edge => edge.Source == step.Name).Select(edge => edge.Target).Distinct(StringComparer.Ordinal))
                 builder.AddEdge<Records.StepPrompt>(router, ports[target], prompt => prompt!.Step == target);
         }
 
+        // The definition never changes, so the graph of every call is the one that wrote the checkpoint it resumes.
         return builder.Build();
     }
 
@@ -186,13 +210,17 @@ public sealed class WorkflowEngine
         Records.WorkflowStep step,
         Records.StepOutcome outcome)
     {
+        // Startup refuses a transition declared twice, so the first match is the only one.
         Records.WorkflowEdge? edge = definition.Edges.FirstOrDefault(candidate =>
             string.Equals(candidate.Source, step.Name, StringComparison.Ordinal)
             && string.Equals(candidate.Tool, outcome.Tool, StringComparison.Ordinal)
             && candidate.OnFailure == outcome.Failed);
+
+        // A call with no edge for its outcome ends the workflow: that is how a workflow declares its exits.
         if (edge is null)
             return null;
 
+        // The edge names the properties that it carries from this result into the next step.
         Dictionary<string, string> arguments = [];
         foreach (string name in edge.Carrying)
         {
@@ -201,6 +229,7 @@ public sealed class WorkflowEngine
                 arguments[name] = value;
         }
 
+        // The prompt names its target, which is what lets only the graph edge to that step through.
         return new Records.StepPrompt(edge.Target, arguments);
     }
 
@@ -209,22 +238,22 @@ public sealed class WorkflowEngine
     /// </summary>
     private static (ExternalRequest? Pending, CheckpointInfo? Checkpoint) Observe(Run run)
     {
+        // A run that raised no request has ended: no step is waiting for the agent.
         ExternalRequest? pending = null;
 
+        // The last request raised is where the run stopped; a failure anywhere in the run fails the turn that drove it.
         foreach (WorkflowEvent workflowEvent in run.NewEvents)
         {
-            switch (workflowEvent)
+            pending = workflowEvent switch
             {
-                case RequestInfoEvent requestEvent:
-                    pending = requestEvent.Request;
-                    break;
-                case WorkflowErrorEvent errorEvent:
-                    throw new InvalidOperationException("The workflow engine failed", errorEvent.Exception);
-                case ExecutorFailedEvent failedEvent:
-                    throw new InvalidOperationException($"A workflow step failed: {failedEvent.Data}");
-            }
+                RequestInfoEvent requestEvent => requestEvent.Request,
+                WorkflowErrorEvent errorEvent => throw new InvalidOperationException("The workflow engine failed", errorEvent.Exception),
+                ExecutorFailedEvent failedEvent => throw new InvalidOperationException($"A workflow step failed: {failedEvent.Data}"),
+                _ => pending
+            };
         }
 
+        // The last checkpoint is taken where the run stopped, which is where the next call resumes.
         return (pending, run.LastCheckpoint);
     }
 
@@ -235,9 +264,12 @@ public sealed class WorkflowEngine
     /// <summary>Turns the request now waiting for the agent into the position that the session keeps.</summary>
     private static Records.WorkflowPosition ToPosition(string workflow, ExternalRequest request, string checkpoint)
     {
-        request.TryGetDataAs(out Records.StepPrompt? prompt);
+        // Every port of this engine is raised by a step prompt, so a request carrying anything else is a broken graph.
+        if (!request.TryGetDataAs(out Records.StepPrompt? prompt) || prompt is null)
+            throw new InvalidOperationException($"Workflow '{workflow}' stopped at '{StepOf(request)}' without the prompt of its step");
 
-        return new Records.WorkflowPosition(workflow, StepOf(request), prompt?.Arguments ?? new Dictionary<string, string>(), checkpoint);
+        // The arguments are the values that the edge carried in, which the agent's tool calls at this step receive.
+        return new Records.WorkflowPosition(workflow, StepOf(request), prompt.Arguments, checkpoint);
     }
 
     /// <summary>
@@ -252,7 +284,10 @@ public sealed class WorkflowEngine
         /// <inheritdoc/>
         public override ValueTask<CheckpointInfo> CreateCheckpointAsync(string sessionId, JsonElement value, CheckpointInfo? parent = null)
         {
+            // Every checkpoint that a call writes is kept: the position names only the latest of them.
             CheckpointInfo info = new CheckpointInfo(sessionId, Guid.NewGuid().ToString("N"));
+
+            // The engine hands over an element of a document it disposes, so the store keeps a copy of its own.
             items[info.CheckpointId] = value.Clone();
 
             return new ValueTask<CheckpointInfo>(info);
@@ -263,6 +298,7 @@ public sealed class WorkflowEngine
             => new ValueTask<JsonElement>(items[key.CheckpointId]);
 
         /// <inheritdoc/>
+        /// <remarks>The store lives for one call and holds no lineage, so the parent filter has nothing to narrow.</remarks>
         public override ValueTask<IEnumerable<CheckpointInfo>> RetrieveIndexAsync(string sessionId, CheckpointInfo? withParent = null)
             => new ValueTask<IEnumerable<CheckpointInfo>>(items.Keys.Select(id => new CheckpointInfo(sessionId, id)));
 
@@ -270,16 +306,20 @@ public sealed class WorkflowEngine
         public string Export(CheckpointInfo latest)
             => JsonSerializer.Serialize(new CheckpointBag(latest.SessionId, latest.CheckpointId, items[latest.CheckpointId]));
 
-        /// <summary>Rebuilds a store holding only the checkpoint that a bag carries.</summary>
-        public static LatestCheckpointStore Import(string bag, out CheckpointInfo latest)
+        /// <summary>Rebuilds a store holding only the checkpoint that a bag carries, with the name the run resumes from.</summary>
+        public static (LatestCheckpointStore Store, CheckpointInfo Latest) Import(string bag)
         {
+            // A position's checkpoint is only ever written by Export, so it always holds one.
             CheckpointBag restored = JsonSerializer.Deserialize<CheckpointBag>(bag)!;
-            latest = new CheckpointInfo(restored.SessionId, restored.CheckpointId);
 
-            LatestCheckpointStore store = new LatestCheckpointStore();
-            store.items[restored.CheckpointId] = restored.Value;
+            // The resumed run reads its state from the one checkpoint that the session kept.
+            LatestCheckpointStore store = new LatestCheckpointStore
+            {
+                items = { [restored.CheckpointId] = restored.Value }
+            };
 
-            return store;
+            // The run resumes in the session that wrote the checkpoint, under the same id.
+            return (store, new CheckpointInfo(restored.SessionId, restored.CheckpointId));
         }
     }
 

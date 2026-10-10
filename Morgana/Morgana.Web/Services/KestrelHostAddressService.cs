@@ -58,6 +58,7 @@ public class KestrelHostAddressService : IHostAddressService
         if (configuration[PublicAddressKey] is { } declaredPublicAddress && !string.IsNullOrWhiteSpace(declaredPublicAddress))
             return declaredPublicAddress.Trim().TrimEnd('/');
 
+        // Nothing is bound before Kestrel starts listening: the question is asked again once it has.
         ICollection<string>? boundAddresses = server.Features.Get<IServerAddressesFeature>()?.Addresses;
 
         if (boundAddresses is null || boundAddresses.Count == 0)
@@ -71,6 +72,7 @@ public class KestrelHostAddressService : IHostAddressService
         string boundAddress = boundAddresses.FirstOrDefault(address => address.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
                               ?? boundAddresses.First();
 
+        // A wildcard binding is not a place a peer can knock, so it is turned into one before it goes into a card.
         return ToDialableAddress(boundAddress);
     }
 
@@ -81,16 +83,21 @@ public class KestrelHostAddressService : IHostAddressService
     /// <param name="boundAddress">Address as the server reports it.</param>
     private string ToDialableAddress(string boundAddress)
     {
+        // A card's interface is compared as an origin: a trailing separator would make it differ from the one fetched.
         string trimmedAddress = boundAddress.TrimEnd('/');
+
+        // An address naming one host, or one that is not a URI, is already callable as written.
 
         if (!Uri.TryCreate(trimmedAddress, UriKind.Absolute, out Uri? parsedAddress)
              || !WildcardHosts.Contains(parsedAddress.Host, StringComparer.OrdinalIgnoreCase))
             return trimmedAddress;
 
+        // Loopback on the bound port: agents of this instance consult each other without leaving the machine.
         string loopbackAddress = $"{parsedAddress.Scheme}://127.0.0.1:{parsedAddress.Port}";
 
         logger.LogInformation("Server bound to the wildcard address {BoundAddress}; agents will reach each other over {LoopbackAddress}", trimmedAddress, loopbackAddress);
 
+        // The address that the cards advertise in place of the wildcard.
         return loopbackAddress;
     }
 }

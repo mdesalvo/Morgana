@@ -67,10 +67,12 @@ public class MorganaAIContextProvider : AIContextProvider
         JsonSerializerOptions? jsonSerializerOptions = null,
         IReadOnlyList<Records.WorkflowDefinition>? workflows = null)
     {
+        // A provider built without shared names persists nothing across agents.
         this.logger = logger;
         this.sharedVariableNames = [.. sharedVariableNames ?? []];
         Workflows = workflows ?? [];
 
+        // A session that holds no variables yet starts with an empty set, so the first turn needs no special case.
         sessionState = new ProviderSessionState<MorganaContextState>(
             stateInitializer: _ => new MorganaContextState(),
             stateKey: StateKeys[0],
@@ -89,12 +91,14 @@ public class MorganaAIContextProvider : AIContextProvider
     {
         MorganaContextState contextState = sessionState.GetOrInitializeState(session);
 
+        // A hit logs the value the tool is about to use.
         if (contextState.Variables.TryGetValue(variableName, out object? value))
         {
             logger.LogInformation("{MorganaAiContextProviderName} GET '{VariableName}' = '{Value}'", nameof(MorganaAIContextProvider), variableName, value);
             return value;
         }
 
+        // A miss is reported as null: the caller treats it as a value that nobody has given yet.
         logger.LogInformation("{MorganaAiContextProviderName} MISS '{VariableName}'", nameof(MorganaAIContextProvider), variableName);
         return null;
     }
@@ -107,15 +111,18 @@ public class MorganaAIContextProvider : AIContextProvider
     /// </summary>
     public async Task SetVariableAsync(AgentSession session, string variableName, object variableValue)
     {
+        // The value always lands in this agent's own session: a later write replaces an earlier one here.
         MorganaContextState contextState = sessionState.GetOrInitializeState(session);
         contextState.Variables[variableName] = variableValue;
         sessionState.SaveState(session, contextState);
 
+        // Only the variables that tools declared shared travel on to the other agents.
         bool isShared = sharedVariableNames.Contains(variableName);
 
         logger.LogInformation(
             "{MorganaAiContextProviderName} SET {Private} '{VariableName}' = '{VariableValue}'", nameof(MorganaAIContextProvider), isShared ? "SHARED" : "PRIVATE", variableName, variableValue);
 
+        // The registry write is awaited so that it is complete before the turn issues its next tool call.
         if (isShared && OnSharedContextUpdate is not null)
             await OnSharedContextUpdate(variableName, variableValue);
     }
@@ -128,6 +135,7 @@ public class MorganaAIContextProvider : AIContextProvider
     {
         MorganaContextState contextState = sessionState.GetOrInitializeState(session);
 
+        // The session is saved only when something was dropped: an absent variable leaves it as it is.
         if (contextState.Variables.Remove(variableName))
         {
             sessionState.SaveState(session, contextState);
@@ -144,6 +152,7 @@ public class MorganaAIContextProvider : AIContextProvider
     /// </remarks>
     public Records.WorkflowPosition? GetWorkflowPosition(AgentSession session)
     {
+        // No stored position means that no workflow runs for this agent.
         if (!sessionState.GetOrInitializeState(session).Variables.TryGetValue(Constants.ContextKeys.WorkflowPosition, out object? stored))
             return null;
 
@@ -155,6 +164,7 @@ public class MorganaAIContextProvider : AIContextProvider
             _ => null
         };
 
+        // An empty or unreadable value is the same as no position.
         return string.IsNullOrEmpty(positionJson)
             ? null
             : JsonSerializer.Deserialize<Records.WorkflowPosition>(positionJson, Records.DefaultJsonSerializerOptions);
@@ -165,10 +175,12 @@ public class MorganaAIContextProvider : AIContextProvider
     /// </summary>
     public void SetWorkflowPosition(AgentSession session, Records.WorkflowPosition position)
     {
+        // The position is stored as JSON text in the variables, so that it is persisted and encrypted with the rest of the session.
         MorganaContextState contextState = sessionState.GetOrInitializeState(session);
         contextState.Variables[Constants.ContextKeys.WorkflowPosition] = JsonSerializer.Serialize(position, Records.DefaultJsonSerializerOptions);
         sessionState.SaveState(session, contextState);
 
+        // The log line traces the workflow's progress step by step.
         logger.LogInformation(
             "{MorganaAiContextProviderName} workflow '{Workflow}' stands at step '{Step}'", nameof(MorganaAIContextProvider), position.Workflow, position.Step);
     }
@@ -208,6 +220,7 @@ public class MorganaAIContextProvider : AIContextProvider
 
         foreach (KeyValuePair<string, object> kvp in sharedContext)
         {
+            // First write wins: a value this agent already holds is the one the user gave it and is never replaced.
             if (!contextState.Variables.TryGetValue(kvp.Key, out object? existing))
             {
                 contextState.Variables[kvp.Key] = kvp.Value;
@@ -223,6 +236,7 @@ public class MorganaAIContextProvider : AIContextProvider
             }
         }
 
+        // The session is saved only when a value was adopted.
         if (changed)
             sessionState.SaveState(session, contextState);
     }

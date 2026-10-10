@@ -71,17 +71,15 @@ public class SQLiteDustLimitService : IDustLimitService
         if (!options.Enabled || dust <= 0)
             return;
 
-        // Never materialize a database for a non-conversation. The
-        // CompleteWithSystemPromptAsync path is reached with framework-internal logging
-        // labels too (e.g. the presenter passes the literal "presentation"); dust is only
-        // chargeable against a real, already-handshaken conversation. A real conversation's
-        // DB always exists by the time any chargeable LLM call runs (created at the
-        // conversation/start handshake), so legitimate per-turn charges still land.
+        // Framework actors also call the model under labels that are not conversations (the presenter
+        // passes "presentation"): charging one would create a database for nothing. A real conversation
+        // has its database from the start handshake, so every legitimate charge still lands.
         if (!persistenceService.ConversationExists(conversationId))
             return;
 
         try
         {
+            // The budget row is seeded with the schema, so it exists before the first charge.
             await persistenceService.EnsureDatabaseInitializedAsync(conversationId);
 
             await using SqliteConnection connection = new SqliteConnection(GetConnectionString(conversationId));
@@ -119,6 +117,7 @@ public class SQLiteDustLimitService : IDustLimitService
                     await logCommand.ExecuteNonQueryAsync();
                 }
 
+                // The charge becomes visible to the budget check of the next turn only from here.
                 await transaction.CommitAsync();
 
                 // Emitted after the commit, never before: a metric reporting spend the ledger rolled back
@@ -128,6 +127,7 @@ public class SQLiteDustLimitService : IDustLimitService
                     new KeyValuePair<string, object?>(MorganaTelemetry.DustLlmRole, llmRole),
                     new KeyValuePair<string, object?>(MorganaTelemetry.ConversationId, conversationId));
 
+                // Traces each charge at debug level: one lands for every model call.
                 logger.LogDebug(
                     "Charged {Dust:F4} dust to {ConversationId} (role={LlmRole})", dust, conversationId, llmRole);
             }
@@ -159,7 +159,7 @@ public class SQLiteDustLimitService : IDustLimitService
         if (options.BudgetPerConversation <= 0)
             return true;
 
-        // No DB for a non-existent conversation → nothing consumed → not over budget.
+        // A conversation with no database has consumed nothing, so it is not over budget.
         if (!persistenceService.ConversationExists(conversationId))
             return false;
 
@@ -224,7 +224,7 @@ public class SQLiteDustLimitService : IDustLimitService
         if (options.BudgetPerConversation <= 0)
             return 1.0;
 
-        // No DB for a non-existent conversation → nothing consumed → ratio 0.
+        // A conversation with no database has consumed nothing, so its ratio is zero.
         if (!persistenceService.ConversationExists(conversationId))
             return 0.0;
 
@@ -237,6 +237,7 @@ public class SQLiteDustLimitService : IDustLimitService
         }
         catch (Exception ex)
         {
+            // Fails open like every other method here: a ratio that cannot be read reports no use.
             logger.LogError(ex, "Dust ratio query failed for {ConversationId} — returning 0.0", conversationId);
             return 0.0;
         }
@@ -245,6 +246,7 @@ public class SQLiteDustLimitService : IDustLimitService
     /// <inheritdoc/>
     public async Task<double?> GetRemainingLevelAsync(string conversationId)
     {
+        // Unmetered: there is no remaining level to report.
         if (!options.Enabled)
             return null;
 
@@ -262,19 +264,23 @@ public class SQLiteDustLimitService : IDustLimitService
         if (!options.Enabled || options.BudgetPerConversation <= 0)
             return (false, false);
 
-        // No DB for a non-existent conversation → no usage → nothing to warn about.
+        // A conversation with no database has no usage, so there is nothing to warn about.
         if (!persistenceService.ConversationExists(conversationId))
             return (false, false);
 
         try
         {
+            // The warning flags live on the budget row, which the schema seeds.
             await persistenceService.EnsureDatabaseInitializedAsync(conversationId);
 
             await using SqliteConnection connection = new SqliteConnection(GetConnectionString(conversationId));
             await connection.OpenAsync();
+
+            // Reading the flags and setting them are one step, so that no two turns warn the same user twice.
             await using SqliteTransaction transaction = connection.BeginTransaction();
             try
             {
+                // The three values that decide which warning is due, read from the single budget row.
                 double consumed;
                 bool warning70Sent;
                 bool warning90Sent;
@@ -284,10 +290,11 @@ public class SQLiteDustLimitService : IDustLimitService
                     readCommand.Transaction = transaction;
                     readCommand.CommandText = "SELECT dust_consumed, warning_70_sent, warning_90_sent FROM dust_budget WHERE id = 1;";
                     await using SqliteDataReader reader = await readCommand.ExecuteReaderAsync();
+                    // No budget row yet means no usage, so nothing is due.
                     if (!await reader.ReadAsync())
                     {
                         await transaction.RollbackAsync();
-                        return (false, false); // No usage yet → nothing to warn about
+                        return (false, false);
                     }
 
                     consumed = reader.GetDouble(0);
@@ -318,16 +325,20 @@ public class SQLiteDustLimitService : IDustLimitService
                 }
 
                 await transaction.CommitAsync();
+
+                // Tells the caller which of the two notices to send to the user now.
                 return (send70, send90);
             }
             catch
             {
+                // A flag set without its warning being sent would silence that warning for good.
                 await transaction.RollbackAsync();
                 throw;
             }
         }
         catch (Exception ex)
         {
+            // Fails open: no warning is sent rather than failing a turn over a notice.
             logger.LogError(ex, "Warning threshold check failed for {ConversationId} — failing open", conversationId);
             return (false, false);
         }
@@ -338,6 +349,7 @@ public class SQLiteDustLimitService : IDustLimitService
     /// <returns>Dust consumed so far; zero when the row does not exist yet.</returns>
     private async Task<double> ReadConsumedAsync(string conversationId)
     {
+        // The first read of a conversation may precede any other use of its database.
         await persistenceService.EnsureDatabaseInitializedAsync(conversationId);
 
         await using SqliteConnection connection = new SqliteConnection(GetConnectionString(conversationId));
@@ -347,6 +359,7 @@ public class SQLiteDustLimitService : IDustLimitService
         command.CommandText = "SELECT dust_consumed FROM dust_budget WHERE id = 1;";
         object? result = await command.ExecuteScalarAsync();
 
+        // A missing or null total is a conversation that has spent nothing.
         return result is null || result == DBNull.Value ? 0.0 : Convert.ToDouble(result, CultureInfo.InvariantCulture);
     }
 
@@ -357,6 +370,7 @@ public class SQLiteDustLimitService : IDustLimitService
     /// <param name="conversationId">Conversation whose database is addressed.</param>
     private string GetConnectionString(string conversationId)
     {
+        // The same file name that persistence derives for this id.
         string sanitized = string.Join("_", conversationId.Split(Path.GetInvalidFileNameChars()));
         return $"Data Source={Path.Combine(persistenceOptions.StoragePath, $"morgana-{sanitized}.db")}";
     }

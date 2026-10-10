@@ -3,7 +3,6 @@ using Akka.Actor;
 using Akka.Actor.Setup;
 using Akka.DependencyInjection;
 using Morgana.AI;
-using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.Commands;
 using Morgana.AI.Interfaces;
@@ -37,7 +36,10 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 // ==============================================================================
 // Standard ASP.NET Core services for web API and documentation
 
+// The REST surface of the conversation and of the command catalogue: the controllers of this assembly.
 builder.Services.AddControllers();
+
+// Endpoint metadata for tooling that describes the REST surface.
 builder.Services.AddEndpointsApiExplorer();
 
 // ==============================================================================
@@ -51,40 +53,49 @@ builder.Services.AddEndpointsApiExplorer();
 // ChannelServiceRegistration entry. Webhook uses IHttpClientFactory for handler rotation; does NOT sign
 // POSTs (asymmetric trust model). Adding new channels requires registration here only; framework unchanged.
 
+// The one owner of a conversation's channel record: both the factory below and the concrete transports read it.
 builder.Services.AddSingleton<IChannelMetadataStore, ChannelMetadataStore>();
 
-//SignalR
+// SignalR transport: the hub clients join and the service pushing to its groups, registered under "signalr".
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<SignalRChannelService>();
 builder.Services.AddSingleton<ChannelServiceRegistration>(sp =>
     new ChannelServiceRegistration(Constants.DeliveryModes.SignalR, sp.GetRequiredService<SignalRChannelService>()));
-//WebHook
+
+// Webhook transport: a named HTTP client so its handlers rotate and the service posting to the callback, registered under "webhook".
 builder.Services.AddHttpClient(WebhookChannelService.HttpClientName);
 builder.Services.AddSingleton<WebhookChannelService>();
 builder.Services.AddSingleton<ChannelServiceRegistration>(sp =>
     new ChannelServiceRegistration(Constants.DeliveryModes.Webhook, sp.GetRequiredService<WebhookChannelService>()));
 
+// Collects the registrations above: it answers which delivery modes this installation serves and hands a conversation its transport.
 builder.Services.AddSingleton<IChannelServiceFactory, ChannelServiceFactory>();
+
+// The decorator that degrades a rich message to the channel's capabilities before the transport sends it.
 builder.Services.AddSingleton<AdaptingChannelService>(sp =>
     new AdaptingChannelService(
         sp.GetRequiredService<IChannelServiceFactory>(),
         sp.GetRequiredService<IChannelMetadataStore>(),
         sp.GetRequiredService<MorganaChannelAdapter>()));
+
+// Producers ask for IChannelService and always get the adapting decorator, never a bare transport.
 builder.Services.AddSingleton<IChannelService>(sp => sp.GetRequiredService<AdaptingChannelService>());
 
 // ==============================================================================
 // SECTION 3: CORS Configuration
 // ==============================================================================
 // Open CORS policy consistent with Morgana's channel-agnostic posture: the backend
-// does not know its clients in advance, so the origin allowlist has been replaced
-// with per-request JWT validation as the real trust boundary. CORS here is the
+// does not know its clients in advance, so the origin allowlist is replaced
+// by per-request JWT validation as the real trust boundary. CORS here is the
 // browser politeness layer; the bearer token is the security layer. In hardened
 // deployments a reverse proxy / API gateway handles origin filtering upstream.
 
+// The policy that Section 10 puts in front of every endpoint: any origin, header and method may knock.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Channel", policy =>
     {
+        // Credentials are allowed too, which a wildcard origin forbids: the origin is echoed back instead.
         policy.SetIsOriginAllowed(_ => true)
               .AllowAnyHeader()
               .AllowAnyMethod()
@@ -99,6 +110,7 @@ builder.Services.AddCors(options =>
 // classifier intent+confidence, router agent selection, agent LLM execution with TTFT).
 // Configured via appsettings.json → Morgana:OpenTelemetry (Enabled, ServiceName, Exporter: "otlp"/"console").
 
+// Registered before any service that opens spans, so every turn is traced from the first message.
 builder.Services.AddMorganaOpenTelemetry(builder.Configuration);
 
 // ==============================================================================
@@ -107,6 +119,7 @@ builder.Services.AddMorganaOpenTelemetry(builder.Configuration);
 // Singleton logger for framework-level logging
 // Actor loggers are created separately within each actor
 
+// Controllers, filters and services ask for the plain ILogger: they all log under the one category named Morgana.
 builder.Services.AddSingleton<ILogger>(sp =>
     sp.GetRequiredService<ILoggerFactory>().CreateLogger(Constants.Morgana));
 
@@ -119,6 +132,8 @@ builder.Services.AddSingleton<ILogger>(sp =>
 // This enables domain-specific agents to be developed separately and loaded
 // without modifying the core Morgana framework.
 
+// Plugins are loaded before the container is built because the registry's startup checks scan the loaded assemblies.
+// The container does not exist yet, so the loader logs through a bootstrap factory of its own.
 using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddConsole()))
 {
     PluginLoaderService pluginLoaderService = new PluginLoaderService(
@@ -147,6 +162,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI, Ollama, OpenAI), three tiers Economy/Efficiency/Performance each served by its own provider (Morgana:LLM:Tiers)
 // - ICommand: One per command a channel may run on a conversation
 
+// Every registration below is a singleton: the services hold configuration and caches shared by all conversations.
 builder.Services.AddSingleton<IMCPClientRegistryService, MCPClientRegistryService>();
 builder.Services.AddSingleton<IToolRegistryService, ProvidesToolForIntentRegistryService>();
 builder.Services.AddSingleton<IAgentConfigurationService, EmbeddedAgentConfigurationService>();
@@ -160,11 +176,13 @@ builder.Services.AddSingleton<IClassifierService, LLMClassifierService>();
 builder.Services.AddSingleton<IPresenterService, LLMPresenterService>();
 builder.Services.AddSingleton<ICommandRegistryService, CommandRegistryService>();
 builder.Services.AddSingleton<ICommand, CompactHistoryCommand>();
+// A factory because the service needs the configuration, the prompt resolver and the logger factory to build its tiers.
 builder.Services.AddSingleton<ILLMService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
 
+    // The tiers are built here, from the configuration, so a tier left unconfigured refuses the boot.
     ConfigurationLLMService llm = new ConfigurationLLMService(config, promptResolver, loggerFactory);
 
     // Wire dust accounting for the framework-actor path (CompleteWithSystemPromptAsync).
@@ -172,6 +190,7 @@ builder.Services.AddSingleton<ILLMService>(sp => {
     // which is registered after this factory. Lazy resolution makes the order safe.
     llm.EnableDustAccounting(sp.GetRequiredService<IDustLimitService>());
 
+    // The service goes out with dust accounting already wired.
     return llm;
 });
 
@@ -194,8 +213,10 @@ string? conversationStoragePath = builder.Configuration["Morgana:ConversationPer
 if (!string.IsNullOrWhiteSpace(conversationStoragePath))
     Environment.SetEnvironmentVariable("Morgana__ConversationPersistence__StoragePath", conversationStoragePath);
 
+// The options the persistence service binds, read from the section that holds the storage path and the encryption key.
 builder.Services.Configure<Records.ConversationPersistenceOptions>(
     builder.Configuration.GetSection("Morgana:ConversationPersistence"));
+// The record every other service reads or writes a conversation through.
 builder.Services.AddSingleton<IConversationPersistenceService, SQLiteConversationPersistenceService>();
 
 // ==============================================================================
@@ -211,8 +232,11 @@ builder.Services.AddSingleton<IConversationPersistenceService, SQLiteConversatio
 // Configuration: Morgana:RateLimiting in appsettings.json
 // Storage: Reuses conversation SQLite databases (morgana-{conversationId}.db)
 
+// The windows per minute, hour and day with the authored refusal texts.
 builder.Services.Configure<Records.RateLimitOptions>(
     builder.Configuration.GetSection("Morgana:RateLimiting"));
+
+// The sliding-window limiter that ConversationLimitsFilter consults on every message and command.
 builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
 
 // ==============================================================================
@@ -227,8 +251,11 @@ builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
 //
 // Configuration: Morgana:DustLimiting + Morgana:LLM:Tiers:{tier}:MagicDust in appsettings.json
 
+// The lifetime budget with the warning and lockout texts.
 builder.Services.Configure<Records.DustLimitingOptions>(
     builder.Configuration.GetSection("Morgana:DustLimiting"));
+
+// The one owner of every dust question: the LLM service resolves it lazily, which is why it may be registered after it.
 builder.Services.AddSingleton<IDustLimitService, SQLiteDustLimitService>();
 
 // ==============================================================================
@@ -240,6 +267,7 @@ builder.Services.AddSingleton<IDustLimitService, SQLiteDustLimitService>();
 //
 // Configuration: Morgana:Authentication in appsettings.json
 
+// The audience and the channel issuers with their keys.
 builder.Services.Configure<Records.AuthenticationOptions>(
     builder.Configuration.GetSection("Morgana:Authentication"));
 
@@ -248,6 +276,7 @@ builder.Services.Configure<Records.AuthenticationOptions>(
 // signs with it.
 builder.Services.AddSingleton<PeerRingKeyService>();
 
+// The one token validator, shared by the channels' gate and the partners' gate.
 builder.Services.AddSingleton<IAuthenticationService, JWTAuthenticationService>();
 
 // ==============================================================================
@@ -255,6 +284,7 @@ builder.Services.AddSingleton<IAuthenticationService, JWTAuthenticationService>(
 // ==============================================================================
 // Service for reducing history messages sent to LLM (configurable summarization)
 
+// The factory that agents ask for the reducer of their history.
 builder.Services.AddSingleton<HistoryReducerService>();
 
 // ==============================================================================
@@ -266,7 +296,10 @@ builder.Services.AddSingleton<HistoryReducerService>();
 //                          template fallback). Invoked implicitly by the AdaptingChannelService
 //                          decorator registered in Section 2 — producers never call it directly.
 
+// Builds every domain agent's chat pipeline.
 builder.Services.AddSingleton<MorganaAgentAdapter>();
+
+// Registered here because AdaptingChannelService in Section 2 resolves it on first use.
 builder.Services.AddSingleton<MorganaChannelAdapter>();
 
 // ==============================================================================
@@ -289,6 +322,7 @@ builder.Services.AddSingleton<MorganaChannelAdapter>();
 //
 // Lifecycle: Managed by AkkaHostedService (graceful shutdown on app stop)
 
+// One actor system for the process, wired to the container so that actors resolve their services from it.
 builder.Services.AddSingleton(sp =>
 {
     BootstrapSetup bootstrap = BootstrapSetup.Create();
@@ -296,6 +330,7 @@ builder.Services.AddSingleton(sp =>
     ActorSystemSetup actorSystemSetup = bootstrap.And(di);
     return ActorSystem.Create(Constants.Morgana, actorSystemSetup);
 });
+// Terminates the actor system when the host stops.
 builder.Services.AddHostedService<AkkaHostedService>();
 
 // ==============================================================================
@@ -309,8 +344,10 @@ builder.Services.AddHostedService<AkkaHostedService>();
 // side effect of which agents happen to consult one another here. Switched off, nothing below is
 // stood up — no hosted agent, no server, no route, no card.
 
+// Every agent class the loaded assemblies declare, by intent: the plugins are loaded by now.
 Dictionary<string, Type> discoveredAgents = HandlesIntentAgentRegistryService.DiscoverAgents();
 
+// All discovered intents when peer consultation is on and none when it is off: publication is whole or nothing.
 string[] publishedIntents = builder.Configuration.GetValue("Morgana:AgentToAgent:Enabled", true)
     ? [.. discoveredAgents.Keys]
     : [];
@@ -350,13 +387,20 @@ app.Services.GetRequiredService<ICommandRegistryService>();
 // Builds the three tiers at startup, so that a tier left unconfigured refuses the boot rather than the first turn.
 app.Services.GetRequiredService<ILLMService>();
 
-app.UseCors("Channel");                 // Open CORS; trust gate is JWT, not origin
-app.UseHttpsRedirection();              // Redirect HTTP to HTTPS
-app.UseStaticFiles();                   // Serve static files (if any)
-app.UseRouting();                       // Enable endpoint routing
-app.UseAuthorization();                 // Enable authorization middleware
-app.MapControllers();                   // Map REST API controllers
-app.MapHub<MorganaHub>("/morganaHub");  // Map SignalR hub endpoint
+// The middleware order is the request's path: CORS answers the browsers' preflight first, then HTTPS
+// redirection and static files, then routing so that authorization sees the matched endpoint.
+// The trust gate is the JWT filters on the controllers, not the origin.
+app.UseCors("Channel");
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+app.UseRouting();
+app.UseAuthorization();
+
+// The REST surface of the conversation and of the commands.
+app.MapControllers();
+
+// The SignalR endpoint that channels join a conversation's group on.
+app.MapHub<MorganaHub>("/morganaHub");
 
 // The publication's second half: the endpoints, the cards and the address they learn once Kestrel
 // has bound. Declared in section 9.5 and mapped here, because a route needs the built application.
@@ -367,6 +411,7 @@ await app.MapMorganaA2AAsync(publishedIntents);
 // ==============================================================================
 // Starts the web application and actor system
 
+// Blocks until the host stops: Kestrel binds here, which is when the A2A cards learn their address.
 await app.RunAsync();
 
 // ==============================================================================

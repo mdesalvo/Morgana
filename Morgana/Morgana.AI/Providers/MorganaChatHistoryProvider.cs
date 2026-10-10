@@ -71,11 +71,13 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         JsonSerializerOptions? jsonSerializerOptions = null,
         IPromptComposerService? promptComposerService = null)
     {
+        // The intent labels every log line, so that the lines of one agent can be told apart in a shared log.
         this.agentIntent = agentIntent;
         this.promptComposerService = promptComposerService;
         viewReducer = chatReducer;
         this.logger = logger;
 
+        // The log line states whether the agent's view is condensed, which is what an operator reads it for.
         string reducerInfo = chatReducer != null
             ? $"with view-reducer={chatReducer.GetType().Name}"
             : "without reducer";
@@ -83,6 +85,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         logger.LogInformation(
             "{MorganaChatHistoryProviderName} CREATED {ReducerInfo} for agent '{AgentIntent}'", nameof(MorganaChatHistoryProvider), reducerInfo, agentIntent);
 
+        // A session that holds no history yet starts with an empty list, so the first turn needs no special case.
         sessionState = new ProviderSessionState<MorganaHistoryState>(
             stateInitializer: _ => new MorganaHistoryState(),
             stateKey: StateKeys[0],
@@ -102,10 +105,14 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     /// </summary>
     public void AppendMessage(AgentSession session, ChatMessage message)
     {
+        // The message joins the stored history, which is the record the agent's session is persisted from.
         MorganaHistoryState historyState = sessionState.GetOrInitializeState(session);
         historyState.Messages.Add(message);
+
+        // Saved at once: the caller persists the session before the model runs, so the message survives a failed turn.
         sessionState.SaveState(session, historyState);
 
+        // The log line shows the history growing ahead of the turn.
         logger.LogInformation(
             $"{nameof(MorganaChatHistoryProvider)} FILED an inbound {{Role}} message ahead of the turn " +
             $"— total history: {{Count}} for agent '{{AgentIntent}}'",
@@ -125,6 +132,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         InvokingContext context,
         CancellationToken cancellationToken = default)
     {
+        // The stored history is the source of the view and stays untouched by it.
         MorganaHistoryState historyState = sessionState.GetOrInitializeState(context.Session);
         List<ChatMessage> fullMessageHistory = historyState.Messages;
 
@@ -135,10 +143,12 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
             ? [.. await viewReducer.ReduceAsync(episode, cancellationToken)]
             : episode;
 
+        // The log line compares what the model is handed with what is stored, which shows how much the view cut.
         logger.LogInformation(
             $"{nameof(MorganaChatHistoryProvider)} PROVIDING {{ViewCount}} messages (history {{HistoryCount}}, episode {{EpisodeCount}}) for agent '{{AgentIntent}}'",
             view.Count, fullMessageHistory.Count, episode.Count, agentIntent);
 
+        // The model reads the results of earlier turns as how things stood then, never as current facts.
         return await MarkEarlierToolResultsAsync(view);
     }
 
@@ -149,6 +159,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     /// <param name="history">The agent's whole stored history.</param>
     public static List<ChatMessage> CurrentEpisode(IReadOnlyList<ChatMessage> history)
     {
+        // The search runs from the newest message back: the latest farewell is the one that closes the previous episode.
         int lastEpisodeEnd = -1;
         for (int index = history.Count - 1; index >= 0 && lastEpisodeEnd < 0; index--)
         {
@@ -156,6 +167,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
                 lastEpisodeEnd = index;
         }
 
+        // A user who never left has one episode: the whole history.
         if (lastEpisodeEnd < 0)
             return [.. history];
 
@@ -166,6 +178,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         while (episodeStart < history.Count && history[episodeStart].Role != ChatRole.User)
             episodeStart++;
 
+        // The slice holds the very instances of the history, so that a fold stamped on them is stored.
         return [.. history.Skip(episodeStart)];
     }
 
@@ -175,6 +188,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     /// </summary>
     private async Task<IEnumerable<ChatMessage>> MarkEarlierToolResultsAsync(List<ChatMessage> view)
     {
+        // Without a composer there is no wording for the marker: the results are handed over as returned.
         if (promptComposerService is null)
             return view;
 
@@ -182,9 +196,11 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         // belongs to this turn, which happens only when the turn is run a second time.
         int currentTurnStart = view.FindLastIndex(message => message.Role == ChatRole.User);
 
+        // The view is rebuilt message by message so that the stored instances are never altered.
         List<ChatMessage> marked = [];
         for (int index = 0; index < view.Count; index++)
         {
+            // A message of the current turn or one that carries no tool result needs no marker and is handed over as it is.
             ChatMessage message = view[index];
             if (index >= currentTurnStart || !message.Contents.OfType<FunctionResultContent>().Any())
             {
@@ -192,15 +208,19 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
                 continue;
             }
 
+            // Each result is wrapped under its own call id, so that the provider still pairs it with its call.
             List<AIContent> contents = [];
             foreach (AIContent content in message.Contents)
             {
                 string? wrapped = content is FunctionResultContent result
                     ? await promptComposerService.ComposeEarlierToolResultAsync(ResultText(result.Result))
                     : null;
-                contents.Add(wrapped is null ? content : new FunctionResultContent(((FunctionResultContent)content).CallId, wrapped));
+                contents.Add(wrapped is not null && content is FunctionResultContent original
+                    ? new FunctionResultContent(original.CallId, wrapped)
+                    : content);
             }
 
+            // The copy keeps author, date, id and properties of the stored message: only its results differ.
             marked.Add(new ChatMessage(message.Role, contents)
             {
                 AuthorName = message.AuthorName,
@@ -210,6 +230,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
             });
         }
 
+        // The marked copies replace the stored messages in what the model reads.
         return marked;
     }
 
@@ -234,6 +255,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         InvokedContext context,
         CancellationToken cancellationToken = default)
     {
+        // The new messages are appended to the stored history, never to the reduced view.
         MorganaHistoryState historyState = sessionState.GetOrInitializeState(context.Session);
 
         // The base class filters context.RequestMessages to exclude messages already in chat history,
@@ -243,15 +265,17 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         // Every response message carries Morgana's own clock, whatever the provider stamped or left
         // unstamped: the history orders turns by it and a client catching up after a disconnection
         // compares it with the timestamps of the replies it was delivered.
-        int responseStartIndex = context.RequestMessages?.Count() ?? 0;
+        int requestCount = context.RequestMessages?.Count() ?? 0;
+        int responseStartIndex = requestCount;
         for (int i = responseStartIndex; i < newMessages.Count; i++)
             newMessages[i].CreatedAt = DateTimeOffset.UtcNow;
 
+        // Request and response are stored in the order they happened, which is the order the model replays them in.
         historyState.Messages.AddRange(newMessages);
         sessionState.SaveState(context.Session, historyState);
 
+        // The counts tell the log reader how much of the turn was stored and from which session.
         string sessionId = context.Session?.ToString() ?? "?";
-        int requestCount = context.RequestMessages?.Count() ?? 0;
         int responseCount = context.ResponseMessages?.Count() ?? 0;
 
         logger.LogInformation(
@@ -259,6 +283,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
             $"(request: {requestCount}, response: {responseCount}) — total history: {historyState.Messages.Count} " +
             $"for agent '{agentIntent}' session '{sessionId}'");
 
+        // Storage is synchronous: nothing is left to await.
         return ValueTask.CompletedTask;
     }
 

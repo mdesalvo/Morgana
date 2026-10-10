@@ -48,6 +48,7 @@ public class MorganaChannelAdapter
         IPromptResolverService promptResolverService,
         ILogger logger)
     {
+        // The adapter is stateless between messages: it holds only the services it rewrites with.
         this.llmService = llmService;
         this.promptResolverService = promptResolverService;
         this.logger = logger;
@@ -66,7 +67,7 @@ public class MorganaChannelAdapter
         ChannelCapabilities channelCapabilities,
         CancellationToken cancellationToken = default)
     {
-        // ── Short-circuit: nothing to degrade ─────────────────────────────────────
+        // A message that the channel can carry as it is costs neither a rewrite nor a model call.
         if (FitsWithin(channelMessage, channelCapabilities))
             return channelMessage;
 
@@ -83,25 +84,30 @@ public class MorganaChannelAdapter
             channelCapabilities.SupportsMarkdown,
             channelCapabilities.MaxMessageLength);
 
-        // ── LLM-guided rewrite ────────────────────────────────────────────────────
+        // The model rewrites the message into prose that keeps its meaning within the channel's budget.
+        // Any failure falls through to the template below, because a message must always reach the user.
         try
         {
             Records.Prompt adapterPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.ChannelAdapter);
 
+            // The model reads the channel's budget as data, in the placeholder the prompt names.
             string capabilitiesJson = JsonSerializer.Serialize(
                 channelCapabilities, Records.DefaultJsonSerializerOptions);
 
+            // The prompt is composed with the same labelled sections as every other framework prompt.
             string systemPrompt = string.Join("\n\n",
                     Records.Prompt.Labeled(Constants.SectionLabels.Target, adapterPrompt.Target),
                     Records.Prompt.Labeled(Constants.SectionLabels.Instructions, adapterPrompt.Instructions),
                     Records.Prompt.Labeled(Constants.SectionLabels.Formatting, adapterPrompt.Formatting))
                 .Replace(Constants.Placeholders.ChannelCapabilities, capabilitiesJson);
 
+            // The whole message travels as the model's input, so that the rewrite sees the card and the buttons it must absorb.
             string userPrompt = JsonSerializer.Serialize(channelMessage, Records.DefaultJsonSerializerOptions);
 
             string llmResponse = await llmService.CompleteWithSystemPromptAsync(
                 channelMessage.ConversationId, systemPrompt, userPrompt);
 
+            // An answer that is not the expected JSON is treated as no answer.
             Records.ChannelAdapterResponse? channelAdapterResponse =
                 JsonSerializer.Deserialize<Records.ChannelAdapterResponse>(llmResponse, Records.DefaultJsonSerializerOptions);
 
@@ -121,57 +127,38 @@ public class MorganaChannelAdapter
                     enforcedText.Length,
                     channelAdapterResponse.QuickReplies?.Count ?? 0);
 
-                return new ChannelMessage
-                {
-                    ConversationId = channelMessage.ConversationId,
-                    Text = enforcedText,
-                    Timestamp = channelMessage.Timestamp,
-                    MessageType = channelMessage.MessageType,
-                    QuickReplies = channelCapabilities.SupportsQuickReplies
+                // The model may have folded the buttons into its text, so its own list wins where the channel keeps buttons.
+                return Degrade(
+                    channelMessage,
+                    enforcedText,
+                    channelCapabilities.SupportsQuickReplies
                         ? (channelAdapterResponse.QuickReplies ?? channelMessage.QuickReplies)
                         : null,
-                    RichCard = channelCapabilities.SupportsRichCards ? channelMessage.RichCard : null,
-                    ErrorReason = channelMessage.ErrorReason,
-                    AgentName = channelMessage.AgentName,
-                    AgentCompleted = channelMessage.AgentCompleted,
-                    FadingMessageDurationSeconds = channelMessage.FadingMessageDurationSeconds,
-                    ConversationMetadata = channelMessage.ConversationMetadata,
-                    Progress = channelMessage.Progress
-                };
+                    channelCapabilities);
             }
 
+            // An empty rewrite is as useless as a failed one, so the template takes over.
             logger.LogWarning(
                 "MorganaChannelAdapter: LLM returned empty or unparseable rewrite for {ConversationId} — using template fallback",
                 channelMessage.ConversationId);
         }
         catch (Exception ex)
         {
+            // Absorbed on purpose: the adapter never throws, since a failed adaptation must not lose the answer.
             logger.LogError(ex,
                 "MorganaChannelAdapter: LLM rewrite failed for {ConversationId} — using template fallback", channelMessage.ConversationId);
         }
 
-        // ── Template fallback ─────────────────────────────────────────────────────
+        // The deterministic rendering that needs no model.
         return BuildTemplateFallback(channelMessage, channelCapabilities);
     }
 
-    // ── Short-circuit predicate ───────────────────────────────────────────────────
-
+    // A message fits when the channel carries every feature it uses and its visual cost is within the length budget.
     private static bool FitsWithin(ChannelMessage channelMessage, ChannelCapabilities channelCapabilities)
-    {
-        if (channelMessage.RichCard != null && !channelCapabilities.SupportsRichCards)
-            return false;
-
-        if (channelMessage.QuickReplies is { Count: > 0 } && !channelCapabilities.SupportsQuickReplies)
-            return false;
-
-        if (!channelCapabilities.SupportsMarkdown && ContainsMarkdown(channelMessage.Text))
-            return false;
-
-        if (channelCapabilities.MaxMessageLength is { } max && EstimateVisualCost(channelMessage) > max)
-            return false;
-
-        return true;
-    }
+        => (channelMessage.RichCard == null || channelCapabilities.SupportsRichCards)
+           && (channelMessage.QuickReplies is not { Count: > 0 } || channelCapabilities.SupportsQuickReplies)
+           && (channelCapabilities.SupportsMarkdown || !ContainsMarkdown(channelMessage.Text))
+           && (channelCapabilities.MaxMessageLength is not { } max || EstimateVisualCost(channelMessage) <= max);
 
     // Sums visual cost of all message components (text, rich card, quick replies).
     private static int EstimateVisualCost(ChannelMessage channelMessage) =>
@@ -183,6 +170,7 @@ public class MorganaChannelAdapter
     // simply follow one another. Only a hard break (trailing spaces, backslash) is markdown syntax.
     private static bool ContainsMarkdown(string text)
     {
+        // Anything but paragraphs of literals and soft line breaks is syntax that a plain channel would show raw.
         MarkdownDocument document = Markdown.Parse(text);
         return document.Descendants()
                        .Any(node => node is not ParagraphBlock
@@ -193,55 +181,62 @@ public class MorganaChannelAdapter
     // Enforces MaxMessageLength: strip markdown first (cheaper); truncate with ellipsis if still over.
     private static string EnforceLengthBudget(string text, ChannelCapabilities channelCapabilities)
     {
+        // A channel without a limit or a text within it needs no change.
         if (channelCapabilities.MaxMessageLength is not { } max || max <= 0 || text.Length <= max)
             return text;
 
+        // Dropping the markup shortens the text without losing words, so it comes before cutting.
         string plain = StripMarkdown(text);
         if (plain.Length <= max)
             return plain;
 
+        // Cut at the limit with an ellipsis that tells the reader the text goes on.
         return plain[..Math.Max(0, max - 1)] + "…";
     }
 
-    // ── Template fallback ─────────────────────────────────────────────────────────
-
+    // Renders the message for the channel with fixed rules, for when the model rewrite is unavailable.
     private static ChannelMessage BuildTemplateFallback(
         ChannelMessage channelMessage,
         ChannelCapabilities channelCapabilities)
     {
-        // When the channel cannot carry a rich card, we deliberately drop it here:
-        // title + subtitle in isolation (without the component payload) would look alien
-        // next to the narrative text. The happy path's LLM rewrite is the only place
-        // capable of transcoding a card into prose — if we're in the template fallback,
-        // the LLM call already failed and an honestly incomplete message beats a message
-        // with orphaned metadata.
+        // A rich card is dropped when the channel cannot carry it, never transcoded: only the model rewrite
+        // can turn a card into prose while a title without its components would read as orphaned metadata.
         StringBuilder sb = new StringBuilder();
         sb.Append(channelMessage.Text);
 
+        // A channel with no buttons receives the options as a plain "Options: A / B / C" line.
         if (channelMessage.QuickReplies is { Count: > 0 } && !channelCapabilities.SupportsQuickReplies)
         {
             if (sb.Length > 0)
                 sb.AppendLine().AppendLine();
-            // Inline quick replies as plain prose for channels that have no button widget.
-            // The "Options: A / B / C" format keeps them scannable without any markdown.
             sb.Append("Options: ");
             sb.Append(string.Join(" / ", channelMessage.QuickReplies.Select(r => r.Label)));
         }
 
         string text = sb.ToString();
 
+        // Markup is shown raw on a channel that cannot render it.
         if (!channelCapabilities.SupportsMarkdown)
             text = StripMarkdown(text);
 
         text = EnforceLengthBudget(text, channelCapabilities);
 
-        return new ChannelMessage
+        return Degrade(channelMessage, text, channelMessage.QuickReplies, channelCapabilities);
+    }
+
+    // Copies the message with the degraded text, keeping the buttons and the card only where the channel carries them.
+    private static ChannelMessage Degrade(
+        ChannelMessage channelMessage,
+        string text,
+        List<QuickReply>? quickReplies,
+        ChannelCapabilities channelCapabilities)
+        => new ChannelMessage
         {
             ConversationId = channelMessage.ConversationId,
             Text = text,
             Timestamp = channelMessage.Timestamp,
             MessageType = channelMessage.MessageType,
-            QuickReplies = channelCapabilities.SupportsQuickReplies ? channelMessage.QuickReplies : null,
+            QuickReplies = channelCapabilities.SupportsQuickReplies ? quickReplies : null,
             RichCard = channelCapabilities.SupportsRichCards ? channelMessage.RichCard : null,
             ErrorReason = channelMessage.ErrorReason,
             AgentName = channelMessage.AgentName,
@@ -253,13 +248,14 @@ public class MorganaChannelAdapter
             // matches the outcome to the command it is waiting on
             Progress = channelMessage.Progress
         };
-    }
 
     // Walks Markdig parse tree, collects literal text, preserves block structure as line breaks.
     private static string StripMarkdown(string text)
     {
         StringBuilder sb = new StringBuilder();
         RenderContainerBlock(Markdown.Parse(text), sb);
+
+        // Every block ends with a blank line, so the last one is trimmed off.
         return sb.ToString().TrimEnd();
     }
 
@@ -297,6 +293,7 @@ public class MorganaChannelAdapter
     // Walks Markdig ContainerInline: literals/code as-is, line breaks→newlines, links/containers recursed.
     private static void RenderContainerInline(ContainerInline? containerInline, StringBuilder sb)
     {
+        // A paragraph or heading may have no inline content.
         if (containerInline == null) return;
         foreach (Inline inline in containerInline)
         {

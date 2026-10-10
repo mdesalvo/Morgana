@@ -57,18 +57,14 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     /// </summary>
     /// <returns>List of intent definitions (empty if no agents.json found)</returns>
     public Task<List<Records.IntentDefinition>> GetIntentsAsync()
-    {
-        return Task.FromResult(agentConfiguration.Value.Intents);
-    }
+        => Task.FromResult(agentConfiguration.Value.Intents);
 
     /// <summary>
     /// Gets agent prompt configurations from the loaded agents.json configuration.
     /// </summary>
     /// <returns>List of agent prompts (empty if no agents.json found)</returns>
     public Task<List<Records.Prompt>> GetAgentPromptsAsync()
-    {
-        return Task.FromResult(agentConfiguration.Value.Agents);
-    }
+        => Task.FromResult(agentConfiguration.Value.Agents);
 
     /// <summary>
     /// Scans every loaded assembly for an agents.json embedded resource and merges what it finds.
@@ -90,10 +86,8 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
 
         // Every assembly in the process, not Morgana's own: a domain lives in a plugin DLL, which
         // PluginLoaderService has already loaded by the time this runs.
-        foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies()
-                                                             // A runtime-generated assembly carries no
-                                                             // embedded resource to find.
-                                                             .Where(a => !a.IsDynamic))
+        // A runtime-generated assembly carries no embedded resource to find.
+        foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies().Where(a => !a.IsDynamic))
         {
             // Matched by file name alone, as morgana.json is: what a plugin author calls their root
             // namespace is their business.
@@ -122,10 +116,13 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                     AgentConfiguration? config = JsonSerializer.Deserialize<AgentConfiguration>(
                         stream, Records.DefaultJsonSerializerOptions);
 
+                    // An empty resource declares nothing: the assembly contributes no intent and no prompt.
                     if (config != null)
                     {
+                        // Named in every refusal below, so an operator knows which plugin to fix.
                         string declaringAssembly = assembly.GetName().Name ?? resourceName;
 
+                        // Reports what this one plugin brought, before the merge can refuse any of it.
                         logger.LogInformation(
                             "✅ Loaded {IntentsCount} intents and {AgentsCount} agent prompts from agents.json", config.Intents.Count, config.Agents.Count);
 
@@ -133,9 +130,8 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                         {
                             // The complement of the domain is not part of it: it is what a request
                             // matching no agent is, the classifier's own word, described in the
-                            // classifier's own prompt. A domain that still declares it is one written
-                            // before that was true, so the declaration is dropped rather than fought
-                            // over — every reader downstream gets the framework's, exactly once.
+                            // classifier's own prompt. A domain declaring it is refused so that
+                            // every reader downstream gets the framework's, exactly once.
                             if (string.Equals(intent.Name, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase))
                             {
                                 throw new InvalidOperationException(
@@ -156,6 +152,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                                     + "Rename the intent.");
                             }
 
+                            // One intent name is one agent: a second plugin claiming it leaves the routing ambiguous.
                             if (declaringAssemblyByIntent.TryGetValue(intent.Name, out string? firstAssembly))
                             {
                                 throw new InvalidOperationException(
@@ -163,6 +160,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                                     + "One name is one agent: deploy one of them, or rename the intent in the other.");
                             }
 
+                            // The intent joins the domain and its origin is kept to name the plugin in a later collision.
                             declaringAssemblyByIntent[intent.Name] = declaringAssembly;
                             mergedIntents.Add(intent);
 
@@ -182,6 +180,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                                     + "One id is one agent: deploy one of them, or rename the prompt in the other.");
                             }
 
+                            // The prompt joins the domain and its origin is kept to name the plugin in a later collision.
                             declaringAssemblyByPrompt[prompt.ID] = declaringAssembly;
                             mergedAgents.Add(prompt);
                         }

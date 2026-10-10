@@ -62,6 +62,7 @@ public sealed class ConversationLimitsFilter(
             return;
         }
 
+        // Both limits hold: the call reaches its action.
         await next();
     }
 
@@ -77,6 +78,7 @@ public sealed class ConversationLimitsFilter(
             ? new CommandProgress(commandRequest.Name, "refused", 0, 1, Finished: true, commandRequest.InvocationId)
             : null;
 
+        // The notice the user reads: Morgana's own voice, never an agent's and never a completed turn.
         return new ChannelMessage
         {
             ConversationId = conversationId,
@@ -94,6 +96,7 @@ public sealed class ConversationLimitsFilter(
     /// <summary>The text authored under Morgana:RateLimiting for the violated window, {limit} filled in.</summary>
     private string GetRateLimitErrorMessage(Records.RateLimitResult result)
     {
+        // The violated window arrives named with its limit, such as PerMinute(10): the name picks the authored text.
         string message = result.ViolatedLimit switch
         {
             { } s when s.Contains("PerMinute") => rateLimitOptions.Value.ErrorMessagePerMinute,
@@ -102,6 +105,7 @@ public sealed class ConversationLimitsFilter(
             _ => rateLimitOptions.Value.ErrorMessageDefault
         };
 
+        // The authored text may promise the number: it is read back from the parenthesised limit in the window's name.
         if (message.Contains("{limit}") && result.ViolatedLimit != null)
         {
             Match match = Regex.Match(result.ViolatedLimit, @"\((\d+)\)");
@@ -109,6 +113,7 @@ public sealed class ConversationLimitsFilter(
                 message = message.Replace("{limit}", match.Groups[1].Value);
         }
 
+        // A text with no placeholder, or a window that names no limit, goes out as authored.
         return message;
     }
 }

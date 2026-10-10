@@ -12,14 +12,14 @@ using Morgana.Contracts;
 namespace Morgana.AI;
 
 /// <summary>
-/// Immutable record types (DTOs) for actor messages, configuration and serialization.
-/// Organized by functional area: conversation lifecycle, classification, prompts, tools, presentation, LLM providers.
-/// Immutability ensures thread-safety; explicit types prevent routing errors in actor system.
+/// Every immutable record, enum and small value helper that crosses a boundary: actor messages,
+/// configuration bound from appsettings and the JSON that the models and the channels exchange.
+/// Records are immutable so that actors can share them without copying; a distinct type per message is what routes it.
 /// </summary>
 public static class Records
 {
     /// <summary>
-    /// Standard STJ deserialization options used by Morgana
+    /// JSON options for every deserialization of model output and prompt configuration: tolerant of casing and property order, enums as camel-case names.
     /// </summary>
     internal static readonly JsonSerializerOptions DefaultJsonSerializerOptions =
         new JsonSerializerOptions
@@ -34,11 +34,11 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Supervisor → Manager final response: text, classification, metadata, agent info, optional quick replies/rich card.
-    /// AgentName: agent identifier (e.g., "Morgana (Billing)"). AgentCompleted: flags multi-turn completion.
-    /// RecordedTimestamp: the instant an agent recorded this reply in its own session, carried so the reply
-    /// pushed live and the same reply read back later are recognisably one. Null when no agent wrote it —
-    /// a refusal, a disambiguation, a fallback: Morgana said it, so she is the one who files and dates it.
+    /// Supervisor → Manager final response: text, classification, metadata, agent info, optional quick replies and rich card.
+    /// AgentName names the answering agent (e.g., "Morgana (Billing)"); AgentCompleted flags that the multi-turn exchange is over.
+    /// RecordedTimestamp is the instant an agent recorded this reply in its own session, so the reply pushed live
+    /// and the same reply read back later are recognisably one. It is null when Morgana herself said the reply
+    /// (a refusal, a disambiguation, a fallback): she is then the one who files and dates it.
     /// </summary>
     public record ConversationResponse(
         string Response,
@@ -70,15 +70,12 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Configuration for SQLite conversation persistence with AES-256 encryption.
-    /// StoragePath: directory for conversation databases (auto-created if missing).
-    /// EncryptionKey: base64-encoded 256-bit key (CRITICAL: keep secure, never commit).
+    /// Where conversations are stored and the key that encrypts them: set under <c>Morgana:ConversationPersistence</c>.
     /// </summary>
     public record ConversationPersistenceOptions
     {
         /// <summary>
-        /// Directory path where conversation files will be stored.
-        /// Directory will be created if it doesn't exist.
+        /// Directory that holds one database file per conversation; created when missing.
         /// </summary>
         /// <example>C:/MorganaData</example>
         public string StoragePath { get; set; } = string.Empty;
@@ -92,16 +89,13 @@ public static class Records
     }
 
     /// <summary>
-    /// Request sent to RouterActor to restore/resolve an agent by intent.
-    /// Returns the agent reference if successful, or null if intent is invalid.
-    /// Router will cache the agent for future routing operations.
+    /// Asks the router for the agent that handles an intent, creating it when the conversation has none yet.
     /// </summary>
     /// <param name="AgentIntent">Intent name to resolve agent for</param>
     public record RestoreAgentRequest(string AgentIntent);
 
     /// <summary>
-    /// Response from RouterActor containing the resolved agent reference.
-    /// Null AgentRef indicates the intent could not be resolved to a valid agent.
+    /// The router's answer to a <see cref="RestoreAgentRequest"/>; a null reference means that no agent handles the intent.
     /// </summary>
     /// <param name="AgentIntent">Original intent requested</param>
     /// <param name="AgentRef">Resolved agent reference, or null if not found</param>
@@ -112,14 +106,13 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Conversation rate limiting config: Enabled toggle, per-minute/hour/day limits, per-window error messages.
-    /// Set Enabled=false for development. Sliding window algorithm enforced via SQLiteRateLimitService.
+    /// Limits on how many messages a conversation may send per minute, hour and day, with the message shown for each window.
+    /// Set Enabled=false for development.
     /// </summary>
     public record RateLimitOptions
     {
         /// <summary>
-        /// Master toggle for rate limiting feature.
-        /// Set to false to disable all rate limiting (useful for development/testing).
+        /// Master toggle: false disables every rate limit (useful for development and testing).
         /// </summary>
         public bool Enabled { get; set; } = true;
 
@@ -192,12 +185,10 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Per-tier pricing: tokens-per-dust and cache cost-weights for accurate token-budget tracking.
-    /// Live cost = (InputTokens × CachedInputWeight) + (CacheWriteTokens × CacheCreationWeight).
-    /// Zero on either axis means that direction is free. One dust unit is worth $0.015, so a tier's
-    /// tokens per unit are 0.015 divided by the model's price per token: recalibrate when a tier changes model.
-    /// Sanity-check BudgetPerConversation against your heaviest agent's actual calls-per-turn
-    /// by inspecting dust_usage_log, not against nominal turn counts.
+    /// What one dust unit is worth on a tier: tokens per unit for each direction and the cost weights of cached input.
+    /// A zero on either axis makes that direction free. One dust unit is worth $0.015, so a tier's tokens per unit
+    /// are 0.015 divided by the model's price per token: recalibrate when the tier changes model.
+    /// Check BudgetPerConversation against the heaviest agent's calls per turn in dust_usage_log, not against nominal turn counts.
     /// </summary>
     public record MagicDustPricing
     {
@@ -279,8 +270,8 @@ public static class Records
 
     /// <summary>
     /// One tier with its own provider, connection, model and dust pricing.
-    /// Lives under Morgana:LLM:Tiers:{tier} as JSON object (keyed by name) not array: allows per-layer overrides to merge
-    /// by key. TierConfiguration is deliberate ChatOptions subset (ModelId, MaxOutputTokens only); MagicDust is tier-specific.
+    /// Declared under Morgana:LLM:Tiers:{tier} as a JSON object keyed by name rather than an array, so that overrides of
+    /// different configuration layers merge by key.
     /// </summary>
     public record TierDefinition(
         LLMProvider Provider,
@@ -316,19 +307,16 @@ public static class Records
     }
 
     /// <summary>
-    /// Deliberately minimal JSON-bindable DTO of tier-configurable ChatOptions subset.
-    /// Excludes sampling knobs, Reasoning, StopSequences and per-call parameters.
-    /// Contains only ModelId (provider-specific identifier) and MaxOutputTokens, mandatory on every tier:
-    /// the Anthropic adapter falls back to 1024 when none is given and reasoning tokens count against the ceiling.
+    /// The part of <see cref="ChatOptions"/> that a deployer sets per tier: the model and the output ceiling, nothing else.
+    /// The ceiling is mandatory on every tier: the Anthropic adapter falls back to 1024 when none is given
+    /// and reasoning tokens count against it. Sampling, reasoning and stop sequences are per-call parameters.
     /// </summary>
     public record TierConfiguration(
         string ModelId,
         int MaxOutputTokens)
     {
         /// <summary>
-        /// Materializes this census into a real <see cref="ChatOptions"/>, ready to be merged
-        /// (field-by-field, fill-if-absent — see <see cref="ChatClients.TierDefaultsChatClient"/>)
-        /// into every per-turn call on this tier.
+        /// Builds the <see cref="ChatOptions"/> that <see cref="ChatClients.TierDefaultsChatClient"/> fills into every call on this tier.
         /// </summary>
         public ChatOptions ToChatOptions() => new()
         {
@@ -338,9 +326,9 @@ public static class Records
     }
 
     /// <summary>
-    /// Per-conversation lifetime dust budget (no sliding window, no reset). Orthogonal to RateLimitOptions.
-    /// Message templates are English defaults; deployments override in Morgana:DustLimiting with own personality.
-    /// Percent placeholder: fuel-gauge semantics (remaining as 0–100 integer, not dust units).
+    /// Lifetime dust budget of a conversation, with no window and no reset; independent of <see cref="RateLimitOptions"/>.
+    /// The messages are set in Morgana:DustLimiting in the deployment's own voice.
+    /// A percent placeholder in them stands for the dust remaining as a 0–100 integer, not as dust units.
     /// </summary>
     public record DustLimitingOptions
     {
@@ -665,8 +653,8 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Request to agent: ConversationId, user message Content (null for tool-only), optional Classification
-    /// (null for follow-up to active agents), TurnContext for OTel span, channel Capabilities (null→full capability).
+    /// Request to an agent: the user's Content (null for a tool-only request), the Classification (null on a follow-up to the active agent),
+    /// the TurnContext of the OTel span and the channel Capabilities (null means a channel without limits).
     /// </summary>
     public record AgentRequest(
         string ConversationId,
@@ -677,10 +665,10 @@ public static class Records
         bool ContentAlreadyStored = false);
 
     /// <summary>
-    /// Agent response: text, IsCompleted flag (true→idle, false→agent stays active),
-    /// optional QuickReplies, optional RichCard for structured UX (e.g., contract terms, invoice details).
-    /// RecordedTimestamp: the timestamp the agent's session keeps this reply under, carried to the
-    /// channel so the history and the live push date the reply identically. Null when nothing was recorded.
+    /// An agent's answer: text, IsCompleted (true returns the conversation to Morgana; false keeps the agent active),
+    /// optional QuickReplies and an optional RichCard for structured data.
+    /// RecordedTimestamp is the timestamp that the agent's session keeps this reply under, so the history and the live push
+    /// date it identically; null when nothing was recorded.
     /// </summary>
     public record AgentResponse(
         string Response,
@@ -690,8 +678,8 @@ public static class Records
         DateTime? RecordedTimestamp = null);
 
     /// <summary>
-    /// Response from RouterActor containing both the agent's response and a reference to the agent actor.
-    /// Used to track which agent is handling the request for multi-turn conversation management.
+    /// The router's reply to a turn: the agent's response with a reference to the agent that wrote it,
+    /// from which the supervisor knows which agent stays active.
     /// </summary>
     /// <param name="Response">Agent's response text</param>
     /// <param name="IsCompleted">Whether the agent has completed its task</param>
@@ -708,8 +696,7 @@ public static class Records
         DateTime? RecordedTimestamp = null);
 
     /// <summary>
-    /// Represents a streaming chunk from an agent during real-time response generation.
-    /// Sent incrementally to enable progressive UI rendering.
+    /// One piece of the text that an agent is streaming, sent as it is written.
     /// </summary>
     public record AgentStreamChunk(
         string Text);
@@ -761,8 +748,10 @@ public static class Records
         /// <param name="configuration">Application configuration, read for the turn budget.</param>
         public static PeerConsultationWaits From(IConfiguration configuration)
         {
+            // The pipeline's turn budget is the single configured figure; 180 seconds applies where a deployment sets none.
             TimeSpan turn = TimeSpan.FromSeconds(configuration.GetValue("Morgana:ActorSystem:TimeoutSeconds", 180));
 
+            // Caller and callee shares are strictly below the turn and ordered, so the colleague gives up first and the supervisor last.
             return new PeerConsultationWaits(turn, turn * CallerShareOfTurn, turn * CalleeShareOfTurn);
         }
     }
@@ -805,6 +794,7 @@ public static class Records
     /// A colleague's answer, both as the actor reply and — serialized — as the tool result the
     /// asking agent's model reads, which is why every member carries an explicit JSON name.
     /// </summary>
+    /// <param name="Answer">What the colleague answers, as text.</param>
     /// <param name="ColleagueAwaitsYourReply">True when the colleague is waiting, i.e. the exchange is unfinished.</param>
     /// <param name="Options">Options offered, as data to choose from — never buttons to render.</param>
     /// <param name="Card">Structured data presented, as data to read — never a card to render.</param>
@@ -819,9 +809,7 @@ public static class Records
         [property: JsonPropertyName("dustConsumed")] double? DustConsumed = null);
 
     /// <summary>
-    /// LLM-generated presentation response from ConversationSupervisorActor.
-    /// Contains the welcome message and quick reply buttons for user interaction.
-    /// Deserialized from JSON returned by the LLM when generating presentation messages.
+    /// The welcome message and quick replies as the presentation prompt returns them.
     /// </summary>
     /// <param name="Message">Welcome/presentation message text (2-4 sentences)</param>
     /// <param name="QuickReplies">List of quick reply button definitions</param>
@@ -865,14 +853,12 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Trigger message to generate and send the initial presentation/welcome message.
-    /// Sent automatically when a conversation is created.
+    /// Tells the supervisor to generate and send the welcome message; sent when a conversation is created.
     /// </summary>
     public record GeneratePresentationMessage;
 
     /// <summary>
-    /// Context containing the generated presentation message and available intents.
-    /// Used internally by ConversationSupervisorActor to send presentation via SignalR.
+    /// The welcome message together with the intents it can offer, carried to the point where the supervisor sends it.
     /// </summary>
     /// <param name="Message">Welcome message text (either LLM-generated or fallback)</param>
     /// <param name="Intents">List of available intent definitions</param>
@@ -881,8 +867,7 @@ public static class Records
         List<IntentDefinition> Intents)
     {
         /// <summary>
-        /// LLM-generated quick replies (takes precedence over Intents if available).
-        /// If null, quick replies are derived from Intents directly.
+        /// Quick replies written by the model; they take precedence over the Intents, from which the replies are derived when this is null.
         /// </summary>
         public List<QuickReply>? LLMQuickReplies { get; init; }
     }
@@ -948,13 +933,8 @@ public static class Records
         [property: JsonPropertyName("Label")] string? Label,
         [property: JsonPropertyName("DefaultValue")] string? DefaultValue = null);
 
-    // ==========================================================================
-    // INTENT CONFIGURATION RECORDS
-    // ==========================================================================
-
     /// <summary>
-    /// Collection of intent definitions with utility methods for classification and presentation.
-    /// Provides filtering and formatting capabilities for different use cases.
+    /// The configured intents, with the views that classification and presentation each need.
     /// </summary>
     public record IntentCollection
     {
@@ -973,20 +953,20 @@ public static class Records
         }
 
         /// <summary>
-        /// Converts intents to name→description dictionary for ClassifierActor LLM prompt formatting.
-        /// Format: "billing (description)|contract (description)". Returns new dictionary each call.
+        /// Maps each intent name to its description, as the classifier's prompt lists them; a new dictionary on every call.
         /// </summary>
         public Dictionary<string, string> AsDictionary()
         {
+            // Names are unique across the merged configuration (startup validation), so the dictionary cannot hit a duplicate key.
             return Intents.ToDictionary(i => i.Name, i => i.Description);
         }
 
         /// <summary>
-        /// Returns intents for presentation quick replies, excluding <see cref="Constants.Intents.Other"/> and intents
-        /// without labels. Filters per UI displayability rules (non-user-selectable excluded).
+        /// Returns the intents that a user can pick from the welcome quick replies: those with a label, <see cref="Constants.Intents.Other"/> excluded.
         /// </summary>
         public List<IntentDefinition> GetDisplayableIntents()
         {
+            // Other is the classifier's complement and an unlabeled intent has no button text, so neither can be offered.
             return
             [
                 .. Intents
@@ -1001,16 +981,15 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Root collection of prompts loaded from configuration files (morgana.json, agents.json).
-    /// Used during JSON deserialization.
+    /// Root of a prompt configuration file (morgana.json or agents.json).
     /// </summary>
     /// <param name="Prompts">Array of prompt definitions</param>
     public record PromptCollection(
         Prompt[] Prompts);
 
     /// <summary>
-    /// Complete prompt definition (Target, Instructions, Personality, Formatting) with metadata and structured properties.
-    /// Loaded from morgana.json (framework) or agents.json (domain, intent-keyed).
+    /// One prompt as authored: its four sections with the territory and the structured properties.
+    /// Framework prompts come from morgana.json; domain prompts come from agents.json keyed by intent.
     /// </summary>
     /// <param name="ID">Prompt identifier: framework="Morgana"/"Classifier"/"Guard"/"Presentation", domain=intent name</param>
     /// <param name="Target">Core prompt text: role definition, capabilities statement, operational boundaries</param>
@@ -1031,12 +1010,12 @@ public static class Records
         string Version)
     {
         /// <summary>
-        /// Structured properties of the prompt: GlobalPolicies, Messages, Tools and the like; empty when the prompt declares none.
+        /// Structured properties of the prompt (GlobalPolicies, Messages and the like); empty when the prompt declares none.
         /// </summary>
         public List<Dictionary<string, object>> AdditionalProperties { get; init; } = [];
+
         /// <summary>
-        /// Gets additional property value (Tools, GlobalPolicies, Messages, etc).
-        /// Throws KeyNotFoundException if property not found. Deserializes JsonElement to type T.
+        /// Gets the array that the prompt declares under <paramref name="additionalPropertyName"/>; throws <see cref="KeyNotFoundException"/> when it declares none.
         /// </summary>
         public T GetAdditionalProperty<T>(string additionalPropertyName)
         {
@@ -1044,10 +1023,13 @@ public static class Records
             {
                 if (additionalProperties.TryGetValue(additionalPropertyName, out object value))
                 {
+                    // The configuration binder leaves every value as a JsonElement, which is read into the type the caller expects.
                     JsonElement element = (JsonElement)value;
                     return element.Deserialize<T>();
                 }
             }
+
+            // A prompt without the property it was asked for is an authoring defect, so it is reported rather than defaulted.
             throw new KeyNotFoundException($"AdditionalProperty with key '{additionalPropertyName}' was not found in the prompt with id='{ID}'");
         }
 
@@ -1059,6 +1041,7 @@ public static class Records
         /// <param name="text">The section as authored.</param>
         public static string Labeled(string label, string? text)
         {
+            // A section that says nothing is left out altogether, so no bare label reaches the model.
             if (string.IsNullOrWhiteSpace(text))
                 return string.Empty;
 
@@ -1078,9 +1061,8 @@ public static class Records
                 .FirstOrDefault(message => string.Equals(message.Name, name, StringComparison.OrdinalIgnoreCase))?.Content ?? string.Empty;
 
         /// <summary>
-        /// Gets an additional property, or <paramref name="defaultValue"/> when the prompt does not
-        /// declare it. For optional configuration whose absence is a legitimate authoring choice
-        /// rather than a defect — where <see cref="GetAdditionalProperty{T}"/> would rightly throw.
+        /// Gets an additional property, or <paramref name="defaultValue"/> when the prompt does not declare it:
+        /// for optional configuration, where <see cref="GetAdditionalProperty{T}"/> would rightly throw.
         /// </summary>
         /// <typeparam name="T">Type to deserialize the property value into</typeparam>
         /// <param name="additionalPropertyName">Name of the property to retrieve</param>
@@ -1091,10 +1073,13 @@ public static class Records
             {
                 if (additionalProperties.TryGetValue(additionalPropertyName, out object value))
                 {
+                    // The configuration binder leaves every value as a JsonElement; a declared null reads as absent.
                     JsonElement element = (JsonElement)value;
                     return element.Deserialize<T>() ?? defaultValue;
                 }
             }
+
+            // The prompt does not declare the property: that is an authoring choice and not a defect.
             return defaultValue;
         }
     }
@@ -1148,12 +1133,15 @@ public static class Records
         /// <param name="values">Placeholder (see <see cref="Constants.Placeholders"/>) to the value that it stands for.</param>
         public static string Resolve(IEnumerable<Injection> injections, string name, IReadOnlyDictionary<string, string>? values = null)
         {
+            // The bare name stands in for a missing entry, so the gap is visible in the transcript.
             string content = injections.FirstOrDefault(injection =>
                 string.Equals(injection.Name, name, StringComparison.OrdinalIgnoreCase))?.Content ?? name;
 
+            // Each placeholder is replaced literally: the values come from the turn and must never be read as patterns.
             foreach ((string placeholder, string value) in values ?? new Dictionary<string, string>())
                 content = content.Replace(placeholder, value, StringComparison.Ordinal);
 
+            // The text the model reads as the tool's result.
             return content;
         }
     }
@@ -1173,10 +1161,8 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// Tool definition specifying a callable tool method with parameters.
-    /// It is projected from the tool's method: on the <see cref="Abstractions.MorganaTool"/> subclass for a native
-    /// domain tool, on <c>ReplyTool</c> for the framework's own tool.
-    /// MorganaToolAdapter turns a method's definition into an AIFunction.
+    /// A callable tool as the model is offered it, projected from the tool's method: on the
+    /// <see cref="Abstractions.MorganaTool"/> subclass for a native domain tool and on <c>ReplyTool</c> for the framework's own.
     /// </summary>
     /// <param name="Name">Tool method name (the actual method name in the MorganaTool class)</param>
     /// <param name="Description">Tool description for LLM understanding</param>
@@ -1192,10 +1178,8 @@ public static class Records
     /// Microsoft.Extensions.AI's, through <c>ApprovalRequiredAIFunction</c>.
     /// </param>
     /// <param name="Reserved">
-    /// True for the framework's base tool (Reply). It is stamped true only where MorganaAgentAdapter
-    /// projects <c>ReplyTool</c>, while the projection of a domain tool's class always
-    /// leaves it false. Consumers (e.g. the reverse guard-rail wrapper) use it to skip tools whose
-    /// output the framework itself controls.
+    /// True for the framework's base tool (Reply) alone: the projection of a domain tool's class leaves it false.
+    /// Consumers skip a reserved tool because the framework controls its output.
     /// </param>
     public record ToolDefinition(
         string Name,
@@ -1206,10 +1190,9 @@ public static class Records
         IReadOnlyList<ToolReturn>? Returns = null);
 
     /// <summary>
-    /// Tool parameter: name (the method parameter's), description, Required flag (the signature's: no default value). Scope: "context" (resolved by
-    /// the framework from the session, never required of the model) or "request" (user input). Shared: whether to persist in conversation-scoped shared_context registry for
-    /// cross-agent hydration. Only applies when Scope="context". Default: false.
-    /// For a native domain tool it is projected from the method parameter, its <c>[Description]</c> and its <see cref="Attributes.ToolParameterAttribute"/>.
+    /// One parameter of a tool, projected from the method parameter, its <c>[Description]</c> and its <see cref="Attributes.ToolParameterAttribute"/>.
+    /// Required is the signature's (no default value). Scope is "context" (resolved by the framework from the session and never required of the model)
+    /// or "request" (asked of the user). Shared, valid for a context parameter only, routes the value into the conversation's shared_context registry for the other agents.
     /// </summary>
     public record ToolParameter(
         string Name,
@@ -1248,7 +1231,7 @@ public static class Records
         IReadOnlyList<WorkflowEdge> Edges,
         IReadOnlyList<string> Parameters)
     {
-        /// <summary>Every tool that a step of the workflow names.</summary>
+        /// <summary>Every tool that a step of the workflow names; empty before the steps are bound.</summary>
         public HashSet<string> ToolSignature()
             => [.. (Steps ?? []).SelectMany(step => step.Tools ?? [])];
 
@@ -1325,9 +1308,11 @@ public static class Records
         /// <returns>Both of them; <c>null</c> when the declarations no longer hold either, which is a position nothing can serve.</returns>
         public (WorkflowDefinition Definition, WorkflowStep Step)? Resolve(IEnumerable<WorkflowDefinition> workflows)
         {
+            // The agent may have been redeployed with other workflows since the position was saved, so either name can have vanished.
             WorkflowDefinition? definition = workflows.FirstOrDefault(candidate => string.Equals(candidate.Name, Workflow, StringComparison.Ordinal));
             WorkflowStep? step = definition?.Steps.FirstOrDefault(candidate => string.Equals(candidate.Name, Step, StringComparison.Ordinal));
 
+            // A position that names neither is handed back as unresolved for the caller to drop.
             return definition is null || step is null ? null : (definition, step);
         }
     }
@@ -1383,11 +1368,13 @@ public static class Records
         /// <param name="sets">The prompt's <c>FrameworkReplies</c> array.</param>
         public static FrameworkReplies From(IEnumerable<FrameworkReplySet> sets)
         {
+            // The array is walked once per set name, so it is materialized first.
             List<FrameworkReplySet> declared = [.. sets];
 
             List<QuickReply>? Find(string name)
                 => declared.FirstOrDefault(set => string.Equals(set.Name, name, StringComparison.OrdinalIgnoreCase))?.Replies;
 
+            // Closure and escape default to empty so that a delivery never meets a null; the approval pair stays null, which means that no approval is offered.
             return new FrameworkReplies(
                 Find(Constants.FrameworkReplySets.Closure) ?? [],
                 Find(Constants.FrameworkReplySets.Escape) ?? [],
@@ -1426,7 +1413,10 @@ public static class Records
         /// <param name="quickReplyId">The id of a button that a turn delivered.</param>
         public static string? ActionTool(string quickReplyId)
         {
+            // The tool name may itself contain the separator, so the last one splits the button's number off.
             int separator = quickReplyId.LastIndexOf(ActionIdSeparator);
+
+            // A button whose id carries no number was not made from an action, so it leads to no tool.
             return separator > 0 && int.TryParse(quickReplyId[(separator + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out _)
                 ? quickReplyId[..separator]
                 : null;
@@ -1441,10 +1431,12 @@ public static class Records
         /// <param name="stepTools">The tools of the choice step, in the order the step declares them.</param>
         public TurnReply WithStepActions(IReadOnlyList<string> stepTools)
         {
+            // The step dictates the buttons: every tool of the step gets one so that the user can take any branch.
             List<ReplyAction> actions = [.. stepTools.Select(tool =>
                 Actions.FirstOrDefault(action => string.Equals(action.Tool, tool, StringComparison.Ordinal))
                 ?? new ReplyAction(tool, LabelFromToolName(tool), LabelFromToolName(tool)))];
 
+            // The turn now awaits a choice among exactly those buttons; the model's other decisions are kept.
             return new TurnReply(AwaitedFromUser.ActionChoice, UserIsLeaving, actions, Card);
         }
 
@@ -1485,9 +1477,11 @@ public static class Records
         /// <param name="frameworkReplies">The authored closure and escape pairs.</param>
         public (List<QuickReply>? QuickReplies, bool HandsBack) ToDelivery(FrameworkReplies frameworkReplies)
         {
+            // A user who says goodbye gets no button and the agent hands the conversation back.
             if (UserIsLeaving)
                 return (null, true);
 
+            // The user is asked to type, so a button would only offer a way around the question; the agent stays active.
             if (Awaits == AwaitedFromUser.TypedAnswer)
                 return (null, false);
 
@@ -1496,6 +1490,7 @@ public static class Records
                 return ([.. Actions.Select((action, index) => new QuickReply($"{action.Tool}{ActionIdSeparator}{index + 1}", action.Label, action.Value)),
                          .. frameworkReplies.Escape], false);
 
+            // An answered request lets the user stay or leave through the closure pair; without authored buttons nothing could end the stay, so the agent hands back.
             return frameworkReplies.Closure.Count > 0 ? ([.. frameworkReplies.Closure], false) : (null, true);
         }
     }
@@ -1512,13 +1507,13 @@ public static class Records
     public enum MCPTransport
     {
         /// <summary>
-        /// HTTP or HTTPS transport. The MCP server is a remote process reachable via a URL.
+        /// HTTP or HTTPS transport. The MCP server is a remote process reachable at a URL.
         /// </summary>
         Http,
 
         /// <summary>
         /// Standard I/O transport. The MCP server is a local executable spawned as a child process.
-        /// Communication happens via stdin/stdout streams.
+        /// Communication runs over its stdin and stdout.
         /// </summary>
         Stdio
     }

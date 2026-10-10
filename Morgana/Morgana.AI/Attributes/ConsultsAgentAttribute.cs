@@ -33,6 +33,7 @@ public class ConsultsAgentAttribute : Attribute
         if (string.IsNullOrWhiteSpace(intent))
             throw new ArgumentException("A consulted agent must be declared by a non-empty intent name.", nameof(intent));
 
+        // The intent is the key that the agent registry resolves the colleague by.
         Intent = intent;
         // Trimmed rather than taken as typed: the name is matched against a configuration entry and
         // a stray space is an instance nobody declared — an error whose cause is invisible on screen.

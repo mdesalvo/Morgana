@@ -21,11 +21,6 @@ namespace Morgana.AI.Interfaces;
 /// metadata is published by <c>ConversationManagerActor</c> into the <c>IChannelMetadataStore</c>;
 /// everything downstream (adapter, supervisor, presenter) consults the store keyed by
 /// conversation id. A missing entry is always an error — there is no transport-level fallback.</para>
-///
-/// <para><strong>Built-In implementation:</strong></para>
-/// <para><c>SignalRChannelService</c> (in Morgana.Web) is the reference transport used by the
-/// Cauldron web UI. It only knows how to push <see cref="ChannelMessage"/> envelopes
-/// and streaming chunks over a SignalR hub; it has no opinion on who is listening.</para>
 /// </remarks>
 public interface IChannelService
 {

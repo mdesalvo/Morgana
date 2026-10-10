@@ -1,11 +1,9 @@
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
-/// Service abstraction for intent classification. Decouples logic from ClassifierActor which delegates entirely to this.
-/// Default implementation: LLMClassifierService using agents.json intents + Classifier prompt from morgana.json.
-/// Fail-safe contract: on failure return ClassificationResult with intent <see cref="Constants.Intents.Other"/>
-/// and confidence 0.0 (silent degradation);
-/// only throw on non-transient configuration failures at startup (fail-fast). Swappable via DI.
+/// Decides which intent a user message expresses.
+/// Fail-safe contract: on failure an implementation returns a result with intent <see cref="Constants.Intents.Other"/>
+/// and confidence 0.0 (silent degradation) and throws only on non-transient configuration failures at startup.
 /// </summary>
 public interface IClassifierService
 {

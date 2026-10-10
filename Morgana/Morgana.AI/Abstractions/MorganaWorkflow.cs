@@ -56,10 +56,12 @@ public abstract class MorganaWorkflow
         // The domain author's class, which carries the name, the description and the carried values.
         Type workflowClass = GetType();
 
+        // The class name without its suffix is the workflow's name, which is also what the launcher `Start{Name}` carries.
         string name = workflowClass.Name;
         if (name.EndsWith(Constants.Workflows.ClassNameSuffix, StringComparison.Ordinal) && name.Length > Constants.Workflows.ClassNameSuffix.Length)
             name = name[..^Constants.Workflows.ClassNameSuffix.Length];
 
+        // The class description is what the launcher tells the model about the workflow.
         string description = workflowClass.GetCustomAttribute<DescriptionAttribute>()?.Description ?? string.Empty;
 
         // Only the class's own properties are carried values: inherited members are the framework's.
@@ -70,18 +72,21 @@ public abstract class MorganaWorkflow
         // Distinct by instance: two steps sharing a name stay two, so validation can refuse the clash.
         List<Records.WorkflowStep> ordered = [start, .. steps.Where(step => !ReferenceEquals(step, start))];
 
+        // The definition is a snapshot: startup validation and the engine read it and never the class again.
         return new Records.WorkflowDefinition(name, description, ordered, [.. edges], parameters);
     }
 
     /// <summary>Records one edge and the steps it names.</summary>
     private void Add(Records.WorkflowStep source, Records.WorkflowStep target, string tool, bool onFailure, IReadOnlyList<string>? carrying)
     {
+        // Steps exist only through the edges that name them; a step named by several edges is registered once.
         foreach (Records.WorkflowStep step in new[] { source, target })
         {
             if (!steps.Any(known => ReferenceEquals(known, step)))
                 steps.Add(step);
         }
 
+        // The edge keeps names only: the graph is rebuilt from them at every call.
         edges.Add(new Records.WorkflowEdge(source.Name, target.Name, tool, onFailure, carrying ?? []));
     }
 }

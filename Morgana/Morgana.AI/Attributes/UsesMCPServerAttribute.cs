@@ -56,6 +56,7 @@ public class UsesMCPServerAttribute : Attribute
     /// </exception>
     public UsesMCPServerAttribute(Records.MCPTransport transport, string command, params string[] args)
     {
+        // An HTTP server is reached by address, so a malformed one is refused when the class is read rather than at the first call.
         if (transport == Records.MCPTransport.Http)
         {
             if (!Uri.TryCreate(command, UriKind.Absolute, out Uri? parsed) ||
@@ -69,6 +70,7 @@ public class UsesMCPServerAttribute : Attribute
             }
         }
 
+        // Stdio servers take their launch arguments here; an HTTP server has none.
         Transport = transport;
         Command   = command;
         Args      = args ?? [];

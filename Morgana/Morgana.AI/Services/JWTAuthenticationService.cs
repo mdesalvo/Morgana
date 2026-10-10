@@ -77,9 +77,11 @@ public class JWTAuthenticationService : IAuthenticationService
                 "No channel is declared under 'Morgana:Authentication:Issuers': this installation serves no users, only whatever partners it federates with.");
         }
 
+        // Issuer names are compared exactly as written: an issuer differing by case is another caller.
         validationParametersByIssuer = new Dictionary<string, TokenValidationParameters>(StringComparer.Ordinal);
         partnerIssuers = new HashSet<string>(StringComparer.Ordinal);
 
+        // The channels come first so that a partner reusing a channel's name is the one refused.
         foreach (Records.IssuerOptions configuredChannel in config.Issuers ?? [])
             AdmitIssuer(configuredChannel.Name, configuredChannel.SymmetricKey, config.Audience, isPartner: false);
 
@@ -131,6 +133,7 @@ public class JWTAuthenticationService : IAuthenticationService
                 ClockSkew = TimeSpan.FromSeconds(30)
             };
 
+        // Recorded so that a successful result tells the gate which of the two registries proved the caller.
         if (isPartner)
             partnerIssuers.Add(issuerName);
     }
@@ -179,6 +182,7 @@ public class JWTAuthenticationService : IAuthenticationService
                         + "Morgana:Authentication:Issuers or as a partner under Morgana:AgentToAgent:Partners.");
         }
 
+        // The declaration is usable: the key is handed over so that it is decoded only once.
         return keyBytes;
     }
 
@@ -220,6 +224,7 @@ public class JWTAuthenticationService : IAuthenticationService
             // lifetime. Everything after this line is reading a document already established as genuine.
             TokenValidationResult result = await jsonWebTokenHandler.ValidateTokenAsync(token, validationParameters);
 
+            // Any failed check closes the door; the reason is logged and answered in a stable phrase.
             if (!result.IsValid)
             {
                 // A stable phrase per failure instead of the library's own message, which is free-form
@@ -246,8 +251,7 @@ public class JWTAuthenticationService : IAuthenticationService
                 return new Records.AuthenticationResult(IsAuthenticated: false, Error: "Token is valid but missing required 'sub' claim");
             }
 
-            // "name" is optional on a channel's self-issued token; falling back to the "sub" value
-            // (the user id itself) means callers always get a non-null DisplayName to show.
+            // The name is optional on a channel's token: falling back to the caller id gives the caller something to show.
             string? displayName = result.Claims.TryGetValue(JwtRegisteredClaimNames.Name, out object? nameValue) ? nameValue?.ToString() : callerId;
 
             // The issuer travels back with the door its key was cut for beside it. A gate admitting

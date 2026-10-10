@@ -24,6 +24,7 @@ public class ChannelMetadataStore : IChannelMetadataStore
     /// </summary>
     private readonly int richFeaturesMinLength;
 
+    /// <summary>Reports each handshake that is settled.</summary>
     private readonly ILogger logger;
 
     /// <summary>
@@ -57,9 +58,13 @@ public class ChannelMetadataStore : IChannelMetadataStore
             Capabilities = NormaliseCapabilities(declaredChannelMetadata.Capabilities)
         };
 
+        // Persisted before it is cached: a restart must find the handshake that this process served.
         await conversationPersistenceService.SaveChannelMetadataAsync(conversationId, channelMetadata);
+
+        // Every later send of this conversation is answered from memory.
         metadataByConversation[conversationId] = channelMetadata;
 
+        // Leaves the effective capabilities on record, which are what the channel will actually be sent.
         logger.LogInformation(
             "Channel metadata registered for {ConversationId}: channel={ChannelName}, delivery={DeliveryMode}, " +
             "rc={SupportsRichCards}, qr={SupportsQuickReplies}, str={SupportsStreaming}, md={SupportsMarkdown}, max={MaxMessageLength}",
@@ -68,6 +73,7 @@ public class ChannelMetadataStore : IChannelMetadataStore
             channelMetadata.Capabilities.SupportsStreaming, channelMetadata.Capabilities.SupportsMarkdown,
             channelMetadata.Capabilities.MaxMessageLength);
 
+        // The caller continues with the normalised record: the declared one is never used again.
         return channelMetadata;
     }
 
@@ -78,6 +84,7 @@ public class ChannelMetadataStore : IChannelMetadataStore
     /// <inheritdoc/>
     public async ValueTask<ChannelMetadata> GetChannelMetadataAsync(string conversationId)
     {
+        // A conversation started in this process is served from memory without reaching SQLite.
         if (metadataByConversation.TryGetValue(conversationId, out ChannelMetadata? knownChannelMetadata))
             return knownChannelMetadata;
 
@@ -87,6 +94,7 @@ public class ChannelMetadataStore : IChannelMetadataStore
                 $"No channel metadata on record for conversation {conversationId}; " +
                 "the start-conversation gate refuses to open a conversation without a handshake.");
 
+        // Cached for the next send; a concurrent lookup that got there first leaves its copy in place.
         return metadataByConversation.GetOrAdd(conversationId, persistedChannelMetadata);
     }
 
@@ -116,6 +124,7 @@ public class ChannelMetadataStore : IChannelMetadataStore
         if (willNeedAdaptation && effectiveCapabilities.SupportsStreaming)
             effectiveCapabilities = effectiveCapabilities with { SupportsStreaming = false };
 
+        // What the channel is sent from now on, whatever it declared.
         return effectiveCapabilities;
     }
 }

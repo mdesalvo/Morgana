@@ -8,13 +8,15 @@ namespace Morgana.AI;
 public static class Constants
 {
     /// <summary>
-    /// The reserved name of the system, on which everything else rests...
+    /// The reserved name of the system: the name under which Morgana speaks in her own voice, files her framework
+    /// prompt and her own conversation row. A domain intent or agent may not take it, so the host and every plugin
+    /// can rely on it naming only her.
     /// </summary>
     public const string Morgana = "Morgana";
 
     /// <summary>
-    /// IDs of the framework prompts in <c>morgana.json</c>, resolved through
-    /// <c>IPromptResolverService</c>. They name framework actors rather than domain concepts, which
+    /// IDs of the framework prompts: a contract between <c>morgana.json</c>, which files them and the actors that
+    /// resolve them through <c>IPromptResolverService</c>. They name framework actors rather than domain concepts, which
     /// is why a domain intent never collides with one. The framework layer's own prompt is not here:
     /// it is filed under the system's name itself, <see cref="Morgana"/>.
     /// </summary>
@@ -34,7 +36,8 @@ public static class Constants
     }
 
     /// <summary>
-    /// Name prefixes of the pipeline actors. An actor's path is <c>/user/{prefix}-{conversationId}</c>,
+    /// Name prefixes of the pipeline actors: a contract between the code that creates an actor and every later turn
+    /// or controller that reaches it by name. An actor's path is <c>/user/{prefix}-{conversationId}</c>,
     /// built by <c>ActorSystemExtensions.GetOrCreateActorAsync</c>: the prefix is what makes a path
     /// predictable, so an actor is reached by name from a later turn (or from a controller that
     /// holds nothing but the conversation id) instead of a reference having to be kept alive.
@@ -58,7 +61,8 @@ public static class Constants
     }
 
     /// <summary>
-    /// The labels that open each section of a composed prompt. Put there by code at composition, never
+    /// The labels that open each section of a composed prompt: a contract between the composer, which writes them
+    /// and the model, which reads them. Put there by code at composition, never
     /// written in configuration, so a section can never reach a model without the label that tells it
     /// which section it is reading.
     /// </summary>
@@ -78,7 +82,8 @@ public static class Constants
     }
 
     /// <summary>
-    /// Names of the global policies that code resolves by name. The rest of the list lives in
+    /// Names of the global policies that code resolves by name: a contract between <c>morgana.json</c>, which
+    /// authors them and the composer, which looks them up. The rest of the list lives in
     /// <c>morgana.json</c> and nowhere else: a policy the framework only renders is read by the model
     /// and by whoever edits the prompt and naming it here would be an index that no rename breaks.
     /// </summary>
@@ -94,8 +99,8 @@ public static class Constants
 
     /// <summary>
     /// Names of the entries in the framework prompt's <c>PromptInjections</c> array: the texts spliced into
-    /// the instructions or the conversation's messages. Each is spliced at exactly one site and is resolved
-    /// by name through <c>Injection.ResolveTemplate</c>.
+    /// the instructions or the conversation's messages: a contract between <c>morgana.json</c>, which authors them
+    /// and the splice site that resolves each by name through <c>Injection.ResolveTemplate</c>.
     /// </summary>
     public static class PromptInjections
     {
@@ -114,7 +119,7 @@ public static class Constants
 
     /// <summary>
     /// The keys of a prompt's <c>AdditionalProperties</c>: everything a prompt declares beside its
-    /// four authored sections. Each is written in <c>morgana.json</c> or a plugin's <c>agents.json</c>
+    /// four authored sections: a contract between the prompt files and the resolver and composer. Each is written in <c>morgana.json</c> or a plugin's <c>agents.json</c>
     /// and read by code that never sees that file, which is exactly the contract this glossary holds.
     /// </summary>
     public static class PromptProperties
@@ -143,7 +148,7 @@ public static class Constants
         /// </summary>
         public const string ComplementIntentDescription = "ComplementIntentDescription";
 
-        /// <summary>The retired agents.json key of an agent's procedures, which startup refuses: workflows are declared on their class.</summary>
+        /// <summary>The agents.json key that startup refuses: an agent's workflows are declared on their class.</summary>
         public const string Workflows = "Workflows";
     }
 
@@ -152,7 +157,8 @@ public static class Constants
     /// read by every channel to decide how to paint it. Two of them are conversation (somebody
     /// said something to somebody); the rest are notices about the conversation rather than
     /// part of it: a channel shows those as banners that fade. Morgana keeps none of them on
-    /// record, because a transcript is what was said.
+    /// record, because a transcript is what was said. A contract between the framework, which stamps the type
+    /// and every channel.
     /// </summary>
     public static class MessageTypes
     {
@@ -176,7 +182,8 @@ public static class Constants
     }
 
     /// <summary>
-    /// Why Morgana refused to take a call, declared on <c>ChannelMessage.ErrorReason</c>. A channel reads it to
+    /// Why Morgana refused to take a call, declared on <c>ChannelMessage.ErrorReason</c> by the host and read by
+    /// every channel. A channel reads it to
     /// act on the refusal rather than merely paint it: a spent budget ends the conversation on its side too.
     /// </summary>
     public static class ErrorReasons
@@ -189,8 +196,9 @@ public static class Constants
     }
 
     /// <summary>
-    /// Names of the entries in the framework prompt's <c>FrameworkReplies</c> array, each read into the
-    /// matching member of <c>Records.FrameworkReplies</c>.
+    /// Names of the entries in the framework prompt's <c>FrameworkReplies</c> array: a contract between
+    /// <c>morgana.json</c>, which authors the buttons and the loader that reads each into the matching
+    /// member of <c>Records.FrameworkReplies</c>.
     /// </summary>
     public static class FrameworkReplySets
     {
@@ -205,8 +213,8 @@ public static class Constants
     }
 
     /// <summary>
-    /// Names of the texts that the framework says to the user in its own voice, authored under a
-    /// prompt's <c>Messages</c> section in morgana.json.
+    /// Names of the texts that the framework says to the user in its own voice: a contract between the
+    /// <c>Messages</c> section that morgana.json authors under a prompt and the actors that fetch each by name.
     /// </summary>
     public static class Messages
     {
@@ -240,7 +248,8 @@ public static class Constants
 
     /// <summary>
     /// Names of the entries in the framework prompt's <c>ToolInjections</c> array: everything the model reads
-    /// as part of a tool, be it what the tool returns or what is added to its description.
+    /// as part of a tool, be it what the tool returns or what is added to its description. A contract between
+    /// <c>morgana.json</c>, which authors the texts and the tools and guards that fetch them by name.
     /// </summary>
     public static class ToolInjections
     {
@@ -306,7 +315,7 @@ public static class Constants
     }
 
     /// <summary>
-    /// The base tool the framework resolves by name: it is the one call that closes a turn, so the
+    /// The base tool name that the framework and the model agree on: it is the one call that closes a turn, so the
     /// agent forces it when the model forgot it and returns its argument errors for repair.
     /// </summary>
     public static class Tools
@@ -316,7 +325,7 @@ public static class Constants
     }
 
     /// <summary>
-    /// What a workflow class and its launcher agree on across the plugin and the framework.
+    /// What a plugin's workflow class and the framework's launcher agree on.
     /// Also what a plugin's returned record or an MCP server's result and the workflow engine reading it agree on.
     /// </summary>
     public static class Workflows
@@ -342,7 +351,8 @@ public static class Constants
 
     /// <summary>
     /// The framework's own context keys: machinery rather than knowledge about the user, so no tool
-    /// parameter is ever resolved from them. Written by a base tool or by the consultation guards and
+    /// parameter is ever resolved from them: a contract between the base tools and guards that write them and
+    /// the agent that reads and drops them. Written by a base tool or by the consultation guards and
     /// dropped by the agent at end of turn; <see cref="WorkflowPosition"/> alone outlives the turn.
     /// </summary>
     public static class ContextKeys
@@ -409,15 +419,16 @@ public static class Constants
         /// </summary>
         public const string ContextOnly = "morgana:context_only";
 
-        /// <summary>A2A message metadata naming the agent that asked. Dotted, not colon-separated, because it travels the protocol.</summary>
+        /// <summary>A2A message metadata naming the agent that asked, written by the asking side and read by the answering side.</summary>
         public const string CallerIntent = "morgana:caller";
 
-        /// <summary>The running summary a reducer stores on its anchor message. MEAI's own name, kept so sessions summarized before <c>MorganaChatReducer</c> shipped still resume.</summary>
+        /// <summary>The running summary a reducer stores on its anchor message. MEAI's own name for it, shared by <c>MorganaChatReducer</c> and the persistence layer that reads it back.</summary>
         public const string Summary = "__summary__";
     }
 
     /// <summary>
-    /// Placeholders authored inside prompt prose and resolved in code. Double parentheses because no
+    /// Placeholders authored inside prompt prose and resolved in code: a contract between the people who edit
+    /// <c>morgana.json</c> and the composer or tool that substitutes each. Double parentheses because no
     /// natural sentence contains them and a prompt is edited by people who are not reading this file.
     /// </summary>
     public static class Placeholders
@@ -478,7 +489,7 @@ public static class Constants
     }
 
     /// <summary>
-    /// Values of <c>Records.ToolParameter.Scope</c>: where a tool's input comes FROM. A parameter
+    /// Values of <c>Records.ToolParameter.Scope</c>, a contract between a tool's author and the tool adapter: where a tool's input comes FROM. A parameter
     /// carrying a value the model itself authors declares neither.
     /// </summary>
     public static class Scopes
@@ -491,7 +502,7 @@ public static class Constants
     }
 
     /// <summary>
-    /// Intent names the framework itself knows. Every other intent is a domain's own.
+    /// Intent names the framework itself knows, shared by the classifier and the router. Every other intent is a domain's own.
     /// </summary>
     public static class Intents
     {
@@ -528,7 +539,8 @@ public static class Constants
 
     /// <summary>
     /// The agent-to-agent surface: how a colleague is named to a model, where its card lives and
-    /// under whose name this installation signs its own peer traffic.
+    /// under whose name this installation signs its own peer traffic: a contract between this host and the partners
+    /// that read its cards.
     /// </summary>
     public static class AgentToAgent
     {
@@ -559,7 +571,6 @@ public static class Constants
 
         /// <summary>Format the bearer token is advertised in, as a hint to whoever has to produce one.</summary>
         public const string BearerFormat = "JWT";
-
     }
 
     /// <summary>
@@ -607,7 +618,8 @@ public static class Constants
     }
 
     /// <summary>
-    /// Sentinel values <c>appsettings.json</c> ships in place of a setting that MUST be filled in
+    /// Sentinel values, a contract between the shipped <c>appsettings.json</c> and every reader of a setting,
+    /// that the file carries in place of a setting that MUST be filled in
     /// before the application is usable — a secret through User Secrets or the environment, a
     /// non-secret required value through either. A setting still holding one has not been
     /// configured and every reader treats it as absent rather than as a value.
@@ -625,7 +637,8 @@ public static class Constants
     }
 
     /// <summary>
-    /// Characters that join or separate two pieces of composed text. Never prose: each one is
+    /// Characters that join or separate two pieces of composed text, shared by the agent that streams it and the
+    /// one that batches it. Never prose: each one is
     /// structure and says nothing of its own to whoever reads the text it punctuates.
     /// </summary>
     public static class Markers

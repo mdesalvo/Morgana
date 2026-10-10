@@ -2,7 +2,6 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
-using Morgana.AI.Abstractions;
 
 namespace Morgana.AI.ChatClients;
 
@@ -55,9 +54,14 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
+        // The input is kept because the closure request quotes the user's message that opened the turn.
         List<ChatMessage> turnInput = [.. chatMessages];
         ChatResponse response = await base.GetResponseAsync(turnInput, options, cancellationToken);
+
+        // The turn has ended here, so it can be judged whole and closed when the model left it open.
         await CloseIfUnclosedAsync(turnInput, options, response.Messages, cancellationToken);
+
+        // The user gets the model's own response: the closure is recorded beside it and never replaces it.
         return response;
     }
 
@@ -67,7 +71,10 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         ChatOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        // The input is kept because the closure request quotes the user's message that opened the turn.
         List<ChatMessage> turnInput = [.. chatMessages];
+
+        // The updates are gathered to rebuild the turn's messages once the stream has ended.
         List<ChatResponseUpdate> updates = [];
 
         // The text keeps streaming to the user as it is written; the closure is a question about the
@@ -78,6 +85,7 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
             yield return update;
         }
 
+        // The stream has ended, so the turn can be judged whole and closed when the model left it open.
         await CloseIfUnclosedAsync(turnInput, options, updates.ToChatResponse().Messages, cancellationToken);
     }
 
@@ -90,6 +98,7 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         IList<ChatMessage> turnMessages,
         CancellationToken cancellationToken)
     {
+        // A deployment with no closure request leaves an unclosed turn as the model wrote it.
         if (turnClosureRequest is null)
             return;
 
@@ -108,6 +117,7 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
             .OfType<FunctionResultContent>()
             .Any(result => result.Result is Records.FrameworkToolResult { Name: Constants.ToolInjections.TurnClosed }
                            || string.Equals(ResultText(result.Result), turnClosedResult, StringComparison.Ordinal));
+        // A closed turn needs nothing more.
         if (closed)
             return;
 
@@ -116,6 +126,7 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         if (turnText.Length == 0)
             return;
 
+        // Each closure on the model's behalf is a sign that the prose leaves Reply unmentioned or unheeded.
         logger.LogWarning("Turn ended without Reply: closing it on the model's behalf");
 
         // The exchange being closed and nothing else: earlier turns are already closed and the tool
@@ -129,6 +140,7 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
 
         try
         {
+            // The provider's capability decides how the closure is obtained: a forced call or a structured answer.
             IDictionary<string, object?>? arguments = canForceToolCall
                 ? await RequestForcedClosureAsync(agentTools, options?.Instructions, closingMessages, cancellationToken)
                 : await RequestStructuredClosureAsync(options?.Instructions, closingMessages, cancellationToken);
@@ -171,6 +183,7 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
             ToolMode = ChatToolMode.RequireSpecific(Constants.Tools.Reply)
         }, cancellationToken);
 
+        // The arguments of the forced call are the closure; none means the model produced nothing to record.
         return response.Messages
             .SelectMany(message => message.Contents)
             .OfType<FunctionCallContent>()
@@ -186,6 +199,7 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         List<ChatMessage> closingMessages,
         CancellationToken cancellationToken)
     {
+        // The answer is constrained to the shape of Reply's arguments, since the provider cannot be forced to call it.
         ChatResponse<Records.TurnReply> response = await InnerClient.GetResponseAsync<Records.TurnReply>(
             closingMessages,
             Records.DefaultJsonSerializerOptions,
@@ -193,6 +207,7 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
             useJsonSchemaResponseFormat: true,
             cancellationToken);
 
+        // An answer that does not parse into a closure leaves the turn unclosed.
         if (!response.TryGetResult(out Records.TurnReply? turnReply))
             return null;
 

@@ -54,6 +54,7 @@ public class MorganaTool
         ILogger toolLogger,
         Func<ToolContext> getToolContext)
     {
+        // The factory is kept unevaluated: the session it reads exists only while a turn runs.
         this.toolLogger = toolLogger;
         this.getToolContext = getToolContext;
     }
@@ -119,6 +120,7 @@ public class MorganaTool
             IReadOnlyCollection<string>? actionableToolNames = null,
             (string Workflow, string Step, IReadOnlyList<string> Tools)? choiceStep = null)
         {
+            // The pair is fixed for the turn that built it, so a tool never sees the session of another turn.
             Provider = provider;
             Session = session;
             ConversationId = conversationId;

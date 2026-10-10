@@ -11,7 +11,10 @@ namespace Morgana.Web.Services;
 /// </summary>
 public class PluginLoaderService
 {
+    /// <summary>Holds the plugin directories that a deployment declares.</summary>
     private readonly IConfiguration configuration;
+
+    /// <summary>Records what each scan found or skipped.</summary>
     private readonly ILogger logger;
 
     /// <summary>
@@ -32,12 +35,14 @@ public class PluginLoaderService
     /// </summary>
     public void LoadPluginAssemblies()
     {
+        // Null when the deployment declares no directory: the default one is then the only place scanned.
         string[]? configuredDirectories = configuration.GetSection("Morgana:Plugins:Directories").Get<string[]>();
 
         // Build the final list of directories with "plugins" always first
         List<string> pluginDirectories = [ "plugins" ];
 
-        // Add other configured directories (skip if "plugins" is already in the list)
+        // Add other configured directories (skip if "plugins" is already in the list).
+        // The match ignores leading dots and separators, so "./plugins" and "plugins" are the same directory.
         if (configuredDirectories is { Length: > 0 })
         {
             pluginDirectories.AddRange(
@@ -51,11 +56,13 @@ public class PluginLoaderService
 
         logger.LogInformation("Scanning {PluginDirectoriesCount} plugin directories (priority order)...", pluginDirectories.Count);
 
+        // Totals for the closing line that tells the operator what the installation can serve.
         int totalLoaded = 0;
         int totalAgents = 0;
 
         foreach (string pluginDirectory in pluginDirectories)
         {
+            // A directory that cannot be scanned costs the plugins in it only: the others still load.
             try
             {
                 // Resolve path relative to application base directory
@@ -67,12 +74,14 @@ public class PluginLoaderService
 
                 if (!Directory.Exists(fullPath))
                 {
+                    // A declared directory that is absent is reported and skipped: the default one is optional too.
                     logger.LogWarning("⚠️  Plugin directory not found: {FullPath}", fullPath);
                     continue;
                 }
 
                 logger.LogInformation("📁 Scanning plugin directory: {FullPath}", fullPath);
 
+                // Only the top level is scanned: a plugin's dependencies sit beside it and are loaded on demand.
                 string[] pluginAssemblies = Directory.GetFiles(fullPath, "*.dll", SearchOption.TopDirectoryOnly);
 
                 if (pluginAssemblies.Length == 0)
@@ -83,6 +92,7 @@ public class PluginLoaderService
 
                 foreach (string pluginAssembly in pluginAssemblies)
                 {
+                    // One broken file never stops the others from loading.
                     try
                     {
                         // Load assembly from filesystem path
@@ -100,25 +110,30 @@ public class PluginLoaderService
                         }
                         else
                         {
+                            // A dependency of a plugin sits beside it: it is loaded when needed and is not an agent library.
                             logger.LogDebug("⚠️  Skipped assembly {GetFileName}: no MorganaAgent subclasses found", Path.GetFileName(pluginAssembly));
                         }
                     }
                     catch (BadImageFormatException)
                     {
+                        // A native or corrupted library next to the plugins: skipped with a warning, since it is not a plugin.
                         logger.LogWarning("⚠️  Skipped {GetFileName}: not a valid .NET assembly", Path.GetFileName(pluginAssembly));
                     }
                     catch (FileLoadException ex)
                     {
+                        // A plugin that cannot be loaded leaves its agents out: the registry's checks report what then lacks an agent.
                         logger.LogError("❌ Failed to load {GetFileName}: {ExMessage}", Path.GetFileName(pluginAssembly), ex.Message);
                     }
                     catch (Exception ex)
                     {
+                        // Any other fault, a type that fails to resolve included, is absorbed so the boot reaches its own checks.
                         logger.LogError(ex, "❌ Unexpected error loading {GetFileName}", Path.GetFileName(pluginAssembly));
                     }
                 }
             }
             catch (Exception ex)
             {
+                // An unreadable directory is reported and the scan goes on with the next one.
                 logger.LogError(ex, "❌ Failed to scan directory: {PluginDirectory}", pluginDirectory);
             }
         }

@@ -1,10 +1,9 @@
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
-/// Enforces per-conversation lifetime token budget (orthogonal to rate limiter).
-/// Rate limiter controls message frequency; dust limiter controls token consumption.
-/// Fixed budget per conversation; exhaustion is terminal (next turn blocked). All methods
-/// fail open — storage faults never block the user.
+/// Owns the per-conversation lifetime token budget: what has been consumed, how much is left and which warnings are due.
+/// It limits consumption where the rate limiter limits frequency. Exhaustion is terminal (the next turn is blocked).
+/// All methods fail open: storage faults never block the user.
 /// </summary>
 public interface IDustLimitService
 {
@@ -34,7 +33,7 @@ public interface IDustLimitService
     /// <summary>
     /// Dust consumed by a conversation since a <paramref name="baseline"/> a previous
     /// <see cref="GetConsumedAsync"/> returned — what the work between the two reads cost.
-    /// Never negative and0.0 whenever the reading itself is unavailable.
+    /// Never negative and 0.0 whenever the reading itself is unavailable.
     /// </summary>
     Task<double> GetConsumedSinceAsync(string conversationId, double baseline);
 

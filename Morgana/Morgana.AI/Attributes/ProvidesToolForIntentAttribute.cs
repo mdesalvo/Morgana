@@ -42,6 +42,7 @@ public class ProvidesToolForIntentAttribute : Attribute
             throw new ArgumentException("Intent cannot be null or empty", nameof(intent));
         }
 
+        // The intent is the key that the tool registry attaches this class's tools to.
         Intent = intent;
     }
 }

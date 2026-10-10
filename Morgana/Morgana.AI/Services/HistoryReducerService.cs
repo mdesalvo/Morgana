@@ -59,10 +59,13 @@ public class HistoryReducerService
     /// </remarks>
     public IChatReducer? CreateReducer(IChatClient chatClient)
     {
+        // Read at every call, so an agent born later is reduced by the configuration in force at its birth.
         IConfigurationSection config = configuration.GetSection("Morgana:HistoryReducer");
 
+        // A disabled reducer hands the model the whole history, which the null below tells the provider.
         if (!config.GetValue("Enabled", true))
         {
+            // The log is the only trace that the null is a decision and not a misconfiguration.
             logger.LogInformation("History summarization disabled - no reducer created");
             return null;
         }
@@ -82,10 +85,12 @@ public class HistoryReducerService
         if (!string.IsNullOrWhiteSpace(summaryPrompt))
             chatReducer.SummarizationPrompt = summaryPrompt;
 
+        // Leaves the sizes in force on record, since they decide when the first fold lands.
         logger.LogInformation(
             "Created MorganaChatReducer: target={TargetCount}, threshold(buffer)={Threshold} → reduction triggers when message count > {Trigger}",
             targetCount, threshold, targetCount + threshold);
 
+        // The agent keeps this reducer for its whole life.
         return chatReducer;
     }
 }
@@ -101,7 +106,7 @@ public class HistoryReducerService
 /// replaces the messages it came from.</para>
 /// <para>Only the summarizer's input differs here. Which messages get summarized is a faithful port,
 /// see <see cref="SummarizedConversation"/> and the kept window is handed back untouched. The
-/// <c>__summary__</c> name is MEAI's, so sessions summarized before this shipped still resume.</para>
+/// <c>__summary__</c> name is MEAI's, so a session summarized by either reducer resumes under the other.</para>
 /// </remarks>
 public sealed class MorganaChatReducer : IChatReducer
 {
@@ -154,10 +159,12 @@ public sealed class MorganaChatReducer : IChatReducer
     /// <param name="logger">Logger for reduction diagnostics.</param>
     public MorganaChatReducer(IChatClient chatClient, int targetCount, int thresholdCount, ILogger logger)
     {
+        // A reducer with no client or no window to keep would fold the whole conversation away.
         ArgumentNullException.ThrowIfNull(chatClient);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(targetCount, 0);
         ArgumentOutOfRangeException.ThrowIfNegative(thresholdCount);
 
+        // The sizes are fixed for the agent's life: they decide where every fold of its history falls.
         this.chatClient = chatClient;
         this.targetCount = targetCount;
         this.thresholdCount = thresholdCount;
@@ -167,11 +174,13 @@ public sealed class MorganaChatReducer : IChatReducer
     /// <inheritdoc/>
     public async Task<IEnumerable<ChatMessage>> ReduceAsync(IEnumerable<ChatMessage> messages, CancellationToken cancellationToken)
     {
+        // A missing history is a caller fault, never an empty conversation.
         ArgumentNullException.ThrowIfNull(messages);
 
         // Rebuilt from scratch on every turn: the reduced view is never stored, so the running summary
         // has to be recovered from the marker each time rather than carried in a field.
         SummarizedConversation conversation = SummarizedConversation.FromChatMessages(messages);
+        // Where the kept window opens, with the hysteresis buffer spent so that a short history is left alone.
         int indexOfFirstMessageToKeep = conversation.FindIndexOfFirstMessageToKeep(targetCount, thresholdCount);
 
         // Zero means the history is still short enough: hand it back untouched and, above all, spend no
@@ -179,6 +188,7 @@ public sealed class MorganaChatReducer : IChatReducer
         if (indexOfFirstMessageToKeep <= 0)
             return conversation.ToChatMessages();
 
+        // The one line that makes a fold observable: the harness reads it by contract.
         logger.LogInformation(
             Constants.ObservableLogs.HistorySummarized,
             indexOfFirstMessageToKeep, conversation.UnsummarizedCount - indexOfFirstMessageToKeep);
@@ -207,6 +217,7 @@ public sealed class MorganaChatReducer : IChatReducer
     /// </remarks>
     public async Task<int> CompactAsync(IEnumerable<ChatMessage> messages, CancellationToken cancellationToken)
     {
+        // A missing history is a caller fault, never an empty conversation.
         ArgumentNullException.ThrowIfNull(messages);
 
         // An earlier fold leaves its own mark in the history, so what this one may fold is what has been
@@ -223,6 +234,7 @@ public sealed class MorganaChatReducer : IChatReducer
         if (indexOfFirstMessageToKeep <= 0)
             return 0;
 
+        // Reports an on-demand fold apart from an automatic one.
         logger.LogInformation(
             "MorganaChatReducer folding {SummarizedCount} message(s) on demand, keeping {KeptCount}",
             indexOfFirstMessageToKeep, conversation.UnsummarizedCount - indexOfFirstMessageToKeep);
@@ -255,6 +267,7 @@ public sealed class MorganaChatReducer : IChatReducer
         /// </summary>
         internal static SummarizedConversation FromChatMessages(IEnumerable<ChatMessage> messages)
         {
+            // The three parts are filled while the history is walked once, in order.
             string? summary = null;
             ChatMessage? systemMessage = null;
             List<ChatMessage> unsummarized = [];
@@ -289,6 +302,7 @@ public sealed class MorganaChatReducer : IChatReducer
                 }
             }
 
+            // The conversation as the reducer sees it from here on: summary, system message and the unfolded tail.
             return new SummarizedConversation(summary, systemMessage, unsummarized);
         }
 
@@ -319,6 +333,7 @@ public sealed class MorganaChatReducer : IChatReducer
             // kept window opens where the user spoke rather than mid-exchange. Bounded by the floor above.
             for (int candidate = cutIndex; candidate >= earliestAllowedIndex; candidate--)
             {
+                // The first user turn found walking back is where the kept window opens.
                 if (unsummarizedMessages[candidate].Role == ChatRole.User)
                     return candidate;
             }
@@ -332,13 +347,14 @@ public sealed class MorganaChatReducer : IChatReducer
         /// </summary>
         /// <remarks>
         /// Stamping the summary mutates the caller's own <see cref="ChatMessage"/>, which is how it reaches
-        /// the persisted session. Upstream behaves the same way.
+        /// the persisted session.
         /// </remarks>
         internal async ValueTask<SummarizedConversation> ResummarizeAsync(
             IChatClient chatClient, int indexOfFirstMessageToKeep, string summarizationPrompt, CancellationToken cancellationToken)
         {
             // The one live call this class makes, paid once per reduction rather than per turn.
             IEnumerable<ChatMessage> summarizerMessages = ToSummarizerChatMessages(indexOfFirstMessageToKeep, summarizationPrompt);
+
             // This answer stands in for every message behind the anchor for the rest of the conversation,
             // so what it leaves out is lost to the agent rather than merely shortened.
             string newSummary = (await chatClient.GetResponseAsync(summarizerMessages, null, cancellationToken)).Text;
@@ -351,6 +367,7 @@ public sealed class MorganaChatReducer : IChatReducer
             anchor.AdditionalProperties ??= [];
             anchor.AdditionalProperties[SummaryKey] = newSummary;
 
+            // The folded head is gone from the view: the summary and the kept tail are what the agent reads next.
             return new SummarizedConversation(newSummary, systemMessage, [.. unsummarizedMessages.Skip(indexOfFirstMessageToKeep)]);
         }
 
@@ -429,6 +446,7 @@ public sealed class MorganaChatReducer : IChatReducer
         /// </summary>
         private static string RenderToolRelatedMessage(ChatMessage message)
         {
+            // One text per message, which the summarizer reads as the record of what the tool exchange did.
             StringBuilder rendered = new StringBuilder();
 
             // Content order is preserved, so the rendering reads in the order the model produced it:
@@ -469,6 +487,7 @@ public sealed class MorganaChatReducer : IChatReducer
                 }
             }
 
+            // The trailing newline is dropped so that the message carries no empty last line.
             return rendered.ToString().TrimEnd();
         }
 
@@ -479,6 +498,7 @@ public sealed class MorganaChatReducer : IChatReducer
         /// </summary>
         private static string Render(object? value)
         {
+            // A call without arguments or a result without a value is named as such for the summarizer.
             if (value is null)
                 return "null";
 
