@@ -30,6 +30,7 @@ public record CommandDescriptor(
     /// </summary>
     public string? DescribeDeclarationProblem()
     {
+        // A command without options declares an empty list, so no option is valid for it.
         IReadOnlyList<CommandOption> declared = Options ?? [];
 
         // Options are matched ignoring case, so two spelled alike would hand the typed value to whichever came first
@@ -44,6 +45,7 @@ public record CommandDescriptor(
         if (declared.FirstOrDefault(option => option.DefaultValue is { } fallback && !option.Allows(fallback)) is { } optionWithDisallowedDefault)
             return $"/{Name} defaults the option '{optionWithDisallowedDefault.Name}' to '{optionWithDisallowedDefault.DefaultValue}', which it does not take";
 
+        // No declaration fault is found, so the registry accepts the command.
         return null;
     }
 
@@ -65,6 +67,7 @@ public record CommandDescriptor(
         // Every name given is a declared one by now, so each finds its option
         foreach ((string given, string value) in options ?? new Dictionary<string, string>())
         {
+            // The option that the given name belongs to is found, which the check above has guaranteed to exist.
             CommandOption option = declared.First(candidate => string.Equals(candidate.Name, given, StringComparison.OrdinalIgnoreCase));
             if (!option.Allows(value))
                 return $"/{Name} takes {option.Name} as {option.DescribeAllowedValues()}, not '{value}'";
@@ -75,6 +78,7 @@ public record CommandDescriptor(
         if (declared.FirstOrDefault(option => option is { Required: true, DefaultValue: null } && !WasGiven(option, options)) is { } missingRequiredOption)
             return $"/{Name} needs {missingRequiredOption.Name}: {missingRequiredOption.Description}";
 
+        // Every given option is valid and every required one is present, so no problem is reported.
         return null;
     }
 
@@ -93,6 +97,7 @@ public record CommandDescriptor(
         // TryAdd leaves a value the user gave untouched: a default only fills what was left out
         foreach (CommandOption option in Options ?? [])
         {
+            // An option with a default contributes it, since the user left it out.
             if (option.DefaultValue is { } fallback)
                 effective.TryAdd(option.Name, fallback);
         }

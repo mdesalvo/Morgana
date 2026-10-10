@@ -17,6 +17,7 @@ public sealed class FailureResponseFilter(ILogger logger) : IExceptionFilter
 
         // A channel reads one error shape from every endpoint, whichever step of the request broke
         context.Result = new ObjectResult(new { error = context.Exception.Message }) { StatusCode = StatusCodes.Status500InternalServerError };
+        // The exception is marked handled, so the failure is answered as a response and not rethrown to the host.
         context.ExceptionHandled = true;
     }
 }

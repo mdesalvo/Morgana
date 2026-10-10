@@ -82,6 +82,7 @@ public class SQLiteDustLimitService : IDustLimitService
             // The budget row is seeded with the schema, so it exists before the first charge.
             await persistenceService.EnsureDatabaseInitializedAsync(conversationId);
 
+            // The budget lives in the conversation's own database, which is opened for the charge.
             await using SqliteConnection connection = new SqliteConnection(GetConnectionString(conversationId));
             await connection.OpenAsync();
 
@@ -94,6 +95,7 @@ public class SQLiteDustLimitService : IDustLimitService
                 // above guarantees it exists), so the hot path is a bare UPDATE.
                 await using (SqliteCommand updateCommand = connection.CreateCommand())
                 {
+                    // The counter is written inside the charge's transaction, so the total and its usage line land together or not at all.
                     updateCommand.Transaction = transaction;
 
                     // Added in the database rather than read, summed and written back: two agents of one
@@ -107,6 +109,7 @@ public class SQLiteDustLimitService : IDustLimitService
                 // is left, this answers where it went — per role, which is what makes a bill readable.
                 await using (SqliteCommand logCommand = connection.CreateCommand())
                 {
+                    // The usage line joins the same transaction as the counter, so the bill and its items stay consistent.
                     logCommand.Transaction = transaction;
                     logCommand.CommandText =
                         "INSERT INTO dust_usage_log (timestamp, dust_consumed, llm_role) VALUES (@ts, @dust, @role);";
@@ -273,6 +276,7 @@ public class SQLiteDustLimitService : IDustLimitService
             // The warning flags live on the budget row, which the schema seeds.
             await persistenceService.EnsureDatabaseInitializedAsync(conversationId);
 
+            // The budget row lives in the conversation's own database, which is opened for the read and for the marks.
             await using SqliteConnection connection = new SqliteConnection(GetConnectionString(conversationId));
             await connection.OpenAsync();
 
@@ -285,6 +289,7 @@ public class SQLiteDustLimitService : IDustLimitService
                 bool warning70Sent;
                 bool warning90Sent;
 
+                // The three values are read inside the transaction, so the flags cannot change before the marks are decided on them.
                 await using (SqliteCommand readCommand = connection.CreateCommand())
                 {
                     readCommand.Transaction = transaction;
@@ -293,10 +298,12 @@ public class SQLiteDustLimitService : IDustLimitService
                     // No budget row yet means no usage, so nothing is due.
                     if (!await reader.ReadAsync())
                     {
+                        // Without a budget row nothing can be due, so the transaction is rolled back and no flag changes.
                         await transaction.RollbackAsync();
                         return (false, false);
                     }
 
+                    // The spent total and the flags of the thresholds already announced are taken from the row.
                     consumed = reader.GetDouble(0);
                     warning70Sent = reader.GetInt32(1) != 0;
                     warning90Sent = reader.GetInt32(2) != 0;
@@ -312,6 +319,7 @@ public class SQLiteDustLimitService : IDustLimitService
                 // decide to send the same warning. Each CASE leaves the other flag as it found it.
                 if (send70 || send90)
                 {
+                    // Only the thresholds newly crossed are marked, so a flag already set is left as it stands.
                     await using SqliteCommand updateCommand = connection.CreateCommand();
                     updateCommand.Transaction = transaction;
                     updateCommand.CommandText =
@@ -324,6 +332,7 @@ public class SQLiteDustLimitService : IDustLimitService
                     await updateCommand.ExecuteNonQueryAsync();
                 }
 
+                // The marks and the decision become visible together, so a warning sent is always a warning recorded.
                 await transaction.CommitAsync();
 
                 // Tells the caller which of the two notices to send to the user now.
@@ -352,6 +361,7 @@ public class SQLiteDustLimitService : IDustLimitService
         // The first read of a conversation may precede any other use of its database.
         await persistenceService.EnsureDatabaseInitializedAsync(conversationId);
 
+        // The spent total is read from the budget row of the conversation's own database.
         await using SqliteConnection connection = new SqliteConnection(GetConnectionString(conversationId));
         await connection.OpenAsync();
 

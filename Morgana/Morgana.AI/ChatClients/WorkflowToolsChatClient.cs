@@ -78,11 +78,11 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
             return options;
 
         // An agent answering a colleague carries the consultation mark in its session.
-        bool servingConsultation = contextProvider.GetVariable(session, Constants.ContextKeys.ServingConsultation) is not null;
+        bool isServingConsultation = contextProvider.GetVariable(session, Constants.ContextKeys.ServingConsultation) is not null;
 
         // A colleague is not consulted by an agent that is answering one, since the chain stops at one hop,
         // nor by a turn that has spent its rounds.
-        bool colleaguesOutOfReach = servingConsultation
+        bool colleaguesOutOfReach = isServingConsultation
             || contextProvider.GetConsultationRounds(session) >= maxConsultationRoundsPerTurn;
 
         // The position says whether a workflow is running and at which step; an agent with no workflows holds none.
@@ -103,7 +103,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         {
             // A consultation answers a colleague and never takes the user's turn, so it never opens a wizard.
             presented = [.. tools.Where(tool => !entryTools.Contains(tool.Name)
-                && (!servingConsultation || tool is not WorkflowLauncherFunction))];
+                && (!isServingConsultation || tool is not WorkflowLauncherFunction))];
         }
         else
         {
@@ -111,16 +111,23 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
             HashSet<string> signature = running.Value.Definition.ToolSignature();
             presented = [];
 
+            // Each tool is kept or withheld according to the step that the workflow stands at.
             foreach (AITool tool in tools)
             {
-                // Closing the turn and consulting a colleague belong to no step: they are offered at every one.
+                // At a choice step Reply is offered with the step's tools as the only actions it may propose.
                 if (tool.Name == Constants.Tools.Reply && running.Value.Step.Tools.Count > 1)
                     presented.Add(WithStepActions(tool, running.Value.Step.Tools));
+
+                // Closing the turn and consulting a colleague belong to no step: they are offered at every one.
                 else if (tool.Name == Constants.Tools.Reply
                     || tool.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
                     presented.Add(tool);
+
+                // One workflow runs at a time, so no launcher is offered while this one stands.
                 else if (tool is WorkflowLauncherFunction)
                     continue;
+
+                // The workflow's own tools are governed by the step it stands at.
                 else if (signature.Contains(tool.Name))
                 {
                     // Of the workflow's own tools only the current step's are offered, without what the framework binds.
@@ -158,6 +165,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         if (tool is not AIFunction function)
             return tool;
 
+        // The schema of the tool is read, so that the parameters the step binds can be hidden from the model.
         JsonObject schema = SchemaOf(function);
 
         // A workflow carries its property's name while a tool spells its parameter its own way, so the
@@ -174,7 +182,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         foreach (string parameter in hidden)
             schema["properties"]!.AsObject().Remove(parameter);
 
-        // A hidden parameter cannot stay required, or the model could never satisfy the schema.
+        // A hidden parameter cannot stay required. Otherwise the model could never satisfy the schema.
         if (schema["required"] is JsonArray required)
             schema["required"] = new JsonArray([.. required
                 .Where(name => !hidden.Contains(name!.GetValue<string>(), StringComparer.Ordinal))
@@ -195,6 +203,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         if (reply is not AIFunction replyFunction)
             return reply;
 
+        // The schema of Reply is read, so that the choices of the step can be written into its actions.
         JsonObject schema = SchemaOf(replyFunction);
 
         // The actions property is where Reply offers buttons; its schema becomes the proposal of the step's choices.

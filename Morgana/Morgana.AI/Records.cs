@@ -99,7 +99,7 @@ public static class Records
     /// The router's answer to a <see cref="RestoreAgentRequest"/>; a null reference means that no agent handles the intent.
     /// </summary>
     /// <param name="AgentIntent">Original intent requested</param>
-    /// <param name="AgentRef">Resolved agent reference, or null if not found</param>
+    /// <param name="AgentRef">Resolved agent reference or null if not found</param>
     public record RestoreAgentResponse(string AgentIntent, IActorRef? AgentRef);
 
     // ==========================================================================
@@ -284,9 +284,13 @@ public static class Records
         /// <summary>Returns the definition declared for <paramref name="tier"/>.</summary>
         public TierDefinition For(LLMTier tier) => tier switch
         {
+            // The cheapest tier takes the definition that the deployer declared for Economy.
             LLMTier.Economy => Economy,
+            // The middle tier takes the definition that the deployer declared for Efficiency.
             LLMTier.Efficiency => Efficiency,
+            // The most capable tier takes the definition that the deployer declared for Performance.
             LLMTier.Performance => Performance,
+            // An unknown tier is refused, since every tier must be declared.
             _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, null)
         };
     }
@@ -467,7 +471,7 @@ public static class Records
     }
 
     /// <summary>
-    /// What this installation may do toward a partner: consult its published agents, or nothing.
+    /// What this installation may do toward a partner: consult its published agents or nothing.
     /// </summary>
     public record PartnerOutboundPolicy
     {
@@ -516,7 +520,7 @@ public static class Records
         public string? Issuer { get; set; }
 
         /// <summary>
-        /// Published agents this partner may consult, or <c>null</c> to admit it to every one of them.
+        /// Published agents this partner may consult or <c>null</c> to admit it to every one of them.
         /// This is how one company's several installations reach only the agents that concern them:
         /// publication stays whole and what narrows is admission.
         /// </summary>
@@ -802,7 +806,7 @@ public static class Records
     /// actor and answered with a <see cref="PeerConsultationResponse"/>.
     /// </summary>
     /// <param name="ConversationId">Conversation both agents belong to; scopes session and shared context.</param>
-    /// <param name="CallerIntent">Intent of the asking agent, or <c>null</c> when the A2A caller is
+    /// <param name="CallerIntent">Intent of the asking agent or <c>null</c> when the A2A caller is
     /// not an agent of this installation and named none.</param>
     /// <param name="Question">The colleague's question, already carrying the declaration spliced in
     /// front of it, since the answering agent's prompt says nothing about serving a colleague.</param>
@@ -846,7 +850,7 @@ public static class Records
     /// that still fit inside the target channel's capabilities.
     /// </summary>
     /// <param name="Text">Rewritten message text, channel-compliant and free of unsupported features.</param>
-    /// <param name="QuickReplies">Quick replies preserved by the rewrite, or null when the channel cannot carry them.</param>
+    /// <param name="QuickReplies">Quick replies preserved by the rewrite or null when the channel cannot carry them.</param>
     public record ChannelAdapterResponse(
         [property: JsonPropertyName("text")] string Text,
         [property: JsonPropertyName("quickReplies")] List<QuickReply>? QuickReplies);
@@ -1041,8 +1045,10 @@ public static class Records
         /// </summary>
         public T GetAdditionalProperty<T>(string additionalPropertyName)
         {
+            // Each block of additional properties the prompt declares is searched in turn.
             foreach (Dictionary<string, object> additionalProperties in AdditionalProperties)
             {
+                // The first block that declares the property supplies its value.
                 if (additionalProperties.TryGetValue(additionalPropertyName, out object? value))
                 {
                     // The configuration binder leaves every value as a JsonElement, which is read into the type the caller expects.
@@ -1085,7 +1091,7 @@ public static class Records
                 .FirstOrDefault(message => string.Equals(message.Name, name, StringComparison.OrdinalIgnoreCase))?.Content ?? string.Empty;
 
         /// <summary>
-        /// Gets an additional property, or <paramref name="defaultValue"/> when the prompt does not declare it:
+        /// Gets an additional property or <paramref name="defaultValue"/> when the prompt does not declare it:
         /// for optional configuration, where <see cref="GetAdditionalProperty{T}"/> would rightly throw.
         /// </summary>
         /// <typeparam name="T">Type to deserialize the property value into</typeparam>
@@ -1093,8 +1099,10 @@ public static class Records
         /// <param name="defaultValue">Value returned when the property is absent</param>
         public T GetAdditionalPropertyOrDefault<T>(string additionalPropertyName, T defaultValue)
         {
+            // Each block of additional properties the prompt declares is searched in turn.
             foreach (Dictionary<string, object> additionalProperties in AdditionalProperties)
             {
+                // The first block that declares the property supplies its value and a block without it is passed over.
                 if (additionalProperties.TryGetValue(additionalPropertyName, out object? value))
                 {
                     // The configuration binder leaves every value as a JsonElement; a declared null reads as absent.
@@ -1395,6 +1403,7 @@ public static class Records
             // The array is walked once per set name, so it is materialized first.
             List<FrameworkReplySet> declared = [.. sets];
 
+            // Looks up the replies of one named set and yields null when the prompt does not declare it.
             List<QuickReply>? Find(string name)
                 => declared.FirstOrDefault(set => string.Equals(set.Name, name, StringComparison.OrdinalIgnoreCase))?.Replies;
 
@@ -1467,6 +1476,7 @@ public static class Records
         /// <summary>Words a tool name as a button label: <c>ConfirmOrder</c> becomes <c>Confirm order</c>.</summary>
         private static string LabelFromToolName(string toolName)
         {
+            // The label is the tool name respelled as the words that a user reads on its button.
             StringBuilder label = new StringBuilder();
 
             for (int index = 0; index < toolName.Length; index++)
@@ -1477,6 +1487,7 @@ public static class Records
                 if (index > 0 && char.IsUpper(current) && (char.IsLower(toolName[index - 1]) || char.IsDigit(toolName[index - 1])))
                     label.Append(' ');
 
+                // The first letter is capitalized and every other one lowered, so the label reads as a sentence.
                 label.Append(index == 0 ? char.ToUpperInvariant(current) : char.ToLowerInvariant(current));
             }
 

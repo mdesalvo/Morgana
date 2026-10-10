@@ -71,7 +71,7 @@ public class SQLiteRateLimitService : IRateLimitService
     /// <returns>
     /// An allowing result when every configured window is under its cap (the request has then been
     /// recorded), otherwise a denying result carrying the first violated limit and its retry-after.
-    /// Also allowing when rate limiting is disabled, or when the check itself failed — the limiter
+    /// Also allowing when rate limiting is disabled or when the check itself failed — the limiter
     /// fails open rather than becoming a single point of failure.
     /// </returns>
     public async Task<RateLimitResult> CheckAndRecordAsync(string conversationId)
@@ -109,7 +109,7 @@ public class SQLiteRateLimitService : IRateLimitService
                 // counted: the log stays bounded without a housekeeping pass of its own.
                 await CleanupOldRequestsAsync(sqliteConnection, sqliteTransaction, utcNow);
 
-                // The narrowest window with no room left, or nothing when all three still have some.
+                // The narrowest window with no room left or nothing when all three still have some.
                 RateLimitResult? violation = await CheckTimeWindowsAsync(
                     sqliteConnection, sqliteTransaction, utcNow);
 
@@ -117,11 +117,13 @@ public class SQLiteRateLimitService : IRateLimitService
                 // cap on every retry, so being refused would lengthen the wait it caused.
                 if (violation != null)
                 {
+                    // The transaction is rolled back, so the refused request leaves no row behind.
                     await sqliteTransaction.RollbackAsync();
 
                     logger.LogWarning(
                         "Rate limit DENIED for conversation {ConversationId}: {ViolationViolatedLimit}", conversationId, violation.ViolatedLimit);
 
+                    // The violated window is returned, so the caller can say how long the conversation must wait.
                     return violation;
                 }
 
@@ -180,6 +182,7 @@ public class SQLiteRateLimitService : IRateLimitService
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             sqliteCommand.CommandText = "DELETE FROM rate_limit_log;";
 
+            // The number of rows removed is kept, since it is the figure the reset is reported with.
             int rowsDeleted = await sqliteCommand.ExecuteNonQueryAsync();
 
             // How much allowance came back, which is the only evidence the reset did anything.
@@ -251,8 +254,10 @@ public class SQLiteRateLimitService : IRateLimitService
             (options.MaxMessagesPerDay, RateLimitWindow.PerDay, TimeSpan.FromDays(1))
         ];
 
+        // Each configured window is checked from the narrowest and the first one without room is reported.
         foreach ((int cap, RateLimitWindow windowName, TimeSpan window) in windows.Where(window => window.Cap > 0))
         {
+            // The requests already in the window are counted inside this check's transaction.
             int count = await CountRequestsAsync(connection, transaction, utcNow - window);
 
             // The count is of prior requests, so reaching the cap means that this one would be the request
@@ -315,6 +320,7 @@ public class SQLiteRateLimitService : IRateLimitService
         sqliteCommand.CommandText = "INSERT INTO rate_limit_log (request_timestamp) VALUES (@timestamp);";
         sqliteCommand.Parameters.AddWithValue("@timestamp", utcNowIso);
 
+        // The admitted request is written inside the check's transaction, so it counts only if the check commits.
         await sqliteCommand.ExecuteNonQueryAsync();
     }
 

@@ -31,6 +31,7 @@ public static class OpenTelemetryExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // Everything that telemetry needs is declared under this one section.
         IConfigurationSection section = configuration.GetSection("Morgana:OpenTelemetry");
 
         // A host that does not enable telemetry pays for none of it: no source is listened to and no exporter is built.
@@ -51,6 +52,7 @@ public static class OpenTelemetryExtensions
             .AddOpenTelemetry()
             .WithTracing(tracing =>
             {
+                // The trace pipeline names the service and listens to the framework's sources and to the LLM client's.
                 tracing
                     .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
                     .AddSource(Telemetry.Source.Name)
@@ -68,8 +70,10 @@ public static class OpenTelemetryExtensions
         // Counters and histograms are aggregates that only an OTLP-compatible backend can consume: without one no meter is collected.
         if (otlpExporter is not null)
         {
+            // Metrics are wired only when an OTLP exporter exists, since an aggregate needs a backend that can read it.
             otel.WithMetrics(metrics =>
             {
+                // The meters of the framework and of the LLM client are collected under the same service name.
                 metrics
                     .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
                     .AddMeter(Telemetry.MorganaMeter.Name)
@@ -78,6 +82,7 @@ public static class OpenTelemetryExtensions
             });
         }
 
+        // The services are returned with telemetry registered, for the host to keep building them.
         return services;
     }
 

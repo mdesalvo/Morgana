@@ -82,6 +82,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             {
                 try
                 {
+                    // The types of a loaded assembly are the candidates for the scan and an assembly that cannot be read contributes none.
                     return a.GetTypes();
                 }
                 catch (ReflectionTypeLoadException)
@@ -95,6 +96,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             // agents, never an agent that answers.
             .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaAgent)));
 
+        // Each concrete agent is entered under the intent it declares, which is the only key the router looks up.
         foreach (Type? morganaAgentType in morganaAgentTypes)
         {
             // An agent without [HandlesIntent] is skipped in silence. Two agents claiming ONE intent is
@@ -139,6 +141,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         if (validationErrors.Count > 0)
             throw new InvalidOperationException(string.Join(Environment.NewLine, validationErrors));
 
+        // The map is returned only once every check has passed, so no caller ever receives a half-validated registry.
         return registry;
     }
 
@@ -156,6 +159,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         Dictionary<string, Type> registry,
         List<Records.IntentDefinition> configuredIntents)
     {
+        // One message is collected per direction of the intent coverage that does not hold.
         List<string> errors = [];
 
         // The intents that code answers for, compared below with the ones that configuration offers.
@@ -217,6 +221,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         // alone cannot say whether the name on the attribute resolves to anything.
         List<Records.PartnerOptions> partners = ConfigurationAgentDirectoryService.ResolvePartners(configuration);
 
+        // Each agent's declared consultations are checked against the registry and the configured partners.
         foreach ((string declaredIntent, Type agentType) in registry)
         {
             // Uniqueness is per agent: two agents may each hold a colleague offered under one name.
@@ -239,8 +244,11 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 // A colleague of this installation: the registry knows every agent, so this is settled here.
                 if (consultsAgent.Instance is null)
                 {
+                    // An agent consulting its own intent would be asking itself, so the declaration is refused.
                     if (string.Equals(consultsAgent.Intent, declaredIntent, StringComparison.OrdinalIgnoreCase))
                         errors.Add($"Agent '{agentType.Name}' declares a consultation of itself ('{declaredIntent}')");
+
+                    // A colleague that no agent of this installation handles could never be reached.
                     else if (!registry.ContainsKey(consultsAgent.Intent))
                         errors.Add($"Agent '{agentType.Name}' declares a consultation of '{consultsAgent.Intent}', which no Morgana agent handles");
                 }
@@ -248,6 +256,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 // One published elsewhere: only this side of the wire is checkable.
                 else if (ValidateConsultablePartner(partners, consultsAgent.Instance, agentType.Name, colleague) is { } partnerError)
                 {
+                    // A partner that cannot be consulted is reported with the reason the partner check gave.
                     errors.Add(partnerError);
                 }
 
@@ -281,6 +290,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         // The framework's own tool is held to the contract that a domain tool is.
         errors.AddRange(ValidateToolContract(Constants.Morgana, typeof(ReplyTool)));
 
+        // An intent has a tool class only when its agent uses native tools.
         foreach (string intent in registry.Keys)
         {
             // An intent without a tool type is the registry's own warning path: no class, no contract to weigh.
@@ -288,6 +298,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             if (toolType is null)
                 continue;
 
+            // The class is checked against the contract that every domain tool keeps.
             errors.AddRange(ValidateToolContract(intent, toolType));
         }
 
@@ -307,18 +318,22 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     {
         List<string> errors = [];
 
+        // Each domain prompt is checked for declarations left in its JSON.
         foreach (Records.Prompt prompt in prompts)
         {
             // A prompt may carry its extra properties in several blocks, so a key is looked for in each of them.
             bool Declares(string key) => prompt.AdditionalProperties.Any(properties => properties.ContainsKey(key));
 
+            // A prompt that still declares tools in JSON would have them silently ignored at run time, so it is refused.
             if (Declares(Constants.PromptProperties.Tools))
                 errors.Add($"Prompt '{prompt.ID}' declares \"{Constants.PromptProperties.Tools}\" in agents.json: tools are declared on the tool class and the declaration would be ignored");
 
+            // A prompt that still declares workflows in JSON is refused for the same reason.
             if (Declares(Constants.PromptProperties.Workflows))
                 errors.Add($"Prompt '{prompt.ID}' declares \"{Constants.PromptProperties.Workflows}\" in agents.json: workflows are declared on their class and the declaration would be ignored");
         }
 
+        // Every prompt is checked before the list is returned, so one startup refusal lists every declaration left in JSON.
         return errors;
     }
 
@@ -338,6 +353,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 .Select(intent => $"A workflow declares intent '{intent}', which no agent handles")
         ];
 
+        // Each agent's workflows are checked against the tools that its own class declares.
         foreach ((string intent, Type agentType) in registry)
         {
             // An agent that declares no workflow has nothing to weigh here.
@@ -347,6 +363,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
             // An agent that acquires tools from an MCP server has steps that startup cannot check by name.
 
+            // The MCP flag tells the checks that some tools are unknown by design, since they arrive at run time.
             errors.AddRange(ValidateWorkflows(
                 intent,
                 workflows,
@@ -354,6 +371,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 agentType.GetCustomAttributes<UsesMCPServerAttribute>().Any()));
         }
 
+        // The list covers every agent, so one startup refusal reports every faulty workflow.
         return errors;
     }
 
@@ -375,6 +393,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         IEnumerable<Records.ToolDefinition> declaredTools,
         bool usesMcpServer)
     {
+        // The workflow faults of this intent are collected here and an empty list means every workflow holds.
         List<string> errors = [];
 
         // Tools by name for the lookups of steps and edges; a duplicated name is the tool class's own fault, reported there.
@@ -406,6 +425,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             // The first step is where the workflow starts, so a workflow without one has nothing to weigh.
             if (workflow.Steps is not { Count: > 0 })
             {
+                // A workflow without a step has nothing to run, so its remaining checks are skipped.
                 errors.Add($"{subject} has no step");
                 continue;
             }
@@ -448,8 +468,10 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 .Select(group => group.Key)
                 .Select(duplicated => $"{subject}, step '{duplicated}': the name is declared more than once"));
 
+        // Each step is checked for the tools it offers.
         foreach (Records.WorkflowStep step in workflow.Steps)
         {
+            // The step is named in every message about it, so the reader knows which step of which workflow to fix.
             string stepSubject = $"{subject}, step '{step.Name}'";
             IReadOnlyList<string> stepTools = step.Tools ?? [];
 
@@ -457,6 +479,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             if (stepTools.Count == 0)
                 errors.Add($"{stepSubject}: the step offers no tool");
 
+            // Each tool a step offers is checked against the framework's own names and the agent's declared tools.
             foreach (string tool in stepTools)
             {
                 // The framework's own tools belong to no step: Reply closes every turn, a launcher starts a workflow
@@ -465,6 +488,8 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                     || launcherNames.Contains(tool)
                     || tool.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
                     errors.Add($"{stepSubject}: '{tool}' belongs to the framework and cannot be a step's tool");
+
+                // A tool the agent does not declare can never be offered at the step, unless an MCP server may supply it at birth.
                 else if (!tools.ContainsKey(tool) && !usesMcpServer)
                     errors.Add($"{stepSubject}: the agent has no tool '{tool}'");
             }
@@ -505,8 +530,10 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 .Where(group => group.Count() > 1)
                 .Select(group => $"{EdgeSubject(subject, group.First())}: the same transition is declared more than once"));
 
+        // Each edge is checked for the tools that it leaves from and leads to.
         foreach (Records.WorkflowEdge edge in workflow.Edges)
         {
+            // The edge is named in every message about it, so the reader knows which transition of which workflow to fix.
             string edgeSubject = EdgeSubject(subject, edge);
 
             // An edge follows a call made at its source step, so the tool has to be one that step offers.
@@ -520,13 +547,16 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             // A target tool that startup cannot see may take any parameter: a name cannot be refused on its account.
             bool targetHasUncheckableTool = usesMcpServer && (target?.Tools ?? []).Any(tool => !tools.ContainsKey(tool));
 
+            // Each value that the edge carries is checked against the workflow and the tools on either side of the edge.
             foreach (string name in edge.Carrying)
             {
+                // The carried name is recorded, so that properties no edge carries are found at the end.
                 carried.Add(name);
 
                 // The edge hands the next step a value by the name of a property of the workflow.
                 if (!workflow.Parameters.Contains(name, StringComparer.Ordinal))
                 {
+                    // A value that the workflow does not declare as a property cannot be bound, so the edge is refused for it.
                     errors.Add($"{edgeSubject}: '{name}' is not a public property of the workflow");
                     continue;
                 }
@@ -567,6 +597,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         // Steps reached whose own edges have not been followed yet.
         Queue<string> pending = new([from]);
 
+        // Walks the edges until no reached step is left unfollowed, collecting every step a path can lead to.
         while (pending.TryDequeue(out string? current))
         {
             foreach (Records.WorkflowEdge edge in workflow.Edges.Where(candidate => candidate.Source == current))
@@ -577,6 +608,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             }
         }
 
+        // The steps reached from the first one are returned for the reachability check of the caller.
         return reached;
     }
 
@@ -604,6 +636,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                    .Select(group => group.Key)
                    .Select(duplicated => $"Tool '{duplicated}' of intent '{intent}' is declared by more than one method of '{toolType.Name}': a tool name is unique"));
 
+        // Each public method of the class is checked on its own, since each one is a tool of the model.
         foreach (MethodInfo method in methods)
         {
             // How the tool is named back to whoever has to fix it.
@@ -621,6 +654,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             foreach (ParameterInfo parameter in method.GetParameters())
                 ValidateToolParameter(subject, parameter, errors);
 
+            // The record that the method returns is checked against the typed contract that a native tool keeps.
             ValidateToolReturn(subject, method, errors);
         }
 
@@ -647,6 +681,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         ToolParameterAttribute? declaration = parameter.GetCustomAttribute<ToolParameterAttribute>();
         if (declaration is null)
         {
+            // A parameter without a scope is refused, since the framework cannot tell where its value comes from.
             errors.Add($"{parameterSubject} has no [ToolParameter]: its scope is always declared");
             return;
         }
@@ -682,6 +717,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         // A string or an object tells the schema nothing: the model would read a document that nobody declared.
         if (returnType is null || returnType == typeof(string) || returnType == typeof(object))
         {
+            // A native tool that returns a string or an object gives the model no declared shape, so it is refused.
             errors.Add($"{subject} returns '{method.ReturnType.Name}': a native tool returns a typed record");
             return;
         }
@@ -690,6 +726,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         JsonElement schema = MorganaToolAdapter.CreateReturnSchema(returnType);
         if (!schema.TryGetProperty("properties", out JsonElement properties))
         {
+            // A record without properties has no fields to declare, so the return type is refused.
             errors.Add($"{subject} returns '{returnType.Name}', which has no properties: a native tool returns a typed record");
             return;
         }
@@ -742,7 +779,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// <param name="instanceName">Partner named on the attribute.</param>
     /// <param name="agentName">Agent carrying the declaration, named in the diagnostics.</param>
     /// <param name="colleague">The colleague as the caller renders it, reused in the messages.</param>
-    /// <returns>The first thing missing, or <c>null</c> when nothing is.</returns>
+    /// <returns>The first thing missing or <c>null</c> when nothing is.</returns>
     private static string? ValidateConsultablePartner(
         List<Records.PartnerOptions> partners,
         string instanceName,
@@ -758,6 +795,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         // parked partner is absent from this list and reads the same way, which is what parking means.
         if (partner is null)
         {
+            // The partner named on the attribute is not among the declared partners, which is usually a spelling mismatch between the two names.
             return $"Agent '{agentName}' declares a consultation of {colleague}, which is not declared under Morgana:AgentToAgent:Partners "
                  + $"(declared: {(partners.Count > 0 ? string.Join(", ", partners.Select(declared => $"'{declared.Name}'")) : "none")}). "
                  + "The name on the attribute and the Name on the entry must be the same, spelling and spacing included";
@@ -767,10 +805,12 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         // so the attribute claims a reach the entry beside it refuses.
         if (partner.OutboundPolicy?.Enabled != true)
         {
+            // The partner is declared, but this installation may not call it, so the attribute claims a reach that the entry refuses.
             return $"Agent '{agentName}' declares a consultation of {colleague}, but partner '{partner.Name}' declares no "
                  + "\"OutboundPolicy\": { \"Enabled\": true }: this installation may not call it";
         }
 
+        // Every check holds, so no partner error is reported.
         return null;
     }
 

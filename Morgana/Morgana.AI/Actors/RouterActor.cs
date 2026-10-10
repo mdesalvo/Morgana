@@ -82,7 +82,7 @@ public class RouterActor : MorganaActor
     /// Uses lazy creation pattern to avoid conflicts during conversation resume.
     /// </summary>
     /// <param name="intent">Intent name (e.g., "billing", "contract")</param>
-    /// <returns>Agent actor reference, or null if no agent handles this intent</returns>
+    /// <returns>Agent actor reference or null if no agent handles this intent</returns>
     private async Task<IActorRef?> GetOrCreateAgentForIntent(string intent)
     {
         // An agent already routed to in this conversation is the same actor for every later turn.
@@ -130,6 +130,7 @@ public class RouterActor : MorganaActor
         // An intent without an agent is answered in Morgana's words and the turn ends there.
         if (selectedAgent == null)
         {
+            // The unrecognized-intent wording comes from the classifier's messages, which Morgana speaks in her own voice.
             Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Classifier);
             string unrecognizedIntentError = classifierPrompt.GetMessage(Constants.Messages.UnrecognizedIntent);
             originalSender.Tell(new Records.AgentResponse(unrecognizedIntentError, true));
@@ -155,6 +156,7 @@ public class RouterActor : MorganaActor
         // The sender identifies which routed request this response closes.
         IActorRef agentSender = Sender;
 
+        // The supervisor that routed the request is looked up, since this answer closes it.
         if (streamingContexts.TryGetValue(agentSender, out IActorRef? originalSender))
         {
             actorLogger.Info($"Received response from agent {agentSender.Path}, " +
@@ -205,6 +207,7 @@ public class RouterActor : MorganaActor
         // The sender identifies which routed request this message belongs to.
         IActorRef agentSender = Sender;
 
+        // The supervisor that routed the request is looked up, so the chunk reaches the conversation it belongs to.
         if (streamingContexts.TryGetValue(agentSender, out IActorRef? originalSender))
         {
             // The turn is in flight: the supervisor that routed it receives the message as it is.

@@ -80,6 +80,7 @@ public sealed class CompactHistoryCommand : ICommand
         // the command declares it needs one, so a conversation Morgana is holding herself never gets here
         if (await persistenceService.GetMostRecentActiveAgentAsync(conversationId) is not { Length: > 0 } agent)
         {
+            // Without an agent carrying the conversation there is nothing to fold and the user is told so.
             await SendOutcomeAsync(conversationId, invocationId, "There is nothing to compact: no agent is carrying this conversation right now.");
             return;
         }
@@ -94,6 +95,7 @@ public sealed class CompactHistoryCommand : ICommand
             // what the user watches advance is therefore attributed to whoever is being summarized
             await SendProgressAsync(conversationId, invocationId, $"summarizing what {agent} carries", completed: 1);
 
+            // The history is folded and the number of messages that the summary now stands for is kept for the answer.
             int foldedMessages = await FoldAgentHistoryAsync(conversationId, agent, cancellationToken);
 
             // An agent still holding a history short enough to read whole folds nothing, which is an answer in
@@ -115,6 +117,7 @@ public sealed class CompactHistoryCommand : ICommand
             // exactly as it was: the fold reaches the record in one write or not at all
             logger.LogError(ex, "Failed to compact the history of '{Agent}' in conversation {ConversationId}", agent, conversationId);
 
+            // The failure is reported to the user, with the history stated as untouched.
             await SendOutcomeAsync(conversationId, invocationId, $"Compacting {agent} did not go through: its history is untouched.");
         }
     }

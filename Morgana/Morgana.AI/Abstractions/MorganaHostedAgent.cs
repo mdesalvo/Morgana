@@ -92,7 +92,7 @@ public sealed class MorganaHostedAgent : AIAgent
     /// <param name="dustLimitService">Ledger consulted for what the served turn cost.</param>
     /// <param name="peerAdmissionService">Weighs a system opening a conversation it has not opened before.</param>
     /// <param name="persistenceService">Owner of the conversation's storage, opened before the turn runs.</param>
-    /// <param name="logger">Records requests that name no conversation, no agent, or that go unanswered.</param>
+    /// <param name="logger">Records requests that name no conversation, no agent or that go unanswered.</param>
     public MorganaHostedAgent(
         string intent,
         string description,
@@ -147,6 +147,7 @@ public sealed class MorganaHostedAgent : AIAgent
                 "Hosted agent '{Intent}' refused a request from '{CallerIssuer}': the context id names no conversation this installation can serve on",
                 intent, hostedAgentSession.CallerIssuer ?? "an undeclared system");
 
+            // The refusal is sent back as the agent's answer, so the caller reads why the request was declined.
             return BuildAgentResponseFromMessage(
                 $"The request for '{intent}' named a conversation this installation cannot serve on: a context id must carry no path "
                 + $"separator, space or control character and must resolve to at most {MaximumConversationNameLength} characters.");
@@ -186,6 +187,7 @@ public sealed class MorganaHostedAgent : AIAgent
                 && hostedAgentSession.CallerIssuer is { } openingIssuer
                 && await peerAdmissionService.TryAdmitNewConversationAsync(openingIssuer) is { IsAdmitted: false } refusal)
             {
+                // The admission refusal goes back as the answer, in the words this deployment wrote for it.
                 return BuildAgentResponseFromMessage(
                     refusal.RefusalMessage ?? await ComposeFallbackAsync(Constants.ToolInjections.PeerAtCapacity));
             }
@@ -204,6 +206,7 @@ public sealed class MorganaHostedAgent : AIAgent
                     "Hosted agent '{Intent}' refused a request from '{CallerIntent}': conversation '{ConversationId}' is over budget",
                     intent, callerIntent, hostedAgentSession.ConversationId);
 
+                // A conversation that is over budget is answered with the out-of-budget wording.
                 return BuildAgentResponseFromMessage(await ComposeFallbackAsync(Constants.ToolInjections.PeerOutOfBudget));
             }
 
@@ -241,6 +244,7 @@ public sealed class MorganaHostedAgent : AIAgent
             // either way and this line only decides whether the asker gets to see it.
             double dustSpent = await dustLimitService.GetConsumedSinceAsync(hostedAgentSession.ConversationId, dustBaseline);
 
+            // The cost is returned only to a caller that is an agent of a Morgana, since only it has a ledger to charge.
             if (callerIntent is not null)
                 peerConsultationResponse = peerConsultationResponse with { DustConsumed = dustSpent };
 
@@ -341,7 +345,7 @@ public sealed class MorganaHostedAgentSession : AgentSession
     public string ConversationId { get; }
 
     /// <summary>
-    /// System that asked, as its token declared it, or <c>null</c> when the request reached this
+    /// System that asked, as its token declared it or <c>null</c> when the request reached this
     /// agent without one — which the gate in front of the endpoint does not allow.
     /// </summary>
     public string? CallerIssuer { get; }

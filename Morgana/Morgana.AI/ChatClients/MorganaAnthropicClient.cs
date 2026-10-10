@@ -40,12 +40,13 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
         ChatOptions? chatOptions = null,
         CancellationToken cancellationToken = default)
     {
-        // The request must end on a role that Claude accepts, or the provider refuses the whole call.
+        // The request must end on a role that Claude accepts. Otherwise the provider refuses the whole call.
         List<ChatMessage> normalizedChatMessages = NormalizeForAnthropic(chatMessages);
 
         // The system prefix is stable across calls, so it is marked for the provider's prompt cache.
         (normalizedChatMessages, chatOptions) = MarkLeadingSystemForCache(normalizedChatMessages, chatOptions);
 
+        // The provider is asked with the normalized request and its response is kept so that its usage can be tagged below.
         ChatResponse chatResponse = await base.GetResponseAsync(normalizedChatMessages, chatOptions, cancellationToken);
 
         // The usage of a whole response is known here: the cache writes it paid are put on the turn's span.
@@ -59,7 +60,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
         ChatOptions? chatOptions = null,
         CancellationToken cancellationToken = default)
     {
-        // The request must end on a role that Claude accepts, or the provider refuses the whole call.
+        // The request must end on a role that Claude accepts. Otherwise the provider refuses the whole call.
         List<ChatMessage> normalizedChatMessages = NormalizeForAnthropic(chatMessages);
 
         // The system prefix is stable across calls, so it is marked for the provider's prompt cache.
@@ -87,6 +88,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
         // The tail of the roles is what an operator needs to see why a request was rewritten.
         if (logger.IsEnabled(LogLevel.Debug))
         {
+            // The last eight roles are joined into the trail that the diagnostic line shows.
             string lastEightRoles = string.Join(" → ", chatMessagesList.TakeLast(8).Select(m => m.Role.Value));
             logger.LogDebug(
                 "Anthropic.MorganaAnthropicClient: outbound message count={Count}, last-8 role trail: {Trail}", chatMessagesList.Count, lastEightRoles);
@@ -120,6 +122,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
             // sent as a user message. The original is left as it is: the framework still holds it.
             if (trailing.Role == ChatRole.System)
             {
+                // The trailing system message is replaced by a user message with the same content, so its instruction still reaches the model.
                 chatMessagesList[^1] = CloneAsUser(trailing, trailing.Contents);
                 logger.LogWarning(
                     "Anthropic.MorganaAnthropicClient: rewrote trailing system message to user " +
@@ -133,11 +136,13 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
             // A trailing assistant message keeps its text as a user message and loses everything else.
             if (trailing.Role == ChatRole.Assistant)
             {
+                // The text of the trailing assistant message is collected, since only text survives the rewrite.
                 List<AIContent> textContents =
                 [
                     .. trailing.Contents.OfType<TextContent>()
                 ];
 
+                // A trailing assistant message without text has nothing to keep.
                 if (textContents.Count == 0)
                 {
                     // A tool-only or blank message carries nothing to preserve, so it is dropped and the next one is judged.
@@ -149,6 +154,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
                     continue;
                 }
 
+                // The text of the trailing assistant message stays and becomes a user message.
                 chatMessagesList[^1] = CloneAsUser(trailing, textContents);
                 logger.LogWarning(
                     "Anthropic.MorganaAnthropicClient: rewrote trailing assistant to user " +
@@ -192,6 +198,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
         // and the instructions are cleared on a clone so the provider never receives the prefix twice.
         if (!string.IsNullOrEmpty(chatOptions?.Instructions))
         {
+            // The options are copied, so the caller's instructions survive for its next turn.
             ChatOptions clonedChatOptions = chatOptions.Clone();
             clonedChatOptions.Instructions = null;
 
@@ -221,6 +228,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
         if (lastText is null)
             return (chatMessages, chatOptions);
 
+        // The last text of the leading system block is marked, so the cache covers the whole prefix.
         lastText.WithCacheControl(Ttl.Ttl1h);
 
         // The messages themselves carry the marker, so the options go on as the caller wrote them.

@@ -151,6 +151,7 @@ public class JWTAuthenticationService : IAuthenticationService
         // Nameless, so there is nothing for an iss claim to match.
         if (string.IsNullOrWhiteSpace(issuerName))
         {
+            // Startup stops here, since an entry without a name cannot be matched to any token.
             throw new InvalidOperationException(
                         "Morgana authentication issuer entry is missing 'Name'.");
         }
@@ -158,6 +159,7 @@ public class JWTAuthenticationService : IAuthenticationService
         // Keyless, so nothing this issuer signs could ever be proven: it would be refused at every door.
         if (string.IsNullOrWhiteSpace(symmetricKey))
         {
+            // Startup stops here, since an issuer without a key could never have a token proven.
             throw new InvalidOperationException(
                         $"Morgana authentication issuer '{issuerName}' has no SymmetricKey configured.");
         }
@@ -167,6 +169,7 @@ public class JWTAuthenticationService : IAuthenticationService
         byte[] keyBytes = Encoding.UTF8.GetBytes(symmetricKey);
         if (keyBytes.Length < 32)
         {
+            // Startup stops here, since a key shorter than the signature needs cannot be trusted.
             throw new InvalidOperationException(
                         $"Morgana authentication SymmetricKey for issuer '{issuerName}' must be at least 256 bits (32 bytes). " +
                         $"Current key is {keyBytes.Length * 8} bits.");
@@ -177,6 +180,7 @@ public class JWTAuthenticationService : IAuthenticationService
         // partner would decide by that order which of the two doors the surviving key opens.
         if (alreadyDeclared.Contains(issuerName))
         {
+            // Startup stops here, since one issuer name cannot be proven by two different keys.
             throw new InvalidOperationException(
                         $"Morgana authentication issuer '{issuerName}' is declared more than once, as a channel under "
                         + "Morgana:Authentication:Issuers or as a partner under Morgana:AgentToAgent:Partners.");
@@ -195,6 +199,7 @@ public class JWTAuthenticationService : IAuthenticationService
             string? issuer;
             try
             {
+                // The issuer the token names is read before anything is checked, so that the key to check it with can be chosen.
                 issuer = jsonWebTokenHandler.ReadJsonWebToken(token)?.Issuer;
             }
             catch
@@ -231,10 +236,15 @@ public class JWTAuthenticationService : IAuthenticationService
                 // prose a package update may reword under whoever reads it in a log or a response.
                 string error = result.Exception switch
                 {
+                    // An expired token is refused as expired, so the caller knows to obtain a fresh one.
                     SecurityTokenExpiredException => "Token has expired",
+                    // A token from an issuer that is not declared gets the same answer as one turned away before validation.
                     SecurityTokenInvalidIssuerException => "Token issuer is not in the list of valid issuers",
+                    // A token issued for another audience is refused, since it was meant for a different service.
                     SecurityTokenInvalidAudienceException => "Token audience does not match expected value",
+                    // A token whose signature does not match its issuer's key is refused as invalid.
                     SecurityTokenInvalidSignatureException => "Token signature is invalid",
+                    // Any other failure gets the generic phrase, so the response never carries the library's own wording.
                     _ => "Token validation failed"
                 };
 

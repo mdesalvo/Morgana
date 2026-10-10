@@ -116,6 +116,7 @@ public sealed class WorkflowEngine
             bool failed = reportedByServer
                             || (fields is not null && ReadField(fields, Constants.Workflows.FailureField) is not null);
 
+            // The outcome carries the tool, whether its call failed and the fields of its record.
             return new Records.StepOutcome(tool, failed, fields);
         }
         catch (JsonException)
@@ -181,17 +182,18 @@ public sealed class WorkflowEngine
         WorkflowBuilder builder = new WorkflowBuilder(start);
         builder.AddEdge<Records.StepPrompt>(start, ports[firstStep], prompt => prompt!.Step == firstStep);
 
+        // Each step gets a router that turns its outcome into the prompt of the next step.
         foreach (Records.WorkflowStep step in definition.Steps)
         {
-            // Behind every port sits a router that turns the outcome into the prompt of the next step, or into nothing.
+            // Behind every port sits a router that turns the outcome into the prompt of the next step or into nothing.
             ExecutorBinding router = ((Func<Records.StepOutcome, IWorkflowContext, ValueTask<Records.StepPrompt?>>)((outcome, _) =>
                 new ValueTask<Records.StepPrompt?>(Route(definition, step, outcome)))).BindAsExecutor(RouterPrefix + step.Name);
 
             // The outcome that the agent hands to a port always reaches that step's own router.
             builder.AddEdge(ports[step.Name], router);
 
-            // One graph edge per reachable step: several declared edges may lead to the same target on different tools,
-            // and the router's prompt names the target that the condition lets through.
+            // One graph edge per reachable step: several declared edges may lead to the same target on different tools.
+            // The router's prompt names the target that the condition lets through.
             foreach (string target in definition.Edges.Where(edge => edge.Source == step.Name).Select(edge => edge.Target).Distinct(StringComparer.Ordinal))
                 builder.AddEdge<Records.StepPrompt>(router, ports[target], prompt => prompt!.Step == target);
         }
@@ -243,11 +245,16 @@ public sealed class WorkflowEngine
         // The last request raised is where the run stopped; a failure anywhere in the run fails the turn that drove it.
         foreach (WorkflowEvent workflowEvent in run.NewEvents)
         {
+            // Each event either keeps the request still waiting or ends the turn with its failure.
             pending = workflowEvent switch
             {
+                // A request raised by a step is the one the run now waits on.
                 RequestInfoEvent requestEvent => requestEvent.Request,
+                // An engine failure fails the turn that drove the run, since no step can be trusted after it.
                 WorkflowErrorEvent errorEvent => throw new InvalidOperationException("The workflow engine failed", errorEvent.Exception),
+                // A failed step fails the turn that drove the run.
                 ExecutorFailedEvent failedEvent => throw new InvalidOperationException($"A workflow step failed: {failedEvent.Data}"),
+                // Any other event leaves the waiting request as it was.
                 _ => pending
             };
         }
@@ -289,6 +296,7 @@ public sealed class WorkflowEngine
             // The engine hands over an element of a document it disposes, so the store keeps a copy of its own.
             items[info.CheckpointId] = value.Clone();
 
+            // The checkpoint is handed back under the identity that names it in the store.
             return new ValueTask<CheckpointInfo>(info);
         }
 

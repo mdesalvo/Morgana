@@ -81,6 +81,7 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         // turn as a whole and can only be asked once the stream has ended.
         await foreach (ChatResponseUpdate update in base.GetStreamingResponseAsync(turnInput, options, cancellationToken))
         {
+            // Each update is kept, so the turn can be rebuilt whole once the stream has ended.
             updates.Add(update);
             yield return update;
         }

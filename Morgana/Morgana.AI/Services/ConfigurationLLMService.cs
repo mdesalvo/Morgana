@@ -44,7 +44,7 @@ public class ConfigurationLLMService : ILLMService
     /// <summary>
     /// Dust limiter, wired post-construction by <see cref="EnableDustAccounting"/> from
     /// Program.cs (DI ordering: the limiter depends on persistence, registered after the LLM).
-    /// Null until wired, or whenever dust limiting is disabled — in which case
+    /// Null until wired or whenever dust limiting is disabled — in which case
     /// <see cref="CompleteWithSystemPromptAsync"/> uses the bare chat client.
     /// </summary>
     private IDustLimitService? dustLimitService;
@@ -100,6 +100,7 @@ public class ConfigurationLLMService : ILLMService
         // that finds no configuration does not name the key that the deployer has to add.
         foreach (Records.LLMTier tier in Enum.GetValues<Records.LLMTier>())
         {
+            // The section of this tier is located by its key, so that a missing one can be named in the refusal.
             IConfigurationSection tierSection = configuration.GetSection($"Morgana:LLM:Tiers:{tier}");
 
             // The three tiers are all mandatory: an agent or a framework actor may be served by any of them.
@@ -135,6 +136,7 @@ public class ConfigurationLLMService : ILLMService
         // Every key is now known to be present and well formed, so the binder cannot fail on a missing one.
         Records.LLMTiers tiers = configuration.GetSection("Morgana:LLM").Get<Records.LLMConfiguration>()!.Tiers;
 
+        // Each tier is built from its own declaration, on the provider that it names.
         foreach (Records.LLMTier tier in Enum.GetValues<Records.LLMTier>())
         {
             // The tier as the deployer declared it: provider, connection, options and pricing.
@@ -155,12 +157,14 @@ public class ConfigurationLLMService : ILLMService
                 Records.LLMProvider.AzureOpenAI => new LanguageModels.AzureOpenAI(),
                 Records.LLMProvider.OpenAI => new LanguageModels.OpenAI(),
                 Records.LLMProvider.Ollama => new LanguageModels.Ollama(),
+                // An unknown provider name stops startup and the refusal names the tier that declared it.
                 _ => throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier}:Provider '{definition.Provider}' is not a known provider.")
             };
 
             // A connection that cannot work is refused at startup rather than at the first user turn.
             try
             {
+                // The provider checks the connection it was given and a refusal is passed on with the key of the tier.
                 languageModel.ValidateConnection(definition.Connection);
             }
             catch (InvalidOperationException ex)
@@ -183,14 +187,17 @@ public class ConfigurationLLMService : ILLMService
         // The tier that serves the guard, the classifier, the presenter and the channel adapter.
         string? frameworkTierName = configuration["Morgana:ActorSystem:Tier"];
 
-        // Absent means the default. A numeric string would parse to a value that names no tier, hence IsDefined.
+        // Left undeclared, the framework actors run on the middle tier.
         if (string.IsNullOrWhiteSpace(frameworkTierName))
             FrameworkTier = Records.LLMTier.Efficiency;
+
+        // A tier is taken by its name in any casing. A number is not a name: it would parse to a value that serves no tier.
         else if (Enum.TryParse(frameworkTierName, ignoreCase: true, out Records.LLMTier parsedTier) && Enum.IsDefined(parsedTier))
             FrameworkTier = parsedTier;
+
+        // Anything else names no tier, so startup stops and the refusal lists the three that exist.
         else
-            throw new InvalidOperationException(
-                $"Morgana:ActorSystem:Tier '{frameworkTierName}' is not a tier. Use Economy, Efficiency or Performance.");
+            throw new InvalidOperationException($"Morgana:ActorSystem:Tier '{frameworkTierName}' is not a tier. Use Economy, Efficiency or Performance.");
     }
 
     /// <inheritdoc/>

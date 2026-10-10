@@ -34,7 +34,9 @@ public record MorganaChatMessage
     /// </summary>
     public string Role => Type switch
     {
+        // A user message is labelled as the user's.
         ChatMessageType.User => "user",
+        // Every other message is labelled as the assistant's.
         _ => "assistant"
     };
 

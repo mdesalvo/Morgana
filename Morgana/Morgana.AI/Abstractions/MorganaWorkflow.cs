@@ -82,6 +82,7 @@ public abstract class MorganaWorkflow
         // Steps exist only through the edges that name them; a step named by several edges is registered once.
         foreach (Records.WorkflowStep step in new[] { source, target })
         {
+            // A step is added only the first time an edge names it, so each step is registered once.
             if (!steps.Any(known => ReferenceEquals(known, step)))
                 steps.Add(step);
         }

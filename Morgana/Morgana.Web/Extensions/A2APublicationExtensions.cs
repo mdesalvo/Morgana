@@ -49,8 +49,10 @@ public static class A2APublicationExtensions
         // because an issuer spans every conversation it opens.
         builder.Services.AddSingleton<IPeerAdmissionService, SQLitePeerAdmissionService>();
 
+        // Each published intent gets a hosted agent of its own.
         foreach (string publishedIntent in publishedIntents)
         {
+            // The hosted agent of the intent is added to the services under the name its requests arrive under.
             builder.Services
                 // One hosted agent per intent: it resolves the very actor the router would have reached and asks it a consultation.
                 // Registered by intent name because that is the name an inboundA2A request arrives under.
@@ -112,6 +114,7 @@ public static class A2APublicationExtensions
         // those cards in with the address Kestrel bound.
         IAgentDirectoryService agentDirectory = app.Services.GetRequiredService<IAgentDirectoryService>();
 
+        // Each published intent gets its card and its endpoint mapped.
         foreach (string publishedIntent in publishedIntents)
         {
             // Both maps below must agree on it: the endpoint sits here, its well-known card exactly

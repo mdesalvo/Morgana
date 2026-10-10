@@ -68,6 +68,7 @@ public class ReplyTool : MorganaTool
             toolLogger.LogWarning("Reply called again in a turn already closed: the first closure stands");
             EndToolLoopOnceResponseIsAnswered();
 
+            // The duplicate is answered with the turn-closed note, so the model learns that the first closure stands.
             return new Records.FrameworkToolResult(Constants.ToolInjections.TurnClosed);
         }
 
@@ -198,13 +199,16 @@ public class ReplyTool : MorganaTool
         // Only a section nests further components: the deepest branch sets the card's depth.
         foreach (CardComponent component in components)
         {
+            // Only a section nests further components, so only a section is descended into.
             if (component is SectionComponent section)
             {
+                // The depth below this section is measured one level deeper than the current one.
                 int sectionDepth = CalculateMaxDepth(section.Components, currentDepth + 1);
                 maxDepth = Math.Max(maxDepth, sectionDepth);
             }
         }
 
+        // The deepest branch is handed back as the depth of the card.
         return maxDepth;
     }
 
@@ -222,10 +226,12 @@ public class ReplyTool : MorganaTool
         // A section adds its own components to the total.
         foreach (CardComponent component in components)
         {
+            // A section counts as one component and the components nested in it count too.
             if (component is SectionComponent section)
                 count += CountComponents(section.Components);
         }
 
+        // The total is handed back to the check that refuses cards too large for the channels.
         return count;
     }
 }

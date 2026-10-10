@@ -71,8 +71,10 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         // A workflow without the attribute belongs to no agent, so nothing could ever launch it.
         IEnumerable<Type> workflowTypes = FindConcreteTypesDeclaring<MorganaWorkflow, ProvidesWorkflowForIntentAttribute>();
 
+        // Each workflow class is entered under the intent its attribute names.
         foreach (Type workflowType in workflowTypes)
         {
+            // Every class reaching this point carries the attribute, since the filter above kept only those that do.
             ProvidesWorkflowForIntentAttribute declaration = workflowType.GetCustomAttribute<ProvidesWorkflowForIntentAttribute>()!;
 
             // Lowercased on the way in, since an intent is typed by hand here and on the agent.
@@ -83,10 +85,12 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
             MorganaWorkflow workflow;
             try
             {
+                // The class is built here to read its definition, so a class that cannot be built is found at startup.
                 workflow = (MorganaWorkflow)Activator.CreateInstance(workflowType)!;
             }
             catch (Exception ex) when (ex is MissingMethodException or TargetInvocationException)
             {
+                // Startup stops here, since the agent would otherwise run without a workflow it declares.
                 throw new InvalidOperationException(
                     $"Workflow class '{workflowType.Name}' of intent '{intent}' cannot be instantiated: {(ex.InnerException ?? ex).Message}", ex);
             }
@@ -117,12 +121,14 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         // Announces the scan, which runs once on first use.
         Console.WriteLine("🔍 Scanning assemblies for MorganaTool implementations...");
 
+        // The tool types and any duplicate registrations are discovered in one pass.
         (Dictionary<string, Type> registry, List<string> registrationErrors) = DiscoverTools();
 
         // Printed rather than thrown: none of what it reports stops a deployment, so the operator is
         // told at startup instead of discovering it on the first conversation that lacks a tool.
         ReportRegistry(registry, registrationErrors);
 
+        // The registry is handed out only after it has been reported, so the report precedes every use of it.
         return registry;
     }
 
@@ -142,6 +148,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         // A tool without the attribute belongs to no agent, so nothing could ever reach it.
         IEnumerable<Type> toolTypes = FindConcreteTypesDeclaring<MorganaTool, ProvidesToolForIntentAttribute>();
 
+        // Each tool class is registered under the intent it declares.
         foreach (Type toolType in toolTypes)
         {
             // Which agent this tool belongs to, in the author's own words. Never absent: a type that does
@@ -162,6 +169,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
                 continue;
             }
 
+            // This tool becomes the one that serves the intent. Any later claim on it was reported above and is skipped.
             registry[intent] = toolType;
 
             // Lets the operator see at startup which agent each tool serves.
@@ -188,6 +196,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
             {
                 try
                 {
+                    // The types of a loaded assembly are the candidates for tool discovery.
                     return assembly.GetTypes();
                 }
                 catch (ReflectionTypeLoadException ex)
@@ -243,6 +252,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         // so this says what a reader would otherwise have to guess from silence.
         foreach (string intent in agentIntents.Except(toolIntents, StringComparer.OrdinalIgnoreCase))
         {
+            // The header is written before the first warning, so a report with no warning prints no header.
             WriteWarningsHeader();
             Console.WriteLine($"  ℹ️  Agent '{intent}' ({agentsByIntent.GetValueOrDefault(intent)?.Name ?? "unknown"}) has no native tool registered!");
         }
@@ -251,6 +261,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         // more often than something intended, so it is surfaced without stopping the deployment.
         foreach (string intent in toolIntents.Except(agentIntents, StringComparer.OrdinalIgnoreCase))
         {
+            // The same header serves these warnings and is printed only once.
             WriteWarningsHeader();
             Console.WriteLine($"  ⚠️  Tool '{registry.GetValueOrDefault(intent)?.Name ?? "unknown"}' provides intent '{intent}' but no agent handles this intent.");
         }
@@ -274,7 +285,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         Console.WriteLine();
     }
 
-    /// <summary>Finds the MorganaTool type registered for an intent, or null (case-insensitive).</summary>
+    /// <summary>Finds the MorganaTool type registered for an intent or null (case-insensitive).</summary>
     /// <remarks>
     /// Null is a legitimate, expected outcome — not an error: it means the agent for that intent
     /// has no native tool and runs on framework tool alone (Reply) or MCP.

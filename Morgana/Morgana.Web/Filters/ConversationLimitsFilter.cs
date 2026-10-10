@@ -42,6 +42,7 @@ public sealed class ConversationLimitsFilter(
                 retryAfterSeconds = rateLimitResult.RetryAfterSeconds,
                 message = rateLimitViolation
             }) { StatusCode = StatusCodes.Status429TooManyRequests };
+            // The refused call stops here, so it never reaches its action.
             return;
         }
 
@@ -51,13 +52,16 @@ public sealed class ConversationLimitsFilter(
         {
             logger.LogWarning("Dust budget exhausted for conversation {ConversationId}", conversationId);
 
+            // The dust refusal is shown to the user over the channel, before the client receives its 429.
             await channelService.SendMessageAsync(RefusalOf(context, conversationId, dustLimitingOptions.Value.ErrorMessage, ChannelMessageTypes.Error, ChannelErrorReasons.DustBudgetExhausted));
 
+            // The 429 tells the client that the dust budget is spent, with the same wording the user read.
             context.Result = new ObjectResult(new
             {
                 error = "Dust budget exhausted",
                 message = dustLimitingOptions.Value.ErrorMessage
             }) { StatusCode = StatusCodes.Status429TooManyRequests };
+            // The refused call stops here, so it never reaches its action.
             return;
         }
 
@@ -98,9 +102,13 @@ public sealed class ConversationLimitsFilter(
         // The violated window picks the authored text; a denial that names none reads the default one.
         string message = result.ViolatedWindow switch
         {
+            // A denial in the per-minute window reads the per-minute wording.
             Records.RateLimitWindow.PerMinute => rateLimitOptions.Value.ErrorMessagePerMinute,
+            // A denial in the per-hour window reads the per-hour wording.
             Records.RateLimitWindow.PerHour   => rateLimitOptions.Value.ErrorMessagePerHour,
+            // A denial in the per-day window reads the per-day wording.
             Records.RateLimitWindow.PerDay    => rateLimitOptions.Value.ErrorMessagePerDay,
+            // A denial that names no window reads the default wording.
             _ => rateLimitOptions.Value.ErrorMessageDefault
         };
 

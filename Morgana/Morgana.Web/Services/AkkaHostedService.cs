@@ -37,6 +37,7 @@ public class AkkaHostedService : IHostedService
         // Conversations stop with the host: their actors end instead of being cut off with the process.
         try
         {
+            // The actor system is terminated and the wait is bounded by the shutdown's own cancellation.
             await _actorSystem.Terminate().WaitAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

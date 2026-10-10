@@ -74,7 +74,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         attr.Transport == Records.MCPTransport.Stdio ? $"stdio:{attr.Command}" : attr.Command;
 
     /// <summary>
-    /// Gets an existing MCP client for the given server declaration, or creates and connects a new one.
+    /// Gets an existing MCP client for the given server declaration or creates and connects a new one.
     /// Thread-safe — uses ConcurrentDictionary to guarantee a single client per pool key.
     /// </summary>
     public async Task<MCPClient> GetOrCreateClientAsync(UsesMCPServerAttribute serverAttribute)
@@ -138,6 +138,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         // Each tool remembers the session it was discovered on, so it can tell that session ending from a failure of its own
         ToolBinding[] toolBindings = await ExecuteWithReconnectAsync(serverAttribute, async mcpClient =>
         {
+            // The server is asked for its tools on this session and each tool is bound to the client that listed it.
             IList<McpClientTool> discoveredTools = await mcpClient.DiscoverToolsAsync(cancellationToken);
             return discoveredTools.Select(discoveredTool => new ToolBinding(discoveredTool, mcpClient)).ToArray();
         });
@@ -158,6 +159,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         MCPClient mcpClient = await GetOrCreateClientAsync(serverAttribute);
         try
         {
+            // The operation runs on the pooled session first, so a session that is still live needs no replacement.
             return await operation(mcpClient);
         }
         catch (Exception ex) when (mcpClient.IsSessionEnded)
@@ -195,6 +197,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
                 && !ReferenceEquals(currentMCPClient, endedMCPClient)
                 && !currentMCPClient.IsSessionEnded)
             {
+                // A replacement that another conversation already connected is adopted, so this one connects nothing.
                 return currentMCPClient;
             }
 
@@ -298,6 +301,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
             // Discovery has no effect on the server, so it may be retried on a replaced session.
             toolBinding = await registry.ExecuteWithReconnectAsync(serverAttribute, async mcpClient =>
             {
+                // The live session is asked again for its tools, so the tool is found again by the name the model called.
                 IList<McpClientTool> discoveredTools = await mcpClient.DiscoverToolsAsync(cancellationToken);
 
                 // A server that dropped the tool since leaves this call nothing to run.
@@ -379,6 +383,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         // A second disposal finds the pool already closed and does nothing.
         if (!disposed)
         {
+            // Every pooled session is closed before the registry is marked as disposed, so none outlives it.
             DisconnectAllAsync().GetAwaiter().GetResult();
             disposed = true;
         }
@@ -395,6 +400,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         // A second disposal finds the pool already closed and does nothing.
         if (!disposed)
         {
+            // Every pooled session is closed before the registry is marked as disposed, so none outlives it.
             await DisconnectAllAsync();
             disposed = true;
         }
@@ -425,7 +431,7 @@ public class MCPClient : IAsyncDisposable
 
     /// <summary>
     /// True once the session behind this client is over — ended by the server, lost with the network or the
-    /// process, or disposed. Such a client never recovers, while a call merely cancelled by its caller leaves
+    /// process or disposed. Such a client never recovers, while a call merely cancelled by its caller leaves
     /// the session open.
     /// </summary>
     public bool IsSessionEnded => mcpClient.Completion.IsCompleted;
@@ -460,12 +466,14 @@ public class MCPClient : IAsyncDisposable
         // switch knows which was chosen.
         switch (attr.Transport)
         {
+            // A remote server is reached over HTTP, at the address the declaration names.
             case Records.MCPTransport.Http:
             {
                 // A remote server already running somewhere: the address is its whole identity.
                 label = attr.Command;
                 logger.LogInformation("Connecting to HTTP MCP server: {Label}", label);
 
+                // The options point at the declared address and carry the server's label. The transport built from them connects at the handshake below.
                 HttpClientTransportOptions options = new HttpClientTransportOptions
                 {
                     Endpoint = new Uri(attr.Command),
@@ -477,6 +485,7 @@ public class MCPClient : IAsyncDisposable
                 break;
             }
 
+            // A local server is started as a process and spoken to over its standard streams.
             case Records.MCPTransport.Stdio:
             {
                 // A server this process starts and speaks to over its pipes. Prefixed so a command named
@@ -484,6 +493,7 @@ public class MCPClient : IAsyncDisposable
                 label = $"stdio:{attr.Command}";
                 logger.LogInformation("Connecting to stdio MCP server: {AttrCommand}", attr.Command);
 
+                // The options name the executable and its arguments and carry the same label as the pool. The process starts only when the connection is made.
                 StdioClientTransportOptions options = new StdioClientTransportOptions
                 {
                     Command   = attr.Command,

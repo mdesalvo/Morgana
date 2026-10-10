@@ -64,11 +64,13 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
                     // here is a service built outside a validated deployment: never a limit invented for it.
                     .Where(partner => partner.InboundPolicy!.RateLimiting is { Enabled: true, MaxConversationsPerHour: > 0 })];
 
+        // Each capped partner's ceiling is keyed by the issuer its callers prove, so admission finds it by that name.
         limitByIssuer = cappedPartners.ToDictionary(
             partner => (partner.InboundPolicy!.Issuer ?? partner.Name).Trim(),
             partner => partner.InboundPolicy!.RateLimiting!.MaxConversationsPerHour!.Value,
             StringComparer.OrdinalIgnoreCase);
 
+        // The refusal message each partner wrote is keyed the same way, so a refusal can quote it.
         refusalMessageByIssuer = cappedPartners.ToDictionary(
             partner => (partner.InboundPolicy!.Issuer ?? partner.Name).Trim(),
             partner => partner.InboundPolicy!.RateLimiting!.ErrorMessagePerHour,
@@ -126,12 +128,14 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
             // every retry, so being turned away would lengthen the wait it caused.
             if (opened >= limit)
             {
+                // The transaction is rolled back, so nothing written before the refusal survives it.
                 await transaction.RollbackAsync();
 
                 logger.LogWarning(
                     "Partner '{Issuer}' has opened its {Limit} conversation(s) for this hour and is admitted to no further ones until the window moves",
                     issuer, limit);
 
+                // The partner is refused with the message its own entry wrote for an exhausted allowance.
                 return new Records.PeerAdmissionResult(IsAdmitted: false, RefusalMessage: refusalMessageByIssuer.GetValueOrDefault(issuer));
             }
 
@@ -181,6 +185,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
             CREATE INDEX IF NOT EXISTS idx_peer_conversation_log ON peer_conversation_log (issuer, opened_at);
             """;
 
+        // The ledger table and its index are created when missing, so running this again changes nothing.
         await command.ExecuteNonQueryAsync();
     }
 
@@ -195,6 +200,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
         string sql,
         params (string Name, object Value)[] parameters)
     {
+        // Each statement is bound to the admission's transaction, so it is part of the one check.
         await using SqliteCommand command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = sql;
@@ -202,6 +208,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
         foreach ((string name, object value) in parameters)
             command.Parameters.AddWithValue(name, value);
 
+        // The statement runs inside the transaction, so its effect is visible only once the check commits.
         await command.ExecuteNonQueryAsync();
     }
 
@@ -216,6 +223,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
         // The directory may not exist on a fresh installation before the first conversation is stored.
         Directory.CreateDirectory(persistenceOptions.StoragePath);
 
+        // The ledger file sits in the storage directory, beside the conversations.
         return Path.Combine(persistenceOptions.StoragePath, DatabaseFileName);
     }
 }

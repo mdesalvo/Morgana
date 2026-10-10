@@ -170,6 +170,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
                 cardsByIntent[intent] = card;
             }
 
+            // The card goes out with this instance's own interface on it, settled now that the server has bound.
             return WithPublishedInterface(card, intent);
         }
         finally
@@ -194,7 +195,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
     /// while every moment after the server begins listening is a moment a caller may already be
     /// reading. Asked for again, an address already settled costs a comparison.
     /// </remarks>
-    /// <param name="card">Card being served, or <c>null</c> for an intent nobody configured.</param>
+    /// <param name="card">Card being served or <c>null</c> for an intent nobody configured.</param>
     /// <param name="intent">Agent whose endpoint the card names.</param>
     private AgentCard? WithPublishedInterface(AgentCard? card, string intent)
     {
@@ -222,18 +223,20 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         logger.LogInformation(
             "Agent '{Intent}' of this instance publishes its A2A interface at {InterfaceUrl}", intent, publishedInterface.Url);
 
+        // The caller gets a card that names an endpoint it can call.
         return card;
     }
 
     /// <inheritdoc />
     public async Task<(AIAgent Agent, AgentCard Card)?> ResolvePeerAgentAsync(Records.PeerReference peer, string callerIntent)
     {
-        // Where the colleague answers: this installation's own address, or the one a declared system
+        // Where the colleague answers: this installation's own address or the one a declared system
         // was given. The instance stays null for one of ours and that null is read again below — it
         // decides whose key signs the call and under whose issuer name.
         Records.PartnerOptions? consultablePartner = null;
         string? baseAddress;
 
+        // A colleague without a partner is one of this installation's own agents, reached at this installation's own address.
         if (peer.Instance is null)
         {
             // Our own address, never configured. Null before Kestrel has bound, which is a colleague
@@ -371,7 +374,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
 
     /// <summary>
     /// Refuses an address this installation could not be reached at, declared for the card its
-    /// agents publish. Returns silently when nothing is published, or when nothing is declared.
+    /// agents publish. Returns silently when nothing is published or when nothing is declared.
     /// </summary>
     /// <remarks>
     /// The one thing a deployment says about itself and it says it only when the binding cannot:
@@ -398,6 +401,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         // fragment to resolve against something else names no host a peer could knock at.
         if (!Uri.TryCreate(declaredPublicAddress.Trim(), UriKind.Absolute, out Uri? publicAddress))
         {
+            // Startup stops here, since a relative address gives no host a peer could knock at.
             throw new InvalidOperationException(
                 $"Morgana:AgentToAgent:PublicUrl is '{declaredPublicAddress}', which is not an absolute address. It is where "
                 + "peers reach this installation when something in front of it terminates the connection, so it carries a "
@@ -408,6 +412,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         if (!string.Equals(publicAddress.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
             && !string.Equals(publicAddress.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
         {
+            // Startup stops here, since a scheme other than http or https cannot carry the bearer token.
             throw new InvalidOperationException(
                 $"Morgana:AgentToAgent:PublicUrl declares the scheme '{publicAddress.Scheme}': this installation is reached over http or https.");
         }
@@ -416,6 +421,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         // this declaration exists to replace: published on a card it sends a peer nowhere.
         if (WildcardHosts.Contains(publicAddress.Host, StringComparer.OrdinalIgnoreCase))
         {
+            // Startup stops here, since a wildcard host is not an address a peer can reach.
             throw new InvalidOperationException(
                 $"Morgana:AgentToAgent:PublicUrl declares the host '{publicAddress.Host}', which names every interface rather "
                 + "than the one peers reach this installation at. Declare the name they resolve.");
@@ -423,7 +429,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
     }
 
     /// <summary>
-    /// Refuses a partner declaration that would admit a caller nobody can prove, or grant a reach
+    /// Refuses a partner declaration that would admit a caller nobody can prove or grant a reach
     /// over agents nobody publishes. Throws on the first incoherence; returns silently when nothing
     /// is published.
     /// </summary>
@@ -453,14 +459,17 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         // Names accepted so far, against which each new one must be new.
         HashSet<string> declaredNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // Each declared partner is checked on its own, whether it is parked or not.
         foreach (Records.PartnerOptions partner in declaredPartners)
         {
+            // The name is trimmed here, so that spacing alone never splits one partner into two.
             string partnerName = partner.Name?.Trim() ?? string.Empty;
 
             // Nameless, so there is nothing for an attribute to consult and nothing for an iss claim
             // to match: the entry describes a relationship with nobody.
             if (partnerName.Length == 0)
             {
+                // Startup stops here, since a nameless partner can be neither consulted nor recognised.
                 throw new InvalidOperationException(
                     "A Morgana:AgentToAgent:Partners entry is missing \"Name\". It is what [ConsultsAgent] writes to reach "
                     + "that partner's agents and the name its own calls arrive under.");
@@ -471,6 +480,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
             // secret and refused, at runtime, for a reason nothing in configuration shows.
             if (string.Equals(partnerName, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase))
             {
+                // Startup stops here, so the reserved name is never taken by a partner.
                 throw new InvalidOperationException(
                     $"Morgana:AgentToAgent:Partners declares a partner named '{Constants.AgentToAgent.IssuerName}', which is "
                     + "reserved for this installation's own agents. Give the partner a name of its own.");
@@ -480,6 +490,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
             // which key proves a caller and which address a call goes to.
             if (!declaredNames.Add(partnerName))
             {
+                // Startup stops here, since a second entry under one name would contradict the first.
                 throw new InvalidOperationException(
                     $"Morgana:AgentToAgent:Partners declares '{partnerName}' twice. One partner is one entry, "
                     + "carrying its key beside what each direction of the relationship allows.");
@@ -490,6 +501,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
             if (!partner.Enabled)
                 continue;
 
+            // Each direction is opened by its own switch and the checks below apply to each open one.
             bool consultable = partner.OutboundPolicy?.Enabled == true;
             bool admitted = partner.InboundPolicy?.Enabled == true;
 
@@ -497,17 +509,19 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
             // one is what "Enabled": false says and it says it where a reader looks first.
             if (!consultable && !admitted)
             {
+                // Startup stops here, since an entry that opens nothing would read as a live relationship.
                 throw new InvalidOperationException(
                     $"Partner '{partnerName}' opens neither direction: declare \"OutboundPolicy\": {{ \"Enabled\": true }} to "
                     + "consult its agents, \"InboundPolicy\": { \"Enabled\": true } to let it consult this installation's, "
                     + "or \"Enabled\": false on the partner itself to park the relationship.");
             }
 
-            // The placeholder counts as absent, or an un-overridden deployment signs and proves with
+            // The placeholder counts as absent. Otherwise an un-overridden deployment signs and proves with
             // the literal word — which fails at the first call rather than here.
             if (string.IsNullOrWhiteSpace(partner.SymmetricKey)
                 || string.Equals(partner.SymmetricKey.Trim(), Constants.SecretOverrides.Secure, StringComparison.Ordinal))
             {
+                // Startup stops here, since a placeholder key would sign and prove calls with a literal word.
                 throw new InvalidOperationException(
                     $"Partner '{partnerName}' carries no usable SymmetricKey. It is the one secret the two installations "
                     + "share: calls to that partner are signed with it and calls from it are proven against it. "
@@ -520,6 +534,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
             byte[] symmetricKeyBytes = Encoding.UTF8.GetBytes(partner.SymmetricKey);
             if (symmetricKeyBytes.Length < 32)
             {
+                // Startup stops here, since a shorter key is not a secret of the strength the token signature needs.
                 throw new InvalidOperationException(
                     $"Partner '{partnerName}' carries a SymmetricKey of {symmetricKeyBytes.Length * 8} bits: it must be at "
                     + "least 256 bits (32 bytes), the margin HMAC-SHA256 signs and proves a peer token with.");
@@ -530,6 +545,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
             if (consultable)
                 ValidateConsultableAddress(partnerName, partner.Url);
 
+            // An admitted partner is also checked against the rules of the inbound direction.
             if (admitted)
                 ValidateAdmission(partnerName, partner.InboundPolicy!, publishedIntents);
         }
@@ -546,6 +562,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         // A base address to join with the published agent path, never a fragment to resolve.
         if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? consultableUrl))
         {
+            // Startup stops here, since a relative Url cannot be joined with the path of the agent.
             throw new InvalidOperationException(
                 $"Partner '{partnerName}' is open to being consulted but declares no absolute Url. It is everything before "
                 + "the published agent path, which is appended from the intent being consulted.");
@@ -555,13 +572,14 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         if (!string.Equals(consultableUrl.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
             && !string.Equals(consultableUrl.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
         {
+            // Startup stops here, since a Url on any other scheme would not carry the token.
             throw new InvalidOperationException(
                 $"Partner '{partnerName}' declares the Url scheme '{consultableUrl.Scheme}': a colleague is reached over http or https.");
         }
     }
 
     /// <summary>
-    /// Refuses an admission granted over agents nobody publishes, or granted with nothing bounding it.
+    /// Refuses an admission granted over agents nobody publishes or granted with nothing bounding it.
     /// </summary>
     /// <param name="partnerName">Partner being weighed, named in the diagnostics.</param>
     /// <param name="inboundPolicy">How far that partner reaches, as declared.</param>
@@ -572,12 +590,14 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         Records.PartnerInboundPolicy inboundPolicy,
         IReadOnlyCollection<string> publishedIntents)
     {
+        // Each agent the partner is admitted to is checked against what this installation publishes.
         foreach (string admittedAgent in inboundPolicy.OnAgents ?? [])
         {
             // A name this installation publishes nothing under is a permission granted over nothing —
             // most often a typo and read by whoever wrote it as real access.
             if (!publishedIntents.Any(intent => string.Equals(intent, admittedAgent?.Trim(), StringComparison.OrdinalIgnoreCase)))
             {
+                // Startup stops here, since an admission over an unpublished agent would name an agent that no caller can reach.
                 throw new InvalidOperationException(
                     $"Partner '{partnerName}' is admitted to '{admittedAgent}', which this installation does not publish "
                     + $"(published: {string.Join(", ", publishedIntents)}).");
@@ -590,6 +610,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         // or writes a generous number; either way it is a sentence somebody wrote.
         if (inboundPolicy.RateLimiting is null)
         {
+            // Startup stops here, since an admitted partner without a ceiling could open conversations without limit.
             throw new InvalidOperationException(
                 $"Partner '{partnerName}' is admitted without declaring \"RateLimiting\". Behind the A2A door a caller names "
                 + "the conversation it is served on, so how many it may open in a sliding hour is the only bound on what it "
@@ -600,6 +621,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         // A ceiling switched on and left without a number bounds nothing while reading as if it did.
         if (inboundPolicy.RateLimiting.Enabled && inboundPolicy.RateLimiting.MaxConversationsPerHour is not > 0)
         {
+            // Startup stops here, since a ceiling with no number bounds nothing while it reads as if it did.
             throw new InvalidOperationException(
                 $"Partner '{partnerName}' declares a rate limit with no positive \"MaxConversationsPerHour\". "
                 + "Declare how many conversations it may open within a sliding hour, generous if it is trusted, but declare it.");
@@ -617,7 +639,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
     /// </remarks>
     /// <param name="baseAddress">Where the colleague answers, this installation's own or a declared system's.</param>
     /// <param name="intent">Colleague whose card is being read.</param>
-    /// <returns>The published card, or <c>null</c> when it could not be read.</returns>
+    /// <returns>The published card or <c>null</c> when it could not be read.</returns>
     private async Task<AgentCard?> ReadPeerCardAsync(string baseAddress, string intent)
     {
         // The endpoint is the identity, not the intent: the same agent name at two systems is two
@@ -722,6 +744,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         // Every one, not the one chosen: which interface the client binds to is its own affair.
         foreach (AgentInterface declaredInterface in declaredInterfaces)
         {
+            // An interface outside the origin the card came from would receive a token it was never meant for, so the card is refused.
             if (!Uri.TryCreate(declaredInterface.Url, UriKind.Absolute, out Uri? declaredUrl) || !IsSameOrigin(trustedOrigin, declaredUrl))
             {
                 logger.LogError(
@@ -747,9 +770,9 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
     /// <param name="card">The colleague's card, already fetched.</param>
     /// <param name="baseAddress">Address the card was fetched from and the only one a token is ever attached for.</param>
     /// <param name="peer">The colleague being resolved, named in the diagnostics.</param>
-    /// <param name="consultablePartner">Declaration of the partner publishing it, or <c>null</c> when it is an agent of this installation.</param>
+    /// <param name="consultablePartner">Declaration of the partner publishing it or <c>null</c> when it is an agent of this installation.</param>
     /// <param name="callerIntent">Asking agent, recorded as the subject of the minted token.</param>
-    /// <returns>The client to call the colleague with, or <c>null</c> when its requirements cannot be met.</returns>
+    /// <returns>The client to call the colleague with or <c>null</c> when its requirements cannot be met.</returns>
     private HttpClient? BuildPeerHttpClient(
         AgentCard card,
         string baseAddress,
@@ -770,7 +793,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         // The first requirement this side can actually present wins; the others are never reached.
         foreach (string schemeName in requiredSchemeNames)
         {
-            // Only a bearer is honoured. A scheme with no definition behind its name, or one asking for
+            // Only a bearer is honoured. A scheme with no definition behind its name or one asking for
             // OAuth2 or mTLS, is passed over for the next candidate.
             if (card.SecuritySchemes?.TryGetValue(schemeName, out SecurityScheme? securityScheme) != true
                 || securityScheme?.HttpAuthSecurityScheme is not { } httpAuthScheme
@@ -837,6 +860,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
             "Agent '{Intent}' requires security scheme(s) '{SchemeNames}', none of which this installation can satisfy",
             peer.Intent, string.Join(", ", requiredSchemeNames));
 
+        // Nothing could satisfy the demanded schemes, so the colleague stays unresolved rather than being called unsigned.
         return null;
     }
 
@@ -845,7 +869,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
     /// the interface under which this installation publishes that agent.
     /// </summary>
     /// <param name="intent">Intent to project.</param>
-    /// <returns>The card, or <c>null</c> when no intent by that name is configured.</returns>
+    /// <returns>The card or <c>null</c> when no intent by that name is configured.</returns>
     private async Task<AgentCard?> ProjectCardAsync(string intent)
     {
         // The domain's own intent list: what an installation can publish is what its plugins declare.
@@ -976,7 +1000,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
     /// A null card is a reading that failed and is kept as deliberately as a successful one: it is
     /// what holds a colleague that is not answering away from the turn of the next conversation.
     /// </remarks>
-    /// <param name="Card">What the colleague published, or <c>null</c> when it could not be read.</param>
+    /// <param name="Card">What the colleague published or <c>null</c> when it could not be read.</param>
     /// <param name="ReadAt">When the reading was taken, which is what makes it expire.</param>
     private sealed record PeerCardReading(AgentCard? Card, DateTimeOffset ReadAt)
     {

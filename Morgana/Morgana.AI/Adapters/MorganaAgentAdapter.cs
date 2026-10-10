@@ -259,24 +259,27 @@ public class MorganaAgentAdapter
         // A missing session means the agent was invoked without its actor seeding one: a wiring fault.
         Func<MorganaTool.ToolContext> toolContextFactory = () =>
         {
+            // The session of the turn in flight is read and a missing one stops the tool before it can run without context.
             AgentSession session = sessionAccessor()
                 ?? throw new InvalidOperationException(
                     $"Agent '{intentAttribute.Intent}' has no active session during tool execution. " +
                     $"Ensure ExecuteAgentAsync sets aiAgentSession before invoking the agent.");
 
+            // Where the workflow running in this session stands, if any: both the buttons and the choice below are bound to it.
+            (Records.WorkflowDefinition Definition, Records.WorkflowStep Step)? runningWorkflow = agentWorkflows is null
+                ? null
+                : morganaAIContextProvider.GetWorkflowPosition(session)?.Resolve(workflowDefinitions);
+
             // Inside a workflow a button may only lead to a tool of the step the workflow stands at.
-            IReadOnlyCollection<string> actionable = agentWorkflows is not null
-                && morganaAIContextProvider.GetWorkflowPosition(session)?.Resolve(workflowDefinitions) is { } running
-                    ? running.Step.Tools
-                    : actionableToolNames;
+            IReadOnlyCollection<string> actionTargetToolNames = runningWorkflow?.Step.Tools ?? actionableToolNames;
 
             // A step naming several tools is a choice: Reply holds the turn's buttons to exactly those tools.
-            (string Workflow, string Step, IReadOnlyList<string> Tools)? choiceStep = agentWorkflows is not null
-                && morganaAIContextProvider.GetWorkflowPosition(session)?.Resolve(workflowDefinitions) is { Step.Tools.Count: > 1 } choicePosition
-                    ? (choicePosition.Definition.Name, choicePosition.Step.Name, choicePosition.Step.Tools)
-                    : null;
+            (string Workflow, string Step, IReadOnlyList<string> Tools)? choiceStep = runningWorkflow is { Step.Tools.Count: > 1 } choicePosition
+                ? (choicePosition.Definition.Name, choicePosition.Step.Name, choicePosition.Step.Tools)
+                : null;
 
-            return new MorganaTool.ToolContext(morganaAIContextProvider, session, conversationId, actionable, choiceStep);
+            // The tool runs with the session, the conversation and the buttons it may lead to, all taken from this turn.
+            return new MorganaTool.ToolContext(morganaAIContextProvider, session, conversationId, actionTargetToolNames, choiceStep);
         };
 
         // The native tools: each definition is bound to the method of its tool class.
@@ -399,6 +402,7 @@ public class MorganaAgentAdapter
         // A workflow at a step holds the call to that step's tools.
         if (running is { } runningWorkflow)
         {
+            // The name of the called tool is what the step's signature and the approval checks below are keyed on.
             string toolName = context.Function.Name;
             HashSet<string> signature = runningWorkflow.Definition.ToolSignature();
             isCurrentStepTool = runningWorkflow.Step.Tools.Contains(toolName);
@@ -410,6 +414,7 @@ public class MorganaAgentAdapter
                     || signature.Contains(toolName)
                     || (workflows!.Tools.TryGetValue(toolName, out Records.ToolDefinition? declared) && declared.RequiresExecutionApproval));
 
+            // A tool the current step does not offer is refused with a note in place of its result, so the model is told the fact.
             if (isHidden)
             {
                 logger.LogWarning("Agent called '{Tool}', which workflow '{Workflow}' does not offer at its step '{Step}'", toolName, runningWorkflow.Definition.Name, runningWorkflow.Step.Name);
@@ -437,6 +442,7 @@ public class MorganaAgentAdapter
         object? result;
         try
         {
+            // The tool runs with the arguments the model passed, once the checks above have let the call through.
             result = await context.Function.InvokeAsync(context.Arguments, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException && isReply)
@@ -475,12 +481,14 @@ public class MorganaAgentAdapter
         if (!schema.TryGetProperty("properties", out JsonElement properties))
             return;
 
+        // Each value the step carries is bound to the arguments of the call.
         foreach ((string carriedName, string valueJson) in position.Arguments)
         {
             // A workflow carries its property's name while a tool spells its parameter its own way,
             // so the match ignores case and the value is written under the schema's spelling.
             foreach (JsonProperty schemaProperty in properties.EnumerateObject())
             {
+                // Only the schema property that carries this name receives the value.
                 if (!string.Equals(schemaProperty.Name, carriedName, StringComparison.OrdinalIgnoreCase))
                     continue;
 
@@ -506,10 +514,13 @@ public class MorganaAgentAdapter
         // The engine reads the result as the text that the model read.
         string resultText = result switch
         {
+            // A tool that answered in text is read as the text the model saw.
             string text => text,
+            // A result that arrived as JSON is read as the JSON text the model saw.
             JsonElement element => element.GetRawText(),
             // A plain-text MCP result arrives as a content block: the model reads its text, not the block's serialization.
             TextContent content => content.Text,
+            // Any other result is serialized, which is the text the model would have been handed.
             _ => JsonSerializer.Serialize(result)
         };
 
@@ -519,6 +530,7 @@ public class MorganaAgentAdapter
         Records.WorkflowPosition? next;
         try
         {
+            // The engine moves the workflow on from the outcome and the position it reaches is null when the outcome ended it.
             next = await workflows.Engine.AdvanceAsync(position, outcome);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -560,6 +572,7 @@ public class MorganaAgentAdapter
         AgentSession session = workflows.SessionAccessor()
             ?? throw new InvalidOperationException($"{launcherName} was called with no active session");
 
+        // The stored position is read, since a workflow already running decides whether this launch may start.
         Records.WorkflowPosition? running = workflows.ContextProvider.GetWorkflowPosition(session);
         bool isServingConsultation = workflows.ContextProvider.GetVariable(session, Constants.ContextKeys.ServingConsultation) is not null;
 
@@ -624,6 +637,7 @@ public class MorganaAgentAdapter
         if (sharedContextCallback != null)
             aiContextProvider.OnSharedContextUpdate = sharedContextCallback;
 
+        // The provider holds the agent's context and the shared registry that its writes go to.
         return aiContextProvider;
     }
 
@@ -672,6 +686,7 @@ public class MorganaAgentAdapter
         MorganaTool customToolInstance;
         try
         {
+            // The domain's tool class is built with the logger and the context factory it declares.
             customToolInstance = (MorganaTool)Activator.CreateInstance(toolType, logger, toolContextFactory)!;
         }
         catch (Exception ex)
@@ -687,6 +702,7 @@ public class MorganaAgentAdapter
         RegisterToolsInAdapter(morganaToolAdapter, customToolInstance, agentSpecificTools);
         logger.LogInformation("Registered {Length} custom tools for intent '{Intent}'", agentSpecificTools.Length, intent);
 
+        // The adapter holds the base tools and the domain tools of the agent.
         return morganaToolAdapter;
     }
 
@@ -705,6 +721,7 @@ public class MorganaAgentAdapter
         MorganaTool toolInstance,
         Records.ToolDefinition[] tools)
     {
+        // Each tool definition is registered from the method of the class that carries its name.
         foreach (Records.ToolDefinition toolDefinition in tools)
         {
             // A definition is projected from the class's methods, so a missing method means the instance is of another class.
@@ -771,6 +788,7 @@ public class MorganaAgentAdapter
         // Null when no colleague resolved, so an agent with none reads no declaration.
         string? colleagues = await promptComposerService.ComposeColleaguesDeclarationAsync(peerTerritories);
 
+        // The instructions go out with the colleagues' declaration appended, when there is one.
         return colleagues is null ? instructions : $"{instructions}\n{colleagues}\n";
     }
 
@@ -797,6 +815,7 @@ public class MorganaAgentAdapter
         MorganaAIContextProvider contextProvider,
         Dictionary<string, string> peerTerritories)
     {
+        // The colleagues the agent declares are read from its class, in the order they are written.
         ConsultsAgentAttribute[] attributes = [.. agentType.GetCustomAttributes<ConsultsAgentAttribute>()];
 
         // An agent that consults nobody is the common case and needs no line above debug.
@@ -832,6 +851,7 @@ public class MorganaAgentAdapter
             if (colleague is not (string peerFunctionName, AIFunction peerFunction, string peerTerritory))
                 continue;
 
+            // The colleague's function joins the tools the agent may call.
             peerAgents.Add(peerFunction);
 
             // The same territory the tool description carries, kept under the callable name: the
@@ -853,9 +873,11 @@ public class MorganaAgentAdapter
             // describes itself and not whatever this installation believes about it.
             Records.PeerReference peer = new Records.PeerReference(attribute.Intent, attribute.Instance);
 
+            // The colleague is resolved through the directory, as a peer in another process would be reached.
             (AIAgent Agent, AgentCard Card)? resolvedPeer =
                 await agentDirectoryService.ResolvePeerAgentAsync(peer, callerIntent);
 
+            // A colleague that could not be reached is left out and the agent runs without it.
             if (resolvedPeer is not (AIAgent peerAgent, AgentCard peerCard))
             {
                 logger.LogWarning("Agent {AgentTypeName} cannot reach declared colleague '{PeerIntent}'; it will run without it", agentType.Name, attribute.Intent);
@@ -941,10 +963,10 @@ public class MorganaAgentAdapter
     /// </remarks>
     /// <param name="callerIntent">Asking agent, named in the diagnostics.</param>
     /// <param name="peerIntent">Colleague being consulted, named in the diagnostics.</param>
-    /// <param name="callerSession">The asking agent's session, or null when it has none yet.</param>
+    /// <param name="callerSession">The asking agent's session or null when it has none yet.</param>
     /// <param name="maxRoundsPerTurn">Consultations one user turn may spend before the exchange is cut short.</param>
     /// <param name="contextProvider">Context store of the asking agent, holding the turn's round count.</param>
-    /// <returns>The serialized refusal envelope, or <c>null</c> when the consultation may proceed.</returns>
+    /// <returns>The serialized refusal envelope or <c>null</c> when the consultation may proceed.</returns>
     private async Task<string?> ApplyPeerGuardsAsync(
         string callerIntent,
         string peerIntent,
@@ -1002,6 +1024,7 @@ public class MorganaAgentAdapter
         declaredOptions.AdditionalProperties ??= [];
         declaredOptions.AdditionalProperties[Constants.MessageProperties.CallerIntent] = callerIntent;
 
+        // The copy that declares the caller is returned in place of the original options.
         return declaredOptions;
     }
 
@@ -1107,6 +1130,7 @@ public class MorganaAgentAdapter
             // remaining servers nor the agent.
             try
             {
+                // Each tool the server offers is checked for a name that is still free.
                 foreach (AIFunction discovered in await DiscoverMCPToolsFromServerAsync(attribute))
                 {
                     // The tool loop refuses a tool list that names two tools alike, which would fail every turn of the agent.
@@ -1130,6 +1154,7 @@ public class MorganaAgentAdapter
             }
         }
 
+        // The MCP tools that were kept are handed back to the agent.
         return mcpTools;
     }
 
@@ -1193,6 +1218,7 @@ public class MorganaAgentAdapter
         IReadOnlyList<Records.WorkflowDefinition> workflows,
         IReadOnlyList<Records.ToolDefinition> heldTools)
     {
+        // The workflows that still hold against the tools the agent really has are collected here.
         List<Records.WorkflowDefinition> kept = [];
 
         foreach (Records.WorkflowDefinition workflow in workflows)
@@ -1201,6 +1227,7 @@ public class MorganaAgentAdapter
             List<string> errors = HandlesIntentAgentRegistryService.ValidateWorkflows(intent, [workflow], heldTools, usesMcpServer: false);
             if (errors.Count == 0)
             {
+                // A workflow that holds is kept.
                 kept.Add(workflow);
                 continue;
             }
@@ -1211,6 +1238,7 @@ public class MorganaAgentAdapter
                 workflow.Name, intent, agentType.Name, string.Join("; ", errors));
         }
 
+        // The agent is born with the workflows that held.
         return kept;
     }
 
@@ -1225,6 +1253,7 @@ public class MorganaAgentAdapter
     {
         logger.LogInformation("Registering MCP tools from server: {ServerAttributeCommand}", serverAttribute.Command);
 
+        // The server's tools are discovered on its live session, which the registry keeps for the agent.
         IList<AIFunction> mcpTools = await imcpClientRegistryService.DiscoverResilientToolsAsync(serverAttribute);
 
         // A reachable server with no tools is not a fault: the agent keeps its native tools.
@@ -1239,6 +1268,7 @@ public class MorganaAgentAdapter
 
         logger.LogInformation("Successfully registered {McpToolsCount} MCP tools from {ServerAttributeCommand}", mcpTools.Count, serverAttribute.Command);
 
+        // The tools are handed back as a fresh list, so the caller owns it.
         return [.. mcpTools];
     }
 
@@ -1266,6 +1296,7 @@ public class MorganaAgentAdapter
         /// <inheritdoc />
         public bool Equals(Records.ToolDefinition? x, Records.ToolDefinition? y)
         {
+            // Two references to one definition are one tool, so the comparison stops here.
             if (ReferenceEquals(x, y))
                 return true;
             if (x is null || y is null)

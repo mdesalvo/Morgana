@@ -138,6 +138,7 @@ public class MorganaAIContextProvider : AIContextProvider
         // The session is saved only when something was dropped: an absent variable leaves it as it is.
         if (contextState.Variables.Remove(variableName))
         {
+            // The changed state is saved, so the dropped variable stays dropped in the session.
             sessionState.SaveState(session, contextState);
             logger.LogInformation("{MorganaAiContextProviderName} DROPPED '{VariableName}'", nameof(MorganaAIContextProvider), variableName);
         }
@@ -199,11 +200,10 @@ public class MorganaAIContextProvider : AIContextProvider
     /// </remarks>
     public int GetConsultationRounds(AgentSession session)
         => sessionState.GetOrInitializeState(session).Variables.TryGetValue(Constants.ContextKeys.ConsultationRounds, out object? stored)
+            // Counted in this process the rounds are a number; restored from a saved session they are JSON.
             ? stored switch
             {
                 int rounds => rounds,
-
-                // Restored from a saved session the count is JSON.
                 JsonElement { ValueKind: JsonValueKind.Number } element => element.GetInt32(),
                 _ => 0
             }
@@ -215,14 +215,17 @@ public class MorganaAIContextProvider : AIContextProvider
     /// </summary>
     public void MergeSharedContext(AgentSession session, Dictionary<string, object> sharedContext)
     {
+        // The agent's context is read before the shared values are merged into it.
         MorganaContextState contextState = sessionState.GetOrInitializeState(session);
         bool changed = false;
 
+        // Each shared value is merged in turn, under the first-write-wins rule.
         foreach (KeyValuePair<string, object> kvp in sharedContext)
         {
             // First write wins: a value this agent already holds is the one the user gave it and is never replaced.
             if (!contextState.Variables.TryGetValue(kvp.Key, out object? existing))
             {
+                // A value the agent does not hold yet is taken from the registry.
                 contextState.Variables[kvp.Key] = kvp.Value;
                 changed = true;
 

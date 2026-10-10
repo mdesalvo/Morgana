@@ -93,6 +93,7 @@ builder.Services.AddSingleton<IChannelService>(sp => sp.GetRequiredService<Adapt
 // The policy that Section 10 puts in front of every endpoint: any origin, header and method may knock.
 builder.Services.AddCors(options =>
 {
+    // The policy is registered under the name the channels are served by, so an endpoint that asks for it receives these rules.
     options.AddPolicy("Channel", policy =>
     {
         // Credentials are allowed too, which a wildcard origin forbids: the origin is echoed back instead.
@@ -136,6 +137,7 @@ builder.Services.AddSingleton<ILogger>(sp =>
 // The container does not exist yet, so the loader logs through a bootstrap factory of its own.
 using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddConsole()))
 {
+    // The loader is built on the configuration and on a bootstrap logger, since the container does not exist yet.
     PluginLoaderService pluginLoaderService = new PluginLoaderService(
         builder.Configuration,
         bootstrapLoggerFactory.CreateLogger<PluginLoaderService>());
@@ -154,7 +156,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IPromptComposerService: Assembles what the model reads (composed prompt, tool descriptions, held-context declaration)
 // - IAgentRegistryService: Maps intents to agent types for routing
 // - IAgentDirectoryService: Describes agents to one another as A2A cards, for peer consultation
-// - IHostAddressService: Reports where this instance is reached — what Kestrel bound, or the public address a proxied deployment declares
+// - IHostAddressService: Reports where this instance is reached — what Kestrel bound or the public address a proxied deployment declares
 // - IGuardRailService: Checks user messages for content safety and compliance
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
@@ -325,6 +327,7 @@ builder.Services.AddSingleton<MorganaChannelAdapter>();
 // One actor system for the process, wired to the container so that actors resolve their services from it.
 builder.Services.AddSingleton(sp =>
 {
+    // The actor system is configured with the bootstrap settings and with the dependency resolver of this container.
     BootstrapSetup bootstrap = BootstrapSetup.Create();
     DependencyResolverSetup di = DependencyResolverSetup.Create(sp);
     ActorSystemSetup actorSystemSetup = bootstrap.And(di);
@@ -373,6 +376,7 @@ builder.AddMorganaA2A(publishedIntents);
 // ==============================================================================
 // Configures the HTTP request pipeline and middleware
 
+// The container is built here, after every registration above. The checks below read from it.
 WebApplication app = builder.Build();
 
 // The domain, the agent registry and the command catalogue are read here rather than on first use. The

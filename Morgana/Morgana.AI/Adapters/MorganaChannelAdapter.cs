@@ -210,6 +210,7 @@ public class MorganaChannelAdapter
         // A channel with no buttons receives the options as a plain "Options: A / B / C" line.
         if (channelMessage.QuickReplies is { Count: > 0 } && !channelCapabilities.SupportsQuickReplies)
         {
+            // The options line is separated from the text only when there is text to separate it from.
             if (sb.Length > 0)
                 sb.AppendLine().AppendLine();
             sb.Append("Options: ");
@@ -307,6 +308,7 @@ public class MorganaChannelAdapter
         if (containerInline == null)
             return;
 
+        // Each inline of the paragraph is read in turn, so the plain text keeps the order it was written in.
         foreach (Inline inline in containerInline)
         {
             // An inline with nothing to read, such as raw HTML, leaves nothing behind.

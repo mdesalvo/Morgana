@@ -61,6 +61,7 @@ public class KestrelHostAddressService : IHostAddressService
         // Nothing is bound before Kestrel starts listening: the question is asked again once it has.
         ICollection<string>? boundAddresses = server.Features.Get<IServerAddressesFeature>()?.Addresses;
 
+        // Without a bound address there is no interface to publish, so the card goes out without one.
         if (boundAddresses is null || boundAddresses.Count == 0)
         {
             logger.LogWarning("The server reports no bound address yet: agents of this instance cannot publish a callable A2A interface");
@@ -86,8 +87,9 @@ public class KestrelHostAddressService : IHostAddressService
         // A card's interface is compared as an origin: a trailing separator would make it differ from the one fetched.
         string trimmedAddress = boundAddress.TrimEnd('/');
 
-        // An address naming one host, or one that is not a URI, is already callable as written.
+        // An address naming one host or one that is not a URI is already callable as written.
 
+        // A callable address is returned as it is, since only a wildcard host needs rewriting.
         if (!Uri.TryCreate(trimmedAddress, UriKind.Absolute, out Uri? parsedAddress)
              || !WildcardHosts.Contains(parsedAddress.Host, StringComparer.OrdinalIgnoreCase))
             return trimmedAddress;

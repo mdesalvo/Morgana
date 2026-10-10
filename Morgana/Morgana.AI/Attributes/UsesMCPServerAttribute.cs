@@ -59,9 +59,11 @@ public class UsesMCPServerAttribute : Attribute
         // An HTTP server is reached by address, so a malformed one is refused when the class is read rather than at the first call.
         if (transport == Records.MCPTransport.Http)
         {
+            // The address of an HTTP server is read before the server is accepted, since a malformed one could only fail at the first call.
             if (!Uri.TryCreate(command, UriKind.Absolute, out Uri? parsed) ||
                 (parsed.Scheme != "https" && parsed.Scheme != "http"))
             {
+                // Startup stops here, since a malformed HTTP address names nothing that a server can be reached at.
                 throw new ArgumentException(
                     $"'{command}' is not a valid absolute http/https URI. " +
                     $"UsesMCPServer with Http transport requires an absolute URI " +

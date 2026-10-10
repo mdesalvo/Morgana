@@ -13,7 +13,7 @@ namespace Morgana.AI.Services;
 /// <remarks>
 /// Several plugins may each bring part of a domain — agents that belong to one organization without
 /// belonging to one deliverable. What they may not do is disagree: two plugins declaring the same
-/// intent, or two prompts under one id, describe two different agents answering to one name and
+/// intent or two prompts under one id describe two different agents answering to one name and
 /// nothing downstream could tell which was meant.
 /// <para>What a domain cannot bring at all is the complement of itself. The catch-all is what a
 /// request matching no agent is, which is the classifier's business and is described in the
@@ -31,7 +31,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     private readonly Lazy<AgentConfiguration> agentConfiguration;
 
     /// <summary>
-    /// Logger for the assembly scan: which resource was found, or that none was and Morgana is
+    /// Logger for the assembly scan: which resource was found or that none was and Morgana is
     /// therefore running agentless — a legal configuration whose only signal is this warning.
     /// </summary>
     private readonly ILogger logger;
@@ -126,6 +126,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                         logger.LogInformation(
                             "✅ Loaded {IntentsCount} intents and {AgentsCount} agent prompts from agents.json", config.Intents.Count, config.Agents.Count);
 
+                        // Each intent of the plugin is checked against the reserved names and against the intents of the other plugins.
                         foreach (Records.IntentDefinition intent in config.Intents)
                         {
                             // The complement of the domain is not part of it: it is what a request
@@ -134,6 +135,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                             // every reader downstream gets the framework's, exactly once.
                             if (string.Equals(intent.Name, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase))
                             {
+                                // Startup stops here, since the reserved complement cannot be declared by a domain.
                                 throw new InvalidOperationException(
                                     $"Plugin '{declaringAssembly}' declares the intent '{intent.Name}', which is reserved. It is the complement "
                                     + "of your domain rather than a part of it: the classifier carries it and describes it in its own prompt. "
@@ -146,6 +148,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                             // orchestrator to everyone who tells the two apart by name.
                             if (string.Equals(intent.Name, Constants.Morgana, StringComparison.OrdinalIgnoreCase))
                             {
+                                // Startup stops here, since the reserved name belongs to the system itself.
                                 throw new InvalidOperationException(
                                     $"Plugin '{declaringAssembly}' declares the intent '{intent.Name}', which is reserved: it names the "
                                     + "system itself, which answers under it and keeps its own side of the conversation under it. "
@@ -156,6 +159,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                             // and the sentence that pressing it sends on the user's behalf.
                             if (string.IsNullOrWhiteSpace(intent.Label) || string.IsNullOrWhiteSpace(intent.DefaultValue))
                             {
+                                // Startup stops here, since an intent without a label or a default value cannot be offered as a welcome button.
                                 throw new InvalidOperationException(
                                     $"Plugin '{declaringAssembly}' declares the intent '{intent.Name}' without a Label or a DefaultValue. "
                                     + "Both are required: the welcome offers every intent as a button that shows its Label and sends its DefaultValue.");
@@ -164,6 +168,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                             // One intent name is one agent: a second plugin claiming it leaves the routing ambiguous.
                             if (declaringAssemblyByIntent.TryGetValue(intent.Name, out string? firstAssembly))
                             {
+                                // Startup stops here, since two plugins claiming one intent would leave the routing ambiguous.
                                 throw new InvalidOperationException(
                                     $"The intent '{intent.Name}' is declared by two plugins, '{firstAssembly}' and '{declaringAssembly}'. "
                                     + "One name is one agent: deploy one of them, or rename the intent in the other.");
@@ -178,12 +183,14 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                             logger.LogInformation("   📋 Intent: {IntentName} - {IntentDescription}", intent.Name, intent.Description);
                         }
 
+                        // Each prompt of the plugin is merged unless another plugin already declared its id.
                         foreach (Records.Prompt prompt in config.Agents)
                         {
                             // Two prompts under one id would leave which agent answers to the order the
                             // assemblies happened to load in.
                             if (declaringAssemblyByPrompt.TryGetValue(prompt.ID, out string? firstAssembly))
                             {
+                                // Startup stops here, since one prompt id cannot belong to two agents.
                                 throw new InvalidOperationException(
                                     $"The agent prompt '{prompt.ID}' is declared by two plugins, '{firstAssembly}' and '{declaringAssembly}'. "
                                     + "One id is one agent: deploy one of them, or rename the prompt in the other.");
@@ -217,6 +224,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                 "✅ Domain assembled from {AssembliesCount} plugin(s): {IntentsCount} intents, {AgentsCount} agent prompts",
                 declaringAssemblyByIntent.Values.Distinct(StringComparer.OrdinalIgnoreCase).Count(), mergedIntents.Count, mergedAgents.Count);
 
+            // The merged domain is returned, the same whether it arrived in one plugin or in several.
             return new AgentConfiguration(mergedIntents, mergedAgents);
         }
 

@@ -154,9 +154,13 @@ public class MorganaToolAdapter
                 // structure that a provider might write out indented.
                 MarshalResult = (result, resultType, _) => new ValueTask<object?>(result switch
                 {
+                    // A call that returned nothing reaches the model as null.
                     null => null,
+                    // A framework tool's named result goes through as itself, for the tool loop to word.
                     Records.FrameworkToolResult named => named,
+                    // A string result reaches the model as the text itself.
                     string text => text,
+                    // Any other domain result is serialized to compact JSON text.
                     _ => JsonSerializer.Serialize(result, resultType ?? result.GetType(), ToolResultSerializerOptions)
                 }),
                 JsonSchemaCreateOptions = AIJsonSchemaCreateOptions.Default with
@@ -214,6 +218,7 @@ public class MorganaToolAdapter
         if (methodParams.Length != definitionParams.Count)
             throw new ArgumentException($"Parameter count mismatch: method has {methodParams.Length}, definition has {definitionParams.Count}");
 
+        // Each parameter of the method is matched to its definition, so the call can bind it by name.
         foreach (ParameterInfo methodParam in methodParams)
         {
             // A call binds its arguments by name, so a method parameter missing from the definition could never be passed.
@@ -302,6 +307,7 @@ public class MorganaToolAdapter
             bool servingConsultation =
                 toolContext.Provider.GetVariable(toolContext.Session, Constants.ContextKeys.ServingConsultation) is not null;
 
+            // Each context parameter is resolved in turn, from what the call and the session hold.
             foreach (string parameter in contextParameters)
             {
                 // A value that the model passes came from the user on this turn or an earlier one: it is
@@ -371,6 +377,7 @@ public class MorganaToolAdapter
         /// </remarks>
         private static string? AsText(object? value)
         {
+            // The argument is read as text, whichever JSON or stored shape it arrived in.
             string? text = value switch
             {
                 // Nothing was passed or stored.

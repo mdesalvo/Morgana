@@ -83,6 +83,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // policies the fenced list of rules inside it.
         FrameworkLayer framework = await frameworkLayer.Value;
 
+        // The agent's instructions are accumulated here, one fenced section after the other.
         StringBuilder sb = new StringBuilder();
 
         // The framework layer opens the prompt and is fenced, so the model reads it as the law over the domain below.
@@ -261,8 +262,10 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// <param name="peerCapable">Admits the peer-consultation policy, skipped for every other agent.</param>
     private static string FormatGlobalPolicies(List<Records.GlobalPolicy> policies, bool peerCapable)
     {
+        // The rendered policies, written in the order the model reads them.
         StringBuilder sb = new StringBuilder();
 
+        // The header fences the policies off from the rest of the prompt.
         sb.AppendLine(GlobalPoliciesHeader);
 
         // One line per policy: its name and what it requires, in the order the model must read them.
@@ -277,9 +280,11 @@ public class ConfigurationPromptComposerService : IPromptComposerService
                      // read rather than how it was filed.
                      .OrderBy(p => p.Priority))
         {
+            // Each policy reads as its name followed by what it requires.
             sb.AppendLine(CultureInfo.InvariantCulture, $"{policy.Name}: {policy.Description}");
         }
 
+        // The footer closes that fence.
         sb.AppendLine(GlobalPoliciesFooter);
 
         // The trailing newline is dropped so that the caller decides the spacing around the block.

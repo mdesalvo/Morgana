@@ -44,6 +44,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
         // question about something nobody described, so its calls are refused and the model asked again.
         for (int refusals = 0; refusals < MaxTextlessRefusals && IsTextlessApprovalRequest(messages, response.Messages, options); refusals++)
         {
+            // The refused attempt joins the conversation with its refusal, so the next attempt sees why its calls were turned down.
             messages = [.. messages, .. response.Messages, RefusalOf(response.Messages)];
             response = await base.GetResponseAsync(messages, options, cancellationToken);
         }
@@ -56,6 +57,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
         foreach (ChatMessage message in response.Messages)
             message.Contents = [.. message.Contents.Where(content => !IsReplyCall(content))];
 
+        // The response goes back with its Reply calls dropped, since the approval buttons close the turn.
         return response;
     }
 
@@ -70,8 +72,10 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
         List<ChatResponseUpdate> heldUpdates;
         List<ChatResponseUpdate> callUpdates;
 
+        // Each attempt is repeated after a textless refusal, until text arrives or the refusals are spent.
         for (int refusals = 0; ; refusals++)
         {
+            // The updates held back for this attempt start empty, since a refused attempt must leave no trace.
             heldUpdates = [];
             callUpdates = [];
             bool textStarted = false;
@@ -84,6 +88,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
                 // Calls are held whole to the end of the response: whether one asks for approval is known only then.
                 if (update.Contents.Any(content => content is FunctionCallContent))
                 {
+                    // A call is held until the response ends, so whether it needs approval is judged on the whole response.
                     callUpdates.Add(update);
                     continue;
                 }
@@ -91,6 +96,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
                 // The first word releases what was held, so the user sees the turn from its beginning.
                 if (!textStarted && update.Contents.OfType<TextContent>().Any(text => !string.IsNullOrWhiteSpace(text.Text)))
                 {
+                    // The first word is recorded, so every later update reaches the user as it comes.
                     textStarted = true;
                     foreach (ChatResponseUpdate held in heldUpdates)
                         yield return held;
@@ -115,6 +121,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
             if (textStarted || refusals >= MaxTextlessRefusals || !IsTextlessApprovalRequest(messages, written, options))
                 break;
 
+            // The refused attempt joins the conversation with its refusal, so the next attempt sees why it was turned down.
             messages = [.. messages, .. written, RefusalOf(written)];
         }
 
@@ -126,6 +133,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
         bool asksForApproval = AsksForApproval(callUpdates.SelectMany(update => update.Contents), options);
         foreach (ChatResponseUpdate update in callUpdates)
         {
+            // A response that asks for approval loses its Reply calls, since the approval buttons close the turn.
             if (asksForApproval)
                 update.Contents = [.. update.Contents.Where(content => !IsReplyCall(content))];
 
@@ -157,6 +165,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
         HashSet<string> approvalRequired =
             [.. (options?.Tools ?? []).OfType<ApprovalRequiredAIFunction>().Select(tool => tool.Name)];
 
+        // The response asks for approval when one of its calls is to a tool that needs the user's consent.
         return approvalRequired.Count > 0
             && contents.OfType<FunctionCallContent>().Any(call => approvalRequired.Contains(call.Name));
     }

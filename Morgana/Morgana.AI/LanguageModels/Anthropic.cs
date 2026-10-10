@@ -73,8 +73,10 @@ public class Anthropic(ILoggerFactory? loggerFactory = null) : MorganaLanguageMo
             // The clock covers the single attempt on the wire so that the log can tell a slow answer from a throttled one.
             long startedAt = Stopwatch.GetTimestamp();
 
+            // The attempt goes out on the wire and the answer is kept for the timing that follows.
             HttpResponseMessage response = await base.SendAsync(request, cancellationToken);
 
+            // The time the attempt took is measured, so the log can tell a slow answer from a throttled one.
             double elapsed = Stopwatch.GetElapsedTime(startedAt).TotalSeconds;
 
             // A throttled or overloaded answer is a warning because the SDK is about to wait and retry; any other answer is routine.

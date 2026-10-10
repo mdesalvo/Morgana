@@ -170,7 +170,7 @@ public class ConversationManagerActor : MorganaActor
     {
         actorLogger.Info($"Terminating conversation {msg.ConversationId}");
 
-        // Check whether there is anything to tear down: a conversation ended twice, or ended before
+        // Check whether there is anything to tear down: a conversation ended twice or ended before
         // it ever produced a turn, reaches here with no supervisor.
         if (supervisor is not null)
         {
@@ -277,6 +277,7 @@ public class ConversationManagerActor : MorganaActor
         if (response.RecordedTimestamp is null && answerTimestamp <= lastAnswerTimestamp)
             answerTimestamp = lastAnswerTimestamp.AddMilliseconds(1);
 
+        // The date of this answer becomes the reference for the next one, so the dates keep rising.
         lastAnswerTimestamp = answerTimestamp;
 
         // Undated by an agent means no agent wrote it: a refusal, a disambiguation, an intent
@@ -341,6 +342,7 @@ public class ConversationManagerActor : MorganaActor
             // logged and left at that, since there's no further fallback delivery path to try.
             try
             {
+                // The apology is sent as a plain message from Morgana, so the user learns that an answer was lost.
                 await channelService.SendMessageAsync(new ChannelMessage
                 {
                     ConversationId = conversationId,

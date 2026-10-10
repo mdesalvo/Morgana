@@ -79,7 +79,7 @@ public class MorganaActor : ReceiveActor
     /// <param name="timeout">Timeout message from Akka.NET</param>
     /// <remarks>
     /// <para><strong>Purpose:</strong></para>
-    /// <para>Receive timeout can be used to implement idle timeouts, cleanup, or periodic health checks.
+    /// <para>Receive timeout can be used to implement idle timeouts, cleanup or periodic health checks.
     /// The default implementation is a no-op to avoid log spam from actors that are legitimately idle.</para>
     /// </remarks>
     protected virtual void HandleReceiveTimeout(ReceiveTimeout timeout)
@@ -88,8 +88,7 @@ public class MorganaActor : ReceiveActor
     }
 
     /// <summary>
-    /// Registers common message handlers that should be present in all actor behaviors.
-    /// Essential for FSM actors using Become() pattern to maintain consistent message handling across states.
+    /// Keeps the receive timeout answered in every state, since Become() drops the handlers of the state it leaves.
     /// </summary>
     /// <remarks>
     /// <para><strong>Purpose:</strong></para>

@@ -38,7 +38,7 @@ public sealed class PartnerAuthenticationFilter(
     {
         string? authorization = context.HttpContext.Request.Headers.Authorization.FirstOrDefault();
 
-        // No header, or one that is not a bearer, is turned away before the token is ever read: an
+        // No header or one that is not a bearer is turned away before the token is ever read: an
         // endpoint filter runs in front of the A2A handler, so what stops here never reaches an agent.
         if (authorization is null || !authorization.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase))
             return Results.Unauthorized();
@@ -71,6 +71,7 @@ public sealed class PartnerAuthenticationFilter(
         // one with no way to find out for itself.
         context.HttpContext.Items[CallerIssuerItemKey] = authentication.Issuer;
 
+        // A partner that passed the gate reaches its action.
         return await next(context);
     }
 }

@@ -49,10 +49,10 @@ public class HistoryReducerService
     }
 
     /// <summary>
-    /// Creates the reducer for one agent, or <c>null</c> when history reduction is disabled.
+    /// Creates the reducer for one agent or <c>null</c> when history reduction is disabled.
     /// </summary>
     /// <param name="chatClient">Chat client the summarization call will run on — the calling agent's own tier.</param>
-    /// <returns>A configured <see cref="MorganaChatReducer"/>, or <c>null</c> to run without reduction.</returns>
+    /// <returns>A configured <see cref="MorganaChatReducer"/> or <c>null</c> to run without reduction.</returns>
     /// <remarks>
     /// The null return is not a failure signal: <c>MorganaChatHistoryProvider</c> reads it as "hand the
     /// LLM the full history", which is the only way to turn reduction off.
@@ -252,7 +252,7 @@ public sealed class MorganaChatReducer : IChatReducer
     /// Ported from <c>SummarizingChatReducer.SummarizedConversation</c>; only
     /// <see cref="ToSummarizerChatMessages"/> departs from it.
     /// </summary>
-    /// <param name="summary">Summary carried over from an earlier reduction, or null on the first one. Prepended to the next summarization call so nothing is summarized twice from scratch.</param>
+    /// <param name="summary">Summary carried over from an earlier reduction or null on the first one. Prepended to the next summarization call so nothing is summarized twice from scratch.</param>
     /// <param name="systemMessage">The conversation's leading system message, held aside to be re-emitted ahead of the summary.</param>
     /// <param name="unsummarizedMessages">Messages not yet folded into <paramref name="summary"/>, in order. Everything the cut and the summarization operate on.</param>
     private readonly struct SummarizedConversation(string? summary, ChatMessage? systemMessage, List<ChatMessage> unsummarizedMessages)
@@ -272,12 +272,14 @@ public sealed class MorganaChatReducer : IChatReducer
             ChatMessage? systemMessage = null;
             List<ChatMessage> unsummarized = [];
 
+            // The history is walked once, sorting each message into the system message, the stored summary or the unfolded tail.
             foreach (ChatMessage message in messages)
             {
                 // Only the first system message is kept; any later one is dropped rather than reordered,
                 // because a system message re-emitted after the summary would outrank it.
                 if (message.Role == ChatRole.System)
                 {
+                    // The first system message is the one kept for the conversation.
                     systemMessage ??= message;
                     continue;
                 }
@@ -298,6 +300,7 @@ public sealed class MorganaChatReducer : IChatReducer
                 // the cut below is measured against.
                 else
                 {
+                    // A message that no reduction has folded yet joins the tail that the cut is measured against.
                     unsummarized.Add(message);
                 }
             }
@@ -307,13 +310,13 @@ public sealed class MorganaChatReducer : IChatReducer
         }
 
         /// <summary>
-        /// Index of the first message to keep out of the summary, or 0 while the history is short enough
+        /// Index of the first message to keep out of the summary or 0 while the history is short enough
         /// to leave alone.
         /// </summary>
         internal int FindIndexOfFirstMessageToKeep(int targetCount, int thresholdCount)
         {
             // The hysteresis gate and also the floor for the search below: no cut may fall earlier than
-            // this, or a reduction would summarize away more than the buffer was meant to protect.
+            // this. Otherwise a reduction would summarize away more than the buffer was meant to protect.
             // Non-positive means the history has not yet outgrown target + threshold — nothing to do.
             int earliestAllowedIndex = unsummarizedMessages.Count - thresholdCount - targetCount;
             if (earliestAllowedIndex <= 0)
@@ -424,6 +427,7 @@ public sealed class MorganaChatReducer : IChatReducer
                 // Plain prose travels as-is, real message and real role.
                 if (!message.Contents.Any(IsToolRelatedContent))
                 {
+                    // Plain prose is passed to the summarizer unchanged, with its real role.
                     yield return message;
                     continue;
                 }

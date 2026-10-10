@@ -174,6 +174,7 @@ public class MorganaController : ControllerBase
 
         logger.LogInformation("Ended conversation {ConversationId}", conversationId);
 
+        // The end is confirmed to the caller, since the actors are already being stopped.
         return Ok(new { message = "Conversation ended" });
     }
 
@@ -214,6 +215,7 @@ public class MorganaController : ControllerBase
             ? dustLimitingOptions.ErrorMessage
             : null;
 
+        // The client is told that the conversation resumes, with its active agent and dust level, so it can redraw the screen.
         return Accepted(new ResumeConversationResponse(
             ConversationId: conversationId,
             Resumed: true,

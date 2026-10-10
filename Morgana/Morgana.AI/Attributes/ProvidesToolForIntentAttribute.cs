@@ -30,7 +30,7 @@ public class ProvidesToolForIntentAttribute : Attribute
     /// Initializes a new instance of the ProvidesToolForIntentAttribute.
     /// </summary>
     /// <param name="intent">Name of the intent this tool provides functionality for</param>
-    /// <exception cref="ArgumentException">Thrown if intent is null, empty, or whitespace</exception>
+    /// <exception cref="ArgumentException">Thrown if intent is null, empty or whitespace</exception>
     /// <remarks>
     /// Validates intent is not null/empty (compile-time error prevention).
     /// Use lowercase, single words or hyphens. Case-sensitive.
@@ -39,6 +39,7 @@ public class ProvidesToolForIntentAttribute : Attribute
     {
         if (string.IsNullOrWhiteSpace(intent))
         {
+            // The intent names the agent the tool belongs to, so a tool without one is refused at its declaration.
             throw new ArgumentException("Intent cannot be null or empty", nameof(intent));
         }
 

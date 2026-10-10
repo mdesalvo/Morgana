@@ -165,6 +165,7 @@ public class ConversationSupervisorActor : MorganaActor
         // mid-exchange this message is its answer, never a new request to classify.
         if (!hasReadPersistedActiveAgent)
         {
+            // An agent left mid-exchange on record is restored once, before the first turn decides on it.
             await RestorePersistedActiveAgentAsync();
             hasReadPersistedActiveAgent = true;
         }
@@ -233,6 +234,7 @@ public class ConversationSupervisorActor : MorganaActor
             return;
         }
 
+        // The welcome is marked as given before it is generated, so a duplicate request cannot greet the user twice.
         hasPresented = true;
         actorLogger.Info("Generating presentation message via IPresenterService");
 
@@ -311,7 +313,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         // The verdict is the normal ending of this state: a failure or a timeout below are the other two.
         ReceiveAsync<Records.GuardCheckResponse>(async response => {
-            // The guard answered, so its window ends here: the next state arms its own, or none.
+            // The guard answered, so its window ends here: the next state arms its own or none.
             Context.SetReceiveTimeout(null);
 
             // The span records the verdict and the latency of the guard round-trip.
@@ -352,6 +354,7 @@ public class ConversationSupervisorActor : MorganaActor
                 // Rejections are counted apart from the per-turn counter that closing the turn feeds.
                 Telemetry.GuardRejectionCounter.Add(1);
 
+                // The rejected turn is closed as not completed, so its span and its count are recorded.
                 CloseTurnSpan(intent: ctx.Classification?.Intent, completed: false);
                 Become(Idle);
                 return;
@@ -375,6 +378,7 @@ public class ConversationSupervisorActor : MorganaActor
             // The guard has ended its part, even with a failure: no reason to keep waiting.
             Context.SetReceiveTimeout(null);
 
+            // A timeout has no exception whereas a failed call carries the cause that the log must keep.
             if (cause != null)
                 actorLogger.Error(cause, "Guard check failed: {0}", description);
             else
@@ -405,6 +409,7 @@ public class ConversationSupervisorActor : MorganaActor
         {
             actorLogger.Info($"Active agent exists, routing to follow-up flow with agent {activeAgent.Path}");
 
+            // The conversation enters the follow-up state, where the active agent alone answers.
             Become(() => AwaitingFollowUpResponse(ctx.OriginalSender));
 
             // The follow-up path never classifies, so the agent receives none.
@@ -425,6 +430,7 @@ public class ConversationSupervisorActor : MorganaActor
         classifierSpan = Telemetry.Source.StartActivity(Telemetry.ClassifierActivity, ActivityKind.Internal, ctx.TurnContext);
         classifierSpan?.SetTag(Telemetry.ConversationId, conversationId);
 
+        // The conversation enters the classification state, where the classifier's ranking is awaited.
         Become(() => AwaitingClassification(ctx));
         classifier.Tell(ctx.OriginalMessage);
     }
@@ -443,7 +449,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         // The result is the normal ending of this state: a failure or a timeout below are the other two.
         ReceiveAsync<Records.ClassificationResult>(async classification => {
-            // The classifier answered, so its window ends here: the next state arms its own, or none.
+            // The classifier answered, so its window ends here: the next state arms its own or none.
             Context.SetReceiveTimeout(null);
 
             actorLogger.Info($"Classification result: {classification.Intent}");
@@ -462,10 +468,12 @@ public class ConversationSupervisorActor : MorganaActor
             // no agent is invoked and none becomes active.
             if (classification.Metadata.TryGetValue("ambiguousIntents", out string? collidingIntentNames))
             {
+                // A colliding classification is answered with the disambiguation question and the turn ends there.
                 await SendDisambiguationAsync(ctx with { Classification = classification }, collidingIntentNames);
                 return;
             }
 
+            // The classified request goes to the router and the conversation waits for the agent's answer.
             DispatchToRouter(ctx, classification);
         });
 
@@ -483,6 +491,7 @@ public class ConversationSupervisorActor : MorganaActor
             // The classifier has ended its part, even with a failure: no reason to keep waiting.
             Context.SetReceiveTimeout(null);
 
+            // A timeout has no exception whereas a failed call carries the cause that the log must keep.
             if (cause != null)
                 actorLogger.Error(cause, "Classification failed: {0}", description);
             else
@@ -508,6 +517,7 @@ public class ConversationSupervisorActor : MorganaActor
             // The router has no agent for "other" by design and answers with its unrecognized-intent text.
             actorLogger.Info("Falling back to 'other' intent");
 
+            // The turn goes to the router under the other intent, which answers with its fallback text.
             DispatchToRouter(ctx, fallbackClassification);
         }
         #endregion
@@ -529,8 +539,10 @@ public class ConversationSupervisorActor : MorganaActor
             ctx.TurnContext);
         routerSpan?.SetTag(Telemetry.RouterIntent, classification.Intent);
 
+        // The conversation enters the agent-response state, where the answer is awaited within the silence budget.
         Become(() => AwaitingAgentResponse(updatedCtx));
 
+        // The request goes to the router with the classification and the channel's budget and the router brings the agent up.
         router.Tell(new Records.AgentRequest(
             ctx.OriginalMessage.ConversationId,
             ctx.OriginalMessage.Text,
@@ -573,6 +585,7 @@ public class ConversationSupervisorActor : MorganaActor
                 null,
                 null));
 
+            // The timed-out turn is closed as a failure, so the trace shows where it stopped.
             CloseTurnSpan(ActivityStatusCode.Error, "Timeout waiting for agent response", intent: ctx.Classification?.Intent, completed: false);
             Become(Idle);
         });
@@ -580,6 +593,7 @@ public class ConversationSupervisorActor : MorganaActor
         // The user sees the answer as it is written while each chunk proves the agent alive.
         Receive<Records.AgentStreamChunk>(chunk =>
         {
+            // Each chunk renews the silence budget, since the agent is still alive and writing.
             Context.SetReceiveTimeout(PhaseBudget);
             ctx.OriginalSender.Tell(chunk);
         });
@@ -637,6 +651,7 @@ public class ConversationSupervisorActor : MorganaActor
                 if (response.IsCompleted)
                     TellAgentFarewell(ctx.OriginalSender, agentName);
 
+                // The turn is closed with its completion, so the count splits on whether the agent finished.
                 CloseTurnSpan(intent: ctx.Classification?.Intent, completed: response.IsCompleted);
 
                 // The follow-up is carried by activeAgent, so the FSM returns to Idle either way.
@@ -662,6 +677,7 @@ public class ConversationSupervisorActor : MorganaActor
                     null,
                     null));
 
+                // A failed answer is closed as a failure, with the exception recorded on the span.
                 CloseTurnSpan(ActivityStatusCode.Error, ex.Message, intent: ctx.Classification?.Intent, completed: false, exception: ex);
                 Become(Idle);
             }
@@ -689,6 +705,7 @@ public class ConversationSupervisorActor : MorganaActor
                     null,
                     response.RichCard));
 
+                // The fallback answer completes the turn, since no agent is left to continue it.
                 CloseTurnSpan(intent: ctx.Classification?.Intent, completed: true);
                 Become(Idle);
             }
@@ -707,6 +724,7 @@ public class ConversationSupervisorActor : MorganaActor
                     DateTime.UtcNow,
                     null));
 
+                // A failed fallback is closed as a failure, with its exception recorded on the span.
                 CloseTurnSpan(ActivityStatusCode.Error, ex.Message, intent: ctx.Classification?.Intent, completed: false, exception: ex);
                 Become(Idle);
             }
@@ -755,6 +773,7 @@ public class ConversationSupervisorActor : MorganaActor
                 DateTime.UtcNow,
                 null));
 
+            // The timed-out follow-up is closed as a failure, under the intent of the agent that was dropped.
             CloseTurnSpan(ActivityStatusCode.Error, "Timeout waiting for follow-up response", intent: timedOutIntent, completed: false);
             Become(Idle);
         });
@@ -762,6 +781,7 @@ public class ConversationSupervisorActor : MorganaActor
         // The user sees the answer as it is written while each chunk proves the agent alive.
         Receive<Records.AgentStreamChunk>(chunk =>
         {
+            // Each chunk renews the silence budget here too, since the active agent is still writing.
             Context.SetReceiveTimeout(PhaseBudget);
             originalSender.Tell(chunk);
         });
@@ -781,6 +801,7 @@ public class ConversationSupervisorActor : MorganaActor
             string? currentIntent = activeAgentIntent;
             try
             {
+                // The name under which the user sees the reply is the active agent's persona or Morgana's when none is left.
                 string agentName = currentIntent != null ? GetAgentDisplayName(currentIntent) : Constants.Morgana;
 
                 // The agent leaves only when it says it is done: while it keeps the exchange open it stays active.
@@ -807,6 +828,7 @@ public class ConversationSupervisorActor : MorganaActor
                 if (response.IsCompleted)
                     TellAgentFarewell(originalSender, agentName);
 
+                // The follow-up turn is closed with its completion, which is what the count splits on.
                 CloseTurnSpan(intent: currentIntent, completed: response.IsCompleted);
                 Become(Idle);
             }
@@ -829,6 +851,7 @@ public class ConversationSupervisorActor : MorganaActor
                     DateTime.UtcNow,
                     null));
 
+                // A failed follow-up is closed as a failure, with the exception recorded on the span.
                 CloseTurnSpan(ActivityStatusCode.Error, ex.Message, intent: currentIntent, completed: false, exception: ex);
                 Become(Idle);
             }
@@ -855,12 +878,13 @@ public class ConversationSupervisorActor : MorganaActor
         bool? completed = null,
         Exception? exception = null)
     {
-        // A turn is closed once: a second call, or PostStop after a closed turn, finds nothing to do.
+        // A turn is closed once: a second call or PostStop after a closed turn finds nothing to do.
         if (turnSpan is not null)
         {
             // Only a failed turn is marked: a completed one keeps the span's default status.
             if (status == ActivityStatusCode.Error)
             {
+                // The span takes the failure status and its description, so the trace shows what went wrong.
                 turnSpan.SetStatus(status, description);
                 if (exception is not null)
                     turnSpan.AddException(exception);
@@ -926,6 +950,7 @@ public class ConversationSupervisorActor : MorganaActor
             null,
             null));
 
+        // The disambiguation question closes the turn as not completed, since the user still has to answer.
         CloseTurnSpan(intent: ctx.Classification?.Intent, completed: false);
         Become(Idle);
     }
@@ -955,6 +980,7 @@ public class ConversationSupervisorActor : MorganaActor
         // A content-policy block counts as a guard rejection either way.
         Telemetry.GuardRejectionCounter.Add(1);
 
+        // The refused turn closes as not completed, under the intent of the agent that refused it.
         CloseTurnSpan(intent: activeAgentIntent, completed: false);
         Become(Idle);
 
@@ -981,6 +1007,7 @@ public class ConversationSupervisorActor : MorganaActor
         if (string.Equals(departingAgentName, Constants.Morgana, StringComparison.OrdinalIgnoreCase))
             return;
 
+        // The farewell wording comes from Morgana's own messages, so it reads in her voice.
         string farewellTemplate = MorganaMessage(Constants.Messages.AgentExit);
 
         // A deployment that words no farewell says none.
@@ -1006,7 +1033,7 @@ public class ConversationSupervisorActor : MorganaActor
     /// </summary>
     private string GetAgentDisplayName(string? intent)
     {
-        // No intent, or the catch-all Intents.Other: shown as the bare persona, with no agent name.
+        // No intent or the catch-all Intents.Other: shown as the bare persona, with no agent name.
         if (string.IsNullOrEmpty(intent) || string.Equals(intent, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase))
             return Constants.Morgana;
 
@@ -1065,6 +1092,7 @@ public class ConversationSupervisorActor : MorganaActor
         // Guard span, still open if the actor stopped before AwaitingGuardCheck ever got a response.
         if (guardSpan is not null)
         {
+            // The guard span is closed as a failure, since the actor stopped before its verdict arrived.
             guardSpan.SetStatus(ActivityStatusCode.Error, "actor stopped mid-turn");
             guardSpan.Dispose();
             guardSpan = null;
@@ -1073,6 +1101,7 @@ public class ConversationSupervisorActor : MorganaActor
         // Classifier span, still open if the actor stopped before AwaitingClassification ever got a response.
         if (classifierSpan is not null)
         {
+            // The classifier span is closed as a failure, since the actor stopped before its ranking arrived.
             classifierSpan.SetStatus(ActivityStatusCode.Error, "actor stopped mid-turn");
             classifierSpan.Dispose();
             classifierSpan = null;

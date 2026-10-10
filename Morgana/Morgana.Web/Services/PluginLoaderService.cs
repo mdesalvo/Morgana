@@ -45,6 +45,7 @@ public class PluginLoaderService
         // The match ignores leading dots and separators, so "./plugins" and "plugins" are the same directory.
         if (configuredDirectories is { Length: > 0 })
         {
+            // The configured directories join the default one, skipping any that name the same folder.
             pluginDirectories.AddRange(
                 from configuredDirectory
                 in configuredDirectories
@@ -60,6 +61,7 @@ public class PluginLoaderService
         int totalLoaded = 0;
         int totalAgents = 0;
 
+        // Each directory is scanned in turn, in priority order.
         foreach (string pluginDirectory in pluginDirectories)
         {
             // A directory that cannot be scanned costs the plugins in it only: the others still load.
@@ -70,8 +72,10 @@ public class PluginLoaderService
                     ? pluginDirectory
                     : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, pluginDirectory);
 
+                // The path is made absolute, so the same folder reads alike whatever spelling the configuration gave it.
                 fullPath = Path.GetFullPath(fullPath);
 
+                // A declared directory that is absent is skipped, without stopping the scan of the others.
                 if (!Directory.Exists(fullPath))
                 {
                     // A declared directory that is absent is reported and skipped: the default one is optional too.
@@ -84,6 +88,7 @@ public class PluginLoaderService
                 // Only the top level is scanned: a plugin's dependencies sit beside it and are loaded on demand.
                 string[] pluginAssemblies = Directory.GetFiles(fullPath, "*.dll", SearchOption.TopDirectoryOnly);
 
+                // A directory with no assemblies holds no plugin, so it is skipped.
                 if (pluginAssemblies.Length == 0)
                 {
                     logger.LogInformation("📭 No .dll files found in {FullPath}", fullPath);
@@ -102,6 +107,7 @@ public class PluginLoaderService
                         int detectedAgents = assembly.GetTypes()
                             .Count(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaAgent)));
 
+                        // An assembly with no agent is not a plugin, so it is not counted.
                         if (detectedAgents > 0)
                         {
                             logger.LogInformation("✅ Loaded plugin assembly with {DetectedAgents} Morgana agents: \"{GetFileName}\"", detectedAgents, Path.GetFileName(pluginAssembly));

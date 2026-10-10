@@ -33,6 +33,7 @@ public static class ActorSystemExtensions
                 Props actorProps = DependencyResolver.For(actorSystem)
                     .Props<T>(conversationId);
 
+                // The new actor is handed back so the caller can address it.
                 return actorSystem.ActorOf(actorProps, actorName);
             }
         }
@@ -50,6 +51,7 @@ public static class ActorSystemExtensions
             }
             catch (ActorNotFoundException)
             {
+                // No actor answers at the path, so the caller learns that there is none.
                 return null;
             }
         }
@@ -75,6 +77,7 @@ public static class ActorSystemExtensions
                 Props agentProps = DependencyResolver.For(actorSystem)
                     .Props(agentType, conversationId);
 
+                // The agent actor is born from its type and handed back so the caller can address it.
                 return actorSystem.ActorOf(agentProps, agentName);
             }
         }

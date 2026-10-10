@@ -163,6 +163,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         int lastEpisodeEnd = -1;
         for (int index = history.Count - 1; index >= 0 && lastEpisodeEnd < 0; index--)
         {
+            // A message that closed an episode is the boundary the search is looking for.
             if (history[index].AdditionalProperties?.ContainsKey(Constants.MessageProperties.EpisodeEnd) == true)
                 lastEpisodeEnd = index;
         }
@@ -204,6 +205,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
             ChatMessage message = view[index];
             if (index >= currentTurnStart || !message.Contents.OfType<FunctionResultContent>().Any())
             {
+                // A message that needs no marker is kept exactly as it is.
                 marked.Add(message);
                 continue;
             }
@@ -212,6 +214,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
             List<AIContent> contents = [];
             foreach (AIContent content in message.Contents)
             {
+                // A tool result is wrapped with its earlier-result text whereas any other content has nothing to wrap.
                 string? wrapped = content is FunctionResultContent result
                     ? await promptComposerService.ComposeEarlierToolResultAsync(ResultText(result.Result))
                     : null;

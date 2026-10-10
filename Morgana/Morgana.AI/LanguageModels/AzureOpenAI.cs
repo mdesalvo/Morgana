@@ -43,6 +43,7 @@ public class AzureOpenAI : MorganaLanguageModel
         // so the ceiling of a call is the timeout times the retries.
         if (isFoundryV1)
         {
+            // The Foundry endpoint is given the same retry policy and timeout as the classic resource.
             OpenAIClientOptions foundryOptions = new OpenAIClientOptions
             {
                 Endpoint = endpoint,
@@ -61,6 +62,7 @@ public class AzureOpenAI : MorganaLanguageModel
             RetryPolicy = new ClientRetryPolicy(connection.MaxRetries),
             NetworkTimeout = TimeSpan.FromSeconds(connection.TimeoutSeconds)
         };
+        // The classic Azure resource is reached through its own client, with the same retry policy and timeout.
         return new AzureOpenAIClient(endpoint, new AzureKeyCredential(connection.ApiKey!), azureOptions)
             .GetChatClient(options.ModelId)
             .AsIChatClient();

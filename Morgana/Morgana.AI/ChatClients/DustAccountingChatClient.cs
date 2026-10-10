@@ -42,6 +42,7 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
         string llmRole,
         string? conversationId = null) : base(innerClient)
     {
+        // The ledger, the pricing and the attribution are what every charge of this client is made with.
         this.dustLimitService = dustLimitService;
         this.dustPricing = dustPricing;
         this.llmRole = llmRole;
@@ -73,9 +74,11 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
         // when the stream completes. Summing would double-count.
         UsageDetails? usageDetails = null;
 
+        // The stream is read chunk by chunk, so its usage can be captured while every chunk still reaches the user.
         await foreach (ChatResponseUpdate chatResponseUpdate in
             base.GetStreamingResponseAsync(chatMessages, chatOptions, cancellationToken))
         {
+            // Each usage report in a chunk replaces the last, since the provider sends a running total.
             foreach (UsageContent usageContent in chatResponseUpdate.Contents.OfType<UsageContent>())
                 usageDetails = usageContent.Details;
 
@@ -97,7 +100,7 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
 
     /// <summary>
     /// Converts a usageDetails report into dust via the per-provider dustPricing and charges it.
-    /// No-op when the conversation id or usageDetails is absent, or when the computed dust is zero
+    /// No-op when the conversation id or usageDetails is absent or when the computed dust is zero
     /// (e.g. Ollama priced at 0 tokens-per-unit on both axes). Never throws.
     /// </summary>
     /// <remarks>
@@ -133,6 +136,7 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
             cacheRead * dustPricing.CachedInputWeight +
             cacheWrite * dustPricing.CacheCreationWeight;
 
+        // The output tokens are counted apart, since they are priced on their own axis.
         long outputTokens = usageDetails.OutputTokenCount ?? 0;
 
         // A tier priced at zero tokens per unit on an axis (a local model) costs nothing on that axis.
@@ -150,6 +154,7 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
 
         try
         {
+            // The dust is charged to the conversation under the role of this client.
             await dustLimitService.ChargeAsync(convId, dust, llmRole);
         }
         catch
