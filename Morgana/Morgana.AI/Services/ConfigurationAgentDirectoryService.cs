@@ -661,14 +661,14 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
         // Too old to stand. One caller replaces it and whoever loses that race takes what the winner
         // put there — so a colleague is asked once when its reading expires, not once per
         // conversation that finds it expired.
-        Lazy<Task<PeerCardReading>> refreshed = StartReading(endpoint);
-        if (!peerCardReadings.TryUpdate(endpoint, refreshed, reading))
-            refreshed = peerCardReadings.GetOrAdd(endpoint, StartReading);
+        Lazy<Task<PeerCardReading>> refreshedReading = StartReading(endpoint);
+        if (!peerCardReadings.TryUpdate(endpoint, refreshedReading, reading))
+            refreshedReading = peerCardReadings.GetOrAdd(endpoint, StartReading);
 
         // Exactly one further reading is ever waited for here. Should that one already be expiring
         // too — a colleague slower to describe itself than the window it is trusted for — its card is
         // used as it stands: a turn is owed an answer, never an unbounded pursuit of a fresher one.
-        return (await refreshed.Value).Card;
+        return (await refreshedReading.Value).Card;
 
         // The reading itself, held back until somebody actually takes it: the one that loses the race
         // above is discarded without ever having troubled the colleague.

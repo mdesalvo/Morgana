@@ -56,19 +56,19 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         IEnumerable<ChatMessage> chatMessages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
-        => base.GetResponseAsync(chatMessages, Present(options), cancellationToken);
+        => base.GetResponseAsync(chatMessages, NarrowToSession(options), cancellationToken);
 
     /// <inheritdoc/>
     public override IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
         IEnumerable<ChatMessage> chatMessages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
-        => base.GetStreamingResponseAsync(chatMessages, Present(options), cancellationToken);
+        => base.GetStreamingResponseAsync(chatMessages, NarrowToSession(options), cancellationToken);
 
     /// <summary>
     /// Rewrites the options' tools for the state of the session; the caller's options are never mutated.
     /// </summary>
-    private ChatOptions? Present(ChatOptions? options)
+    private ChatOptions? NarrowToSession(ChatOptions? options)
     {
         // The session is read on every call: a step reached halfway through a turn changes what the next call offers.
         AgentSession? session = sessionAccessor();
@@ -87,71 +87,47 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
 
         // The position says whether a workflow is running and at which step; an agent with no workflows holds none.
         Records.WorkflowPosition? position = workflows.Count == 0 ? null : contextProvider.GetWorkflowPosition(session);
-        (Records.WorkflowDefinition Definition, Records.WorkflowStep Step)? running = position?.Resolve(workflows);
+        (Records.WorkflowDefinition Definition, Records.WorkflowStep Step)? runningWorkflow = position?.Resolve(workflows);
 
-        // A procedure is entered through its launcher alone: outside it, the tools of its first step are not offered,
-        // so a model cannot open the procedure halfway and leave the framework out of it.
-        HashSet<string> entryTools = running is null ? [.. workflows.SelectMany(workflow => workflow.EntryTools)] : [];
-
-        // With no workflow running, no workflow to enter and every colleague within reach the agent is offered exactly the tools it was given.
-        if (running is null && entryTools.Count == 0 && !colleaguesOutOfReach)
+        // With no workflow declared and every colleague within reach the agent is offered exactly the tools it was given.
+        if (workflows.Count == 0 && !colleaguesOutOfReach)
             return options;
 
-        // The tools the model is offered on this call, chosen by whether a workflow is running.
-        List<AITool> presented;
-        if (running is null)
+        // The tools the model is offered on this call, each one weighed against the state of the session.
+        List<AITool> offeredTools = [];
+        foreach (AITool tool in tools)
         {
+            // The workflows decide whether the tool belongs to the step that stands: entry tools, launchers, other steps' tools and approval tools stay out.
+            if (!WorkflowEngine.IsOffered(tool.Name, tool is WorkflowLauncherFunction, tool is ApprovalRequiredAIFunction, runningWorkflow, workflows))
+                continue;
+
+            // The ban on colleagues holds inside a running workflow as well, whatever the step allows.
+            if (colleaguesOutOfReach && tool.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
+                continue;
+
             // A consultation answers a colleague and never takes the user's turn, so it never opens a wizard.
-            presented = [.. tools.Where(tool => !entryTools.Contains(tool.Name)
-                && (!isServingConsultation || tool is not WorkflowLauncherFunction))];
+            if (isServingConsultation && tool is WorkflowLauncherFunction)
+                continue;
+
+            // At a choice step Reply is offered with the step's tools as the only actions it may propose.
+            if (runningWorkflow is { Step.Tools.Count: > 1 } && tool.Name == Constants.Tools.Reply)
+                offeredTools.Add(WithStepActions(tool, runningWorkflow.Value.Step.Tools));
+
+            // A tool of the current step is offered without what the framework binds.
+            else if (runningWorkflow is { } workflowAndStep && workflowAndStep.Step.Tools.Contains(tool.Name))
+                offeredTools.Add(WithoutBoundParameters(tool, position!.Arguments.Keys));
+
+            // Any other tool that the workflows let through is offered as the agent holds it.
+            else
+                offeredTools.Add(tool);
         }
-        else
-        {
-            // The tools that the workflow names are the ones that its steps govern; any other tool is the agent's own.
-            HashSet<string> signature = running.Value.Definition.ToolSignature();
-            presented = [];
-
-            // Each tool is kept or withheld according to the step that the workflow stands at.
-            foreach (AITool tool in tools)
-            {
-                // At a choice step Reply is offered with the step's tools as the only actions it may propose.
-                if (tool.Name == Constants.Tools.Reply && running.Value.Step.Tools.Count > 1)
-                    presented.Add(WithStepActions(tool, running.Value.Step.Tools));
-
-                // Closing the turn and consulting a colleague belong to no step: they are offered at every one.
-                else if (tool.Name == Constants.Tools.Reply
-                    || tool.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
-                    presented.Add(tool);
-
-                // One workflow runs at a time, so no launcher is offered while this one stands.
-                else if (tool is WorkflowLauncherFunction)
-                    continue;
-
-                // The workflow's own tools are governed by the step it stands at.
-                else if (signature.Contains(tool.Name))
-                {
-                    // Of the workflow's own tools only the current step's are offered, without what the framework binds.
-                    if (running.Value.Step.Tools.Contains(tool.Name))
-                        presented.Add(WithoutBoundParameters(tool, position!.Arguments.Keys));
-                }
-
-                // Outside the signature a tool is a private method of the workflow: offered for answers
-                // on the side, except where it needs approval, since a binding act there would be a second workflow.
-                else if (tool is not ApprovalRequiredAIFunction)
-                    presented.Add(tool);
-            }
-        }
-
-        // The ban on colleagues holds inside a running workflow as well, whatever the step allows.
-        if (colleaguesOutOfReach)
-            presented.RemoveAll(tool => tool.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal));
 
         // The caller's options are shared across turns, so the narrowed tool list goes on a clone.
-        ChatOptions presentedOptions = options.Clone();
-        presentedOptions.Tools = presented;
+        ChatOptions offeredOptions = options.Clone();
+        offeredOptions.Tools = offeredTools;
 
         // The model reads only the tools that the session's state allows.
-        return presentedOptions;
+        return offeredOptions;
     }
 
     /// <summary>

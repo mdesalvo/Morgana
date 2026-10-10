@@ -31,18 +31,18 @@ public record CommandDescriptor(
     public string? DescribeDeclarationProblem()
     {
         // A command without options declares an empty list, so no option is valid for it.
-        IReadOnlyList<CommandOption> declared = Options ?? [];
+        IReadOnlyList<CommandOption> declaredOptions = Options ?? [];
 
         // Options are matched ignoring case, so two spelled alike would hand the typed value to whichever came first
-        if (declared.GroupBy(option => option.Name, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1) is { } clashingOptions)
+        if (declaredOptions.GroupBy(option => option.Name, StringComparer.OrdinalIgnoreCase).FirstOrDefault(group => group.Count() > 1) is { } clashingOptions)
             return $"/{Name} declares the option '{clashingOptions.Key}' more than once";
 
         // An empty list would refuse every value, leaving an option nobody can give
-        if (declared.FirstOrDefault(option => option.AllowedValues is { Count: 0 }) is { } optionAllowingNothing)
+        if (declaredOptions.FirstOrDefault(option => option.AllowedValues is { Count: 0 }) is { } optionAllowingNothing)
             return $"/{Name} declares no value the option '{optionAllowingNothing.Name}' takes";
 
         // A default is what the command runs on unasked, so one it would refuse makes every run without it fail
-        if (declared.FirstOrDefault(option => option.DefaultValue is { } fallback && !option.Allows(fallback)) is { } optionWithDisallowedDefault)
+        if (declaredOptions.FirstOrDefault(option => option.DefaultValue is { } fallback && !option.Allows(fallback)) is { } optionWithDisallowedDefault)
             return $"/{Name} defaults the option '{optionWithDisallowedDefault.Name}' to '{optionWithDisallowedDefault.DefaultValue}', which it does not take";
 
         // No declaration fault is found, so the registry accepts the command.
@@ -56,11 +56,11 @@ public record CommandDescriptor(
     public string? DescribeOptionProblem(IReadOnlyDictionary<string, string>? options)
     {
         // A command declaring nothing is checked against an empty list, so every given option is unknown
-        IReadOnlyList<CommandOption> declared = Options ?? [];
+        IReadOnlyList<CommandOption> declaredOptions = Options ?? [];
 
         // An option nobody declared is a typo or a memory of another command, never something to run on
         if (options is not null && options.Keys.FirstOrDefault(
-                given => !declared.Any(option => string.Equals(option.Name, given, StringComparison.OrdinalIgnoreCase))) is { } unknownOptionName)
+                given => !declaredOptions.Any(option => string.Equals(option.Name, given, StringComparison.OrdinalIgnoreCase))) is { } unknownOptionName)
             return $"/{Name} takes no option named '{unknownOptionName}'";
 
         // A value the command cannot use is the user's to correct, so it is refused with the values that would do.
@@ -68,14 +68,14 @@ public record CommandDescriptor(
         foreach ((string given, string value) in options ?? new Dictionary<string, string>())
         {
             // The option that the given name belongs to is found, which the check above has guaranteed to exist.
-            CommandOption option = declared.First(candidate => string.Equals(candidate.Name, given, StringComparison.OrdinalIgnoreCase));
+            CommandOption option = declaredOptions.First(candidate => string.Equals(candidate.Name, given, StringComparison.OrdinalIgnoreCase));
             if (!option.Allows(value))
                 return $"/{Name} takes {option.Name} as {option.DescribeAllowedValues()}, not '{value}'";
         }
 
         // What the command cannot work without is asked for before anything happens, not discovered halfway
         // through. An option carrying a default is never missing: the default is what the command runs on
-        if (declared.FirstOrDefault(option => option is { Required: true, DefaultValue: null } && !WasGiven(option, options)) is { } missingRequiredOption)
+        if (declaredOptions.FirstOrDefault(option => option is { Required: true, DefaultValue: null } && !WasGiven(option, options)) is { } missingRequiredOption)
             return $"/{Name} needs {missingRequiredOption.Name}: {missingRequiredOption.Description}";
 
         // Every given option is valid and every required one is present, so no problem is reported.

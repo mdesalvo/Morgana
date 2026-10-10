@@ -205,8 +205,8 @@ public class MorganaAgent : MorganaActor
 
             // The turn is filed before the model runs, then run, then closed and recorded.
             Records.TurnOpening opening = await OpenTurnAsync(req, frameworkReplies, agentSpan);
-            Records.TurnOutcome outcome = await RunTurnAsync(opening.Session, req, opening.PressedActionTool, senderRef, agentSpan);
-            Records.TurnClosure closure = CloseTurn(opening.Session, outcome, morganaPrompt, frameworkReplies);
+            Records.TurnOutcome turnOutcome = await RunTurnAsync(opening.Session, req, opening.PressedActionTool, senderRef, agentSpan);
+            Records.TurnClosure closure = CloseTurn(opening.Session, turnOutcome, morganaPrompt, frameworkReplies);
             DateTime? recordedAt = await RecordTurnAsync(opening.Session, closure, opening.HistoryBaseline, agentSpan);
 
             // Dated as the history keeps it, so a client catching up recognises the reply it was pushed.
@@ -515,10 +515,10 @@ public class MorganaAgent : MorganaActor
     }
 
     /// <summary>Decides the text, buttons and card that the user receives, from what the model wrote and how Reply closed the turn.</summary>
-    private Records.TurnClosure CloseTurn(AgentSession session, Records.TurnOutcome outcome, Records.Prompt morganaPrompt, Records.FrameworkReplies frameworkReplies)
+    private Records.TurnClosure CloseTurn(AgentSession session, Records.TurnOutcome turnOutcome, Records.Prompt morganaPrompt, Records.FrameworkReplies frameworkReplies)
     {
         // An approval asked with no word of the model's own is asked in Morgana's words.
-        string llmResponseText = outcome.Text;
+        string llmResponseText = turnOutcome.Text;
         if (llmResponseText.Length == 0)
             llmResponseText = morganaPrompt.GetMessage(Constants.Messages.Approval);
 
@@ -537,7 +537,7 @@ public class MorganaAgent : MorganaActor
 
         // A workflow that still stands at a choice step offers its tools as the buttons, whatever the model
         // closed with: a model that never complied, the framework's own closure and a missing Reply all end here.
-        if (!turnReply.UserIsLeaving && !outcome.AwaitsApproval)
+        if (!turnReply.UserIsLeaving && !turnOutcome.AwaitsApproval)
         {
             // A workflow standing at a choice step offers the tools of that step as buttons.
             if (aiContextProvider.GetWorkflowPosition(session)?.Resolve(aiContextProvider.Workflows) is { Step.Tools.Count: > 1 } choicePosition)
@@ -546,11 +546,11 @@ public class MorganaAgent : MorganaActor
 
         // A turn waiting for an approval offers exactly the two answers to it; any other turn gets the
         // buttons its closure calls for.
-        (List<QuickReply>? quickReplies, bool isCompleted) = outcome.AwaitsApproval
+        (List<QuickReply>? quickReplies, bool isCompleted) = turnOutcome.AwaitsApproval
             ? (frameworkReplies.Approval is { Count: > 0 } approvalButtons ? [.. approvalButtons] : null, false)
             : turnReply.ToDelivery(frameworkReplies);
         // An approval question carries no card: the user is asked one thing.
-        RichCard? richCard = outcome.AwaitsApproval ? null : turnReply.Card;
+        RichCard? richCard = turnOutcome.AwaitsApproval ? null : turnReply.Card;
 
         // The line the harness and the operator read to see how the turn closed.
         agentLogger.LogInformation(

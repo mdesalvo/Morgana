@@ -130,8 +130,8 @@ public class ReplyTool : MorganaTool
         if (ctx.ActionableToolNames is { } actionableToolNames)
         {
             // The model is not told about the discard: the log is where an agent that offers phantom buttons shows up.
-            foreach (Records.ReplyAction discarded in offeredActions.Where(action => !actionableToolNames.Contains(action.Tool)))
-                toolLogger.LogWarning("Reply discarded the action '{Label}': it leads to '{Tool}', which this agent does not have", discarded.Label, discarded.Tool);
+            foreach (Records.ReplyAction discardedAction in offeredActions.Where(action => !actionableToolNames.Contains(action.Tool)))
+                toolLogger.LogWarning("Reply discarded the action '{Label}': it leads to '{Tool}', which this agent does not have", discardedAction.Label, discardedAction.Tool);
 
             // Only the buttons that lead to a tool of this agent are delivered.
             offeredActions = [.. offeredActions.Where(action => actionableToolNames.Contains(action.Tool))];

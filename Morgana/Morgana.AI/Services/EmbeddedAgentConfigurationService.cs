@@ -96,123 +96,123 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
 
             // The assembly that carries the domain. Every other one in the process is passed over in
             // silence, since not carrying a domain is the normal condition of an assembly.
-            if (resourceName != null)
+            if (resourceName is null)
+                continue;
+
+            logger.LogInformation("✅ Found agents.json in assembly: {Name}", assembly.GetName().Name);
+
+            try
             {
-                logger.LogInformation("✅ Found agents.json in assembly: {Name}", assembly.GetName().Name);
-
-                try
+                // Named in the manifest yet unreadable: the search moves on rather than settling
+                // for an assembly that advertised a domain it cannot hand over.
+                using Stream? stream = assembly.GetManifestResourceStream(resourceName);
+                if (stream == null)
                 {
-                    // Named in the manifest yet unreadable: the search moves on rather than settling
-                    // for an assembly that advertised a domain it cannot hand over.
-                    using Stream? stream = assembly.GetManifestResourceStream(resourceName);
-                    if (stream == null)
+                    logger.LogWarning("Could not open stream for {ResourceName}", resourceName);
+                    continue;
+                }
+
+                // The whole domain: the intents the classifier routes on, plus the prompt of every
+                // agent that handles one.
+                AgentConfiguration? config = JsonSerializer.Deserialize<AgentConfiguration>(
+                    stream, Records.DefaultJsonSerializerOptions);
+
+                // An empty resource declares nothing: the assembly contributes no intent and no prompt.
+                if (config is null)
+                    continue;
+
+                // Named in every refusal below, so an operator knows which plugin to fix.
+                string declaringAssembly = assembly.GetName().Name ?? resourceName;
+
+                // Reports what this one plugin brought, before the merge can refuse any of it.
+                logger.LogInformation(
+                    "✅ Loaded {IntentsCount} intents and {AgentsCount} agent prompts from agents.json", config.Intents.Count, config.Agents.Count);
+
+                // Each intent of the plugin is checked against the reserved names and against the intents of the other plugins.
+                foreach (Records.IntentDefinition intent in config.Intents)
+                {
+                    // The complement of the domain is not part of it: it is what a request
+                    // matching no agent is, the classifier's own word, described in the
+                    // classifier's own prompt. A domain declaring it is refused so that
+                    // every reader downstream gets the framework's, exactly once.
+                    if (string.Equals(intent.Name, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase))
                     {
-                        logger.LogWarning("Could not open stream for {ResourceName}", resourceName);
-                        continue;
+                        // Startup stops here, since the reserved complement cannot be declared by a domain.
+                        throw new InvalidOperationException(
+                            $"Plugin '{declaringAssembly}' declares the intent '{intent.Name}', which is reserved. It is the complement "
+                            + "of your domain rather than a part of it: the classifier carries it and describes it in its own prompt. "
+                            + "Delete the declaration.");
                     }
 
-                    // The whole domain: the intents the classifier routes on, plus the prompt of every
-                    // agent that handles one.
-                    AgentConfiguration? config = JsonSerializer.Deserialize<AgentConfiguration>(
-                        stream, Records.DefaultJsonSerializerOptions);
-
-                    // An empty resource declares nothing: the assembly contributes no intent and no prompt.
-                    if (config != null)
+                    // The orchestrator answers under this name and its words are filed under
+                    // it in the conversation record. An agent taking the name would take over
+                    // that record. It would also become indistinguishable from the
+                    // orchestrator to everyone who tells the two apart by name.
+                    if (string.Equals(intent.Name, Constants.Morgana, StringComparison.OrdinalIgnoreCase))
                     {
-                        // Named in every refusal below, so an operator knows which plugin to fix.
-                        string declaringAssembly = assembly.GetName().Name ?? resourceName;
-
-                        // Reports what this one plugin brought, before the merge can refuse any of it.
-                        logger.LogInformation(
-                            "✅ Loaded {IntentsCount} intents and {AgentsCount} agent prompts from agents.json", config.Intents.Count, config.Agents.Count);
-
-                        // Each intent of the plugin is checked against the reserved names and against the intents of the other plugins.
-                        foreach (Records.IntentDefinition intent in config.Intents)
-                        {
-                            // The complement of the domain is not part of it: it is what a request
-                            // matching no agent is, the classifier's own word, described in the
-                            // classifier's own prompt. A domain declaring it is refused so that
-                            // every reader downstream gets the framework's, exactly once.
-                            if (string.Equals(intent.Name, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase))
-                            {
-                                // Startup stops here, since the reserved complement cannot be declared by a domain.
-                                throw new InvalidOperationException(
-                                    $"Plugin '{declaringAssembly}' declares the intent '{intent.Name}', which is reserved. It is the complement "
-                                    + "of your domain rather than a part of it: the classifier carries it and describes it in its own prompt. "
-                                    + "Delete the declaration.");
-                            }
-
-                            // The orchestrator answers under this name and its words are filed under
-                            // it in the conversation record. An agent taking the name would take over
-                            // that record. It would also become indistinguishable from the
-                            // orchestrator to everyone who tells the two apart by name.
-                            if (string.Equals(intent.Name, Constants.Morgana, StringComparison.OrdinalIgnoreCase))
-                            {
-                                // Startup stops here, since the reserved name belongs to the system itself.
-                                throw new InvalidOperationException(
-                                    $"Plugin '{declaringAssembly}' declares the intent '{intent.Name}', which is reserved: it names the "
-                                    + "system itself, which answers under it and keeps its own side of the conversation under it. "
-                                    + "Rename the intent.");
-                            }
-
-                            // Every intent is offered as a welcome button, which needs both the text written on it
-                            // and the sentence that pressing it sends on the user's behalf.
-                            if (string.IsNullOrWhiteSpace(intent.Label) || string.IsNullOrWhiteSpace(intent.DefaultValue))
-                            {
-                                // Startup stops here, since an intent without a label or a default value cannot be offered as a welcome button.
-                                throw new InvalidOperationException(
-                                    $"Plugin '{declaringAssembly}' declares the intent '{intent.Name}' without a Label or a DefaultValue. "
-                                    + "Both are required: the welcome offers every intent as a button that shows its Label and sends its DefaultValue.");
-                            }
-
-                            // One intent name is one agent: a second plugin claiming it leaves the routing ambiguous.
-                            if (declaringAssemblyByIntent.TryGetValue(intent.Name, out string? firstAssembly))
-                            {
-                                // Startup stops here, since two plugins claiming one intent would leave the routing ambiguous.
-                                throw new InvalidOperationException(
-                                    $"The intent '{intent.Name}' is declared by two plugins, '{firstAssembly}' and '{declaringAssembly}'. "
-                                    + "One name is one agent: deploy one of them, or rename the intent in the other.");
-                            }
-
-                            // The intent joins the domain and its origin is kept to name the plugin in a later collision.
-                            declaringAssemblyByIntent[intent.Name] = declaringAssembly;
-                            mergedIntents.Add(intent);
-
-                            // The intent list spelled out at startup. It is what the classifier will be
-                            // given, the only place an operator reads it back before a conversation exists.
-                            logger.LogInformation("   📋 Intent: {IntentName} - {IntentDescription}", intent.Name, intent.Description);
-                        }
-
-                        // Each prompt of the plugin is merged unless another plugin already declared its id.
-                        foreach (Records.Prompt prompt in config.Agents)
-                        {
-                            // Two prompts under one id would leave which agent answers to the order the
-                            // assemblies happened to load in.
-                            if (declaringAssemblyByPrompt.TryGetValue(prompt.ID, out string? firstAssembly))
-                            {
-                                // Startup stops here, since one prompt id cannot belong to two agents.
-                                throw new InvalidOperationException(
-                                    $"The agent prompt '{prompt.ID}' is declared by two plugins, '{firstAssembly}' and '{declaringAssembly}'. "
-                                    + "One id is one agent: deploy one of them, or rename the prompt in the other.");
-                            }
-
-                            // The prompt joins the domain and its origin is kept to name the plugin in a later collision.
-                            declaringAssemblyByPrompt[prompt.ID] = declaringAssembly;
-                            mergedAgents.Add(prompt);
-                        }
+                        // Startup stops here, since the reserved name belongs to the system itself.
+                        throw new InvalidOperationException(
+                            $"Plugin '{declaringAssembly}' declares the intent '{intent.Name}', which is reserved: it names the "
+                            + "system itself, which answers under it and keeps its own side of the conversation under it. "
+                            + "Rename the intent.");
                     }
+
+                    // Every intent is offered as a welcome button, which needs both the text written on it
+                    // and the sentence that pressing it sends on the user's behalf.
+                    if (string.IsNullOrWhiteSpace(intent.Label) || string.IsNullOrWhiteSpace(intent.DefaultValue))
+                    {
+                        // Startup stops here, since an intent without a label or a default value cannot be offered as a welcome button.
+                        throw new InvalidOperationException(
+                            $"Plugin '{declaringAssembly}' declares the intent '{intent.Name}' without a Label or a DefaultValue. "
+                            + "Both are required: the welcome offers every intent as a button that shows its Label and sends its DefaultValue.");
+                    }
+
+                    // One intent name is one agent: a second plugin claiming it leaves the routing ambiguous.
+                    if (declaringAssemblyByIntent.TryGetValue(intent.Name, out string? firstAssembly))
+                    {
+                        // Startup stops here, since two plugins claiming one intent would leave the routing ambiguous.
+                        throw new InvalidOperationException(
+                            $"The intent '{intent.Name}' is declared by two plugins, '{firstAssembly}' and '{declaringAssembly}'. "
+                            + "One name is one agent: deploy one of them, or rename the intent in the other.");
+                    }
+
+                    // The intent joins the domain and its origin is kept to name the plugin in a later collision.
+                    declaringAssemblyByIntent[intent.Name] = declaringAssembly;
+                    mergedIntents.Add(intent);
+
+                    // The intent list spelled out at startup. It is what the classifier will be
+                    // given, the only place an operator reads it back before a conversation exists.
+                    logger.LogInformation("   📋 Intent: {IntentName} - {IntentDescription}", intent.Name, intent.Description);
                 }
-                // The refusals above are verdicts on a domain that is readable and wrong (a reserved
-                // name, a name claimed twice); each is meant to stop startup where it is stated.
-                // Swallowed here they would drop the whole domain instead. The operator would
-                // meet the consequence much later, as a prompt that cannot be found for an intent
-                // nobody refused: the wrong place to go looking.
-                catch (Exception ex) when (ex is not InvalidOperationException)
+
+                // Each prompt of the plugin is merged unless another plugin already declared its id.
+                foreach (Records.Prompt prompt in config.Agents)
                 {
-                    // A half-built plugin left in plugins/ costs itself: the search goes on through the
-                    // other assemblies rather than taking Morgana's startup down with it.
-                    logger.LogError(ex, "Failed to deserialize agents.json from {Name}", assembly.GetName().Name);
+                    // Two prompts under one id would leave which agent answers to the order the
+                    // assemblies happened to load in.
+                    if (declaringAssemblyByPrompt.TryGetValue(prompt.ID, out string? firstAssembly))
+                    {
+                        // Startup stops here, since one prompt id cannot belong to two agents.
+                        throw new InvalidOperationException(
+                            $"The agent prompt '{prompt.ID}' is declared by two plugins, '{firstAssembly}' and '{declaringAssembly}'. "
+                            + "One id is one agent: deploy one of them, or rename the prompt in the other.");
+                    }
+
+                    // The prompt joins the domain and its origin is kept to name the plugin in a later collision.
+                    declaringAssemblyByPrompt[prompt.ID] = declaringAssembly;
+                    mergedAgents.Add(prompt);
                 }
+            }
+            // The refusals above are verdicts on a domain that is readable and wrong (a reserved
+            // name, a name claimed twice); each is meant to stop startup where it is stated.
+            // Swallowed here they would drop the whole domain instead. The operator would
+            // meet the consequence much later, as a prompt that cannot be found for an intent
+            // nobody refused: the wrong place to go looking.
+            catch (Exception ex) when (ex is not InvalidOperationException)
+            {
+                // A half-built plugin left in plugins/ costs itself: the search goes on through the
+                // other assemblies rather than taking Morgana's startup down with it.
+                logger.LogError(ex, "Failed to deserialize agents.json from {Name}", assembly.GetName().Name);
             }
         }
 

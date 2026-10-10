@@ -496,11 +496,11 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         }
 
         // Steps that no path from the first one reaches would never be offered: the workflow could not mean them.
-        HashSet<string> reached = ReachableFrom(workflow, workflow.Steps[0].Name);
+        HashSet<string> reachedSteps = ReachableFrom(workflow, workflow.Steps[0].Name);
         errors.AddRange(
             workflow.Steps
                 .Skip(1)
-                .Where(step => !reached.Contains(step.Name))
+                .Where(step => !reachedSteps.Contains(step.Name))
                 .Select(step => $"{subject}, step '{step.Name}': no path leads to it from '{workflow.Steps[0].Name}'"));
     }
 
@@ -592,24 +592,24 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     private static HashSet<string> ReachableFrom(Records.WorkflowDefinition workflow, string from)
     {
         // The start counts as reached from the outset: the first step is where the workflow stands when launched.
-        HashSet<string> reached = new([from], StringComparer.Ordinal);
+        HashSet<string> reachedSteps = new([from], StringComparer.Ordinal);
 
         // Steps reached whose own edges have not been followed yet.
-        Queue<string> pending = new([from]);
+        Queue<string> pendingSteps = new([from]);
 
         // Walks the edges until no reached step is left unfollowed, collecting every step a path can lead to.
-        while (pending.TryDequeue(out string? current))
+        while (pendingSteps.TryDequeue(out string? currentStep))
         {
-            foreach (Records.WorkflowEdge edge in workflow.Edges.Where(candidate => candidate.Source == current))
+            foreach (Records.WorkflowEdge edge in workflow.Edges.Where(candidate => candidate.Source == currentStep))
             {
                 // A step reached for the first time is followed in turn; one reached again is not, so a loop ends.
-                if (reached.Add(edge.Target))
-                    pending.Enqueue(edge.Target);
+                if (reachedSteps.Add(edge.Target))
+                    pendingSteps.Enqueue(edge.Target);
             }
         }
 
         // The steps reached from the first one are returned for the reachability check of the caller.
-        return reached;
+        return reachedSteps;
     }
 
     /// <summary>
@@ -797,7 +797,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         {
             // The partner named on the attribute is not among the declared partners, which is usually a spelling mismatch between the two names.
             return $"Agent '{agentName}' declares a consultation of {colleague}, which is not declared under Morgana:AgentToAgent:Partners "
-                 + $"(declared: {(partners.Count > 0 ? string.Join(", ", partners.Select(declared => $"'{declared.Name}'")) : "none")}). "
+                 + $"(declared: {(partners.Count > 0 ? string.Join(", ", partners.Select(partner => $"'{partner.Name}'")) : "none")}). "
                  + "The name on the attribute and the Name on the entry must be the same, spelling and spacing included";
         }
 

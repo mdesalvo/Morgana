@@ -396,47 +396,41 @@ public class MorganaAgentAdapter
         // Before anything else: a tool that the workflow hides is not run, whatever the model was shown.
         AgentSession? session = workflows is null || isReply ? null : workflows.SessionAccessor();
         Records.WorkflowPosition? position = session is null ? null : workflows!.ContextProvider.GetWorkflowPosition(session);
-        (Records.WorkflowDefinition Definition, Records.WorkflowStep Step)? running = position?.Resolve(workflows!.Definitions);
-        bool isCurrentStepTool = false;
+        (Records.WorkflowDefinition Definition, Records.WorkflowStep Step)? runningWorkflow = position?.Resolve(workflows!.Definitions);
 
-        // A workflow at a step holds the call to that step's tools.
-        if (running is { } runningWorkflow)
+        // The call of a current-step tool is bound and its result advances the workflow.
+        bool isCurrentStepTool = runningWorkflow?.Step.Tools.Contains(context.Function.Name) == true;
+
+        // The workflows answer, with the rule that shaped the model's tool list, whether this call may run.
+        if (session is not null
+            && !WorkflowEngine.IsOffered(
+                context.Function.Name,
+                context.Function is WorkflowLauncherFunction,
+                workflows!.Tools.TryGetValue(context.Function.Name, out Records.ToolDefinition? declaredTool) && declaredTool.RequiresExecutionApproval,
+                runningWorkflow,
+                workflows.Definitions))
         {
-            // The name of the called tool is what the step's signature and the approval checks below are keyed on.
-            string toolName = context.Function.Name;
-            HashSet<string> signature = runningWorkflow.Definition.ToolSignature();
-            isCurrentStepTool = runningWorkflow.Step.Tools.Contains(toolName);
+            // The refusal names the workflow that stands; with none running the tool was refused as an entry tool, so one workflow has it.
+            string workflowName = runningWorkflow?.Definition.Name
+                ?? workflows.Definitions.First(definition => definition.EntryTools.Contains(context.Function.Name)).Name;
 
-            // A colleague is consulted at any step: it is a private method of the workflow, never part of it.
-            bool isHidden = !toolName.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal)
-                && !isCurrentStepTool
-                && (context.Function is WorkflowLauncherFunction
-                    || signature.Contains(toolName)
-                    || (workflows!.Tools.TryGetValue(toolName, out Records.ToolDefinition? declared) && declared.RequiresExecutionApproval));
+            // A tool that the running workflow does not offer at its step is reported as such.
+            if (runningWorkflow is { } workflowAndStep)
+                logger.LogWarning("Agent called '{Tool}', which workflow '{Workflow}' does not offer at its step '{Step}'", context.Function.Name, workflowName, workflowAndStep.Step.Name);
 
-            // A tool the current step does not offer is refused with a note in place of its result, so the model is told the fact.
-            if (isHidden)
-            {
-                logger.LogWarning("Agent called '{Tool}', which workflow '{Workflow}' does not offer at its step '{Step}'", toolName, runningWorkflow.Definition.Name, runningWorkflow.Step.Name);
-                return await promptComposerService.ComposeToolInjectionAsync(
-                    Constants.ToolInjections.ToolNotAtThisStep,
-                    ToolNotAtThisStepValues(toolName, runningWorkflow.Definition.Name));
-            }
+            // Outside its workflow a first-step tool is not run: the procedure is entered through its launcher alone.
+            else
+                logger.LogWarning("Agent called '{Tool}' outside workflow '{Workflow}', which is entered through its launcher only", context.Function.Name, workflowName);
 
-            // The values that the previous step carried are written into the call, over what the model passed.
-            if (isCurrentStepTool)
-                BindStepArguments(context, position!);
-        }
-        else if (session is not null
-                  && workflows!.Definitions.FirstOrDefault(definition => definition.EntryTools.Contains(context.Function.Name)) is { } enteredWorkflow)
-        {
-            // Outside its workflow a first-step tool is not run, whatever the model was shown: the procedure is
-            // entered through its launcher alone: run otherwise, it would leave the framework out of it.
-            logger.LogWarning("Agent called '{Tool}' outside workflow '{Workflow}', which is entered through its launcher only", context.Function.Name, enteredWorkflow.Name);
+            // The model reads a note in place of the result, so it is told the fact.
             return await promptComposerService.ComposeToolInjectionAsync(
                 Constants.ToolInjections.ToolNotAtThisStep,
-                ToolNotAtThisStepValues(context.Function.Name, enteredWorkflow.Name));
+                ToolNotAtThisStepValues(context.Function.Name, workflowName));
         }
+
+        // The values that the previous step carried are written into the call, over what the model passed.
+        if (isCurrentStepTool)
+            BindStepArguments(context, position!);
 
         // The call runs here, so a failure of Reply can be answered instead of aborting the turn.
         object? result;
@@ -456,7 +450,7 @@ public class MorganaAgentAdapter
         // current-step tool's one under the label of where the workflow stands now.
         if (result is not Records.FrameworkToolResult frameworkToolResult)
             return isCurrentStepTool
-                ? await AdvanceWorkflowAsync(context.Function.Name, workflows!, session!, position!, running!.Value.Definition.Name, result)
+                ? await AdvanceWorkflowAsync(context.Function.Name, workflows!, session!, position!, runningWorkflow!.Value.Definition.Name, result)
                 : result;
 
         // The framework's result is worded in morgana.json under the name it carries.
@@ -525,13 +519,13 @@ public class MorganaAgentAdapter
         };
 
         // Where the failure marker and the fields sit depends on the tool's origin, never on the shape of its result.
-        Records.StepOutcome outcome = WorkflowEngine.ReadOutcome(toolName, resultText, workflows.MCPToolNames.Contains(toolName));
+        Records.StepOutcome stepOutcome = WorkflowEngine.ReadOutcome(toolName, resultText, workflows.MCPToolNames.Contains(toolName));
 
-        Records.WorkflowPosition? next;
+        Records.WorkflowPosition? nextPosition;
         try
         {
             // The engine moves the workflow on from the outcome and the position it reaches is null when the outcome ended it.
-            next = await workflows.Engine.AdvanceAsync(position, outcome);
+            nextPosition = await workflows.Engine.AdvanceAsync(position, stepOutcome);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -543,13 +537,13 @@ public class MorganaAgentAdapter
         }
 
         // No next position means that the outcome ended the workflow, which then leaves the session.
-        if (next is null)
+        if (nextPosition is null)
             workflows.ContextProvider.DropWorkflowPosition(session);
         else
-            workflows.ContextProvider.SetWorkflowPosition(session, next);
+            workflows.ContextProvider.SetWorkflowPosition(session, nextPosition);
 
         // The model reads the result under the label of the step reached or of the end.
-        return await promptComposerService.ComposeWorkflowResultAsync(workflowName, next?.Step, resultText) ?? result;
+        return await promptComposerService.ComposeWorkflowResultAsync(workflowName, nextPosition?.Step, resultText) ?? result;
     }
 
     /// <summary>The values of <see cref="Constants.ToolInjections.ToolNotAtThisStep"/>.</summary>
@@ -573,16 +567,16 @@ public class MorganaAgentAdapter
             ?? throw new InvalidOperationException($"{launcherName} was called with no active session");
 
         // The stored position is read, since a workflow already running decides whether this launch may start.
-        Records.WorkflowPosition? running = workflows.ContextProvider.GetWorkflowPosition(session);
+        Records.WorkflowPosition? storedPosition = workflows.ContextProvider.GetWorkflowPosition(session);
         bool isServingConsultation = workflows.ContextProvider.GetVariable(session, Constants.ContextKeys.ServingConsultation) is not null;
 
         // One workflow at a time and never for a colleague: the call changes nothing and is told so.
         // A stored position that no declaration serves any more does not count as a workflow running.
-        bool isRunning = running?.Resolve(workflows.Definitions) is not null;
+        bool isRunning = storedPosition?.Resolve(workflows.Definitions) is not null;
         if (isRunning || isServingConsultation)
             return new Records.FrameworkToolResult(
                 Constants.ToolInjections.ToolNotAtThisStep,
-                ToolNotAtThisStepValues(launcherName, isRunning ? running!.Workflow : definition.Name));
+                ToolNotAtThisStepValues(launcherName, isRunning ? storedPosition!.Workflow : definition.Name));
 
         // The workflow starts at its first step and the session keeps the position across turns.
         Records.WorkflowPosition position = await workflows.Engine.LaunchAsync(definition.Name);
@@ -1131,21 +1125,21 @@ public class MorganaAgentAdapter
             try
             {
                 // Each tool the server offers is checked for a name that is still free.
-                foreach (AIFunction discovered in await DiscoverMCPToolsFromServerAsync(attribute))
+                foreach (AIFunction discoveredTool in await DiscoverMCPToolsFromServerAsync(attribute))
                 {
                     // The tool loop refuses a tool list that names two tools alike, which would fail every turn of the agent.
-                    if (heldNames.Contains(discovered.Name)
-                        || discovered.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
+                    if (heldNames.Contains(discoveredTool.Name)
+                        || discoveredTool.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
                     {
                         logger.LogError(
                             "Agent {AgentTypeName} drops tool '{McpToolName}' of MCP server '{ServerCommand}': its name is taken by another tool or reserved for colleagues",
-                            agentType.Name, discovered.Name, attribute.Command);
+                            agentType.Name, discoveredTool.Name, attribute.Command);
                         continue;
                     }
 
                     // The name is taken from here on, so a later server cannot repeat it.
-                    heldNames.Add(discovered.Name);
-                    mcpTools.Add(discovered);
+                    heldNames.Add(discoveredTool.Name);
+                    mcpTools.Add(discoveredTool);
                 }
             }
             catch (Exception ex)
@@ -1219,7 +1213,7 @@ public class MorganaAgentAdapter
         IReadOnlyList<Records.ToolDefinition> heldTools)
     {
         // The workflows that still hold against the tools the agent really has are collected here.
-        List<Records.WorkflowDefinition> kept = [];
+        List<Records.WorkflowDefinition> soundWorkflows = [];
 
         foreach (Records.WorkflowDefinition workflow in workflows)
         {
@@ -1228,7 +1222,7 @@ public class MorganaAgentAdapter
             if (errors.Count == 0)
             {
                 // A workflow that holds is kept.
-                kept.Add(workflow);
+                soundWorkflows.Add(workflow);
                 continue;
             }
 
@@ -1239,7 +1233,7 @@ public class MorganaAgentAdapter
         }
 
         // The agent is born with the workflows that held.
-        return kept;
+        return soundWorkflows;
     }
 
     /// <summary>

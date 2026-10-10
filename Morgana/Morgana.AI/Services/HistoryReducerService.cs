@@ -270,7 +270,7 @@ public sealed class MorganaChatReducer : IChatReducer
             // The three parts are filled while the history is walked once, in order.
             string? summary = null;
             ChatMessage? systemMessage = null;
-            List<ChatMessage> unsummarized = [];
+            List<ChatMessage> unsummarizedMessages = [];
 
             // The history is walked once, sorting each message into the system message, the stored summary or the unfolded tail.
             foreach (ChatMessage message in messages)
@@ -292,7 +292,7 @@ public sealed class MorganaChatReducer : IChatReducer
                     // Everything gathered so far is already covered by that summary, so it goes: what
                     // survives a fold is the summary, never the messages behind it. A later marker
                     // overwrites an earlier one, which collapses a chain of reductions to the most recent.
-                    unsummarized.Clear();
+                    unsummarizedMessages.Clear();
                     summary = storedSummary;
                 }
 
@@ -301,12 +301,12 @@ public sealed class MorganaChatReducer : IChatReducer
                 else
                 {
                     // A message that no reduction has folded yet joins the tail that the cut is measured against.
-                    unsummarized.Add(message);
+                    unsummarizedMessages.Add(message);
                 }
             }
 
             // The conversation as the reducer sees it from here on: summary, system message and the unfolded tail.
-            return new SummarizedConversation(summary, systemMessage, unsummarized);
+            return new SummarizedConversation(summary, systemMessage, unsummarizedMessages);
         }
 
         /// <summary>
@@ -435,9 +435,9 @@ public sealed class MorganaChatReducer : IChatReducer
                 // Anything tool-bearing becomes text. Upstream drops these, which is the whole defect;
                 // rendering can still come back empty (a message carrying only content this doesn't know
                 // how to write) and an empty turn is worth nothing to the summarizer.
-                string rendered = RenderToolRelatedMessage(message);
-                if (!string.IsNullOrWhiteSpace(rendered))
-                    yield return new ChatMessage(ChatRole.Assistant, rendered);
+                string renderedText = RenderToolRelatedMessage(message);
+                if (!string.IsNullOrWhiteSpace(renderedText))
+                    yield return new ChatMessage(ChatRole.Assistant, renderedText);
             }
 
             // Last, not first: this is the instruction about the transcript above and it reads as one.

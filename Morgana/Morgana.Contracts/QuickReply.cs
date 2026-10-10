@@ -16,6 +16,7 @@ public record QuickReply(
     [property: JsonPropertyName("value")] string Value,
     [property: JsonPropertyName("termination")] bool? Termination=false)
 {
+    /// <summary>A button counts this many characters beyond its label when a message is measured against a channel's length budget.</summary>
     private const int ButtonPadding = 4;
 
     /// <summary>

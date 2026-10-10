@@ -8,26 +8,18 @@ namespace Morgana.AI.ChatClients;
 /// A <see cref="DelegatingChatClient"/> that meters token consumption ("magic dust") for
 /// every LLM call passing through it and charges the conversation's lifetime budget.
 /// </summary>
-/// <remarks>
-/// <para><strong>Why an instance carries its own llmRole.</strong> There is no singleton dust
-/// wrapper on <see cref="Services.ConfigurationLLMService"/>'s chat client. Instead this client is constructed at
-/// exactly two points, each stamping its own <c>llmRole</c> at construction time — so we never
-/// need a separate llmRole-stamping decorator and the same call is never charged twice:</para>
-/// <list type="bullet">
-///   <item><see cref="Services.ConfigurationLLMService.CompleteWithSystemPromptAsync"/> wraps per call with llmRole
-///   <c>"Morgana"</c> (framework actors: guard, classifier, presenter, channel adapter).</item>
-///   <item><see cref="Adapters.MorganaAgentAdapter"/> wraps per agent with llmRole
-///   <c>"Morgana (Intent)"</c> (domain agents and their history reducer).</item>
-/// </list>
-/// <para>The conversation id is read from <see cref="ChatOptions.ConversationId"/>, which
-/// every caller already sets. Charging is best-effort: <see cref="IDustLimitService"/> itself
-/// fails open and any exception here is swallowed so dust accounting can never break a turn.</para>
-/// </remarks>
 public sealed class DustAccountingChatClient : DelegatingChatClient
 {
+    /// <summary>The ledger every call of this client is charged to.</summary>
     private readonly IDustLimitService dustLimitService;
+
+    /// <summary>The price of the tier this client serves, turning its tokens into dust.</summary>
     private readonly Records.MagicDustPricing dustPricing;
+
+    /// <summary>Who the ledger names as the consumer, such as "Morgana (Billing/Efficiency)" for an agent or "Morgana" for the framework actors.</summary>
     private readonly string llmRole;
+
+    /// <summary>The conversation charged when a call names none of its own; null for the framework actors, whose every call names one.</summary>
     private readonly string? conversationId;
 
     /// <summary>
@@ -75,8 +67,7 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
         UsageDetails? usageDetails = null;
 
         // The stream is read chunk by chunk, so its usage can be captured while every chunk still reaches the user.
-        await foreach (ChatResponseUpdate chatResponseUpdate in
-            base.GetStreamingResponseAsync(chatMessages, chatOptions, cancellationToken))
+        await foreach (ChatResponseUpdate chatResponseUpdate in base.GetStreamingResponseAsync(chatMessages, chatOptions, cancellationToken))
         {
             // Each usage report in a chunk replaces the last, since the provider sends a running total.
             foreach (UsageContent usageContent in chatResponseUpdate.Contents.OfType<UsageContent>())

@@ -60,8 +60,8 @@ public class UsesMCPServerAttribute : Attribute
         if (transport == Records.MCPTransport.Http)
         {
             // The address of an HTTP server is read before the server is accepted, since a malformed one could only fail at the first call.
-            if (!Uri.TryCreate(command, UriKind.Absolute, out Uri? parsed) ||
-                (parsed.Scheme != "https" && parsed.Scheme != "http"))
+            if (!Uri.TryCreate(command, UriKind.Absolute, out Uri? serverAddress) ||
+                (serverAddress.Scheme != "https" && serverAddress.Scheme != "http"))
             {
                 // Startup stops here, since a malformed HTTP address names nothing that a server can be reached at.
                 throw new ArgumentException(

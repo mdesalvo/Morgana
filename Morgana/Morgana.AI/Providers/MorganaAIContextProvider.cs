@@ -154,11 +154,11 @@ public class MorganaAIContextProvider : AIContextProvider
     public Records.WorkflowPosition? GetWorkflowPosition(AgentSession session)
     {
         // No stored position means that no workflow runs for this agent.
-        if (!sessionState.GetOrInitializeState(session).Variables.TryGetValue(Constants.ContextKeys.WorkflowPosition, out object? stored))
+        if (!sessionState.GetOrInitializeState(session).Variables.TryGetValue(Constants.ContextKeys.WorkflowPosition, out object? storedPosition))
             return null;
 
         // Written this process lifetime it is the string stored below; restored from a saved session it is JSON.
-        string? positionJson = stored switch
+        string? positionJson = storedPosition switch
         {
             string text => text,
             JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
@@ -199,9 +199,9 @@ public class MorganaAIContextProvider : AIContextProvider
     /// Read without the per-variable access line: the model-call filter reads it before every call.
     /// </remarks>
     public int GetConsultationRounds(AgentSession session)
-        => sessionState.GetOrInitializeState(session).Variables.TryGetValue(Constants.ContextKeys.ConsultationRounds, out object? stored)
+        => sessionState.GetOrInitializeState(session).Variables.TryGetValue(Constants.ContextKeys.ConsultationRounds, out object? storedRounds)
             // Counted in this process the rounds are a number; restored from a saved session they are JSON.
-            ? stored switch
+            ? storedRounds switch
             {
                 int rounds => rounds,
                 JsonElement { ValueKind: JsonValueKind.Number } element => element.GetInt32(),
@@ -223,7 +223,7 @@ public class MorganaAIContextProvider : AIContextProvider
         foreach (KeyValuePair<string, object> kvp in sharedContext)
         {
             // First write wins: a value this agent already holds is the one the user gave it and is never replaced.
-            if (!contextState.Variables.TryGetValue(kvp.Key, out object? existing))
+            if (!contextState.Variables.TryGetValue(kvp.Key, out object? heldValue))
             {
                 // A value the agent does not hold yet is taken from the registry.
                 contextState.Variables[kvp.Key] = kvp.Value;
@@ -235,7 +235,7 @@ public class MorganaAIContextProvider : AIContextProvider
             else
             {
                 logger.LogInformation(
-                    "{MorganaAiContextProviderName} IGNORED shared context '{KvpKey}' (already set to '{Existing}')", nameof(MorganaAIContextProvider), kvp.Key, existing);
+                    "{MorganaAiContextProviderName} IGNORED shared context '{KvpKey}' (already set to '{Existing}')", nameof(MorganaAIContextProvider), kvp.Key, heldValue);
             }
         }
 

@@ -108,17 +108,16 @@ public class PluginLoaderService
                             .Count(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaAgent)));
 
                         // An assembly with no agent is not a plugin, so it is not counted.
-                        if (detectedAgents > 0)
+                        // A dependency of a plugin sits beside it: it is loaded when needed and is not an agent library.
+                        if (detectedAgents == 0)
                         {
-                            logger.LogInformation("✅ Loaded plugin assembly with {DetectedAgents} Morgana agents: \"{GetFileName}\"", detectedAgents, Path.GetFileName(pluginAssembly));
-                            totalLoaded++;
-                            totalAgents += detectedAgents;
-                        }
-                        else
-                        {
-                            // A dependency of a plugin sits beside it: it is loaded when needed and is not an agent library.
                             logger.LogDebug("⚠️  Skipped assembly {GetFileName}: no MorganaAgent subclasses found", Path.GetFileName(pluginAssembly));
+                            continue;
                         }
+
+                        logger.LogInformation("✅ Loaded plugin assembly with {DetectedAgents} Morgana agents: \"{GetFileName}\"", detectedAgents, Path.GetFileName(pluginAssembly));
+                        totalLoaded++;
+                        totalAgents += detectedAgents;
                     }
                     catch (BadImageFormatException)
                     {

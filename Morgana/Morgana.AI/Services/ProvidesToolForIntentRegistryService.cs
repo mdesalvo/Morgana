@@ -66,7 +66,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         Console.WriteLine("🔍 Scanning assemblies for MorganaWorkflow implementations...");
 
         // Grouped by intent: one agent may be served by several workflow classes.
-        Dictionary<string, List<Records.WorkflowDefinition>> collected = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, List<Records.WorkflowDefinition>> definitionsByIntent = new(StringComparer.OrdinalIgnoreCase);
 
         // A workflow without the attribute belongs to no agent, so nothing could ever launch it.
         IEnumerable<Type> workflowTypes = FindConcreteTypesDeclaring<MorganaWorkflow, ProvidesWorkflowForIntentAttribute>();
@@ -96,19 +96,19 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
             }
 
             // The first workflow of an intent opens its list.
-            if (!collected.TryGetValue(intent, out List<Records.WorkflowDefinition>? definitions))
-                collected[intent] = definitions = [];
+            if (!definitionsByIntent.TryGetValue(intent, out List<Records.WorkflowDefinition>? definitions))
+                definitionsByIntent[intent] = definitions = [];
             definitions.Add(workflow.ToDefinition());
 
             // Lets the operator see at startup which agent each workflow will be launched from.
             Console.WriteLine($"  📦 Registered workflow: {workflowType.Name} for intent '{declaration.Intent}'");
         }
 
-        Console.WriteLine($"✅ Workflow registry initialized with {collected.Values.Sum(definitions => definitions.Count)} workflow(s)");
+        Console.WriteLine($"✅ Workflow registry initialized with {definitionsByIntent.Values.Sum(definitions => definitions.Count)} workflow(s)");
         Console.WriteLine();
 
         // Handed over read-only: the registry never changes after discovery.
-        return collected.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<Records.WorkflowDefinition>)pair.Value, StringComparer.OrdinalIgnoreCase);
+        return definitionsByIntent.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<Records.WorkflowDefinition>)pair.Value, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>

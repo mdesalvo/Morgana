@@ -31,7 +31,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
         : base(innerClient)
     {
         logger = loggerFactory?.CreateLogger<MorganaAnthropicClient>()
-                    ?? NullLogger<MorganaAnthropicClient>.Instance;
+                   ?? NullLogger<MorganaAnthropicClient>.Instance;
     }
 
     /// <inheritdoc />
@@ -41,7 +41,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
         CancellationToken cancellationToken = default)
     {
         // The request must end on a role that Claude accepts. Otherwise the provider refuses the whole call.
-        List<ChatMessage> normalizedChatMessages = NormalizeForAnthropic(chatMessages);
+        List<ChatMessage> normalizedChatMessages = NormalizeMessageForAnthropic(chatMessages);
 
         // The system prefix is stable across calls, so it is marked for the provider's prompt cache.
         (normalizedChatMessages, chatOptions) = MarkLeadingSystemForCache(normalizedChatMessages, chatOptions);
@@ -61,7 +61,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
         CancellationToken cancellationToken = default)
     {
         // The request must end on a role that Claude accepts. Otherwise the provider refuses the whole call.
-        List<ChatMessage> normalizedChatMessages = NormalizeForAnthropic(chatMessages);
+        List<ChatMessage> normalizedChatMessages = NormalizeMessageForAnthropic(chatMessages);
 
         // The system prefix is stable across calls, so it is marked for the provider's prompt cache.
         (normalizedChatMessages, chatOptions) = MarkLeadingSystemForCache(normalizedChatMessages, chatOptions);
@@ -76,7 +76,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
     /// rewrites or strips the trailing chatMessages until it does. Diagnostic logs are always
     /// emitted at <c>Debug</c>; structural fixes are logged at <c>Warning</c>.
     /// </summary>
-    private List<ChatMessage> NormalizeForAnthropic(IEnumerable<ChatMessage> chatMessages)
+    private List<ChatMessage> NormalizeMessageForAnthropic(IEnumerable<ChatMessage> chatMessages)
     {
         // The list is copied so the rewrites below never touch the caller's own.
         List<ChatMessage> chatMessagesList = [.. chatMessages];
@@ -114,8 +114,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
             // Each pass judges the message that currently ends the request.
             ChatMessage trailing = chatMessagesList[^1];
             string textPreview = Truncate(trailing.Text, 120);
-            string contentTypes = string.Join(",",
-                trailing.Contents.Select(c => c.GetType().Name));
+            string contentTypes = string.Join(",", trailing.Contents.Select(c => c.GetType().Name));
             int contentCount = trailing.Contents.Count;
 
             // A trailing system message carries an instruction that must still reach the model, so it is
@@ -123,7 +122,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
             if (trailing.Role == ChatRole.System)
             {
                 // The trailing system message is replaced by a user message with the same content, so its instruction still reaches the model.
-                chatMessagesList[^1] = CloneAsUser(trailing, trailing.Contents);
+                chatMessagesList[^1] = CloneWithUserRole(trailing, trailing.Contents);
                 logger.LogWarning(
                     "Anthropic.MorganaAnthropicClient: rewrote trailing system message to user " +
                     "[content-types=[{ContentTypes}], text-preview=\"{TextPreview}\"] — " +
@@ -155,7 +154,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
                 }
 
                 // The text of the trailing assistant message stays and becomes a user message.
-                chatMessagesList[^1] = CloneAsUser(trailing, textContents);
+                chatMessagesList[^1] = CloneWithUserRole(trailing, textContents);
                 logger.LogWarning(
                     "Anthropic.MorganaAnthropicClient: rewrote trailing assistant to user " +
                     "(kept {KeptCount}/{OriginalCount} content blocks: TextContent only) " +
@@ -265,7 +264,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
     /// additional properties). The supplied <paramref name="contents"/> are copied into a
     /// fresh list so the returned message does not share state with the chatMessage.
     /// </summary>
-    private static ChatMessage CloneAsUser(ChatMessage chatMessage, IEnumerable<AIContent> contents) =>
+    private static ChatMessage CloneWithUserRole(ChatMessage chatMessage, IEnumerable<AIContent> contents) =>
         new ChatMessage(ChatRole.User, [.. contents])
         {
             AuthorName = chatMessage.AuthorName,

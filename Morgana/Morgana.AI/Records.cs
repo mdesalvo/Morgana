@@ -1401,11 +1401,11 @@ public static class Records
         public static FrameworkReplies From(IEnumerable<FrameworkReplySet> sets)
         {
             // The array is walked once per set name, so it is materialized first.
-            List<FrameworkReplySet> declared = [.. sets];
+            List<FrameworkReplySet> declaredSets = [.. sets];
 
             // Looks up the replies of one named set and yields null when the prompt does not declare it.
             List<QuickReply>? Find(string name)
-                => declared.FirstOrDefault(set => string.Equals(set.Name, name, StringComparison.OrdinalIgnoreCase))?.Replies;
+                => declaredSets.FirstOrDefault(set => string.Equals(set.Name, name, StringComparison.OrdinalIgnoreCase))?.Replies;
 
             // Closure and escape default to empty so that a delivery never meets a null; the approval pair stays null, which means that no approval is offered.
             return new FrameworkReplies(

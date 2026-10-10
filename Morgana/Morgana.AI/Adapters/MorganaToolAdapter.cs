@@ -157,7 +157,7 @@ public class MorganaToolAdapter
                     // A call that returned nothing reaches the model as null.
                     null => null,
                     // A framework tool's named result goes through as itself, for the tool loop to word.
-                    Records.FrameworkToolResult named => named,
+                    Records.FrameworkToolResult frameworkToolResult => frameworkToolResult,
                     // A string result reaches the model as the text itself.
                     string text => text,
                     // Any other domain result is serialized to compact JSON text.

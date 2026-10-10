@@ -70,10 +70,10 @@ public abstract class MorganaWorkflow
             .Select(property => property.Name)];
 
         // Distinct by instance: two steps sharing a name stay two, so validation can refuse the clash.
-        List<Records.WorkflowStep> ordered = [start, .. steps.Where(step => !ReferenceEquals(step, start))];
+        List<Records.WorkflowStep> orderedSteps = [start, .. steps.Where(step => !ReferenceEquals(step, start))];
 
         // The definition is a snapshot: startup validation and the engine read it and never the class again.
-        return new Records.WorkflowDefinition(name, description, ordered, [.. edges], parameters);
+        return new Records.WorkflowDefinition(name, description, orderedSteps, [.. edges], parameters);
     }
 
     /// <summary>Records one edge and the steps it names.</summary>

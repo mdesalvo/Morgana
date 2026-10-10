@@ -198,7 +198,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         int currentTurnStart = view.FindLastIndex(message => message.Role == ChatRole.User);
 
         // The view is rebuilt message by message so that the stored instances are never altered.
-        List<ChatMessage> marked = [];
+        List<ChatMessage> markedMessages = [];
         for (int index = 0; index < view.Count; index++)
         {
             // A message of the current turn or one that carries no tool result needs no marker and is handed over as it is.
@@ -206,7 +206,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
             if (index >= currentTurnStart || !message.Contents.OfType<FunctionResultContent>().Any())
             {
                 // A message that needs no marker is kept exactly as it is.
-                marked.Add(message);
+                markedMessages.Add(message);
                 continue;
             }
 
@@ -224,7 +224,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
             }
 
             // The copy keeps author, date, id and properties of the stored message: only its results differ.
-            marked.Add(new ChatMessage(message.Role, contents)
+            markedMessages.Add(new ChatMessage(message.Role, contents)
             {
                 AuthorName = message.AuthorName,
                 CreatedAt = message.CreatedAt,
@@ -234,7 +234,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         }
 
         // The marked copies replace the stored messages in what the model reads.
-        return marked;
+        return markedMessages;
     }
 
     /// <summary>

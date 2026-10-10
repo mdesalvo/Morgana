@@ -27,7 +27,10 @@ public record RichCard(
     [property: JsonPropertyName("components")] List<CardComponent> Components
 )
 {
+    /// <summary>The title counts this many characters beyond its text when the card is measured against a channel's length budget.</summary>
     private const int TitleOverhead = 4;
+
+    /// <summary>The subtitle counts this many characters beyond its text when the card is measured against a channel's length budget.</summary>
     private const int SubtitleOverhead = 2;
 
     /// <summary>
@@ -94,6 +97,7 @@ public record TextBlockComponent(
     [property: JsonPropertyName("content")] string Content,
     [property: JsonPropertyName("style")] TextStyle Style = TextStyle.Normal) : CardComponent
 {
+    /// <summary>A text block counts this many characters beyond its text when the card is measured against a channel's length budget.</summary>
     private const int Overhead = 2;
 
     /// <inheritdoc />
@@ -111,6 +115,7 @@ public record KeyValueComponent(
     [property: JsonPropertyName("value")] string Value,
     [property: JsonPropertyName("emphasize")] bool Emphasize = false) : CardComponent
 {
+    /// <summary>A key-value pair counts this many characters beyond its key and value when the card is measured against a channel's length budget.</summary>
     private const int Overhead = 4;
 
     /// <inheritdoc />
@@ -123,6 +128,7 @@ public record KeyValueComponent(
 /// </summary>
 public record DividerComponent : CardComponent
 {
+    /// <summary>A divider counts this many characters when the card is measured against a channel's length budget.</summary>
     private const int Overhead = 4;
 
     /// <inheritdoc />
@@ -138,6 +144,7 @@ public record ListComponent(
     [property: JsonPropertyName("items")] List<string> Items,
     [property: JsonPropertyName("style")] ListStyle Style = ListStyle.Bullet) : CardComponent
 {
+    /// <summary>Each list item counts this many characters beyond its text when the card is measured against a channel's length budget.</summary>
     private const int ItemOverhead = 3;
 
     /// <inheritdoc />
@@ -156,7 +163,10 @@ public record SectionComponent(
     [property: JsonPropertyName("subtitle")] string? Subtitle,
     [property: JsonPropertyName("components")] List<CardComponent> Components) : CardComponent
 {
+    /// <summary>The section title counts this many characters beyond its text when the card is measured against a channel's length budget.</summary>
     private const int TitleOverhead = 4;
+
+    /// <summary>The section subtitle counts this many characters beyond its text when the card is measured against a channel's length budget.</summary>
     private const int SubtitleOverhead = 2;
 
     /// <inheritdoc />
@@ -175,6 +185,7 @@ public record GridComponent(
     [property: JsonPropertyName("columns")] int Columns,
     [property: JsonPropertyName("items")] List<GridItem> Items) : CardComponent
 {
+    /// <summary>Each grid pair counts this many characters beyond its key and value when the card is measured against a channel's length budget.</summary>
     private const int ItemOverhead = 4;
 
     /// <inheritdoc />
@@ -200,6 +211,7 @@ public record BadgeComponent(
     [property: JsonPropertyName("text")] string Text,
     [property: JsonPropertyName("variant")] BadgeVariant Variant = BadgeVariant.Neutral) : CardComponent
 {
+    /// <summary>A badge counts this many characters beyond its text when the card is measured against a channel's length budget.</summary>
     private const int Overhead = 2;
 
     /// <inheritdoc />
@@ -220,7 +232,10 @@ public record ImageComponent(
     [property: JsonPropertyName("caption")] string? Caption = null,
     [property: JsonPropertyName("size")] ImageSize Size = ImageSize.Medium) : CardComponent
 {
+    /// <summary>An image counts this many characters for the placeholder that stands for it when the card is measured against a channel's length budget.</summary>
     private const int PlaceholderOverhead = 10;
+
+    /// <summary>The caption counts this many characters beyond its text when the card is measured against a channel's length budget.</summary>
     private const int CaptionOverhead = 2;
 
     /// <inheritdoc />

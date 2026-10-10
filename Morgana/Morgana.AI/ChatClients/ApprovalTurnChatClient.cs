@@ -98,8 +98,8 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
                 {
                     // The first word is recorded, so every later update reaches the user as it comes.
                     textStarted = true;
-                    foreach (ChatResponseUpdate held in heldUpdates)
-                        yield return held;
+                    foreach (ChatResponseUpdate heldUpdate in heldUpdates)
+                        yield return heldUpdate;
                     heldUpdates.Clear();
                 }
 
@@ -117,17 +117,17 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
 
             // Same rule as the non-streaming path: an approval request is let through only once the turn has text.
             // The refusal is appended so the next attempt sees why its calls were turned down.
-            List<ChatMessage> written = [.. heldUpdates.Concat(callUpdates).ToChatResponse().Messages];
-            if (textStarted || refusals >= MaxTextlessRefusals || !IsTextlessApprovalRequest(messages, written, options))
+            List<ChatMessage> attemptMessages = [.. heldUpdates.Concat(callUpdates).ToChatResponse().Messages];
+            if (textStarted || refusals >= MaxTextlessRefusals || !IsTextlessApprovalRequest(messages, attemptMessages, options))
                 break;
 
             // The refused attempt joins the conversation with its refusal, so the next attempt sees why it was turned down.
-            messages = [.. messages, .. written, RefusalOf(written)];
+            messages = [.. messages, .. attemptMessages, RefusalOf(attemptMessages)];
         }
 
         // Whatever was still held belongs to the response that goes through, so it reaches the user now.
-        foreach (ChatResponseUpdate held in heldUpdates)
-            yield return held;
+        foreach (ChatResponseUpdate heldUpdate in heldUpdates)
+            yield return heldUpdate;
 
         // The calls are released with the Reply dropped when the response asks for approval, as in the non-streaming path.
         bool asksForApproval = AsksForApproval(callUpdates.SelectMany(update => update.Contents), options);

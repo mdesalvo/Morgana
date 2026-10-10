@@ -30,6 +30,41 @@ public sealed class WorkflowEngine
     public WorkflowEngine(IEnumerable<Records.WorkflowDefinition> definitions)
         => this.definitions = definitions.ToDictionary(definition => definition.Name, StringComparer.Ordinal);
 
+    /// <summary>Whether the workflows of an agent let the model use a tool now: the one rule behind what the model is shown and what it may run.</summary>
+    /// <param name="toolName">The tool asked about.</param>
+    /// <param name="isLauncher">Whether the tool starts a workflow.</param>
+    /// <param name="requiresApproval">Whether the tool declares an execution approval.</param>
+    /// <param name="runningWorkflow">The workflow that stands and its current step; <c>null</c> when none runs.</param>
+    /// <param name="workflows">The workflows that the agent declares.</param>
+    public static bool IsOffered(
+        string toolName,
+        bool isLauncher,
+        bool requiresApproval,
+        (Records.WorkflowDefinition Definition, Records.WorkflowStep Step)? runningWorkflow,
+        IReadOnlyList<Records.WorkflowDefinition> workflows)
+    {
+        // Closing the turn and consulting a colleague belong to no step: they are offered at every one.
+        if (string.Equals(toolName, Constants.Tools.Reply, StringComparison.Ordinal)
+            || toolName.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
+            return true;
+
+        // A procedure is entered through its launcher alone: outside it, the tools of its first step are not offered or run.
+        if (runningWorkflow is not { } workflowAndStep)
+            return !workflows.Any(workflow => workflow.EntryTools.Contains(toolName));
+
+        // One workflow runs at a time, so no launcher is offered while this one stands.
+        if (isLauncher)
+            return false;
+
+        // The workflow's own tools are governed by the step it stands at: only the current step's are offered.
+        if (workflowAndStep.Definition.ToolSignature().Contains(toolName))
+            return workflowAndStep.Step.Tools.Contains(toolName);
+
+        // Outside the signature a tool is a private method of the workflow: offered for answers on the side,
+        // except where it needs approval, since a binding act there would be a second workflow.
+        return !requiresApproval;
+    }
+
     /// <summary>
     /// Starts a workflow and stops it at its first step, waiting for the agent's outcome.
     /// </summary>
@@ -57,9 +92,9 @@ public sealed class WorkflowEngine
     /// Hands the engine the outcome of the call made at the current step and moves the workflow on.
     /// </summary>
     /// <param name="position">Where the workflow stands; its checkpoint is where the engine resumes from.</param>
-    /// <param name="outcome">The tool that was called and how its call ended.</param>
+    /// <param name="stepOutcome">The tool that was called and how its call ended.</param>
     /// <returns>Where the workflow stands now; <c>null</c> when the outcome ended it.</returns>
-    public async Task<Records.WorkflowPosition?> AdvanceAsync(Records.WorkflowPosition position, Records.StepOutcome outcome)
+    public async Task<Records.WorkflowPosition?> AdvanceAsync(Records.WorkflowPosition position, Records.StepOutcome stepOutcome)
     {
         // A position is written only by this engine for one of its workflows, so its name always finds the definition.
         Records.WorkflowDefinition definition = definitions[position.Workflow];
@@ -76,11 +111,11 @@ public sealed class WorkflowEngine
             throw new InvalidOperationException($"Workflow '{position.Workflow}' waits at '{StepOf(waiting)}' while its position says '{position.Step}'");
 
         // The outcome is the answer to the waiting step: its router picks the edge and the run moves to the next port.
-        await run.ResumeAsync([waiting.CreateResponse(outcome)]);
+        await run.ResumeAsync([waiting.CreateResponse(stepOutcome)]);
 
         // No pending request after the outcome means the router sent nothing on: the workflow ended.
-        (ExternalRequest? Pending, CheckpointInfo? Checkpoint) next = Observe(run);
-        return next.Pending is null ? null : ToPosition(position.Workflow, next.Pending, store.Export(next.Checkpoint!));
+        (ExternalRequest? Pending, CheckpointInfo? Checkpoint) observation = Observe(run);
+        return observation.Pending is null ? null : ToPosition(position.Workflow, observation.Pending, store.Export(observation.Checkpoint!));
     }
 
     /// <summary>
@@ -186,8 +221,8 @@ public sealed class WorkflowEngine
         foreach (Records.WorkflowStep step in definition.Steps)
         {
             // Behind every port sits a router that turns the outcome into the prompt of the next step or into nothing.
-            ExecutorBinding router = ((Func<Records.StepOutcome, IWorkflowContext, ValueTask<Records.StepPrompt?>>)((outcome, _) =>
-                new ValueTask<Records.StepPrompt?>(Route(definition, step, outcome)))).BindAsExecutor(RouterPrefix + step.Name);
+            ExecutorBinding router = ((Func<Records.StepOutcome, IWorkflowContext, ValueTask<Records.StepPrompt?>>)((stepOutcome, _) =>
+                new ValueTask<Records.StepPrompt?>(Route(definition, step, stepOutcome)))).BindAsExecutor(RouterPrefix + step.Name);
 
             // The outcome that the agent hands to a port always reaches that step's own router.
             builder.AddEdge(ports[step.Name], router);
@@ -209,13 +244,13 @@ public sealed class WorkflowEngine
     private static Records.StepPrompt? Route(
         Records.WorkflowDefinition definition,
         Records.WorkflowStep step,
-        Records.StepOutcome outcome)
+        Records.StepOutcome stepOutcome)
     {
         // Startup refuses a transition declared twice, so the first match is the only one.
         Records.WorkflowEdge? edge = definition.Edges.FirstOrDefault(candidate =>
             string.Equals(candidate.Source, step.Name, StringComparison.Ordinal)
-            && string.Equals(candidate.Tool, outcome.Tool, StringComparison.Ordinal)
-            && candidate.OnFailure == outcome.Failed);
+            && string.Equals(candidate.Tool, stepOutcome.Tool, StringComparison.Ordinal)
+            && candidate.OnFailure == stepOutcome.Failed);
 
         // A call with no edge for its outcome ends the workflow: that is how a workflow declares its exits.
         if (edge is null)
@@ -226,7 +261,7 @@ public sealed class WorkflowEngine
         foreach (string name in edge.Carrying)
         {
             // A result that lacks the field leaves the parameter unbound: the model supplies it.
-            if (outcome.FieldsJson is not null && ReadField(outcome.FieldsJson, name) is { } value)
+            if (stepOutcome.FieldsJson is not null && ReadField(stepOutcome.FieldsJson, name) is { } value)
                 arguments[name] = value;
         }
 
