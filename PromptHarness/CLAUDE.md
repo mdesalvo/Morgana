@@ -68,7 +68,7 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ServedConsultation
 # boot-flagged — one knob each, never together
 Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
 Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~SummarizationTests"
-Harness__DustBudgetPerConversation=15 dotnet test … --filter "FullyQualifiedName~DustTests"
+Harness__DustBudgetPerConversation=1.5 dotnet test … --filter "FullyQualifiedName~DustTests"
 Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateLimitTests"    # deterministic, skipped without the knob
 Harness__FederatedPeer=true dotnet test … --filter "FullyQualifiedName~FederationTests"
 Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~ConversationPersistenceTests"

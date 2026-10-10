@@ -194,8 +194,8 @@ public static class Records
     /// <summary>
     /// Per-tier pricing: tokens-per-dust and cache cost-weights for accurate token-budget tracking.
     /// Live cost = (InputTokens × CachedInputWeight) + (CacheWriteTokens × CacheCreationWeight).
-    /// Zero on either axis means that direction is free. Defaults calibrated for Haiku 4.5/Sonnet 5
-    /// or gpt-4o-mini/gpt-4o; recalibrate when pointing a tier at a different model.
+    /// Zero on either axis means that direction is free. One dust unit is worth $0.015, so a tier's
+    /// tokens per unit are 0.015 divided by the model's price per token: recalibrate when a tier changes model.
     /// Sanity-check BudgetPerConversation against your heaviest agent's actual calls-per-turn
     /// by inspecting dust_usage_log, not against nominal turn counts.
     /// </summary>
@@ -209,7 +209,7 @@ public static class Records
 
         /// <summary>
         /// Cost weight applied to cache-read input tokens (<c>CachedInputTokenCount</c>)
-        /// relative to a fresh input token. Anthropic cache-read ≈ 0.10; OpenAI ≈ 0.50.
+        /// relative to a fresh input token: about 0.10 on most current models, 0.05 on some (Claude Opus 5.5, GPT-6.1 Sol).
         /// </summary>
         public double CachedInputWeight { get; set; }
 
@@ -318,14 +318,12 @@ public static class Records
     /// <summary>
     /// Deliberately minimal JSON-bindable DTO of tier-configurable ChatOptions subset.
     /// Excludes sampling knobs, Reasoning, StopSequences and per-call parameters.
-    /// Contains only ModelId (provider-specific identifier, e.g. "claude-haiku-4-5") and
-    /// MaxOutputTokens (per-tier ceiling). Left null, MaxOutputTokens defers to provider SDK
-    /// defaults, which are NOT uniform: Anthropic caps at 1024, while OpenAI/AzureOpenAI/Ollama
-    /// leave uncapped up to the model's context window.
+    /// Contains only ModelId (provider-specific identifier) and MaxOutputTokens, mandatory on every tier:
+    /// the Anthropic adapter falls back to 1024 when none is given and reasoning tokens count against the ceiling.
     /// </summary>
     public record TierConfiguration(
         string ModelId,
-        int? MaxOutputTokens = null)
+        int MaxOutputTokens)
     {
         /// <summary>
         /// Materializes this census into a real <see cref="ChatOptions"/>, ready to be merged

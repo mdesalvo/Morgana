@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -80,7 +81,8 @@ public class ConfigurationLLMService : ILLMService
     /// decorator. Pass <c>null</c> to skip the decorator (test paths, unit tests).
     /// </param>
     /// <exception cref="InvalidOperationException">
-    /// A tier is missing or carries a placeholder in a field that its provider uses, or the framework tier names no tier.
+    /// A tier is missing, carries a placeholder in a field that its provider uses or declares no positive <c>MaxOutputTokens</c>.
+    /// Thrown as well when the framework tier names no tier.
     /// </exception>
     public ConfigurationLLMService(
         IConfiguration configuration,
@@ -110,6 +112,19 @@ public class ConfigurationLLMService : ILLMService
                 throw new InvalidOperationException(
                     $"Morgana:LLM:Tiers:{tier}:Provider is still the placeholder '{tierSection["Provider"]}'. " +
                     $"Override it via User Secrets or environment variables before starting.");
+
+            // Checked here because a placeholder in an int field would otherwise fail inside the binder with a message that names no key.
+            string? maxOutputTokens = tierSection["Options:MaxOutputTokens"];
+            if (string.IsNullOrWhiteSpace(maxOutputTokens))
+                throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier}:Options:MaxOutputTokens is missing.");
+
+            if (Constants.SecretOverrides.All.Contains(maxOutputTokens))
+                throw new InvalidOperationException(
+                    $"Morgana:LLM:Tiers:{tier}:Options:MaxOutputTokens is still the placeholder '{maxOutputTokens}'. " +
+                    $"Override it via User Secrets or environment variables before starting.");
+
+            if (!int.TryParse(maxOutputTokens, NumberStyles.None, CultureInfo.InvariantCulture, out int ceiling) || ceiling <= 0)
+                throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier}:Options:MaxOutputTokens must be a positive integer but is '{maxOutputTokens}'.");
         }
 
         Records.LLMTiers tiers = configuration.GetSection("Morgana:LLM").Get<Records.LLMConfiguration>()!.Tiers;

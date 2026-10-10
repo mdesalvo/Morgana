@@ -1266,6 +1266,7 @@ public class InterviewService : IInterviewService
             Name = "Alembic",
             ChatOptions = new ChatOptions
             {
+                MaxOutputTokens = CodeEmitService.OutputCeiling,
                 Instructions = await alembicPromptService.ComposeAsync(interviewerId, correcting),
 
                 // Each one wrapped so the call and the sentence it is answered with are written

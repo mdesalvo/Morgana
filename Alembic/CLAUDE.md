@@ -138,8 +138,8 @@ bytes. The mocks are the one artifact a template writes badly and they are **moc
 because of the turnkey promise: the client must be able to *talk to their agent on the first run*, the
 only way to hear whether the prose is right. A `NotImplementedException` makes it unreviewable.
 
-No output ceiling is declared in code — a source file's length is a property of the toolkit — so the
-ceiling lives generously in `appsettings.json` and an empty answer throws rather than writing an empty
+Alembic sets its own output ceiling on every call (`CodeEmitService.OutputCeiling`) rather than taking the
+tier's, since a source file's length is a property of the toolkit. An empty answer throws rather than writing an empty
 file that looks like success.
 
 ### The migration report

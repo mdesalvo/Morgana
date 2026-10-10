@@ -88,6 +88,8 @@ public class CoherenceApplyService : ICoherenceApplyService
             Name = "Alembic",
             ChatOptions = new ChatOptions
             {
+                MaxOutputTokens = CodeEmitService.OutputCeiling,
+
                 // The framework first, this pass's own prose under it: what it rewrites is an
                 // agent's own prose and the commonest repair — striking a sentence that restates a
                 // rule binding above the agent — cannot be told from mutilation without knowing

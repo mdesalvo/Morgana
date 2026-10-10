@@ -88,7 +88,7 @@ public static class StreamedCompletion
                 try
                 {
                     await foreach (ChatResponseUpdate update in chatClient.GetStreamingResponseAsync(
-                                       conversation, cancellationToken: stall.Token))
+                                       conversation, new ChatOptions { MaxOutputTokens = CodeEmitService.OutputCeiling }, stall.Token))
                     {
                         stall.CancelAfter(StallTimeout);
 

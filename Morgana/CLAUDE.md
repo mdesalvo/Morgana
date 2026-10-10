@@ -255,7 +255,7 @@ uses them. **There is no cross-tier fallback**. Validation never asks which agen
 
 `Morgana:LLM:Tiers` is a JSON **object keyed by tier name**, so env-var overrides merge per tier. Each
 entry carries `Provider`, `Connection` (each provider reads only the fields it uses), `Options` — a
-deliberately narrow mirror of `ChatOptions`, see `Records.TierConfiguration` — plus its own `MagicDust`.
+deliberately narrow mirror of `ChatOptions` (`MaxOutputTokens` mandatory), see `Records.TierConfiguration` — plus its own `MagicDust`.
 
 Two consumption modes: `CompleteWithSystemPromptAsync` (stateless, on `Morgana:ActorSystem:Tier`) and
 `GetChatClient(tier)` / `GetPricing(tier)` (an agent's own `[RequiresLLMTier]`).

@@ -5,7 +5,7 @@ namespace Morgana.AI.ChatClients;
 /// <summary>
 /// DelegatingChatClient filling tier-level ChatOptions defaults (TierConfiguration) on every call,
 /// fill-if-absent per field (never overwrite). Mirrors Microsoft.Agents.AI pattern one layer down at tier client.
-/// Reason: provider SDKs disagree on null field handling (e.g. Anthropic silently caps MaxOutputTokens at 1024).
+/// Reason: provider SDKs disagree on null field handling (the Anthropic adapter falls back to a 1024-token ceiling when none is given, hence MaxOutputTokens is mandatory per tier).
 /// </summary>
 public sealed class TierDefaultsChatClient : DelegatingChatClient
 {

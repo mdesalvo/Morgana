@@ -136,7 +136,7 @@ public class ToolMockService : IToolMockService
             throw new InvalidOperationException(
                 $"The model returned no source for {className}: the whole response was "
                 + "reasoning and no text. That is what a MaxOutputTokens too small for a source file produces — Alembic's "
-                + "own tier declares a generous one for exactly this reason, so check what the deployment configures.");
+                + "own ceiling is generous for exactly this reason, so check what the model can emit.");
 
         // One retry covers every problem the first answer has, so a file wrong twice over costs one
         // more completion and not two. The constructor belongs to the generated half, which is where

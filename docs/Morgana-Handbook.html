@@ -618,7 +618,7 @@
         <thead><tr><th>Setting</th><th>Description</th></tr></thead>
         <tbody>
           <tr><td>Morgana:LLM:Tiers:{Tier}:*</td><td>Three tiers, <code>Economy</code>, <code>Efficiency</code> and <code>Performance</code>, from the cheapest model to the most capable. Each declares its own <code>Provider</code> (<code>Anthropic</code>, <code>AzureOpenAI</code>, <code>OpenAI</code> or <code>Ollama</code>) and <code>Connection</code> (ApiKey, Endpoint, MaxRetries, TimeoutSeconds). All three are mandatory: there is no cross-tier fallback</td></tr>
-          <tr><td>Morgana:LLM:Tiers:{Tier}:Options:*</td><td>Narrow, JSON-bindable mirror of <code>ChatOptions</code> for this tier: <code>ModelId</code> (required), optional <code>MaxOutputTokens</code></td></tr>
+          <tr><td>Morgana:LLM:Tiers:{Tier}:Options:*</td><td>Narrow, JSON-bindable mirror of <code>ChatOptions</code> for this tier: <code>ModelId</code> and <code>MaxOutputTokens</code> (both required: the ceiling of a single model call, generous since reasoning counts against it)</td></tr>
           <tr><td>Morgana:LLM:Tiers:{Tier}:MagicDust:*</td><td>Per-tier token pricing: <code>InputTokensPerDustUnit</code>, <code>OutputTokensPerDustUnit</code>, <code>CachedInputWeight</code>, <code>CacheCreationWeight</code></td></tr>
           <tr><td>Morgana:Authentication:Audience</td><td>Expected JWT audience (default: <code>morgana.ai</code>)</td></tr>
           <tr><td>Morgana:Authentication:Issuers[]</td><td><strong>Channels only</strong>: array of <code>{ Name, SymmetricKey }</code> entries, one per channel (e.g. <code>cauldron</code>, <code>grimoire</code>, <code>rune</code>, <code>harness</code>). Partners live in <code>Morgana:AgentToAgent:Partners[]</code> and a name declared in both lists is startup-fatal. Nothing is authored for <code>morgana</code>, the reserved name this installation's own agents consult each other under: that key is coined at every start</td></tr>
@@ -800,6 +800,7 @@
           <tr><td>LLM_{TIER}_APIKEY</td><td>LLM provider API key of a tier</td><td>From your provider dashboard (if cloud-based)</td></tr>
           <tr><td>LLM_{TIER}_ENDPOINT</td><td>Endpoint of a tier, where its provider uses one</td><td>From your provider dashboard (if cloud-based)</td></tr>
           <tr><td>LLM_{TIER}_MODEL</td><td>Model ID of a tier</td><td>From your provider's model list</td></tr>
+          <tr><td>LLM_{TIER}_MAXOUTPUTTOKENS</td><td>Output ceiling of a single model call on a tier</td><td>A positive integer such as 8192</td></tr>
           <tr><td>ACTORSYSTEM_TIER</td><td>Tier of the framework actors</td><td>One of: Economy, Efficiency, Performance</td></tr>
         </tbody>
       </table>

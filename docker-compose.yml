@@ -69,14 +69,17 @@ services:
       - Morgana__LLM__Tiers__Economy__Connection__ApiKey=${LLM_ECONOMY_APIKEY:-_SECURE_OVERRIDE_}
       - Morgana__LLM__Tiers__Economy__Connection__Endpoint=${LLM_ECONOMY_ENDPOINT:-_SECURE_OVERRIDE_}
       - Morgana__LLM__Tiers__Economy__Options__ModelId=${LLM_ECONOMY_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Economy__Options__MaxOutputTokens=${LLM_ECONOMY_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
       - Morgana__LLM__Tiers__Efficiency__Provider=${LLM_EFFICIENCY_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
       - Morgana__LLM__Tiers__Efficiency__Connection__ApiKey=${LLM_EFFICIENCY_APIKEY:-_SECURE_OVERRIDE_}
       - Morgana__LLM__Tiers__Efficiency__Connection__Endpoint=${LLM_EFFICIENCY_ENDPOINT:-_SECURE_OVERRIDE_}
       - Morgana__LLM__Tiers__Efficiency__Options__ModelId=${LLM_EFFICIENCY_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Efficiency__Options__MaxOutputTokens=${LLM_EFFICIENCY_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
       - Morgana__LLM__Tiers__Performance__Provider=${LLM_PERFORMANCE_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
       - Morgana__LLM__Tiers__Performance__Connection__ApiKey=${LLM_PERFORMANCE_APIKEY:-_SECURE_OVERRIDE_}
       - Morgana__LLM__Tiers__Performance__Connection__Endpoint=${LLM_PERFORMANCE_ENDPOINT:-_SECURE_OVERRIDE_}
       - Morgana__LLM__Tiers__Performance__Options__ModelId=${LLM_PERFORMANCE_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Performance__Options__MaxOutputTokens=${LLM_PERFORMANCE_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
       - Morgana__ActorSystem__Tier=${ACTORSYSTEM_TIER:-Economy}
     volumes:
       # Persistent volume for SQLite databases
@@ -248,14 +251,17 @@ services:
       - Morgana__LLM__Tiers__Economy__Connection__ApiKey=${LLM_ECONOMY_APIKEY:-_SECURE_OVERRIDE_}
       - Morgana__LLM__Tiers__Economy__Connection__Endpoint=${LLM_ECONOMY_ENDPOINT:-_SECURE_OVERRIDE_}
       - Morgana__LLM__Tiers__Economy__Options__ModelId=${LLM_ECONOMY_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Economy__Options__MaxOutputTokens=${LLM_ECONOMY_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
       - Morgana__LLM__Tiers__Efficiency__Provider=${LLM_EFFICIENCY_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
       - Morgana__LLM__Tiers__Efficiency__Connection__ApiKey=${LLM_EFFICIENCY_APIKEY:-_SECURE_OVERRIDE_}
       - Morgana__LLM__Tiers__Efficiency__Connection__Endpoint=${LLM_EFFICIENCY_ENDPOINT:-_SECURE_OVERRIDE_}
       - Morgana__LLM__Tiers__Efficiency__Options__ModelId=${LLM_EFFICIENCY_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Efficiency__Options__MaxOutputTokens=${LLM_EFFICIENCY_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
       - Morgana__LLM__Tiers__Performance__Provider=${LLM_PERFORMANCE_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
       - Morgana__LLM__Tiers__Performance__Connection__ApiKey=${LLM_PERFORMANCE_APIKEY:-_SECURE_OVERRIDE_}
       - Morgana__LLM__Tiers__Performance__Connection__Endpoint=${LLM_PERFORMANCE_ENDPOINT:-_SECURE_OVERRIDE_}
       - Morgana__LLM__Tiers__Performance__Options__ModelId=${LLM_PERFORMANCE_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LLM__Tiers__Performance__Options__MaxOutputTokens=${LLM_PERFORMANCE_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
 
 # ==============================================================================
 # VOLUMES

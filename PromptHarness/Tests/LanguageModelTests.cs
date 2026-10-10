@@ -91,6 +91,27 @@ public sealed class LanguageModelTests
     }
 
     [Fact]
+    public void LanguageModel_Construction_is_refused_when_the_output_ceiling_is_missing()
+    {
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
+            () => Build(Configuration(), without: "Morgana:LLM:Tiers:Efficiency:Options:MaxOutputTokens"));
+
+        Assert.Contains("Morgana:LLM:Tiers:Efficiency:Options:MaxOutputTokens", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(FunctionalPlaceholder)]
+    [InlineData("0")]
+    [InlineData("lots")]
+    public void LanguageModel_Construction_is_refused_when_the_output_ceiling_is_not_a_positive_integer(string configured)
+    {
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
+            () => Build(Configuration(("Morgana:LLM:Tiers:Performance:Options:MaxOutputTokens", configured))));
+
+        Assert.Contains("Morgana:LLM:Tiers:Performance:Options:MaxOutputTokens", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void LanguageModel_A_field_the_provider_does_not_use_may_stay_empty()
     {
         // Ollama reaches a local server: it has an endpoint and no key, so the key left on its
@@ -164,6 +185,7 @@ public sealed class LanguageModelTests
             values[$"Morgana:LLM:Tiers:{tier}:Provider"] = "Anthropic";
             values[$"Morgana:LLM:Tiers:{tier}:Connection:ApiKey"] = "test-key";
             values[$"Morgana:LLM:Tiers:{tier}:Options:ModelId"] = $"{tier.ToLowerInvariant()}-model";
+            values[$"Morgana:LLM:Tiers:{tier}:Options:MaxOutputTokens"] = "8192";
             values[$"Morgana:LLM:Tiers:{tier}:MagicDust:InputTokensPerDustUnit"] = "1000";
             values[$"Morgana:LLM:Tiers:{tier}:MagicDust:OutputTokensPerDustUnit"] = "200";
         }

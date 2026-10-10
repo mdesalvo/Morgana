@@ -25,6 +25,11 @@ public class CodeEmitService : ICodeEmitService
     public const string DefaultNamespace = "Domain";
 
     /// <summary>
+    /// The output ceiling of every Alembic model call: it generates whole source files, so it does not take the tier's ceiling.
+    /// </summary>
+    public const int OutputCeiling = 16384;
+
+    /// <summary>
     /// The tier assumed when the Draft carries none.
     /// </summary>
     /// <remarks>
