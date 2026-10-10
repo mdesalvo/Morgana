@@ -242,16 +242,13 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
         if (current is null)
             return;
 
-        // The key that names cache creation differs across SDK versions, so any key naming both words
-        // matches. No match tags nothing: the cache reads remain the primary signal.
-        KeyValuePair<string, long> cacheCreation = usageDetails.AdditionalCounts.FirstOrDefault(count =>
-            count.Key.Contains("cache", StringComparison.OrdinalIgnoreCase)
-            && count.Key.Contains("creation", StringComparison.OrdinalIgnoreCase));
-        if (cacheCreation.Key is null)
+        // The same count that the dust ledger prices, so a span and a charge never disagree on the cache writes.
+        // A call that wrote nothing to the cache reports no count and tags nothing.
+        if (!usageDetails.AdditionalCounts.TryGetValue(Constants.UsageCounts.CacheCreationInputTokens, out long cacheCreationTokens))
             return;
 
         // OpenTelemetry standardises only the read side, so the write tag is named after the read one.
-        current.SetTag("gen_ai.usage.cache_write.input_tokens", cacheCreation.Value);
+        current.SetTag("gen_ai.usage.cache_write.input_tokens", cacheCreationTokens);
     }
 
     /// <summary>

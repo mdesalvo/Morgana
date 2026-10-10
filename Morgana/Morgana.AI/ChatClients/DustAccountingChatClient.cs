@@ -104,7 +104,7 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
     /// The Anthropic MEAI adapter reports <see cref="UsageDetails.InputTokenCount"/> as the
     /// total prompt (fresh + cache-read + cache-write), with cache-read in
     /// <see cref="UsageDetails.CachedInputTokenCount"/> and cache-write in
-    /// <c>AdditionalCounts["CacheCreationInputTokens"]</c>. We decompose it and apply the
+    /// <c>AdditionalCounts[Constants.UsageCounts.CacheCreationInputTokens]</c>. We decompose it and apply the
     /// per-provider cache weights so the charge tracks real cache economics rather than
     /// over-counting cheap cache reads at full price.
     /// </remarks>
@@ -120,9 +120,8 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
 
         // Only providers that bill cache writes report them: the others charge none.
         long cacheWrite = 0;
-        if (usageDetails.AdditionalCounts is not null &&
-            usageDetails.AdditionalCounts.TryGetValue("CacheCreationInputTokens", out long w))
-            cacheWrite = w;
+        if (usageDetails.AdditionalCounts is not null && usageDetails.AdditionalCounts.TryGetValue(Constants.UsageCounts.CacheCreationInputTokens, out long cacheCreationTokens))
+            cacheWrite = cacheCreationTokens;
 
         // Fresh = total minus the two cache components. Clamp at 0: defends against any
         // adapter that might report the components non-disjointly.

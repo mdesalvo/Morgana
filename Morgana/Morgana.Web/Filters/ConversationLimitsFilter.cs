@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Options;
@@ -32,7 +31,7 @@ public sealed class ConversationLimitsFilter(
 
             // The user hears why over the channel; the 429 below is for the client, which does not show it
             string rateLimitViolation = GetRateLimitErrorMessage(rateLimitResult);
-            await channelService.SendMessageAsync(RefusalOf(context, conversationId, rateLimitViolation, Constants.MessageTypes.SystemWarning, Constants.ErrorReasons.RateLimitExceeded));
+            await channelService.SendMessageAsync(RefusalOf(context, conversationId, rateLimitViolation, ChannelMessageTypes.SystemWarning, ChannelErrorReasons.RateLimitExceeded));
 
             // A window that reports no wait still gets a minute, so a client never retries in a tight loop
             context.HttpContext.Response.Headers.Append("Retry-After", rateLimitResult.RetryAfterSeconds?.ToString(CultureInfo.InvariantCulture) ?? "60");
@@ -52,7 +51,7 @@ public sealed class ConversationLimitsFilter(
         {
             logger.LogWarning("Dust budget exhausted for conversation {ConversationId}", conversationId);
 
-            await channelService.SendMessageAsync(RefusalOf(context, conversationId, dustLimitingOptions.Value.ErrorMessage, Constants.MessageTypes.Error, Constants.ErrorReasons.DustBudgetExhausted));
+            await channelService.SendMessageAsync(RefusalOf(context, conversationId, dustLimitingOptions.Value.ErrorMessage, ChannelMessageTypes.Error, ChannelErrorReasons.DustBudgetExhausted));
 
             context.Result = new ObjectResult(new
             {
@@ -83,7 +82,7 @@ public sealed class ConversationLimitsFilter(
         {
             ConversationId = conversationId,
             Text = text,
-            MessageType = outcomeFrame is null ? messageType : Constants.MessageTypes.System,
+            MessageType = outcomeFrame is null ? messageType : ChannelMessageTypes.System,
 
             // Kept on a command's outcome too: a spent budget ends the conversation whatever asked for more of it
             ErrorReason = errorReason,
@@ -96,24 +95,20 @@ public sealed class ConversationLimitsFilter(
     /// <summary>The text authored under Morgana:RateLimiting for the violated window, {limit} filled in.</summary>
     private string GetRateLimitErrorMessage(Records.RateLimitResult result)
     {
-        // The violated window arrives named with its limit, such as PerMinute(10): the name picks the authored text.
-        string message = result.ViolatedLimit switch
+        // The violated window picks the authored text; a denial that names none reads the default one.
+        string message = result.ViolatedWindow switch
         {
-            { } s when s.Contains("PerMinute") => rateLimitOptions.Value.ErrorMessagePerMinute,
-            { } s when s.Contains("PerHour")   => rateLimitOptions.Value.ErrorMessagePerHour,
-            { } s when s.Contains("PerDay")    => rateLimitOptions.Value.ErrorMessagePerDay,
+            Records.RateLimitWindow.PerMinute => rateLimitOptions.Value.ErrorMessagePerMinute,
+            Records.RateLimitWindow.PerHour   => rateLimitOptions.Value.ErrorMessagePerHour,
+            Records.RateLimitWindow.PerDay    => rateLimitOptions.Value.ErrorMessagePerDay,
             _ => rateLimitOptions.Value.ErrorMessageDefault
         };
 
-        // The authored text may promise the number: it is read back from the parenthesised limit in the window's name.
-        if (message.Contains("{limit}") && result.ViolatedLimit != null)
-        {
-            Match match = Regex.Match(result.ViolatedLimit, @"\((\d+)\)");
-            if (match.Success)
-                message = message.Replace("{limit}", match.Groups[1].Value);
-        }
+        // The authored text may promise the number: it is the cap of the violated window.
+        if (result.ViolatedCap is { } violatedCap)
+            message = message.Replace("{limit}", violatedCap.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
-        // A text with no placeholder, or a window that names no limit, goes out as authored.
+        // A text with no placeholder goes out as authored.
         return message;
     }
 }

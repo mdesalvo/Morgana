@@ -130,16 +130,16 @@ public sealed class DustTests
         // channel ends the conversation on
         Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendCommandAsync(conversationId, """{"name":"compact"}""", TestContext.Current.CancellationToken)).StatusCode);
         ChannelMessage commandRefusal = await fixture.Channel.ReceiveAsync(conversationId, TimeSpan.FromSeconds(15));
-        Assert.Equal("dust_budget_exhausted", commandRefusal.ErrorReason);
-        Assert.Equal("system", commandRefusal.MessageType);
+        Assert.Equal(ChannelErrorReasons.DustBudgetExhausted, commandRefusal.ErrorReason);
+        Assert.Equal(ChannelMessageTypes.System, commandRefusal.MessageType);
         Assert.True(commandRefusal.Progress is { Command: "compact", Finished: true }, "The refusal of a command was not told as that command's outcome.");
 
         // A message is refused as a notice in the conversation, with no frame belonging to it
         Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendAsync(
             "POST", "/api/morgana/conversation/{id}/message", conversationId, api.HarnessToken())).StatusCode);
         ChannelMessage messageRefusal = await fixture.Channel.ReceiveAsync(conversationId, TimeSpan.FromSeconds(15));
-        Assert.Equal("dust_budget_exhausted", messageRefusal.ErrorReason);
-        Assert.Equal("error", messageRefusal.MessageType);
+        Assert.Equal(ChannelErrorReasons.DustBudgetExhausted, messageRefusal.ErrorReason);
+        Assert.Equal(ChannelMessageTypes.Error, messageRefusal.MessageType);
         Assert.Null(messageRefusal.Progress);
 
         // A channel coming back to the conversation learns at once that it is over, gauge at zero

@@ -38,6 +38,23 @@ public static class ActorSystemExtensions
         }
 
         /// <summary>
+        /// Returns the conversation's live actor at /user/{actorSuffix}-{conversationId}; null when none is running.
+        /// </summary>
+        public async Task<IActorRef?> FindActorAsync(string actorSuffix, string conversationId)
+        {
+            try
+            {
+                // Only a running actor answers: a conversation whose actors have stopped has none, as does one never started in this process.
+                return await actorSystem.ActorSelection($"/user/{actorSuffix}-{conversationId}")
+                    .ResolveOne(TimeSpan.FromMilliseconds(500));
+            }
+            catch (ActorNotFoundException)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Returns the conversation's agent of a type known only at runtime at /user/{actorSuffix}-{conversationId}, creating it when absent.
         /// </summary>
         public async Task<IActorRef> GetOrCreateAgentAsync(Type agentType, string actorSuffix, string conversationId)

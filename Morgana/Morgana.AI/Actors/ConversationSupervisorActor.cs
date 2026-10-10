@@ -7,7 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Telemetry;
+using Morgana.AI;
 using Morgana.Contracts;
 using Status = Akka.Actor.Status;
 
@@ -47,6 +47,9 @@ public class ConversationSupervisorActor : MorganaActor
 
     /// <summary>Reaches the agent of an intent and carries its answer back.</summary>
     private readonly IActorRef router;
+
+    /// <summary>Morgana's own prompt, whose messages are what she says in her own voice: farewells, apologies.</summary>
+    private readonly Records.Prompt morganaPrompt;
 
     /// <summary>
     /// Reference to the currently active agent (for multi-turn conversations).
@@ -114,6 +117,9 @@ public class ConversationSupervisorActor : MorganaActor
         guard = Context.System.GetOrCreateActorAsync<GuardActor>(Constants.Actors.Guard, conversationId).GetAwaiter().GetResult();
         classifier = Context.System.GetOrCreateActorAsync<ClassifierActor>(Constants.Actors.Classifier, conversationId).GetAwaiter().GetResult();
         router = Context.System.GetOrCreateActorAsync<RouterActor>(Constants.Actors.Router, conversationId).GetAwaiter().GetResult();
+
+        // Morgana's lines are read from her prompt at every turn that needs one, so it is resolved here once.
+        morganaPrompt = promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
 
         // A supervisor born for a conversation waits for its first message or presentation request.
         Idle();
@@ -186,10 +192,10 @@ public class ConversationSupervisorActor : MorganaActor
         // actor keeps processing after the HTTP response has already returned to the client, so a
         // parent/child pair (which a trace UI expects to close together) would be the wrong shape.
         ActivityLink[] links = msg.TurnContext != default ? [new ActivityLink(msg.TurnContext)] : [];
-        turnSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.TurnActivity, ActivityKind.Internal, parentContext: default, links: links);
+        turnSpan = Telemetry.Source.StartActivity(Telemetry.TurnActivity, ActivityKind.Internal, parentContext: default, links: links);
         // A trace is found by conversation and shows the first 200 characters of what the user said.
-        turnSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
-        turnSpan?.SetTag(MorganaTelemetry.TurnUserMessage, msg.Text.Length > 200 ? msg.Text[..200] : msg.Text);
+        turnSpan?.SetTag(Telemetry.ConversationId, conversationId);
+        turnSpan?.SetTag(Telemetry.TurnUserMessage, msg.Text.Length > 200 ? msg.Text[..200] : msg.Text);
 
         // Every later stage parents its span on this one.
         ActivityContext turnContext = turnSpan?.Context ?? default;
@@ -200,8 +206,8 @@ public class ConversationSupervisorActor : MorganaActor
         // rather than when its response arrives in AwaitingGuardCheck, so the recorded duration
         // covers the full round-trip — mailbox/dispatch latency included, not just GuardActor's
         // own processing time once it picks the message up.
-        guardSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.GuardActivity, ActivityKind.Internal, turnContext);
-        guardSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+        guardSpan = Telemetry.Source.StartActivity(Telemetry.GuardActivity, ActivityKind.Internal, turnContext);
+        guardSpan?.SetTag(Telemetry.ConversationId, conversationId);
 
         // The turn's context travels through the states, each of which adds what it learned.
         Records.ProcessingContext ctx = new Records.ProcessingContext(
@@ -273,7 +279,7 @@ public class ConversationSupervisorActor : MorganaActor
             {
                 ConversationId = conversationId,
                 Text = ctx.Message,
-                MessageType = Constants.MessageTypes.Presentation,
+                MessageType = ChannelMessageTypes.Presentation,
                 QuickReplies = quickReplies,
                 AgentName = Constants.Morgana,
                 AgentCompleted = false,
@@ -309,11 +315,11 @@ public class ConversationSupervisorActor : MorganaActor
             Context.SetReceiveTimeout(null);
 
             // The span records the verdict and the latency of the guard round-trip.
-            guardSpan?.SetTag(MorganaTelemetry.GuardCompliant, response.Compliant);
+            guardSpan?.SetTag(Telemetry.GuardCompliant, response.Compliant);
             if (!response.Compliant && response.Violation != null)
-                guardSpan?.SetTag(MorganaTelemetry.GuardViolation, response.Violation);
+                guardSpan?.SetTag(Telemetry.GuardViolation, response.Violation);
             if (guardSpan is not null)
-                MorganaTelemetry.GuardDuration.Record((DateTime.UtcNow - guardSpan.StartTimeUtc).TotalMilliseconds);
+                Telemetry.GuardDuration.Record((DateTime.UtcNow - guardSpan.StartTimeUtc).TotalMilliseconds);
             guardSpan?.Dispose();
             guardSpan = null;
 
@@ -344,7 +350,7 @@ public class ConversationSupervisorActor : MorganaActor
                     null));
 
                 // Rejections are counted apart from the per-turn counter that closing the turn feeds.
-                MorganaTelemetry.GuardRejectionCounter.Add(1);
+                Telemetry.GuardRejectionCounter.Add(1);
 
                 CloseTurnSpan(intent: ctx.Classification?.Intent, completed: false);
                 Become(Idle);
@@ -416,8 +422,8 @@ public class ConversationSupervisorActor : MorganaActor
 
         // Opened before the Tell, like the guard span, so that its duration covers the whole
         // round-trip and not only the classifier's own processing.
-        classifierSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.ClassifierActivity, ActivityKind.Internal, ctx.TurnContext);
-        classifierSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+        classifierSpan = Telemetry.Source.StartActivity(Telemetry.ClassifierActivity, ActivityKind.Internal, ctx.TurnContext);
+        classifierSpan?.SetTag(Telemetry.ConversationId, conversationId);
 
         Become(() => AwaitingClassification(ctx));
         classifier.Tell(ctx.OriginalMessage);
@@ -443,12 +449,12 @@ public class ConversationSupervisorActor : MorganaActor
             actorLogger.Info($"Classification result: {classification.Intent}");
 
             // The span records the top intent with its confidence and the full ranking plus the latency of the round-trip.
-            classifierSpan?.SetTag(MorganaTelemetry.ClassificationIntent, classification.Intent);
-            classifierSpan?.SetTag(MorganaTelemetry.ClassificationMetadata, classification.Metadata);
+            classifierSpan?.SetTag(Telemetry.ClassificationIntent, classification.Intent);
+            classifierSpan?.SetTag(Telemetry.ClassificationMetadata, classification.Metadata);
             if (classification.Metadata.TryGetValue("confidence", out string? confidence))
-                classifierSpan?.SetTag(MorganaTelemetry.ClassificationConfidence, confidence);
+                classifierSpan?.SetTag(Telemetry.ClassificationConfidence, confidence);
             if (classifierSpan is not null)
-                MorganaTelemetry.ClassifierDuration.Record((DateTime.UtcNow - classifierSpan.StartTimeUtc).TotalMilliseconds);
+                Telemetry.ClassifierDuration.Record((DateTime.UtcNow - classifierSpan.StartTimeUtc).TotalMilliseconds);
             classifierSpan?.Dispose();
             classifierSpan = null;
 
@@ -517,11 +523,11 @@ public class ConversationSupervisorActor : MorganaActor
 
         // Opened before the Tell, like the guard and classifier spans, so that its duration covers
         // the whole round-trip. It is scoped to this call because nothing else needs to close it.
-        using Activity? routerSpan = MorganaTelemetry.Source.StartActivity(
-            MorganaTelemetry.RouterActivity,
+        using Activity? routerSpan = Telemetry.Source.StartActivity(
+            Telemetry.RouterActivity,
             ActivityKind.Internal,
             ctx.TurnContext);
-        routerSpan?.SetTag(MorganaTelemetry.RouterIntent, classification.Intent);
+        routerSpan?.SetTag(Telemetry.RouterIntent, classification.Intent);
 
         Become(() => AwaitingAgentResponse(updatedCtx));
 
@@ -558,7 +564,7 @@ public class ConversationSupervisorActor : MorganaActor
             // No agent was confirmed for this turn yet, so there is no active agent to drop:
             // the timeout in AwaitingFollowUpResponse clears one because it was already set.
             ctx.OriginalSender.Tell(new Records.ConversationResponse(
-                "I apologize, time ran out before the cauldron could brew your answer. Cast it again.",
+                MorganaMessage(Constants.Messages.Timeout),
                 ctx.Classification?.Intent,
                 ctx.Classification?.Metadata,
                 GetAgentDisplayName(ctx.Classification?.Intent),
@@ -647,7 +653,7 @@ public class ConversationSupervisorActor : MorganaActor
 
                 // The user is apologised to in place of the answer that was lost.
                 ctx.OriginalSender.Tell(new Records.ConversationResponse(
-                    "I apologize, the potion bubbled over in error. Repeat your incantation.",
+                    MorganaMessage(Constants.Messages.GenericError),
                     ctx.Classification?.Intent,
                     ctx.Classification?.Metadata,
                     GetAgentDisplayName(ctx.Classification?.Intent),
@@ -692,7 +698,7 @@ public class ConversationSupervisorActor : MorganaActor
 
                 // The user is apologised to in place of the fallback text that was lost.
                 ctx.OriginalSender.Tell(new Records.ConversationResponse(
-                    "I apologize, the grimoire slammed shut. Utter the words once more.",
+                    MorganaMessage(Constants.Messages.GenericError),
                     ctx.Classification?.Intent,
                     ctx.Classification?.Metadata,
                     Constants.Morgana,
@@ -740,7 +746,7 @@ public class ConversationSupervisorActor : MorganaActor
 
             // This state carries no classification, so the apology has no intent or metadata to attach.
             originalSender.Tell(new Records.ConversationResponse(
-                "I apologize, the sands of time drained from the cauldron. Re-weave your spell.",
+                MorganaMessage(Constants.Messages.Timeout),
                 null,
                 null,
                 Constants.Morgana,
@@ -814,7 +820,7 @@ public class ConversationSupervisorActor : MorganaActor
 
                 // The user is apologised to in place of the answer that was lost.
                 originalSender.Tell(new Records.ConversationResponse(
-                    "I apologize, the runes are misaligned. Cast your intent once more.",
+                    MorganaMessage(Constants.Messages.GenericError),
                     null,
                     null,
                     Constants.Morgana,
@@ -866,8 +872,8 @@ public class ConversationSupervisorActor : MorganaActor
                 : (DateTime.UtcNow - turnSpan.StartTimeUtc).TotalMilliseconds;
 
             // Volume and latency are broken down by intent and completion on a dashboard.
-            MorganaTelemetry.TurnDuration.Record(durationMs);
-            MorganaTelemetry.TurnCounter.Add(1,
+            Telemetry.TurnDuration.Record(durationMs);
+            Telemetry.TurnCounter.Add(1,
                 new KeyValuePair<string, object?>("intent", intent ?? "unknown"),
                 new KeyValuePair<string, object?>("completed", completed ?? false));
 
@@ -900,14 +906,8 @@ public class ConversationSupervisorActor : MorganaActor
         [
             .. intentNames
                 .Where(intentsByName.ContainsKey)
-                .Select(name =>
-                {
-                    Records.IntentDefinition intent = intentsByName[name];
-                    return new QuickReply(
-                        intent.Name,
-                        intent.Label ?? intent.Name,
-                        intent.DefaultValue ?? $"Help me with {intent.Name}");
-                })
+                .Select(name => intentsByName[name])
+                .Select(intent => new QuickReply(intent.Name, intent.Label, intent.DefaultValue))
         ];
 
         // The question that accompanies the buttons is worded in the classifier's messages.
@@ -953,13 +953,19 @@ public class ConversationSupervisorActor : MorganaActor
             null));
 
         // A content-policy block counts as a guard rejection either way.
-        MorganaTelemetry.GuardRejectionCounter.Add(1);
+        Telemetry.GuardRejectionCounter.Add(1);
 
         CloseTurnSpan(intent: activeAgentIntent, completed: false);
         Become(Idle);
 
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// What Morgana says in her own voice under <paramref name="messageName"/>, as morgana.json words it.
+    /// </summary>
+    private string MorganaMessage(string messageName)
+        => morganaPrompt.GetMessage(messageName);
 
     /// <summary>
     /// Says the line that closes an agent's engagement and brings the conversation back to Morgana,
@@ -975,10 +981,7 @@ public class ConversationSupervisorActor : MorganaActor
         if (string.Equals(departingAgentName, Constants.Morgana, StringComparison.OrdinalIgnoreCase))
             return;
 
-        // The farewell is worded in morgana.json; the wait is synchronous because the handlers that call this are not async.
-        string farewellTemplate = promptResolverService
-            .ResolveAsync(Constants.Morgana).GetAwaiter().GetResult()
-            .GetMessage(Constants.Messages.AgentExit);
+        string farewellTemplate = MorganaMessage(Constants.Messages.AgentExit);
 
         // A deployment that words no farewell says none.
         if (string.IsNullOrWhiteSpace(farewellTemplate))

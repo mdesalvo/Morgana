@@ -45,8 +45,8 @@ public record MorganaChatMessage
     public required string AgentName { get; init; }
 
     /// <summary>
-    /// Indicates whether the agent has completed its task.
-    /// Mapped from SQLite is_active column: true when is_active = 0, false when is_active = 1.
+    /// Whether the agent that wrote this message no longer holds the conversation when the history is read:
+    /// false only on the messages of the agent that later user messages still go to.
     /// </summary>
     public required bool AgentCompleted { get; init; }
 

@@ -192,7 +192,7 @@ public sealed class ConsoleUiService : ITerminalUi
 
     /// <summary>
     /// Latched true when Morgana delivers the terminal dust-exhaustion notice
-    /// (<c>ErrorReason == "dust_budget_exhausted"</c>). The conversation is spent: only a command line
+    /// (<c>ErrorReason == ChannelErrorReasons.DustBudgetExhausted</c>). The conversation is spent: only a command line
     /// allowed on a spent conversation can be typed and the prompt names the two ways out, <c>/new</c>
     /// and Esc. Cleared only when another conversation replaces this one. Mutated only under
     /// <see cref="renderLock"/>; volatile so <see cref="ReadKeysLoop"/> sees it
@@ -510,7 +510,7 @@ public sealed class ConsoleUiService : ITerminalUi
 
                     // A command's outcome always travels on its finished frame: a command line naming no command
                     // belongs to nothing on screen and has no place in the transcript either
-                    case MessageEvent { Message.MessageType: "system" }:
+                    case MessageEvent { Message.MessageType: ChannelMessageTypes.System }:
                         break;
                     case MessageEvent { Message: var message }:
                         if (HandleInboundMessage(ctx, message))
@@ -608,7 +608,7 @@ public sealed class ConsoleUiService : ITerminalUi
                 invocationOwingOutcome = null;
 
                 // A budget found spent ends the conversation whatever asked for more of it, a command included
-                if (string.Equals(message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal))
+                if (string.Equals(message.ErrorReason, ChannelErrorReasons.DustBudgetExhausted, StringComparison.Ordinal))
                     MarkConversationSpent();
             }
 
@@ -760,7 +760,7 @@ public sealed class ConsoleUiService : ITerminalUi
         // it BEFORE wasting a keystroke. The red banner line above stays as
         // Morgana's canonical word and BuildInputRows replaces the prompt with
         // the way to act on it here: /new for a fresh conversation or Esc to leave.
-        if (string.Equals(message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal))
+        if (string.Equals(message.ErrorReason, ChannelErrorReasons.DustBudgetExhausted, StringComparison.Ordinal))
             MarkConversationSpent();
 
         // Quick replies turn the bottom line INTO the prompt for this turn: instead of
@@ -1100,7 +1100,7 @@ public sealed class ConsoleUiService : ITerminalUi
             // user can act again (the quick replies are gone, but free text is available).
             lock (renderLock)
             {
-                history.Add(new DisplayedMessage(channelSpeaker, $"send failed: {ex.Message}", "red", "error"));
+                history.Add(new DisplayedMessage(channelSpeaker, $"send failed: {ex.Message}", "red", ChannelMessageTypes.Error));
                 ReleaseTurn();
                 ctx.UpdateTarget(BuildLayout());
                 ctx.Refresh();
@@ -1476,7 +1476,7 @@ public sealed class ConsoleUiService : ITerminalUi
             if (exitRequested)
                 return;
 
-            history.Add(new DisplayedMessage(channelSpeaker, text, color, "system_warning"));
+            history.Add(new DisplayedMessage(channelSpeaker, text, color, ChannelMessageTypes.SystemWarning));
 
             // A notice scrolled out of sight would leave the user wondering why nothing happened
             scrollOffset = 0;
@@ -1530,8 +1530,8 @@ public sealed class ConsoleUiService : ITerminalUi
     /// </summary>
     private static string OutcomeColor(ChannelMessage message) => message.ErrorReason switch
     {
-        "rate_limit_exceeded" => WarningColor,
-        "dust_budget_exhausted" => ErrorColor,
+        ChannelErrorReasons.RateLimitExceeded => WarningColor,
+        ChannelErrorReasons.DustBudgetExhausted => ErrorColor,
         _ => CommandReportColor
     };
 
@@ -1609,7 +1609,7 @@ public sealed class ConsoleUiService : ITerminalUi
             {
                 if (exitRequested)
                     return;
-                history.Add(new DisplayedMessage(channelSpeaker, $"send failed: {ex.Message}", ErrorColor, "error"));
+                history.Add(new DisplayedMessage(channelSpeaker, $"send failed: {ex.Message}", ErrorColor, ChannelMessageTypes.Error));
                 ReleaseTurn();
                 ctx.UpdateTarget(BuildLayout());
                 ctx.Refresh();
@@ -1768,7 +1768,7 @@ public sealed class ConsoleUiService : ITerminalUi
                 if (streamingDisplayed.Length > 0)
                 {
                     // What the user already read of an abandoned reply stays as the agent's message it was
-                    history.Add(new DisplayedMessage(currentSpeaker, streamingDisplayed, SpeakerColor(currentSpeaker), "assistant"));
+                    history.Add(new DisplayedMessage(currentSpeaker, streamingDisplayed, SpeakerColor(currentSpeaker), ChannelMessageTypes.Assistant));
                     streamingDisplayed = string.Empty;
                 }
                 streamingComplete = false;
@@ -1779,7 +1779,7 @@ public sealed class ConsoleUiService : ITerminalUi
                     channelSpeaker,
                     $"no answer from Morgana after {replyTimeout.TotalSeconds:0}s — the turn may be lost, ask again or press Esc to quit",
                     ErrorColor,
-                    "error"));
+                    ChannelMessageTypes.Error));
                 ReleaseTurn();
                 ctx.UpdateTarget(BuildLayout());
                 ctx.Refresh();
@@ -2267,9 +2267,9 @@ public sealed class ConsoleUiService : ITerminalUi
     /// </summary>
     private static string RowColor(ChannelMessage message, string speaker)
     {
-        if (string.Equals(message.MessageType, "error", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(message.MessageType, ChannelMessageTypes.Error, StringComparison.OrdinalIgnoreCase))
             return ErrorColor;
-        if (string.Equals(message.MessageType, "system_warning", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(message.MessageType, ChannelMessageTypes.SystemWarning, StringComparison.OrdinalIgnoreCase))
             return WarningColor;
         return SpeakerColor(speaker);
     }
@@ -2296,7 +2296,7 @@ public sealed class ConsoleUiService : ITerminalUi
         public string MessageType { get; } = messageType;
 
         /// <summary>Tells a message of the conversation from a notice, which is what <c>/status</c> counts.</summary>
-        public bool IsConversationMessage => MessageType is "assistant" or "presentation" or "user";
+        public bool IsConversationMessage => MessageType is ChannelMessageTypes.Assistant or ChannelMessageTypes.Presentation or "user";
 
         /// <summary>Optional rich card delivered with the message, Spectrized beneath the prose. Null for user echoes, system notices and agent-completion courtesy lines.</summary>
         public RichCard? Card { get; } = card;

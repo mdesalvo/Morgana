@@ -24,8 +24,8 @@ public static class DraftProjection
     public static Records.IntentDefinition ToIntentDefinition(IntentDraft intent) =>
         new(intent.Name ?? string.Empty,
             intent.Description ?? string.Empty,
-            intent.Label,
-            intent.DefaultValue);
+            intent.Label ?? string.Empty,
+            intent.DefaultValue ?? string.Empty);
 
     /// <summary>
     /// Rebuilds an agent prompt from its Draft element, carrying the unmodelled

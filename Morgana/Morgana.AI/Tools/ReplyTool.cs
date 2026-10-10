@@ -119,8 +119,8 @@ public class ReplyTool : MorganaTool
                 });
 
             // Recorded in the order the step declares, whatever order the model wrote them in.
-            List<Records.ReplyAction> replyActions = offeredActions;
-            offeredActions = [.. choice.Tools.Select(tool => replyActions.First(action => string.Equals(action.Tool, tool, StringComparison.Ordinal)))];
+            List<Records.ReplyAction> actionsInModelOrder = offeredActions;
+            offeredActions = [.. choice.Tools.Select(tool => actionsInModelOrder.First(action => string.Equals(action.Tool, tool, StringComparison.Ordinal)))];
             awaits = Records.AwaitedFromUser.ActionChoice;
         }
 

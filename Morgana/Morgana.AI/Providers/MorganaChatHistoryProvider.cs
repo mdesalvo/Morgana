@@ -259,28 +259,27 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         MorganaHistoryState historyState = sessionState.GetOrInitializeState(context.Session);
 
         // The base class filters context.RequestMessages to exclude messages already in chat history,
-        // so only the new user/tool messages for this turn arrive here.
-        List<ChatMessage> newMessages = [.. context.RequestMessages, .. context.ResponseMessages ?? []];
+        // so only the new user/tool messages for this turn arrive here. A failed invocation has no response.
+        List<ChatMessage> requestMessages = [.. context.RequestMessages];
+        List<ChatMessage> responseMessages = [.. context.ResponseMessages ?? []];
 
         // Every response message carries Morgana's own clock, whatever the provider stamped or left
         // unstamped: the history orders turns by it and a client catching up after a disconnection
         // compares it with the timestamps of the replies it was delivered.
-        int requestCount = context.RequestMessages?.Count() ?? 0;
-        int responseStartIndex = requestCount;
-        for (int i = responseStartIndex; i < newMessages.Count; i++)
-            newMessages[i].CreatedAt = DateTimeOffset.UtcNow;
+        foreach (ChatMessage responseMessage in responseMessages)
+            responseMessage.CreatedAt = DateTimeOffset.UtcNow;
 
         // Request and response are stored in the order they happened, which is the order the model replays them in.
-        historyState.Messages.AddRange(newMessages);
+        historyState.Messages.AddRange(requestMessages);
+        historyState.Messages.AddRange(responseMessages);
         sessionState.SaveState(context.Session, historyState);
 
         // The counts tell the log reader how much of the turn was stored and from which session.
         string sessionId = context.Session?.ToString() ?? "?";
-        int responseCount = context.ResponseMessages?.Count() ?? 0;
 
         logger.LogInformation(
-            $"{nameof(MorganaChatHistoryProvider)} STORED {newMessages.Count} messages " +
-            $"(request: {requestCount}, response: {responseCount}) — total history: {historyState.Messages.Count} " +
+            $"{nameof(MorganaChatHistoryProvider)} STORED {requestMessages.Count + responseMessages.Count} messages " +
+            $"(request: {requestMessages.Count}, response: {responseMessages.Count}) — total history: {historyState.Messages.Count} " +
             $"for agent '{agentIntent}' session '{sessionId}'");
 
         // Storage is synchronous: nothing is left to await.

@@ -170,15 +170,37 @@ public static class Records
     }
 
     /// <summary>
+    /// The time windows a conversation's requests are counted over, each with its own cap and its own authored refusal.
+    /// </summary>
+    public enum RateLimitWindow
+    {
+        /// <summary>The last minute, capped by <c>MaxMessagesPerMinute</c>.</summary>
+        PerMinute,
+
+        /// <summary>The last hour, capped by <c>MaxMessagesPerHour</c>.</summary>
+        PerHour,
+
+        /// <summary>The last day, capped by <c>MaxMessagesPerDay</c>.</summary>
+        PerDay
+    }
+
+    /// <summary>
     /// Result of a rate limit check operation.
     /// </summary>
     /// <param name="IsAllowed">Whether the request is allowed to proceed</param>
-    /// <param name="ViolatedLimit">Description of which limit was exceeded (null if allowed)</param>
+    /// <param name="ViolatedWindow">The window whose cap was reached (null if allowed): it picks the refusal the user reads.</param>
+    /// <param name="ViolatedCap">The cap of that window (null if allowed), which the refusal may quote.</param>
     /// <param name="RetryAfterSeconds">Suggested wait time in seconds before retrying (null if allowed)</param>
     public record RateLimitResult(
         bool IsAllowed,
-        string? ViolatedLimit = null,
-        int? RetryAfterSeconds = null);
+        RateLimitWindow? ViolatedWindow = null,
+        int? ViolatedCap = null,
+        int? RetryAfterSeconds = null)
+    {
+        /// <summary>The violated limit as the log and the client read it, named after its setting, such as <c>MaxMessagesPerMinute (10)</c>.</summary>
+        public string? ViolatedLimit
+            => ViolatedWindow is { } window ? $"MaxMessages{window} ({ViolatedCap})" : null;
+    }
 
     // ==========================================================================
     // MAGIC DUST (TOKEN BUDGET)
@@ -206,7 +228,7 @@ public static class Records
 
         /// <summary>
         /// Cost weight applied to cache-creation input tokens
-        /// (<c>AdditionalCounts["CacheCreationInputTokens"]</c>) relative to a fresh input
+        /// (<c>AdditionalCounts[Constants.UsageCounts.CacheCreationInputTokens]</c>) relative to a fresh input
         /// token. Anthropic 1h cache write ≈ 2.0; providers with no separate write cost = 1.0.
         /// </summary>
         public double CacheCreationWeight { get; set; }
@@ -339,13 +361,13 @@ public static class Records
         public double BudgetPerConversation { get; set; }
 
         /// <summary>One-shot advisory shown when consumption crosses 70%.</summary>
-        public string Warning70Message { get; set; }
+        public string Warning70Message { get; set; } = string.Empty;
 
         /// <summary>One-shot advisory shown when consumption crosses 90%.</summary>
-        public string Warning90Message { get; set; }
+        public string Warning90Message { get; set; } = string.Empty;
 
         /// <summary>Blocking message shown when the budget is exhausted (100%).</summary>
-        public string ErrorMessage { get; set; }
+        public string ErrorMessage { get; set; } = string.Empty;
     }
 
     // ==========================================================================
@@ -925,13 +947,13 @@ public static class Records
     /// </summary>
     /// <param name="Name">Intent identifier (lowercase, e.g., "billing", "contract")</param>
     /// <param name="Description">Intent description for classifier LLM</param>
-    /// <param name="Label">User-facing label with emoji (e.g., "📄 Billing") for quick replies</param>
-    /// <param name="DefaultValue">Sample user message for this intent (used in quick reply value)</param>
+    /// <param name="Label">User-facing label with emoji (e.g., "📄 Billing") for quick replies; required at startup.</param>
+    /// <param name="DefaultValue">Sample user message for this intent (used in quick reply value); required at startup.</param>
     public record IntentDefinition(
         [property: JsonPropertyName("Name")] string Name,
         [property: JsonPropertyName("Description")] string Description,
-        [property: JsonPropertyName("Label")] string? Label,
-        [property: JsonPropertyName("DefaultValue")] string? DefaultValue = null);
+        [property: JsonPropertyName("Label")] string Label,
+        [property: JsonPropertyName("DefaultValue")] string DefaultValue);
 
     /// <summary>
     /// The configured intents, with the views that classification and presentation each need.
@@ -962,16 +984,15 @@ public static class Records
         }
 
         /// <summary>
-        /// Returns the intents that a user can pick from the welcome quick replies: those with a label, <see cref="Constants.Intents.Other"/> excluded.
+        /// Returns the intents that a user can pick from the welcome quick replies: every one but <see cref="Constants.Intents.Other"/>.
         /// </summary>
         public List<IntentDefinition> GetDisplayableIntents()
         {
-            // Other is the classifier's complement and an unlabeled intent has no button text, so neither can be offered.
+            // Other is the classifier's complement: no agent stands behind it, so it cannot be offered.
             return
             [
                 .. Intents
-                    .Where(i => !string.Equals(i.Name, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase)
-                                && !string.IsNullOrEmpty(i.Label))
+                    .Where(i => !string.Equals(i.Name, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase))
             ];
         }
     }
@@ -1015,17 +1036,19 @@ public static class Records
         public List<Dictionary<string, object>> AdditionalProperties { get; init; } = [];
 
         /// <summary>
-        /// Gets the array that the prompt declares under <paramref name="additionalPropertyName"/>; throws <see cref="KeyNotFoundException"/> when it declares none.
+        /// Gets the array that the prompt declares under <paramref name="additionalPropertyName"/>; throws when it declares none or declares it null.
         /// </summary>
         public T GetAdditionalProperty<T>(string additionalPropertyName)
         {
             foreach (Dictionary<string, object> additionalProperties in AdditionalProperties)
             {
-                if (additionalProperties.TryGetValue(additionalPropertyName, out object value))
+                if (additionalProperties.TryGetValue(additionalPropertyName, out object? value))
                 {
                     // The configuration binder leaves every value as a JsonElement, which is read into the type the caller expects.
-                    JsonElement element = (JsonElement)value;
-                    return element.Deserialize<T>();
+                    // A property declared null is as much an authoring defect as one not declared at all.
+                    JsonElement element = (JsonElement)value!;
+                    return element.Deserialize<T>()
+                        ?? throw new InvalidOperationException($"AdditionalProperty with key '{additionalPropertyName}' is null in the prompt with id='{ID}'");
                 }
             }
 
@@ -1071,10 +1094,10 @@ public static class Records
         {
             foreach (Dictionary<string, object> additionalProperties in AdditionalProperties)
             {
-                if (additionalProperties.TryGetValue(additionalPropertyName, out object value))
+                if (additionalProperties.TryGetValue(additionalPropertyName, out object? value))
                 {
                     // The configuration binder leaves every value as a JsonElement; a declared null reads as absent.
-                    JsonElement element = (JsonElement)value;
+                    JsonElement element = (JsonElement)value!;
                     return element.Deserialize<T>() ?? defaultValue;
                 }
             }
@@ -1231,13 +1254,13 @@ public static class Records
         IReadOnlyList<WorkflowEdge> Edges,
         IReadOnlyList<string> Parameters)
     {
-        /// <summary>Every tool that a step of the workflow names; empty before the steps are bound.</summary>
+        /// <summary>Every tool that a step of the workflow names.</summary>
         public HashSet<string> ToolSignature()
-            => [.. (Steps ?? []).SelectMany(step => step.Tools ?? [])];
+            => [.. Steps.SelectMany(step => step.Tools)];
 
         /// <summary>The tools of the first step: the procedure is entered through its launcher alone, so they are never offered or run outside it.</summary>
         public IReadOnlyList<string> EntryTools
-            => Steps is { Count: > 0 } ? Steps[0].Tools ?? [] : [];
+            => Steps is { Count: > 0 } ? Steps[0].Tools : [];
     }
 
     /// <summary>

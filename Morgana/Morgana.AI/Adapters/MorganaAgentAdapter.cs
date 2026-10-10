@@ -483,8 +483,12 @@ public class MorganaAgentAdapter
             // so the match ignores case and the value is written under the schema's spelling.
             foreach (JsonProperty schemaProperty in properties.EnumerateObject())
             {
-                if (string.Equals(schemaProperty.Name, carriedName, StringComparison.OrdinalIgnoreCase))
-                    context.Arguments[schemaProperty.Name] = JsonDocument.Parse(valueJson).RootElement.Clone();
+                if (!string.Equals(schemaProperty.Name, carriedName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // The argument outlives this call, so it holds a copy and the parsed document is released at once.
+                using JsonDocument carriedValue = JsonDocument.Parse(valueJson);
+                context.Arguments[schemaProperty.Name] = carriedValue.RootElement.Clone();
             }
         }
     }

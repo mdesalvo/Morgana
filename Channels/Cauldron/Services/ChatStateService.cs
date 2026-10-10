@@ -144,7 +144,7 @@ public class ChatStateService : IChatStateService
             ConversationId = ConversationId,
             Text = text,
             Timestamp = DateTime.UtcNow,
-            MessageType = "error",
+            MessageType = ChannelMessageTypes.Error,
             ErrorReason = errorReason,
             FadingMessageDurationSeconds = fadingDurationSeconds
         });
@@ -172,7 +172,7 @@ public class ChatStateService : IChatStateService
             ConversationId = ConversationId,
             Text = text,
             Timestamp = DateTime.UtcNow,
-            MessageType = "error",
+            MessageType = ChannelMessageTypes.Error,
             ErrorReason = errorReason,
             FadingMessageDurationSeconds = fadingDurationSeconds
         });
@@ -188,8 +188,8 @@ public class ChatStateService : IChatStateService
     public void ClearErrorMessages()
     {
         TemporaryMessages.RemoveAll(m =>
-            string.Equals(m.MessageType, "error", StringComparison.OrdinalIgnoreCase)
-             && !string.Equals(m.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal));
+            string.Equals(m.MessageType, ChannelMessageTypes.Error, StringComparison.OrdinalIgnoreCase)
+             && !string.Equals(m.ErrorReason, ChannelErrorReasons.DustBudgetExhausted, StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -272,14 +272,14 @@ public class ChatStateService : IChatStateService
 
     /// <summary>
     /// True when the conversation is terminally spent: a dust-exhaustion banner
-    /// (ErrorReason <c>"dust_budget_exhausted"</c>) is on screen. The conversation is
+    /// (ErrorReason <see cref="ChannelErrorReasons.DustBudgetExhausted"/>) is on screen. The conversation is
     /// dead and the only way forward is a brand-new one, so the "New Conversation"
     /// button must stay reachable even when the usual connection/history/init gates
     /// would otherwise hide it (e.g. a transient SignalR reconnect right after lockout).
     /// </summary>
     public bool IsConversationDeadFromDust() =>
         TemporaryMessages.Any(m =>
-            string.Equals(m.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal));
+            string.Equals(m.ErrorReason, ChannelErrorReasons.DustBudgetExhausted, StringComparison.Ordinal));
 
     /// <summary>
     /// Resets all state for a fresh start.

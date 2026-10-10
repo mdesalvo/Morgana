@@ -137,7 +137,7 @@ public sealed class MorganaClientService
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
         HttpResponseMessage response = await httpClient.GetAsync($"/api/morgana/conversation/{conversationId}/history", cancellationToken);
 
-        // A conversation nobody has spoken in yet is reported as absent, which is not a failure to report upwards
+        // A conversation Morgana does not know has no transcript to export, which is not a failure to report upwards
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             return [];
 

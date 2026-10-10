@@ -152,48 +152,6 @@ public static class Constants
         public const string Workflows = "Workflows";
     }
 
-    /// <summary>
-    /// What kind of thing an outbound message is, declared on <c>ChannelMessage.MessageType</c> and
-    /// read by every channel to decide how to paint it. Two of them are conversation (somebody
-    /// said something to somebody); the rest are notices about the conversation rather than
-    /// part of it: a channel shows those as banners that fade. Morgana keeps none of them on
-    /// record, because a transcript is what was said. A contract between the framework, which stamps the type
-    /// and every channel.
-    /// </summary>
-    public static class MessageTypes
-    {
-        /// <summary>An answer, from an agent or from Morgana herself.</summary>
-        public const string Assistant = "assistant";
-
-        /// <summary>Morgana opening a conversation or handing one back, styled apart from an answer.</summary>
-        public const string Presentation = "presentation";
-
-        /// <summary>A notice about the conversation carrying no reply, such as a budget running low.</summary>
-        public const string SystemWarning = "system_warning";
-
-        /// <summary>
-        /// A command's own frame or outcome, never anything else: a channel keeps it out of the transcript
-        /// on this type alone, since a command is not a turn of the conversation.
-        /// </summary>
-        public const string System = "system";
-
-        /// <summary>A notice that something stopped the turn, such as a budget that ran out.</summary>
-        public const string Error = "error";
-    }
-
-    /// <summary>
-    /// Why Morgana refused to take a call, declared on <c>ChannelMessage.ErrorReason</c> by the host and read by
-    /// every channel. A channel reads it to
-    /// act on the refusal rather than merely paint it: a spent budget ends the conversation on its side too.
-    /// </summary>
-    public static class ErrorReasons
-    {
-        /// <summary>The conversation called too often in one of its windows; it may call again later.</summary>
-        public const string RateLimitExceeded = "rate_limit_exceeded";
-
-        /// <summary>The conversation's dust budget is spent: it will take no further turn or command.</summary>
-        public const string DustBudgetExhausted = "dust_budget_exhausted";
-    }
 
     /// <summary>
     /// Names of the entries in the framework prompt's <c>FrameworkReplies</c> array: a contract between
@@ -230,6 +188,9 @@ public static class Constants
         /// <summary>What the user is told when classification lands on an intent that no agent handles (Classifier).</summary>
         public const string UnrecognizedIntent = "UnrecognizedIntent";
 
+        /// <summary>What the user is told when the provider's own content filter refuses a message before the guard can judge it (Guard).</summary>
+        public const string ContentFiltered = "ContentFiltered";
+
         /// <summary>
         /// What Morgana says when an agent finishes and the conversation comes back to her (Morgana).
         /// <c>{0}</c> is that agent's display name.
@@ -239,11 +200,11 @@ public static class Constants
         /// <summary>What the user is asked when a turn asks to run a tool that needs their approval and says nothing itself (Morgana).</summary>
         public const string Approval = "Approval";
 
-        /// <summary>What the user is told when an agent's turn fails (Morgana).</summary>
+        /// <summary>What the user is told when a turn fails, in an agent or in the model service (Morgana).</summary>
         public const string GenericError = "GenericError";
 
-        /// <summary>What the user is told when the model service itself fails a call (Morgana).</summary>
-        public const string LLMServiceError = "LLMServiceError";
+        /// <summary>What the user is told when the agent stays silent past the turn's budget (Morgana).</summary>
+        public const string Timeout = "Timeout";
     }
 
     /// <summary>
@@ -481,9 +442,6 @@ public static class Constants
         /// <summary>In the <see cref="Prompts.Classifier"/> prompt — the configured intents, formatted for ranking.</summary>
         public const string FormattedIntents = "((formattedIntents))";
 
-        /// <summary>In the <see cref="Prompts.Presentation"/> prompt — the intents offered as opening quick replies.</summary>
-        public const string Intents = "((intents))";
-
         /// <summary>In the <see cref="Prompts.ChannelAdapter"/> prompt — the target channel's capability budget, as JSON.</summary>
         public const string ChannelCapabilities = "((channel_capabilities))";
     }
@@ -649,5 +607,15 @@ public static class Constants
         /// into one paragraph.
         /// </summary>
         public const string MessageSeparator = "\n\n";
+    }
+
+    /// <summary>
+    /// Keys of the extra counts that a provider's chat client reports beside the standard usage. The client writes
+    /// them; the dust ledger and the telemetry read the same key, so a charge and a span count the same tokens.
+    /// </summary>
+    public static class UsageCounts
+    {
+        /// <summary>Prompt tokens written to the provider's cache by this call, billed apart from fresh and cached ones.</summary>
+        public const string CacheCreationInputTokens = "CacheCreationInputTokens";
     }
 }

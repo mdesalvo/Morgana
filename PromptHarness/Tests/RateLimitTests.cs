@@ -114,7 +114,7 @@ public sealed class RateLimitTests
         // The refusal is the command's outcome: its finished frame, naming the run, so a channel draws it where the
         // command's outcome goes and keeps it out of the transcript. The reason still travels for the channel to act on
         ChannelMessage refusal = await ReceiveRefusalAsync(conversationId);
-        Assert.Equal("system", refusal.MessageType);
+        Assert.Equal(ChannelMessageTypes.System, refusal.MessageType);
         Assert.NotNull(refusal.Progress);
         Assert.Equal("compact", refusal.Progress.Command);
         Assert.Equal("refused-run", refusal.Progress.InvocationId);
@@ -135,7 +135,7 @@ public sealed class RateLimitTests
 
         // A refused message is a notice about the conversation, which a channel shows in it: no frame belongs to it
         ChannelMessage refusal = await ReceiveRefusalAsync(conversationId);
-        Assert.Equal("system_warning", refusal.MessageType);
+        Assert.Equal(ChannelMessageTypes.SystemWarning, refusal.MessageType);
         Assert.Null(refusal.Progress);
     }
 
@@ -157,7 +157,7 @@ public sealed class RateLimitTests
         while (true)
         {
             ChannelMessage delivered = await fixture.Channel.ReceiveAsync(conversationId, TimeSpan.FromSeconds(15));
-            if (delivered.ErrorReason == "rate_limit_exceeded")
+            if (delivered.ErrorReason == ChannelErrorReasons.RateLimitExceeded)
                 return delivered;
         }
     }

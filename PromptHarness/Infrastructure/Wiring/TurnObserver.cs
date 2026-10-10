@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Morgana.AI;
-using Morgana.AI.Telemetry;
 using Morgana.Contracts;
 
 namespace PromptHarness.Infrastructure.Wiring;
@@ -281,53 +280,53 @@ public sealed class TurnObserver : IDisposable
 
         // No conversation id tag means this span cannot be attributed to any conversation's
         // history — nothing useful to record, so it's dropped rather than filed under a null key.
-        if (activity.GetTagItem(MorganaTelemetry.ConversationId) is not string conversationId)
+        if (activity.GetTagItem(Telemetry.ConversationId) is not string conversationId)
             return;
 
         switch (activity.OperationName)
         {
-            case MorganaTelemetry.AgentActivity:
+            case Telemetry.AgentActivity:
                 // agent.tools_invoked is a single comma-joined string tag (spans can't carry
                 // arrays), so it has to be split back into an ordered list here — order matters,
                 // since ExpectationChecker's toolsCalledFirst assertion depends on invocation order.
-                string toolsInvoked = activity.GetTagItem(MorganaTelemetry.AgentToolsInvoked) as string ?? string.Empty;
+                string toolsInvoked = activity.GetTagItem(Telemetry.AgentToolsInvoked) as string ?? string.Empty;
 
                 Append(agentSpans, conversationId, new AgentSpan(
-                    activity.GetTagItem(MorganaTelemetry.AgentName) as string,
+                    activity.GetTagItem(Telemetry.AgentName) as string,
                     [.. toolsInvoked.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)]));
                 break;
 
-            case MorganaTelemetry.ConsultationActivity:
+            case Telemetry.ConsultationActivity:
                 // Same comma-joined tag the agent span carries, set on the answering agent's side:
                 // this is the only place the harness can see which tools the colleague reached for.
-                string consultationTools = activity.GetTagItem(MorganaTelemetry.AgentToolsInvoked) as string ?? string.Empty;
+                string consultationTools = activity.GetTagItem(Telemetry.AgentToolsInvoked) as string ?? string.Empty;
 
                 Append(consultationSpans, conversationId, new ConsultationObservation(
-                    activity.GetTagItem(MorganaTelemetry.ConsultationCaller) as string,
-                    activity.GetTagItem(MorganaTelemetry.ConsultationTarget) as string,
+                    activity.GetTagItem(Telemetry.ConsultationCaller) as string,
+                    activity.GetTagItem(Telemetry.ConsultationTarget) as string,
                     [.. consultationTools.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)],
-                    activity.GetTagItem(MorganaTelemetry.ConsultationAwaitingReply) as bool?,
-                    activity.GetTagItem(MorganaTelemetry.ConsultationQuestion) as string,
-                    activity.GetTagItem(MorganaTelemetry.ConsultationAnswer) as string));
+                    activity.GetTagItem(Telemetry.ConsultationAwaitingReply) as bool?,
+                    activity.GetTagItem(Telemetry.ConsultationQuestion) as string,
+                    activity.GetTagItem(Telemetry.ConsultationAnswer) as string));
                 break;
 
-            case MorganaTelemetry.GuardActivity:
+            case Telemetry.GuardActivity:
                 Append(guardSpans, conversationId, new GuardSpan(
-                    activity.GetTagItem(MorganaTelemetry.GuardCompliant) as bool?,
-                    activity.GetTagItem(MorganaTelemetry.GuardViolation) as string));
+                    activity.GetTagItem(Telemetry.GuardCompliant) as bool?,
+                    activity.GetTagItem(Telemetry.GuardViolation) as string));
                 break;
 
-            case MorganaTelemetry.ClassifierActivity:
+            case Telemetry.ClassifierActivity:
                 // classification.confidence is stored as a string tag (ConversationSupervisorActor
                 // sets it from a Dictionary<string,string>), so it's parsed tolerantly here rather
                 // than cast — an unparseable value becomes "unknown", not a listener crash.
-                double? confidence = activity.GetTagItem(MorganaTelemetry.ClassificationConfidence) is string raw
+                double? confidence = activity.GetTagItem(Telemetry.ClassificationConfidence) is string raw
                     && double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed)
                         ? parsed
                         : null;
 
                 Append(classifierSpans, conversationId, new ClassifierSpan(
-                    activity.GetTagItem(MorganaTelemetry.ClassificationIntent) as string,
+                    activity.GetTagItem(Telemetry.ClassificationIntent) as string,
                     confidence));
                 break;
 

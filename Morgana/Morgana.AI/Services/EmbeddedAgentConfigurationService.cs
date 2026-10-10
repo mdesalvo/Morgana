@@ -152,6 +152,15 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                                     + "Rename the intent.");
                             }
 
+                            // Every intent is offered as a welcome button, which needs both the text written on it
+                            // and the sentence that pressing it sends on the user's behalf.
+                            if (string.IsNullOrWhiteSpace(intent.Label) || string.IsNullOrWhiteSpace(intent.DefaultValue))
+                            {
+                                throw new InvalidOperationException(
+                                    $"Plugin '{declaringAssembly}' declares the intent '{intent.Name}' without a Label or a DefaultValue. "
+                                    + "Both are required: the welcome offers every intent as a button that shows its Label and sends its DefaultValue.");
+                            }
+
                             // One intent name is one agent: a second plugin claiming it leaves the routing ambiguous.
                             if (declaringAssemblyByIntent.TryGetValue(intent.Name, out string? firstAssembly))
                             {

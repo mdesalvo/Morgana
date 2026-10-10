@@ -241,21 +241,6 @@ public class MorganaAIContextProvider : AIContextProvider
             sessionState.SaveState(session, contextState);
     }
 
-    // =========================================================================
-    // AIContextProvider overrides
-    // =========================================================================
-
-    /// <summary>
-    /// Called AFTER each agent invocation. Override to inspect response messages and apply context updates.
-    /// </summary>
-    protected override ValueTask StoreAIContextAsync(
-        InvokedContext context,
-        CancellationToken cancellationToken = default)
-    {
-        // Reserved for future use: extract state from response messages and persist via sessionState.SaveState.
-        return ValueTask.CompletedTask;
-    }
-
     /// <summary>
     /// Per-session state stored inside <see cref="AgentSession"/> via <see cref="ProviderSessionState{T}"/>.
     /// Serialized and restored automatically by the framework as part of session persistence.

@@ -789,7 +789,8 @@ WHERE id = 1;
             sqliteCommand.Parameters.AddWithValue("@variable_name", variableName);
             sqliteCommand.Parameters.AddWithValue("@variable_value", encrypted);
             sqliteCommand.Parameters.AddWithValue("@source_agent_intent", sourceAgentIntent);
-            sqliteCommand.Parameters.AddWithValue("@last_update", DateTime.UtcNow.ToString("O"));
+            // Stamped in the same text format as the morgana table, so every last_update in the file reads and sorts alike.
+            sqliteCommand.Parameters.AddWithValue("@last_update", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture));
 
             // Zero rows means an earlier writer already claimed the name, which is not an error.
             int rowsAffected = await sqliteCommand.ExecuteNonQueryAsync();

@@ -199,7 +199,7 @@ public sealed class CompactHistoryCommand : ICommand
         {
             ConversationId = conversationId,
             Text = $"Compacting: {label} ({completed + 1}/{ProgressSteps})",
-            MessageType = Constants.MessageTypes.System,
+            MessageType = ChannelMessageTypes.System,
             AgentName = Constants.Morgana,
             FadingMessageDurationSeconds = 3,
             // The steps are the command's own: what it has already done, out of what it set out to do
@@ -215,7 +215,7 @@ public sealed class CompactHistoryCommand : ICommand
         {
             ConversationId = conversationId,
             Text = outcome,
-            MessageType = Constants.MessageTypes.System,
+            MessageType = ChannelMessageTypes.System,
             AgentName = Constants.Morgana,
             Progress = new CommandProgress(Descriptor.Name, "done", ProgressSteps, ProgressSteps, Finished: true, invocationId)
         });

@@ -17,7 +17,7 @@ public interface IRateLimitService
     /// <returns>
     /// RateLimitResult containing:
     /// - IsAllowed: true if request should proceed
-    /// - ViolatedLimit: which limit was exceeded (if any)
+    /// - ViolatedWindow and ViolatedCap: which limit was exceeded (if any)
     /// - RetryAfterSeconds: suggested wait time before retrying
     /// </returns>
     /// <remarks>

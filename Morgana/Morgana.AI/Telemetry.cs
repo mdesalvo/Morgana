@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
-namespace Morgana.AI.Telemetry;
+namespace Morgana.AI;
 
 /// <summary>
 /// Central OpenTelemetry instrumentation hub for the Morgana framework.
@@ -32,7 +32,7 @@ namespace Morgana.AI.Telemetry;
 /// <see cref="Records.AgentRequest"/>. Each actor reconstructs the
 /// parent link via <see cref="ActivitySource.StartActivity(string, ActivityKind)"/>.</para>
 /// </remarks>
-public static class MorganaTelemetry
+public static class Telemetry
 {
     // ==============================================================================
     // ACTIVITY SOURCE
@@ -161,9 +161,6 @@ public static class MorganaTelemetry
 
     /// <summary>Intent used to select the agent (matches classification.intent on success).</summary>
     public const string RouterIntent = "router.intent";
-
-    /// <summary>Akka.NET path of the agent actor selected by the router.</summary>
-    public const string RouterAgentPath = "router.agent_path";
 
     // ==============================================================================
     // ATTRIBUTE NAMES — AGENT

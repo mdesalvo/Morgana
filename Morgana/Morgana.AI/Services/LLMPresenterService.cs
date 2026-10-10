@@ -15,15 +15,20 @@ namespace Morgana.AI.Services;
 public class LLMPresenterService : IPresenterService
 {
     /// <summary>
+    /// Stands in for a conversation id on the presenter's model calls and channel cache, since a welcome
+    /// is composed before any conversation exists: no dust is charged to it and logs can tell it apart.
+    /// </summary>
+    private const string PresentationLabel = "presentation";
+
+    /// <summary>
     /// LLM used to author the welcome message and its quick replies. Consumed through the
     /// stateless completion path, so it always runs on the framework tier.
     /// </summary>
     private readonly ILLMService llmService;
 
     /// <summary>
-    /// Source of the <c>Presentation</c> prompt: the message template interpolated with
-    /// <c>((intents))</c>, plus the <c>Fallback</c> and <c>NoAgents</c> messages that the two
-    /// non-LLM paths return verbatim.
+    /// Source of the <c>Presentation</c> prompt: the sections that ask the model for the welcome,
+    /// plus the <c>Fallback</c> and <c>NoAgents</c> messages that the two non-LLM paths return verbatim.
     /// </summary>
     private readonly IPromptResolverService promptResolverService;
 
@@ -123,9 +128,9 @@ public class LLMPresenterService : IPresenterService
         ChannelMessage channelMessage = await channelAdapter.AdaptAsync(
             new ChannelMessage
             {
-                ConversationId = $"{channelName}-presentation-cache",
+                ConversationId = $"{channelName}-{PresentationLabel}-cache",
                 Text = presentationResult.Message,
-                MessageType = Constants.MessageTypes.Presentation,
+                MessageType = ChannelMessageTypes.Presentation,
                 QuickReplies = presentationResult.QuickReplies,
                 AgentName = Constants.Morgana,
                 AgentCompleted = false
@@ -140,8 +145,8 @@ public class LLMPresenterService : IPresenterService
     /// null payload) it logs and returns the deterministic fallback so the caller never sees an
     /// exception — the service's reliability contract is enforced here.
     /// </summary>
-    /// <param name="presentationPrompt">Resolved <c>Presentation</c> prompt; its <c>((intents))</c> placeholder is interpolated here and it also carries the fallback text.</param>
-    /// <param name="displayableIntents">Intents rendered into the prompt as a bullet list and reused verbatim by the fallback path.</param>
+    /// <param name="presentationPrompt">Resolved <c>Presentation</c> prompt; it also carries the fallback text.</param>
+    /// <param name="displayableIntents">Intents handed to the model as a bullet list and reused verbatim by the fallback path.</param>
     /// <returns>The LLM-generated presentation, or the deterministic fallback if anything went wrong.</returns>
     private async Task<Records.PresentationResult> GenerateMessageAsync(
         Records.Prompt presentationPrompt,
@@ -153,17 +158,16 @@ public class LLMPresenterService : IPresenterService
             string formattedIntents = string.Join("\n",
                 displayableIntents.Select(i => $"- {i.Name}: {i.Description}"));
 
-            // The three authored sections with the intent list spliced into the place that the prompt reserves for it.
+            // The three authored sections say how to welcome; what there is to offer arrives as the input.
             string presentationSystemPrompt =
                 string.Join("\n\n",
                     Records.Prompt.Labeled(Constants.SectionLabels.Target, presentationPrompt.Target),
                     Records.Prompt.Labeled(Constants.SectionLabels.Instructions, presentationPrompt.Instructions),
-                    Records.Prompt.Labeled(Constants.SectionLabels.Formatting, presentationPrompt.Formatting))
-                .Replace(Constants.Placeholders.Intents, formattedIntents);
+                    Records.Prompt.Labeled(Constants.SectionLabels.Formatting, presentationPrompt.Formatting));
 
-            // The user message only triggers the generation: everything the model must know is in the system prompt.
+            // The intent list is the model's input, as the message to adapt is the channel adapter's.
             string llmResponse = await llmService.CompleteWithSystemPromptAsync(
-                "presentation", presentationSystemPrompt, "Generate the presentation");
+                PresentationLabel, presentationSystemPrompt, formattedIntents);
 
             // A null payload carries no presentation: it is treated as a failure so that the fallback answers.
             Records.PresentationResponse? presentation =
@@ -205,15 +209,11 @@ public class LLMPresenterService : IPresenterService
         // never an error string, because the user is opening a conversation rather than meeting a fault.
         string fallbackMessage = presentationPrompt.GetMessage(Constants.Messages.Fallback);
 
-        // One quick reply per intent. Label falls back to the intent name; value falls back to a
-        // generic "Help me with X" so the button always carries a usable payload.
+        // One quick reply per intent, worded as the domain authored it.
         List<QuickReply> fallbackReplies =
         [
             .. displayableIntents
-                .Select(intent => new QuickReply(
-                    intent.Name,
-                    intent.Label ?? intent.Name,
-                    intent.DefaultValue ?? $"Help me with {intent.Name}"))
+                .Select(intent => new QuickReply(intent.Name, intent.Label, intent.DefaultValue))
         ];
 
         // Distinguishes the fallback from a generated presentation in the log.

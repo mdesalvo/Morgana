@@ -101,9 +101,9 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Tools/` | `ReplyTool`: the framework's own tool, declared on its method as a domain tool is |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
 | `Providers/` | `MorganaAIContextProvider` (context variables plus the shared registry), `MorganaChatHistoryProvider` (stores the whole history, hands the model the current episode only — since the user last left — with earlier tool results marked) |
-| `Telemetry/` | `MorganaTelemetry`, holding its own span and attribute glossary |
 | `Records.cs` | Every immutable record: actor messages, configuration, DTOs |
-| `Constants.cs` | The glossary: **every literal that is a contract between two parties who cannot see each other**, `PromptProperties` included. Deliberately absent: log text, prompt prose, `IConfiguration` keys. The test is a *resolver*, not a mention |
+| `Constants.cs` | The glossary: **every literal that is a contract between two parties who cannot see each other**, `PromptProperties` included. Deliberately absent: log text, prompt prose, `IConfiguration` keys. The test is a *resolver*, not a mention. A value that a channel reads off the wire lives in `Morgana.Contracts` instead (`ChannelMessageTypes`, `ChannelErrorReasons`), where both sides see it |
+| `Telemetry.cs` | The activity source and the meter, holding their own span and attribute glossary |
 | `morgana.json` | Framework prompts: Morgana, Classifier, Guard, Presentation, ChannelAdapter |
 
 ### Morgana.Web
@@ -153,10 +153,10 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `conversation/start` | POST | Validates `ChannelMetadata` (required), settles it on record, then creates the manager actor |
-| `conversation/{id}/end` | POST | Stops the supervisor |
+| `conversation/{id}/end` | POST | 404 if unknown; stops the conversation's actors, where any are running |
 | `conversation/{id}/resume` | POST | 404 if unknown; read-only, reports the active agent and the dust level |
 | `conversation/{id}/message` | POST | Auth, 404 if unknown, then rate limit, then dust budget, then `UserMessage` |
-| `conversation/{id}/history` | GET | `ConversationHistoryResponse` |
+| `conversation/{id}/history` | GET | 404 if unknown; `ConversationHistoryResponse`, empty while nobody has spoken |
 | `conversation/{id}/command` | POST | Auth, 404 if unknown, 400 for an unknown name or a missing confirmation, rate limit, dust budget, then runs it; the outcome arrives over the channel |
 | `commands` | GET | `CommandCatalogResponse`: every `ICommand` registered in DI. The framework publishes `/compact` |
 | `health` | GET | Actor system liveness |
@@ -484,7 +484,7 @@ or environment variables.
 
 ## Conventions
 
-- Actor messages are immutable records in `Records.cs`; every cross-party literal is a `Constants` member
+- Actor messages are immutable records in `Records.cs`; every cross-party literal is a `Constants` member (a `Morgana.Contracts` one when a channel reads it)
 - Actors use `Tell`, never `Ask` (streaming) and `Become()` for FSM transitions
 - A domain tool is its method: no prose about it lives anywhere else
 - Prompts resolve by ID: the five framework ids or an intent name

@@ -139,9 +139,14 @@ public class DraftValidationService : IDraftValidationService
                     "The description is the only thing the classifier reads about this intent; without one it can only match on the name."));
 
             if (string.IsNullOrWhiteSpace(intent.Label))
-                findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
+                findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                     "The intent has no label.",
-                    "The presenter derives its quick-reply buttons from the labels; a missing one costs this intent its button."));
+                    "Morgana refuses to start: every intent is offered as a button and the label is what the button shows."));
+
+            if (string.IsNullOrWhiteSpace(intent.DefaultValue))
+                findings.Add(new ValidationFinding(FindingSeverity.Error, where,
+                    "The intent has no default value.",
+                    "Morgana refuses to start: every intent is offered as a button and the default value is what pressing it sends."));
         }
     }
 

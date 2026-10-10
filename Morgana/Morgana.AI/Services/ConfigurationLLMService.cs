@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Telemetry;
+using Morgana.AI;
 
 namespace Morgana.AI.Services;
 
@@ -224,7 +224,7 @@ public class ConfigurationLLMService : ILLMService
         // Prompt and response bodies reach the exporters only where the deployer opted in.
         bool enableSensitiveData = configuration.GetValue("Morgana:OpenTelemetry:EnableSensitiveData", false);
         return new ChatClientBuilder(innerChatClient)
-            .UseOpenTelemetry(loggerFactory, MorganaTelemetry.LLMChatClientSourceName, otel => otel.EnableSensitiveData = enableSensitiveData)
+            .UseOpenTelemetry(loggerFactory, Telemetry.LLMChatClientSourceName, otel => otel.EnableSensitiveData = enableSensitiveData)
             .Build();
     }
 
@@ -290,7 +290,7 @@ public class ConfigurationLLMService : ILLMService
         catch (Exception)
         {
             // Any other failure is answered in Morgana's voice: the framework actors cannot act on a provider error.
-            return morganaPrompt.GetMessage(Constants.Messages.LLMServiceError);
+            return morganaPrompt.GetMessage(Constants.Messages.GenericError);
         }
     }
 }

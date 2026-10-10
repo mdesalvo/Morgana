@@ -1,11 +1,12 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Morgana.AI;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
-namespace Morgana.AI.Telemetry;
+namespace Morgana.AI.Extensions;
 
 /// <summary>
 /// Extension methods for registering Morgana OpenTelemetry instrumentation.
@@ -17,7 +18,7 @@ namespace Morgana.AI.Telemetry;
 /// <item><term>console</term><description>Writes traces to stdout: useful for development</description></item>
 /// </list>
 /// </remarks>
-public static class TelemetryExtensions
+public static class OpenTelemetryExtensions
 {
     /// <summary>
     /// Registers Morgana OpenTelemetry tracing and metrics with the ASP.NET Core DI container.
@@ -52,8 +53,8 @@ public static class TelemetryExtensions
             {
                 tracing
                     .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
-                    .AddSource(MorganaTelemetry.Source.Name)
-                    .AddSource(MorganaTelemetry.LLMChatClientSourceName) // MEAI OpenTelemetryChatClient activity source
+                    .AddSource(Telemetry.Source.Name)
+                    .AddSource(Telemetry.LLMChatClientSourceName) // MEAI OpenTelemetryChatClient activity source
                     .AddAspNetCoreInstrumentation();
 
                 // The conventional local collector address applies when the entry names no endpoint.
@@ -71,8 +72,8 @@ public static class TelemetryExtensions
             {
                 metrics
                     .SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName))
-                    .AddMeter(MorganaTelemetry.MorganaMeter.Name)
-                    .AddMeter(MorganaTelemetry.LLMChatClientSourceName) // MEAI OpenTelemetryChatClient meter
+                    .AddMeter(Telemetry.MorganaMeter.Name)
+                    .AddMeter(Telemetry.LLMChatClientSourceName) // MEAI OpenTelemetryChatClient meter
                     .AddOtlpExporter(otlp => otlp.Endpoint = new Uri(otlpExporter.Endpoint ?? "http://localhost:4317"));
             });
         }

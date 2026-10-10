@@ -187,7 +187,7 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
                 // purple styling all engage) instead of letting the user discover the
                 // wall by firing a message that is instantly rejected.
                 if (!string.IsNullOrEmpty(result?.DustExhaustedMessage))
-                    _chatStateService.AddErrorBanner(result.DustExhaustedMessage, "dust_budget_exhausted");
+                    _chatStateService.AddErrorBanner(result.DustExhaustedMessage, ChannelErrorReasons.DustBudgetExhausted);
 
                 if (string.IsNullOrEmpty(result?.ActiveAgent)
                     || string.Equals(result.ActiveAgent, "Morgana", StringComparison.OrdinalIgnoreCase))

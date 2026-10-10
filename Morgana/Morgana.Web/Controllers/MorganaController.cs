@@ -156,20 +156,21 @@ public class MorganaController : ControllerBase
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation to end</param>
     /// <returns>
-    /// 200 OK on successful termination.
+    /// 200 OK on successful termination, also when no actor of the conversation is running.
+    /// 404 Not Found if the conversation was never started.
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpPost("conversation/{conversationId}/end")]
+    [TypeFilter<KnownConversationFilter>(Order = 1)]
     public async Task<IActionResult> EndConversationAsync([FromRoute] string conversationId)
     {
         logger.LogInformation("Ending conversation {ConversationId}", conversationId);
 
-        // The manager is looked up by the conversation's name, so the stop reaches the very actor that serves it.
-        IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
-            Constants.Actors.Manager, conversationId);
-
+        // Only a running manager has anything to stop. A conversation already ended is left as it is, as is one served
+        // by a process that has restarted since: neither is brought up only to be torn down.
         // The manager stops the supervisor and with it every actor of the conversation.
-        manager.Tell(new Records.TerminateConversation(conversationId));
+        IActorRef? manager = await actorSystem.FindActorAsync(Constants.Actors.Manager, conversationId);
+        manager?.Tell(new Records.TerminateConversation(conversationId));
 
         logger.LogInformation("Ended conversation {ConversationId}", conversationId);
 
@@ -227,11 +228,13 @@ public class MorganaController : ControllerBase
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation</param>
     /// <returns>
-    /// 200 OK with a ConversationHistoryResponse wrapping the MorganaChatMessage array on success.
-    /// 404 Not Found if conversation doesn't exist.
+    /// 200 OK with a ConversationHistoryResponse wrapping the MorganaChatMessage array, empty while nobody has spoken.
+    /// 404 Not Found if the conversation was never started.
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpGet("conversation/{conversationId}/history")]
+    // A started conversation with nothing said yet is an empty transcript, never one that does not exist
+    [TypeFilter<KnownConversationFilter>(Order = 1)]
     public async Task<IActionResult> GetConversationHistoryAsync([FromRoute] string conversationId)
     {
         logger.LogInformation("Retrieving conversation history for {ConversationId}", conversationId);
@@ -239,13 +242,6 @@ public class MorganaController : ControllerBase
         // The transcript across every participant, in chronological order.
         MorganaChatMessage[] chatMessages = await conversationPersistenceService
             .GetConversationHistoryAsync(conversationId);
-
-        // A conversation with no message on record is reported as not found: there is nothing for a client to redraw.
-        if (chatMessages.Length == 0)
-        {
-            logger.LogWarning("No history found for conversation {ConversationId}", conversationId);
-            return NotFound(new { error = $"Conversation {conversationId} not found or has no messages" });
-        }
 
         logger.LogInformation("Retrieved {ChatMessagesLength} messages for conversation {ConversationId}", chatMessages.Length, conversationId);
 

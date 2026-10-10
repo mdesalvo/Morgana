@@ -244,14 +244,14 @@ public class SQLiteRateLimitService : IRateLimitService
     {
         // The three windows from the narrowest to the widest, so the caller is told the shortest wait.
         // A cap of 0 skips its window entirely instead of meaning "zero requests allowed".
-        (int Cap, string CapName, TimeSpan Window)[] windows =
+        (int Cap, RateLimitWindow Name, TimeSpan Window)[] windows =
         [
-            (options.MaxMessagesPerMinute, nameof(options.MaxMessagesPerMinute), TimeSpan.FromMinutes(1)),
-            (options.MaxMessagesPerHour, nameof(options.MaxMessagesPerHour), TimeSpan.FromHours(1)),
-            (options.MaxMessagesPerDay, nameof(options.MaxMessagesPerDay), TimeSpan.FromDays(1))
+            (options.MaxMessagesPerMinute, RateLimitWindow.PerMinute, TimeSpan.FromMinutes(1)),
+            (options.MaxMessagesPerHour, RateLimitWindow.PerHour, TimeSpan.FromHours(1)),
+            (options.MaxMessagesPerDay, RateLimitWindow.PerDay, TimeSpan.FromDays(1))
         ];
 
-        foreach ((int cap, string capName, TimeSpan window) in windows.Where(window => window.Cap > 0))
+        foreach ((int cap, RateLimitWindow windowName, TimeSpan window) in windows.Where(window => window.Cap > 0))
         {
             int count = await CountRequestsAsync(connection, transaction, utcNow - window);
 
@@ -262,7 +262,8 @@ public class SQLiteRateLimitService : IRateLimitService
                 // The wait offered is the window itself: the oldest request leaves it no sooner.
                 return new RateLimitResult(
                     IsAllowed: false,
-                    ViolatedLimit: $"{capName} ({cap})",
+                    ViolatedWindow: windowName,
+                    ViolatedCap: cap,
                     RetryAfterSeconds: (int)window.TotalSeconds);
             }
         }
