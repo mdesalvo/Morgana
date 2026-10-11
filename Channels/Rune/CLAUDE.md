@@ -15,6 +15,22 @@ It holds the poor-TTY cell of the matrix; Grimoire holds rich-TTY, Cauldron rich
 Grimoire share the `tui` docker profile, mutually exclusive at runtime — only one process can own
 stdin and stdout.
 
+## What lives here
+
+Almost nothing, by design. The terminal UI, the host wiring and every behaviour the two TTY channels
+share (keys, command palette, reply and command deadlines, startup checks, webhook endpoint) live in
+**`Morgana.Terminal`**: `TerminalUiService` and `TerminalChannelExtensions` document them. Rune is:
+
+- `Messages/RuneChannelProfile.cs`: who Rune is and what little it can render. The library reads the
+  handshake, the token claims and the `Rune:` configuration root from it and switches the streaming
+  pane and the quick replies on only where its flags say so
+- `Messages/RuneTerminalTheme.cs`: its emeralds (`#10b981` base Morgana, `#6ee7b7` a specialised
+  agent) and a progress bar in plain characters
+- `Program.cs`: the profile and the theme handed to the library, nothing else
+
+It draws through the library's `PlainTextMessageRenderService`. `QuickReply` and `RichCard` arrive in the
+shared `Morgana.Contracts` types **already stripped by the adapter upstream**, which is the point of the channel.
+
 ## Channel handshake
 
 ```csharp
@@ -23,31 +39,17 @@ Capabilities = { SupportsRichCards: false, SupportsQuickReplies: false, Supports
                  SupportsMarkdown: false, MaxMessageLength: <Rune:MaxMessageLength, default 500> }
 ```
 
-Morgana's gate additionally requires `callbackUrl` to be an **absolute** URI when
-`deliveryMode=webhook`, fail-closed at the handshake. A `MaxMessageLength` below
-`Morgana:AdaptiveMessaging:RichFeaturesMinLength` **also forces rich cards and quick replies off
-server-side**, even were a future Rune to claim them — which is why the aggressive default stays.
-
-## Lifecycle
-
-Backend URL, callback URL and signing key are checked before anything else, every problem reported
-at once: the two URLs must be absolute `http(s)`, the key must no longer be the shipped
-`_SECURE_OVERRIDE_` marker. Each is fatal and the Live UI would swallow the reason. Logging is then cleared,
-Kestrel starts listening and `ConversationLifecycleService` wires the webhook
-receiver to the UI queue, opens the conversation with the handshake (retried at
-`MorganaStartRetryPolicy`'s pace while Morgana is unreachable) and blocks on the Live loop until
-`/exit` or `Esc`. A `finally` ends the conversation and stops the host. The webhook accepts only
-deliveries for the conversation on screen and answers 404 to any other.
+Morgana requires `callbackUrl` to be an **absolute** URI when `deliveryMode=webhook`. A
+`MaxMessageLength` below `Morgana:AdaptiveMessaging:RichFeaturesMinLength` **also forces rich cards and
+quick replies off server-side**, even were a future Rune to claim them — which is why the aggressive
+default stays.
 
 ## Authentication
 
-`MorganaAuthHandler` mints short-lived JWTs: HMAC-SHA256 with `Rune:Authentication:SymmetricKey`,
-issuer `rune`, audience `morgana.ai`, five minutes.
-
-**Trust is asymmetric by design**: Rune signs its outbound calls toward Morgana; Morgana does **not**
-sign the inbound webhook POST toward Rune. That matches `WebhookChannelService`'s convention (the
-GitHub / Stripe / Twilio style) — it is not a gap, so do not add webhook signing without revisiting
-the decision recorded there.
+JWTs are HMAC-SHA256 with `Rune:Authentication:SymmetricKey`, issuer `rune`, audience `morgana.ai`, five
+minutes. **Trust is asymmetric by design**: Rune signs its calls toward Morgana, Morgana does not sign
+the webhook POST toward Rune (`WebhookChannelService`'s convention). Do not add webhook signing without
+revisiting the decision recorded there.
 
 **Onboarding a fresh Morgana instance:**
 1. Add `{ "Name": "rune", "SymmetricKey": "<≥256 bit, base64>" }` to
@@ -57,61 +59,7 @@ the decision recorded there.
    variable, never a commit
 3. Start Morgana (`:5001`), then `dotnet run` from `Channels/Rune/` (`:5003`)
 
-## Wire contracts
-
-A `ProjectReference` on **`Morgana.Contracts`**, consumed directly, responses included. Rune still
-renders no `QuickReply` or `RichCard`: they arrive as part of the shared contract **already stripped
-by the adapter upstream**, which is the point of the channel.
-
-A second `ProjectReference` on **`Morgana.Terminal`**, the library the two TTY channels share:
-authentication, the Morgana REST client, the start-retry policy, the webhook dispatcher, the landing
-messages, the resize watchers, the terminal-cell measurement, the conversation lifecycle and the Live
-UI itself (`TerminalUiService`), which draws messages through the channel's `IMessageRenderer` and
-shows streaming and quick replies only where the `ChannelProfile` declares them. It is internal to the repository and
-never published, so its surface answers to Rune and Grimoire alone. Spectre.Console and the JWT
-package arrive with it. Identity stays channel-side in `Messages/RuneChannelProfile.cs`: the
-`ChannelProfile` is the one statement of who Rune is: from it the library reads the handshake, the
-token claims and the `Rune:` configuration root.
-
-## Terminal UI
-
-Spectre.Console `LiveDisplay` plus `Layout`: a sticky header (speaker, truncated conversation id,
-dust gauge, scroll and input-length indicators) over a scrolling body, with the input line at the
-bottom. There is no streaming pane — there is no streaming. Colours: `#10b981` emerald for base
-Morgana, `#6ee7b7` light green for a specialised agent, white for the user, orange for advisory
-warnings and red for errors.
-
-### Input
-
-`Console.ReadKey(intercept: true)` on a background task polling every 25 ms — Spectre's Live
-rendering cannot share stdin with a first-class prompt. **Enter** commits,
-**Backspace** and **Delete** remove around the caret, **←/→** move it, **Esc** exits. At rest
-**↑/↓** and **PgUp/PgDn** scroll the transcript back; they are ignored while a turn is in flight, so
-the window never moves under an arriving reply. Repainting waits for the keystrokes to stop, so a
-pasted line costs one frame rather than one per character.
-
-**Commands**: a leading `/` opens the shared palette (`Morgana.Terminal`): `/help`, `/status`, `/new`, `/export`, `/exit` and
-whatever Morgana publishes. Esc dismisses it. The list filters as you type and Enter runs the
-highlighted candidate, as in Claude Code. A command declaring `RequiresConfirmation` takes
-the prompt over with a Yes/No question instead of running; Morgana refuses it without that answer. **A command
-never enters the transcript**, neither its line nor its outcome: it holds the prompt while it runs, its progress
-bar is drawn above the prompt; what it comes to opens a panel over the whole body, closed by Esc or Enter, which
-gives back the screen as it was. A line that runs nothing is explained above the prompt instead. One of Morgana's
-is called off after `Rune:CommandTimeoutSeconds`, which Morgana notices and stops without writing anything.
-
-A turn that Morgana accepts but never answers releases the prompt after `Rune:ReplyTimeoutSeconds`
-with a red notice, instead of locking the conversation until the process is killed.
-
-A reply is never lost to a callback that was briefly unreachable: a webhook is the transport where
-Morgana itself sees the delivery fail, so Morgana delivers the message again for about half a
-minute (`WebhookChannelService`), already degraded for Rune. The deadline is left for the turn
-Morgana never answered at all.
-
-### Resume
-
-**There is none.** Every process start begins a fresh conversation. A future Rune picking up a
-conversation id from a store would announce nothing again: the handshake is settled on Morgana's
-record at start and read back from there, by a resume and by a Morgana that restarted meanwhile alike.
+**There is no resume**: every process start begins a fresh conversation.
 
 ## Key configuration
 
@@ -121,8 +69,8 @@ record at start and read back from there, by a resume and by a Morgana that rest
 | `Rune:Authentication:*` | `SymmetricKey` matching Morgana's entry for `Name=rune`, plus `Issuer` and `Audience` |
 | `Rune:MaxMessageLength` | The cap advertised at the handshake. Default `500`, aggressive on purpose so the downgrade runs every turn. Raising it (say `2000`) softens the rewrite without losing the profile; anything below `RichFeaturesMinLength` keeps rich features forced off server-side |
 | `Rune:MaxInputLength` | What the *user* may type in one turn, default `500`. Independent of `MaxMessageLength`, which caps what Morgana may send back: the two travel in opposite directions and nothing couples them |
-| `Rune:ReplyTimeoutSeconds` | How long a sent turn may go unanswered before the prompt comes back with a red notice (default 180). Deliberately higher than Grimoire's: a poor channel sees nothing until the reply lands, so the wait covers the whole turn — tool chains and remote colleagues included — not the silence between chunks |
-| `Rune:CommandTimeoutSeconds` | How long the prompt waits on one of Morgana's commands before calling it off (default 120). The channel's own deadline: it never travels, Morgana only notices the call being dropped |
+| `Rune:ReplyTimeoutSeconds` | How long a sent turn may go unanswered before the prompt comes back with a red notice (180). Higher than Grimoire's: a poor channel sees nothing until the reply lands, so the wait covers the whole turn — tool chains and remote colleagues included — not the silence between chunks |
+| `Rune:CommandTimeoutSeconds` | How long the prompt waits on one of Morgana's commands before calling it off (default 120) |
 | `Rune:LandingMessages` | The startup lines, cleared when the Live UI takes over. Mirrors Cauldron's |
 | `Rune:StartupTimeoutSeconds` | How long to wait for Morgana's first delivery before entering the Live UI anyway (default 30). Raise it on providers with cold starts |
 
@@ -135,18 +83,13 @@ record at start and read back from there, by a resume and by a Morgana that rest
   ```bash
   docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases rune
   ```
-  `run` auto-activates the service's profiles, `--service-ports` allocates the TTY **and** publishes
-  5003 so the callback can land. **`--use-aliases` is mandatory**: unlike `up`, `run` registers
-  no network alias, so without it Morgana's callback to `http://rune:5003/morgana-hook` fails DNS
-  resolution.
+  `--service-ports` allocates the TTY **and** publishes 5003 so the callback can land. **`--use-aliases`
+  is mandatory**: unlike `up`, `run` registers no network alias, so without it Morgana's callback to
+  `http://rune:5003/morgana-hook` fails DNS resolution.
 
 ## Conventions
 
-- **Logging is silenced at startup** — the Live UI owns the terminal; errors surface as red in-UI lines
-- **Singletons**: one process is one session. Multi-session would first have to move the UI history
-  and the receiver's callback onto a per-conversation scope
 - **Never enrich Rune.** Its value is exactly what it cannot do: raise a capability here and the
-  degradation path stops being exercised anywhere. Sharing `Morgana.Terminal` with the rich-TTY
-  channel does not soften this: a feature of Grimoire's reaches Rune only if someone opts Rune in.
-  The flags in `RuneChannelProfile` are the place where that would have to be written. Local
-  chrome such as the command palette is not a capability
+  degradation path stops being exercised anywhere. Sharing `Morgana.Terminal` with Grimoire does not
+  soften this: a feature reaches Rune only through the flags of `RuneChannelProfile`, which is where
+  that would have to be written. Local chrome such as the command palette is not a capability
