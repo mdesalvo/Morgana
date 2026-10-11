@@ -176,7 +176,8 @@ public class SignalRService : IAsyncDisposable
         if (hubConnection != null)
         {
             // Ends a first connection still being attempted, which would otherwise outlive the circuit
-            startCancellation?.Cancel();
+            if (startCancellation is not null)
+                await startCancellation.CancelAsync();
 
             // Closes the connection and releases the groups held on the server
             await hubConnection.StopAsync();
@@ -326,7 +327,8 @@ public class SignalRService : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         // Ends a first connection attempt that would otherwise outlive the circuit
-        startCancellation?.Cancel();
+        if (startCancellation is not null)
+            await startCancellation.CancelAsync();
 
         // Reached with a live connection only when the page never stopped it
         if (hubConnection != null)

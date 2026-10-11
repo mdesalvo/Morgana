@@ -264,7 +264,7 @@ public class ChatStateService : IChatStateService
     /// (live messages with IsLastHistoryMessage == null, or the last message of a resumed history).
     /// </summary>
     public bool HasActiveQuickReplies() =>
-        ChatMessages.Any(m => m is { QuickReplies: { Count: > 0 }, SelectedQuickReplyId: null, IsLastHistoryMessage: not false });
+        ChatMessages.Any(m => m is { QuickReplies.Count: > 0, SelectedQuickReplyId: null, IsLastHistoryMessage: not false });
 
     /// <summary>
     /// True if any message is currently showing a typing indicator.
