@@ -38,4 +38,4 @@ turns:
       # satisfy every other assertion here and still be the failure the scenario is about.
       textNotEmpty: true
     judge:
-      - "The response says it cannot tell the customer which courier shipped that line."
+      - "Read in full: the response tells the customer that which courier shipped that line is unknown, unavailable or not recorded."
