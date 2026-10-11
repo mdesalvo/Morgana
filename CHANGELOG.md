@@ -6,17 +6,42 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 
 ## [1.0.0-preview.33] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Model-proof protocols
+Morgana's application protocols no longer rely on the model's interpretation: they are now **capabilities of the framework itself**.
+Quick replies, rich cards and turn closure express nothing new: they simply reach the user reliably, whichever model is behind the agent.
+### 🎯 Major Feature: Multi-vendor LLM tiers
+No more vendor lock-in: **each LLM tier now brings its own provider**, so Morgana can think with Anthropic, OpenAI, AzureOpenAI and Ollama at once.
+A new **Economy** tier joins Efficiency and Performance, taking over Morgana's own pipeline so that the premium models are spent only where an agent needs them.
+### 🎯 Major Feature: Workflows
+Agents can now follow **a process**, not just a conversation. Workflows, based on `Microsoft.Agents.AI` and the new **`MorganaWorkflow`** abstraction, give each step the tools that may be used and let every call decide where it leads.
+An interrupted workflow picks up where it left off, even after a restart. Native and MCP tools mix freely.
+### 🎯 Major Feature: Execution approval
+A tool performing a dispositive action (e.g: placing an order, signing a contract) can now **wait for the user's go-ahead**: mark it **`[RequiresApproval(true)]`** and Morgana holds the call until the user approves or declines it with one click.
+
 ### ✨ Added
 
 ### 🔄 Changed
+- Prompt aspects of tools no longer live in `agents.json`: they are now based on **`Microsoft.Extensions.AI`**. A tool and each of its parameters are described with the standard **`[Description]`** attribute on the public methods of a `MorganaTool`: `Microsoft.Extensions.AI` turns it into the tool schema handed to the model.
+- `morgana.json` is lighter: tools are no longer declared in it and `GlobalPolicies` drop from 9 to 5, now that the protocol is enforced in code. Some `AdditionalProperties` are renamed after what they do: `Injections` is split into `PromptInjections` and `ToolInjections`.
+- Morgana graduates from 0.x: 1.0 previews begin, heading for a stable release consolidating architecture and quality
 
 ### 🐛 Fixed
+- Ending an unknown conversation brought its actors to life just to stop them and to answer OK
+- The history of a conversation where nobody had spoken yet was answered with 404, as if the conversation did not exist
+- **Grimoire (1)**
+  - Backspace, Delete and the arrow keys split an emoji typed at the prompt in half, leaving a broken character behind
+- **PromptHarness (1)**
+  - A scenario continuing past a completed agent read Morgana's closing line as the next turn's reply, so every later turn was judged one reply behind
 
 ### 📦 Dependencies
 - Updated `Microsoft.Agents.AI` to 1.24.0
 - Updated `OllamaSharp` to 5.5.0
 
 ### 🚀 Future Enablement
+- **Processes that must go by the book**: workflows keep the steps in order and approval asks the user before every dispositive action, a natural foundation for procedures such as a claim or a customer onboarding
+- **Workflows you can see**: built on `Microsoft.Agents.AI.Workflows`, whose graphs can already be rendered as Mermaid or DOT, so a domain expert could review the drawing of a process before it ships
+- **Channels that know what is expected of the user**: every turn already declares whether it awaits nothing, a typed answer or a choice, the hint a voice channel needs to know when to listen
+- **Hybrid local and cloud deployments**: with a vendor per tier, Morgana's own pipeline can stay on a local Ollama model while only the agents that need it reach the cloud
 
 
 ## [0.32.0] - 2026-09-26
