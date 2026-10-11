@@ -436,12 +436,12 @@
         <div class="pillar">
           <div class="icon">&#x1F916;</div>
           <h4>Agent System</h4>
-          <p>Domain specialists that self-register through declarative attributes. Supports native tools (MorganaTool), MCP server integration for runtime capability discovery and peer consultation between agents over the A2A protocol, with colleagues of this installation or of another Morgana it declares as consultable, indistinguishable to the agent that consults them.</p>
+          <p>Domain specialists that self-register through declarative attributes. Supports native tools (MorganaTool), workflows (MorganaWorkflow) that keep a procedure's steps in order, tools held for the user's approval, MCP server integration for runtime capability discovery and peer consultation between agents over the A2A protocol, with colleagues of this installation or of another Morgana it declares as consultable, indistinguishable to the agent that consults them.</p>
         </div>
         <div class="pillar">
           <div class="icon">&#x1F4DD;</div>
           <h4>Prompt System</h4>
-          <p>Prompts as versioned project artifacts with layered personality: a global Morgana character plus per-agent specializations. No hardcoded strings: iterate without redeployment.</p>
+          <p>Prompts as versioned project artifacts with layered personality: a global Morgana character plus per-agent specializations. No hardcoded strings: iterate without redeployment. The protocol is not prose: how a turn closes, which buttons it offers and which tools are in reach are capabilities of the framework, so they hold whichever model is behind the agent.</p>
         </div>
         <div class="pillar">
           <div class="icon">&#x1F4BE;</div>
@@ -519,7 +519,7 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="building-your-agents">
       <h2>Building Your Agents with Alembic</h2>
-      <p>Agents can still be authored entirely by hand: <code>agents.json</code> and C# against the <code>Morgana.AI</code> NuGet package. But the <strong>preferred path</strong> is now <strong>Alembic</strong>, Morgana's authoring workbench: an AI-conducted interview that distills a <strong>new domain</strong> from scratch, or <strong>extends an existing one</strong>, into intents, agent prose, tool contracts and working C#, ready to be compiled into a Morgana plugin.</p>
+      <p>Agents can still be authored entirely by hand: <code>agents.json</code> and C# against the <code>Morgana.AI</code> NuGet package. But the <strong>preferred path</strong> is now <strong>Alembic</strong>, Morgana's authoring workbench: an AI-conducted interview that distills a <strong>new domain</strong> from scratch, or <strong>extends an existing one</strong>, into intents, agent prose, tools, workflows and working C#, ready to be compiled into a Morgana plugin.</p>
 
       <div class="info-box">
         <strong>See <a href="Alembic-Handbook.html" style="color: var(--purple-light);">Alembic Handbook</a></strong> for the full workflow: from launching the interview to the final assets.
@@ -550,11 +550,13 @@
           <tr><td>IChannelServiceFactory</td><td>ChannelServiceFactory</td><td>Per-conversation dispatch to the concrete transport</td></tr>
           <tr><td>IChatReducer</td><td>MorganaChatReducer</td><td>History summarization preserving tool calls</td></tr>
           <tr><td>IClassifierService</td><td>LLMClassifierService</td><td>Intent classification</td></tr>
+          <tr><td>ICommandRegistryService</td><td>CommandRegistryService</td><td>Commands published to the channels' palettes</td></tr>
           <tr><td>IConversationPersistenceService</td><td>SQLiteConversationPersistenceService</td><td>Encrypted conversation storage</td></tr>
           <tr><td>IDustLimitService</td><td>SQLiteDustLimitService</td><td>Per-conversation token budget protection</td></tr>
           <tr><td>IGuardRailService</td><td>LLMGuardRailService</td><td>Content moderation &amp; policy enforcement</td></tr>
           <tr><td>IHostAddressService</td><td>KestrelHostAddressService</td><td>Address this instance publishes on its A2A cards</td></tr>
-          <tr><td>ILLMService</td><td>Anthropic / AzureOpenAI / Ollama / OpenAI</td><td>LLM provider abstraction</td></tr>          <tr><td>IMCPClientRegistryService</td><td>MCPClientRegistryService</td><td>MCP connection pool (Http / Stdio)</td></tr>
+          <tr><td>ILLMService</td><td>ConfigurationLLMService</td><td>The three LLM tiers, each on its own provider (Anthropic, AzureOpenAI, Ollama or OpenAI)</td></tr>
+          <tr><td>IMCPClientRegistryService</td><td>MCPClientRegistryService</td><td>MCP connection pool (Http / Stdio)</td></tr>
           <tr><td>IPeerAdmissionService</td><td>SQLitePeerAdmissionService</td><td>Conversations a partner may open per hour (fails closed)</td></tr>
           <tr><td>IPresenterService</td><td>LLMPresenterService</td><td>Welcome presentation &amp; first engagement</td></tr>
           <tr><td>IPromptComposerService</td><td>ConfigurationPromptComposerService</td><td>Everything the model reads, assembled into one prompt</td></tr>
@@ -579,20 +581,21 @@
     <!-- ════════════════════════════════════════════════════════════════════════ -->
     <div class="page" id="startup-validation">
       <h2>Startup Validation</h2>
-      <p>A plugin declares its world across three places at once (attributes in C#, intents and prose in <code>agents.json</code>, credentials and policies in configuration) and nothing in the type system holds the three together. Morgana closes that gap at boot with <strong>nine checks, each of them fatal</strong>, all guarding one failure shape: <strong>a topology that validates cleanly and then fails, or opens, silently.</strong></p>
+      <p>A plugin declares its world across three places at once (attributes in C#, intents and prose in <code>agents.json</code>, credentials and policies in configuration) and nothing in the type system holds the three together. Morgana closes that gap at boot with <strong>ten checks, each of them fatal</strong>, all guarding one failure shape: <strong>a topology that validates cleanly and then fails, or opens, silently.</strong></p>
 
       <table>
         <thead><tr><th>#</th><th>Check</th><th>What it prevents</th></tr></thead>
         <tbody>
           <tr><td>1</td><td>Every configured intent has an agent and every agent an intent</td><td>A classified intent routed nowhere, or a desk nobody can reach</td></tr>
-          <tr><td>2</td><td>Every agent declares <code>[RequiresLLMTier]</code> and that tier is configured</td><td>An agent needing deep reasoning silently served by a cheaper tier: there is no cross-tier fallback</td></tr>
+          <tr><td>2</td><td>Every agent declares <code>[RequiresLLMTier]</code></td><td>An agent needing deep reasoning silently served by a cheaper tier: there is no cross-tier fallback</td></tr>
           <tr><td>3</td><td>Every <code>[ConsultsAgent]</code> names a reachable colleague and no two fold to one function name</td><td>A consultation that fails at the first question, or two colleagues answering under one name</td></tr>
-          <tr><td>4</td><td>Tools: orphans warn, duplicates for one intent are refused</td><td>Two implementations claiming the same tool, with the winner decided by scan order</td></tr>
-          <tr><td>5</td><td>Every plugin's <code>agents.json</code> merges with no duplicated intent or prompt id, none declaring the reserved <code>other</code></td><td>One deployment's plugins silently overwriting each other's domain</td></tr>
-          <tr><td>6</td><td>No <code>Tiers</code> entry left on its override placeholder, no empty <code>Tiers</code> map</td><td>A deployment shipped with the template's secrets still in place</td></tr>
+          <tr><td>4</td><td>Tools: orphans warn, duplicates for one intent are refused; every tool method and parameter carries its <code>[Description]</code> and <code>[ToolParameter]</code>, returns a typed record and is not overloaded; no <code>agents.json</code> prompt still declares <code>Tools</code></td><td>Two implementations claiming the same tool, with the winner decided by scan order or a tool the model cannot read correctly</td></tr>
+          <tr><td>5</td><td>Every plugin's <code>agents.json</code> merges with no duplicated intent or prompt id, none declaring the reserved <code>other</code> or <code>Morgana</code></td><td>One deployment's plugins silently overwriting each other's domain</td></tr>
+          <tr><td>6</td><td>All three tiers declared, none left on its override placeholder, <code>ActorSystem:Tier</code> naming one of them</td><td>A deployment shipped with the template's secrets still in place or a tier nobody filled</td></tr>
           <tr><td>7</td><td>Every admitted issuer (channel, partner and the ring alike) carries a name and a key of at least 256 bits, with no name admitted twice</td><td>A door held shut by a key too short to hold it, or one name answering for two callers</td></tr>
           <tr><td>8</td><td><code>ValidateTrustConfiguration</code>: each <code>Partners[]</code> entry names somebody once, does something, is coherent per open direction and carries a key that can sign</td><td>A relationship that looks configured and admits nobody, or admits without a ceiling</td></tr>
           <tr><td>9</td><td><code>ValidatePublishedAddress</code>: <code>PublicUrl</code>, where declared, is absolute, on a bearer-carrying scheme and names one interface</td><td>A card sending peers to an address this installation is not reachable at, or one that would carry tokens in clear</td></tr>
+          <tr><td>10</td><td>Every <code>MorganaWorkflow</code> names only tools its agent declares, reaches every step from the first and carries only values that its edges' tools return and its steps' tools take. A step naming an MCP tool is checked when the agent is born instead</td><td>A workflow that strands the agent on a step it cannot leave or hands a step a value nobody produced</td></tr>
         </tbody>
       </table>
 
@@ -825,8 +828,8 @@
           <tr><td>morgana.turn</td><td>conversation.id, turn.user_message</td></tr>
           <tr><td>morgana.guard</td><td>guard.compliant, guard.violation</td></tr>
           <tr><td>morgana.classifier</td><td>classification.intent, classification.confidence</td></tr>
-          <tr><td>morgana.router</td><td>router.intent, router.agent_path</td></tr>
-          <tr><td>morgana.agent</td><td>agent.name, agent.ttft_ms, agent.response_preview</td></tr>
+          <tr><td>morgana.router</td><td>router.intent</td></tr>
+          <tr><td>morgana.agent</td><td>agent.name, agent.intent, agent.tools_invoked (names only, never arguments), agent.ttft_ms, agent.response_preview</td></tr>
           <tr><td>morgana.consultation</td><td>consultation.caller, consultation.target, consultation.awaiting_reply</td></tr>
         </tbody>
       </table>
@@ -835,6 +838,10 @@
       <table>
         <thead><tr><th>Metric</th><th>Unit</th><th>Tags</th></tr></thead>
         <tbody>
+          <tr><td>morgana.turn.count</td><td>turns</td><td>intent, completed: how many turns each agent takes and how many of them close its task</td></tr>
+          <tr><td>morgana.turn.duration</td><td>ms</td><td>End-to-end turn latency</td></tr>
+          <tr><td>morgana.agent.ttft</td><td>ms</td><td>Agent time-to-first-token: how long the user waits before the answer starts</td></tr>
+          <tr><td>morgana.guard.rejections</td><td>messages</td><td>Messages refused by content moderation</td></tr>
           <tr><td>morgana.dust.consumed</td><td>dust</td><td>dust.llm_role (<code>Morgana</code> for framework actors, <code>Morgana (Intent)</code> for agents), conversation.id</td></tr>
           <tr><td>gen_ai.usage.*</td><td>tokens</td><td>Emitted by Microsoft.Extensions.AI beside the above, so cost in dust and cost in tokens are read on the same dashboard</td></tr>
         </tbody>
