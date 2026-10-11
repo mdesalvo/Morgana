@@ -39,6 +39,7 @@ public sealed class WebhookReceiverService
         if (!IsExpected(message.ConversationId))
             return false;
 
+        // The UI queue receives the accepted message
         OnMessage?.Invoke(message);
         return true;
     }
@@ -49,6 +50,7 @@ public sealed class WebhookReceiverService
         if (OnChunk is not { } onChunk || !IsExpected(chunk.ConversationId))
             return false;
 
+        // The UI queue receives the accepted chunk
         onChunk(chunk);
         return true;
     }

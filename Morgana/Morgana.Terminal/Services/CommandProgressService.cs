@@ -8,7 +8,7 @@ namespace Morgana.Terminal.Services;
 /// The progress a running command reports, as a TTY channel shows it: which frame is current, how the bar
 /// is drawn and when the widget leaves the screen. Frames replace one another and none reaches the
 /// transcript, so a command that took twenty steps leaves the conversation exactly as it found it. Every
-/// TTY channel draws it in its own <see cref="CommandTheme"/>, glyphs included, so a rich terminal's
+/// TTY channel draws it in its own <see cref="TerminalTheme"/>, glyphs included, so a rich terminal's
 /// bar of solid blocks and a poor one's row of plain characters are the same widget wearing each channel's
 /// own vocabulary. It holds the current frame, so every call must come under the render lock of the UI that
 /// owns it.
@@ -29,10 +29,10 @@ public sealed class CommandProgressService
     private readonly TerminalCellService cells;
 
     /// <summary>The channel's colour and character vocabulary, which the whole widget is drawn in.</summary>
-    private readonly CommandTheme theme;
+    private readonly TerminalTheme theme;
 
     /// <summary>Captures the cell measurement and the channel's theme.</summary>
-    public CommandProgressService(TerminalCellService cells, CommandTheme theme)
+    public CommandProgressService(TerminalCellService cells, TerminalTheme theme)
     {
         this.cells = cells;
         this.theme = theme;
@@ -71,27 +71,28 @@ public sealed class CommandProgressService
             return [];
 
         // A frame counting past its own total would fill more of the bar than the bar has
-        int completed = Math.Clamp(frame.Completed, 0, frame.Total);
-        int filledCells = (int)Math.Round((double)completed / frame.Total * theme.ProgressWidth);
+        int completedSteps = Math.Clamp(frame.Completed, 0, frame.Total);
+        int filledCells = (int)Math.Round((double)completedSteps / frame.Total * theme.ProgressWidth);
 
         // The row is built in the three pieces it is painted in, never searched for its own glyphs: a label
         // naming a file with a dash in it would otherwise be read as part of the bar it sits beside
         string head = $"  {frame.Command} ";
-        string filled = new(theme.ProgressFilledGlyph, filledCells);
-        string remaining = new(theme.ProgressEmptyGlyph, theme.ProgressWidth - filledCells);
-        string tail = SanitizeForTerminal($" {completed}/{frame.Total}  {frame.Label}");
+        string filledBar = new(theme.ProgressFilledGlyph, filledCells);
+        string remainingBar = new(theme.ProgressEmptyGlyph, theme.ProgressWidth - filledCells);
+        string tail = SanitizeForTerminal($" {completedSteps}/{frame.Total}  {frame.Label}");
 
         // Each piece takes what the ones before it left of the row, so a narrow terminal loses the label
         // first, then the bar, never the name of the command doing the work
         string drawnHead = cells.Trunc(head, width);
-        string drawnFilled = cells.Trunc(filled, width - drawnHead.GetCellWidth());
-        string drawnRemaining = cells.Trunc(remaining, width - drawnHead.GetCellWidth() - drawnFilled.GetCellWidth());
+        string drawnFilled = cells.Trunc(filledBar, width - drawnHead.GetCellWidth());
+        string drawnRemaining = cells.Trunc(remainingBar, width - drawnHead.GetCellWidth() - drawnFilled.GetCellWidth());
         string drawnTail = cells.Trunc(tail, width - drawnHead.GetCellWidth() - drawnFilled.GetCellWidth() - drawnRemaining.GetCellWidth());
 
+        // The bar is one row: the command, the filled and remaining cells, then the count and the label
         return
         [
             new Markup($"[{CaptionStyle}]{Markup.Escape(drawnHead)}[/]"
-                       + $"[{theme.PrimaryColor}]{drawnFilled}[/]"
+                       + $"[{theme.MorganaColor}]{drawnFilled}[/]"
                        + $"[{RemainingStyle}]{drawnRemaining}[/]"
                        + $"[{CaptionStyle}]{Markup.Escape(drawnTail)}[/]")
         ];

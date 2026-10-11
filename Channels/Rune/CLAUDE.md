@@ -65,9 +65,9 @@ by the adapter upstream**, which is the point of the channel.
 
 A second `ProjectReference` on **`Morgana.Terminal`**, the library the two TTY channels share:
 authentication, the Morgana REST client, the start-retry policy, the webhook dispatcher, the landing
-messages, the resize watchers, the terminal-cell measurement and the conversation lifecycle, which
-drives the turn through `ITerminalUi` — queue a delivery, own the terminal — so the library never
-needs to know how a channel draws anything. It is internal to the repository and
+messages, the resize watchers, the terminal-cell measurement, the conversation lifecycle and the Live
+UI itself (`TerminalUiService`), which draws messages through the channel's `IMessageRenderer` and
+shows streaming and quick replies only where the `ChannelProfile` declares them. It is internal to the repository and
 never published, so its surface answers to Rune and Grimoire alone. Spectre.Console and the JWT
 package arrive with it. Identity stays channel-side in `Messages/RuneChannelProfile.cs`: the
 `ChannelProfile` is the one statement of who Rune is: from it the library reads the handshake, the

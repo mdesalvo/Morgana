@@ -31,10 +31,12 @@ public sealed class MorganaStartRetryPolicy
     /// <summary>Returns the wait before the next attempt, given how many have already failed.</summary>
     public TimeSpan NextRetryDelay(int failedAttempts)
     {
+        // The first attempts retry quickly and the later ones settle on the slowest delay
         TimeSpan baseDelay = failedAttempts < QuickRetryDelays.Length
             ? QuickRetryDelays[failedAttempts]
             : SteadyRetryDelay;
 
+        // A random share is added so channels restarted together do not all knock on Morgana at the same instant
         return baseDelay + baseDelay * (Random.Shared.NextDouble() * MaximumJitterShare);
     }
 

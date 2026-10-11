@@ -55,6 +55,7 @@ public sealed class TerminalCommandRegistryService
             discoveredCommands.Add(command);
         }
 
+        // The registry now lists exactly the commands that were discovered
         terminalCommands = discoveredCommands;
     }
 
@@ -73,9 +74,10 @@ public sealed class TerminalCommandRegistryService
     ];
 
     /// <summary>Runs <paramref name="invocation"/>, here or on Morgana depending on whose command it is, returning once it is over. A command declaring it must be confirmed runs on nothing less than a <paramref name="confirmed"/> the channel obtained from the user.</summary>
-    /// <exception cref="InvalidOperationException">Thrown when no command answers to the name, when its options are not what it declares, or when one that must be confirmed was not.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when no command answers to the name, when its options are not what it declares or when one that must be confirmed was not.</exception>
     public Task ExecuteCommandAsync(CommandInvocation invocation, ITerminalUi ui, bool confirmed, CancellationToken cancellationToken)
     {
+        // The name the user asked for, matched ignoring case
         string name = invocation.Command.Name;
 
         // What the user left out is filled from the command's own declaration before anything runs, so a
@@ -109,6 +111,7 @@ public sealed class TerminalCommandRegistryService
         IReadOnlyList<CommandDescriptor> catalog;
         try
         {
+            // The catalogue is requested once Morgana is up
             catalog = await morganaClientService.GetCommandCatalogAsync(cancellationToken);
         }
         catch (Exception)
@@ -118,6 +121,7 @@ public sealed class TerminalCommandRegistryService
             return;
         }
 
+        // Morgana's commands are the catalogue minus what cannot be typed or is already the terminal's
         morganaCommands =
         [
             .. catalog

@@ -24,6 +24,7 @@ public static class GrimoireChannelProfile
             SupportsMarkdown: true,
             MaxMessageLength: null),
 
+        // The introduction tells a newcomer that replies stream in as they are written
         Introduction: "Talk with Morgana from your terminal: write what you need and press Enter. She answers herself "
                       + "or hands you to the agent who knows the subject. Replies stream in as they are written.",
 

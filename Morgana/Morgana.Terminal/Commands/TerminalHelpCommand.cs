@@ -26,14 +26,14 @@ public sealed class TerminalHelpCommand : TerminalCommand
     /// <summary>Supplies the channel's introduction and key bindings, the part of the help no other channel shares.</summary>
     private readonly ChannelProfile profile;
 
-    /// <summary>The channel's primary colour, which marks the title, the section heading and every command name.</summary>
-    private readonly CommandTheme theme;
+    /// <summary>The channel's Morgana colour, which marks the title, the section heading and every command name.</summary>
+    private readonly TerminalTheme theme;
 
     /// <summary>Measures and wraps every row to the width the UI's row budget counts on.</summary>
     private readonly TerminalCellService cells;
 
     /// <summary>Names the channel in the description, so the palette says what is being explained.</summary>
-    public TerminalHelpCommand(ChannelProfile profile, CommandTheme theme, TerminalCellService cells)
+    public TerminalHelpCommand(ChannelProfile profile, TerminalTheme theme, TerminalCellService cells)
     {
         this.profile = profile;
         this.theme = theme;
@@ -62,15 +62,16 @@ public sealed class TerminalHelpCommand : TerminalCommand
         List<Markup> rows = [];
 
         // The rule opens the block in the channel's colour, so the help reads apart from the transcript above it
-        rows.Add(cells.RenderPanelTitle($"{profile.DisplayName} help", width, theme.PrimaryColor));
+        rows.Add(cells.RenderPanelTitle($"{profile.DisplayName} help", width, theme.MorganaColor));
 
+        // The introduction says what the channel is and how talking through it goes, wrapped at the spaces
         rows.AddRange(cells.WrapWords(profile.Introduction, width).Select(row => new Markup(Markup.Escape(row))));
         rows.AddRange(LayOutKeyBindings(width));
 
         // The heading carries how the list is reached, which is the one thing a newcomer does with it
         const string heading = "Commands";
         string paletteHint = cells.Trunc("type / to open them · Tab completes · Enter runs", Math.Max(1, width - heading.Length - ColumnGap));
-        rows.Add(new Markup($"[{theme.PrimaryColor} bold]{heading}[/]{new string(' ', ColumnGap)}[{HintStyle}]{Markup.Escape(paletteHint)}[/]"));
+        rows.Add(new Markup($"[{theme.MorganaColor} bold]{heading}[/]{new string(' ', ColumnGap)}[{HintStyle}]{Markup.Escape(paletteHint)}[/]"));
         rows.AddRange(LayOutCommands(commands, width));
         return rows;
     }
@@ -83,8 +84,10 @@ public sealed class TerminalHelpCommand : TerminalCommand
         StringBuilder row = new();
         int rowCells = 0;
 
+        // Each binding is measured whole, because a binding is never split across two rows
         foreach ((string keys, string action) in profile.KeyBindings)
         {
+            // Keys, one space and action are the cells the binding occupies
             int bindingCells = keys.GetCellWidth() + 1 + action.GetCellWidth();
 
             // A binding wider than the whole row is cut as plain text, since keys and action cannot both be kept
@@ -93,23 +96,29 @@ public sealed class TerminalHelpCommand : TerminalCommand
                 : $"[{DescriptionStyle}]{Markup.Escape(cells.Trunc($"{keys} {action}", width))}[/]";
             bindingCells = Math.Min(bindingCells, width);
 
+            // A binding that does not fit after the separator opens the next row
             if (rowCells > 0 && rowCells + separator.Length + bindingCells > width)
             {
+                // The row is closed with the bindings it holds
                 rows.Add(new Markup(row.ToString()));
                 row.Clear();
                 rowCells = 0;
             }
 
+            // Bindings on the same row are told apart by a separator
             if (rowCells > 0)
             {
+                // The separator is dimmed so the bindings read as the content
                 row.Append($"[{HintStyle}]{separator}[/]");
                 rowCells += separator.Length;
             }
 
+            // The binding joins the row being built
             row.Append(binding);
             rowCells += bindingCells;
         }
 
+        // The last row holds the bindings left
         if (rowCells > 0)
             rows.Add(new Markup(row.ToString()));
         return rows;
@@ -133,27 +142,32 @@ public sealed class TerminalHelpCommand : TerminalCommand
                 Description: TerminalCellService.StripControlCharacters(command.Description) + (command.RequiresConfirmation ? " · asks first" : string.Empty)))
         ];
 
+        // The name column is as wide as the longest name, so every description starts at the same cell
         int labelWidth = entries.Max(entry => entry.Label.GetCellWidth());
         int descriptionWidth = width - indent - labelWidth - ColumnGap;
 
+        // Each command is one entry of the list
         foreach ((string label, string description) in entries)
         {
+            // The label is padded to the column so descriptions line up
             string paddedLabel = new string(' ', indent) + label + new string(' ', labelWidth - label.GetCellWidth() + ColumnGap);
 
             // A terminal too narrow for two columns keeps the name and as much of the description as the row holds
             if (descriptionWidth < MinDescriptionWidth)
             {
-                rows.Add(new Markup($"[{theme.PrimaryColor}]{Markup.Escape(cells.Trunc($"  {label}  {description}", width))}[/]"));
+                // The entry is drawn as one truncated row in the channel's colour
+                rows.Add(new Markup($"[{theme.MorganaColor}]{Markup.Escape(cells.Trunc($"  {label}  {description}", width))}[/]"));
                 continue;
             }
 
             // Continuation rows start under the description, so the name column stays clear down the whole list
             List<string> descriptionRows = cells.WrapWords(description, descriptionWidth);
-            rows.Add(new Markup($"[{theme.PrimaryColor}]{Markup.Escape(paddedLabel)}[/][{DescriptionStyle}]{Markup.Escape(descriptionRows[0])}[/]"));
+            rows.Add(new Markup($"[{theme.MorganaColor}]{Markup.Escape(paddedLabel)}[/][{DescriptionStyle}]{Markup.Escape(descriptionRows[0])}[/]"));
             rows.AddRange(descriptionRows.Skip(1).Select(continuation =>
                 new Markup($"{new string(' ', paddedLabel.Length)}[{DescriptionStyle}]{Markup.Escape(continuation)}[/]")));
         }
 
+        // The rows the panel draws below the heading
         return rows;
     }
 }

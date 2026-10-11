@@ -59,9 +59,9 @@ Morgana.Web's own `WebhookChannelService`. There is no private copy on either si
 
 A second `ProjectReference` on **`Morgana.Terminal`**, the library the two TTY channels share:
 authentication, the Morgana REST client, the start-retry policy, the webhook dispatcher, the landing
-messages, the resize watchers, the terminal-cell measurement and the conversation lifecycle, which
-drives the turn through `ITerminalUi` — queue a delivery, own the terminal — so the library never
-needs to know how a channel draws anything. It is internal to the repository and
+messages, the resize watchers, the terminal-cell measurement, the conversation lifecycle and the Live
+UI itself (`TerminalUiService`), which draws messages through the channel's `IMessageRenderer` and
+shows streaming and quick replies only where the `ChannelProfile` declares them. It is internal to the repository and
 never published, so its surface answers to Grimoire and Rune alone. Spectre.Console and the JWT
 package arrive with it. Identity stays channel-side in `Messages/GrimoireChannelProfile.cs`: the
 `ChannelProfile` is the one statement of who Grimoire is: from it the library reads the handshake,
@@ -161,6 +161,6 @@ once: the two URLs must be absolute `http(s)`, the key must no longer be the shi
   ESC or OSC sequence slips straight through it and is obeyed by the user's terminal
 - **Logging is silenced at startup** — the Live UI owns the terminal; errors surface as red in-UI lines
 - **Singletons**: one process is one session. Multi-session would first have to move
-  `ConsoleUiService.history` and the receiver's callback onto a per-conversation scope
+  `TerminalUiService.history` and the receiver's callback onto a per-conversation scope
 - **The server is the source of truth** for final text: the deferred commit uses the final
   `ChannelMessage.Text`, so a rare adapter rewrite wins over the streamed prefix
