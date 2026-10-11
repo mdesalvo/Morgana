@@ -5,12 +5,7 @@ namespace Alembic.Interfaces;
 /// <summary>
 /// Holds the Draft the client is currently working on.
 /// </summary>
-/// <remarks>
-/// Scoped, which in Blazor Server means one instance per circuit: two browser tabs are two separate
-/// interviews and the state dies with the connection that owns it. Nothing is persisted and nothing
-/// is resumed — durability is the client's, via <see cref="IDraftSerializationService"/> and the file
-/// behind Save my work, which they bring back to the landing page to carry on.
-/// </remarks>
+/// <remarks>One instance lives per circuit and nothing is persisted: durability is the client's, through the save file.</remarks>
 public interface IDraftStateService
 {
     /// <summary>

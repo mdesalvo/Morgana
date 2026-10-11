@@ -10,25 +10,15 @@ using Morgana.AI.Interfaces;
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="ICoherenceApplyService"/>: a one-shot tool-calling agent, built the same way
-/// an interview pass is, whose tools write directly into the agents the finding named.
+/// Applies one coherence finding by running a tool-calling agent whose tools write into the agents the finding names.
 /// </summary>
-/// <remarks>
-/// One <see cref="AIAgent"/> per call rather than a reused one: the tool set is rebuilt against
-/// this call's <see cref="DomainDraft"/> instance every time (<see cref="CoherenceApplyTools"/>
-/// closes over it) and a finding is a single, self-contained instruction with no turn after it to
-/// keep an agent alive for.
-/// </remarks>
+/// <remarks>The agent is built per call because its tools close over that call's draft.</remarks>
 public class CoherenceApplyService : ICoherenceApplyService
 {
-    /// <summary>
-    /// The prompt in <c>alembic.json</c> governing this pass.
-    /// </summary>
+    /// <summary>The <c>alembic.json</c> prompt that composes this pass.</summary>
     private const string PromptId = "CoherenceApplier";
 
-    /// <summary>
-    /// The tools of this pass: the ones that read and correct one agent, then the one that declares the fix applied.
-    /// </summary>
+    /// <summary>The tools of this pass: the ones that read and correct one agent then the one that declares the fix applied.</summary>
     private static readonly Records.WorkflowStep CoherenceApplierStep = new(
         PromptId,
         [
@@ -44,16 +34,18 @@ public class CoherenceApplyService : ICoherenceApplyService
             nameof(CoherenceApplyTools.ApplyCompleted)
         ]);
 
+    /// <summary>Resolves the applier's prompt and its tool declarations from <c>alembic.json</c>.</summary>
     private readonly IAlembicPromptService alembicPromptService;
+
+    /// <summary>Supplies the Efficiency-tier chat client that runs the applier.</summary>
     private readonly ILLMService llmService;
+
+    /// <summary>Records an apply that failed.</summary>
     private readonly ILogger logger;
 
     /// <summary>
-    /// Initializes the apply service.
+    /// Initializes the applier over Alembic's prompts and the Efficiency-tier model.
     /// </summary>
-    /// <param name="alembicPromptService">Resolves the <c>CoherenceApplier</c> prompt and its tool declarations from <c>alembic.json</c>.</param>
-    /// <param name="llmService">Supplies the chat client, always on the Efficiency tier.</param>
-    /// <param name="logger">Records a failed apply — the caller also sees it, via the returned result.</param>
     public CoherenceApplyService(
         IAlembicPromptService alembicPromptService,
         ILLMService llmService,
@@ -65,36 +57,34 @@ public class CoherenceApplyService : ICoherenceApplyService
     }
 
     /// <inheritdoc />
-    /// <param name="draft">The domain to fix, mutated in place by whichever tools the model calls —
-    /// there is no copy: a successful apply is the caller's own Draft with the fix already on it.</param>
-    /// <param name="finding">The one coherence finding to act on, rendered into the opening user
-    /// message below (Kind/Where/What/Why/Fix) rather than left for the model to re-derive.</param>
-    /// <param name="cancellationToken">Cancels the underlying run.</param>
-    /// <returns>Whether the pass declared the fix applied (via <c>ApplyCompleted</c>) and a one-line
-    /// summary of what changed — or, on failure, an explanation of what could not be done. A
-    /// declared-false-but-tool-calls-may-have-landed result is possible: see the final return below.</returns>
+    /// <param name="draft">The domain to fix, changed in place by the tools the model calls.</param>
+    /// <param name="finding">The one finding to act on, handed to the model as written.</param>
+    /// <param name="cancellationToken">Stops the run when the client leaves the page.</param>
     public async Task<CoherenceApplyResult> ApplyAsync(DomainDraft draft, CoherenceFinding finding, CancellationToken cancellationToken = default)
     {
+        // The applier's own prose is read from alembic.json.
         Records.Prompt prompt = alembicPromptService.Resolve(PromptId);
+
+        // The tools write straight into this call's draft.
         CoherenceApplyTools tools = new CoherenceApplyTools(draft, alembicPromptService);
 
         // A name that the class does not declare throws here instead of reaching the model as a tool that nothing implements.
         MorganaToolAdapter toolAdapter = alembicPromptService.OfferTools(CoherenceApplierStep, tools);
 
+        // The applier rewrites prose that must not contradict itself, so it runs on the Efficiency tier.
         IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 
+        // The agent is the pass: its instructions are the framework primer and the applier's sections, its tools the ones above.
         AIAgent agent = chatClient.AsAIAgent(new ChatClientAgentOptions
         {
             Id = "alembic-coherence-applier",
             Name = "Alembic",
             ChatOptions = new ChatOptions
             {
+                // A repair may rewrite whole sections, so the ceiling is Alembic's own.
                 MaxOutputTokens = CodeEmitService.OutputCeiling,
 
-                // The framework first, this pass's own prose under it: what it rewrites is an
-                // agent's own prose and the commonest repair — striking a sentence that restates a
-                // rule binding above the agent — cannot be told from mutilation without knowing
-                // which rules those are.
+                // The primer comes first: striking a sentence that restates a framework rule cannot be told from mutilation without knowing the rules.
                 Instructions = string.Join("\n\n",
                     new[]
                     {
@@ -107,20 +97,26 @@ public class CoherenceApplyService : ICoherenceApplyService
             }
         });
 
+        // The session holds the single exchange of this finding.
         AgentSession session = await agent.CreateSessionAsync();
 
+        // The finding is handed over field by field so the model does not re-derive it.
         string message = $"Kind: {finding.Kind}\nWhere: {finding.Where}\nWhat: {finding.What}\nWhy: {finding.Why}\nFix: {finding.Fix}";
 
         try
         {
+            // The model reads the finding and corrects the draft through its tools.
             await agent.RunAsync(new ChatMessage(ChatRole.User, message), session, cancellationToken: cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(ex, "Applying a coherence finding failed");
+
+            // The client is told why the fix did not land.
             return new CoherenceApplyResult(false, $"The fix could not be applied: {ex.Message}");
         }
 
+        // Only a pass that declared the fix applied reports success; otherwise tool calls made before it stopped may already be on the draft.
         return tools.Summary is { } summary
             ? new CoherenceApplyResult(true, summary)
             : new CoherenceApplyResult(false, "The pass stopped without declaring the fix applied. Some of its tool calls may already have "

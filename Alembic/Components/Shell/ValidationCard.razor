@@ -168,7 +168,7 @@
     public DomainDraft Draft { get; set; } = default!;
 
     /// <summary>
-    /// Taking the work away.
+    /// The shell's buttons for taking the work away, drawn beside this card's own actions.
     /// </summary>
     [Parameter]
     public RenderFragment? Keep { get; set; }
@@ -268,9 +268,11 @@
     /// </summary>
     protected override void OnInitialized()
     {
+        // The deterministic families come first, each keyed by the name of its check.
         foreach ((ValidationCheck check, string label) in Families)
             rows.Add(new CheckRow { Id = check.ToString(), Label = label, Check = check });
 
+        // The judged classes follow, as the model's own prompt declares them and with nothing ticked.
         foreach (CoherenceAspect aspect in CoherenceService.Aspects)
             rows.Add(new CheckRow { Id = aspect.Id, Label = aspect.Label });
     }
@@ -280,14 +282,18 @@
     /// </summary>
     private async Task RunAsync()
     {
+        // Only what the client ticked is run.
         List<CheckRow> choices = [.. rows.Where(row => row.Chosen)];
 
+        // The button is disabled with nothing ticked: this is the guard for a click that races it.
         if (choices.Count == 0)
             return;
 
+        // The families decided by reading are run now and show their outcomes from here on.
         checksRun.Clear();
         checksRun.UnionWith(choices.Where(row => row.Check is not null).Select(row => row.Id));
 
+        // The judged classes are sent to the model by the kind they answer with.
         List<string> aspects = [.. choices.Where(row => row.Check is null).Select(row => row.Id)];
 
         // The judged part costs a model call and can be turned away, which the summary below must know.
@@ -295,6 +301,7 @@
 
         // What came back with something opens on its own: it is what was asked.
         IReadOnlyList<ValidationFinding> findings = DraftValidationService.Validate(Draft);
+
         checksOpen.Clear();
         checksOpen.UnionWith(rows.Where(row => checksRun.Contains(row.Id)
                                          && (row.Check is { } check
@@ -302,11 +309,13 @@
                                              : coherence.Any(finding => string.Equals(finding.Kind, row.Id, StringComparison.OrdinalIgnoreCase))))
                            .Select(row => row.Id));
 
+        // The summary counts only the checks that were asked for in this run.
         int findingCount = findings.Count(FamilyRan)
                     + coherence.Count(finding => checksRun.Contains(finding.Kind));
         int checks = rows.Count(row => checksRun.Contains(row.Id));
         bool blocking = findings.Any(finding => finding.Severity == FindingSeverity.Error && FamilyRan(finding));
 
+        // A refused judged run has already told the client why; a second summary would contradict it.
         if (!refused && checks > 0)
             await OnNotify.InvokeAsync(findingCount == 0
                 ? new Notice($"Nothing to fix in the {checks} check(s) run.", NoticeKind.Success)
@@ -321,6 +330,7 @@
         // Relations need two ends: with a single agent the model has nothing to compare.
         if (Draft.Agents.Count < 2)
         {
+            // A refused run is reported as such so the summary stays silent.
             await OnNotify.InvokeAsync(new Notice("One agent, so there is nothing to relate: the judged checks need two.", NoticeKind.Warning));
             return true;
         }
@@ -333,10 +343,12 @@
 
         try
         {
+            // The model reads the domain's exact words for the chosen classes and weighs the corrections already applied.
             report = await CoherenceService.ReviewAsync(Draft, aspects, corrections);
         }
         finally
         {
+            // Whatever the outcome the wait gives way to the rows.
             running = false;
         }
 
@@ -347,6 +359,7 @@
             return true;
         }
 
+        // The new findings replace the previous run's; the classes asked for show their outcomes.
         coherence = [.. report.Findings];
         checksRun.UnionWith(aspects);
 
@@ -358,6 +371,7 @@
             checksRun.Add(kind);
         }
 
+        // The run completed: the summary may be told.
         return false;
     }
 
@@ -372,27 +386,32 @@
     /// </summary>
     private async Task ApplyAsync(CoherenceFinding finding)
     {
+        // The finding shows the wait and every other correction is held back.
         fixInFlight = finding;
         CoherenceApplyResult result;
 
         try
         {
+            // The model rewrites the agents the finding names and the result says what changed.
             result = await CoherenceApplyService.ApplyAsync(Draft, finding);
         }
         finally
         {
+            // Whatever the outcome the wait ends and the next correction may start.
             fixInFlight = null;
         }
 
         // Refreshed even after a declared failure: the applier may have written before it stopped.
         await OnChanged.InvokeAsync();
 
+        // An applied finding leaves the report; a later run can tell it was fixed.
         if (result.Applied)
         {
             coherence.Remove(finding);
             corrections.Add(new ResolvedCoherenceFinding(finding, result.Summary));
         }
 
+        // The client is told what the correction did or why it did nothing.
         await OnNotify.InvokeAsync(new Notice(result.Summary, result.Applied ? NoticeKind.Success : NoticeKind.Failure));
     }
 
@@ -401,8 +420,10 @@
     /// </summary>
     private void SetOpen(CheckRow row, bool expanded)
     {
+        // An unfolded item shows its findings.
         if (expanded)
             checksOpen.Add(row.Id);
+        // A folded item hides them.
         else
             checksOpen.Remove(row.Id);
     }
@@ -432,25 +453,26 @@
     </text>;
 
     /// <summary>
-    /// A sentence cut at its backticks: every other piece is a name, and an unclosed backtick leaves the rest as prose.
+    /// A sentence cut at its backticks: every other piece is a name while an unclosed backtick leaves the rest as prose.
     /// </summary>
     private static IEnumerable<(string Piece, bool IsName)> Pieces(string text)
     {
+        // Odd pieces sit between two backticks: they are the names the model marked.
         string[] pieces = text.Split('`');
 
         for (int index = 0; index < pieces.Length; index++)
         {
+            // The last odd piece follows a backtick that was never closed and so is not a name.
             bool closed = index % 2 == 1 && index < pieces.Length - 1;
 
+            // An empty piece (two adjacent backticks or a text edge) draws nothing.
             if (pieces[index].Length > 0)
                 yield return (closed ? pieces[index] : (index % 2 == 1 ? "`" : "") + pieces[index], closed);
         }
     }
 
     /// <summary>
-    /// Where a finding points, one badge per name: a judged finding lists the agents it involves, a finding decided
-    /// by reading spells one element's path, and neither the quotes, the backticks nor the dots it was written with
-    /// reach the badge.
+    /// Where a finding points, one badge per name drawn without the quotes, backticks or dots it was written with.
     /// </summary>
     private static IEnumerable<string> Places(string location) =>
         location.Split([',', '.'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)

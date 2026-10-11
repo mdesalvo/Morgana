@@ -4,22 +4,8 @@ using Microsoft.Extensions.AI;
 namespace Alembic.Services;
 
 /// <summary>
-/// One completion, streamed and resumed until the model stops of its own accord.
+/// Runs one completion to its natural end, resuming it whenever the provider cuts it at its output limit.
 /// </summary>
-/// <remarks>
-/// <para>
-/// Everything Alembic emits as an artifact — a tool class, a coherence report — is a whole file and
-/// a file's length is a property of what it describes rather than a number choosable in advance. So
-/// every round sets Alembic's own output ceiling (<see cref="CodeEmitService.OutputCeiling"/>) rather
-/// than the tier's and this keeps asking until the answer is finished.
-/// </para>
-/// <para>
-/// The resume goes back as a <em>user</em> message carrying what has been written so far, not as an
-/// assistant prefill: <c>MorganaAnthropicClient</c> guards against a trailing assistant turn and a
-/// mechanism that works on one provider and silently not on another is worse than the round trip it
-/// saves.
-/// </para>
-/// </remarks>
 public static class StreamedCompletion
 {
     /// <summary>
@@ -28,17 +14,16 @@ public static class StreamedCompletion
     private static readonly TimeSpan StallTimeout = TimeSpan.FromSeconds(180);
 
     /// <summary>
-    /// Runs one prompt to completion.
+    /// Obtains the whole text of one artifact, however many rounds the provider needs to finish writing it.
     /// </summary>
-    /// <param name="chatClient">The client to run on.</param>
-    /// <param name="system">The system prompt.</param>
-    /// <param name="request">What to ask for.</param>
-    /// <param name="continuationRequest">What is sent to resume an answer the provider cut off mid-write.</param>
-    /// <param name="onResume">Called when the answer had to be resumed, with the length so far.</param>
-    /// <param name="onStall">Called when a round went silent and is about to be retried, with the length reached.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The whole answer, fence stripped. Empty when the model produced no text at all.</returns>
-    /// <exception cref="TimeoutException">The round went silent twice — once and again on its retry.</exception>
+    /// <param name="system">The prompt that composes the model for the artifact.</param>
+    /// <param name="request">The artifact to write.</param>
+    /// <param name="continuationRequest">The message that precedes the text written so far when a cut-off answer is resumed.</param>
+    /// <param name="onResume">Reports the length written so far each time the answer is resumed.</param>
+    /// <param name="onStall">Reports the length reached each time a silent round is retried.</param>
+    /// <param name="cancellationToken">Stops the completion when the client leaves the page.</param>
+    /// <returns>The whole answer, fence stripped; empty when the model produced no text at all.</returns>
+    /// <exception cref="TimeoutException">The round went silent twice.</exception>
     public static async Task<string> RunAsync(
         IChatClient chatClient,
         string system,
@@ -48,14 +33,17 @@ public static class StreamedCompletion
         Action<int>? onStall = null,
         CancellationToken cancellationToken = default)
     {
+        // The conversation opens with the artifact's composed prompt and the request to write it.
         List<ChatMessage> conversation =
         [
             new ChatMessage(ChatRole.System, system),
             new ChatMessage(ChatRole.User, request)
         ];
 
+        // The answer accumulates across rounds so the artifact is returned whole.
         StringBuilder answer = new StringBuilder();
 
+        // Rounds repeat until the model finishes on its own or a resume cannot continue.
         while (true)
         {
             // Where this round starts, so a round that adds nothing is recognised below.
@@ -64,22 +52,19 @@ public static class StreamedCompletion
             // One round: the model writes until it stops or the provider cuts it off.
             ChatFinishReason? finishReason = await RoundAsync(chatClient, conversation, answer, onStall, cancellationToken);
 
+            // Any end other than the output limit means the artifact is finished.
             if (finishReason != ChatFinishReason.Length)
                 break;
 
-            // No progress means resuming is not working and another round would only spend money to
-            // produce the same nothing. This is the loop's only exit besides completion and it is a
-            // fact about the last response rather than a budget.
+            // A cut-off round that wrote nothing means resuming does not work: another round would pay for the same nothing.
             if (answer.Length == start)
                 break;
 
+            // The caller learns how much of the artifact stands, so the client can see the resume happen.
             onResume?.Invoke(answer.Length);
 
-            // Rebuilt to exactly three messages every round rather than appended to: the assistant's
-            // cut-off reply never re-enters the conversation (that would be the assistant-prefill
-            // shape the class-level remarks rule out) and a prior continuation request is replaced
-            // rather than accumulated, so the provider always sees system + original request + one
-            // "here is everything so far, keep going" turn, however many rounds this takes.
+            // The resume goes back as the client's message, since a trailing assistant turn is refused by the Anthropic client.
+            // The conversation is rebuilt every round so the provider sees the prompt, the request and one resume turn however long the artifact is.
             conversation =
             [
                 conversation[0],
@@ -88,6 +73,7 @@ public static class StreamedCompletion
             ];
         }
 
+        // The artifact is handed over without the markdown fence a model may wrap it in.
         return Unfenced(answer.ToString());
     }
 
@@ -104,47 +90,50 @@ public static class StreamedCompletion
         // Where the round starts, so a stalled attempt can be rolled back to it.
         int start = answer.Length;
 
+        // A silent stream is retried once from the same point.
         for (int attempt = 1; ; attempt++)
         {
+            // The provider's reason for ending the stream, taken from the first update that carries one.
             ChatFinishReason? finishReason = null;
 
-            // Linked, so a client pressing Stop still cancels through this; and reset on every
-            // update, so the deadline is always "silent since the last token" rather than a
-            // budget for the whole answer.
-            using CancellationTokenSource stall =
-                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            // The deadline is linked to the client's own cancellation and restarts on every update, so it measures silence since the last token.
+            using CancellationTokenSource stall = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
+            // The first token gets the same allowance as every later one: a stream that never starts is a stall too.
             stall.CancelAfter(StallTimeout);
 
             try
             {
+                // The output ceiling is Alembic's own since a source file's length is a property of the toolkit it describes.
                 await foreach (ChatResponseUpdate update in chatClient.GetStreamingResponseAsync(
                                    conversation, new ChatOptions { MaxOutputTokens = CodeEmitService.OutputCeiling }, stall.Token))
                 {
+                    // A token arrived: the silence deadline starts again.
                     stall.CancelAfter(StallTimeout);
 
+                    // The first finish reason reported is the one that says why the round ended.
                     finishReason ??= update.FinishReason;
 
-                    // Text only. On a reasoning model the updates also carry the thinking and
-                    // appending it would put the model's deliberation inside the artifact.
+                    // Only text enters the artifact: a reasoning model's updates also carry its thinking.
                     foreach (TextContent text in update.Contents.OfType<TextContent>())
                         answer.Append(text.Text);
                 }
 
+                // The stream ended in time: the caller learns whether the provider finished or cut the answer.
                 return finishReason;
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                // Rolled back to where the round started: the resume hands the model
-                // everything written so far, so a half-round left in place would have the retry
-                // continue from text the provider never finished sending.
+                // The half-written round is discarded, so the retry does not continue from text the provider never finished sending.
                 answer.Length = start;
 
+                // The second silence in a row ends the attempt.
                 if (attempt > 1)
                     throw new TimeoutException(
                         $"The model stopped sending for {StallTimeout.TotalSeconds:0} seconds, twice. "
                         + "Nothing was written for this artifact.");
 
+                // The first silence is reported and the loop retries the round.
                 onStall?.Invoke(start);
             }
         }
@@ -153,25 +142,27 @@ public static class StreamedCompletion
     /// <summary>
     /// Strips a markdown code fence if the answer arrived wrapped in one.
     /// </summary>
-    /// <remarks>
-    /// Every prompt here asks for a bare artifact and a model that complies loses nothing. This
-    /// exists because the failure it prevents is a file that does not parse over three backticks,
-    /// which is a poor thing to hand a client at the end of an interview.
-    /// </remarks>
     public static string Unfenced(string answer)
     {
+        // Surrounding whitespace is never part of the artifact.
         string text = answer.Trim();
 
+        // An answer that opens without a fence is already the bare artifact.
         if (!text.StartsWith("```", StringComparison.Ordinal))
             return text;
 
+        // A fence with no line after it holds no artifact to unwrap.
         int firstNewline = text.IndexOf('\n');
         if (firstNewline < 0)
             return text;
 
+        // The opening fence line, with its language tag, is dropped.
         text = text[(firstNewline + 1)..];
+
+        // The closing fence is cut when the model wrote one.
         int fence = text.LastIndexOf("```", StringComparison.Ordinal);
 
+        // The unwrapped file ends with a single newline.
         return (fence >= 0 ? text[..fence] : text).TrimEnd() + "\n";
     }
 }

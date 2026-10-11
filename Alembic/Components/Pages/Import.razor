@@ -16,7 +16,6 @@
 
 <div class="alembic-page">
 
-    @* What came in reads in its own scroll, however many agents it holds; the doors stay in view below it. *@
     <div class="import-reading">
 
     @if (Revealed is null)
@@ -247,16 +246,21 @@
     /// </summary>
     private static string? Named(InterviewSitting sitting)
     {
+        // The sitting stopped on an agent of the map: the client was writing it.
         if (sitting.At >= 0 && sitting.At < sitting.Map.Count)
         {
             IntentDraft entry = sitting.Map[sitting.At];
             return $"You were in the middle of {entry.Name}";
         }
 
+        // Otherwise the sitting stopped while the map was being drawn: its length says how far.
         return sitting.Map.Count switch
         {
+            // An empty map holds nothing to resume.
             0 => null,
+            // A single entry reads in the singular.
             1 => "You were drawing the map, one entry declared so far",
+            // Several entries are counted.
             var count => $"You were drawing the map, {count} entries declared so far"
         };
     }
@@ -266,13 +270,16 @@
     /// </summary>
     private static string Humanise(string? name)
     {
+        // A tool with no name is shown as a dash.
         if (string.IsNullOrWhiteSpace(name))
             return "—";
 
+        // The words of the name accumulate here, lowered and spaced.
         StringBuilder phrase = new StringBuilder();
 
         foreach (char letter in name)
         {
+            // Each capital after the first letter starts a new word.
             if (char.IsUpper(letter) && phrase.Length > 0)
                 phrase.Append(' ');
 
@@ -293,6 +300,7 @@
     /// </summary>
     private async Task OnFileSelectedAsync(InputFileChangeEventArgs selection)
     {
+        // A new upload replaces whatever the previous one showed or reported.
         isReading = true;
         error = null;
         arrivedAsArchive = false;
@@ -308,13 +316,16 @@
 
             buffer.Position = 0;
 
+            // A zip is the archive Alembic emitted: its save file travels inside.
             if (IsZip(buffer))
             {
                 // An archive is Alembic's only where it carries the marker its own emit writes: any other zip is somebody else's.
                 arrivedAsArchive = HasMarker(buffer);
 
+                // The save file inside is the only part of the archive that Alembic reads back.
                 await using MemoryStream? saveFile = arrivedAsArchive ? await ExtractSaveFileAsync(buffer) : null;
 
+                // An archive without its save file cannot restore the draft, so it is refused.
                 if (saveFile is null)
                 {
                     error = $"{file.Name} is not an archive of mine. {OnlyOwnFiles}";
@@ -326,6 +337,7 @@
                 return;
             }
 
+            // A bare JSON is accepted only when it is a save file.
             if (IsSaveFile(buffer))
             {
                 buffer.Position = 0;
@@ -333,6 +345,7 @@
                 return;
             }
 
+            // Any other file is not one of Alembic's own: a bare agents.json has no draft behind it.
             error = $"{file.Name} is not a save file of mine. {OnlyOwnFiles}";
         }
         // Too large, a broken zip or JSON that is not what it claims: each is told to the client, never a dropped circuit.
@@ -342,6 +355,7 @@
         }
         finally
         {
+            // The page shows the outcome of the read, success or not.
             isReading = false;
         }
     }
@@ -351,12 +365,14 @@
     /// </summary>
     private async Task ResumeAsync(Stream saveFile, string fileName)
     {
+        // A file that carried the save marker yet does not deserialize is reported by name.
         if (await DraftSerializationService.DeserializeAsync(saveFile) is not { } draft)
         {
             error = $"{fileName} looks like a sitting of ours, but I could not read it.";
             return;
         }
 
+        // The restored draft becomes the circuit's domain.
         SetDraft(draft);
     }
 
@@ -365,7 +381,10 @@
     /// </summary>
     private void SetDraft(DomainDraft? draft)
     {
+        // An interview in progress was written against the previous draft and would contradict the new one.
         InterviewService.Abandon();
+
+        // The circuit's single draft becomes the uploaded one.
         DraftStateService.Set(draft);
     }
 
@@ -380,9 +399,11 @@
     /// </summary>
     private static bool HasMarker(MemoryStream buffer)
     {
+        // The shape test read the stream to its end: the archive is read from the start.
         buffer.Position = 0;
         using ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true);
 
+        // The marker file's presence is what makes the zip Alembic's own.
         return archive.Entries.Any(entry => string.Equals(
             entry.Name, Alembic.Services.AssetPackageService.MarkerFileName, StringComparison.OrdinalIgnoreCase));
     }
@@ -392,18 +413,23 @@
     /// </summary>
     private static async Task<MemoryStream?> ExtractSaveFileAsync(MemoryStream buffer)
     {
+        // The marker check read the stream to its end: the archive is read from the start.
         buffer.Position = 0;
         await using ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true);
 
+        // Every archive Alembic emits carries its save file under this name.
         ZipArchiveEntry? entry = archive.Entries.FirstOrDefault(e => string.Equals(e.Name, "alembic-draft.json", StringComparison.OrdinalIgnoreCase));
 
+        // An archive without the save file cannot restore a sitting.
         if (entry is null)
             return null;
 
+        // The save file leaves the archive as a stream of its own, so the archive can close.
         MemoryStream copy = new MemoryStream();
         await using (Stream entryStream = await entry.OpenAsync())
             await entryStream.CopyToAsync(copy);
 
+        // The save file is handed over ready to be read from its first byte.
         copy.Position = 0;
         return copy;
     }
@@ -417,6 +443,7 @@
         {
             using JsonDocument document = JsonDocument.Parse(json);
 
+            // Only a saved interview carries the marker property at its root.
             return document.RootElement.ValueKind == JsonValueKind.Object
                    && document.RootElement.EnumerateObject().Any(property =>
                        string.Equals(property.Name, SaveFileMarker, StringComparison.OrdinalIgnoreCase));

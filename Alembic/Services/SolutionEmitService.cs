@@ -5,39 +5,26 @@ using System.Reflection;
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="ISolutionEmitService"/>: string templates and nothing else — same discipline
-/// as <see cref="CodeEmitService"/>, applied one level up, to the project that houses its output.
+/// Writes the project and solution files that house the emitted sources, so the unzipped archive builds as it is.
 /// </summary>
-/// <remarks>
-/// Without this, the archive is loose sources: a client unzips it and still has to create a class
-/// library, add the Morgana.AI reference and embed agents.json by hand before anything builds.
-/// With it, the same unzip is already <c>dotnet build</c> — assuming a NuGet feed that resolves
-/// Morgana.AI, which is the one thing here Alembic cannot see or guarantee.
-/// </remarks>
+/// <remarks>The build needs a NuGet feed that resolves Morgana.AI, which Alembic cannot see.</remarks>
 public class SolutionEmitService : ISolutionEmitService
 {
-    /// <summary>
-    /// The .NET the emitted project targets — the same one Alembic and Morgana.AI are built on.
-    /// </summary>
+    /// <summary>The .NET that the emitted project targets, the one Alembic and Morgana.AI are built on.</summary>
     private const string TargetFramework = "net10.0";
 
     /// <inheritdoc />
-    /// <param name="draft">The domain the project is being emitted for — only its agents' namespace
-    /// is read here; the sources themselves come from <see cref="ICodeEmitService"/> separately.</param>
-    /// <returns>The <c>.csproj</c> and <c>.slnx</c>, named after the resolved namespace, both marked
-    /// <see cref="FileOwnership.Generated"/> — a client editing them by hand loses the edit on the
-    /// next archive built, same as any other <c>.g.cs</c>.</returns>
+    /// <returns>The <c>.csproj</c> and <c>.slnx</c> named after the namespace, both generated so a hand edit is lost on the next archive.</returns>
     public IReadOnlyList<EmittedFile> Emit(DomainDraft draft)
     {
-        // The first agent that carries one, since every agent of one domain is emitted into the same
-        // namespace — there is nothing to reconcile if several agents agree and nothing sensible to
-        // do if they disagree, so the first one found stands for all of them.
+        // Every agent of the domain is emitted into one namespace: the first that declares one stands for all.
         string ns = draft.Agents.FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.Code.Namespace))?.Code.Namespace
                     ?? CodeEmitService.DefaultNamespace;
 
-        // The version of Morgana drives package references
+        // The Morgana packages are pinned to the build that this Alembic runs against.
         string version = PackageVersion(typeof(Morgana.AI.Records));
 
+        // The project is a library that embeds agents.json and references the two Morgana packages.
         string csproj = $"""
             <Project Sdk="Microsoft.NET.Sdk">
 
@@ -63,6 +50,7 @@ public class SolutionEmitService : ISolutionEmitService
             </Project>
             """;
 
+        // The solution lists the project together with the documents that travel in the archive.
         string slnx = $"""
             <Solution>
               <Folder Name="/Solution Items/">
@@ -74,6 +62,7 @@ public class SolutionEmitService : ISolutionEmitService
             </Solution>
             """;
 
+        // The archive receives the project and the solution as generated files.
         return
         [
             new EmittedFile($"{ns}.csproj", csproj, FileOwnership.Generated),
@@ -81,18 +70,14 @@ public class SolutionEmitService : ISolutionEmitService
         ];
     }
 
-    /// <summary>
-    /// The version to pin a package reference to: whichever build of it this very Alembic is
-    /// running against, read off the assembly of one of its own types rather than restated by hand
-    /// somewhere it would drift the day the framework ships a new one.
-    /// </summary>
+    /// <summary>The version of the package that a type comes from, which the emitted project pins its reference to.</summary>
     private static string PackageVersion(Type typeFromThatPackage)
     {
-        // The informational version is the package's own, preview suffix included: the numeric
-        // assembly version would pin 1.0.0, which no preview package satisfies. The SDK appends the
-        // source revision after a '+', which is no part of a package version.
+        // The informational version carries the preview suffix that the package is published with.
+        // The source revision after the '+' is no part of a package version.
         string? informationalVersion = typeFromThatPackage.Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        // A build without version information accepts any version of the package.
         return string.IsNullOrEmpty(informationalVersion) ? "*" : informationalVersion.Split('+')[0];
     }
 }

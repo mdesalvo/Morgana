@@ -3,33 +3,23 @@ namespace Alembic.Models;
 /// <summary>
 /// What has been written down about the agent in hand, in the order it gets written.
 /// </summary>
-/// <remarks>
-/// A projection of the interview rather than a component's private business, because two things on
-/// the screen need it and they are not the same component: the entry's own tag says how much of it
-/// is written and the panel that opens under that tag says what. Computed in one place so the count
-/// on the tag can never disagree with the rows behind it.
-/// </remarks>
+/// <remarks>The entry's tag and the panel under it both read these rows, so the count on the tag always agrees with them.</remarks>
 public static class AgentRows
 {
     /// <summary>
-    /// One row.
+    /// One thing written about the agent, labelled with the noun the rail uses.
     /// </summary>
-    /// <param name="What">What it is, as a noun — the rail's own for the four sections it names.</param>
+    /// <param name="What">The label the client scans, named as the step that settles it.</param>
     /// <param name="Value">What has been written, or <c>null</c> while it is still unasked.</param>
-    /// <param name="Moved">Whether the last exchange is what put it there.</param>
+    /// <param name="Moved">Whether the last exchange is what wrote it.</param>
     public sealed record Row(string What, string? Value, bool Moved);
 
     /// <summary>
-    /// Everything this agent is made of.
+    /// Every row of the agent in hand, in the order the interview writes them.
     /// </summary>
     public static IReadOnlyList<Row> Of(InterviewState interviewState)
     {
-        // Nouns and for the four sections the rail's own nouns. "It is theirs when", "how it meets
-        // them", "what it reaches for" were sentences with pronouns in them and a column of those is
-        // read as prose rather than scanned as labels — the client has to work out what "them" is
-        // before they can find the line they are looking for. Naming the sections exactly as the step
-        // that settles them is named makes the panel and the rail the same vocabulary: what you were
-        // just asked for is the row that just filled in.
+        // Rows are labelled with the rail's own nouns, so the row that just filled in is the one the client was just asked for.
         List<Row> rows =
         [
             new Row("name", interviewState.Intent.Name, interviewState.Changed.Contains("intentName")),
@@ -51,62 +41,56 @@ public static class AgentRows
                 interviewState.Changed.Contains("agentFormatting"))
         ];
 
+        // The rows go to the tag and to the panel behind it.
         return rows;
     }
 
     /// <summary>
     /// A quick reply as the user will meet it: what is written on it and what pressing it sends.
     /// </summary>
-    // One row, because it is one thing. A button whose label is read apart from the sentence it sends
-    // is half of a button and the half that is missing is the one that decides whether pressing it
-    // does what it looked like it would.
     private static string? Button(IntentDraft intent) =>
+        // Label and sentence share one row, since a label read apart from what it sends is half a button.
         intent.Label is null && intent.DefaultValue is null
             ? null
             : $"{intent.Label ?? "…"}  |  {intent.DefaultValue ?? "…"}";
 
     /// <summary>
-    /// The toolkit's own <see cref="Row.Value"/>: not what actually reaches the client, only enough
-    /// to say whether the row is empty and to give <see cref="Written"/> something to count. The view
-    /// itself renders the tools it stands for straight from <see cref="ToolDraft"/>, one line each
-    /// with its signature bolded — real markup, so this stays plain text.
+    /// The toolkit row's value: plain signatures that tell whether the row is empty while the view renders the tools itself.
     /// </summary>
     public static string? Toolkit(IReadOnlyList<ToolDraft> tools) =>
+        // No tool leaves the row unasked.
         tools.Count == 0 ? null : string.Join(" · ", tools.Select(Signature));
 
     /// <summary>
-    /// The workflows' own <see cref="Row.Value"/>: only enough to say whether the row is empty and to
-    /// give <see cref="Written"/> something to count, since the view renders the steps itself.
+    /// The workflows row's value: the workflow names that tell whether the row is empty while the view renders the steps itself.
     /// </summary>
     public static string? Workflows(IReadOnlyList<WorkflowDraft> workflows) =>
+        // No workflow leaves the row unasked.
         workflows.Count == 0 ? null : string.Join(" · ", workflows.Select(workflow => workflow.Name ?? "(unnamed)"));
 
     /// <summary>
     /// A tool's name and parameters, plain text, exactly as the client named both.
     /// </summary>
     public static string Signature(ToolDraft tool) =>
+        // A name still unasked shows as a placeholder so the signature stays readable mid-interview.
         (tool.Name ?? "(unnamed)") + (tool.Parameters.Count == 0
             ? string.Empty
             : $"({string.Join(", ", tool.Parameters.Select(p => p.Name ?? "…"))})");
 
     /// <summary>
-    /// How many rows have something in them.
+    /// How many rows have something written, the count the entry's tag shows.
     /// </summary>
     public static int Written(IReadOnlyList<Row> rows) => rows.Count(row => row.Value is not null);
 
     /// <summary>
     /// A written section as the client should read it: without the label the framework fences it in.
     /// </summary>
-    /// <remarks>
-    /// Public because two screens read prose the interview wrote and neither should meet the fence:
-    /// the panel behind the entry's tag and the walk over a domain's agents.
-    /// </remarks>
-    // [TARGET] is a marker for the model that reads the composed prompt, guaranteed in code precisely
-    // because it must not depend on anyone remembering it. It is not a word of this client's and a
-    // panel written for them is the wrong place to meet it.
+    /// <remarks>The entry's panel and the walk over a domain's agents both show prose without the fence.</remarks>
     public static string? Plain(string? section) =>
+        // The leading [TARGET]-style marker is for the model alone and is not a word of the client's.
         section is null ? null : Labelled.Replace(section, string.Empty).TrimStart();
 
+    /// <summary>Matches the bracketed label that the framework fences a section in.</summary>
     private static readonly System.Text.RegularExpressions.Regex Labelled =
         new(@"^\s*\[[A-Z ]+\]\s*", System.Text.RegularExpressions.RegexOptions.Compiled);
 }

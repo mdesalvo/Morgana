@@ -235,7 +235,6 @@
                     </FluentGridItem>
 
                     <FluentGridItem Xs="5">
-                        @* Newest first in the markup: the log is drawn bottom up, so it stays on its newest line by itself. *@
                         <ol class="distillation-log" aria-live="polite">
                             <li class="log-current"><FluentSpinner Size="SpinnerSize.Tiny" />Writing @CurrentLogLabel…</li>
                             @for (int line = pathsWritten.Count - 1; line >= 0; line--)
@@ -287,7 +286,7 @@
     public DomainDraft Draft { get; set; } = default!;
 
     /// <summary>
-    /// Taking the work away.
+    /// The shell's buttons for taking the work away, drawn beside this card's own actions.
     /// </summary>
     [Parameter]
     public RenderFragment? Keep { get; set; }
@@ -430,22 +429,27 @@
     /// <summary>
     /// Fills every missing class name from the agent's name and reads back the stated code facts.
     /// </summary>
-    // Proposed in the box itself, where the client reads it before it can land in their code.
     protected override void OnInitialized()
     {
+        // Names are proposed in the boxes themselves, where the client reads them before they can land in their code.
         foreach (AgentDraft agent in Draft.Agents)
         {
+            // An agent that has no class name yet receives the one its ID suggests.
             if (string.IsNullOrWhiteSpace(agent.Code.AgentClassName))
                 agent.Code.AgentClassName = AgentCodeFacts.ProposeClassName(agent.ID, "Agent");
 
+            // Only an agent with tools has a tool class to name.
             if (agent.Tools.Count > 0 && string.IsNullOrWhiteSpace(agent.Code.ToolClassName))
                 agent.Code.ToolClassName = AgentCodeFacts.ProposeClassName(agent.ID, "Tool");
 
+            // The facts are on screen for the client to confirm from here, so they stop counting as inferred.
             agent.Code.Inferred = false;
 
+            // The rows start from the MCP servers the agent already declares.
             mcp[agent] = [.. agent.Code.MCPServers.Select(url => new McpRow { Url = url })];
         }
 
+        // The namespace is one for the domain: the first agent that states it supplies it.
         rootNamespace = Draft.Agents.Select(agent => agent.Code.Namespace).FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? string.Empty;
     }
 
@@ -462,13 +466,16 @@
     {
         get
         {
+            // A blank namespace is reported only once distilling was refused.
             if (string.IsNullOrWhiteSpace(rootNamespace))
                 return touched ? "Required" : null;
 
+            // Every dot-separated segment becomes a C# identifier in the emitted files.
             foreach (string part in rootNamespace.Trim().Split('.'))
                 if (!IsIdentifier(part))
                     return $"\"{part}\" cannot be a segment of a C# namespace.";
 
+            // Every segment is usable, so there is nothing to tell the client.
             return null;
         }
     }
@@ -503,7 +510,10 @@
     /// </summary>
     private async Task InvalidateAsync()
     {
+        // The archive was written against the old facts and must be built again.
         package = null;
+
+        // The shell learns that the domain changed under the client's hands.
         await OnChanged.InvokeAsync();
     }
 
@@ -517,6 +527,7 @@
     /// </summary>
     private async Task RemoveMcpAsync(AgentDraft agent, McpRow row)
     {
+        // The row leaves the screen and the agent's code facts follow it.
         McpRows(agent).Remove(row);
         await SyncMcpAsync(agent);
     }
@@ -526,32 +537,39 @@
     /// </summary>
     private async Task TryMcpAsync(McpRow row)
     {
+        // The row shows a spinner and forgets the outcome of any earlier try.
         row.Trying = true;
         row.TriedUrl = row.Url;
         row.ToolCount = null;
         row.Failure = null;
 
+        // A server that does not answer in ten seconds is reported as silent.
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
 
         try
         {
+            // The client opens the same kind of session the agent will open at runtime.
             await using Morgana.AI.Services.MCPClient client = await Morgana.AI.Services.MCPClient.ConnectAsync(
                 new Morgana.AI.Attributes.UsesMCPServerAttribute(row.Url.Trim()), Logger, timeout.Token);
 
+            // The number of tools the server lists is what the client reads as proof that the address works.
             row.ToolCount = (await client.DiscoverToolsAsync(timeout.Token)).Count;
         }
         catch (Exception failure)
         {
             // An unreachable server is an outcome to show: a server down today may be up tomorrow and nothing is blocked.
+            // The innermost exception carries the reason the client can act on.
             Exception rootCause = failure;
 
             while (rootCause.InnerException is { } cause)
                 rootCause = cause;
 
+            // The timeout has a sentence of its own: its exception message says nothing about the server.
             row.Failure = timeout.IsCancellationRequested ? "no answer within 10 seconds" : rootCause.Message;
         }
         finally
         {
+            // Whatever the outcome the spinner gives way to the badge.
             row.Trying = false;
         }
     }
@@ -561,6 +579,7 @@
     /// </summary>
     private async Task SyncMcpAsync(AgentDraft agent)
     {
+        // The agent's code facts hold the trimmed addresses in the order the client typed them.
         agent.Code.MCPServers = [.. McpRows(agent).Select(row => row.Url.Trim())];
         await InvalidateAsync();
     }
@@ -570,22 +589,27 @@
     /// </summary>
     private async Task FinalizeAsync()
     {
+        // From now on every missing fact shows as an error.
         touched = true;
 
+        // The code cannot be written around a missing namespace or class name or a malformed address.
         if (HasHoles)
         {
             await OnNotify.InvokeAsync(new Notice("Namespace, tier, class names and MCP servers must be completed before distilling.", NoticeKind.Warning));
             return;
         }
 
+        // The findings that stop the domain from starting at runtime are caught here while changing them costs nothing.
         int errors = DraftValidationService.Validate(Draft).Count(finding => finding.Severity == FindingSeverity.Error);
 
+        // A domain Morgana would refuse at startup is not packaged.
         if (errors > 0)
         {
             await OnNotify.InvokeAsync(new Notice($"{errors} {(errors == 1 ? "error stops" : "errors stop")} this domain from starting: see Validation.", NoticeKind.Failure));
             return;
         }
 
+        // Facts complete and domain startable: the archive is built.
         await BuildAsync();
     }
 
@@ -594,6 +618,7 @@
     /// </summary>
     private async Task AgainAsync()
     {
+        // The previous archive is discarded so the download never offers a stale one while the new one is built.
         package = null;
         await BuildAsync();
     }
@@ -603,6 +628,7 @@
     /// </summary>
     private async Task BuildAsync()
     {
+        // The card switches to the distillation view with an empty log and a plan to walk.
         running = true;
         pathsWritten.Clear();
         plan.Clear();
@@ -613,22 +639,28 @@
 
         try
         {
+            // The namespace is stored on every agent because the code facts are kept per agent.
             foreach (AgentDraft agent in Draft.Agents)
                 agent.Code.Namespace = rootNamespace.Trim();
 
+            // The shell is told that the namespace landed on the domain before the long wait begins.
             await OnChanged.InvokeAsync();
 
             // State only: drawing is the heartbeat's, so no interop outlives the circuit from here.
             Progress<string> progress = new Progress<string>(path =>
             {
+                // The log shows the file the moment it lands in the archive.
                 pathsWritten.Add(path);
 
+                // A path that belongs to no step of the plan adds a log line only.
                 if (MatchStep(path) is not { } step)
                     return;
 
+                // The step in hand before the file landed tells whether this file moved the build on.
                 Step? stepInProgress = InProgress;
                 step.Done = true;
 
+                // The elapsed-time counter restarts whenever a new step begins.
                 if (!ReferenceEquals(InProgress, stepInProgress))
                     stepEnteredAt = DateTime.UtcNow;
             });
@@ -638,11 +670,13 @@
             CancellationToken token = buildCancellation.Token;
             package = await Task.Run(() => AssetPackageService.BuildAsync(draft, progress, token));
 
+            // The archive is complete: steps that reported no file of their own are closed as well.
             foreach (Step step in plan)
                 step.Done = true;
         }
         catch (OperationCanceledException)
         {
+            // Stop discards the whole build so the client never holds half an archive.
             package = null;
             pathsWritten.Clear();
             plan.Clear();
@@ -650,11 +684,13 @@
         }
         catch (Exception failure)
         {
+            // The client reads the reason where they are looking: a model refusal or a failed emit.
             Logger.LogError(failure, "The archive could not be built");
             await OnNotify.InvokeAsync(new Notice($"The archive could not be built: {failure.Message}", NoticeKind.Failure));
         }
         finally
         {
+            // Whatever the outcome the card leaves the distillation view and releases the build.
             StopHeartbeat();
             running = false;
             isStopping = false;
@@ -668,9 +704,11 @@
     /// </summary>
     private void Stop()
     {
+        // Nothing to stop when no build runs or a stop is already unwinding.
         if (buildCancellation is null || isStopping)
             return;
 
+        // The button says "Stopping…" until the build's handler has discarded its files.
         isStopping = true;
 
         try
@@ -679,6 +717,7 @@
         }
         catch (Exception exception)
         {
+            // The build ended between the check and the call: the stop has already been achieved.
             Logger.LogDebug(exception, "Cancelling the build threw while stopping");
         }
     }
@@ -688,6 +727,7 @@
     /// </summary>
     private async Task DownloadAsync()
     {
+        // The browser receives the archive as a zip named by convention.
         if (package is { } archive)
             await JS.InvokeVoidAsync("alembicSave", ArchiveName, Convert.ToBase64String(archive), "application/zip");
     }
@@ -749,6 +789,7 @@
             });
         }
 
+        // The plan lists steps in the order the package service writes them.
         return steps;
     }
 
@@ -782,14 +823,15 @@
     /// <summary>
     /// The agent the model turns to after the one it is writing for, while there is one.
     /// </summary>
-    // Only the steps that wait on the model count: a class is templated in no time, so an agent without
-    // tools would be announced and passed in the same instant and the line would jump past it.
     private string? NextAgent
     {
         get
         {
+            // Only the steps that wait on the model count: a class is templated in no time, so an agent without
+            // tools would be announced and passed in the same instant and the line would jump past it.
             List<Step> awaitingModel = [.. plan.Where(step => !step.Done && step.Kind == StepKind.Mock)];
 
+            // The next agent is the first one after the agent being written whose mock is still to come.
             return awaitingModel.Count == 0
                 ? null
                 : awaitingModel.FirstOrDefault(step => step.AgentId != awaitingModel[0].AgentId)?.Label;
@@ -849,6 +891,7 @@
     {
         get
         {
+            // A step that has just begun shows no time; a slow one shows seconds then minutes.
             int seconds = (int)(DateTime.UtcNow - stepEnteredAt).TotalSeconds;
             return !running || seconds < 3 ? null : seconds < 60 ? $"{seconds}s" : $"{seconds / 60}m {seconds % 60:00}s";
         }
@@ -859,6 +902,7 @@
     /// </summary>
     private void StartHeartbeat()
     {
+        // A beat already running is replaced so a second build never doubles the redraws.
         StopHeartbeat();
         heartbeat = new System.Threading.Timer(_ => _ = BeatAsync(), null, TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
     }
@@ -870,6 +914,7 @@
     {
         try
         {
+            // The page repeats the log and the clock while a model call keeps the build silent.
             await InvokeAsync(StateHasChanged);
         }
         catch (OperationCanceledException)
@@ -878,6 +923,7 @@
         }
         catch (Exception exception) when (exception is ObjectDisposedException or InvalidOperationException)
         {
+            // The client's circuit is gone: the beat has nothing left to redraw.
             StopHeartbeat();
         }
     }
@@ -887,6 +933,7 @@
     /// </summary>
     private void StopHeartbeat()
     {
+        // Without a beat the page redraws only on events.
         heartbeat?.Dispose();
         heartbeat = null;
     }
@@ -896,14 +943,17 @@
     /// </summary>
     public void Dispose()
     {
+        // The client left the page: nothing is left to redraw.
         StopHeartbeat();
 
         try
         {
+            // Nobody is left to download the archive, so the build in flight is stopped.
             buildCancellation?.Cancel();
         }
         catch (Exception exception)
         {
+            // The build had already finished: its token source is gone.
             Logger.LogDebug(exception, "Cancelling the build on dispose threw");
         }
 

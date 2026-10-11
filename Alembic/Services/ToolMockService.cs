@@ -10,38 +10,32 @@ using Morgana.AI.Interfaces;
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="IToolMockService"/>: one completion per agent, on the Efficiency tier.
+/// Authors the working mock of an agent's tool class in one completion on the Efficiency tier.
 /// </summary>
-/// <remarks>
-/// A single completion rather than an agent with tools, because nothing here is a conversation:
-/// there is one input, the toolkit and one output, a file. The interview needed tools to hold a
-/// state machine steady across many turns; this needs none of that and giving it an agent would be
-/// machinery in place of a call.
-/// </remarks>
+/// <remarks>One completion is enough: the input is the generated toolkit and the output is a single file.</remarks>
 public class ToolMockService : IToolMockService
 {
-    /// <summary>
-    /// The prompt in <c>alembic.json</c> that governs mock authoring.
-    /// </summary>
+    /// <summary>The <c>alembic.json</c> prompt that composes the mock author.</summary>
     private const string MockPromptId = "CodeMocker";
 
-    /// <summary>
-    /// The prompt in <c>alembic.json</c> that holds the sentence resuming a cut-off answer.
-    /// </summary>
+    /// <summary>The <c>alembic.json</c> prompt that holds the sentence resuming a cut-off answer.</summary>
     private const string AlembicPromptId = "Alembic";
 
+    /// <summary>Resolves the mock author's prompt and injections from <c>alembic.json</c>.</summary>
     private readonly IAlembicPromptService alembicPromptService;
+
+    /// <summary>Supplies the generated half whose signatures the mock completes.</summary>
     private readonly ICodeEmitService codeEmitService;
+
+    /// <summary>Supplies the Efficiency-tier chat client that writes the mock.</summary>
     private readonly ILLMService llmService;
+
+    /// <summary>Records a mock that was resumed or went silent.</summary>
     private readonly ILogger logger;
 
     /// <summary>
-    /// Initializes the mock service.
+    /// Initializes the mock author over the code emit and the Efficiency-tier model.
     /// </summary>
-    /// <param name="alembicPromptService">Resolves the <c>CodeMocker</c> prompt from <c>alembic.json</c>.</param>
-    /// <param name="codeEmitService">Supplies the generated tool signatures the mock must implement.</param>
-    /// <param name="llmService">Supplies the chat client, always on the Efficiency tier.</param>
-    /// <param name="logger">Records a resumed (cut-off) generation — the caller's own progress signal.</param>
     public ToolMockService(
         IAlembicPromptService alembicPromptService,
         ICodeEmitService codeEmitService,
@@ -55,19 +49,17 @@ public class ToolMockService : IToolMockService
     }
 
     /// <inheritdoc />
-    /// <param name="agent">The agent whose toolkit needs a mock body — read for its Target, Formatting and tools.</param>
-    /// <param name="intentName">The intent this agent answers, passed through to <see cref="ICodeEmitService.Emit"/>
-    /// to regenerate the same tool signatures the caller already has, rather than threading them through as a parameter.</param>
-    /// <param name="cancellationToken">Cancels the underlying completion.</param>
-    /// <returns>The whole <c>Tools/*.cs</c> source file, fence-stripped and ready to write to the archive.</returns>
-    /// <exception cref="InvalidOperationException">The model returned no text at all — see the remarks below.</exception>
+    /// <param name="agent">The agent whose toolkit needs a mock body.</param>
+    /// <param name="intentName">The intent the agent answers, used to regenerate the signatures the mock completes.</param>
+    /// <param name="cancellationToken">Stops the completion when the client leaves the page.</param>
+    /// <returns>The whole <c>Tools/*.cs</c> source file, ready to write to the archive.</returns>
+    /// <exception cref="InvalidOperationException">The model returned no source or repeated a defect after its retry.</exception>
     public async Task<string> AuthorAsync(AgentDraft agent, string intentName, CancellationToken cancellationToken = default)
     {
+        // The mock author's own prose is read from alembic.json.
         Records.Prompt mock = alembicPromptService.Resolve(MockPromptId);
 
-        // Composed without Morgana's layer, unlike every interview pass. Her Personality is how she
-        // speaks to someone; this call speaks to nobody and emits a file. Handing it a voice would
-        // be the same defect the interview doctrine warns about, pointed the other way.
+        // The prompt carries no Morgana voice: this call speaks to nobody and emits a file.
         string system = string.Join("\n\n",
             new[]
             {
@@ -76,12 +68,11 @@ public class ToolMockService : IToolMockService
                 Records.Prompt.Labeled(Constants.SectionLabels.Formatting, mock.Formatting)
             }.Where(section => section.Length > 0));
 
-        // The generated half IS the specification: it carries the exact signatures the answer must
-        // implement, the class name, the namespace and the base class. Describing them in prose as
-        // well would be a second, drifting statement of something already exact.
+        // The generated half is the specification: it carries the signatures to implement, the class name, the namespace and the base class.
         EmittedFile signatures = codeEmitService.Emit(agent, intentName)
             .First(f => f.Path.Contains("/Tools/", StringComparison.Ordinal) || f.Path.StartsWith("Tools/", StringComparison.Ordinal));
 
+        // The request is the task, the generated half, the contracts of arguments and results and what the agent is for.
         StringBuilder request = new StringBuilder();
         request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "Request"));
         request.AppendLine();
@@ -91,87 +82,90 @@ public class ToolMockService : IToolMockService
         request.AppendLine();
         request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "AgentPurpose", ("target", agent.Target ?? string.Empty)));
 
+        // An agent with a Formatting tells the author how its tool output is presented.
         if (!string.IsNullOrWhiteSpace(agent.Formatting))
         {
             request.AppendLine();
             request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "AgentPresentation", ("formatting", agent.Formatting)));
         }
 
-        // The class the two halves share, named by the fact the emit already carries rather than
-        // guessed: what the generated half declares is what a second declaration would collide with.
+        // The class the two halves share is named as the generated half declares it, which is what a second declaration would collide with.
         string className = agent.Code.ToolClassName ?? intentName;
 
+        // Mocks are code the client reads and runs on the first turn, so they are written on the Efficiency tier.
         IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 
+        // First attempt at the whole source file.
         string source = await CompleteAsync(chatClient, system, request.ToString(), agent, cancellationToken);
 
-        // Thrown rather than returned, so the packager's per-agent catch writes a file that says
-        // what happened instead of one that is silently empty. An empty source file is the one
-        // outcome here that looks like success and is not.
+        // An empty source would look like a finished mock: the throw lets the packager's per-agent catch write a file that says what happened.
         if (source.Length == 0)
             throw new InvalidOperationException(
                 $"The model returned no source for {className}: the whole response was "
                 + "reasoning and no text. That is what a MaxOutputTokens too small for a source file produces — Alembic's "
                 + "own ceiling is generous for exactly this reason, so check what the model can emit.");
 
-        // One retry covers every problem the first answer has, so a file wrong twice over costs one
-        // more completion and not two. The constructor belongs to the generated half, which is where
-        // the tool's own dependencies are taken and handed to the base class: one written here wins
-        // over it and takes neither, so the base constructor goes unsatisfied. The result records are
-        // declared there too, so a second declaration collides with them. A type that a record names
-        // and nobody declares is the opposite case: it exists only if this half declares it. Told once
-        // and written anyway, the model is told what it did and asked again.
+        // The constructor and the result records belong to the generated half: redeclaring them breaks the build.
+        // A type that a record field names exists only if this half declares it.
+        // One retry names every defect found, so a file wrong in several ways costs one more completion.
         MockDefects defects = MockDefects.Of(source, agent, className);
 
+        // A source with any defect is asked for again with the defects named.
         if (defects.Any)
         {
+            // The constructor takes the tool's dependencies in the generated half, so one written here leaves the base class unsatisfied.
             if (defects.WroteConstructor)
             {
                 request.AppendLine();
                 request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "ConstructorWritten", ("class", className)));
             }
 
+            // The result records are already declared by the generated half.
             if (defects.RedeclaredRecords.Count > 0)
             {
                 request.AppendLine();
                 request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "RecordsRedeclared", ("records", string.Join(", ", defects.RedeclaredRecords))));
             }
 
+            // The types that returned fields name are declared only by the half this author writes.
             if (defects.MissingTypes.Count > 0)
             {
                 request.AppendLine();
                 request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "TypesUndeclared", ("types", string.Join(", ", defects.MissingTypes))));
             }
 
+            // Second attempt, with the defects of the first named in the request.
             source = await CompleteAsync(chatClient, system, request.ToString(), agent, cancellationToken);
 
             // The second answer is judged on its own: what the first got wrong is no evidence against it.
             defects = MockDefects.Of(source, agent, className);
         }
 
-        // Thrown rather than returned, for the same reason as an empty answer: a file that says what
-        // went wrong is worth more to whoever opens the archive than one that cannot be built.
+        // A defect that survives the retry is thrown, so whoever opens the archive finds a file that says what went wrong instead of one that cannot be built.
         if (defects.WroteConstructor)
             throw new InvalidOperationException(
                 $"The model wrote a constructor for {className} twice over. That class takes its dependencies in the "
                 + "generated half of the pair and a second constructor leaves the base class unsatisfied, so the "
                 + "archive would not build.");
 
+        // The second answer still redeclares the generated records.
         if (defects.RedeclaredRecords.Count > 0)
             throw new InvalidOperationException(
                 $"The model declared {string.Join(", ", defects.RedeclaredRecords)} twice over. The generated half already declares "
                 + "those records, so a second declaration would not build.");
 
+        // The second answer still leaves a returned field's type undeclared.
         if (defects.MissingTypes.Count > 0)
             throw new InvalidOperationException(
                 $"The model left {string.Join(", ", defects.MissingTypes)} undeclared twice over. The generated half names those "
                 + "types as the type of a returned field and only the half written here can declare them, so the archive would not build.");
 
+        // The mock is handed over without any tool attribute the generated half already carries.
         return StripDuplicateToolAttribute(source);
     }
 
     /// <summary>
-    /// Runs one completion for this agent's mock, reporting a cut-off or a stall on the agent's own log.
+    /// Obtains the source of this agent's mock, logging a resume or a stall against the agent.
     /// </summary>
     private Task<string> CompleteAsync(
         IChatClient chatClient, string system, string request, AgentDraft agent, CancellationToken cancellationToken) =>
@@ -203,11 +197,7 @@ public class ToolMockService : IToolMockService
     }
 
     /// <summary>Whether authored source declares a constructor of the class it is one half of.</summary>
-    /// <remarks>
-    /// A declaration is recognised where a method never could be: a member named after its own class,
-    /// opening a line under an access modifier. Anything else naming the class is somebody building
-    /// one, which is what a mock does all day.
-    /// </remarks>
+    /// <remarks>Only a member named after its class under an access modifier counts: a mock builds the class all day.</remarks>
     private static bool DeclaresConstructor(string source, string className) =>
         Regex.IsMatch(source,
             $@"^[ \t]*(?:public|internal|protected|private)[ \t]+(?:sealed[ \t]+)?{Regex.Escape(className)}[ \t]*\(",
@@ -218,16 +208,20 @@ public class ToolMockService : IToolMockService
     /// </summary>
     private void AppendArgumentContract(StringBuilder request, AgentDraft agent)
     {
+        // A tool still unnamed in the draft has no contract to restate.
         foreach (ToolDraft tool in agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name)))
         {
+            // Only parameters the client has named and described are restated.
             List<ToolParameterDraft> parameters =
             [
                 .. tool.Parameters.Where(p => !string.IsNullOrWhiteSpace(p.Name) && !string.IsNullOrWhiteSpace(p.Description))
             ];
 
+            // A tool without parameters has no argument contract.
             if (parameters.Count == 0)
                 continue;
 
+            // The tool is introduced, then each parameter with the description the running model reads.
             request.AppendLine();
             request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "ArgumentContract", ("tool", tool.Name!)));
 
@@ -241,13 +235,17 @@ public class ToolMockService : IToolMockService
     /// </summary>
     private void AppendReturnContract(StringBuilder request, AgentDraft agent)
     {
+        // The fields that a workflow edge carries are flagged, since the mock must fill them for the workflow to move.
         HashSet<(string Tool, string Field)> readByWorkflows = FieldsReadByWorkflows(agent);
 
+        // Only a tool that returns fields has a record to describe.
         foreach (ToolDraft tool in agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name) && t.Returns.Count > 0))
         {
+            // The tool is introduced with the name of the record the generated half declares for it.
             request.AppendLine();
             request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "ReturnContract", ("tool", tool.Name!), ("type", CodeEmitService.ResultTypeName(tool.Name!))));
 
+            // Each field is shown with its type and description plus the notes for the failure field and the workflow-carried ones.
             foreach (ToolReturnDraft field in tool.Returns.Where(r => !string.IsNullOrWhiteSpace(r.Name)))
                 request.AppendLine(CultureInfo.InvariantCulture,
                     $"  {field.Name} ({field.Type}): {field.Description}{(field.Name == Constants.Workflows.FailureField ? alembicPromptService.ResolvePromptInjection(MockPromptId, "FailureFieldNote") : string.Empty)}{(readByWorkflows.Contains((tool.Name!, field.Name!)) ? alembicPromptService.ResolvePromptInjection(MockPromptId, "WorkflowFieldNote") : string.Empty)}");
@@ -257,20 +255,20 @@ public class ToolMockService : IToolMockService
     /// <summary>
     /// The result fields that an edge of some workflow carries to the next step, as tool and field.
     /// </summary>
-    /// <remarks>
-    /// A carried name is matched to the tool's field regardless of case, because the workflow class
-    /// names it as a property and the result record names it as a field.
-    /// </remarks>
     private static HashSet<(string Tool, string Field)> FieldsReadByWorkflows(AgentDraft agent)
     {
+        // The pairs found across every workflow of the agent.
         HashSet<(string Tool, string Field)> fields = [];
 
+        // Every value an edge carries is a field that the next step reads out of the tool's result.
         foreach (Records.WorkflowEdge edge in agent.Workflows.SelectMany(workflow => workflow.Edges))
             foreach (string name in edge.Carrying ?? [])
+                // A carried name matches the result field ignoring case, since the workflow names a property and the record a field.
                 if (agent.Tools.FirstOrDefault(t => string.Equals(t.Name, edge.Tool, StringComparison.Ordinal)) is { } tool
                     && tool.Returns.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase)) is { } field)
                     fields.Add((edge.Tool, field.Name!));
 
+        // The tool and field pairs that the mock must fill.
         return fields;
     }
 
@@ -286,10 +284,6 @@ public class ToolMockService : IToolMockService
     /// <summary>
     /// The types that a returned field names and that neither the generated half nor the authored source declares.
     /// </summary>
-    /// <remarks>
-    /// The generated half declares only the result records, so a record that a field refers to
-    /// (a list of catalog entries) exists only if the half the client owns declares it.
-    /// </remarks>
     private static List<string> UndeclaredClientTypes(string source, AgentDraft agent) =>
         [.. agent.Tools
             .SelectMany(t => t.Returns)
@@ -305,17 +299,9 @@ public class ToolMockService : IToolMockService
         Regex.IsMatch(source, $@"\b(?:record|class|struct|enum|interface)\s+(?:class\s+|struct\s+)?{Regex.Escape(name)}\b");
 
     /// <summary>
-    /// The <c>[ProvidesToolForIntent]</c> attribute the <c>.g.cs</c> half already carries on this
-    /// same partial class.
+    /// Matches the <c>[ProvidesToolForIntent]</c> line that the <c>.g.cs</c> half already carries on the same partial class.
     /// </summary>
-    /// <remarks>
-    /// <c>CodeMocker</c>'s own prompt already tells the model this is a compile error and to write
-    /// no attribute at all; an observed run still wrote one anyway (<c>CS0579</c>, a duplicate
-    /// attribute across the two partial declarations). Prose that has already failed once empirically
-    /// is not made more reliable by restating it more emphatically; this is the deterministic backstop,
-    /// the same reasoning as <see cref="StreamedCompletion.Unfenced"/> stripping a markdown fence the
-    /// model was equally told not to add.
-    /// </remarks>
+    /// <remarks>A second copy of the attribute across the two halves fails the build with CS0579.</remarks>
     private static readonly Regex ProvidesToolForIntentLine =
         new(@"^[ \t]*\[ProvidesToolForIntent\([^\n]*\)\][ \t]*\r?\n", RegexOptions.Multiline | RegexOptions.Compiled);
 

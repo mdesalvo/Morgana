@@ -6,51 +6,40 @@ using Morgana.AI.Interfaces;
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="IRecapService"/>: drives the framework's own composer over a Draft.
+/// Shows the prompt an agent's model will read, composed by the framework's own composer over the draft.
 /// </summary>
-/// <remarks>
-/// There is deliberately almost nothing in this class. Every byte the client is shown comes out of
-/// <see cref="IPromptComposerService"/> and anything Alembic added on top would be a claim about
-/// the prompt rather than the prompt.
-/// </remarks>
+/// <remarks>Nothing is added on top: what the client reads is the prompt itself.</remarks>
 public class RecapService : IRecapService
 {
-    /// <summary>
-    /// The framework's prompt composer.
-    /// </summary>
+    /// <summary>The framework's composer, whose output the client is shown untouched.</summary>
     private readonly IPromptComposerService promptComposerService;
 
     /// <summary>
-    /// Initializes the recap service.
+    /// Initializes the recap over the framework's composer.
     /// </summary>
-    /// <param name="promptComposerService">Assembles what the model reads.</param>
     public RecapService(IPromptComposerService promptComposerService)
     {
         this.promptComposerService = promptComposerService;
     }
 
     /// <inheritdoc />
-    /// <remarks>
-    /// Composed as two separate blocks rather than concatenated, because that is how the model
-    /// itself reads them at runtime — the whole system prompt once, before the conversation starts,
-    /// then each tool description as it is weighed mid-turn. <see cref="AgentRecap"/> keeps that
-    /// same split so what the client is shown here matches the two moments it actually happens.
-    /// </remarks>
-    /// <param name="agent">The agent to recap, projected into the framework's own <see cref="Records.Prompt"/> shape.</param>
-    /// <param name="consultedByOthers">True when some other agent of the domain declares it may consult this one.</param>
-    /// <returns>The system prompt this agent's model will read, plus one <see cref="ToolRecap"/> per declared tool.</returns>
     public async Task<AgentRecap> ComposeAsync(AgentDraft agent, bool consultedByOthers = false)
     {
+        // The system prompt carries the colleague policy whenever the agent asks a colleague or is asked by one.
         string systemPrompt = await promptComposerService.ComposeAgentInstructionsAsync(
             DraftProjection.ToPrompt(agent),
             agent.Code.Consults.Count > 0 || consultedByOthers);
 
+        // Each tool is shown with the description its model weighs mid-turn and the parameters it fills.
         List<ToolRecap> tools = [];
 
         foreach (ToolDraft tool in agent.Tools)
         {
+            // The tool is projected into the framework's own definition, the shape the composer reads.
             Records.ToolDefinition definition = DraftProjection.ToToolDefinition(tool);
 
+            // The tool's recap pairs the description the framework composes for the model with each parameter as the model fills it:
+            // its name, its description, whether it is required and where its value comes from, absent while the scope is unsettled.
             tools.Add(new ToolRecap(
                 definition.Name,
                 await promptComposerService.ComposeToolDescriptionAsync(definition),
@@ -61,6 +50,7 @@ public class RecapService : IRecapService
                     string.IsNullOrWhiteSpace(p.Scope) ? null : p.Scope))]));
         }
 
+        // The recap hands back the prompt and the tools in the two moments the model meets them.
         return new AgentRecap(agent.ID ?? string.Empty, systemPrompt, tools);
     }
 }

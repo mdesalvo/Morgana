@@ -5,13 +5,7 @@ namespace Alembic.Models;
 /// <summary>
 /// Which pass of the interview is running.
 /// </summary>
-/// <remarks>
-/// The mapping pass runs once and the other four run once per intent it produced. That order is
-/// forced twice over. The intents are what a classifier weighs against each other, so they are
-/// designed together or they collide — an intent settled alone is a description nobody compared to
-/// anything. Within an agent, Instructions and Formatting speak about its tools, so they cannot
-/// be written before the toolkit exists.
-/// </remarks>
+/// <remarks>The mapping pass runs once and every other pass runs once per intent it produced.</remarks>
 public enum InterviewStep
 {
     /// <summary>
@@ -62,13 +56,7 @@ public enum InterviewStep
 /// <summary>
 /// One interview in progress.
 /// </summary>
-/// <remarks>
-/// The state machine lives here, in C# and the conducting lives in the model. That split is the
-/// architecture: what has been established, which pass is running and what may be written next are
-/// facts and facts do not belong to a language model's discretion. What the model owns is the
-/// conversation — which question to ask next and how to phrase a domain expert's answer as
-/// dispositive prose.
-/// </remarks>
+/// <remarks>The state holds what is established and what may be written next while the model conducts the conversation.</remarks>
 public sealed class InterviewState
 {
     /// <summary>
@@ -79,60 +67,32 @@ public sealed class InterviewState
     /// <summary>
     /// The question on the table: the last thing Alembic said to the client.
     /// </summary>
-    /// <remarks>
-    /// One question, not a log. The conversation is the agent's (it runs in a live
-    /// <c>AgentSession</c> and is what the model reads back) and a second copy on this side would
-    /// be a transcript nobody needs kept in step with one that already exists. What the screen
-    /// needs is what is being asked right now.
-    /// </remarks>
+    /// <remarks>The transcript lives in the agent's session, so this holds only what the screen asks right now.</remarks>
     public string? Question { get; set; }
 
     /// <summary>
     /// The worked example standing in the answer box under the question on the table.
     /// </summary>
-    /// <remarks>
-    /// Written by the model in the turn that opens a step, not held as a fixed string per pass: by
-    /// then it has read the map, so the example can be an answer somebody in THEIR trade might have
-    /// given, about the agent being built, rather than a stranger's business quoted at them while
-    /// they are being asked about their own. Cleared every exchange, so it belongs to the question
-    /// it was written for and never stands under the short follow-up that comes after it.
-    /// </remarks>
+    /// <remarks>Cleared every exchange, so it never stands under the follow-up of the question it was written for.</remarks>
     public string? Example { get; set; }
 
     /// <summary>
     /// The prose just written for the agent, shown to the client word for word on the turn that asks
     /// whether it is right.
     /// </summary>
-    /// <remarks>
-    /// What is being approved is these exact words, so they are drawn apart from the sentence
-    /// introducing them: run together — 'I have written a fond and careful voice that follows…' —
-    /// the client cannot see where Alembic stops speaking and the agent's own prose starts; an
-    /// approval given to that is an approval of nothing in particular. Cleared every exchange, like
-    /// everything else that belongs to one question.
-    /// </remarks>
+    /// <remarks>The words are drawn apart from the introducing sentence so the client approves the agent's prose and nothing else.</remarks>
     public string? Quoted { get; set; }
 
     /// <summary>
     /// What this step adds to the agent in hand, over the question that asks for it.
     /// </summary>
-    /// <remarks>
-    /// Written by the pass on the turn a step lands on and drawn apart from the question, in its own
-    /// quieter voice: what the client is told and what they are asked are two different things to
-    /// read and one block of text at one size is read as neither. Cleared every exchange, so a
-    /// confirmation or a follow-up carries none and the screen never says the interview has moved on
-    /// when it has not.
-    /// </remarks>
+    /// <remarks>Written on the turn a step lands on and cleared every exchange, so a follow-up never claims the interview has moved on.</remarks>
     public string? Placing { get; set; }
 
     /// <summary>
     /// The button attached to the question on the table and whether it was pressed.
     /// </summary>
-    /// <remarks>
-    /// One button, never a row: the only answer worth a press is the one that agrees, since
-    /// disagreement is a sentence saying what to change and the box it is typed into never closes.
-    /// The pressed flag is held because a button's label and the answer it sends are deliberately
-    /// different things, so a button that stays lit is the only sign the gesture happened at all.
-    /// </remarks>
+    /// <remarks>It is one button carrying the answer that adds nothing; the pressed flag is what shows the gesture happened.</remarks>
     public QuickReply? Choice { get; set; }
 
     /// <inheritdoc cref="Choice" />
@@ -151,19 +111,13 @@ public sealed class InterviewState
     /// <summary>
     /// Whether the question on the table is the first one this pass has asked.
     /// </summary>
-    // Read by the sentence that places the step, which belongs to the question a step lands on and to
-    // no confirmation or follow-up after it. It is also read by the house example, which belongs to the
-    // opening question of the mapping pass alone.
+    // The sentence that places the step and the house example of the mapping pass belong to the opening question alone.
     public bool PassJustOpened => Exchanges <= PassOpenedAt + 1;
 
     /// <summary>
     /// The domain map: every kind of request this business gets, in the order they were named.
     /// </summary>
-    /// <remarks>
-    /// The interview's spine. One entry becomes one intent and one agent and the three later passes
-    /// run once down this list — which is why the map is settled first and whole: what routes to an
-    /// agent is only correct relative to what routes to the others.
-    /// </remarks>
+    /// <remarks>One entry becomes one intent and one agent; the agent passes run once down this list.</remarks>
     public List<IntentDraft> Map { get; } = [];
 
     /// <summary>
@@ -174,25 +128,17 @@ public sealed class InterviewState
     /// <summary>
     /// The intent being built: the map entry the interview stands on.
     /// </summary>
-    /// <remarks>
-    /// Backed by the C# 13 <c>field</c> keyword rather than a named field: while <see cref="At"/> is
-    /// -1 (the map itself is still being drawn) there is no entry to index into, so the getter falls
-    /// back to the auto-property's own backing store — initialised once below to a fresh
-    /// <see cref="IntentDraft"/> — instead of throwing or returning <c>null</c>.
-    /// </remarks>
+    /// <remarks>While <see cref="At"/> is -1 the map is still being drawn and a scratch intent stands in for the missing entry.</remarks>
     public IntentDraft Intent
     {
+        // The entry at the cursor when there is one; the scratch intent while the map is drawn.
         get => At >= 0 && At < Map.Count ? Map[At] : field;
     } = new();
 
     /// <summary>
-    /// Whether the interview is standing on one entry of the map, rather than on the whole domain.
+    /// Whether the interview is standing on one entry of the map or on the whole domain.
     /// </summary>
-    /// <remarks>
-    /// The map stands on the domain and holds an agent nobody will ever write to. What is found out
-    /// about the work there is a fact about the business, so it is kept for the business: written
-    /// onto that empty agent it would be thrown away with it.
-    /// </remarks>
+    /// <remarks>On the map what is found out belongs to the business, since the agent held there is never written.</remarks>
     public bool OnAnEntry => At >= 0 && At < Map.Count;
 
     /// <summary>
@@ -201,16 +147,9 @@ public sealed class InterviewState
     public AgentDraft Agent { get; set; } = new();
 
     /// <summary>
-    /// Set when the entry in hand came out of the domain — one section of an agent that already
-    /// exists, opened from the walk — rather than out of a map being drawn today.
+    /// Set when the entry in hand is a section of an agent that already exists, opened from the walk.
     /// </summary>
-    /// <remarks>
-    /// The steps themselves do not read this and that is what made the walk cheap to build: writing
-    /// the Toolkit of an agent that already exists is the same step, asked the same way, as writing
-    /// the Toolkit of one being written now. What reads it is the two ends — there is nothing behind
-    /// the first step of an edit, since no map was drawn today to step back onto and letting the
-    /// agent in again has to put it back where it came from rather than append it.
-    /// </remarks>
+    /// <remarks>Only stepping back from the first step and letting the agent in again read it.</remarks>
     public AgentRevision? Revision { get; set; }
 
     /// <summary>
@@ -219,14 +158,9 @@ public sealed class InterviewState
     public InterviewState? Resume { get; set; }
 
     /// <summary>
-    /// Whether Alembic considers this pass's fields settled. A statement about the configuration,
-    /// never about the client's patience.
+    /// Whether Alembic considers this pass's fields settled.
     /// </summary>
-    /// <remarks>
-    /// Set only through the <c>SetPassCompleted</c> tool, never by a token in Alembic's text —
-    /// the same out-of-band rule Morgana applies to closing its own turn with Reply and for the same
-    /// reason: a marker inside prose is a marker the prose can accidentally produce.
-    /// </remarks>
+    /// <remarks>Set only through the <c>SetPassCompleted</c> tool, since a marker inside prose can be produced by accident.</remarks>
     public bool ReadyForReview { get; set; }
 
     /// <summary>
@@ -246,14 +180,7 @@ public sealed class InterviewState
     /// <summary>
     /// Words offered for the agent's voice and the ones Alembic is about to offer.
     /// </summary>
-    /// <remarks>
-    /// A cloud rather than buttons and the difference is not decoration: a button is one answer and
-    /// these are picked several at a time, so the shape has to say 'take what fits' rather than
-    /// 'choose one'. It is the one question of the interview the client cannot dictate, since nobody has
-    /// a ready sentence about how their own staff should sound; recognition is what they can do
-    /// instead. The words are the model's, written for this domain and this agent after reading
-    /// Morgana's own voice, so none of them can contradict her.
-    /// </remarks>
+    /// <remarks>They are picked several at a time and so are shown as a cloud, since nobody has a ready sentence about how their staff should sound.</remarks>
     public IReadOnlyList<string> Traits { get; set; } = [];
 
     /// <inheritdoc cref="Traits" />
@@ -267,14 +194,14 @@ public sealed class InterviewState
         // A failure belongs to the turn that raised it and a healthy turn must not inherit it.
         Error = null;
 
-        // The offers are written by the tools during the turn: whatever was queued before is for a question already answered.
+        // Whatever was queued before is for a question already answered.
         PendingChoice = null;
         PendingExample = null;
         PendingPlacing = null;
         PendingQuoted = null;
         PendingTraits.Clear();
 
-        // The rows highlighted last turn are recomputed from this turn's before/after diff.
+        // The rows highlighted last turn are recomputed from this turn's changes.
         Changed.Clear();
     }
 
@@ -295,23 +222,11 @@ public sealed class InterviewState
     }
 
     /// <summary>
-    /// The offered words the agent's voice already carries, so the cloud opens showing the voice
-    /// that exists rather than an empty set.
+    /// The offered words that the agent's voice already carries, so a reopened step shows the voice that exists.
     /// </summary>
-    /// <remarks>
-    /// A step reopened reads what is written as settled fact and this is that rule reaching the one
-    /// part of the screen it had not. An agent whose Personality says it is formal and pragmatic,
-    /// offered the word 'pragmatic' unlit, is being asked to say a second time what the question
-    /// above it has just read back — so the client either re-picks what was already true, which is
-    /// busywork, or leaves it dark and reads the cloud as a claim that it is not.
-    /// <para>
-    /// Literal, case-insensitive, on whole words: a word is lit because the prose contains it, never
-    /// because it means something similar. Lighting 'precise' over a voice that says 'exacting' would
-    /// be Alembic putting a word in the client's mouth on the one question whose whole point is that
-    /// the words are theirs to recognise.
-    /// </para>
-    /// </remarks>
+    /// <remarks>A word is lit only when the prose contains it literally as a whole word, never for a similar meaning.</remarks>
     public IReadOnlyList<string> TraitsTaken =>
+        // A voice already written lights the offered words it contains; an unwritten voice lights none.
         Agent.Personality is { Length: > 0 } voice
             ? [.. Traits.Where(trait => Carries(voice, trait))]
             : [];
@@ -319,21 +234,23 @@ public sealed class InterviewState
     /// <summary>
     /// Whether a piece of prose uses a word, as a word and not as part of a longer one.
     /// </summary>
-    // The boundary check is what keeps 'formal' from lighting up inside 'informal', which is the one
-    // pair where a substring match would say the opposite of the truth.
     private static bool Carries(string prose, string trait)
     {
+        // Every occurrence is checked, since the first may sit inside a longer word.
         for (int at = prose.IndexOf(trait, StringComparison.OrdinalIgnoreCase);
              at >= 0;
              at = prose.IndexOf(trait, at + 1, StringComparison.OrdinalIgnoreCase))
         {
+            // The position just after the match, where the next letter would continue the word.
             int end = at + trait.Length;
 
+            // Letters on either side make it part of a longer word, so 'formal' does not light inside 'informal'.
             if ((at == 0 || !char.IsLetter(prose[at - 1]))
                 && (end == prose.Length || !char.IsLetter(prose[end])))
                 return true;
         }
 
+        // No occurrence stands as a whole word.
         return false;
     }
 
@@ -345,16 +262,7 @@ public sealed class InterviewState
     /// <summary>
     /// The fields the last exchange actually moved.
     /// </summary>
-    /// <remarks>
-    /// The two-column layout exists so the client watches their domain being written and that only
-    /// works if the panel says what just changed. Without it the same rows sit there turn after turn
-    /// and the panel reads as decoration — which is exactly what it becomes once a field is set and
-    /// never mentioned again.
-    /// <para>
-    /// Computed by diffing a snapshot across the exchange rather than reported by the tools, because
-    /// a tool called twice with the same value changed nothing and should not claim to have.
-    /// </para>
-    /// </remarks>
+    /// <remarks>Computed by diffing a snapshot across the exchange, since a tool called with the same value changed nothing.</remarks>
     public HashSet<string> Changed { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -372,12 +280,11 @@ public sealed class InterviewState
         ["agentInstructions"] = Agent.Instructions,
         ["agentFormatting"] = Agent.Formatting,
 
-        // The whole toolkit as one string: any tool added, dropped, renamed, redescribed or
-        // reparametrised moves it, which is precisely when the toolkit panel deserves attention.
+        // The whole toolkit as one string: any change to a tool, its parameters or its returns moves it and lights the toolkit panel.
         ["tools"] = string.Join("|", Agent.Tools.Select(t =>
             $"{t.Name}:{t.Description}:{string.Join(",", t.Parameters.Select(x => $"{x.Name}/{x.Scope}/{x.Required}/{x.Shared}/{x.Description}"))}:{string.Join(",", t.Returns.Select(r => $"{r.Name}/{r.Type}/{r.Description}"))}")),
 
-        // The whole set of workflows as one string, for the same reason as the toolkit above.
+        // The whole set of workflows as one string, lighting the workflows panel on any change.
         ["workflows"] = string.Join("|", Agent.Workflows.Select(w =>
             $"{w.Name}:{w.Description}:{string.Join(",", w.Steps.Select(x => $"{x.Name}/{string.Join("+", x.Tools)}"))}:{string.Join(",", w.Edges.Select(e => $"{e.Source}/{e.Tool}/{e.OnFailure}/{e.Target}/{string.Join("+", e.Carrying)}"))}"))
     };
@@ -385,15 +292,10 @@ public sealed class InterviewState
     /// <summary>
     /// The fields the <em>running</em> pass is responsible for that are still unset.
     /// </summary>
-    /// <remarks>
-    /// Pass-scoped on purpose and it is what makes <c>SetPassCompleted</c> mean anything: a pass is
-    /// complete when the fields it owns are set, never when the fields of a later one are still
-    /// blank. The toolkit and workflows passes own no field at all — an agent with no native tools is a legal
-    /// configuration, the MCP-only case — so it reports only tools left half-declared and its
-    /// emptiness is a decision Alembic must have taken with the client rather than a gate.
-    /// </remarks>
+    /// <remarks>The toolkit and workflows passes report only what is half-declared, since an agent with none of either is legal.</remarks>
     public IReadOnlyList<string> Missing() => Pass switch
     {
+        // Each pass reports the fields it owns; an unknown pass reports none.
         InterviewStep.DomainMapper => MissingMap(),
         InterviewStep.AgentTarget => MissingTarget(),
         InterviewStep.AgentPersonality => MissingVoice(),
@@ -406,72 +308,68 @@ public sealed class InterviewState
     };
 
     /// <summary>
-    /// The map: at least one kind of request, each one complete — the whole <c>Intents</c> section
-    /// of an <c>agents.json</c> and nothing less.
+    /// The map: at least one kind of request, each with its description and its whole button.
     /// </summary>
-    /// <remarks>
-    /// All four fields, because all four are read against their neighbours: the description by the
-    /// classifier, the label and its sentence by a user seeing every button at once. An entry
-    /// missing one of them is not half-written, it is a route that cannot be taken or a button that
-    /// cannot be pressed.
-    /// </remarks>
     private List<string> MissingMap()
     {
+        // A map with no entry has named no kind of request at all.
         if (Map.Count == 0)
             return ["the domain map: not one kind of request has been named yet"];
 
+        // The entries of the map that still lack something the client has to say.
         List<string> gaps = [];
 
+        // Each entry is judged on its own fields.
         foreach (IntentDraft intent in Map)
         {
+            // The gap names the entry in the client's words, with a placeholder while it has no name.
             string intentName = intent.Name ?? "(unnamed)";
 
+            // Without a description the classifier has no route to this entry.
             if (string.IsNullOrWhiteSpace(intent.Description))
                 gaps.Add($"what routes to '{intentName}'");
 
+            // Without a label the user sees no button for this entry.
             if (string.IsNullOrWhiteSpace(intent.Label))
                 gaps.Add($"the button for '{intentName}'");
 
+            // Without a sentence the button cannot send anything.
             if (string.IsNullOrWhiteSpace(intent.DefaultValue))
                 gaps.Add($"what pressing '{intentName}' sends");
         }
 
+        // The gaps go to the model as what is still to be written.
         return gaps;
     }
 
     /// <summary>
     /// What the agent IS: its Target and nothing else at all.
     /// </summary>
-    /// <remarks>
-    /// The intent is the map's, settled whole and not reopened here; the voice is the next pass's.
-    /// This pass owns one field, which is why it has one tool that writes — the two facts agree
-    /// because they are the same fact stated in the two places that enforce it.
-    /// </remarks>
     private List<string> MissingTarget()
     {
         List<string> gaps = [];
 
+        // The pass owns the Target alone: the intent is the map's and the voice is the next pass's.
         if (string.IsNullOrWhiteSpace(Agent.Target))
             gaps.Add("agentTarget");
 
+        // The gaps go to the model as what is still to be written.
         return gaps;
     }
 
     /// <summary>
     /// What the agent answers for, written for another agent to read.
     /// </summary>
-    /// <remarks>
-    /// Every agent owes one, edges or none: it is published on the agent's card and read by whoever
-    /// holds a question this agent might settle, so an agent without one is finished for itself and
-    /// mute to everyone else, where nothing inside the domain can notice the silence.
-    /// </remarks>
+    /// <remarks>Every agent owes one whether or not a colleague is declared, since its card is read by whoever holds a question it might settle.</remarks>
     private List<string> MissingTerritory() =>
+        // A blank territory leaves the agent's card mute to every other agent.
         string.IsNullOrWhiteSpace(Agent.Territory) ? ["agentTerritory"] : [];
 
     /// <summary>
     /// How the agent sounds.
     /// </summary>
     private List<string> MissingVoice() =>
+        // A blank voice leaves the agent without a tone.
         string.IsNullOrWhiteSpace(Agent.Personality) ? ["agentPersonality"] : [];
 
     /// <summary>
@@ -479,6 +377,7 @@ public sealed class InterviewState
     /// tool that takes nothing is ordinary. One that hands back nothing is, since startup refuses it.
     /// </summary>
     private List<string> MissingToolkit() =>
+        // A tool without a description cannot be weighed by the model; one that hands back nothing is refused at startup.
         [.. Agent.Tools
                 .Where(t => string.IsNullOrWhiteSpace(t.Description))
                 .Select(t => $"description of {t.Name ?? "(unnamed tool)"}"),
@@ -491,6 +390,7 @@ public sealed class InterviewState
     /// no gate: only a workflow without description or steps and a step without tools are reported.
     /// </summary>
     private List<string> MissingWorkflows() =>
+        // Each report names a half-declared workflow part so the client can finish it.
         [.. Agent.Workflows
                 .Where(w => string.IsNullOrWhiteSpace(w.Description))
                 .Select(w => $"description of workflow {w.Name ?? "(unnamed workflow)"}"),
@@ -505,11 +405,13 @@ public sealed class InterviewState
     /// How the agent goes about the work, which could not be written before the toolkit existed.
     /// </summary>
     private List<string> MissingInstructions() =>
+        // Blank Instructions leave the agent without rules for its tools.
         string.IsNullOrWhiteSpace(Agent.Instructions) ? ["agentInstructions"] : [];
 
     /// <summary>
     /// How the agent lays out what its tools return.
     /// </summary>
     private List<string> MissingFormatting() =>
+        // Blank Formatting leaves the agent without a shape for its tools' output.
         string.IsNullOrWhiteSpace(Agent.Formatting) ? ["agentFormatting"] : [];
 }

@@ -8,40 +8,23 @@ using Morgana.AI.Attributes;
 namespace Alembic.Tools;
 
 /// <summary>
-/// The tools Alembic calls while applying one coherence finding.
+/// The tools that write one coherence fix straight into agents already committed to the draft.
 /// </summary>
-/// <remarks>
-/// <para>
-/// Unlike <see cref="InterviewTools"/>, which writes into the single agent the current interview
-/// pass has open, these write directly into agents already committed to the Draft — the ones the
-/// finding named in its <c>Where</c>. There is no client dialogue here: the finding's own
-/// <c>Fix</c> is the instruction, already read and accepted by pressing the button that started
-/// this pass.
-/// </para>
-/// <para>
-/// Deliberately narrower than the interview's toolset. No <c>SetAgentPersonality</c>: no coherence
-/// defect this pass exists for is about voice and a fix that touched it would be rewriting
-/// something nobody asked to change. No <c>DeclareIntent</c>/<c>DropIntent</c>: the map is not
-/// reopened here any more than it is mid-interview, only its description may be sharpened.
-/// </para>
-/// </remarks>
+/// <remarks>Voice and the map are out of reach: only the sections, the toolkit and an intent's description can change.</remarks>
 public class CoherenceApplyTools
 {
+    /// <summary>The domain the finding was read against and the fix is written into.</summary>
     private readonly DomainDraft draft;
 
     /// <summary>The authority on <c>alembic.json</c>, which holds every sentence these tools answer with.</summary>
     private readonly IAlembicPromptService alembicPromptService;
 
-    /// <summary>
-    /// What changed, in the client's own words, recorded by <see cref="ApplyCompleted"/>.
-    /// </summary>
+    /// <summary>What the fix changed, as the client is told once the pass ends.</summary>
     public string? Summary { get; private set; }
 
     /// <summary>
-    /// Binds the toolset to the domain the finding was read against.
+    /// Builds the toolset over the domain the finding was read against.
     /// </summary>
-    /// <param name="draft">The domain the finding was read against.</param>
-    /// <param name="alembicPromptService">Resolves the sentences that the tools answer the model with.</param>
     public CoherenceApplyTools(DomainDraft draft, IAlembicPromptService alembicPromptService)
     {
         this.draft = draft;
@@ -49,7 +32,7 @@ public class CoherenceApplyTools
     }
 
     /// <summary>
-    /// Fetches a sentence that a tool answers the model with, from the <c>ToolInjections</c> of the <c>Alembic</c> prompt.
+    /// Fetches the sentence a tool answers the model with, from the <c>ToolInjections</c> of the <c>Alembic</c> prompt.
     /// </summary>
     private string Said(string injectionName, params (string Placeholder, string Value)[] values) =>
         alembicPromptService.ResolveToolInjection(injectionName, values);
@@ -57,19 +40,17 @@ public class CoherenceApplyTools
     /// <summary>
     /// Returns one agent's prose and toolkit as they stand, by ID.
     /// </summary>
-    /// <remarks>
-    /// Called before any write: this pass opens knowing only the finding's own words and a tool
-    /// call naming a field it has not seen the rest of risks discarding what a sibling field
-    /// depended on.
-    /// </remarks>
+    /// <remarks>The pass knows only the finding's words when it opens: a write made before this read can discard what a sibling section depended on.</remarks>
     [Description("Returns one agent's prose and toolkit as they stand, by its ID. Call it for every agent the finding names before changing anything.")]
     [RequiresApproval(false)]
     public ToolReply GetAgent(
         [Description("The agent's ID, exactly as the finding's Where names it.")] [ToolParameter(Records.ToolScope.Request)] string agentId)
     {
+        // An ID that matches no committed agent is refused, so the model corrects the name before reading anything.
         if (Find(agentId) is not { } agent)
             return ToolReply.Refused(Said("ApplyAgentUnknown", ("agent", agentId ?? string.Empty)));
 
+        // The four sections are shown in the order the agent's prompt carries them, a missing one flagged as not written.
         List<string> sections =
         [
             agent.Target ?? "(no target)",
@@ -78,6 +59,7 @@ public class CoherenceApplyTools
             agent.Formatting ?? "(no formatting)"
         ];
 
+        // Each tool is listed with its approval requirement and every parameter with its scope and flags, so the model reads the toolkit whole.
         string tools = agent.Tools.Count == 0
             ? Said("NoNativeTools")
             : Said("ToolsHeader") + "\n" + string.Join("\n", agent.Tools.Select(t =>
@@ -87,6 +69,7 @@ public class CoherenceApplyTools
 
         // The workflows are read-only here: a procedure written in prose is fixed in the prose, with
         // the workflow set beside it as the fact the sentence must not restate.
+        // The reply hands over the sections, the toolkit and the workflows as one reading of the agent.
         return new ToolReply(string.Join("\n\n", sections) + "\n\n" + tools + "\n\n" + InterviewTools.DescribeWorkflows(alembicPromptService, agent.Workflows));
     }
 
@@ -99,11 +82,17 @@ public class CoherenceApplyTools
         [Description("The agent's ID.")] [ToolParameter(Records.ToolScope.Request)] string agentId,
         [Description("The complete revised Target, addressed to the agent as 'you'. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string target)
     {
+        // A section can only be rewritten on an agent the finding named and the draft holds.
         if (Find(agentId) is not { } agent)
             return ToolReply.Refused(Said("ApplyAgentNotNamed", ("agent", agentId ?? string.Empty)));
 
+        // The revised section replaces the whole previous text.
         agent.Target = target?.Trim();
+
+        // An imported agent reached by the fix is reported as revised.
         MarkRevised(agent);
+
+        // The model is told which section of which agent now holds the new text.
         return new ToolReply(Said("ApplySectionRevised", ("agent", agentId), ("section", "Target")));
     }
 
@@ -116,11 +105,17 @@ public class CoherenceApplyTools
         [Description("The agent's ID.")] [ToolParameter(Records.ToolScope.Request)] string agentId,
         [Description("The complete revised Instructions, addressed to the agent as 'you'. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string instructions)
     {
+        // A section can only be rewritten on an agent the finding named and the draft holds.
         if (Find(agentId) is not { } agent)
             return ToolReply.Refused(Said("ApplyAgentNotNamed", ("agent", agentId ?? string.Empty)));
 
+        // The revised section replaces the whole previous text.
         agent.Instructions = instructions?.Trim();
+
+        // An imported agent reached by the fix is reported as revised.
         MarkRevised(agent);
+
+        // The model is told which section of which agent now holds the new text.
         return new ToolReply(Said("ApplySectionRevised", ("agent", agentId), ("section", "Instructions")));
     }
 
@@ -133,49 +128,53 @@ public class CoherenceApplyTools
         [Description("The agent's ID.")] [ToolParameter(Records.ToolScope.Request)] string agentId,
         [Description("The complete revised Formatting, addressed to the agent as 'you'. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string formatting)
     {
+        // A section can only be rewritten on an agent the finding named and the draft holds.
         if (Find(agentId) is not { } agent)
             return ToolReply.Refused(Said("ApplyAgentNotNamed", ("agent", agentId ?? string.Empty)));
 
+        // The revised section replaces the whole previous text.
         agent.Formatting = formatting?.Trim();
+
+        // An imported agent reached by the fix is reported as revised.
         MarkRevised(agent);
+
+        // The model is told which section of which agent now holds the new text.
         return new ToolReply(Said("ApplySectionRevised", ("agent", agentId), ("section", "Formatting")));
     }
 
     /// <summary>
     /// Sharpens an intent's description — the one intent-level edit a coherence fix ever makes.
     /// </summary>
-    /// <remarks>
-    /// Everything else about the map is out of reach on purpose: an overlapping-intents finding is
-    /// resolved by telling two descriptions apart, never by adding, dropping or renaming an entry.
-    /// </remarks>
+    /// <remarks>An overlapping-intents finding is resolved by telling two descriptions apart: no entry is added, dropped or renamed.</remarks>
     [Description("Sharpens one intent's description — the only edit a coherence fix ever makes to the map itself.")]
     [RequiresApproval(false)]
     public ToolReply SetIntentDescription(
         [Description("The intent's name, exactly as it appears in the domain.")] [ToolParameter(Records.ToolScope.Request)] string intentName,
         [Description("The complete revised description, the classifier's whole basis for routing here.")] [ToolParameter(Records.ToolScope.Request)] string description)
     {
+        // The intent is found by name regardless of case, as the finding quotes it.
         IntentDraft? intent = draft.Intents.FirstOrDefault(i =>
             string.Equals(i.Name, intentName?.Trim(), StringComparison.OrdinalIgnoreCase));
 
+        // A name that matches no intent is refused so the model quotes the domain's own name.
         if (intent is null)
             return ToolReply.Refused(Said("ApplyIntentNotNamed", ("name", intentName ?? string.Empty)));
 
+        // The new description is what the classifier routes on from now on.
         intent.Description = description?.Trim();
 
+        // An imported intent reached by the fix is reported as revised.
         if (intent.Origin == Provenance.Imported)
             intent.Origin = Provenance.Revised;
 
+        // The model is told which intent now carries the sharper description.
         return new ToolReply(Said("ApplyIntentDescriptionRevised", ("name", intentName)));
     }
 
     /// <summary>
     /// Opens a tool on the named agent, or revises the description and the approval requirement of one already open.
     /// </summary>
-    /// <remarks>
-    /// Touches only the tool's name, description and approval requirement. Parameters are a separate concern reached
-    /// through <see cref="SetToolParameter"/> — a revision here never disturbs a parameter list
-    /// already recorded on the same tool, whether the tool is new or already existed.
-    /// </remarks>
+    /// <remarks>The parameters already on the tool are left as they stand: they change only through <see cref="SetToolParameter"/>.</remarks>
     [Description("Opens a tool on the named agent, or revises one already open.")]
     [RequiresApproval(false)]
     public ToolReply DeclareTool(
@@ -184,25 +183,34 @@ public class CoherenceApplyTools
         [Description("What the tool does, what it returns and when to call it.")] [ToolParameter(Records.ToolScope.Request)] string description,
         [Description("Whether the tool changes something real and so waits for the user's approval. Keep what GetAgent shows unless the Fix says otherwise.")] [ToolParameter(Records.ToolScope.Request)] bool requiresApproval)
     {
+        // A tool is declared only on an agent the draft holds.
         if (Find(agentId) is not { } agent)
             return ToolReply.Refused(Said("ApplyToolAgentMissing", ("agent", agentId ?? string.Empty)));
 
+        // A blank name would declare a tool nobody can call.
         string cleanName = (name ?? string.Empty).Trim();
         if (cleanName.Length == 0)
             return ToolReply.Refused(Said("ApplyToolNameMissing"));
 
+        // A tool of the same name on this agent is revised in place, otherwise a new authored tool is opened.
         ToolDraft? match = FindTool(agent, cleanName);
         bool revision = match is not null;
         ToolDraft tool = match ?? new ToolDraft { Name = cleanName, Origin = Provenance.Authored };
+
+        // The description and the approval requirement are what the model reads and what the user is asked about.
         tool.Description = description?.Trim();
         tool.RequiresExecutionApproval = requiresApproval;
 
+        // Only a new tool joins the agent's toolkit.
         if (!revision)
             agent.Tools.Add(tool);
 
+        // An imported agent reached by the fix is reported as revised.
         MarkRevised(agent);
 
+        // A tool name off the PascalCase convention is flagged in the same reply so the model corrects it at once.
         string complaint = InterviewTools.IdentifierComplaint(alembicPromptService, cleanName, "tool name", pascalCase: true);
+        // The reply says whether the tool was opened or revised and appends the naming complaint when there is one.
         return new ToolReply((revision
                    ? Said("ApplyToolRevised", ("name", cleanName), ("agent", agentId))
                    : Said("ApplyToolDeclared", ("name", cleanName), ("agent", agentId)))
@@ -212,11 +220,7 @@ public class CoherenceApplyTools
     /// <summary>
     /// Adds a parameter to a declared tool of the named agent, or revises one already there.
     /// </summary>
-    /// <remarks>
-    /// Touches exactly the one parameter named — every other parameter already on the tool and
-    /// the tool's own name and description, are left as they stand. The tool itself must already
-    /// exist: this never creates one, since a coherence finding names a tool it has already read.
-    /// </remarks>
+    /// <remarks>The tool must already exist: a coherence finding names a tool it has read.</remarks>
     [Description("Adds a parameter to a declared tool on the named agent, or revises one already there by name and in place.")]
     [RequiresApproval(false)]
     public ToolReply SetToolParameter(
@@ -228,12 +232,15 @@ public class CoherenceApplyTools
         [Description("Whether the agent must supply this value on every call.")] [ToolParameter(Records.ToolScope.Request)] bool required,
         [Description("Whether the resolved value is published to the whole conversation. Only a 'context' parameter may be shared.")] [ToolParameter(Records.ToolScope.Request)] bool shared)
     {
+        // A parameter is written only on an agent the draft holds.
         if (Find(agentId) is not { } agent)
             return ToolReply.Refused(Said("ApplyParameterAgentMissing", ("agent", agentId ?? string.Empty)));
 
+        // The tool must already be declared on that agent: this tool never opens one.
         if (FindTool(agent, toolName) is not { } tool)
             return ToolReply.Refused(Said("ApplyParameterToolMissing", ("tool", toolName ?? string.Empty), ("agent", agentId)));
 
+        // A blank name would declare a parameter nobody can fill.
         string cleanName = (name ?? string.Empty).Trim();
         if (cleanName.Length == 0)
             return ToolReply.Refused(Said("ApplyParameterNameMissing"));
@@ -242,24 +249,31 @@ public class CoherenceApplyTools
         // rather than being silently coerced into one of the two known ones.
         string? resolvedScope = InterviewTools.ResolveScope(scope);
 
+        // A parameter of the same name on this tool is revised in place.
         ToolParameterDraft? match = tool.Parameters.FirstOrDefault(p =>
             string.Equals(p.Name, cleanName, StringComparison.Ordinal));
 
+        // The reply to the model says whether the parameter was revised or newly opened.
         bool revision = match is not null;
         ToolParameterDraft parameter = match ?? new ToolParameterDraft { Name = cleanName };
 
+        // The parameter takes the description, scope and flags the fix gives it.
         parameter.Description = description?.Trim();
         parameter.Scope = resolvedScope;
         parameter.Required = required;
         parameter.Shared = shared;
 
+        // Only a new parameter joins the tool's list.
         if (!revision)
             tool.Parameters.Add(parameter);
 
+        // An imported agent reached by the fix is reported as revised.
         MarkRevised(agent);
 
+        // Scope and flag combinations the framework refuses at startup are reported back in the same reply.
         List<string> complaints = InterviewTools.ScopeComplaints(alembicPromptService, resolvedScope, required, shared);
 
+        // The reply confirms the parameter on its tool and appends any complaint.
         return new ToolReply(Said("ApplyParameterRecorded", ("name", cleanName), ("agent", agentId), ("tool", tool.Name ?? string.Empty))
                + (complaints.Count > 0 ? " " + string.Join(" ", complaints) : string.Empty));
     }
@@ -274,15 +288,19 @@ public class CoherenceApplyTools
         [Description("The exact name of the tool.")] [ToolParameter(Records.ToolScope.Request)] string toolName,
         [Description("The exact name of the parameter to remove.")] [ToolParameter(Records.ToolScope.Request)] string parameterName)
     {
+        // Neither the agent nor its tool can be missing for a removal to mean anything.
         if (Find(agentId) is not { } agent || FindTool(agent, toolName) is not { } tool)
             return ToolReply.Refused(Said("ApplyDropToolUnknown", ("agent", agentId ?? string.Empty)));
 
+        // The parameter is dropped by exact name and the count says whether it was there.
         int removals = tool.Parameters.RemoveAll(p =>
             string.Equals(p.Name, parameterName?.Trim(), StringComparison.Ordinal));
 
+        // Only an actual removal marks an imported agent as revised.
         if (removals > 0)
             MarkRevised(agent);
 
+        // A removal is confirmed while a name that was never there is refused.
         return removals > 0
             ? new ToolReply(Said("ApplyParameterDropped", ("name", parameterName ?? string.Empty), ("agent", agentId), ("tool", tool.Name ?? string.Empty)))
             : ToolReply.Refused(Said("ParameterAbsent", ("tool", tool.Name ?? string.Empty), ("name", parameterName ?? string.Empty)));
@@ -297,15 +315,19 @@ public class CoherenceApplyTools
         [Description("The agent's ID.")] [ToolParameter(Records.ToolScope.Request)] string agentId,
         [Description("The exact name of the tool to remove.")] [ToolParameter(Records.ToolScope.Request)] string toolName)
     {
+        // A tool is dropped only from an agent the draft holds.
         if (Find(agentId) is not { } agent)
             return ToolReply.Refused(Said("ApplyDropAgentMissing", ("agent", agentId ?? string.Empty)));
 
+        // The tool goes with all its parameters and the count says whether it was there.
         int removals = agent.Tools.RemoveAll(t =>
             string.Equals(t.Name, toolName?.Trim(), StringComparison.Ordinal));
 
+        // Only an actual removal marks an imported agent as revised.
         if (removals > 0)
             MarkRevised(agent);
 
+        // A removal is confirmed while a name that was never there is refused.
         return removals > 0
             ? new ToolReply(Said("ApplyToolDropped", ("name", toolName ?? string.Empty), ("agent", agentId)))
             : ToolReply.Refused(Said("ApplyToolAbsent", ("agent", agentId), ("name", toolName ?? string.Empty)));
@@ -319,30 +341,31 @@ public class CoherenceApplyTools
     public ToolReply ApplyCompleted(
         [Description("One sentence, in the domain's own words, naming the field and the agent changed.")] [ToolParameter(Records.ToolScope.Request)] string summary)
     {
+        // The summary is what the client reads once the pass ends; a blank one falls back to a bare confirmation.
         Summary = string.IsNullOrWhiteSpace(summary) ? "Applied." : summary.Trim();
+
+        // The model is told the fix is recorded and the pass may stop.
         return new ToolReply(Said("ApplyRecorded"));
     }
 
     /// <summary>
-    /// Flags an agent touched by this pass so the migration report tells the client honestly which
-    /// of their imported agents a coherence fix reached.
+    /// Marks an imported agent as revised so the migration report lists the agents a fix reached.
     /// </summary>
     private static void MarkRevised(AgentDraft agent)
     {
+        // An agent authored here is already reported as new: only an imported one changes provenance.
         if (agent.Origin == Provenance.Imported)
             agent.Origin = Provenance.Revised;
     }
 
     /// <summary>
-    /// Looks up an agent already committed to the Draft, by its intent ID — case-insensitively,
-    /// since that is how the finding's own <c>Where</c> names it.
+    /// Finds a committed agent by its intent ID regardless of case, as the finding's <c>Where</c> names it.
     /// </summary>
     private AgentDraft? Find(string? agentId) =>
         draft.Agents.FirstOrDefault(a => string.Equals(a.ID, agentId?.Trim(), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// Looks up one of an agent's already-declared tools, by name — ordinally, the same comparison
-    /// <see cref="DraftValidationService"/> holds tool names to.
+    /// Finds one of an agent's declared tools by exact name, the comparison validation holds tool names to.
     /// </summary>
     private static ToolDraft? FindTool(AgentDraft agent, string? toolName) =>
         agent.Tools.FirstOrDefault(t => string.Equals(t.Name, toolName?.Trim(), StringComparison.Ordinal));

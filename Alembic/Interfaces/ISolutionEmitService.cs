@@ -3,14 +3,9 @@ using Alembic.Models;
 namespace Alembic.Interfaces;
 
 /// <summary>
-/// Emits the project and solution files that turn the archive into a buildable class library on
-/// arrival, instead of loose sources the client must first shelter inside a project of their own.
+/// Emits the project and solution files that make the archive a buildable class library on arrival.
 /// </summary>
-/// <remarks>
-/// Deterministic template, same as <see cref="ICodeEmitService"/> and for the same reason: the
-/// shape of a .csproj referencing the <c>Morgana.AI</c> package is fixed and known at compile time,
-/// so a generator would only approximate what a template reproduces exactly.
-/// </remarks>
+/// <remarks>It is a template like <see cref="ICodeEmitService"/>, since the shape of the project file is fixed.</remarks>
 public interface ISolutionEmitService
 {
     /// <summary>

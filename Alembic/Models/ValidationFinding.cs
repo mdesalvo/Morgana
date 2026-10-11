@@ -19,22 +19,11 @@ public enum FindingSeverity
 /// <summary>
 /// One deterministic observation about a Draft.
 /// </summary>
-/// <remarks>
-/// Every finding here is decidable by reading the Draft — no model is asked and none could help.
-/// That is the whole point of running this pass before the recap: the client should never be shown
-/// a beautifully composed prompt for a domain that would not start.
-/// <para>
-/// Most of these restate a check the framework already performs at startup. Duplicating them is
-/// deliberate and is the entire value: a startup exception arrives after the client has packaged,
-/// deployed and run, whereas the same sentence here arrives while they are still authoring.
-/// </para>
-/// </remarks>
-/// <param name="Severity">Whether this stops the domain or merely deserves a look.</param>
+/// <remarks>Every finding is decidable by reading the Draft; most restate a check the framework performs at startup.</remarks>
+/// <param name="Severity">Whether the finding stops the domain or only deserves a look.</param>
 /// <param name="Where">What the finding is about, e.g. <c>billing.GetInvoices.customerCode</c>.</param>
 /// <param name="Message">What is wrong, in the terms the client authored it in.</param>
-/// <param name="Because">
-/// Which rule of Morgana's makes it so — named, so the finding teaches rather than just refuses.
-/// </param>
+/// <param name="Because">The rule of Morgana's that makes it so.</param>
 public sealed record ValidationFinding(
     FindingSeverity Severity,
     string Where,

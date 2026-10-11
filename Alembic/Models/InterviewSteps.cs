@@ -160,6 +160,7 @@ public static class InterviewSteps
     /// <exception cref="ArgumentOutOfRangeException">The pass has no declared step.</exception>
     public static Records.WorkflowStep Of(InterviewStep step) => step switch
     {
+        // Each pass maps to its declared step; a pass without one is refused below.
         InterviewStep.DomainMapper => DomainMapper,
         InterviewStep.AgentTarget => AgentTarget,
         InterviewStep.AgentPersonality => AgentPersonality,
@@ -168,6 +169,7 @@ public static class InterviewSteps
         InterviewStep.AgentTerritory => AgentTerritory,
         InterviewStep.AgentInstructions => AgentInstructions,
         InterviewStep.AgentFormatting => AgentFormatting,
+        // An undeclared pass would run with no tools at all, so it stops instead.
         _ => throw new ArgumentOutOfRangeException(nameof(step), step, "No tools are declared for this interview step.")
     };
 }

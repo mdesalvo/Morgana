@@ -40,8 +40,7 @@
                 </FluentStack>
             }
 
-            @* Keyed on the turn: every question gets a fresh box with the caret already in it.
-               Tall and on the recessed ground, so an answer is read back whole. *@
+            @* Keyed on the turn: every question gets a fresh box with the caret already in it. *@
             <FluentTextArea @key="Turn" @bind-Value="answer" Immediate="true" Autofocus="true"
                             Appearance="TextAreaAppearance.FilledDarker"
                             Resize="TextAreaResize.Vertical" Size="TextAreaSize.Large" Width="100%" Height="45vh"
@@ -208,9 +207,11 @@
         if (!touched && text.Length > 0)
             return string.Empty;
 
+        // Lit words travel as the voice the client wants.
         if (voiceWords.Count > 0)
             return $"The voice I would want here: {string.Join(", ", voiceWords)}.";
 
+        // Every word was put down: the client says that none of the offered voices fits.
         return touched ? "None of those words is the voice I want." : string.Empty;
     }
 
@@ -224,22 +225,28 @@
     /// </summary>
     protected override void OnParametersSet()
     {
+        // A failed turn gives back the answer it lost, so the client does not retype it.
         if (Error is not null && answer.Length == 0 && lastAnswer.Length > 0)
             answer = lastAnswer;
 
+        // The same question re-rendered keeps what the client has done in the box.
         if (Turn == primeTurn)
         {
             // A turn can bring an example and leave the question standing: the box takes it unless the client wrote there.
             if (Prompting != primeExample && (answer.Length == 0 || answer == primeExample))
                 answer = Prompting;
 
+            // The example in the box is now the one that this turn carries.
             primeExample = Prompting;
             return;
         }
 
+        // A new question opens with its own example in the box.
         primeTurn = Turn;
         primeExample = Prompting;
         answer = Prompting;
+
+        // The cloud starts from the words the voice already carries and nothing touched.
         touched = false;
         voiceWords.Clear();
 
@@ -252,6 +259,7 @@
     /// </summary>
     private void RestoreIfEmptied()
     {
+        // An emptied box would send nothing: the proposal comes back for the client to accept or edit.
         if (string.IsNullOrEmpty(answer) && !string.IsNullOrEmpty(Prompting))
             answer = Prompting;
     }
@@ -261,8 +269,10 @@
     /// </summary>
     private void Toggle(string trait)
     {
+        // Any press on the cloud means the client has spoken about the voice.
         touched = true;
 
+        // A word that was not lit is taken instead.
         if (!voiceWords.Remove(trait))
             voiceWords.Add(trait);
     }
@@ -272,13 +282,18 @@
     /// </summary>
     private async Task SendAsync()
     {
+        // The answer is fixed before the box is emptied.
         string reply = Said;
 
+        // The reply is kept in case the turn fails and has to be offered back.
         lastAnswer = reply;
+
+        // The box and the cloud are cleared so the next question is not met by this answer.
         answer = string.Empty;
         touched = false;
         voiceWords.Clear();
 
+        // The shell takes the answer to the interview.
         await OnAnswer.InvokeAsync(reply);
     }
 }

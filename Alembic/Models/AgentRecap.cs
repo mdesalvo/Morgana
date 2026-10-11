@@ -1,59 +1,36 @@
 namespace Alembic.Models;
 
 /// <summary>
-/// What one agent's model actually reads, composed from the Draft through the framework's own
-/// <c>IPromptComposerService</c>.
+/// The prompt and the tools that one agent's model reads, composed from the Draft by the framework's own composer.
 /// </summary>
-/// <remarks>
-/// Not a summary of the client's answers: the same service, the same fences, the same policy
-/// ordering the running agent gets. The two parts below are shown apart rather than concatenated —
-/// each is read by the model at a different moment and seeing them merged would blur that.
-/// <para>
-/// What is deliberately absent is the framework's per-turn held-context declaration. It is a global
-/// policy's own injection template, not anything Alembic or the domain author wrote and it can only
-/// ever be shown here against a supposed session that does not exist at authoring time — showing a
-/// framework policy body in Alembic is exactly the layering violation the two-layer composition
-/// exists to avoid everywhere else.
-/// </para>
-/// </remarks>
-/// <param name="AgentId">Which agent this is.</param>
-/// <param name="SystemPrompt">
-/// The composed two-layer system prompt: framework layer, fences, global policies, then the domain
-/// layer. Read once, before anything else.
-/// </param>
-/// <param name="Tools">
-/// Each tool as the model weighs it.
-/// </param>
+/// <remarks>The framework's per-turn held-context declaration is absent, since it belongs to a session that does not exist while the domain is authored.</remarks>
+/// <param name="AgentId">The agent the recap belongs to.</param>
+/// <param name="SystemPrompt">The two-layer system prompt the model reads once before anything else.</param>
+/// <param name="Tools">Each tool as the model weighs it mid-turn.</param>
 public sealed record AgentRecap(
     string AgentId,
     string SystemPrompt,
     IReadOnlyList<ToolRecap> Tools);
 
 /// <summary>
-/// One tool as the model reads it.
+/// One tool as the model reads it, with the description the author wrote and the parameters it fills.
 /// </summary>
-/// <param name="Name">Tool name, which is also the C# method name.</param>
-/// <param name="Description">
-/// The description exactly as the author wrote it: the framework adds nothing to it.
-/// </param>
-/// <param name="Parameters">The parameters, as their JSON schema will carry them.</param>
+/// <param name="Name">The tool name, which is also the C# method name.</param>
+/// <param name="Description">The description as written, since the framework splices nothing onto it.</param>
+/// <param name="Parameters">The parameters as their JSON schema carries them.</param>
 public sealed record ToolRecap(
     string Name,
     string Description,
     IReadOnlyList<ParameterRecap> Parameters);
 
 /// <summary>
-/// One parameter as its JSON schema will carry it.
+/// One tool parameter as the model reads it in the JSON schema.
 /// </summary>
-/// <remarks>
-/// Shown unmodified on purpose and that is the fact worth seeing: the framework splices no
-/// template onto a parameter description. What the author wrote is the whole of what the model
-/// reads at this rung and a parameter left undescribed is emitted bare.
-/// </remarks>
-/// <param name="Name">Parameter name.</param>
-/// <param name="Description">Exactly what the author wrote.</param>
-/// <param name="Required">Whether the model must supply it.</param>
-/// <param name="Scope">Its scope, or <c>null</c> where it declares none.</param>
+/// <remarks>A parameter left undescribed is emitted bare, since the framework adds no template to its description.</remarks>
+/// <param name="Name">The parameter name.</param>
+/// <param name="Description">The description as the author wrote it.</param>
+/// <param name="Required">Whether the model must supply the value.</param>
+/// <param name="Scope">Where the value comes from; <c>null</c> where the parameter declares none.</param>
 public sealed record ParameterRecap(
     string Name,
     string Description,

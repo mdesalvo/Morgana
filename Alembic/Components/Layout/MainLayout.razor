@@ -39,11 +39,14 @@
     // Every value is a palette token rather than a hex, so palette.css stays the one place a colour is written.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // The theme is built once per circuit, on the first render.
         if (!firstRender)
             return;
 
+        // The ramp grows from the seed violet in dark mode.
         Theme theme = await ThemeService.CreateCustomThemeAsync(new ThemeSettings(Seed, 0, 0, ThemeMode.Dark, true));
 
+        // Text, numbers and tool signatures take Alembic's faces.
         theme.Fonts.Family.Base = BaseFace;
         theme.Fonts.Family.Numeric = BaseFace;
         theme.Fonts.Family.Monospace = MonospaceFace;
@@ -60,11 +63,13 @@
         theme.Colors.Neutral.Background4 = "var(--alembic-bg-deep)";
         theme.Colors.Neutral.CardBackground = "var(--alembic-panel)";
 
+        // Text and its muted forms follow the palette's text tokens.
         theme.Colors.Neutral.Foreground1 = "var(--alembic-text)";
         theme.Colors.Neutral.Foreground2 = "var(--alembic-text)";
         theme.Colors.Neutral.Foreground3 = "var(--alembic-muted)";
         theme.Colors.Neutral.Foreground4 = "var(--alembic-muted)";
 
+        // Lines follow the palette's borders.
         theme.Colors.Neutral.Stroke1 = "var(--alembic-border-lit)";
         theme.Colors.Neutral.Stroke2 = "var(--alembic-border)";
         theme.Colors.Neutral.StrokeSubtle = "var(--alembic-border)";
@@ -82,6 +87,7 @@
         theme.Colors.Status.WarningForeground3 = "var(--alembic-gold)";
         theme.Colors.Status.WarningForegroundInverted = "var(--alembic-bg-deep)";
 
+        // Failures wear the palette's red.
         theme.Colors.Status.DangerBackground1 = "color-mix(in srgb, var(--alembic-error) 12%, transparent)";
         theme.Colors.Status.DangerBackground2 = "color-mix(in srgb, var(--alembic-error) 20%, transparent)";
         theme.Colors.Status.DangerBackground3 = "var(--alembic-error)";
@@ -95,6 +101,7 @@
         theme.Colors.Status.DangerForeground3 = "var(--alembic-error)";
         theme.Colors.Status.DangerForegroundInverted = "var(--alembic-bg-deep)";
 
+        // Verified news wears the palette's green.
         theme.Colors.Status.SuccessBackground1 = "color-mix(in srgb, var(--alembic-success) 12%, transparent)";
         theme.Colors.Status.SuccessBackground2 = "color-mix(in srgb, var(--alembic-success) 20%, transparent)";
         theme.Colors.Status.SuccessBackground3 = "var(--alembic-success)";
@@ -123,8 +130,10 @@
         theme.Colors.Palette.GreenForeground1 = "var(--alembic-success)";
         theme.Colors.Palette.GreenForeground3 = "var(--alembic-success)";
 
+        // The finished theme is applied before anything is drawn.
         await ThemeService.SetThemeAsync(theme);
 
+        // The page and its providers may now appear.
         themed = true;
         StateHasChanged();
     }

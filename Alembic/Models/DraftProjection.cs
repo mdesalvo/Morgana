@@ -5,42 +5,26 @@ namespace Alembic.Models;
 /// <summary>
 /// Projects Draft elements onto the framework's own record types.
 /// </summary>
-/// <remarks>
-/// One place, two callers with different purposes: the exporter serializes what comes out of here
-/// while the recap hands it to <c>IPromptComposerService</c>. That they share this projection is the
-/// point — a recap composed from a slightly different <see cref="Records.Prompt"/> than the one
-/// that gets written would be a recap of a domain nobody is going to run.
-/// <para>
-/// A Draft field that is still <c>null</c> ("not asked yet") projects to the empty string, because
-/// the framework's records have no notion of unanswered. Validation is what distinguishes the two;
-/// this projection deliberately does not and must not be read as accepting them as equivalent.
-/// </para>
-/// </remarks>
+/// <remarks>The exporter and the recap share this projection; a field not asked yet becomes an empty string that validation still tells apart.</remarks>
 public static class DraftProjection
 {
     /// <summary>
     /// Rebuilds an intent definition from its Draft element.
     /// </summary>
     public static Records.IntentDefinition ToIntentDefinition(IntentDraft intent) =>
+        // Fields not asked yet project to empty strings, which the framework's records can carry.
         new(intent.Name ?? string.Empty,
             intent.Description ?? string.Empty,
             intent.Label ?? string.Empty,
             intent.DefaultValue ?? string.Empty);
 
     /// <summary>
-    /// Rebuilds an agent prompt from its Draft element, carrying the unmodelled
-    /// AdditionalProperties through.
+    /// Rebuilds an agent prompt from its Draft element, carrying the unmodelled AdditionalProperties through.
     /// </summary>
-    /// <remarks>
-    /// The toolkit is never written: the framework refuses a <c>Tools</c> key in <c>agents.json</c>, since the tool class declares it.
-    /// The workflows are classes, so the prompt carries none. The unmodelled entries are written as they arrived. This does
-    /// not necessarily reproduce the grouping a file arrived with — AdditionalProperties is a list
-    /// of dictionaries and the same content can be spread across it in several ways — which is
-    /// precisely why the round-trip invariant is stated as equivalence and not byte identity.
-    /// Morgana looks keys up across every entry, so the grouping is not information.
-    /// </remarks>
+    /// <remarks>The prompt carries neither the toolkit nor the workflows, since the framework reads both off the tool and workflow classes.</remarks>
     public static Records.Prompt ToPrompt(AgentDraft agent)
     {
+        // The unmodelled entries travel as they arrived: Morgana looks keys up across all of them, so the grouping carries no information.
         return new Records.Prompt(
             agent.ID ?? string.Empty,
             agent.Target ?? string.Empty,
@@ -51,6 +35,7 @@ public static class DraftProjection
             agent.Language,
             agent.Version)
         {
+            // The keys Alembic does not model travel back out untouched.
             AdditionalProperties = [.. agent.UnmodelledProperties]
         };
     }
@@ -59,6 +44,7 @@ public static class DraftProjection
     /// Rebuilds the definition the framework would project from the tool's class, for the readers inside Alembic.
     /// </summary>
     public static Records.ToolDefinition ToToolDefinition(ToolDraft tool) =>
+        // Fields not asked yet project to empty strings; the parameters project one by one.
         new(tool.Name ?? string.Empty,
             tool.Description ?? string.Empty,
             [.. tool.Parameters.Select(ToToolParameter)],
@@ -75,6 +61,7 @@ public static class DraftProjection
     /// Rebuilds a workflow definition from its Draft element; the carried properties are the distinct names across its edges.
     /// </summary>
     public static Records.WorkflowDefinition ToWorkflowDefinition(WorkflowDraft workflow) =>
+        // Steps and edges go across as declared; the carried names are read off the edges.
         new(workflow.Name ?? string.Empty,
             workflow.Description ?? string.Empty,
             [.. workflow.Steps],
@@ -85,16 +72,15 @@ public static class DraftProjection
     /// The names that a workflow's edges carry, distinct and in order of first appearance.
     /// </summary>
     public static List<string> CarriedNames(WorkflowDraft workflow) =>
+        // An edge that carries nothing contributes no name; a name carried twice counts once.
         [.. workflow.Edges.SelectMany(edge => edge.Carrying ?? []).Distinct(StringComparer.Ordinal)];
 
     /// <summary>
     /// Rebuilds a tool parameter from its Draft element.
     /// </summary>
-    /// <remarks>
-    /// The framework's record types <c>Scope</c> as a non-nullable string, so a scope not settled yet
-    /// travels as the empty string.
-    /// </remarks>
+    /// <remarks>A scope not settled yet travels as the empty string, since the framework's record does not allow <c>null</c>.</remarks>
     public static Records.ToolParameter ToToolParameter(ToolParameterDraft parameter) =>
+        // The parameter keeps its requiredness and its sharing exactly as the client settled them.
         new(parameter.Name ?? string.Empty,
             parameter.Description ?? string.Empty,
             parameter.Required,

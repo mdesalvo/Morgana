@@ -3,35 +3,16 @@ using Alembic.Models;
 namespace Alembic.Interfaces;
 
 /// <summary>
-/// Composes what an agent's model will really read.
+/// Composes what an agent's model will really read, as the framework's own composer produces it.
 /// </summary>
-/// <remarks>
-/// The recap is the composed prompt, not a summary of the interview: a summary would be Alembic
-/// grading its own homework, whereas this is the framework's own <c>IPromptComposerService</c>
-/// producing the same bytes the running agent gets.
-/// <para>
-/// It is possible at all because <c>ComposeAgentInstructionsAsync</c> takes the domain prompt as a
-/// parameter — so the <c>Records.Prompt</c> can be built in memory from a Draft that exists nowhere
-/// on disk and belongs to no deployed Morgana.
-/// </para>
-/// <para>
-/// One caveat the client is owed: the framework layer comes from the <c>morgana.json</c> embedded
-/// in the Morgana.AI this Alembic was built against. There is no override for it anywhere in the
-/// framework — it is an embedded resource — so the recap is true for that version of Morgana and
-/// says nothing about a different one.
-/// </para>
-/// </remarks>
+/// <remarks>The framework layer comes from the <c>morgana.json</c> embedded in the Morgana.AI that this Alembic was built against.</remarks>
 public interface IRecapService
 {
     /// <summary>
-    /// Composes one agent's system prompt, tool descriptions and hypothetical held-context injection.
+    /// Composes one agent's system prompt and the description and parameters of each of its tools.
     /// </summary>
     /// <param name="agent">The agent to compose.</param>
-    /// <param name="consultedByOthers">
-    /// True when another agent of the domain declares it may consult this one. The framework renders
-    /// its peer-consultation policy for either end of that relation, so an agent that only ever
-    /// answers colleagues still reads it. The recap would understate its prompt without this.
-    /// </param>
+    /// <param name="consultedByOthers">True when another agent declares it may consult this one, since the colleague policy then reaches this prompt too.</param>
     /// <returns>What the model reads, split by where in the turn it reads it.</returns>
     Task<AgentRecap> ComposeAsync(AgentDraft agent, bool consultedByOthers = false);
 }

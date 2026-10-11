@@ -51,17 +51,20 @@ public readonly record struct ShellPoint(int Entry, int Rail) : IComparable<Shel
     /// The moment's name on the track.
     /// </summary>
     public string Name =>
+        // The map has its own name; an agent's moments and the domain's index into their lists from their rail.
         IsMap ? "Map" : OnAgent ? AgentMoments[Rail - 1] : DomainMoments[Rail - CollaborationRail];
 
     /// <summary>
     /// Where the state machine stands: the frontier the pointer may never pass.
     /// </summary>
-    // The agent passes are numbered 1-7 in the same order as the track's sections, so the pass is the
-    // rail. Acceptance is no pass: the interview waits there once Formatting is settled.
+    // The agent passes are numbered like the track's sections, so the pass is the rail.
     public static ShellPoint FrontierOf(InterviewState interview) => interview switch
     {
+        // While the map is drawn the frontier is the map.
         { Pass: InterviewStep.DomainMapper } => Map,
+        // Acceptance is no pass: the interview waits there once Formatting is settled.
         { Pass: InterviewStep.AgentFormatting, ReadyForReview: true } => new ShellPoint(interview.At, AcceptanceRail),
+        // Any other pass stands on its own rail of the agent in hand.
         _ => new ShellPoint(interview.At, (int)interview.Pass)
     };
 
@@ -72,6 +75,7 @@ public readonly record struct ShellPoint(int Entry, int Rail) : IComparable<Shel
     /// The track read left to right: the map, every agent in map order, then the domain.
     /// </summary>
     private (int Band, int Entry, int Rail) Order =>
+        // Bands keep the map first and the domain last; agents sort by entry and then by rail.
         IsMap ? (0, 0, 0) : OnAgent ? (1, Entry, Rail) : (2, 0, Rail);
 
     public static bool operator <(ShellPoint left, ShellPoint right) => left.CompareTo(right) < 0;

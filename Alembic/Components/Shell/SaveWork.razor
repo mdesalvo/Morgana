@@ -32,13 +32,18 @@
     /// </summary>
     private async Task HandOverAsync()
     {
+        // The snapshot of this moment is saved; when it cannot be serialized the newest autosave stands in.
         if ((DraftStateService.Snapshot() ?? DraftStateService.Latest()) is not { } work)
         {
+            // With no snapshot and no autosave the client has no work yet and is told so.
             await OnReceipt.InvokeAsync(new Notice("Nothing to save: there is no work in hand yet.", NoticeKind.Warning));
             return;
         }
 
+        // The browser downloads the work as the save file the landing page accepts back.
         await JS.InvokeVoidAsync("alembicSave", FileName, Convert.ToBase64String(work));
+
+        // The receipt reports what the downloaded bytes hold, not what the interview on screen holds.
         await OnReceipt.InvokeAsync(await ReadBackAsync(work));
     }
 
@@ -47,18 +52,23 @@
     /// </summary>
     private async Task<Notice> ReadBackAsync(byte[] work)
     {
+        // The bytes just handed over are read exactly as the landing page would read them.
         using MemoryStream stream = new MemoryStream(work);
 
+        // A file that does not read back is a failed save and the client is told so.
         if (await DraftSerializationService.DeserializeAsync(stream) is not { } draft)
             return new Notice($"{FileName} could not be read back.", NoticeKind.Failure);
 
+        // The sitting is what the file holds of the interview in progress.
         InterviewSitting? sitting = draft.Sitting;
         int mapSize = sitting?.Map.Count ?? 0;
 
+        // The receipt names the agent in hand or, before any agent, the map.
         string position = sitting is { At: >= 0 } && sitting.At < sitting.Map.Count
             ? $"in hand: {sitting.Map[sitting.At].Name}"
             : "in hand: the map";
 
+        // The receipt counts the map, the agents and the size found in the file.
         return new Notice($"{FileName} · read back: {mapSize} on the map · {draft.Agents.Count} agents in the domain · {position} · {Sized(work.Length)}", NoticeKind.Success);
     }
 

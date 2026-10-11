@@ -196,6 +196,7 @@
     /// </summary>
     private void LookAt(ShellPoint point)
     {
+        // With no correction running a domain moment is where the client works, not a page being leafed.
         if (inDomain && point.OnDomain && InterviewService.Current is null)
         {
             domainAt = point;
@@ -203,6 +204,7 @@
             return;
         }
 
+        // Looking at the work in hand or beyond the frontier clears the pointer: nothing there is written yet.
         focus = point == Working || point > Frontier ? null : point;
     }
 
@@ -211,14 +213,20 @@
     /// </summary>
     private void GoTo(ValidationFinding finding)
     {
+        // A finding about the domain as a whole names no agent and has no entry on the track.
         int entry = finding.Agent is { } agent ? EntryOf(agent) : -1;
 
+        // The destination is where the client can rewrite what the finding reports.
         ShellPoint target = finding.Check switch
         {
+            // Colleague findings are settled on the Collaboration form.
             ValidationCheck.Colleagues => Collaboration,
+            // Code findings are settled on the Archive card, where the class names are written.
             ValidationCheck.Code => Archive,
+            // Agent and tool findings reopen the section that holds them, the Target when none is named.
             _ when entry >= 0 && finding.Check is ValidationCheck.Agents or ValidationCheck.Tools
                 => new ShellPoint(entry, finding.Step is { } step ? (int)step : 1),
+            // Every other finding concerns the map, which settles the intents against one another.
             _ => ShellPoint.Map
         };
 
@@ -233,10 +241,12 @@
     /// <inheritdoc cref="EntryOf(IntentDraft)" />
     private int EntryOf(string name)
     {
+        // Intent names are compared without case, as the framework resolves them.
         for (int entry = 0; entry < entries.Count; entry++)
             if (string.Equals(entries[entry].Name, name, StringComparison.OrdinalIgnoreCase))
                 return entry;
 
+        // An intent that is not on the track has no position.
         return -1;
     }
 
@@ -245,17 +255,22 @@
     /// </summary>
     private AgentDraft? AgentAt(int entry)
     {
+        // The agent being corrected lives in the running interview, not in the domain.
         if (InterviewService.Current is { } interview && (inDomain || interview.Resume is not null) && entry == EntryOf(interview.Intent))
             return interview.Agent;
 
+        // The agent being composed lives in the interview that owns the frontier until the client accepts it.
         if (!inDomain && FrontierInterview is { } owner && owner.OnAnEntry && entry == owner.At)
             return owner.Agent;
 
+        // A position outside the track has no agent.
         if (entry < 0 || entry >= entries.Count)
             return null;
 
+        // The intent name is the ID of the agent that answers it.
         string? name = entries[entry].Name;
 
+        // An agent already accepted is read from the domain draft.
         return DraftStateService.Current?.Agents.FirstOrDefault(agent =>
             string.Equals(agent.ID, name, StringComparison.OrdinalIgnoreCase));
     }
@@ -277,12 +292,16 @@
     /// </summary>
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // Entry is decided once per circuit, on the first render.
         if (!firstRender)
             return;
 
+        // The walk, validate and archive doors need a loaded domain with agents to work on.
         if (Door is "walk" or "validate" or "archive" && DraftStateService.Current is { Agents.Count: > 0 })
         {
             EnterDomain();
+
+            // Each door opens the domain on the moment its intention names.
             domainAt = Door switch { "validate" => Validation, "archive" => Archive, _ => Collaboration };
 
             // Correcting starts on the first agent: whoever comes to correct recognises the problem by reading.
@@ -293,9 +312,11 @@
             return;
         }
 
+        // With no interview in hand the client starts one from the opening question.
         if (InterviewService.Current is null)
             await TurnAsync(() => InterviewService.StartAsync());
 
+        // A start that left no interview means there is nothing to ask: the domain is what remains.
         if (InterviewService.Current is null)
             EnterDomain();
 
@@ -308,6 +329,7 @@
     /// </summary>
     private async Task SendAsync(string reply)
     {
+        // The engine merges the answer into the draft and may open the next pass inside the same call.
         await TurnAsync(() => InterviewService.AnswerAsync(reply));
         AfterTurn();
     }
@@ -317,9 +339,11 @@
     /// </summary>
     private Task ChooseAsync(QuickReply choice)
     {
+        // The button is marked chosen so the client sees their gesture while the turn runs.
         if (InterviewService.Current is { } interview)
             interview.Chosen = true;
 
+        // The button's value travels as the client's answer.
         return SendAsync(choice.Value);
     }
 
@@ -328,6 +352,7 @@
     /// </summary>
     private async Task AcceptAsync()
     {
+        // Accepting is the client's decision to admit the finished agent into the domain.
         await TurnAsync(() => InterviewService.AcceptAsync());
         AfterTurn();
     }
@@ -337,14 +362,20 @@
     /// </summary>
     private async Task ReopenAsync()
     {
+        // The pointer names the agent the client has been reading.
         int entry = Pointer.Entry;
+
+        // Whether the engine agreed to open the correction.
         bool opened = false;
 
+        // In the domain the agent is revised by name; the first branch needs an entry still on the track.
         if (inDomain && entry >= 0 && entry < entries.Count && entries[entry].Name is { } name)
             await TurnAsync(async () => opened = await InterviewService.ReviseAsync(name));
+        // During the interview the agent is reopened by its position on the map.
         else if (!inDomain)
             await TurnAsync(async () => opened = await InterviewService.ReopenAsync(entry));
 
+        // A refused reopening is reported, since the card stays where it was.
         if (!opened)
             await NotifyAsync(new Notice("This agent cannot be reopened right now.", NoticeKind.Failure));
     }
@@ -354,15 +385,18 @@
     /// </summary>
     private async Task TurnAsync(Func<Task> call)
     {
+        // The card is locked while the model works so no second answer is sent.
         busy = true;
         StateHasChanged();
 
         try
         {
+            // The engine call whose outcome the open card shows.
             await call();
         }
         finally
         {
+            // A failed turn also unlocks the card: the interview carries its error for the client to read.
             busy = false;
             focus = null;
             Refresh();
@@ -374,8 +408,10 @@
     /// </summary>
     private void AfterTurn()
     {
+        // An interview that ended leaves the domain as the client's place.
         if (!inDomain && InterviewService.Current is null)
             EnterDomain();
+        // Otherwise the track follows the interview where it stands.
         else
             Refresh();
     }
@@ -385,6 +421,7 @@
     /// </summary>
     private void EnterDomain()
     {
+        // The domain opens on the Collaboration form with nothing set aside to look at.
         inDomain = true;
         domainAt = Collaboration;
         focus = null;
@@ -397,17 +434,21 @@
     // A correction takes its agent out of the domain while it runs, so the track keeps the list it had.
     private void Refresh()
     {
+        // While interviewing the track follows the map the interview is building.
         if (!inDomain && FrontierInterview is { } owner)
         {
             entries = [.. owner.Map];
             return;
         }
 
+        // A correction in the domain keeps the list the track already shows.
         if (inDomain && InterviewService.Current is not null)
             return;
 
+        // The domain draft holds the agents accepted so far.
         DomainDraft? draft = DraftStateService.Current;
 
+        // Only intents that already have an agent appear on the track.
         entries = draft is null
             ? []
             : [.. draft.Intents.Where(intent => draft.Agents.Any(agent =>
@@ -429,8 +470,10 @@
     /// </summary>
     private async Task NotifyAsync(Notice notice)
     {
+        // The toast carries the notice's sentence as its title and the palette of its kind.
         await NotificationService.ShowToastAsync(options =>
         {
+            // Each kind of news maps to the toast intent that carries its icon.
             options.Intent = notice.Kind switch
             {
                 NoticeKind.Success => ToastIntent.Success,
@@ -455,6 +498,7 @@
     // The kinds' own marks already come from the theme; only plain news needs its mark set, in the accent.
     private static string LookOf(NoticeKind kind)
     {
+        // The edge colour is the one the checks use for the same kind of news.
         string colour = kind switch
         {
             NoticeKind.Success => "var(--alembic-success)",
@@ -463,8 +507,10 @@
             _ => "var(--alembic-accent)"
         };
 
+        // Plain news is the only kind whose icon is not drawn by the theme.
         string mark = kind is NoticeKind.Success or NoticeKind.Warning or NoticeKind.Failure ? string.Empty : $" --colorBrandForeground1: {colour};";
 
+        // The style sets the lit panel of the room and the edge in the kind's colour.
         return "--colorNeutralBackground1: var(--alembic-panel-lit); --shadow8: var(--alembic-glow); "
                + $"--colorTransparentStroke: {colour};{mark}";
     }

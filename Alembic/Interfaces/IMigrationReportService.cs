@@ -5,19 +5,7 @@ namespace Alembic.Interfaces;
 /// <summary>
 /// States what this Draft changes against the archive that was last emitted from it.
 /// </summary>
-/// <remarks>
-/// <para>
-/// <b>Unconditional.</b> It is produced for a greenfield domain too, where it says everything is
-/// new — because a report that only appears when something is wrong is a report nobody learns to
-/// read and this one has to be read on the day it finally matters.
-/// </para>
-/// <para>
-/// It exists because Alembic never sees the client's tree. It cannot know which C# is already
-/// there, cannot merge and must not pretend to: what it can do is name every change precisely
-/// enough that a human applies it in a minute. The signature section is the load-bearing one — a
-/// tool whose parameters changed regenerates its declaration and no longer matches the implementation in the half the client owns, which is exactly where that fix has to be made by hand.
-/// </para>
-/// </remarks>
+/// <remarks>The report is produced for a greenfield domain too, where it says everything is new.</remarks>
 public interface IMigrationReportService
 {
     /// <summary>
@@ -72,9 +60,7 @@ public enum MigrationKind
 }
 
 /// <summary>What happened to an element.</summary>
-/// <remarks>
-/// Ordered by how much work it costs the client, most first, because the report is sorted on it.
-/// </remarks>
+/// <remarks>The members run from the change that costs the client most work to the one that costs least, which is the order of the report.</remarks>
 public enum MigrationChange
 {
     /// <summary>Gone from the configuration. Its C# is now dead and may still be referenced.</summary>

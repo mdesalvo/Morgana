@@ -23,9 +23,7 @@
                         <FluentDivider />
                     }
 
-                    @* The direction lives in the row, so no box has to repeat it; one grid holds the name and the boxes so the
-                       name sits on the line of the first boxes, and fixed columns keep a colleague's box in the same place
-                       from one asking agent to the next. *@
+                    @* The direction lives in the row: the agent on the left asks and each box is a colleague it may consult. *@
                     <FluentGrid Spacing="1" Class="a2a-row">
                         <FluentGridItem Xs="3">
                             <FluentText Size="TextSize.Size400">@Named(asker)</FluentText>
@@ -107,7 +105,7 @@
     public DomainDraft Draft { get; set; } = default!;
 
     /// <summary>
-    /// Taking the work away.
+    /// The shell's buttons for taking the work away, drawn beside this card's own actions.
     /// </summary>
     [Parameter]
     public RenderFragment? Keep { get; set; }
@@ -202,11 +200,13 @@
     /// </summary>
     protected override void OnInitialized()
     {
+        // A colleague of another Morgana appears once however many agents declare it.
         foreach (Morgana.AI.Records.PeerReference remote in Draft.Agents
                      .SelectMany(agent => agent.Code.Consults)
                      .Where(colleague => colleague.Instance is not null)
                      .DistinctBy(colleague => (colleague.Intent.ToLowerInvariant(), colleague.Instance!.ToLowerInvariant())))
         {
+            // Typed and applied halves start equal: nothing has been edited yet.
             remotes.Add(new RemoteRow
             {
                 Intent = remote.Intent,
@@ -216,6 +216,7 @@
             });
         }
 
+        // The grid is drawn from the edges already declared.
         Rebuild();
     }
 
@@ -224,10 +225,12 @@
     /// </summary>
     private void Rebuild()
     {
+        // The grid is drawn afresh from the domain so a box always shows what the domain declares.
         cells = [];
 
         foreach (AgentDraft asker in Agents)
         {
+            // An agent may consult every other agent of the domain but never itself.
             foreach (AgentDraft colleague in Agents.Where(colleague => colleague != asker))
                 cells.Add(new ConsultCell
                 {
@@ -237,6 +240,7 @@
                     On = Consults(asker, colleague.ID!, null)
                 });
 
+            // A colleague of another Morgana is offered once both its name and its partner are known.
             foreach (RemoteRow row in remotes.Where(row => row.Complete))
                 cells.Add(new ConsultCell
                 {
@@ -267,39 +271,47 @@
     /// </summary>
     private async Task ApplyAsync(ConsultCell cell)
     {
+        // A ticked box declares the edge unless the domain already holds it.
         if (cell.On && !Consults(cell.Asking, cell.Intent, cell.Instance))
             cell.Asking.Code.Consults.Add(new Morgana.AI.Records.PeerReference(cell.Intent, cell.Instance));
+        // An unticked box withdraws the edge.
         else if (!cell.On)
             cell.Asking.Code.Consults.RemoveAll(colleague => Same(colleague, cell.Intent, cell.Instance));
 
+        // The shell learns that the domain's edges changed.
         await OnChanged.InvokeAsync();
     }
 
     /// <summary>
     /// Carries a renamed remote colleague onto every edge that names it.
     /// </summary>
-    // A colleague left half-named names nothing, so its edges leave the domain until both halves are back.
     private async Task RenameAsync(RemoteRow row)
     {
+        // A row never applied to the domain has no edges to carry along.
         bool wasApplied = !string.IsNullOrWhiteSpace(row.AppliedIntent);
 
         foreach (AgentDraft agent in Draft.Agents)
         {
             for (int index = 0; index < agent.Code.Consults.Count; index++)
             {
+                // Only the edges that carry the colleague's previous name are touched.
                 if (!wasApplied || !Same(agent.Code.Consults[index], row.AppliedIntent, row.AppliedInstance))
                     continue;
 
+                // Both halves named: the edge carries the new name.
                 if (row.Complete)
                     agent.Code.Consults[index] = agent.Code.Consults[index] with { Intent = row.Intent.Trim(), Instance = row.Instance.Trim() };
+                // A colleague left half-named names nothing: its edges leave the domain until both halves are back.
                 else
                     agent.Code.Consults.RemoveAt(index--);
             }
         }
 
+        // The applied halves record what the edges now carry so the next rename can find them.
         row.AppliedIntent = row.Complete ? row.Intent.Trim() : string.Empty;
         row.AppliedInstance = row.Complete ? row.Instance.Trim() : string.Empty;
 
+        // The grid offers the colleague under its new name or not at all.
         Rebuild();
         await OnChanged.InvokeAsync();
     }
@@ -309,9 +321,11 @@
     /// </summary>
     private async Task RemoveAsync(RemoteRow row)
     {
+        // Every agent stops consulting the colleague that is taken back.
         foreach (AgentDraft agent in Draft.Agents)
             agent.Code.Consults.RemoveAll(colleague => Same(colleague, row.AppliedIntent, row.AppliedInstance));
 
+        // The colleague and its boxes leave the form.
         remotes.Remove(row);
         Rebuild();
         await OnChanged.InvokeAsync();
@@ -327,13 +341,16 @@
     /// </summary>
     private async Task NextAsync()
     {
+        // A half-named colleague cannot be reached and so cannot be carried into the archive.
         if (remotes.Any(row => !row.Complete))
         {
+            // The blank halves show as errors from here on.
             touched = true;
             await OnRefuse.InvokeAsync("Name and partner are both needed: without them the colleague cannot be reached.");
             return;
         }
 
+        // Every colleague is complete: the client moves on to Validation.
         await OnNext.InvokeAsync();
     }
 

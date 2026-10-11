@@ -7,45 +7,24 @@ using Alembic.Models;
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="IAssetPackageService"/>: assembles the archive in memory.
+/// Assembles the one archive that the client downloads: configuration, save file, project, generated C# and mocks.
 /// </summary>
-/// <remarks>
-/// In memory and that is not a size compromise — a whole domain is tens of kilobytes. It is the
-/// same constraint that shapes everything else here: Alembic has no filesystem it may write to,
-/// because at runtime it lives wherever the client deployed it.
-/// </remarks>
+/// <remarks>The archive is built in memory since Alembic assumes no filesystem it may write to.</remarks>
 public class AssetPackageService : IAssetPackageService
 {
-    /// <summary>
-    /// The one file in the archive that says Alembic built it.
-    /// </summary>
-    /// <remarks>
-    /// A zip carrying an <c>agents.json</c> is not evidence of that on its own: anyone can zip up a
-    /// bare configuration and Import's own next-step doors read differently for an archive than for
-    /// a bare upload. This is the fact that check is allowed to trust, because it is the one thing a
-    /// zip built anywhere else would have no reason to contain. Content over name, as everywhere else
-    /// Alembic tells files apart: what matters is that the entry exists, not what is written in it.
-    /// </remarks>
+    /// <summary>The entry that tells Import an archive was built by Alembic, since a zip with an <c>agents.json</c> proves nothing.</summary>
     public const string MarkerFileName = "alembic-emit.marker";
 
-    /// <summary>
-    /// The configuration Morgana loads.
-    /// </summary>
+    /// <summary>The entry that holds the configuration Morgana loads.</summary>
     public const string ConfigurationFileName = "agents.json";
 
-    /// <summary>
-    /// The interview's save file.
-    /// </summary>
+    /// <summary>The entry that holds the interview's save file.</summary>
     public const string DraftFileName = "alembic-draft.json";
 
-    /// <summary>
-    /// The report of what this archive differs from the one before it.
-    /// </summary>
+    /// <summary>The entry that reports how this archive differs from the one before it.</summary>
     public const string MigrationFileName = "MIGRATION.md";
 
-    /// <summary>
-    /// The convention carried inside the archive.
-    /// </summary>
+    /// <summary>The entry that carries the two-halves convention to the client.</summary>
     public const string ReadmeFileName = "README.md";
 
     /// <summary>
@@ -59,24 +38,30 @@ public class AssetPackageService : IAssetPackageService
     /// </summary>
     public static string FailedMockPathOf(string mockPath) => mockPath + ".FAILED.txt";
 
+    /// <summary>Writes the Draft as the <c>agents.json</c> entry.</summary>
     private readonly IDraftExportService draftExportService;
+
+    /// <summary>Writes the Draft as the save file entry and copies it for the baseline.</summary>
     private readonly IDraftSerializationService draftSerializationService;
+
+    /// <summary>Writes the project and solution entries.</summary>
     private readonly ISolutionEmitService solutionEmitService;
+
+    /// <summary>Writes the generated C# entries of each agent.</summary>
     private readonly ICodeEmitService codeEmitService;
+
+    /// <summary>Authors the mock entry of each tool class.</summary>
     private readonly IToolMockService toolMockService;
+
+    /// <summary>Writes the migration report entry.</summary>
     private readonly IMigrationReportService migrationReportService;
+
+    /// <summary>Receives the failures of mock authoring that the archive ships around.</summary>
     private readonly ILogger logger;
 
     /// <summary>
-    /// Initializes the package service with the emitters and reports that <see cref="BuildAsync"/> drives.
+    /// Initializes the package service over the emitters and reports that the archive is made of.
     /// </summary>
-    /// <param name="draftExportService">Writes the Draft back out as <c>agents.json</c>.</param>
-    /// <param name="draftSerializationService">Writes the Draft's own save file, <c>alembic-draft.json</c>.</param>
-    /// <param name="solutionEmitService">Writes the project and solution files the generated sources live in.</param>
-    /// <param name="codeEmitService">Writes the deterministic <c>.g.cs</c> half of each agent and tool class.</param>
-    /// <param name="toolMockService">Writes the authored mock half of each tool class — the one call that can fail.</param>
-    /// <param name="migrationReportService">Builds <c>MIGRATION.md</c> from the Draft's diff against its baseline.</param>
-    /// <param name="logger">Used to record per-agent mock failures that the archive still ships around.</param>
     public AssetPackageService(
         IDraftExportService draftExportService,
         IDraftSerializationService draftSerializationService,
@@ -96,19 +81,13 @@ public class AssetPackageService : IAssetPackageService
     }
 
     /// <inheritdoc />
-    /// <remarks>
-    /// Entries are written in the order a client would want to trust them: the marker and the
-    /// configuration first, then the project scaffolding, then the generated and authored C# per
-    /// agent. The whole method runs inside one <see cref="ZipArchive"/>, so a failure past the
-    /// marker still yields a partial-but-openable zip rather than nothing.
-    /// </remarks>
+    /// <remarks>Entries are written marker and configuration first, then the project, then the C# of each agent.</remarks>
     public async Task<byte[]> BuildAsync(
         DomainDraft draft,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        // The report below reads the draft's current baseline, which is the previous archive; the
-        // snapshot taken here becomes the baseline only once this archive has been built.
+        // The report reads the baseline that is the previous archive: this snapshot becomes the baseline once the archive is built.
         DateTimeOffset emittedAt = DateTimeOffset.UtcNow;
         DomainDraft snapshot = await CloneAsync(draft, cancellationToken);
         snapshot.Baseline = null;
@@ -119,55 +98,55 @@ public class AssetPackageService : IAssetPackageService
         DomainDraft copy = await CloneAsync(draft, cancellationToken);
         copy.Baseline = snapshot;
 
+        // The archive bytes accumulate here for the download.
         using MemoryStream buffer = new MemoryStream();
 
-        // The archive lives entirely in this using block: ZipArchive buffers entries and writes the
-        // central directory only on Dispose, so nothing after this point may return early — a buffer
-        // read before that point is bytes no unzip program will recognise as a zip.
+        // The zip is complete only when this block closes, so nothing inside it may return early.
         await using (ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
         {
+            // The marker lets a re-upload of this archive be recognised as Alembic's.
             await WriteAsync(archive, MarkerFileName,
                 "This file marks an archive Alembic built. It carries no information of its own and "
                 + "is not part of the domain — safe to delete once you have unpacked the rest.",
                 progress, cancellationToken);
 
+            // The configuration, the save file and the migration report all come from the draft as it stands now.
             await WriteAsync(archive, ConfigurationFileName, Encoding.UTF8.GetString(draftExportService.Export(draft)), progress, cancellationToken);
             await WriteAsync(archive, DraftFileName, Encoding.UTF8.GetString(draftSerializationService.Serialize(copy)), progress, cancellationToken);
             await WriteAsync(archive, MigrationFileName, migrationReportService.Build(draft).Markdown, progress, cancellationToken);
             await WriteAsync(archive, ReadmeFileName, Readme, progress, cancellationToken);
 
-            // The project and solution the generated sources live in. Their absence used to mean
-            // the archive was loose files the client first had to shelter inside a project of their
-            // own; with them, the same unzip is already `dotnet build` or "open in the IDE".
+            // The project and solution make the unzipped archive buildable as it is.
             foreach (EmittedFile file in solutionEmitService.Emit(draft))
                 await WriteAsync(archive, file.Path, file.Content, progress, cancellationToken);
 
+            // An agent without an ID is a validation error and has no class to write.
             foreach (AgentDraft agent in draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)))
             {
+                // The deterministic half of the agent: its class, its workflows and its tool signatures.
                 foreach (EmittedFile file in codeEmitService.Emit(agent, agent.ID!))
                     await WriteAsync(archive, file.Path, file.Content, progress, cancellationToken);
 
+                // An agent without tools has no tool class and so no mock.
                 if (agent.Tools.Count == 0)
                     continue;
 
-                // The one call in the archive that can fail on something outside Alembic. It is
-                // caught per agent rather than allowed to abort the download: a client holding the
-                // configuration, the signatures and the report, minus one mock body, has everything
-                // that matters. Losing all of it to one provider timeout would not.
+                // The mock is the one call that can fail on something outside Alembic.
+                // A failure costs the client one mock body and never the rest of the archive.
                 string mockPath = MockPathOf(agent);
 
                 try
                 {
+                    // The client's half of the tool class, authored as a working mock of the domain.
                     string mock = await toolMockService.AuthorAsync(agent, agent.ID!, cancellationToken);
                     await WriteAsync(archive, mockPath, mock, progress, cancellationToken);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
+                    // The client's cancellation still aborts the build; any other failure is reported in the archive.
                     logger.LogError(ex, "Could not author the mock for {AgentId}", agent.ID);
 
-                    // A sibling file rather than a silently missing one: the client sees exactly
-                    // which class has no body yet and what to do about it, in the same folder they
-                    // would have looked in for the mock itself.
+                    // The note beside the missing mock tells the client which class has no body yet and what to do.
                     await WriteAsync(archive, FailedMockPathOf(mockPath),
                         $"Alembic could not write this mock: {ex.Message}\n\n"
                         + $"Everything else in the archive is complete. Implement the partial methods declared in {Path.GetFileNameWithoutExtension(mockPath)}.g.cs by hand,\n"
@@ -180,42 +159,40 @@ public class AssetPackageService : IAssetPackageService
         // Set only here: a build that threw above leaves the draft diffing against the archive the client last received.
         draft.Baseline = snapshot;
 
+        // The finished zip goes to the download.
         return buffer.ToArray();
     }
 
-    /// <summary>
-    /// Deep-copies a Draft through its own save format, so the copy is exactly what a resume would read.
-    /// </summary>
+    /// <summary>Copies a Draft through its own save format, so the copy is exactly what a resume would read.</summary>
     private async Task<DomainDraft> CloneAsync(DomainDraft draft, CancellationToken cancellationToken)
     {
         using MemoryStream bytes = new MemoryStream(draftSerializationService.Serialize(draft));
+
+        // A Draft that was just serialized and cannot be read back signals a defect in the save format.
         return await draftSerializationService.DeserializeAsync(bytes, cancellationToken)
                ?? throw new InvalidOperationException("The Draft could not be copied through its own save format.");
     }
 
-    /// <summary>
-    /// Writes one entry and announces it.
-    /// </summary>
-    /// <param name="archive">The archive under construction.</param>
+    /// <summary>Writes one text entry into the archive and tells the client's status line which one.</summary>
     /// <param name="path">The entry's path inside the archive, forward-slash separated.</param>
-    /// <param name="content">The entry's whole text content, encoded as UTF-8 without a byte-order mark.</param>
-    /// <param name="progress">Reported the entry's path once it is written, for the caller's own status line.</param>
-    /// <param name="cancellationToken">Cancels the write mid-entry.</param>
+    /// <param name="progress">Receives the entry's path once it is written.</param>
+    /// <param name="cancellationToken">Stops the write when the client leaves the page.</param>
     private static async Task WriteAsync(
         ZipArchive archive, string path, string content, IProgress<string>? progress, CancellationToken cancellationToken)
     {
+        // The entry is the file the client finds under this path after unzipping.
         ZipArchiveEntry entry = archive.CreateEntry(path, CompressionLevel.Optimal);
 
+        // The text is written as UTF-8 without a byte-order mark, as the files are read back by Morgana.
         await using (Stream stream = await entry.OpenAsync(cancellationToken))
         await using (StreamWriter writer = new StreamWriter(stream, new UTF8Encoding(false)))
             await writer.WriteAsync(content.AsMemory(), cancellationToken);
 
+        // The client sees the entry as soon as it is in the archive.
         progress?.Report(path);
     }
 
-    /// <summary>
-    /// The convention, carried inside the archive because there is nowhere else to carry it.
-    /// </summary>
+    /// <summary>The text of the archive's README: what each entry is and which half of a tool class is the client's.</summary>
     private const string Readme = """
         # What is in here
 

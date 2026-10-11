@@ -49,18 +49,19 @@
     /// <summary>
     /// Enters the shell for a new domain, leaving behind a domain with an archive behind it that is still held in this circuit.
     /// </summary>
-    /// <remarks>
-    /// Only a domain with a baseline is dropped: a greenfield interview already under way is resumed rather
-    /// than thrown away, since it has no archive behind it to leave.
-    /// </remarks>
     private void StartFresh()
     {
+        // Only a domain with a baseline is dropped: a greenfield interview under way has no archive behind it to leave.
         if (DraftStateService.Current?.Baseline is not null)
         {
+            // The interview was written against the domain being left.
             InterviewService.Abandon();
+
+            // The new domain starts from an empty draft.
             DraftStateService.Set(null);
         }
 
+        // Both ways in end at the shell, which opens the interview or resumes the one under way.
         NavigationManager.NavigateTo("shell");
     }
 }

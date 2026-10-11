@@ -1,7 +1,6 @@
 @*
-    The track: the map, the agents and the domain. The map has no steps of its own, so it keeps one width. The agents
-    and the domain share the rest: the one looked at opens on its steps and takes most of it, the other folds to its
-    name and bar and is the way back onto it.
+    The track: the map, the agents and the domain. The map has no steps of its own. Of the agents and the domain
+    the one looked at opens on its steps; the other folds to its name and bar and is the way back onto it.
 *@
 
 <div class="track">
@@ -15,7 +14,6 @@
 
     <FluentDivider Vertical="true" Class="sep" />
 
-    @* The agents and the domain share what the map leaves: evenly, until the one looked at opens. *@
     <div class="stage" data-open="@Open">
         @if (!Mapped)
         {
@@ -31,7 +29,6 @@
             <div class="carousel">
                 @Arrow(Centred - 1, "‹", "The previous agent")
 
-                @* Keyed on the agent, so the slide plays when the agent changes and never on a step. *@
                 <FluentCard Class="seg middle slide" data-state="here" Shadow="CardShadow.None" @key="Centred">
                     <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" Height="100%">
                         <span class="seg-name">
@@ -246,12 +243,17 @@
     // It lands on the work in hand for the agent at the frontier and on the Target for one behind it.
     private RenderFragment Arrow(int entry, string glyph, string label)
     {
+        // The first and the last agent have no neighbour beyond them.
         if (entry < 0 || entry >= Entries.Count)
             return _ => { };
 
+        // The agent at the frontier is reached at the step in hand and any agent behind it at its Target.
         ShellPoint destination = Frontier.OnAgent && entry == Frontier.Entry ? Frontier : new ShellPoint(entry, 1);
+
+        // The neighbour's place in the row, shown beside the arrow.
         string position = $"{entry + 1}/{Entries.Count}";
 
+        // The arrow is disabled while the neighbour lies beyond the frontier: nothing there is written yet.
         return @<FluentButton Appearance="ButtonAppearance.Outline" Class="arrow" Disabled="@(destination > Frontier)"
                               Title="@label" OnClick="() => OnLook.InvokeAsync(destination)">
                     @if (glyph == "‹")
