@@ -76,7 +76,7 @@ public static partial class ExpectationChecker
     /// <summary>What the conversation's persisted history does and does not carry.</summary>
     private static void CheckHistory(ExpectSpec expect, IReadOnlyList<MorganaChatMessage>? history, List<string> failures)
     {
-        if (expect.HistoryExcludesAgents is not { Count: > 0 } && expect.HistoryUserMessages is null)
+        if (!expect.AsksAboutHistory)
             return;
 
         // A null history here means the runner was never asked for one, which can only happen if a
@@ -369,11 +369,11 @@ public static partial class ExpectationChecker
 
     /// <summary>
     /// Splits a <c>contextReads</c> entry into its optional outcome prefix and variable name —
-    /// <c>"Hit:customerCode"</c> → <c>("Hit", "customerCode")</c>, <c>"customerCode"</c> → <c>(null, "customerCode")</c>.
+    /// <c>"Hit:customerCode"</c> → <c>Hit</c> and <c>customerCode</c>, <c>"customerCode"</c> → no prefix and <c>customerCode</c>.
     /// </summary>
-    private static (string? Operation, string Variable) ParseContextReadEntry(string entry)
+    private static ContextReadEntry ParseContextReadEntry(string entry)
     {
         int colon = entry.IndexOf(':');
-        return colon < 0 ? (null, entry) : (entry[..colon], entry[(colon + 1)..]);
+        return colon < 0 ? new ContextReadEntry(null, entry) : new ContextReadEntry(entry[..colon], entry[(colon + 1)..]);
     }
 }

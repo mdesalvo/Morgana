@@ -400,36 +400,17 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // refusing an unauthenticated call proves the door is shut, not that it is shut selectively.
         // Its key, its reach and its ceiling are one entry, so there is no second half to forget.
         ScopedPartnerIndex = Configuration.GetSection("Morgana:AgentToAgent:Partners").GetChildren().Count();
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__Name", ScopedPartnerName);
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__SymmetricKey", ScopedPartnerKey);
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__Enabled", "true");
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__OnAgents__0", ScopedPartnerAgent);
 
-        // How many conversations this partner may open in an hour, which the instance under test
-        // demands of every admitted partner. Far above anything a scripted suite could reach: the
-        // ceiling exists here to satisfy a declaration, never to be met.
-        Environment.SetEnvironmentVariable(
-            $"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__RateLimiting__Enabled", "true");
-        Environment.SetEnvironmentVariable(
-            $"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__RateLimiting__MaxConversationsPerHour",
-            ScopedPartnerConversationsPerHour.ToString(CultureInfo.InvariantCulture));
+        // The ceiling is how many conversations this partner may open in an hour, which the instance
+        // under test demands of every admitted partner. Far above anything a scripted suite could
+        // reach: it exists here to satisfy a declaration, never to be met.
+        DeclareInboundPartner(ScopedPartnerIndex, ScopedPartnerName, ScopedPartnerKey, ScopedPartnerConversationsPerHour, refusal: null);
 
         // The same admission with a ceiling that can actually be met, with the sentence this deployment
         // turns a partner away with. One conversation an hour is the smallest bound that still lets the
         // first exchange be served, which is what makes the second one's refusal mean something.
         MeteredPartnerIndex = ScopedPartnerIndex + 1;
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__Name", MeteredPartnerName);
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__SymmetricKey", MeteredPartnerKey);
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__InboundPolicy__Enabled", "true");
-        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__InboundPolicy__OnAgents__0", ScopedPartnerAgent);
-        Environment.SetEnvironmentVariable(
-            $"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__InboundPolicy__RateLimiting__Enabled", "true");
-        Environment.SetEnvironmentVariable(
-            $"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__InboundPolicy__RateLimiting__MaxConversationsPerHour",
-            MeteredPartnerConversationsPerHour.ToString(CultureInfo.InvariantCulture));
-        Environment.SetEnvironmentVariable(
-            $"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__InboundPolicy__RateLimiting__ErrorMessagePerHour",
-            MeteredPartnerRefusal);
+        DeclareInboundPartner(MeteredPartnerIndex, MeteredPartnerName, MeteredPartnerKey, MeteredPartnerConversationsPerHour, MeteredPartnerRefusal);
 
         // Where a broken declaration may be written without landing on either of the two above.
         FreePartnerIndex = MeteredPartnerIndex + 1;
@@ -445,6 +426,35 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // observer parses are Information-level and the rest is noise in the capture buffer.
         Environment.SetEnvironmentVariable("Logging__LogLevel__Default", "Warning");
         Environment.SetEnvironmentVariable("Logging__LogLevel__Morgana", Options.HostLogLevel);
+    }
+
+    /// <summary>
+    /// Declares one inbound partner at the given index, admitted to the single agent every harness partner
+    /// reaches and held to an hourly ceiling of conversations.
+    /// </summary>
+    /// <param name="refusal">Sentence the deployment turns the partner away with past the ceiling; null leaves the default.</param>
+    private static void DeclareInboundPartner(int index, string name, string symmetricKey, int conversationsPerHour, string? refusal)
+    {
+        string partner = $"Morgana__AgentToAgent__Partners__{index}";
+
+        // The name and the key are all the admission needs to recognise the partner.
+        Environment.SetEnvironmentVariable($"{partner}__Name", name);
+        Environment.SetEnvironmentVariable($"{partner}__SymmetricKey", symmetricKey);
+
+        // The inbound policy admits the partner to one agent only, which is what lets the scope half
+        // of the gate be observed at all.
+        Environment.SetEnvironmentVariable($"{partner}__InboundPolicy__Enabled", "true");
+        Environment.SetEnvironmentVariable($"{partner}__InboundPolicy__OnAgents__0", ScopedPartnerAgent);
+
+        // The instance under test demands an hourly ceiling of every admitted partner.
+        Environment.SetEnvironmentVariable($"{partner}__InboundPolicy__RateLimiting__Enabled", "true");
+        Environment.SetEnvironmentVariable(
+            $"{partner}__InboundPolicy__RateLimiting__MaxConversationsPerHour",
+            conversationsPerHour.ToString(CultureInfo.InvariantCulture));
+
+        // Only a partner whose refusal is spelled out overrides the default sentence.
+        if (refusal is not null)
+            Environment.SetEnvironmentVariable($"{partner}__InboundPolicy__RateLimiting__ErrorMessagePerHour", refusal);
     }
 
     /// <summary>

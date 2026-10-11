@@ -6,6 +6,7 @@ using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.Providers;
+using PromptHarness.Infrastructure;
 using Xunit;
 
 namespace PromptHarness.Tests;
@@ -160,7 +161,8 @@ public sealed class ContextResolutionTests
                 return Task.CompletedTask;
             };
 
-            tool.Session = await new ChatClientAgent(new SilentChatClient()).CreateSessionAsync();
+            // The agent is only ever asked for a session: any call to its model is a test fault.
+            tool.Session = await new ChatClientAgent(new ScriptedChatClient()).CreateSessionAsync();
 
             Records.ToolDefinition definition = new Records.ToolDefinition(
                 "GetInvoiceDetails",
@@ -184,21 +186,5 @@ public sealed class ContextResolutionTests
 
             return tool;
         }
-    }
-
-    /// <summary>
-    /// The model of an agent that is only ever asked for a session. Any call to it is a test fault.
-    /// </summary>
-    private sealed class SilentChatClient : IChatClient
-    {
-        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-            => throw new InvalidOperationException("No model is reached by this group");
-
-        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-            => throw new InvalidOperationException("No model is reached by this group");
-
-        public object? GetService(Type serviceType, object? serviceKey = null) => null;
-
-        public void Dispose() { }
     }
 }

@@ -12,6 +12,7 @@ using Morgana.AI.Providers;
 using Morgana.AI.Services;
 using Morgana.AI.Tools;
 using Morgana.Contracts;
+using PromptHarness.Infrastructure;
 using Xunit;
 
 namespace PromptHarness.Tests;
@@ -392,31 +393,5 @@ public sealed class TurnClosureTests
         /// <summary>The closure recorded on the session; null when none was.</summary>
         public Records.TurnReply? Recorded()
             => provider.GetVariable(session, "turn_reply") is string json ? Deserialize(json) : null;
-    }
-
-    /// <summary>
-    /// Stands where the model would, answering each request with the next scripted response and
-    /// keeping every request it received.
-    /// </summary>
-    private sealed class ScriptedChatClient(params ChatResponse[] responses) : IChatClient
-    {
-        /// <summary>The scripted answers still to give.</summary>
-        private readonly Queue<ChatResponse> pending = new(responses);
-
-        /// <summary>Every request received, in order.</summary>
-        public List<(List<ChatMessage> Messages, ChatOptions? Options)> Requests { get; } = [];
-
-        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            Requests.Add(([.. messages], options));
-            return Task.FromResult(pending.Count > 0 ? pending.Dequeue() : Text(""));
-        }
-
-        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-            => throw new InvalidOperationException("No streaming is scripted in this group");
-
-        public object? GetService(Type serviceType, object? serviceKey = null) => null;
-
-        public void Dispose() { }
     }
 }

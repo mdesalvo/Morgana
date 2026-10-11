@@ -9,11 +9,6 @@ using PromptHarness.Infrastructure.Wiring;
 
 namespace PromptHarness.Infrastructure.Engine;
 
-/// <summary>Outcome of one judged proposition.</summary>
-/// <param name="Holds">Whether the judge found the proposition true of the response.</param>
-/// <param name="Reason">The judge's one-line justification, surfaced in failure messages.</param>
-public sealed record JudgeVerdict(bool Holds, string Reason);
-
 /// <summary>
 /// Evaluates natural-language propositions about a response — the properties no structural
 /// assertion can reach, such as "asks for the operand in prose without enumerating options".
@@ -93,7 +88,7 @@ public sealed class LLMJudge
         // "judge:" propositions must all hold — a failure is any one the judge found false.
         foreach (string proposition in judge ?? [])
         {
-            JudgeVerdict verdict = await EvaluateAsync(proposition, text, quickReplies, richCard);
+            JudgeVerdict verdict = await JudgePropositionAsync(proposition, text, quickReplies, richCard);
             if (!verdict.Holds)
                 failures.Add($"judge: \"{proposition}\" did not hold — {verdict.Reason}");
         }
@@ -102,7 +97,7 @@ public sealed class LLMJudge
         // here it's the judge finding TRUE that produces a failure message.
         foreach (string proposition in judgeNot ?? [])
         {
-            JudgeVerdict verdict = await EvaluateAsync(proposition, text, quickReplies, richCard);
+            JudgeVerdict verdict = await JudgePropositionAsync(proposition, text, quickReplies, richCard);
             if (verdict.Holds)
                 failures.Add($"judgeNot: \"{proposition}\" held but must not — {verdict.Reason}");
         }
@@ -119,7 +114,7 @@ public sealed class LLMJudge
         [TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(6)];
 
     /// <summary>Judges a single proposition, retrying twice, with waits, before giving up.</summary>
-    private async Task<JudgeVerdict> EvaluateAsync(string proposition, string text, IReadOnlyList<QuickReply> quickReplies, RichCard? richCard)
+    private async Task<JudgeVerdict> JudgePropositionAsync(string proposition, string text, IReadOnlyList<QuickReply> quickReplies, RichCard? richCard)
     {
         // Exactly what a user would see: text, button labels and the card's own rendered content —
         // never the tool trace, the context accesses, or anything else only the structural layer is

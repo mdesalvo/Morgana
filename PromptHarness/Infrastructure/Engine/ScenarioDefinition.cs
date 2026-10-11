@@ -199,6 +199,9 @@ public sealed class ExpectSpec
     /// scripted-length conversation actually cross the trigger.
     /// </summary>
     public bool? SummarizationOccurred { get; init; }
+
+    /// <summary>Whether the turn expects something of the persisted history, which makes the runner fetch it.</summary>
+    public bool AsksAboutHistory => HistoryExcludesAgents is { Count: > 0 } || HistoryUserMessages is not null;
 }
 
 /// <summary>Loads scenario files from the harness output directory.</summary>

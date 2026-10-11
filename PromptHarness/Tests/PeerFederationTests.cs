@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using Morgana.AI;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
+using PromptHarness.Infrastructure;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;
@@ -256,7 +257,8 @@ public sealed class PeerFederationTests
             .Build();
 
         return new ConfigurationAgentDirectoryService(
-            new UnreadAgentConfiguration(),
+            // The domain describes agents of this installation only, which no path toward a colleague elsewhere reads.
+            new ScriptedDomain(),
             new UnreadPromptResolver(),
             new UnreadToolRegistry(),
             configuration,
@@ -321,14 +323,6 @@ public sealed class PeerFederationTests
     /// <param name="Schemes">Schemes the card defines.</param>
     /// <param name="RequiredSchemeName">The one it names in its requirement.</param>
     private sealed record AgentCardSecurity(Dictionary<string, SecurityScheme> Schemes, string RequiredSchemeName);
-
-    /// <summary>Stands in for the domain configuration, which describes agents of this installation only.</summary>
-    private sealed class UnreadAgentConfiguration : IAgentConfigurationService
-    {
-        public Task<List<Records.IntentDefinition>> GetIntentsAsync() => Task.FromResult(new List<Records.IntentDefinition>());
-
-        public Task<List<Records.Prompt>> GetAgentPromptsAsync() => Task.FromResult(new List<Records.Prompt>());
-    }
 
     /// <summary>Stands in for prompt resolution, which no path toward a colleague elsewhere reaches.</summary>
     private sealed class UnreadPromptResolver : IPromptResolverService

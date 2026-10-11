@@ -12,6 +12,7 @@ using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using Morgana.Contracts;
 using Morgana.Web.Filters;
+using PromptHarness.Infrastructure;
 using PromptHarness.Infrastructure.Wiring;
 using Xunit;
 
@@ -373,7 +374,7 @@ public sealed class ConversationApiTests
     /// holding only <see cref="IrreversibleCommand"/>; answers the context the gate left and whether it let
     /// the request go on.
     /// </summary>
-    private async Task<(ActionExecutingContext Context, bool Ran)> AdmitAsync(ExecuteCommandRequest request)
+    private async Task<CommandAdmission> AdmitAsync(ExecuteCommandRequest request)
     {
         CommandAdmissionFilter gate = new CommandAdmissionFilter(
             new CommandRegistryService([new IrreversibleCommand()]), api.HostPersistenceService(), NullLogger.Instance);
@@ -393,7 +394,7 @@ public sealed class ConversationApiTests
             return Task.FromResult(new ActionExecutedContext(context, [], context.Controller));
         });
 
-        return (context, ran);
+        return new CommandAdmission(context, ran);
     }
 
     /// <summary>A command that cannot be taken back, which is all the gate reads of it: it is never run.</summary>

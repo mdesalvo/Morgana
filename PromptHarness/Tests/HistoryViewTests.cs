@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Morgana.AI;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
+using PromptHarness.Infrastructure;
 using Xunit;
 
 namespace PromptHarness.Tests;
@@ -98,7 +99,7 @@ public sealed class HistoryViewTests
         private AgentSession session = null!;
 
         /// <summary>The model, recording each request.</summary>
-        private readonly RecordingChatClient model = new RecordingChatClient();
+        private readonly ScriptedChatClient model = new ScriptedChatClient();
 
         /// <summary>The messages on record.</summary>
         public IReadOnlyList<ChatMessage> Stored => history.GetMessages(session);
@@ -129,8 +130,13 @@ public sealed class HistoryViewTests
         public async Task<IReadOnlyList<ChatMessage>> RunTurnAsync(string userText)
         {
             File(new ChatMessage(ChatRole.User, userText));
+
+            // One plain answer per turn: what the model says is no part of what these cases look at.
+            model.Enqueue(new ChatResponse(new ChatMessage(ChatRole.Assistant, "noted")));
             await agent.RunAsync(session);
-            return model.LastRequest;
+
+            // The view the model read is the messages of the request this turn made.
+            return model.Requests[^1].Messages;
         }
     }
 
@@ -151,27 +157,5 @@ public sealed class HistoryViewTests
         public Task<string> ComposeReplyNotAcceptedAsync(string reason) => throw new NotSupportedException();
         public Task<string> ComposeToolInjectionAsync(string name, IReadOnlyDictionary<string, string>? values = null) => throw new NotSupportedException();
         public Task<string?> ComposeWorkflowResultAsync(string workflow, string? step, string result) => throw new NotSupportedException();
-    }
-
-    /// <summary>
-    /// Stands where the model would, answering an empty text and keeping the messages of the last request.
-    /// </summary>
-    private sealed class RecordingChatClient : IChatClient
-    {
-        /// <summary>What the last request carried: the view that the agent's model would read.</summary>
-        public IReadOnlyList<ChatMessage> LastRequest { get; private set; } = [];
-
-        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            LastRequest = [.. messages];
-            return Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "noted")));
-        }
-
-        public IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
-            => throw new InvalidOperationException("No streaming is scripted in this group");
-
-        public object? GetService(Type serviceType, object? serviceKey = null) => null;
-
-        public void Dispose() { }
     }
 }

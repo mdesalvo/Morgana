@@ -133,11 +133,11 @@ public sealed class TurnObserver : IDisposable
         return new TurnScope(
             conversationId,
             output.Mark(),
-            agentSpans.TryGetValue(conversationId, out List<AgentSpan>? spans) ? spans.Count : 0,
-            guardSpans.TryGetValue(conversationId, out List<GuardSpan>? guards) ? guards.Count : 0,
-            classifierSpans.TryGetValue(conversationId, out List<ClassifierSpan>? classifiers) ? classifiers.Count : 0,
+            SpanCount(agentSpans, conversationId),
+            SpanCount(guardSpans, conversationId),
+            SpanCount(classifierSpans, conversationId),
             llmMark,
-            consultationSpans.TryGetValue(conversationId, out List<ConsultationObservation>? consultations) ? consultations.Count : 0);
+            SpanCount(consultationSpans, conversationId));
     }
 
     /// <summary>
@@ -184,23 +184,12 @@ public sealed class TurnObserver : IDisposable
             }
         }
 
-        // The most recent agent span recorded for this conversation since the turn began, if any —
-        // spans.Count > scope.SpanCount is what filters out spans from earlier turns of the same
-        // conversation; [^1] takes the latest of whatever new ones landed during this turn.
-        AgentSpan? span = agentSpans.TryGetValue(scope.ConversationId, out List<AgentSpan>? spans) && spans.Count > scope.SpanCount
-            ? spans[^1]
-            : null;
-
-        // Same "count > mark, take the latest" read as the agent span above, applied to the guard
-        // and classifier dictionaries — both are null on any turn that skipped that step (e.g. a
-        // follow-up turn skips classification, a guard-disabled run never produces a guard span).
-        GuardSpan? guard = guardSpans.TryGetValue(scope.ConversationId, out List<GuardSpan>? guards) && guards.Count > scope.GuardSpanCount
-            ? guards[^1]
-            : null;
-
-        ClassifierSpan? classifier = classifierSpans.TryGetValue(scope.ConversationId, out List<ClassifierSpan>? classifiers) && classifiers.Count > scope.ClassifierSpanCount
-            ? classifiers[^1]
-            : null;
+        // The latest span of each kind recorded since the turn began: spans from earlier turns of the
+        // same conversation sit below the mark. Guard and classifier are null on a turn that skipped
+        // that step (a follow-up skips classification, a guard-disabled run has no guard span).
+        AgentSpan? span = LatestSpanSince(agentSpans, scope.ConversationId, scope.SpanCount);
+        GuardSpan? guard = LatestSpanSince(guardSpans, scope.ConversationId, scope.GuardSpanCount);
+        ClassifierSpan? classifier = LatestSpanSince(classifierSpans, scope.ConversationId, scope.ClassifierSpanCount);
 
         // Every consultation that closed during the turn, not just the latest: one turn may ask
         // more than one colleague and which of them was asked is the whole point of reading these.
@@ -286,25 +275,18 @@ public sealed class TurnObserver : IDisposable
         switch (activity.OperationName)
         {
             case Telemetry.AgentActivity:
-                // agent.tools_invoked is a single comma-joined string tag (spans can't carry
-                // arrays), so it has to be split back into an ordered list here — order matters,
-                // since ExpectationChecker's toolsCalledFirst assertion depends on invocation order.
-                string toolsInvoked = activity.GetTagItem(Telemetry.AgentToolsInvoked) as string ?? string.Empty;
-
                 Append(agentSpans, conversationId, new AgentSpan(
                     activity.GetTagItem(Telemetry.AgentName) as string,
-                    [.. toolsInvoked.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)]));
+                    ReadToolsInvoked(activity)));
                 break;
 
             case Telemetry.ConsultationActivity:
-                // Same comma-joined tag the agent span carries, set on the answering agent's side:
-                // this is the only place the harness can see which tools the colleague reached for.
-                string consultationTools = activity.GetTagItem(Telemetry.AgentToolsInvoked) as string ?? string.Empty;
-
+                // The tools tag is set on the answering agent's side: this is the only place the
+                // harness can see which tools the colleague reached for.
                 Append(consultationSpans, conversationId, new ConsultationObservation(
                     activity.GetTagItem(Telemetry.ConsultationCaller) as string,
                     activity.GetTagItem(Telemetry.ConsultationTarget) as string,
-                    [.. consultationTools.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)],
+                    ReadToolsInvoked(activity),
                     activity.GetTagItem(Telemetry.ConsultationAwaitingReply) as bool?,
                     activity.GetTagItem(Telemetry.ConsultationQuestion) as string,
                     activity.GetTagItem(Telemetry.ConsultationAnswer) as string));
@@ -348,6 +330,25 @@ public sealed class TurnObserver : IDisposable
             return existing;
         });
 
+    /// <summary>How many spans a conversation has in one of the per-conversation dictionaries, zero when it has none.</summary>
+    private static int SpanCount<T>(ConcurrentDictionary<string, List<T>> spans, string conversationId)
+        => spans.TryGetValue(conversationId, out List<T>? conversationSpans) ? conversationSpans.Count : 0;
+
+    /// <summary>The latest span a conversation recorded after the turn's mark, or null when the turn recorded none.</summary>
+    private static T? LatestSpanSince<T>(ConcurrentDictionary<string, List<T>> spans, string conversationId, int mark)
+        where T : class
+        => spans.TryGetValue(conversationId, out List<T>? conversationSpans) && conversationSpans.Count > mark
+            ? conversationSpans[^1]
+            : null;
+
+    /// <summary>
+    /// Splits the comma-joined tools tag back into the ordered list of tools the agent called. Order is
+    /// kept because the <c>toolsCalledFirst</c> assertion depends on invocation order.
+    /// </summary>
+    private static IReadOnlyList<string> ReadToolsInvoked(Activity activity)
+        => [.. (activity.GetTagItem(Telemetry.AgentToolsInvoked) as string ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
     /// <summary>
     /// Reads a token count that providers report as any integral type, or as a string on some
     /// paths. Missing or unparseable means zero: a token count is a measurement, never an
@@ -372,57 +373,3 @@ public sealed class TurnObserver : IDisposable
     /// <summary>What a closed <c>morgana.classifier</c> span contributes to a turn result.</summary>
     private sealed record ClassifierSpan(string? Intent, double? Confidence);
 }
-
-/// <summary>
-/// Token usage aggregated over the LLM calls of a turn — the measurement A2 has to move.
-/// </summary>
-/// <param name="InputTokens">Prompt tokens billed at full rate.</param>
-/// <param name="OutputTokens">Completion tokens.</param>
-/// <param name="CacheReadTokens">Prompt tokens served from the provider's prompt cache.</param>
-/// <param name="CacheWriteTokens">Prompt tokens written into the cache.</param>
-/// <param name="Calls">Number of LLM round trips — the multiplier that makes the fixed payload expensive.</param>
-public sealed record TokenUsage(
-    long InputTokens,
-    long OutputTokens,
-    long CacheReadTokens,
-    long CacheWriteTokens,
-    int Calls)
-{
-    /// <summary>The empty measurement and the seed of every aggregation.</summary>
-    public static readonly TokenUsage Zero = new TokenUsage(0, 0, 0, 0, 0);
-
-    /// <summary>Sums two measurements.</summary>
-    public static TokenUsage operator +(TokenUsage left, TokenUsage right)
-        => new TokenUsage(
-            left.InputTokens + right.InputTokens,
-            left.OutputTokens + right.OutputTokens,
-            left.CacheReadTokens + right.CacheReadTokens,
-            left.CacheWriteTokens + right.CacheWriteTokens,
-            left.Calls + right.Calls);
-
-    /// <summary>Compact rendering for transcripts and harness files.</summary>
-    public override string ToString()
-        => $"{Calls} call(s), in={InputTokens}, out={OutputTokens}, cacheRead={CacheReadTokens}, cacheWrite={CacheWriteTokens}";
-}
-
-/// <summary>One LLM call as the model saw it: its cost, its instructions, its tools, the messages it read and its answer.</summary>
-/// <remarks>The texts are the OpenTelemetry <c>gen_ai.*</c> content attributes, as JSON; null when the host records no content.</remarks>
-public sealed record ModelCall(
-    TokenUsage Usage,
-    string? Instructions,
-    string? ToolDefinitions,
-    string? InputMessages,
-    string? OutputMessages);
-
-/// <summary>
-/// Marks the start of a turn's observation window: where the log stood and how many agent, guard
-/// and classifier spans the conversation had already produced.
-/// </summary>
-/// <param name="ConversationId">Conversation being observed.</param>
-/// <param name="LogMark">Index into the captured log at the moment the turn was sent.</param>
-/// <param name="SpanCount">Agent spans already recorded for the conversation.</param>
-/// <param name="GuardSpanCount">Guard spans already recorded for the conversation.</param>
-/// <param name="ConsultationSpanCount">Consultation spans already recorded for the conversation.</param>
-/// <param name="ClassifierSpanCount">Classifier spans already recorded for the conversation.</param>
-/// <param name="LlmSpanCount">LLM spans already recorded, process-wide.</param>
-public sealed record TurnScope(string ConversationId, int LogMark, int SpanCount, int GuardSpanCount, int ClassifierSpanCount, int LlmSpanCount, int ConsultationSpanCount);

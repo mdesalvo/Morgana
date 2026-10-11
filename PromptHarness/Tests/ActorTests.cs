@@ -1,4 +1,5 @@
 using Morgana.Contracts;
+using PromptHarness.Infrastructure;
 using PromptHarness.Infrastructure.Engine;
 using PromptHarness.Infrastructure.Wiring;
 using Xunit;

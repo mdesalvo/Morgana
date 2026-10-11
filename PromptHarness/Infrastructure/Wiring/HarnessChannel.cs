@@ -192,7 +192,7 @@ public sealed class HarnessChannel : IAsyncDisposable
     /// is overridden — see <see cref="DegradedChannelName"/>'s own remarks for why.
     /// </param>
     /// <returns>The conversation id and the presentation message that was drained.</returns>
-    public async Task<(string ConversationId, ChannelMessage Presentation)> StartConversationAsync(
+    public async Task<StartedConversation> StartConversationAsync(
         TimeSpan timeout, ChannelCapabilities? capabilities = null, string? channelName = null)
     {
         // The conversation id is minted here, client-side and handed to Morgana on the start
@@ -214,7 +214,7 @@ public sealed class HarnessChannel : IAsyncDisposable
         // corresponds to the first user turn, not to whatever the presentation happened to be.
         ChannelMessage presentation = await ReceiveAsync(conversationId, timeout);
 
-        return (conversationId, presentation);
+        return new StartedConversation(conversationId, presentation);
     }
 
     /// <summary>How a message Morgana speaks herself is signed, spelled out: it is read off the wire, not shared code.</summary>

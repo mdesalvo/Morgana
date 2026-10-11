@@ -7,6 +7,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.AI;
 using Morgana.Contracts;
+using PromptHarness.Infrastructure;
 using PromptHarness.Infrastructure.Wiring;
 using Xunit;
 

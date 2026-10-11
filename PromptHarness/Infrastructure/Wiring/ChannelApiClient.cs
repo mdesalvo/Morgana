@@ -53,11 +53,20 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
 
         // Start, message and command carry a body; the other endpoints take none. The command named is
         // the one the framework publishes, so the call is well-formed and only its credential is on trial.
-        object? body = path.EndsWith("/start", StringComparison.Ordinal)
-            ? new { conversationId }
-            : path.EndsWith("/message", StringComparison.Ordinal) ? new { text = "Hello" }
-            : path.EndsWith("/command", StringComparison.Ordinal) ? new { name = "compact" }
-            : null;
+        object? body = path[path.LastIndexOf('/')..] switch
+        {
+            // The handshake names the conversation it opens.
+            "/start" => new { conversationId },
+
+            // A user turn.
+            "/message" => new { text = "Hello" },
+
+            // The compact command, which Morgana ships.
+            "/command" => new { name = "compact" },
+
+            // Every other endpoint is called without a body.
+            _ => null
+        };
 
         return body is null
             ? await httpClient.PostAsync(address, content: null)
@@ -117,7 +126,7 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
             return;
 
         await using SqliteConnection connection = new SqliteConnection(
-            $"Data Source={Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.db")}");
+            $"Data Source={DatabasePath(conversationId)}");
         await connection.OpenAsync();
         await using SqliteCommand command = connection.CreateCommand();
 
@@ -139,7 +148,7 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
     public async Task<object?> QueryRecordAsync(string conversationId, string sql)
     {
         await using SqliteConnection connection = new SqliteConnection(
-            $"Data Source={Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.db")};Pooling=False");
+            $"Data Source={DatabasePath(conversationId)};Pooling=False");
         await connection.OpenAsync();
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = sql;
@@ -158,5 +167,9 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
 
     /// <summary>Whether the host keeps a record of the conversation: its own database in the run's storage path.</summary>
     public bool ConversationIsOnRecord(string conversationId) =>
-        File.Exists(Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.db"));
+        File.Exists(DatabasePath(conversationId));
+
+    /// <summary>The file the host keeps one conversation's record in, inside the run's storage path.</summary>
+    private string DatabasePath(string conversationId) =>
+        Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.db");
 }

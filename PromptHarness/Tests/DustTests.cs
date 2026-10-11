@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using PromptHarness.Infrastructure;
 using PromptHarness.Infrastructure.Wiring;
 using Morgana.Contracts;
 using Xunit;

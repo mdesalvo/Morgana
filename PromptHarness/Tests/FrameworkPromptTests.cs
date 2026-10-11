@@ -1,6 +1,6 @@
 using Morgana.AI;
-using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
+using PromptHarness.Infrastructure;
 using Xunit;
 
 namespace PromptHarness.Tests;
@@ -20,8 +20,8 @@ namespace PromptHarness.Tests;
 /// </remarks>
 public sealed class FrameworkPromptTests
 {
-    /// <summary>The framework prompts, read through the resolver from the embedded morgana.json.</summary>
-    private readonly ConfigurationPromptResolverService resolver = new ConfigurationPromptResolverService(new NoDomain());
+    /// <summary>The framework prompts, read through the resolver from the embedded morgana.json over a domain with no agents.</summary>
+    private readonly ConfigurationPromptResolverService resolver = new ConfigurationPromptResolverService(new ScriptedDomain());
 
     [Fact]
     public async Task FrameworkPrompt_Morgana_prompt_carries_every_section_an_agent_is_composed_of()
@@ -104,13 +104,5 @@ public sealed class FrameworkPromptTests
         Assert.Equal("[TARGET] Answer billing questions.", Records.Prompt.Labeled("[TARGET]", "Answer billing questions."));
         Assert.Equal("[TARGET] Answer billing questions.", Records.Prompt.Labeled("[TARGET]", "[TARGET] Answer billing questions."));
         Assert.Equal("", Records.Prompt.Labeled("[TARGET]", "  "));
-    }
-
-    /// <summary>A deployment with no domain: only the framework prompts are resolved.</summary>
-    private sealed class NoDomain : IAgentConfigurationService
-    {
-        public Task<List<Records.IntentDefinition>> GetIntentsAsync() => Task.FromResult(new List<Records.IntentDefinition>());
-
-        public Task<List<Records.Prompt>> GetAgentPromptsAsync() => Task.FromResult(new List<Records.Prompt>());
     }
 }

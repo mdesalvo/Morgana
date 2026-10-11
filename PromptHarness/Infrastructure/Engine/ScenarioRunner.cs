@@ -8,84 +8,6 @@ using Xunit;
 
 namespace PromptHarness.Infrastructure.Engine;
 
-/// <summary>Outcome of a single replay of a scenario.</summary>
-/// <param name="Index">1-based run number.</param>
-/// <param name="Failures">Violated expectations; empty when the run passed.</param>
-/// <param name="Transcript">Per-turn rendering of what happened, attached to failing runs.</param>
-/// <param name="Tokens">Token usage summed over the run's turns. Judge calls are excluded: they are the harness's cost, not Morgana's.</param>
-/// <param name="Turns">Every turn played, kept whole so a failing run's model calls can be written out.</param>
-public sealed record RunOutcome(
-    int Index,
-    IReadOnlyList<string> Failures,
-    IReadOnlyList<string> Transcript,
-    TokenUsage Tokens,
-    IReadOnlyList<TurnResult> Turns)
-{
-    /// <summary>Whether every expectation of every turn held.</summary>
-    public bool Passed => Failures.Count == 0;
-}
-
-/// <summary>Aggregate outcome of a scenario over its configured number of runs.</summary>
-/// <param name="Scenario">The scenario that was run.</param>
-/// <param name="Required">Number of passing runs required.</param>
-/// <param name="Runs">Individual run outcomes.</param>
-public sealed record ScenarioOutcome(ScenarioDefinition Scenario, int Required, IReadOnlyList<RunOutcome> Runs)
-{
-    /// <summary>How many runs passed.</summary>
-    public int Passes => Runs.Count(run => run.Passed);
-
-    /// <summary>Whether the scenario met its threshold.</summary>
-    public bool Passed => Passes >= Required;
-
-    /// <summary>Token usage summed over every run.</summary>
-    public TokenUsage TotalTokens => Runs.Aggregate(TokenUsage.Zero, (total, run) => total + run.Tokens);
-
-    /// <summary>Mean input tokens per run — the number a prompt revision is expected to move.</summary>
-    public long InputTokensPerRun => Runs.Count == 0 ? 0 : TotalTokens.InputTokens / Runs.Count;
-
-    /// <summary>Mean output tokens per run.</summary>
-    public long OutputTokensPerRun => Runs.Count == 0 ? 0 : TotalTokens.OutputTokens / Runs.Count;
-
-    /// <summary>Mean LLM round trips per run.</summary>
-    public double CallsPerRun => Runs.Count == 0 ? 0 : (double)TotalTokens.Calls / Runs.Count;
-
-    /// <summary>One-line summary, emitted on every run, pass or fail.</summary>
-    public string Summary()
-        => $"'{Scenario.Id}': {Passes}/{Runs.Count} passed (need {Required}) · "
-         + $"per run: {CallsPerRun:F1} LLM calls, in={InputTokensPerRun}, out={OutputTokensPerRun}, "
-         + $"cacheRead={(Runs.Count == 0 ? 0 : TotalTokens.CacheReadTokens / Runs.Count)}";
-
-    /// <summary>Human-readable report, printed on failure.</summary>
-    public string Report()
-    {
-        StringBuilder report = new StringBuilder();
-        report.AppendLine(CultureInfo.InvariantCulture, $"Scenario '{Scenario.Id}': {Passes}/{Runs.Count} runs passed, {Required} required.");
-        report.AppendLine(Scenario.Description);
-        report.AppendLine(CultureInfo.InvariantCulture, $"Tokens per run: {CallsPerRun:F1} LLM calls, in={InputTokensPerRun}, out={OutputTokensPerRun}, cacheRead={(Runs.Count == 0 ? 0 : TotalTokens.CacheReadTokens / Runs.Count)}");
-
-        // Only the failing runs get a section — a scenario that cleared its threshold with, say,
-        // 4/5 still has one failing run worth reading (see FailureLog's own reasoning for why),
-        // while the passing runs add nothing a reader needs to diagnose what went wrong.
-        foreach (RunOutcome run in Runs.Where(run => !run.Passed))
-        {
-            report.AppendLine();
-            report.AppendLine(CultureInfo.InvariantCulture, $"--- run {run.Index} ---");
-            foreach (string failure in run.Failures)
-                report.AppendLine(CultureInfo.InvariantCulture, $"  ✗ {failure}");
-
-            // The full per-turn transcript follows the failure list, so the reader sees not just
-            // *what* was violated but the entire conversation that produced it.
-            foreach (string turn in run.Transcript)
-            {
-                report.AppendLine();
-                report.AppendLine(turn);
-            }
-        }
-
-        return report.ToString();
-    }
-}
-
 /// <summary>
 /// Replays a scenario N times against the live instance and reports how many runs held.
 /// </summary>
@@ -227,7 +149,7 @@ public sealed class ScenarioRunner
                 // Fetched only for the turns that ask about it: every other structural signal is
                 // already in hand when the turn ends, while this one is a round trip to the host.
                 IReadOnlyList<MorganaChatMessage>? history =
-                    turnDefinition.Expect is { } spec && (spec.HistoryExcludesAgents is { Count: > 0 } || spec.HistoryUserMessages is not null)
+                    turnDefinition.Expect is { AsksAboutHistory: true }
                         ? await channel.GetHistoryAsync(conversationId)
                         : null;
 
