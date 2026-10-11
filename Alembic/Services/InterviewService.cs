@@ -1,7 +1,9 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using Alembic.Interfaces;
-using Alembic.Model;
+using Alembic.Models;
+using Alembic.Tools;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Morgana.AI;
@@ -33,44 +35,9 @@ namespace Alembic.Services;
 public class InterviewService : IInterviewService
 {
     /// <summary>
-    /// The prompt in <c>alembic.json</c> conducting each pass.
+    /// The prompt in <c>alembic.json</c> that holds the sentences every pass opens with.
     /// </summary>
-    private static readonly Dictionary<InterviewStep, string> PassPromptIds = new()
-    {
-        [InterviewStep.DomainMapper] = "DomainMapper",
-        [InterviewStep.AgentTarget] = "AgentTarget",
-        [InterviewStep.AgentPersonality] = "AgentPersonality",
-        [InterviewStep.AgentToolkit] = "AgentToolkit",
-        [InterviewStep.AgentWorkflows] = "AgentWorkflows",
-        [InterviewStep.AgentTerritory] = "AgentTerritory",
-        [InterviewStep.AgentInstructions] = "AgentInstructions",
-        [InterviewStep.AgentFormatting] = "AgentFormatting",
-        [InterviewStep.DomainColleagues] = "DomainColleagues"
-    };
-
-    /// <summary>
-    /// What the agent is sent to open a pass. Never shown to the client: a chat completion needs a
-    /// user turn to answer, not because anybody said it.
-    /// </summary>
-    private static readonly Dictionary<InterviewStep, string> BootstrapMessages = new()
-    {
-        [InterviewStep.DomainMapper] = "Begin the interview.",
-        [InterviewStep.AgentTarget] = "This step settles its Target, which gives it everything it will be "
-                                       + "able to take on.",
-        [InterviewStep.AgentPersonality] = "This step settles its Personality, which gives it the voice it meets "
-                                      + "people with.",
-        [InterviewStep.AgentToolkit] = "This step settles its Toolkit, which gives it everything it can "
-                                         + "reach outside the conversation.",
-        [InterviewStep.AgentWorkflows] = "This step settles its Workflows, which give it what it must do in a fixed order.",
-        [InterviewStep.AgentTerritory] = "This step settles its Territory, which gives it what this agent is "
-                                         + "the one to be asked about.",
-        [InterviewStep.AgentInstructions] = "This step settles its Instructions, which give it how it goes "
-                                          + "about the work.",
-        [InterviewStep.AgentFormatting] = "This last step settles its Formatting, which gives it how what it "
-                                         + "finds reaches the person reading it.",
-        [InterviewStep.DomainColleagues] = "This closing step settles which of them may put a question to another, "
-                                         + "which is the one thing that could not be asked while they were being written."
-    };
+    private const string AlembicPromptId = "Alembic";
 
     /// <summary>
     /// Loads <c>alembic.json</c> and composes the two-layer prompt each pass runs on.
@@ -201,15 +168,6 @@ public class InterviewService : IInterviewService
     /// </remarks>
     private async Task<InterviewState> StartCoreAsync(CancellationToken cancellationToken)
     {
-        // A sitting saved on the colleagues step is a finished interview: the colleagues are a form now.
-        if (draftStateService.Current is { Sitting.Pass: InterviewStep.DomainColleagues } spent)
-        {
-            spent.Sitting = null;
-            draftStateService.Set(spent);
-            Current = null;
-            return new InterviewState();
-        }
-
         Current = new InterviewState();
 
         // An interview brought back in a save file resumes where it stopped and resumes the way a
@@ -226,7 +184,6 @@ public class InterviewService : IInterviewService
             // into the domain as freshly authored, at the end of the list, over C# facts it arrived
             // with — the three things the revision exists to get right.
             Current.Revision = sitting.Revision;
-            Current.Colleagues.AddRange(sitting.Colleagues);
 
             // A correction saved half-done comes back with the interview it set aside.
             if (sitting.Resume is { } frontier)
@@ -491,7 +448,7 @@ public class InterviewService : IInterviewService
         // from how this loop got here), but the walk from one settled pass to the next is the same
         // walk either way: the point of an edit is that a change to one section forces the model to
         // recheck every section after it, not to settle one and stop.
-        while (interviewState is { ReadyForReview: true, Error: null, Pass: not (InterviewStep.AgentFormatting or InterviewStep.DomainColleagues) })
+        while (interviewState is { ReadyForReview: true, Error: null, Pass: not InterviewStep.AgentFormatting })
         {
             // A correction of the agent in hand stops where the interview stood: from there on the
             // agent was never written, so there is nothing left to correct.
@@ -509,16 +466,6 @@ public class InterviewService : IInterviewService
                 interviewState.At = 0;
 
             await EnterPassAsync(interviewState, interviewState.Pass + 1, cancellationToken);
-        }
-
-        // The closing step is the one pass whose own agreement ends the interview. There is nothing
-        // waiting to be let into the domain the way a finished agent is — the agents are all in it
-        // already — so the gesture that would let it in does not exist and what settles the set of
-        // colleagues writes it and puts the client on their finished domain.
-        if (interviewState is { ReadyForReview: true, Error: null, Pass: InterviewStep.DomainColleagues })
-        {
-            CommitColleagues(interviewState);
-            Abandon();
         }
 
         return interviewState;
@@ -684,16 +631,6 @@ public class InterviewService : IInterviewService
             case InterviewStep.DomainMapper:
                 return false;
 
-            // Behind the closing step is the last entry of the map, whose agent is in the domain
-            // already: it comes back out and into the client's hands exactly as stepping between two
-            // entries does. The edges declared so far survive — they are this step's own working set,
-            // not that agent's and re-entering reads them back.
-            case InterviewStep.DomainColleagues when interviewState.Map.Count > 0:
-                interviewState.At = interviewState.Map.Count - 1;
-                Uncommit(interviewState);
-                await EnterPassAsync(interviewState, InterviewStep.AgentFormatting, cancellationToken, revisiting: true);
-                return true;
-
             // An edit is one agent and no map: the client opened it from the walk at its Target and
             // behind that first pass is that screen rather than a step of anything. Where they came
             // in is where they leave and the walk's own way back is what takes them.
@@ -781,8 +718,7 @@ public class InterviewService : IInterviewService
         Map = [.. interviewState.Map],
         Agent = interviewState.Agent,
         Example = interviewState.Example,
-        Revision = interviewState.Revision,
-        Colleagues = [.. interviewState.Colleagues]
+        Revision = interviewState.Revision
     };
 
     /// <summary>
@@ -801,7 +737,6 @@ public class InterviewService : IInterviewService
         };
 
         interviewState.Map.AddRange(sitting.Map);
-        interviewState.Colleagues.AddRange(sitting.Colleagues);
 
         return interviewState;
     }
@@ -828,87 +763,6 @@ public class InterviewService : IInterviewService
 
         draftStateService.Set(draft);
     }
-
-    /// <summary>
-    /// Writes the declared colleagues into the domain, edges and reconciled prose together.
-    /// </summary>
-    /// <remarks>
-    /// Together, because either alone is a defect: the attribute without the prose hands an agent a
-    /// function its own Instructions forbid it to use and the prose without the attribute licenses
-    /// a question it has no function to ask. This is the one write of the interview that lands on
-    /// agents already in the configuration, which is why it happens once, at the client's word and
-    /// never as each edge is proposed.
-    /// </remarks>
-    private void CommitColleagues(InterviewState interviewState)
-    {
-        if (draftStateService.Current is not { } draft)
-            return;
-
-        foreach (ConsultationDraft edge in interviewState.Colleagues)
-        {
-            AgentDraft? asking = Named(draft, edge.Asking);
-            AgentDraft? asked = Named(draft, edge.Asked);
-
-            // Both ends have to be there. An agent the client removed from the walk between the
-            // declaration and the word that commits it leaves an edge naming nothing and a
-            // [ConsultsAgent] onto an intent no agent handles is startup-fatal. A colleague at an
-            // instance has no second end here at all, which is why it is declared where a developer
-            // finalizes the domain rather than in a conversation with its author.
-            if (asking is null || asked is null)
-                continue;
-
-            Morgana.AI.Records.PeerReference colleague = new Morgana.AI.Records.PeerReference(edge.Asked);
-
-            if (!asking.Code.Consults.Any(declared => PeerNaming.Same(declared, colleague)))
-                asking.Code.Consults.Add(colleague);
-
-            Reconcile(asking, edge.AskingInstructions, edge.AskingTarget);
-            Reconcile(asked, edge.AskedInstructions, null);
-        }
-
-        // The interview is over and an interview nobody is having is not something to resume into.
-        draft.Sitting = null;
-        draftStateService.Set(draft);
-    }
-
-    /// <summary>
-    /// Replaces the prose an edge rewrote and says so in the agent's provenance.
-    /// </summary>
-    /// <remarks>
-    /// Both sections, because a boundary is written in either: the Instructions carry how the agent
-    /// goes about the subject and the Target carries whether the subject is its at all; an edge
-    /// contradicted by one is contradicted whichever of the two states it.
-    /// <para>
-    /// An imported agent whose prose this step rewrote becomes Revised: the migration report's whole
-    /// job is naming which of the agents the client brought were touched and an edge that changed a
-    /// sentence of one of them touched it.
-    /// </para>
-    /// </remarks>
-    private static void Reconcile(AgentDraft agent, string? instructions, string? target)
-    {
-        bool moved = false;
-
-        if (!string.IsNullOrWhiteSpace(instructions) && !string.Equals(agent.Instructions, instructions, StringComparison.Ordinal))
-        {
-            agent.Instructions = instructions;
-            moved = true;
-        }
-
-        if (!string.IsNullOrWhiteSpace(target) && !string.Equals(agent.Target, target, StringComparison.Ordinal))
-        {
-            agent.Target = target;
-            moved = true;
-        }
-
-        if (moved && agent.Origin == Provenance.Imported)
-            agent.Origin = Provenance.Revised;
-    }
-
-    /// <summary>
-    /// The domain's agent for an intent name, matched the way Morgana matches a prompt ID.
-    /// </summary>
-    private static AgentDraft? Named(DomainDraft draft, string intentName) =>
-        draft.Agents.FirstOrDefault(a => string.Equals(a.ID, intentName, StringComparison.OrdinalIgnoreCase));
 
     /// <inheritdoc />
     public void Abandon()
@@ -962,7 +816,7 @@ public class InterviewService : IInterviewService
         // the session still needs building above, since the client's first answer lands on it.
         if (interviewPass == InterviewStep.DomainMapper && !revisiting)
         {
-            interviewState.Question = OpeningQuestion;
+            interviewState.Question = Said("OpeningQuestion");
             interviewState.Choice = null;
             interviewState.Example = null;
             interviewState.Placing = null;
@@ -982,12 +836,19 @@ public class InterviewService : IInterviewService
     }
 
     /// <summary>
-    /// The one question every interview opens on, fixed rather than composed: the client has said
-    /// nothing yet, so there is nothing for a model to phrase differently from one run to the next.
+    /// Fetches a text of the <c>Alembic</c> prompt's <c>PromptInjections</c> that a pass opens with.
     /// </summary>
-    private const string OpeningQuestion =
-        "Morgana takes on a handful of your own processes, one entry each becoming its own agent — "
-        + "what would you like her to handle for you?";
+    private string Said(string injectionName, params (string Placeholder, string Value)[] values) =>
+        alembicPromptService.ResolvePromptInjection(AlembicPromptId, injectionName, values);
+
+    /// <summary>
+    /// What a pass says about what it settles, from the <c>Opening</c> injection of its own prompt.
+    /// </summary>
+    /// <remarks>
+    /// Never shown to the client: a chat completion needs a user turn to answer, not because anybody said it.
+    /// </remarks>
+    private string Opening(InterviewStep interviewPass) =>
+        alembicPromptService.ResolvePromptInjection(interviewPass.ToString(), "Opening");
 
     /// <summary>
     /// What the agent is sent to open a pass.
@@ -1003,15 +864,7 @@ public class InterviewService : IInterviewService
     private string Bootstrap(InterviewState interviewState, InterviewStep interviewPass, bool correcting)
     {
         if (interviewPass == InterviewStep.DomainMapper)
-            return BootstrapMessages[interviewPass] + Known(interviewState);
-
-        // The closing step stands on the domain rather than on an entry of the map, so the sentence
-        // that places every other step — entry n of m, this intent, what is written on it — has
-        // nothing to say here. What it is standing on is the whole list and it reads that for
-        // itself: the agents are in the configuration, whole and GetDomainAgents hands them back.
-        if (interviewPass == InterviewStep.DomainColleagues)
-            return "Every entry of the map has its agent and the domain is complete. "
-                   + BootstrapMessages[interviewPass] + Known(interviewState);
+            return Opening(interviewPass) + Known(interviewState);
 
         // Which of the two jobs this is and it is stated as a FACT rather than as an instruction:
         // what to do about each is one rule in the shared layer, read by every pass and repeating it
@@ -1026,11 +879,13 @@ public class InterviewService : IInterviewService
             ? Reads(interviewState.Agent)
             : Stands(interviewState.Agent);
 
-        return $"The map is settled and the client is still here. You are on entry {interviewState.At + 1} "
-               + $"of {interviewState.Map.Count}: the intent '{interviewState.Intent.Name}', which the map "
-               + $"describes as: {interviewState.Intent.Description}. "
-               + standing + " "
-               + BootstrapMessages[interviewPass]
+        return Said("EntryStanding",
+                   ("entry", (interviewState.At + 1).ToString(CultureInfo.InvariantCulture)),
+                   ("total", interviewState.Map.Count.ToString(CultureInfo.InvariantCulture)),
+                   ("intent", interviewState.Intent.Name ?? string.Empty),
+                   ("description", interviewState.Intent.Description ?? string.Empty))
+               + " " + standing + " "
+               + Opening(interviewPass)
                + Known(interviewState);
     }
 
@@ -1053,32 +908,26 @@ public class InterviewService : IInterviewService
         if (trade.Count == 0 && agent.Count == 0 && neighbours.Count == 0)
             return string.Empty;
 
-        string told = " What is known about their work — build your questions on it, never ask any of "
-                      + "it again and never copy any of it into a section:";
+        string told = " " + Said("KnownHeader");
 
         if (trade.Count > 0)
-            told += "\nAbout their business: " + Facts(trade);
+            told += "\n" + Said("KnownBusiness") + " " + Facts(trade);
 
         if (agent.Count > 0)
-            told += "\nAbout this agent: " + Facts(agent);
+            told += "\n" + Said("KnownAgent") + " " + Facts(agent);
 
         // The other agents arrive as subjects rather than as sentences: nine of them read whole would
         // be forty sentences carried into every question, nearly all about counters this step will
         // never touch. What is listed is enough to know whether one of them bears on the question in
         // hand, which is the only moment the sentences themselves are worth fetching.
         if (neighbours.Count > 0)
-            told += "\nThe other agents of this domain and what is on record about each — call RecallAgent "
-                    + "with a name to read one, where what it keeps bears on the question you are about "
-                    + "to ask: " + string.Join(" ", neighbours);
+            told += "\n" + Said("KnownNeighbours") + " " + string.Join(" ", neighbours);
 
         // Said and read are not worth the same and the difference is stated once, at the foot of the
         // list: an agent that arrived in an upload carries finished prose and no memory of the
         // conversation behind it, so everything known about it is Alembic's own reading.
         if (trade.Concat(agent).Any(fact => fact.Inferred))
-            told += "\nWhat is marked (read, not said) was taken off the configuration they uploaded and "
-                    + "nobody has confirmed it. Treat it as a reading that may be wrong: let it be "
-                    + "corrected inside a question you were going to ask anyway and never put it to them "
-                    + "as something they told you.";
+            told += "\n" + Said("KnownInferredNote");
 
         return told;
     }
@@ -1086,9 +935,9 @@ public class InterviewService : IInterviewService
     /// <summary>
     /// A run of facts as a step reads them, each saying whether anybody actually said it.
     /// </summary>
-    private static string Facts(IEnumerable<KnownFact> facts) =>
+    private string Facts(IEnumerable<KnownFact> facts) =>
         string.Join(" ", facts.Select(fact =>
-            $"- {fact.Subject}: {fact.Fact}" + (fact.Inferred ? " (read, not said)" : string.Empty)));
+            $"- {fact.Subject}: {fact.Fact}" + (fact.Inferred ? " " + Said("FactInferred") : string.Empty)));
 
     /// <summary>
     /// What is known about every other agent of the domain, named one by one.
@@ -1120,7 +969,7 @@ public class InterviewService : IInterviewService
 
             string about = written.TryGetValue(name, out List<KnownFact>? facts) && facts.Count > 0
                 ? string.Join(", ", facts.Select(fact => fact.Subject).Distinct(StringComparer.OrdinalIgnoreCase))
-                : intent.Description ?? "nothing known about it yet";
+                : intent.Description ?? Said("NeighbourUnknown");
 
             others.Add($"- {name}: {about}");
         }
@@ -1152,7 +1001,7 @@ public class InterviewService : IInterviewService
     /// re-reads what has since been rewritten.
     /// </para>
     /// </remarks>
-    private static string Reads(AgentDraft agent)
+    private string Reads(AgentDraft agent)
     {
         List<string> sections = [];
 
@@ -1180,8 +1029,7 @@ public class InterviewService : IInterviewService
         // The exact two shapes the shared layer tells every pass to expect. They are one sentence in
         // two places, so the wording is the same wording: a pass that has been taught to recognise
         // "already exists and reads" must be handed those words and not a paraphrase of them.
-        return "This agent already exists and you are correcting it. It currently reads — "
-               + string.Join(" | ", sections);
+        return Said("ReadsAgent", ("sections", string.Join(" | ", sections)));
     }
 
     /// <summary>
@@ -1206,28 +1054,28 @@ public class InterviewService : IInterviewService
     /// about. The pass that owns it says what it settles regardless.
     /// </para>
     /// </remarks>
-    private static string Stands(AgentDraft agent)
+    private string Stands(AgentDraft agent)
     {
         List<string> written = [];
 
         if (!string.IsNullOrWhiteSpace(agent.Target))
-            written.Add("its Target");
+            written.Add(Said("StandsTarget"));
 
         if (!string.IsNullOrWhiteSpace(agent.Personality))
-            written.Add("its Personality");
+            written.Add(Said("StandsPersonality"));
 
         if (agent.Tools.Count > 0)
-            written.Add("its Toolkit");
+            written.Add(Said("StandsToolkit"));
 
         if (!string.IsNullOrWhiteSpace(agent.Instructions))
-            written.Add("its Instructions");
+            written.Add(Said("StandsInstructions"));
 
         if (!string.IsNullOrWhiteSpace(agent.Formatting))
-            written.Add("its Formatting");
+            written.Add(Said("StandsFormatting"));
 
         return written.Count == 0
-            ? "Nothing of this agent is written yet."
-            : $"Nothing of this agent is written yet beyond what the steps before you settled: {string.Join(", ", written)}.";
+            ? Said("StandsBlank")
+            : Said("StandsPartial", ("written", string.Join(", ", written)));
     }
 
     /// <summary>
@@ -1247,8 +1095,8 @@ public class InterviewService : IInterviewService
     /// </remarks>
     private async Task BuildAgentAsync(InterviewState interviewState, InterviewStep interviewPass, bool correcting)
     {
-        string interviewerId = PassPromptIds[interviewPass];
-        InterviewTools tools = new InterviewTools(interviewState, draftStateService, draftValidationService, recapService);
+        string interviewerId = interviewPass.ToString();
+        InterviewTools tools = new InterviewTools(interviewState, draftStateService, draftValidationService, recapService, alembicPromptService);
 
         // The pass is offered the tools its step names and nothing else: the constraint on
         // what it may write is the absence of a tool. A name the class does not declare throws here,
@@ -1290,13 +1138,8 @@ public class InterviewService : IInterviewService
         if (agent is null || session is null)
             return;
 
-        interviewState.Error = null;
-        interviewState.PendingChoice = null;
-        interviewState.PendingExample = null;
-        interviewState.PendingPlacing = null;
-        interviewState.PendingQuoted = null;
-        interviewState.PendingTraits.Clear();
-        interviewState.Changed.Clear();
+        // Nothing of the last turn's error or offers may survive into this one.
+        interviewState.OpenTurn();
 
         // A before/after diff of every field Snapshot exposes, rather than trusting the tools
         // themselves to report what they touched: a tool answers the model, it does not report to
@@ -1306,7 +1149,7 @@ public class InterviewService : IInterviewService
         long startedAt = Stopwatch.GetTimestamp();
         logger.LogInformation(
             "{Pass} is answering {Length} characters from the client",
-            PassPromptIds[interviewState.Pass], message.Length);
+            interviewState.Pass.ToString(), message.Length);
 
         using CancellationTokenSource bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         bounded.CancelAfter(turnCeiling);
@@ -1318,7 +1161,7 @@ public class InterviewService : IInterviewService
 
             logger.LogInformation(
                 "{Pass} answered in {Elapsed:0.0}s",
-                PassPromptIds[interviewState.Pass], Stopwatch.GetElapsedTime(startedAt).TotalSeconds);
+                interviewState.Pass.ToString(), Stopwatch.GetElapsedTime(startedAt).TotalSeconds);
 
             foreach ((string field, string? value) in interviewState.Snapshot())
                 if (!string.Equals(value, before[field], StringComparison.Ordinal))
@@ -1341,18 +1184,14 @@ public class InterviewService : IInterviewService
                 interviewState.Exchanges++;
             }
 
-            interviewState.Choice = interviewState.PendingChoice;
-            interviewState.Example = interviewState.PendingExample;
-            interviewState.Placing = interviewState.PendingPlacing;
-            interviewState.Quoted = interviewState.PendingQuoted;
-            interviewState.Traits = [.. interviewState.PendingTraits];
-            interviewState.Chosen = false;
+            // Not gated on the question above: the offers are promoted even when the turn wrote none.
+            interviewState.ShowTurnOffers();
         }
         catch (OperationCanceledException) when (bounded.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             logger.LogError(
                 "{Pass} was still waiting after {Elapsed:0.0}s and was given up on",
-                PassPromptIds[interviewState.Pass], Stopwatch.GetElapsedTime(startedAt).TotalSeconds);
+                interviewState.Pass.ToString(), Stopwatch.GetElapsedTime(startedAt).TotalSeconds);
 
             interviewState.Error = "That turn took too long and was given up on. Your work is safe — send the answer again.";
         }
@@ -1362,7 +1201,7 @@ public class InterviewService : IInterviewService
         {
             logger.LogError(
                 "{Pass} was cancelled beneath the turn after {Elapsed:0.0}s, inside its ceiling",
-                PassPromptIds[interviewState.Pass], Stopwatch.GetElapsedTime(startedAt).TotalSeconds);
+                interviewState.Pass.ToString(), Stopwatch.GetElapsedTime(startedAt).TotalSeconds);
 
             interviewState.Error = "The model stopped answering before the turn was done. Your work is safe — send the answer again.";
         }

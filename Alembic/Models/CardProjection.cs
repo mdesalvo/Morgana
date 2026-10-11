@@ -1,4 +1,4 @@
-namespace Alembic.Model;
+namespace Alembic.Models;
 
 /// <summary>
 /// The card an agent presents to whoever might consult it, projected from the Draft in hand.
@@ -12,30 +12,25 @@ namespace Alembic.Model;
 /// </remarks>
 public static class CardProjection
 {
-    /// <summary>The card as a caller meets it at this point of the interview.</summary>
+    /// <summary>The description the card carries at this point of the interview.</summary>
     /// <remarks>
     /// The card exists from the moment the map names the agent and it describes it with the phrase the
     /// classifier routes on until the territory is settled, which is what it says from then onwards.
     /// One description or the other, never both: the routing phrase says which utterances land here
     /// and the territory says what this agent answers for, so a caller reading them together would be
     /// weighing its question against two different things.
-    /// <para>
-    /// The skills are the agent's own tools, which is what an external consumer of the card reads. A
-    /// colleague inside Morgana is offered the description alone: an inventory of functions invites a
-    /// caller to rule out a question the agent has never seen.
-    /// </para>
     /// </remarks>
-    public static string Render(IntentDraft intent, AgentDraft agent)
-    {
-        string description = AgentRows.Plain(agent.Territory) is { Length: > 0 } territory
+    public static string Description(IntentDraft intent, AgentDraft agent) =>
+        AgentRows.Plain(agent.Territory) is { Length: > 0 } territory
             ? territory
             : intent.Description ?? string.Empty;
 
-        string skills = agent.Tools.Count == 0
-            ? "    skills advertised: none — this agent declares no tool of its own"
-            : string.Join("\n", agent.Tools.Select(tool => $"    skill '{tool.Name}': {tool.Description}"));
-
-        return $"The card '{intent.Name}' presents to anyone who might consult it:\n"
-               + $"    what it answers for: {description}\n{skills}";
-    }
+    /// <summary>The skills the card advertises, one row per tool of the agent.</summary>
+    /// <remarks>
+    /// The skills are the agent's own tools, which is what an external consumer of the card reads. A
+    /// colleague inside Morgana is offered the description alone: an inventory of functions invites a
+    /// caller to rule out a question the agent has never seen.
+    /// </remarks>
+    public static string Skills(AgentDraft agent) =>
+        string.Join("\n", agent.Tools.Select(tool => $"    skill '{tool.Name}': {tool.Description}"));
 }

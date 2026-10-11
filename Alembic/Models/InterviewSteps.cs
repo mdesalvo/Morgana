@@ -1,7 +1,7 @@
-using Alembic.Services;
+using Alembic.Tools;
 using Morgana.AI;
 
-namespace Alembic.Model;
+namespace Alembic.Models;
 
 /// <summary>
 /// The tools that each pass of the interview is offered, declared as the framework declares a workflow step.
@@ -155,20 +155,6 @@ public static class InterviewSteps
         ]);
 
     /// <summary>
-    /// The tools of the DomainColleagues pass.
-    /// </summary>
-    public static readonly Records.WorkflowStep DomainColleagues = new(
-        nameof(InterviewStep.DomainColleagues),
-        [
-            .. EveryInterviewStep,
-            nameof(InterviewTools.DeclareConsultation),
-            nameof(InterviewTools.DropConsultation),
-            nameof(InterviewTools.GetConsultations),
-            nameof(InterviewTools.GetDomainAgents),
-            nameof(InterviewTools.ShowWhatIsWritten)
-        ]);
-
-    /// <summary>
     /// The step that declares the tools of one interview pass.
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">The pass has no declared step.</exception>
@@ -182,7 +168,6 @@ public static class InterviewSteps
         InterviewStep.AgentTerritory => AgentTerritory,
         InterviewStep.AgentInstructions => AgentInstructions,
         InterviewStep.AgentFormatting => AgentFormatting,
-        InterviewStep.DomainColleagues => DomainColleagues,
         _ => throw new ArgumentOutOfRangeException(nameof(step), step, "No tools are declared for this interview step.")
     };
 }

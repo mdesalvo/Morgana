@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Alembic.Interfaces;
-using Alembic.Model;
+using Alembic.Models;
 using Morgana.AI;
 
 namespace Alembic.Services;

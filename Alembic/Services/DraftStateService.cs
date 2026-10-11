@@ -1,5 +1,5 @@
 using Alembic.Interfaces;
-using Alembic.Model;
+using Alembic.Models;
 
 namespace Alembic.Services;
 

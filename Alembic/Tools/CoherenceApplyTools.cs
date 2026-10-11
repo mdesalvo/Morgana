@@ -1,9 +1,11 @@
 using System.ComponentModel;
-using Alembic.Model;
+using Alembic.Interfaces;
+using Alembic.Models;
+using Alembic.Services;
 using Morgana.AI;
 using Morgana.AI.Attributes;
 
-namespace Alembic.Services;
+namespace Alembic.Tools;
 
 /// <summary>
 /// The tools Alembic calls while applying one coherence finding.
@@ -27,6 +29,9 @@ public class CoherenceApplyTools
 {
     private readonly DomainDraft draft;
 
+    /// <summary>The authority on <c>alembic.json</c>, which holds every sentence these tools answer with.</summary>
+    private readonly IAlembicPromptService alembicPromptService;
+
     /// <summary>
     /// What changed, in the client's own words, recorded by <see cref="ApplyCompleted"/>.
     /// </summary>
@@ -35,10 +40,19 @@ public class CoherenceApplyTools
     /// <summary>
     /// Binds the toolset to the domain the finding was read against.
     /// </summary>
-    public CoherenceApplyTools(DomainDraft draft)
+    /// <param name="draft">The domain the finding was read against.</param>
+    /// <param name="alembicPromptService">Resolves the sentences that the tools answer the model with.</param>
+    public CoherenceApplyTools(DomainDraft draft, IAlembicPromptService alembicPromptService)
     {
         this.draft = draft;
+        this.alembicPromptService = alembicPromptService;
     }
+
+    /// <summary>
+    /// Fetches a sentence that a tool answers the model with, from the <c>ToolInjections</c> of the <c>Alembic</c> prompt.
+    /// </summary>
+    private string Said(string injectionName, params (string Placeholder, string Value)[] values) =>
+        alembicPromptService.ResolveToolInjection(injectionName, values);
 
     /// <summary>
     /// Returns one agent's prose and toolkit as they stand, by ID.
@@ -54,7 +68,7 @@ public class CoherenceApplyTools
         [Description("The agent's ID, exactly as the finding's Where names it.")] [ToolParameter(Records.ToolScope.Request)] string agentId)
     {
         if (Find(agentId) is not { } agent)
-            return ToolReply.Refused($"No agent named '{agentId}' in this domain. The finding's Where names agents by their intent ID.");
+            return ToolReply.Refused(Said("ApplyAgentUnknown", ("agent", agentId ?? string.Empty)));
 
         List<string> sections =
         [
@@ -65,15 +79,15 @@ public class CoherenceApplyTools
         ];
 
         string tools = agent.Tools.Count == 0
-            ? "Declares no native tools."
-            : "Tools:\n" + string.Join("\n", agent.Tools.Select(t =>
-                $"- {t.Name}{(t.RequiresExecutionApproval ? " (waits for the user's approval)" : string.Empty)}: {t.Description}"
+            ? Said("NoNativeTools")
+            : Said("ToolsHeader") + "\n" + string.Join("\n", agent.Tools.Select(t =>
+                $"- {t.Name}{(t.RequiresExecutionApproval ? " " + Said("ToolWaitsForApproval") : string.Empty)}: {t.Description}"
                 + string.Concat(t.Parameters.Select(p =>
-                    $"\n    {p.Name} [{p.Scope ?? "no scope yet"}{(p.Required ? "" : ", optional")}{(p.Shared ? ", shared" : "")}]: {p.Description}"))));
+                    $"\n    {p.Name} [{p.Scope ?? Said("NoScopeYet")}{(p.Required ? "" : ", " + Said("ParameterOptional"))}{(p.Shared ? ", " + Said("ParameterShared") : "")}]: {p.Description}"))));
 
         // The workflows are read-only here: a procedure written in prose is fixed in the prose, with
         // the workflow set beside it as the fact the sentence must not restate.
-        return new ToolReply(string.Join("\n\n", sections) + "\n\n" + tools + "\n\n" + InterviewTools.DescribeWorkflows(agent.Workflows));
+        return new ToolReply(string.Join("\n\n", sections) + "\n\n" + tools + "\n\n" + InterviewTools.DescribeWorkflows(alembicPromptService, agent.Workflows));
     }
 
     /// <summary>
@@ -86,11 +100,11 @@ public class CoherenceApplyTools
         [Description("The complete revised Target, addressed to the agent as 'you'. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string target)
     {
         if (Find(agentId) is not { } agent)
-            return ToolReply.Refused($"Nothing recorded: no agent named '{agentId}'.");
+            return ToolReply.Refused(Said("ApplyAgentNotNamed", ("agent", agentId ?? string.Empty)));
 
         agent.Target = target?.Trim();
         MarkRevised(agent);
-        return new ToolReply($"{agentId}'s Target revised.");
+        return new ToolReply(Said("ApplySectionRevised", ("agent", agentId), ("section", "Target")));
     }
 
     /// <summary>
@@ -103,11 +117,11 @@ public class CoherenceApplyTools
         [Description("The complete revised Instructions, addressed to the agent as 'you'. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string instructions)
     {
         if (Find(agentId) is not { } agent)
-            return ToolReply.Refused($"Nothing recorded: no agent named '{agentId}'.");
+            return ToolReply.Refused(Said("ApplyAgentNotNamed", ("agent", agentId ?? string.Empty)));
 
         agent.Instructions = instructions?.Trim();
         MarkRevised(agent);
-        return new ToolReply($"{agentId}'s Instructions revised.");
+        return new ToolReply(Said("ApplySectionRevised", ("agent", agentId), ("section", "Instructions")));
     }
 
     /// <summary>
@@ -120,11 +134,11 @@ public class CoherenceApplyTools
         [Description("The complete revised Formatting, addressed to the agent as 'you'. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string formatting)
     {
         if (Find(agentId) is not { } agent)
-            return ToolReply.Refused($"Nothing recorded: no agent named '{agentId}'.");
+            return ToolReply.Refused(Said("ApplyAgentNotNamed", ("agent", agentId ?? string.Empty)));
 
         agent.Formatting = formatting?.Trim();
         MarkRevised(agent);
-        return new ToolReply($"{agentId}'s Formatting revised.");
+        return new ToolReply(Said("ApplySectionRevised", ("agent", agentId), ("section", "Formatting")));
     }
 
     /// <summary>
@@ -144,14 +158,14 @@ public class CoherenceApplyTools
             string.Equals(i.Name, intentName?.Trim(), StringComparison.OrdinalIgnoreCase));
 
         if (intent is null)
-            return ToolReply.Refused($"Nothing recorded: no intent named '{intentName}'.");
+            return ToolReply.Refused(Said("ApplyIntentNotNamed", ("name", intentName ?? string.Empty)));
 
         intent.Description = description?.Trim();
 
         if (intent.Origin == Provenance.Imported)
             intent.Origin = Provenance.Revised;
 
-        return new ToolReply($"'{intentName}' description revised.");
+        return new ToolReply(Said("ApplyIntentDescriptionRevised", ("name", intentName)));
     }
 
     /// <summary>
@@ -171,11 +185,11 @@ public class CoherenceApplyTools
         [Description("Whether the tool changes something real and so waits for the user's approval. Keep what GetAgent shows unless the Fix says otherwise.")] [ToolParameter(Records.ToolScope.Request)] bool requiresApproval)
     {
         if (Find(agentId) is not { } agent)
-            return ToolReply.Refused($"No tool recorded: no agent named '{agentId}'.");
+            return ToolReply.Refused(Said("ApplyToolAgentMissing", ("agent", agentId ?? string.Empty)));
 
         string cleanName = (name ?? string.Empty).Trim();
         if (cleanName.Length == 0)
-            return ToolReply.Refused("No tool recorded: a tool must have a name.");
+            return ToolReply.Refused(Said("ApplyToolNameMissing"));
 
         ToolDraft? existing = FindTool(agent, cleanName);
         bool revision = existing is not null;
@@ -188,8 +202,10 @@ public class CoherenceApplyTools
 
         MarkRevised(agent);
 
-        string complaint = InterviewTools.IdentifierComplaint(cleanName, "tool name", pascalCase: true);
-        return new ToolReply((revision ? $"'{cleanName}' revised on {agentId}." : $"'{cleanName}' declared on {agentId}.")
+        string complaint = InterviewTools.IdentifierComplaint(alembicPromptService, cleanName, "tool name", pascalCase: true);
+        return new ToolReply((revision
+                   ? Said("ApplyToolRevised", ("name", cleanName), ("agent", agentId))
+                   : Said("ApplyToolDeclared", ("name", cleanName), ("agent", agentId)))
                + (complaint.Length > 0 ? " " + complaint : string.Empty));
     }
 
@@ -213,14 +229,14 @@ public class CoherenceApplyTools
         [Description("Whether the resolved value is published to the whole conversation. Only a 'context' parameter may be shared.")] [ToolParameter(Records.ToolScope.Request)] bool shared)
     {
         if (Find(agentId) is not { } agent)
-            return ToolReply.Refused($"No parameter recorded: no agent named '{agentId}'.");
+            return ToolReply.Refused(Said("ApplyParameterAgentMissing", ("agent", agentId ?? string.Empty)));
 
         if (FindTool(agent, toolName) is not { } tool)
-            return ToolReply.Refused($"No parameter recorded: no tool named '{toolName}' on {agentId}.");
+            return ToolReply.Refused(Said("ApplyParameterToolMissing", ("tool", toolName ?? string.Empty), ("agent", agentId)));
 
         string cleanName = (name ?? string.Empty).Trim();
         if (cleanName.Length == 0)
-            return ToolReply.Refused("No parameter recorded: a parameter must have a name.");
+            return ToolReply.Refused(Said("ApplyParameterNameMissing"));
 
         // An unrecognised scope passes through verbatim so that it surfaces as a validation finding
         // rather than being silently coerced into one of the two known ones.
@@ -242,9 +258,9 @@ public class CoherenceApplyTools
 
         MarkRevised(agent);
 
-        List<string> complaints = InterviewTools.ScopeComplaints(resolvedScope, required, shared);
+        List<string> complaints = InterviewTools.ScopeComplaints(alembicPromptService, resolvedScope, required, shared);
 
-        return new ToolReply($"'{cleanName}' recorded on {agentId}.{tool.Name}."
+        return new ToolReply(Said("ApplyParameterRecorded", ("name", cleanName), ("agent", agentId), ("tool", tool.Name ?? string.Empty))
                + (complaints.Count > 0 ? " " + string.Join(" ", complaints) : string.Empty));
     }
 
@@ -259,7 +275,7 @@ public class CoherenceApplyTools
         [Description("The exact name of the parameter to remove.")] [ToolParameter(Records.ToolScope.Request)] string parameterName)
     {
         if (Find(agentId) is not { } agent || FindTool(agent, toolName) is not { } tool)
-            return ToolReply.Refused($"Nothing dropped: no such tool on '{agentId}'.");
+            return ToolReply.Refused(Said("ApplyDropToolUnknown", ("agent", agentId ?? string.Empty)));
 
         int removed = tool.Parameters.RemoveAll(p =>
             string.Equals(p.Name, parameterName?.Trim(), StringComparison.Ordinal));
@@ -268,8 +284,8 @@ public class CoherenceApplyTools
             MarkRevised(agent);
 
         return removed > 0
-            ? new ToolReply($"'{parameterName}' dropped from {agentId}.{tool.Name}.")
-            : ToolReply.Refused($"Nothing dropped: {tool.Name} has no parameter named '{parameterName}'.");
+            ? new ToolReply(Said("ApplyParameterDropped", ("name", parameterName ?? string.Empty), ("agent", agentId), ("tool", tool.Name ?? string.Empty)))
+            : ToolReply.Refused(Said("ParameterAbsent", ("tool", tool.Name ?? string.Empty), ("name", parameterName ?? string.Empty)));
     }
 
     /// <summary>
@@ -282,7 +298,7 @@ public class CoherenceApplyTools
         [Description("The exact name of the tool to remove.")] [ToolParameter(Records.ToolScope.Request)] string toolName)
     {
         if (Find(agentId) is not { } agent)
-            return ToolReply.Refused($"Nothing dropped: no agent named '{agentId}'.");
+            return ToolReply.Refused(Said("ApplyDropAgentMissing", ("agent", agentId ?? string.Empty)));
 
         int removed = agent.Tools.RemoveAll(t =>
             string.Equals(t.Name, toolName?.Trim(), StringComparison.Ordinal));
@@ -291,8 +307,8 @@ public class CoherenceApplyTools
             MarkRevised(agent);
 
         return removed > 0
-            ? new ToolReply($"'{toolName}' dropped from {agentId}, with its parameters.")
-            : ToolReply.Refused($"Nothing dropped: {agentId} has no tool named '{toolName}'.");
+            ? new ToolReply(Said("ApplyToolDropped", ("name", toolName ?? string.Empty), ("agent", agentId)))
+            : ToolReply.Refused(Said("ApplyToolAbsent", ("agent", agentId), ("name", toolName ?? string.Empty)));
     }
 
     /// <summary>
@@ -304,7 +320,7 @@ public class CoherenceApplyTools
         [Description("One sentence, in the domain's own words, naming the field and the agent changed.")] [ToolParameter(Records.ToolScope.Request)] string summary)
     {
         Summary = string.IsNullOrWhiteSpace(summary) ? "Applied." : summary.Trim();
-        return new ToolReply("Recorded.");
+        return new ToolReply(Said("ApplyRecorded"));
     }
 
     /// <summary>

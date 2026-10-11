@@ -1,4 +1,5 @@
 @using Alembic.Services
+@using static Alembic.Services.DraftValidationService
 @implements IDisposable
 @inject IDraftValidationService DraftValidationService
 @inject IAssetPackageService AssetPackageService
@@ -331,6 +332,21 @@
     }
 
     /// <summary>
+    /// What a step of the plan writes.
+    /// </summary>
+    private enum StepKind
+    {
+        /// <summary>The configuration and the reports every agent shares.</summary>
+        Structure,
+
+        /// <summary>One agent's generated classes.</summary>
+        Code,
+
+        /// <summary>One agent's mock tool class: the step that waits on the model.</summary>
+        Mock
+    }
+
+    /// <summary>
     /// One thing the archive is built toward: the configuration or one agent's class or mock.
     /// </summary>
     private sealed class Step
@@ -338,8 +354,11 @@
         /// <summary>The agent it belongs to; empty for the configuration.</summary>
         public required string AgentId { get; init; }
 
-        /// <summary>structure, code or mock.</summary>
-        public required string Kind { get; init; }
+        /// <summary>What the step writes.</summary>
+        public required StepKind Kind { get; init; }
+
+        /// <summary>The archive paths whose landing marks the step as begun.</summary>
+        public required IReadOnlyList<string> Paths { get; init; }
 
         /// <summary>The agent as its card names it.</summary>
         public required string Label { get; init; }
@@ -461,12 +480,6 @@
         (touched && string.IsNullOrWhiteSpace(name)) || (!string.IsNullOrWhiteSpace(name) && !IsIdentifier(name))
             ? MessageState.Error
             : null;
-
-    /// <summary>
-    /// Whether a name can be a C# identifier.
-    /// </summary>
-    private static bool IsIdentifier(string? name) =>
-        !string.IsNullOrEmpty(name) && (char.IsLetter(name[0]) || name[0] == '_') && name.All(c => char.IsLetterOrDigit(c) || c == '_');
 
     /// <summary>
     /// Whether an address is an absolute http or https URI, the shape an MCP attribute expects.
@@ -686,53 +699,64 @@
 
     /// <summary>
     /// The steps in the order the package service writes them: the configuration, then every agent's
-    /// class and mock.
+    /// class and mock, each with the paths it owns.
     /// </summary>
     private List<Step> BuildPlan()
     {
-        List<Step> steps = [new Step { AgentId = string.Empty, Kind = "structure", Label = "the configuration" }];
+        // The files every agent shares are named by the package service, so the plan cannot drift from what it writes.
+        List<Step> steps =
+        [
+            new Step
+            {
+                AgentId = string.Empty,
+                Kind = StepKind.Structure,
+                Label = "the configuration",
+                Paths =
+                [
+                    Alembic.Services.AssetPackageService.ConfigurationFileName,
+                    Alembic.Services.AssetPackageService.DraftFileName,
+                    Alembic.Services.AssetPackageService.MigrationFileName,
+                    Alembic.Services.AssetPackageService.ReadmeFileName,
+                    Alembic.Services.AssetPackageService.MarkerFileName
+                ]
+            }
+        ];
 
         foreach (AgentDraft agent in Agents)
         {
-            steps.Add(new Step { AgentId = agent.ID!, Kind = "code", Label = Named(agent) });
+            // The class step owns whatever the code emitter writes for this agent.
+            steps.Add(new Step
+            {
+                AgentId = agent.ID!,
+                Kind = StepKind.Code,
+                Label = Named(agent),
+                Paths = [.. CodeEmitService.Emit(agent, agent.ID!).Select(file => file.Path)]
+            });
 
-            if (agent.Tools.Count > 0)
-                steps.Add(new Step { AgentId = agent.ID!, Kind = "mock", Label = Named(agent) });
+            // An agent without tools has no tool class and so no mock to wait for.
+            if (agent.Tools.Count == 0)
+                continue;
+
+            // The mock lands at the path the package service decides or beside it as a failure note.
+            string mockPath = Alembic.Services.AssetPackageService.MockPathOf(agent);
+
+            steps.Add(new Step
+            {
+                AgentId = agent.ID!,
+                Kind = StepKind.Mock,
+                Label = Named(agent),
+                Paths = [mockPath, Alembic.Services.AssetPackageService.FailedMockPathOf(mockPath)]
+            });
         }
 
         return steps;
     }
 
     /// <summary>
-    /// Which step a written path belongs to, asked of the code emitter itself so the paths cannot drift.
+    /// Which step a written path belongs to, read off the paths each step owns.
     /// </summary>
-    private Step? MatchStep(string path)
-    {
-        if (path is "agents.json" or "alembic-draft.json" or "MIGRATION.md" or "README.md" or Alembic.Services.AssetPackageService.MarkerFileName)
-            return plan.FirstOrDefault(step => step.Kind == "structure");
-
-        foreach (AgentDraft agent in Agents)
-        {
-            string id = agent.ID!;
-
-            foreach (EmittedFile file in CodeEmitService.Emit(agent, id))
-            {
-                if (path == file.Path)
-                    return plan.FirstOrDefault(step => step.AgentId == id && step.Kind == "code");
-
-                // The mock is the generated tool file's client half: same path with ".g" dropped.
-                if (file.Path.StartsWith("Tools/", StringComparison.Ordinal) && file.Path.EndsWith(".g.cs", StringComparison.Ordinal))
-                {
-                    string mockPath = file.Path[..^".g.cs".Length] + ".cs";
-
-                    if (path == mockPath || path == mockPath + ".FAILED.txt")
-                        return plan.FirstOrDefault(step => step.AgentId == id && step.Kind == "mock");
-                }
-            }
-        }
-
-        return null;
-    }
+    private Step? MatchStep(string path) =>
+        plan.FirstOrDefault(step => step.Paths.Contains(path, StringComparer.Ordinal));
 
     /// <summary>
     /// The step being worked on: the first not yet done, since a step is only reported when it lands.
@@ -748,7 +772,7 @@
     /// The plan regrouped by agent, one card each.
     /// </summary>
     private IEnumerable<IGrouping<string, Step>> AgentCards =>
-        plan.Where(step => step.Kind != "structure").GroupBy(step => step.AgentId);
+        plan.Where(step => step.Kind != StepKind.Structure).GroupBy(step => step.AgentId);
 
     /// <summary>
     /// The agent the step in hand belongs to; none while the files every agent shares are written.
@@ -764,7 +788,7 @@
     {
         get
         {
-            List<Step> awaitingModel = [.. plan.Where(step => !step.Done && step.Kind == "mock")];
+            List<Step> awaitingModel = [.. plan.Where(step => !step.Done && step.Kind == StepKind.Mock)];
 
             return awaitingModel.Count == 0
                 ? null
@@ -775,11 +799,11 @@
     /// <summary>
     /// A step named for what the client gets.
     /// </summary>
-    private static string StepKindLabel(string kind) => kind switch
+    private static string StepKindLabel(StepKind kind) => kind switch
     {
-        "code" => "class",
-        "mock" => "tools",
-        _ => kind
+        StepKind.Code => "class",
+        StepKind.Mock => "tools",
+        _ => "configuration"
     };
 
     /// <summary>
@@ -799,9 +823,9 @@
         ? "Sealing the archive…"
         : step.Kind switch
         {
-            "structure" => "Writing the domain's configuration and reports…",
-            "code" => $"Distilling {step.Label}: writing its agent class…",
-            "mock" => $"Distilling {step.Label}: writing its tools…",
+            StepKind.Structure => "Writing the domain's configuration and reports…",
+            StepKind.Code => $"Distilling {step.Label}: writing its agent class…",
+            StepKind.Mock => $"Distilling {step.Label}: writing its tools…",
             _ => "Distilling…"
         };
 
@@ -812,9 +836,9 @@
         ? "the last of it"
         : step.Kind switch
         {
-            "structure" => "the configuration",
-            "code" => $"{step.Label}'s agent class",
-            "mock" => $"{step.Label}'s tool class",
+            StepKind.Structure => "the configuration",
+            StepKind.Code => $"{step.Label}'s agent class",
+            StepKind.Mock => $"{step.Label}'s tool class",
             _ => step.Label
         };
 

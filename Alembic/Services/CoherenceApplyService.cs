@@ -1,5 +1,6 @@
 using Alembic.Interfaces;
-using Alembic.Model;
+using Alembic.Models;
+using Alembic.Tools;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Morgana.AI;
@@ -75,7 +76,7 @@ public class CoherenceApplyService : ICoherenceApplyService
     public async Task<CoherenceApplyResult> ApplyAsync(DomainDraft draft, CoherenceFinding finding, CancellationToken cancellationToken = default)
     {
         Records.Prompt prompt = alembicPromptService.Resolve(PromptId);
-        CoherenceApplyTools tools = new CoherenceApplyTools(draft);
+        CoherenceApplyTools tools = new CoherenceApplyTools(draft, alembicPromptService);
 
         // A name that the class does not declare throws here instead of reaching the model as a tool that nothing implements.
         MorganaToolAdapter toolAdapter = alembicPromptService.OfferTools(CoherenceApplierStep, tools);

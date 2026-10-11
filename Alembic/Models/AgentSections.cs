@@ -1,4 +1,4 @@
-namespace Alembic.Model;
+namespace Alembic.Models;
 
 /// <summary>
 /// An agent's seven sections as the shell shows them, keyed by the rail that writes each.

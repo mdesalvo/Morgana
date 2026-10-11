@@ -10,8 +10,8 @@ namespace Alembic.Services;
 /// <para>
 /// Everything Alembic emits as an artifact — a tool class, a coherence report — is a whole file and
 /// a file's length is a property of what it describes rather than a number choosable in advance. So
-/// nothing here declares an output ceiling: what the deployment's tier configures still holds per
-/// request and this keeps asking until the answer is finished.
+/// every round sets Alembic's own output ceiling (<see cref="CodeEmitService.OutputCeiling"/>) rather
+/// than the tier's and this keeps asking until the answer is finished.
 /// </para>
 /// <para>
 /// The resume goes back as a <em>user</em> message carrying what has been written so far, not as an
@@ -23,22 +23,8 @@ namespace Alembic.Services;
 public static class StreamedCompletion
 {
     /// <summary>
-    /// What is sent to resume an answer the provider cut off mid-write.
-    /// </summary>
-    private const string ContinuationRequest =
-        "That was cut off at the provider's output limit. Here is everything you have written so far.\n\n"
-        + "Continue from exactly where it stops — the very next character. Do not repeat a line, do not "
-        + "start again, do not explain and do not open a fence. Just carry on.\n\n";
-
-    /// <summary>
     /// How long a round may go silent before it is abandoned and retried once.
     /// </summary>
-    /// <remarks>
-    /// Not configurable, because there is nothing here a deployment would tune: it governs one
-    /// behaviour of one step and the number only has to be longer than any pause a healthy model
-    /// takes mid-artifact. Generous on purpose — it is a guard against a stream that has stopped
-    /// arriving, not a budget for how long one may take.
-    /// </remarks>
     private static readonly TimeSpan StallTimeout = TimeSpan.FromSeconds(180);
 
     /// <summary>
@@ -47,6 +33,7 @@ public static class StreamedCompletion
     /// <param name="chatClient">The client to run on.</param>
     /// <param name="system">The system prompt.</param>
     /// <param name="request">What to ask for.</param>
+    /// <param name="continuationRequest">What is sent to resume an answer the provider cut off mid-write.</param>
     /// <param name="onResume">Called when the answer had to be resumed, with the length so far.</param>
     /// <param name="onStall">Called when a round went silent and is about to be retried, with the length reached.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -56,6 +43,7 @@ public static class StreamedCompletion
         IChatClient chatClient,
         string system,
         string request,
+        string continuationRequest,
         Action<int>? onResume = null,
         Action<int>? onStall = null,
         CancellationToken cancellationToken = default)
@@ -70,53 +58,11 @@ public static class StreamedCompletion
 
         while (true)
         {
-            ChatFinishReason? finishReason = null;
+            // Where this round starts, so a round that adds nothing is recognised below.
             int before = answer.Length;
 
-            for (int attempt = 1; ; attempt++)
-            {
-                finishReason = null;
-
-                // Linked, so a client pressing Stop still cancels through this; and reset on every
-                // update, so the deadline is always "silent since the last token" rather than a
-                // budget for the whole answer.
-                using CancellationTokenSource stall =
-                    CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-                stall.CancelAfter(StallTimeout);
-
-                try
-                {
-                    await foreach (ChatResponseUpdate update in chatClient.GetStreamingResponseAsync(
-                                       conversation, new ChatOptions { MaxOutputTokens = CodeEmitService.OutputCeiling }, stall.Token))
-                    {
-                        stall.CancelAfter(StallTimeout);
-
-                        finishReason ??= update.FinishReason;
-
-                        // Text only. On a reasoning model the updates also carry the thinking and
-                        // appending it would put the model's deliberation inside the artifact.
-                        foreach (TextContent text in update.Contents.OfType<TextContent>())
-                            answer.Append(text.Text);
-                    }
-
-                    break;
-                }
-                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-                {
-                    // Rolled back to where the round started: the resume below hands the model
-                    // everything written so far, so a half-round left in place would have the retry
-                    // continue from text the provider never finished sending.
-                    answer.Length = before;
-
-                    if (attempt > 1)
-                        throw new TimeoutException(
-                            $"The model stopped sending for {StallTimeout.TotalSeconds:0} seconds, twice. "
-                            + "Nothing was written for this artifact.");
-
-                    onStall?.Invoke(before);
-                }
-            }
+            // One round: the model writes until it stops or the provider cuts it off.
+            ChatFinishReason? finishReason = await RoundAsync(chatClient, conversation, answer, onStall, cancellationToken);
 
             if (finishReason != ChatFinishReason.Length)
                 break;
@@ -138,11 +84,70 @@ public static class StreamedCompletion
             [
                 conversation[0],
                 conversation[1],
-                new ChatMessage(ChatRole.User, ContinuationRequest + answer)
+                new ChatMessage(ChatRole.User, continuationRequest + answer)
             ];
         }
 
         return Unfenced(answer.ToString());
+    }
+
+    /// <summary>
+    /// Streams one round into the answer and says why the provider ended it, retrying once when the stream goes silent.
+    /// </summary>
+    private static async Task<ChatFinishReason?> RoundAsync(
+        IChatClient chatClient,
+        List<ChatMessage> conversation,
+        StringBuilder answer,
+        Action<int>? onStall,
+        CancellationToken cancellationToken)
+    {
+        // Where the round starts, so a stalled attempt can be rolled back to it.
+        int before = answer.Length;
+
+        for (int attempt = 1; ; attempt++)
+        {
+            ChatFinishReason? finishReason = null;
+
+            // Linked, so a client pressing Stop still cancels through this; and reset on every
+            // update, so the deadline is always "silent since the last token" rather than a
+            // budget for the whole answer.
+            using CancellationTokenSource stall =
+                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+            stall.CancelAfter(StallTimeout);
+
+            try
+            {
+                await foreach (ChatResponseUpdate update in chatClient.GetStreamingResponseAsync(
+                                   conversation, new ChatOptions { MaxOutputTokens = CodeEmitService.OutputCeiling }, stall.Token))
+                {
+                    stall.CancelAfter(StallTimeout);
+
+                    finishReason ??= update.FinishReason;
+
+                    // Text only. On a reasoning model the updates also carry the thinking and
+                    // appending it would put the model's deliberation inside the artifact.
+                    foreach (TextContent text in update.Contents.OfType<TextContent>())
+                        answer.Append(text.Text);
+                }
+
+                return finishReason;
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // Rolled back to where the round started: the resume hands the model
+                // everything written so far, so a half-round left in place would have the retry
+                // continue from text the provider never finished sending.
+                answer.Length = before;
+
+                if (attempt > 1)
+                    throw new TimeoutException(
+                        $"The model stopped sending for {StallTimeout.TotalSeconds:0} seconds, twice. "
+                        + "Nothing was written for this artifact.");
+
+                onStall?.Invoke(before);
+            }
+        }
     }
 
     /// <summary>

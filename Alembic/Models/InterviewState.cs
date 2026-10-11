@@ -1,6 +1,6 @@
 using Morgana.Contracts;
 
-namespace Alembic.Model;
+namespace Alembic.Models;
 
 /// <summary>
 /// Which pass of the interview is running.
@@ -56,19 +56,7 @@ public enum InterviewStep
     /// <summary>
     /// How the agent lays out what its tools return: its Formatting and nothing else.
     /// </summary>
-    AgentFormatting,
-
-    /// <summary>
-    /// The colleagues: which of the finished agents needs to be able to put a question to another
-    /// one. Runs once, after the last entry of the map has its agent and settles no agent's own
-    /// sections beyond the boundary sentence an edge contradicts.
-    /// </summary>
-    /// <remarks>
-    /// Last for the same reason the map is first, read the other way round: an edge is a relation
-    /// and a relation cannot be asked about while half its ends are still unwritten. It sits outside
-    /// the lap because it is asked once over the whole domain, never once per entry.
-    /// </remarks>
-    DomainColleagues
+    AgentFormatting
 }
 
 /// <summary>
@@ -201,10 +189,9 @@ public sealed class InterviewState
     /// Whether the interview is standing on one entry of the map, rather than on the whole domain.
     /// </summary>
     /// <remarks>
-    /// The map and the closing step both stand on the domain and the closing step stands past the
-    /// end of the map, holding an agent nobody will ever write to. What is found out about the work
-    /// there is a fact about the business, so it is kept for the business: written onto that empty
-    /// agent it would be thrown away with it.
+    /// The map stands on the domain and holds an agent nobody will ever write to. What is found out
+    /// about the work there is a fact about the business, so it is kept for the business: written
+    /// onto that empty agent it would be thrown away with it.
     /// </remarks>
     public bool OnAnEntry => At >= 0 && At < Map.Count;
 
@@ -273,6 +260,41 @@ public sealed class InterviewState
     public List<string> PendingTraits { get; } = [];
 
     /// <summary>
+    /// Opens a turn: clears the error and every offer the tools of the last turn queued, so nothing stale rides into the new one.
+    /// </summary>
+    public void OpenTurn()
+    {
+        // A failure belongs to the turn that raised it and a healthy turn must not inherit it.
+        Error = null;
+
+        // The offers are written by the tools during the turn: whatever was queued before is for a question already answered.
+        PendingChoice = null;
+        PendingExample = null;
+        PendingPlacing = null;
+        PendingQuoted = null;
+        PendingTraits.Clear();
+
+        // The rows highlighted last turn are recomputed from this turn's before/after diff.
+        Changed.Clear();
+    }
+
+    /// <summary>
+    /// Puts the offers the turn's tools queued on screen, replacing the ones under the question that was just answered.
+    /// </summary>
+    public void ShowTurnOffers()
+    {
+        // Each offer on screen becomes what the tools queued this turn, so a turn that queued none clears it.
+        Choice = PendingChoice;
+        Example = PendingExample;
+        Placing = PendingPlacing;
+        Quoted = PendingQuoted;
+        Traits = [.. PendingTraits];
+
+        // A fresh button has not been pressed yet.
+        Chosen = false;
+    }
+
+    /// <summary>
     /// The offered words the agent's voice already carries, so the cloud opens showing the voice
     /// that exists rather than an empty set.
     /// </summary>
@@ -316,17 +338,6 @@ public sealed class InterviewState
     }
 
     /// <summary>
-    /// The colleagues declared by the closing step, none of them in the domain until the client
-    /// agrees to the set.
-    /// </summary>
-    /// <remarks>
-    /// Held here rather than written straight onto the agents for the reason the map is held here
-    /// too: what the step settles is a set, judged whole and an edge dropped a turn after it was
-    /// declared must leave no trace on an agent that is already in the client's configuration.
-    /// </remarks>
-    public List<ConsultationDraft> Colleagues { get; } = [];
-
-    /// <summary>
     /// Why the last exchange failed, when it did. Null on a healthy interview.
     /// </summary>
     public string? Error { get; set; }
@@ -368,12 +379,7 @@ public sealed class InterviewState
 
         // The whole set of workflows as one string, for the same reason as the toolkit above.
         ["workflows"] = string.Join("|", Agent.Workflows.Select(w =>
-            $"{w.Name}:{w.Description}:{string.Join(",", w.Steps.Select(x => $"{x.Name}/{string.Join("+", x.Tools)}"))}:{string.Join(",", w.Edges.Select(e => $"{e.Source}/{e.Tool}/{e.OnFailure}/{e.Target}/{string.Join("+", e.Carrying)}"))}")),
-
-        // The whole set as one string, for the same reason as the toolkit above: an edge declared,
-        // dropped or re-declared with different prose moves it and nothing finer is worth a row.
-        ["colleagues"] = string.Join("|", Colleagues.Select(c =>
-            $"{c.Asking}->{c.Asked}:{c.AskingInstructions}:{c.AskingTarget}:{c.AskedInstructions}"))
+            $"{w.Name}:{w.Description}:{string.Join(",", w.Steps.Select(x => $"{x.Name}/{string.Join("+", x.Tools)}"))}:{string.Join(",", w.Edges.Select(e => $"{e.Source}/{e.Tool}/{e.OnFailure}/{e.Target}/{string.Join("+", e.Carrying)}"))}"))
     };
 
     /// <summary>
@@ -396,11 +402,6 @@ public sealed class InterviewState
         InterviewStep.AgentTerritory => MissingTerritory(),
         InterviewStep.AgentInstructions => MissingInstructions(),
         InterviewStep.AgentFormatting => MissingFormatting(),
-
-        // Owns no field, like the toolkit pass and for the same kind of reason: a domain where no
-        // agent needs a colleague is the ordinary domain, not an unfinished one, so an empty set is
-        // a decision Alembic took with the client rather than a gate to hold the pass open.
-        InterviewStep.DomainColleagues => [],
         _ => []
     };
 

@@ -1,6 +1,6 @@
 using Morgana.AI;
 
-namespace Alembic.Model;
+namespace Alembic.Models;
 
 /// <summary>
 /// Projects Draft elements onto the framework's own record types.

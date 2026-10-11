@@ -2,7 +2,8 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Alembic.Interfaces;
-using Alembic.Model;
+using Alembic.Models;
+using Alembic.Tools;
 using Microsoft.Extensions.AI;
 using Morgana.AI;
 using Morgana.AI.Interfaces;
@@ -23,6 +24,11 @@ public class CoherenceService : ICoherenceService
     /// The prompt in <c>alembic.json</c> that governs the coherence pass.
     /// </summary>
     private const string CoherencePromptId = "DomainValidator";
+
+    /// <summary>
+    /// The prompt in <c>alembic.json</c> that holds the sentence resuming a cut-off answer.
+    /// </summary>
+    private const string AlembicPromptId = "Alembic";
 
     /// <summary>
     /// The key under which that prompt lists the subjects the pass weighs. Alembic's own, unlike the
@@ -89,7 +95,7 @@ public class CoherenceService : ICoherenceService
         CancellationToken cancellationToken = default)
     {
         // Two agents is the floor: with one there is nothing for a relational pass to relate and
-        // running it anyway would spend a Performance call to say so.
+        // running it anyway would spend an Efficiency call to say so.
         if (draft.Agents.Count < 2)
             return new CoherenceReport([], "A coherence pass needs at least two agents: everything it looks for is a relation between them.");
 
@@ -131,6 +137,7 @@ public class CoherenceService : ICoherenceService
         {
             string answer = await StreamedCompletion.RunAsync(
                 chatClient, system, Describe(draft, resolved),
+                alembicPromptService.ResolvePromptInjection(AlembicPromptId, "ContinuationRequest"),
                 length => logger.LogInformation("The coherence pass was cut at {Length} characters; resuming", length),
                 length => logger.LogWarning("The coherence pass went silent after {Length} characters; retrying once", length),
                 cancellationToken);
@@ -156,6 +163,12 @@ public class CoherenceService : ICoherenceService
     }
 
     /// <summary>
+    /// Fetches a text that the coherence pass reads from the <c>DomainValidator</c> prompt's <c>PromptInjections</c>.
+    /// </summary>
+    private string Said(string injectionName, params (string Placeholder, string Value)[] values) =>
+        alembicPromptService.ResolvePromptInjection(CoherencePromptId, injectionName, values);
+
+    /// <summary>
     /// States the whole domain: every intent description, every agent's prose, every toolkit.
     /// </summary>
     /// <remarks>
@@ -166,7 +179,7 @@ public class CoherenceService : ICoherenceService
     /// <param name="draft">The domain to render — read whole, never summarized.</param>
     /// <param name="resolved">Prior fixes this sitting, rendered first and by name so the model can
     /// tell a lingering defect from one it already dealt with.</param>
-    private static string Describe(DomainDraft draft, IReadOnlyList<ResolvedCoherenceFinding>? resolved)
+    private string Describe(DomainDraft draft, IReadOnlyList<ResolvedCoherenceFinding>? resolved)
     {
         StringBuilder sb = new StringBuilder();
 
@@ -176,25 +189,26 @@ public class CoherenceService : ICoherenceService
         // would just see the domain and say what it always says about it.
         if (resolved is { Count: > 0 })
         {
-            sb.AppendLine("# Already addressed this sitting");
+            sb.AppendLine(Said("AddressedHeader"));
             sb.AppendLine();
-            sb.AppendLine("Do not report these again on sight. Read the current text below first: report one only if it is genuinely still true of it, not because it once resembled this.");
+            sb.AppendLine(Said("AddressedInstruction"));
             sb.AppendLine();
 
             foreach (ResolvedCoherenceFinding r in resolved)
-                sb.AppendLine(CultureInfo.InvariantCulture, $"- {r.Finding.Kind} ({r.Finding.Where}): {r.Finding.What} — addressed: {r.Resolution}");
+                sb.AppendLine(Said("AddressedFinding",
+                    ("kind", r.Finding.Kind), ("where", r.Finding.Where), ("what", r.Finding.What), ("resolution", r.Resolution)));
 
             sb.AppendLine();
         }
 
-        sb.AppendLine("# Intents, as the classifier reads them");
+        sb.AppendLine(Said("IntentsHeader"));
         sb.AppendLine();
 
         foreach (IntentDraft intent in draft.Intents)
             sb.AppendLine(CultureInfo.InvariantCulture, $"- {intent.Name}: {intent.Description}");
 
         sb.AppendLine();
-        sb.AppendLine("# Agents");
+        sb.AppendLine(Said("AgentsHeader"));
         sb.AppendLine();
         // Every agent below is described by its native tools alone. A Morgana agent may also be
         // hybrid, with native tools of its own plus arbitrary MCP tools reached at runtime. Which
@@ -202,7 +216,7 @@ public class CoherenceService : ICoherenceService
         // carries, whether that agent's own tool count here is zero or not. So a capability a
         // Target or Instructions promises with no native tool listed for it is not evidence of
         // PROMISES WITHOUT TOOLS on its own — it may be MCP-backed, invisibly to this description.
-        sb.AppendLine("Native tools only, below: an agent may also reach further capability through MCP servers this description cannot see, whether or not it lists any native tools of its own.");
+        sb.AppendLine(Said("NativeToolsOnly"));
 
         foreach (AgentDraft agent in draft.Agents)
         {
@@ -222,30 +236,30 @@ public class CoherenceService : ICoherenceService
             // answers is invisible from the prose alone.
             sb.AppendLine();
             sb.AppendLine(agent.Code.Consults.Count > 0
-                ? $"May consult and is handed each as a function of its own: {PeerNaming.Describe(agent.Code.Consults)}."
-                : "Declares no colleagues: it can put a question to no other agent.");
+                ? Said("ConsultsDeclared", ("colleagues", PeerNaming.Describe(agent.Code.Consults)))
+                : Said("ConsultsNone"));
 
             // A procedure written in the prose that a workflow of the agent already imposes is a class
             // of finding, readable only with the workflow set beside the sentence.
             sb.AppendLine();
-            sb.AppendLine(InterviewTools.DescribeWorkflows(agent.Workflows));
+            sb.AppendLine(InterviewTools.DescribeWorkflows(alembicPromptService, agent.Workflows));
 
             if (agent.Tools.Count == 0)
             {
                 sb.AppendLine();
-                sb.AppendLine("Declares no native tools.");
+                sb.AppendLine(Said("NoNativeTools"));
                 continue;
             }
 
             sb.AppendLine();
-            sb.AppendLine("Tools:");
+            sb.AppendLine(Said("ToolsHeader"));
 
             foreach (ToolDraft tool in agent.Tools)
             {
-                sb.AppendLine(CultureInfo.InvariantCulture, $"- {tool.Name}{(tool.RequiresExecutionApproval ? " (waits for the user's approval)" : string.Empty)}: {tool.Description}");
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- {tool.Name}{(tool.RequiresExecutionApproval ? " " + Said("ToolWaitsForApproval") : string.Empty)}: {tool.Description}");
 
                 foreach (ToolParameterDraft parameter in tool.Parameters)
-                    sb.AppendLine(CultureInfo.InvariantCulture, $"    {parameter.Name} [{parameter.Scope ?? "no scope yet"}{(parameter.Shared ? ", shared" : "")}]: {parameter.Description}");
+                    sb.AppendLine(CultureInfo.InvariantCulture, $"    {parameter.Name} [{parameter.Scope ?? Said("NoScopeYet")}{(parameter.Shared ? ", " + Said("ParameterShared") : "")}]: {parameter.Description}");
             }
         }
 

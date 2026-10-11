@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Alembic.Interfaces;
-using Alembic.Model;
+using Alembic.Models;
 using Morgana.AI;
 using Morgana.AI.Services;
 
@@ -305,20 +305,15 @@ public class DraftValidationService : IDraftValidationService
                 "The agent has no Formatting.",
                 "Formatting is where an agent says how its own tools' output should be presented, which no global policy can know for it.") { Step = InterviewStep.AgentFormatting });
 
-        // Deliberately not a finding, for the same reason as Code.Inferred below: whether zero
-        // native tools means "MCP-only, genuinely nothing to declare" or "the author forgot" is
-        // undecidable without knowing which MCP servers the agent reaches at runtime and that is a
-        // C# fact — AgentCodeFacts.MCPServers — that is nowhere in an agents.json import and no
-        // more decided in an alembic-draft.json save file that has not been through Morganize yet
-        // either. A warning that fires identically on both cases teaches neither apart.
+        // Deliberately not a finding: zero native tools means either an MCP-only agent or a forgotten
+        // toolkit and only AgentCodeFacts.MCPServers could tell them apart. That is a C# fact set on the
+        // Archive step, absent from an agents.json import and from a save file that has not been
+        // through it, so a warning would fire identically on both cases.
 
-        // Deliberately not a finding: agent.Code.Inferred is true of every agent that has not yet
-        // visited Morganize — imported from agents.json, resumed from an alembic-draft.json saved
-        // before that page, or freshly authored this minute, with no exception among the three — so
-        // a warning here would fire on the very first Review after any of them, teaching nothing
-        // ("of course I don't have a die, I haven't been to Morganize") and never once discriminating
-        // a domain that needs attention from one that does not. Morganize's own panel already
-        // surfaces and resolves this directly, where it is actionable rather than tautological.
+        // Deliberately not a finding: agent.Code.Inferred is true of every agent that has not yet been
+        // through the Archive step, so a warning would fire on the first Review after any import,
+        // resume or fresh authoring and never discriminate a domain that needs attention from one
+        // that does not. The Archive card surfaces and resolves it where it is actionable.
 
         ValidateIdentifier(agent.Code.AgentClassName, $"{where} class name", "class name", findings);
         ValidateIdentifier(agent.Code.ToolClassName, $"{where} tool class name", "class name", findings);
@@ -386,7 +381,7 @@ public class DraftValidationService : IDraftValidationService
     }
 
     /// <summary>
-    /// Checks one tool's name, description and parameter list.
+    /// Checks one tool's name and description then hands its parameters and its returned fields to their own checks.
     /// </summary>
     private static void ValidateTool(AgentDraft agent, ToolDraft tool, HashSet<string> toolNames, IReadOnlySet<string> reservedToolNames, List<ValidationFinding> toolkit)
     {
@@ -420,11 +415,21 @@ public class DraftValidationService : IDraftValidationService
                 "The tool has no description.",
                 "The description is what the model reads when it decides whether to call this tool at all; an empty one leaves the decision to the name."));
 
-        HashSet<string> parameterNames = new(StringComparer.Ordinal);
-        bool optionalSeen = false;
+        // The parameter list and the returned record are the tool's two other declarations and each is judged on its own rules.
+        ValidateParameters(tool, where, findings);
+        ValidateReturns(tool, where, findings);
+    }
 
-        foreach (ToolParameterDraft parameter in tool.Parameters)
+    /// <summary>
+    /// Checks the parameter list of one tool: names, descriptions, scopes and the order C# can declare.
+    /// </summary>
+    private static void ValidateParameters(ToolDraft tool, string where, ToolkitFindings findings)
+    {
+        HashSet<string> parameterNames = new(StringComparer.Ordinal);
+
+        for (int index = 0; index < tool.Parameters.Count; index++)
         {
+            ToolParameterDraft parameter = tool.Parameters[index];
             string parameterWhere = $"{where}.{parameter.Name ?? "(unnamed)"}";
 
             if (string.IsNullOrWhiteSpace(parameter.Name))
@@ -451,32 +456,33 @@ public class DraftValidationService : IDraftValidationService
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "The parameter has no scope.",
                     "Every parameter declares [ToolParameter] with 'context' or 'request': Morgana refuses at startup a parameter without one."));
-            else if (!KnownScopes.Contains(parameter.Scope, StringComparer.OrdinalIgnoreCase))
+            else if (!IsScope(parameter.Scope))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     $"'{parameter.Scope}' is not a scope.",
                     "A parameter resolving an input declares 'context' or 'request' and nothing else."));
 
-            bool isContext = string.Equals(parameter.Scope, Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase);
-            bool isRequest = string.Equals(parameter.Scope, Constants.Scopes.Request, StringComparison.OrdinalIgnoreCase);
-
-            if (parameter.Shared && isRequest)
+            if (IsSharedRequest(parameter.Scope, parameter.Shared))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "A request parameter is marked as shared.",
                     "Only what the context holds is shared, so a value asked of the user has nothing to share: Morgana refuses the combination at startup."));
 
-            if (!parameter.Required && isContext)
+            if (IsOptionalContext(parameter.Scope, parameter.Required))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "A context parameter is optional.",
                     "A context value that nobody holds stops the tool, so a default would never be used: Morgana refuses a context parameter with a default value at startup."));
 
-            if (parameter.Required && optionalSeen)
+            if (RequiredFollowsOptional(tool.Parameters, index))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "A required parameter follows an optional one.",
                     "C# cannot declare that method signature."));
-
-            optionalSeen |= !parameter.Required;
         }
+    }
 
+    /// <summary>
+    /// Checks the fields one tool hands back: names, types and the failure field.
+    /// </summary>
+    private static void ValidateReturns(ToolDraft tool, string where, ToolkitFindings findings)
+    {
         if (tool.Returns.Count == 0)
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 "The tool declares nothing it hands back.",
@@ -505,7 +511,7 @@ public class DraftValidationService : IDraftValidationService
 
             // The model reads the property back through camelCase, so the name declared has to be
             // the one that survives the trip out and in.
-            if (!string.Equals(JsonNamingPolicy.CamelCase.ConvertName(CodeEmitService.PropertyName(field.Name)), field.Name, StringComparison.Ordinal))
+            if (!KeepsNameInCSharp(field.Name))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, fieldWhere,
                     "The returned field cannot keep this name in C#.",
                     "The record's property is named with its first letter upper-cased and the model reads it back camelCased, so the model would find a different name than the one declared."));
@@ -519,7 +525,7 @@ public class DraftValidationService : IDraftValidationService
                     $"'{field.Type}' is not a C# type.",
                     "The type is written into the record verbatim and a text that is not a type does not compile."));
 
-            if (field.Name == Constants.Workflows.FailureField && !string.IsNullOrWhiteSpace(field.Type) && field.Type.Trim().TrimEnd('?') != "string")
+            if (IsNonTextFailureField(field.Name, field.Type))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, fieldWhere,
                     $"The '{Constants.Workflows.FailureField}' field is not a string.",
                     "The field named error is the failure and holds why the call failed: Morgana refuses a record whose error property is not text that allows null."));
@@ -671,6 +677,61 @@ public class DraftValidationService : IDraftValidationService
     }
 
     /// <summary>
+    /// Whether a name has the shape of a C# identifier: a letter or underscore first then letters, digits or underscores.
+    /// </summary>
+    public static bool IsIdentifierShape(string? name) =>
+        !string.IsNullOrEmpty(name)
+        && (char.IsLetter(name[0]) || name[0] == '_')
+        && name.All(c => char.IsLetterOrDigit(c) || c == '_');
+
+    /// <summary>
+    /// Whether a name can stand as a C# identifier: it has the shape and is not a keyword.
+    /// </summary>
+    public static bool IsIdentifier(string? name) => IsIdentifierShape(name) && !IsKeyword(name!);
+
+    /// <summary>
+    /// Whether a name is a C# keyword, which cannot be used bare as an identifier.
+    /// </summary>
+    public static bool IsKeyword(string name) => ReservedWords.Contains(name);
+
+    /// <summary>
+    /// Whether a scope is one of the two a parameter may declare.
+    /// </summary>
+    internal static bool IsScope(string? scope) => KnownScopes.Contains(scope, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a parameter asked of the user is marked as shared, which only a context value can be.
+    /// </summary>
+    internal static bool IsSharedRequest(string? scope, bool shared) =>
+        shared && string.Equals(scope, Constants.Scopes.Request, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a context parameter is optional, which a value the context must hold can never be.
+    /// </summary>
+    internal static bool IsOptionalContext(string? scope, bool required) =>
+        !required && string.Equals(scope, Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether the parameter at an index is required yet follows an optional one, a signature C# cannot declare.
+    /// </summary>
+    internal static bool RequiredFollowsOptional(IReadOnlyList<ToolParameterDraft> parameters, int index) =>
+        parameters[index].Required && parameters.Take(index).Any(earlier => !earlier.Required);
+
+    /// <summary>
+    /// Whether a returned field's name comes back unchanged after the record's property is camelCased for the model.
+    /// </summary>
+    internal static bool KeepsNameInCSharp(string name) =>
+        string.Equals(JsonNamingPolicy.CamelCase.ConvertName(CodeEmitService.PropertyName(name)), name, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether a returned field is the failure field yet declares a type other than text.
+    /// </summary>
+    internal static bool IsNonTextFailureField(string name, string? type) =>
+        string.Equals(name, Constants.Workflows.FailureField, StringComparison.Ordinal)
+        && !string.IsNullOrWhiteSpace(type)
+        && type.Trim().TrimEnd('?') != "string";
+
+    /// <summary>
     /// Checks that a name can be a C# identifier at all.
     /// </summary>
     /// <remarks>
@@ -683,14 +744,11 @@ public class DraftValidationService : IDraftValidationService
         if (string.IsNullOrWhiteSpace(name))
             return;
 
-        bool shapeOk = (char.IsLetter(name[0]) || name[0] == '_')
-                       && name.All(c => char.IsLetterOrDigit(c) || c == '_');
-
-        if (!shapeOk)
+        if (!IsIdentifierShape(name))
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 $"'{name}' cannot be a C# identifier.",
                 $"The {what} becomes C# verbatim: it must start with a letter or underscore and carry only letters, digits and underscores."));
-        else if (ReservedWords.Contains(name))
+        else if (IsKeyword(name))
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 $"'{name}' is a C# keyword.",
                 $"The {what} becomes C# verbatim and a keyword cannot be used bare as an identifier."));

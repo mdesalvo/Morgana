@@ -63,7 +63,7 @@ public class AlembicPromptService : IAlembicPromptService
 
     // Fences, in the framework's own idiom and for the framework's own reason: two layers carry
     // overlapping section labels and without a boundary the composed prompt shows [PERSONALITY]
-    // twice with nothing saying which is which.
+    // twice with nothing saying which is which. Their texts are the Alembic prompt's PromptInjections.
     //
     // Two layers, not three and that is still true of what the model reads: Morgana, then Alembic.
     // What changed is where Alembic's half is stored. Four passes that differ only in which tools
@@ -75,26 +75,11 @@ public class AlembicPromptService : IAlembicPromptService
     // its own — what it settles, what it must leave alone, how it goes about that. The two are
     // merged section by section here, under one set of labels, because the composed prompt must
     // still be the four sections an agent prompt always is: the model sees no seam.
-    private const string MorganaLayerHeader =
-        "======== FENCE: MORGANA — WHOSE VESSEL YOU ARE ========\n" +
-        "You are an instrument of Morgana. This is her voice and it is yours: it is not a description of someone else and it is not overridable.";
-    private const string MorganaLayerFooter = "======== END OF FENCE ========";
 
-    // The one place in the fence that is not her voice. Everything above it is Morgana speaking and
-    // binding; what follows is the framework described so an author can write against it. An author
-    // reading it as one more thing to obey would start writing turn machinery into an agent's own
-    // prose — the exact defect the primer exists to prevent.
-    private const string MorganaPrimerHeader =
-        "-------- HOW SHE RUNS WHAT YOU WRITE --------\n" +
-        "Fact about the world your agents will live in, not instruction to you.";
-
-    // The primer closes on its own mark because two of its readers stand outside the fence: the
-    // coherence pass and the one that applies its findings get the framework without Morgana's
-    // voice; an unterminated block of world facts would run straight into their own prose.
-    private const string MorganaPrimerFooter = "-------- END OF WHAT SHE ALREADY DOES --------";
-    private const string AlembicLayerHeader =
-        "======== ALEMBIC ========\n" +
-        "What follows specialises Morgana's voice for the step of the interview you are conducting right now. It adds that and NOTHING ELSE. It never contradicts the layer above.";
+    /// <summary>
+    /// The placeholder of a text of <c>alembic.json</c>, written <c>((name))</c> there.
+    /// </summary>
+    private static string Placeholder(string name) => $"(({name}))";
 
     /// <summary>
     /// Alembic's own prompts, parsed once on first use.
@@ -136,7 +121,7 @@ public class AlembicPromptService : IAlembicPromptService
 
         // Morgana
         Records.Prompt morgana = await morganaPrompt.Value;
-        sb.AppendLine(MorganaLayerHeader);
+        sb.AppendLine(ResolvePromptInjection(AlembicPromptId, "MorganaLayerHeader"));
         sb.AppendLine();
         sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Target, morgana.Target));
         sb.AppendLine();
@@ -144,7 +129,7 @@ public class AlembicPromptService : IAlembicPromptService
         sb.AppendLine();
         sb.AppendLine(await ComposeFrameworkPrimerAsync());
         sb.AppendLine();
-        sb.AppendLine(MorganaLayerFooter);
+        sb.AppendLine(ResolvePromptInjection(AlembicPromptId, "MorganaLayerFooter"));
         sb.AppendLine();
         
         // Alembic. Three rows read as one: what holds in every interview, which of the two jobs this
@@ -154,7 +139,7 @@ public class AlembicPromptService : IAlembicPromptService
         Records.Prompt alembic = Resolve(AlembicPromptId);
         Records.Prompt mode = Resolve(correcting ? CorrectingPromptId : ComposingPromptId);
 
-        sb.AppendLine(AlembicLayerHeader);
+        sb.AppendLine(ResolvePromptInjection(AlembicPromptId, "AlembicLayerHeader"));
         sb.AppendLine();
         AppendSection(sb, Constants.SectionLabels.Target, alembic.Target, mode.Target, interviewer.Target);
         AppendSection(sb, Constants.SectionLabels.Personality, alembic.Personality, mode.Personality, interviewer.Personality);
@@ -162,6 +147,48 @@ public class AlembicPromptService : IAlembicPromptService
         AppendSection(sb, Constants.SectionLabels.Formatting, alembic.Formatting, mode.Formatting, interviewer.Formatting);
 
         return sb.ToString();
+    }
+
+    /// <inheritdoc />
+    public string ResolvePromptInjection(string promptId, string injectionName, params (string Placeholder, string Value)[] values)
+    {
+        // The injections of the prompt that was asked for: a prompt that declares none is an authoring defect and not an empty set.
+        Records.Prompt prompt = Resolve(promptId);
+        string text = Records.Injection.ResolveTemplate(
+            prompt.GetAdditionalProperty<List<Records.Injection>>(Constants.PromptProperties.PromptInjections), injectionName);
+
+        return Spliced(text, $"The {promptId} prompt in alembic.json declares no '{injectionName}' injection.", values);
+    }
+
+    /// <inheritdoc />
+    public string ResolveToolInjection(string injectionName, params (string Placeholder, string Value)[] values)
+    {
+        // One list answers for both tool classes of Alembic, since they share their helpers.
+        Records.Prompt prompt = Resolve(AlembicPromptId);
+        string text = Records.Injection.ResolveTemplate(
+            prompt.GetAdditionalProperty<List<Records.Injection>>(Constants.PromptProperties.ToolInjections), injectionName);
+
+        return Spliced(text, $"The {AlembicPromptId} prompt in alembic.json declares no '{injectionName}' tool injection.", values);
+    }
+
+    /// <summary>
+    /// Fills the placeholders of an injection's text with the values of the call.
+    /// </summary>
+    /// <param name="text">The injection as authored; empty when the prompt declares none.</param>
+    /// <param name="absence">What the exception says when the text is empty.</param>
+    /// <param name="values">Placeholder name to the value that it stands for.</param>
+    private static string Spliced(string text, string absence, (string Placeholder, string Value)[] values)
+    {
+        // A text that is absent stops here: the model handed a request with a sentence missing would work wrong without any sign of it.
+        if (text.Length == 0)
+            throw new InvalidOperationException(absence);
+
+        // Each placeholder is replaced literally: the values come from the turn and must never be read as patterns.
+        foreach ((string placeholder, string value) in values)
+            text = text.Replace(Placeholder(placeholder), value, StringComparison.Ordinal);
+
+        // The sentence as the model reads it.
+        return text;
     }
 
     /// <inheritdoc />
@@ -173,12 +200,12 @@ public class AlembicPromptService : IAlembicPromptService
         Records.Prompt morgana = await morganaPrompt.Value;
 
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine(MorganaPrimerHeader);
+        sb.AppendLine(ResolvePromptInjection(AlembicPromptId, "MorganaPrimerHeader"));
         sb.AppendLine();
         sb.AppendLine(Resolve(MorganaPrimerPromptId).Target);
         sb.AppendLine();
         sb.AppendLine(BindingPolicies(morgana));
-        sb.AppendLine(MorganaPrimerFooter);
+        sb.AppendLine(ResolvePromptInjection(AlembicPromptId, "MorganaPrimerFooter"));
 
         return sb.ToString().TrimEnd();
     }
@@ -262,13 +289,13 @@ public class AlembicPromptService : IAlembicPromptService
 
         if (silent.Length > 0)
         {
-            sb.AppendLine("ALREADY BINDING on every agent written here, stated above it and with more authority. Never write a rule about any of these subjects into an agent's own prose — what each of them already settles:");
+            sb.AppendLine(ResolvePromptInjection(AlembicPromptId, "BindingPoliciesSilent"));
             AppendGlossed(sb, silent, glosses);
         }
 
         if (expressive.Length > 0)
         {
-            sb.AppendLine("ALSO ALREADY BINDING, but not silently. Their MECHANIC is fixed above the agent and never yours to restate, while what does belong to an agent's own author is named in each:");
+            sb.AppendLine(ResolvePromptInjection(AlembicPromptId, "BindingPoliciesExpressive"));
             AppendGlossed(sb, expressive, glosses);
         }
 

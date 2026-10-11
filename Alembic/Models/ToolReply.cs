@@ -1,6 +1,6 @@
 using System.ComponentModel;
 
-namespace Alembic.Model;
+namespace Alembic.Models;
 
 /// <summary>
 /// What a tool of Alembic's own answers to the model: the sentence it acts on in the same turn, or the reason that the call changed nothing.

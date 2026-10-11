@@ -1,5 +1,5 @@
 using Alembic.Interfaces;
-using Alembic.Model;
+using Alembic.Models;
 using System.Reflection;
 
 namespace Alembic.Services;
@@ -26,7 +26,7 @@ public class SolutionEmitService : ISolutionEmitService
     /// is read here; the sources themselves come from <see cref="ICodeEmitService"/> separately.</param>
     /// <returns>The <c>.csproj</c> and <c>.slnx</c>, named after the resolved namespace, both marked
     /// <see cref="FileOwnership.Generated"/> — a client editing them by hand loses the edit on the
-    /// next Morganize, same as any other <c>.g.cs</c>.</returns>
+    /// next archive built, same as any other <c>.g.cs</c>.</returns>
     public IReadOnlyList<EmittedFile> Emit(DomainDraft draft)
     {
         // The first agent that carries one, since every agent of one domain is emitted into the same

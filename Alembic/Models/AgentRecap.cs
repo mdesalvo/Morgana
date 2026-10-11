@@ -1,4 +1,4 @@
-namespace Alembic.Model;
+namespace Alembic.Models;
 
 /// <summary>
 /// What one agent's model actually reads, composed from the Draft through the framework's own

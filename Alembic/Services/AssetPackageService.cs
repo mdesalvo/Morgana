@@ -2,7 +2,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using Alembic.Interfaces;
-using Alembic.Model;
+using Alembic.Models;
 
 namespace Alembic.Services;
 
@@ -27,6 +27,37 @@ public class AssetPackageService : IAssetPackageService
     /// Alembic tells files apart: what matters is that the entry exists, not what is written in it.
     /// </remarks>
     public const string MarkerFileName = "alembic-emit.marker";
+
+    /// <summary>
+    /// The configuration Morgana loads.
+    /// </summary>
+    public const string ConfigurationFileName = "agents.json";
+
+    /// <summary>
+    /// The interview's save file.
+    /// </summary>
+    public const string DraftFileName = "alembic-draft.json";
+
+    /// <summary>
+    /// The report of what this archive differs from the one before it.
+    /// </summary>
+    public const string MigrationFileName = "MIGRATION.md";
+
+    /// <summary>
+    /// The convention carried inside the archive.
+    /// </summary>
+    public const string ReadmeFileName = "README.md";
+
+    /// <summary>
+    /// Where an agent's mock lands in the archive: the client's half of its tool class.
+    /// </summary>
+    public static string MockPathOf(AgentDraft agent) =>
+        $"Tools/{agent.Code.ToolClassName ?? $"{char.ToUpperInvariant(agent.ID![0])}{agent.ID[1..]}Tool"}.cs";
+
+    /// <summary>
+    /// Where the note replacing a mock lands when its authoring failed, beside the mock itself.
+    /// </summary>
+    public static string FailedMockPathOf(string mockPath) => mockPath + ".FAILED.txt";
 
     private readonly IDraftExportService draftExportService;
     private readonly IDraftSerializationService draftSerializationService;
@@ -100,10 +131,10 @@ public class AssetPackageService : IAssetPackageService
                 + "is not part of the domain — safe to delete once you have unpacked the rest.",
                 progress, cancellationToken);
 
-            await WriteAsync(archive, "agents.json", Encoding.UTF8.GetString(draftExportService.Export(draft)), progress, cancellationToken);
-            await WriteAsync(archive, "alembic-draft.json", Encoding.UTF8.GetString(draftSerializationService.Serialize(saved)), progress, cancellationToken);
-            await WriteAsync(archive, "MIGRATION.md", migrationReportService.Build(draft).Markdown, progress, cancellationToken);
-            await WriteAsync(archive, "README.md", Readme, progress, cancellationToken);
+            await WriteAsync(archive, ConfigurationFileName, Encoding.UTF8.GetString(draftExportService.Export(draft)), progress, cancellationToken);
+            await WriteAsync(archive, DraftFileName, Encoding.UTF8.GetString(draftSerializationService.Serialize(saved)), progress, cancellationToken);
+            await WriteAsync(archive, MigrationFileName, migrationReportService.Build(draft).Markdown, progress, cancellationToken);
+            await WriteAsync(archive, ReadmeFileName, Readme, progress, cancellationToken);
 
             // The project and solution the generated sources live in. Their absence used to mean
             // the archive was loose files the client first had to shelter inside a project of their
@@ -123,12 +154,12 @@ public class AssetPackageService : IAssetPackageService
                 // caught per agent rather than allowed to abort the download: a client holding the
                 // configuration, the signatures and the report, minus one mock body, has everything
                 // that matters. Losing all of it to one provider timeout would not.
-                string toolClass = agent.Code.ToolClassName ?? $"{char.ToUpperInvariant(agent.ID![0])}{agent.ID[1..]}Tool";
+                string mockPath = MockPathOf(agent);
 
                 try
                 {
                     string mock = await toolMockService.AuthorAsync(agent, agent.ID!, cancellationToken);
-                    await WriteAsync(archive, $"Tools/{toolClass}.cs", mock, progress, cancellationToken);
+                    await WriteAsync(archive, mockPath, mock, progress, cancellationToken);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -137,9 +168,9 @@ public class AssetPackageService : IAssetPackageService
                     // A sibling file rather than a silently missing one: the client sees exactly
                     // which class has no body yet and what to do about it, in the same folder they
                     // would have looked in for the mock itself.
-                    await WriteAsync(archive, $"Tools/{toolClass}.cs.FAILED.txt",
+                    await WriteAsync(archive, FailedMockPathOf(mockPath),
                         $"Alembic could not write this mock: {ex.Message}\n\n"
-                        + $"Everything else in the archive is complete. Implement the partial methods declared in {toolClass}.g.cs by hand,\n"
+                        + $"Everything else in the archive is complete. Implement the partial methods declared in {Path.GetFileNameWithoutExtension(mockPath)}.g.cs by hand,\n"
                         + "or morganize it again.",
                         progress, cancellationToken);
                 }

@@ -1,4 +1,4 @@
-using Alembic.Model;
+using Alembic.Models;
 
 namespace Alembic.Interfaces;
 

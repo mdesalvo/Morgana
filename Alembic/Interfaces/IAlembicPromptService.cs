@@ -41,6 +41,25 @@ public interface IAlembicPromptService
     Records.Prompt Resolve(string promptId);
 
     /// <summary>
+    /// Resolves a text that a prompt of <c>alembic.json</c> declares among its <c>PromptInjections</c>, with its values spliced in.
+    /// </summary>
+    /// <param name="promptId">The prompt that declares the injection, e.g. <c>Alembic</c> or <c>DomainValidator</c>.</param>
+    /// <param name="injectionName">Which injection.</param>
+    /// <param name="values">Placeholder name (without its <c>((</c> and <c>))</c>) to the value that it stands for.</param>
+    /// <returns>The text the model reads.</returns>
+    /// <exception cref="InvalidOperationException">The prompt declares no such injection: a pass handed a missing sentence would work wrong without any sign of it.</exception>
+    string ResolvePromptInjection(string promptId, string injectionName, params (string Placeholder, string Value)[] values);
+
+    /// <summary>
+    /// Resolves a text that Alembic's tools answer the model with, from the <c>ToolInjections</c> of the <c>Alembic</c> prompt, with its values spliced in.
+    /// </summary>
+    /// <param name="injectionName">Which injection.</param>
+    /// <param name="values">Placeholder name (without its <c>((</c> and <c>))</c>) to the value that it stands for.</param>
+    /// <returns>The text the model reads as the tool's answer.</returns>
+    /// <exception cref="InvalidOperationException">The prompt declares no such injection.</exception>
+    string ResolveToolInjection(string injectionName, params (string Placeholder, string Value)[] values);
+
+    /// <summary>
     /// Renders one interviewer into the system prompt it conducts with.
     /// </summary>
     /// <remarks>

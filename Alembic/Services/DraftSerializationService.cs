@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Alembic.Interfaces;
-using Alembic.Model;
+using Alembic.Models;
 
 namespace Alembic.Services;
 

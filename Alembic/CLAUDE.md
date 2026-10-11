@@ -313,33 +313,16 @@ ends do not exist yet. So it is settled once, at the end, over the whole domain 
 uploads included — on the **Collaboration form**: a grid of asking agent × colleague plus the agents
 another Morgana publishes, each named by intent and partner. It is a form rather than a pass because an
 edge is a fact about the domain, not something the client narrates; the interview ends at the last
-agent and the `DomainColleagues` pass is no longer entered. What the form cannot do is rewrite the
-prose an edge contradicts, which is why the paragraphs below belong to the coherence pass and its Apply.
-
-**An edge and the prose it contradicts land together or the edge is a defect.** The model reads a
-function offering the colleague and a flat imperative refusing the subject; Morgana's `PeerConsultation`
-policy decides that collision by precedence, but an agent whose own prose is overruled every turn is
-still a defect — the contradiction is paid in tokens and settled by a model rather than by its author.
-So `DeclareConsultation` takes the asking agent's rewritten prose **in the same call**.
-
-**The closing pass is handed each agent's territory and that is what keeps the repair honest.** The
-framework appends the colleague's own `Territory` to the asking agent's prompt, so the boundary must
-state fact about this agent's **own** books and nothing about the other agent. A pass that could not read
-the territory had only the colleague's `Target` and `Instructions` to work from, so asked to strike a
-refusal it wrote the colleague's *process* into the asking agent's prose instead — the defect the
-coherence pass reports as `colleague-out-of-step`.
+agent. The boundary prose an edge contradicts is reported by the coherence pass and rewritten by its Apply.
 
 What that prose must never carry: a rule about when to consult, how briefly, what to expect back or what
 to do with the answer — every one of those is a framework rule and a second copy below is a second voice
 claiming the same authority.
 
-The client is asked a question about **their own work** — whether the accounts agent really rings the
-greenhouse — never which agent should call which, which is machinery they were never shown.
-
-An edge is touched in three places, each doing what the others cannot: **the interview asks** and is the
-only place that can rewrite the boundary in the same gesture; **the emit page holds it** and is the only
-place a colleague published by *another* Morgana can be declared; **the coherence pass reports** and is
-the only one that reads the declaration against the prose and says they disagree.
+An edge is touched in three places, each doing what the others cannot: **the Collaboration form
+declares it** and is the only place a colleague published by *another* Morgana can be named; **the
+coherence pass reports** and is the only one that reads the declaration against the prose and says they
+disagree; **its Apply rewrites** the boundary, stating fact about the asking agent's **own** books.
 
 ### The walk: a domain is edited, not only added to
 

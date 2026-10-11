@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Alembic.Interfaces;
-using Alembic.Model;
+using Alembic.Models;
 using Microsoft.Extensions.AI;
 using Morgana.AI;
 using Morgana.AI.Interfaces;
@@ -25,26 +25,10 @@ public class ToolMockService : IToolMockService
     /// </summary>
     private const string MockPromptId = "CodeMocker";
 
-    /// <summary>The value of the agent's Target, spliced into the <c>AgentPurpose</c> message.</summary>
-    private const string TargetPlaceholder = "((target))";
-
-    /// <summary>The value of the agent's Formatting, spliced into the <c>AgentPresentation</c> message.</summary>
-    private const string FormattingPlaceholder = "((formatting))";
-
-    /// <summary>The name of the tool that a contract message is about.</summary>
-    private const string ToolPlaceholder = "((tool))";
-
-    /// <summary>The name of the result record that the generated half declares for a tool.</summary>
-    private const string TypePlaceholder = "((type))";
-
-    /// <summary>The name of the tool class that the two halves share.</summary>
-    private const string ClassPlaceholder = "((class))";
-
-    /// <summary>The result records that the authored source declared a second time.</summary>
-    private const string RecordsPlaceholder = "((records))";
-
-    /// <summary>The types that a returned field names and that the authored source left undeclared.</summary>
-    private const string TypesPlaceholder = "((types))";
+    /// <summary>
+    /// The prompt in <c>alembic.json</c> that holds the sentence resuming a cut-off answer.
+    /// </summary>
+    private const string AlembicPromptId = "Alembic";
 
     private readonly IAlembicPromptService alembicPromptService;
     private readonly ICodeEmitService codeEmitService;
@@ -99,18 +83,18 @@ public class ToolMockService : IToolMockService
             .First(f => f.Path.Contains("/Tools/", StringComparison.Ordinal) || f.Path.StartsWith("Tools/", StringComparison.Ordinal));
 
         StringBuilder request = new StringBuilder();
-        request.AppendLine(Said(mock, "Request"));
+        request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "Request"));
         request.AppendLine();
         request.AppendLine(signatures.Content);
-        AppendArgumentContract(request, mock, agent);
-        AppendReturnContract(request, mock, agent);
+        AppendArgumentContract(request, agent);
+        AppendReturnContract(request, agent);
         request.AppendLine();
-        request.AppendLine(Said(mock, "AgentPurpose", (TargetPlaceholder, agent.Target ?? string.Empty)));
+        request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "AgentPurpose", ("target", agent.Target ?? string.Empty)));
 
         if (!string.IsNullOrWhiteSpace(agent.Formatting))
         {
             request.AppendLine();
-            request.AppendLine(Said(mock, "AgentPresentation", (FormattingPlaceholder, agent.Formatting)));
+            request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "AgentPresentation", ("formatting", agent.Formatting)));
         }
 
         // The class the two halves share, named by the fact the emit already carries rather than
@@ -119,15 +103,7 @@ public class ToolMockService : IToolMockService
 
         IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 
-        string authored = await StreamedCompletion.RunAsync(
-            chatClient, system, request.ToString(),
-            length => logger.LogInformation(
-                "The mock for {AgentId} was cut at the provider's limit after {Length} characters; resuming",
-                agent.ID, length),
-            length => logger.LogWarning(
-                "The mock for {AgentId} went silent after {Length} characters; retrying once",
-                agent.ID, length),
-            cancellationToken);
+        string authored = await CompleteAsync(chatClient, system, request.ToString(), agent, cancellationToken);
 
         // Thrown rather than returned, so the packager's per-agent catch writes a file that says
         // what happened instead of one that is silently empty. An empty source file is the one
@@ -145,85 +121,85 @@ public class ToolMockService : IToolMockService
         // declared there too, so a second declaration collides with them. A type that a record names
         // and nobody declares is the opposite case: it exists only if this half declares it. Told once
         // and written anyway, the model is told what it did and asked again.
-        List<string> redeclaredRecords = RedeclaredResultRecords(authored, agent);
-        List<string> missingTypes = UndeclaredClientTypes(authored, agent);
-        bool wroteConstructor = DeclaresConstructor(authored, className);
+        MockDefects defects = MockDefects.Of(authored, agent, className);
 
-        if (wroteConstructor || redeclaredRecords.Count > 0 || missingTypes.Count > 0)
+        if (defects.Any)
         {
-            if (wroteConstructor)
+            if (defects.WroteConstructor)
             {
                 request.AppendLine();
-                request.AppendLine(Said(mock, "ConstructorWritten", (ClassPlaceholder, className)));
+                request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "ConstructorWritten", ("class", className)));
             }
 
-            if (redeclaredRecords.Count > 0)
+            if (defects.RedeclaredRecords.Count > 0)
             {
                 request.AppendLine();
-                request.AppendLine(Said(mock, "RecordsRedeclared", (RecordsPlaceholder, string.Join(", ", redeclaredRecords))));
+                request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "RecordsRedeclared", ("records", string.Join(", ", defects.RedeclaredRecords))));
             }
 
-            if (missingTypes.Count > 0)
+            if (defects.MissingTypes.Count > 0)
             {
                 request.AppendLine();
-                request.AppendLine(Said(mock, "TypesUndeclared", (TypesPlaceholder, string.Join(", ", missingTypes))));
+                request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "TypesUndeclared", ("types", string.Join(", ", defects.MissingTypes))));
             }
 
-            authored = await StreamedCompletion.RunAsync(
-                chatClient, system, request.ToString(),
-                length => logger.LogInformation(
-                    "The mock for {AgentId} was cut at the provider's limit after {Length} characters; resuming",
-                    agent.ID, length),
-                length => logger.LogWarning(
-                    "The mock for {AgentId} went silent after {Length} characters; retrying once",
-                    agent.ID, length),
-                cancellationToken);
+            authored = await CompleteAsync(chatClient, system, request.ToString(), agent, cancellationToken);
+
+            // The second answer is judged on its own: what the first got wrong is no evidence against it.
+            defects = MockDefects.Of(authored, agent, className);
         }
 
         // Thrown rather than returned, for the same reason as an empty answer: a file that says what
         // went wrong is worth more to whoever opens the archive than one that cannot be built.
-        if (DeclaresConstructor(authored, className))
+        if (defects.WroteConstructor)
             throw new InvalidOperationException(
                 $"The model wrote a constructor for {className} twice over. That class takes its dependencies in the "
                 + "generated half of the pair and a second constructor leaves the base class unsatisfied, so the "
                 + "archive would not build.");
 
-        redeclaredRecords = RedeclaredResultRecords(authored, agent);
-        if (redeclaredRecords.Count > 0)
+        if (defects.RedeclaredRecords.Count > 0)
             throw new InvalidOperationException(
-                $"The model declared {string.Join(", ", redeclaredRecords)} twice over. The generated half already declares "
+                $"The model declared {string.Join(", ", defects.RedeclaredRecords)} twice over. The generated half already declares "
                 + "those records, so a second declaration would not build.");
 
-        missingTypes = UndeclaredClientTypes(authored, agent);
-        if (missingTypes.Count > 0)
+        if (defects.MissingTypes.Count > 0)
             throw new InvalidOperationException(
-                $"The model left {string.Join(", ", missingTypes)} undeclared twice over. The generated half names those "
+                $"The model left {string.Join(", ", defects.MissingTypes)} undeclared twice over. The generated half names those "
                 + "types as the type of a returned field and only the half written here can declare them, so the archive would not build.");
 
         return StripDuplicateToolAttribute(authored);
     }
 
     /// <summary>
-    /// Fetches a text that the mock author reads from the prompt's <c>PromptInjections</c>, with its values spliced in.
+    /// Runs one completion for this agent's mock, reporting a cut-off or a stall on the agent's own log.
     /// </summary>
-    /// <remarks>
-    /// A missing message throws: an author handed a request with a sentence absent would write the wrong file without any sign of it.
-    /// </remarks>
-    /// <param name="mock">The <c>CodeMocker</c> prompt, which carries the message.</param>
-    /// <param name="name">Which message.</param>
-    /// <param name="values">Placeholder to the value that it stands for.</param>
-    private static string Said(Records.Prompt mock, string name, params (string Placeholder, string Value)[] values)
+    private Task<string> CompleteAsync(
+        IChatClient chatClient, string system, string request, AgentDraft agent, CancellationToken cancellationToken) =>
+        StreamedCompletion.RunAsync(
+            chatClient, system, request,
+            alembicPromptService.ResolvePromptInjection(AlembicPromptId, "ContinuationRequest"),
+            length => logger.LogInformation(
+                "The mock for {AgentId} was cut at the provider's limit after {Length} characters; resuming",
+                agent.ID, length),
+            length => logger.LogWarning(
+                "The mock for {AgentId} went silent after {Length} characters; retrying once",
+                agent.ID, length),
+            cancellationToken);
+
+    /// <summary>
+    /// What an authored mock got wrong against the generated half it completes.
+    /// </summary>
+    /// <param name="WroteConstructor">Whether the source declares the class's constructor, which the generated half owns.</param>
+    /// <param name="RedeclaredRecords">The result records the generated half already declares.</param>
+    /// <param name="MissingTypes">The types a returned field names that nobody declares.</param>
+    private sealed record MockDefects(bool WroteConstructor, List<string> RedeclaredRecords, List<string> MissingTypes)
     {
-        string text = Records.Injection.ResolveTemplate(
-            mock.GetAdditionalProperty<List<Records.Injection>>(Constants.PromptProperties.PromptInjections), name);
+        /// <summary>Whether any of the three defects is present, which is what makes the source worth another completion.</summary>
+        public bool Any => WroteConstructor || RedeclaredRecords.Count > 0 || MissingTypes.Count > 0;
 
-        if (text.Length == 0)
-            throw new InvalidOperationException($"The {MockPromptId} prompt in alembic.json declares no '{name}' message.");
-
-        foreach ((string placeholder, string value) in values)
-            text = text.Replace(placeholder, value, StringComparison.Ordinal);
-
-        return text;
+        /// <summary>Reads the three defects off an authored source.</summary>
+        public static MockDefects Of(string authored, AgentDraft agent, string className) =>
+            new(DeclaresConstructor(authored, className), RedeclaredResultRecords(authored, agent), UndeclaredClientTypes(authored, agent));
     }
 
     /// <summary>Whether authored source declares a constructor of the class it is one half of.</summary>
@@ -240,7 +216,7 @@ public class ToolMockService : IToolMockService
     /// <summary>
     /// Restates each tool's parameters to the mock author in the words the running model will read.
     /// </summary>
-    private static void AppendArgumentContract(StringBuilder request, Records.Prompt mock, AgentDraft agent)
+    private void AppendArgumentContract(StringBuilder request, AgentDraft agent)
     {
         foreach (ToolDraft tool in agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name)))
         {
@@ -253,7 +229,7 @@ public class ToolMockService : IToolMockService
                 continue;
 
             request.AppendLine();
-            request.AppendLine(Said(mock, "ArgumentContract", (ToolPlaceholder, tool.Name!)));
+            request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "ArgumentContract", ("tool", tool.Name!)));
 
             foreach (ToolParameterDraft parameter in described)
                 request.AppendLine(CultureInfo.InvariantCulture, $"  {parameter.Name}: {parameter.Description}");
@@ -263,18 +239,18 @@ public class ToolMockService : IToolMockService
     /// <summary>
     /// States to the mock author the fields each result record carries, in the words the model reads.
     /// </summary>
-    private static void AppendReturnContract(StringBuilder request, Records.Prompt mock, AgentDraft agent)
+    private void AppendReturnContract(StringBuilder request, AgentDraft agent)
     {
         HashSet<(string Tool, string Field)> readByWorkflows = FieldsReadByWorkflows(agent);
 
         foreach (ToolDraft tool in agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name) && t.Returns.Count > 0))
         {
             request.AppendLine();
-            request.AppendLine(Said(mock, "ReturnContract", (ToolPlaceholder, tool.Name!), (TypePlaceholder, CodeEmitService.ResultTypeName(tool.Name!))));
+            request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "ReturnContract", ("tool", tool.Name!), ("type", CodeEmitService.ResultTypeName(tool.Name!))));
 
             foreach (ToolReturnDraft field in tool.Returns.Where(r => !string.IsNullOrWhiteSpace(r.Name)))
                 request.AppendLine(CultureInfo.InvariantCulture,
-                    $"  {field.Name} ({field.Type}): {field.Description}{(field.Name == Constants.Workflows.FailureField ? Said(mock, "FailureFieldNote") : string.Empty)}{(readByWorkflows.Contains((tool.Name!, field.Name!)) ? Said(mock, "WorkflowFieldNote") : string.Empty)}");
+                    $"  {field.Name} ({field.Type}): {field.Description}{(field.Name == Constants.Workflows.FailureField ? alembicPromptService.ResolvePromptInjection(MockPromptId, "FailureFieldNote") : string.Empty)}{(readByWorkflows.Contains((tool.Name!, field.Name!)) ? alembicPromptService.ResolvePromptInjection(MockPromptId, "WorkflowFieldNote") : string.Empty)}");
         }
     }
 
