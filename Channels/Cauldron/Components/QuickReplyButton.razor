@@ -9,16 +9,16 @@
 <div class="quick-replies @(IsDisabled ? "disabled" : "")">
     @if (Replies != null)
     {
-        @foreach (var reply in Replies.Select((r, i) => new { Reply = r, Index = i }))
+        @foreach ((int position, QuickReply reply) in Replies.Index())
         {
             @* animation-delay is derived from the index, so the buttons cascade in rather
                than appearing all at once. *@
-            <button class="quick-reply-btn @(reply.Reply.Termination == true ? "termination" : "") @(IsReplySelected(reply.Reply.Id) ? "selected" : "") @(IsDisabled ? "disabled" : "")"
-                    style="animation-delay: @(reply.Index * 0.1)s"
+            <button class="quick-reply-btn @(reply.Termination == true ? "termination" : "") @(IsReplySelected(reply.Id) ? "selected" : "") @(IsDisabled ? "disabled" : "")"
+                    style="animation-delay: @(position * 0.1)s"
                     disabled="@IsDisabled"
-                    @onclick="() => OnReplyClick(reply.Reply)">
-                <span class="label">@reply.Reply.Label</span>
-                @if (IsReplySelected(reply.Reply.Id))
+                    @onclick="() => OnReplyClick(reply)">
+                <span class="label">@reply.Label</span>
+                @if (IsReplySelected(reply.Id))
                 {
                     @* Marks the chosen reply once the row is frozen, so the transcript still
                        shows what was picked. *@
@@ -30,64 +30,48 @@
 </div>
 
 @code {
-    // =========================================================================
-    // COMPONENT PARAMETERS
-    // =========================================================================
-    
     /// <summary>
-    /// Quick reply options to display. Label is what the user reads, Value is what gets sent.
+    /// Quick replies to show: the label is what the visitor reads and the value is what gets sent.
     /// </summary>
     [Parameter]
     public List<QuickReply>? Replies { get; set; }
-    
+
     /// <summary>
-    /// Fired when a button is clicked. The parent records the selection and sends the message.
+    /// Raised with the reply that was clicked.
     /// </summary>
     [Parameter]
     public EventCallback<QuickReply> OnSelect { get; set; }
-    
+
     /// <summary>
-    /// Indicates whether all quick reply buttons should be disabled.
-    /// Set to true after one reply is selected to prevent multiple selections.
+    /// True once the row is frozen: a reply was picked or the message is no longer the latest.
     /// </summary>
     [Parameter]
     public bool IsDisabled { get; set; }
-    
+
     /// <summary>
-    /// ID of the currently selected quick reply (if any).
-    /// Used to show checkmark on the selected button.
+    /// Id of the reply that was picked; null while none was.
     /// </summary>
     [Parameter]
     public string? SelectedReplyId { get; set; }
-    
-    // =========================================================================
-    // HELPER METHODS
-    // =========================================================================
-    
+
     /// <summary>
-    /// Determines if a specific quick reply is currently selected.
-    /// Used to apply "selected" CSS class and show checkmark.
+    /// True when the visitor already picked this reply, so its button shows the checkmark.
     /// </summary>
-    /// <param name="replyId">ID of the quick reply to check</param>
-    /// <returns>True if this reply is selected, false otherwise</returns>
     private bool IsReplySelected(string replyId)
     {
-        return !string.IsNullOrEmpty(SelectedReplyId) && SelectedReplyId == replyId;
+        return SelectedReplyId == replyId;
     }
-    
+
     /// <summary>
-    /// Handles quick reply button click event.
-    /// Invokes the OnSelect callback if buttons are not disabled.
+    /// Reports the clicked reply to the parent, which records the selection and sends the message.
     /// </summary>
-    /// <param name="reply">The quick reply that was clicked</param>
-    /// <returns>Task representing the async callback invocation</returns>
     private async Task OnReplyClick(QuickReply reply)
     {
         // Re-checked despite the disabled attribute: the markup guard is client-side, this one
         // is what actually keeps a second reply from being reported on an already-answered row.
-        if (!IsDisabled)
-        {
-            await OnSelect.InvokeAsync(reply);
-        }
+        if (IsDisabled)
+            return;
+
+        await OnSelect.InvokeAsync(reply);
     }
 }

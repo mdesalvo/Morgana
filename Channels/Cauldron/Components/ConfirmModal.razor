@@ -33,37 +33,55 @@
 }
 
 @code {
+    /// <summary>
+    /// True while the dialog is on screen.
+    /// </summary>
     [Parameter]
     public bool IsVisible { get; set; }
 
+    /// <summary>
+    /// Heading of the dialog.
+    /// </summary>
     [Parameter]
-    public string Title { get; set; } = "Confirm Action";
+    public required string Title { get; set; }
 
+    /// <summary>
+    /// Question that the visitor is asked to confirm.
+    /// </summary>
     [Parameter]
-    public string Message { get; set; } = "Are you sure?";
+    public required string Message { get; set; }
 
+    /// <summary>
+    /// Label of the button that confirms.
+    /// </summary>
     [Parameter]
-    public string ConfirmText { get; set; } = "Yes";
+    public required string ConfirmText { get; set; }
 
+    /// <summary>
+    /// Label of the button that cancels.
+    /// </summary>
     [Parameter]
-    public string CancelText { get; set; } = "No";
+    public required string CancelText { get; set; }
 
+    /// <summary>
+    /// Raised when the visitor confirms.
+    /// </summary>
     [Parameter]
     public EventCallback OnConfirm { get; set; }
 
+    /// <summary>
+    /// Raised when the visitor cancels or clicks outside the dialog.
+    /// </summary>
     [Parameter]
     public EventCallback OnCancel { get; set; }
 
-    [Parameter]
-    public bool CloseOnBackdrop { get; set; } = true;
-
-    private void HandleBackdropClick()
+    /// <summary>
+    /// Reports a click on the overlay as a cancellation.
+    /// </summary>
+    private async Task HandleBackdropClick()
     {
         // Clicking away is treated as cancelling, never as confirming: a destructive action
         // must not be triggered by a stray click on the overlay.
-        if (CloseOnBackdrop)
-        {
-            OnCancel.InvokeAsync();
-        }
+        await OnCancel.InvokeAsync();
     }
 }

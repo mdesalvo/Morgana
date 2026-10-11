@@ -5,12 +5,12 @@
 @inject SignalRService SignalRService
 @inject ILandingMessageService LandingMessageService
 @inject NavigationManager NavigationManager
+@inject ILogger Logger
 @implements IAsyncDisposable
 
 <PageTitle>Morgana - Magical AI Assistant</PageTitle>
 
 <div class="chat-container">
-    <!-- Header -->
     <div class="chat-header">
         <div class="header-content">
 
@@ -25,15 +25,13 @@
                 <span class="sparkle s6"></span>
                 <img src="images/morgana-animated.webp"
                      alt="Morgana"
-                     class="header-avatar"
-                     style="border: 3px solid @ChatStateService.GetAvatarBorderColor(ChatStateService.CurrentAgentName);" />
+                     class="header-avatar" />
             </div>
 
             <div class="header-info">
-                <h1 style="color: @ChatStateService.GetAvatarBorderColor(ChatStateService.CurrentAgentName);">@ChatStateService.CurrentAgentName</h1>
+                <h1 class="@ChatStateService.GetAgentClass(ChatStateService.CurrentAgentName)">@ChatStateService.CurrentAgentName</h1>
                 <span class="status @(ChatStateService.IsConnected ? "online" : "offline")"
-                      role="status"
-                      style="color: @(ChatStateService.IsConnected ? "#10b981" : "#ef4444");">
+                      role="status">
                     @(ChatStateService.IsConnected ? "Online" : "Offline")
                 </span>
                 <DustMeter DustLevel="ChatStateService.DustLevel" />
@@ -50,7 +48,6 @@
         </div>
     </div>
 
-    <!-- Messages Area -->
     <div class="messages-container" aria-live="polite" aria-relevant="additions">
 
         @* Single child of the scrolling container, which is column-reverse so the view stays
@@ -64,7 +61,7 @@
                 {
                     <FadingMessage @key="temporaryMessage"
                                    Message="@temporaryMessage"
-                                   DurationSeconds="@(temporaryMessage.FadingMessageDurationSeconds ?? 10)"
+                                   DurationSeconds="@temporaryMessage.FadingMessageDurationSeconds"
                                    OnDismissed="@HandleMessageDismissed"/>
                 }
             </div>
@@ -96,12 +93,11 @@
                     <div class="sparkle sp11"></div>
                     <div class="sparkle sp12"></div>
                 </div>
-                <p class="loading-text">@(landingMessage)</p>
+                <p class="loading-text">@landingMessage</p>
             </div>
         }
         else
         {
-            <!-- Message list -->
             @* Keyed by instance, so a row keeps its cached HTML when the typing placeholder is swapped out *@
             @foreach (ChatMessage chatMessage in ChatStateService.ChatMessages)
             {
@@ -114,7 +110,6 @@
         </div>
     </div>
 
-    <!-- Input Area -->
     <div class="input-container">
         <textarea
             @bind="inputText"
@@ -124,16 +119,15 @@
             placeholder="Consult @(ChatStateService.CurrentAgentName)..."
             rows="1"
             disabled="@IsTextareaDisabled"
-            class="message-input @(ChatStateService.IsSpecializedAgent(ChatStateService.CurrentAgentName) ? "agent" : "morgana")"></textarea>
+            class="message-input @ChatStateService.GetAgentClass(ChatStateService.CurrentAgentName)"></textarea>
         <SendButton
-            AgentName="@ChatStateService.CurrentAgentName"
+            AgentClass="@ChatStateService.GetAgentClass(ChatStateService.CurrentAgentName)"
             IsSending="@ChatStateService.IsSending"
             IsDisabled="@IsSendButtonDisabled"
             OnClick="SendMessageAsync" />
     </div>
 </div>
 
-<!-- Confirmation Modal for New Conversation -->
 <ConfirmModal IsVisible="@showConfirmModal"
               Title="Start New Conversation?"
               Message="This will start a new conversation with Morgana. Your chat history will be lost. Are you sure you want to continue?"
@@ -169,7 +163,11 @@
     /// instance and removes nothing, silently leaving the subscription in place.
     /// </summary>
     private Action? onStreamingStateChanged;
+
+    /// <summary>Retained handler of the connection state, see <see cref="onStreamingStateChanged"/>.</summary>
     private Action<bool>? onConnectionStateChanged;
+
+    /// <summary>Retained handler of the reply deadline, see <see cref="onStreamingStateChanged"/>.</summary>
     private Action? onReplyDeadlineExpired;
 
     // =========================================================================
@@ -180,27 +178,28 @@
     /// Blazor lifecycle method called when component is initialized.
     /// Sets up SignalR connection and subscribes to events.
     /// </summary>
-    /// <returns>Task representing the async initialization</returns>
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            // Initialize landing message
+            // Shown by the loader until the first backend message lands
             landingMessage = LandingMessageService.GetLandingMessage();
 
-            // Subscribe to streaming state changes for UI re-render
+            // Each typewriter tick repaints the page: the timer thread cannot touch the render tree itself
             onStreamingStateChanged = () => InvokeAsync(StateHasChanged);
             StreamingService.OnStateChanged += onStreamingStateChanged;
 
-            // Start SignalRService connection
+            // Replies are pushed over this connection: it must be up before the conversation starts
             await SignalRService.StartAsync();
+            // The initial state is read here because no event announces it to this page
             ChatStateService.IsConnected = SignalRService.IsConnected;
 
-            // Subscribe to events (message received, streaming chunks for progressive rendering, connection state changes)
+            // Replies and chunks arrive through these events; the connection state drives the Online badge
             SignalRService.OnMessageReceived += HandleMessageReceivedAsync;
             SignalRService.OnStreamChunkReceived += HandleStreamChunkReceivedAsync;
             onConnectionStateChanged = (connected) =>
             {
+                // Gates the composer and the Online badge
                 ChatStateService.IsConnected = connected;
 
                 // Back online: a reply pushed while this client was out of its group is gone for
@@ -209,6 +208,7 @@
                 if (connected)
                     _ = InvokeAsync(DeliverMissedRepliesAsync);
 
+                // The handler runs on the SignalR thread: the repaint goes through the circuit
                 InvokeAsync(StateHasChanged);
             };
             SignalRService.OnConnectionStateChanged += onConnectionStateChanged;
@@ -227,7 +227,7 @@
 
                 try
                 {
-                    // Check ProtectedLocalStorage for saved conversation ID
+                    // A browser that talked to Morgana before has its conversation id stored
                     string? savedConversationId = await ConversationLifecycleService.GetSavedConversationIdAsync();
 
                     // A saved id means a returning visitor. Resume falls back to a fresh
@@ -237,15 +237,19 @@
                     else
                         await ConversationLifecycleService.StartConversationAsync();
 
+                    // The composer may open once a conversation exists. Banners raised while connecting
+                    // are stale by now and the terminal dust notice survives the clearing.
                     ChatStateService.IsInitialized = true;
                     ChatStateService.ClearErrorMessages();
                 }
                 catch (Exception ex)
                 {
+                    // The page stays up with a banner rather than a blank screen
                     ChatStateService.AddErrorBanner($"Initialization error: {ex.Message}", "initialization_failed", 20);
                 }
                 finally
                 {
+                    // Success or failure, the loader or the banner must reach the screen
                     await InvokeAsync(StateHasChanged);
                 }
             }
@@ -256,6 +260,7 @@
         }
         catch (Exception ex)
         {
+            // Failure outside the bootstrap itself: connection or subscription setup
             ChatStateService.AddErrorBanner($"Critical initialization error: {ex.Message}", "critical_initialization_failed", 30);
             await InvokeAsync(StateHasChanged);
         }
@@ -269,10 +274,9 @@
     /// Sends a user message to Morgana backend via REST API.
     /// Adds user message and typing indicator to UI, then waits for agent response via SignalR.
     /// </summary>
-    /// <returns>Task representing the async send operation</returns>
     private async Task SendMessageAsync()
     {
-        // Validate input
+        // Nothing to send while the composer is empty or a turn is already in flight or the channel is offline
         if (string.IsNullOrWhiteSpace(inputText) || ChatStateService.IsSending || !ChatStateService.IsConnected)
             return;
 
@@ -282,7 +286,7 @@
         inputText = string.Empty;
         ChatStateService.IsSending = true;
 
-        // Add user message to UI
+        // Echoed at once as the visitor's own turn
         ChatStateService.AddUserMessage(messageText);
 
         // Shown immediately: the real answer arrives over SignalR, so without this the UI
@@ -300,8 +304,6 @@
     /// Handles incoming messages from SignalR with strongly-typed DTO.
     /// Removes typing indicator, updates agent state and adds message to UI.
     /// </summary>
-    /// <param name="message">Strongly-typed channel message DTO containing all message data</param>
-    /// <returns>Task representing the async message handling</returns>
     private async Task HandleMessageReceivedAsync(ChannelMessage message)
     {
         // Marshal the entire handler onto the circuit's SynchronizationContext so that
@@ -309,7 +311,7 @@
         // (which enumerates the same lists on the circuit thread). Running the mutations on
         // the SignalR dispatch thread caused "Collection was modified; enumeration operation
         // may not execute" during concurrent renders, tearing down the circuit.
-        await InvokeAsync(async () =>
+        await InvokeAsync(() =>
         {
             try
             {
@@ -325,17 +327,7 @@
                 if (string.Equals(message.MessageType, ChannelMessageTypes.SystemWarning, StringComparison.OrdinalIgnoreCase)
                     || string.Equals(message.MessageType, ChannelMessageTypes.Error, StringComparison.OrdinalIgnoreCase))
                 {
-                    // The dust-exhausted notice is terminal and never fades, so further
-                    // blocked sends must not stack duplicate persistent banners — keep at
-                    // most one. Transient notices (rate limit) fade on their own.
-                    bool isDustExhausted = string.Equals(
-                        message.ErrorReason, ChannelErrorReasons.DustBudgetExhausted, StringComparison.Ordinal);
-                    if (isDustExhausted
-                        && ChatStateService.TemporaryMessages.Any(m => string.Equals(
-                            m.ErrorReason, ChannelErrorReasons.DustBudgetExhausted, StringComparison.Ordinal)))
-                        return;
-
-                    ChatStateService.TemporaryMessages.Add(message);
+                    ChatStateService.AddTemporaryMessage(message);
                     StateHasChanged();
                     return;
                 }
@@ -350,43 +342,38 @@
                     return;
                 ChatStateService.NoteDelivered(message.Timestamp);
 
-                // PATH 1: this message closes a response already typing itself out on screen
+                // This message closes a response already typing itself out on screen
                 if (StreamingService.IsStreaming)
                 {
                     StreamingService.FinalizeStreaming(message);
-                    ChatStateService.UpdateAgentFromMessage(message);
-                    ChatStateService.IsSending = false;
-                    StateHasChanged();
-                    return;
+                }
+                // The response arrived whole, with no chunks preceding it
+                else
+                {
+                    ChatStateService.RemoveTypingIndicator();
+
+                    ChatStateService.ChatMessages.Add(new ChatMessage
+                    {
+                        ConversationId = message.ConversationId,
+                        Text = message.Text,
+                        Type = MessageType.Assistant,
+                        Timestamp = message.Timestamp,
+                        QuickReplies = message.QuickReplies,
+                        AgentName = message.AgentName ?? Cauldron.Services.ChatStateService.BaseAgentName,
+                        AgentCompleted = false,
+                        RichCard = message.RichCard
+                    });
                 }
 
-                // PATH 2: the response arrived whole, with no chunks preceding it
-                ChatStateService.RemoveTypingIndicator();
+                // Either way the turn is answered: the header follows the speaker and the composer reopens
                 ChatStateService.UpdateAgentFromMessage(message);
-
-                // Add main agent message
-                ChatStateService.ChatMessages.Add(new ChatMessage
-                {
-                    ConversationId = message.ConversationId,
-                    Text = message.Text,
-                    Type = MessageType.Assistant,
-                    Timestamp = message.Timestamp,
-                    QuickReplies = message.QuickReplies,
-                    AgentName = message.AgentName ?? "Morgana",
-                    AgentCompleted = false,
-                    RichCard = message.RichCard
-                });
-
-                // Reset sending state - message received via SignalR
                 ChatStateService.IsSending = false;
-
                 StateHasChanged();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in HandleMessageReceived: {ex.Message}");
+                Logger.LogError(ex, "Error in HandleMessageReceived");
             }
-            await Task.CompletedTask;
         });
     }
 
@@ -397,11 +384,14 @@
     /// <returns>True when at least one reply was recovered.</returns>
     private async Task<bool> DeliverMissedRepliesAsync()
     {
+        // What Morgana wrote past the latest reply this client has
         IReadOnlyList<ChannelMessage> missedReplies = await ConversationLifecycleService.GetMissedRepliesAsync();
 
+        // In order, each through the handler a push takes
         foreach (ChannelMessage missedReply in missedReplies)
             await HandleMessageReceivedAsync(missedReply);
 
+        // The caller treats a recovery as the turn having been answered
         return missedReplies.Count > 0;
     }
 
@@ -419,9 +409,11 @@
             return;
         }
 
+        // The turn was answered in the meantime: there is nothing to settle
         if (!ConversationLifecycleService.IsAwaitingReply)
             return;
 
+        // The reply exists in Morgana's record: it goes on screen and the turn is no longer silent
         if (await DeliverMissedRepliesAsync())
             return;
 
@@ -429,6 +421,7 @@
         if (!ConversationLifecycleService.IsAwaitingReply)
             return;
 
+        // Morgana really has nothing: the composer is freed with a notice
         ConversationLifecycleService.AbandonTurn();
         StateHasChanged();
     }
@@ -442,7 +435,6 @@
     /// Starts streaming mode if needed and buffers chunks for typewriter effect.
     /// </summary>
     /// <param name="chunkText">Partial response text to append</param>
-    /// <returns>Task representing the async chunk handling</returns>
     private async Task HandleStreamChunkReceivedAsync(string chunkText)
     {
         // Marshal onto the circuit thread: the first chunk causes StreamingService.HandleChunkAsync
@@ -458,7 +450,7 @@
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in HandleStreamChunkReceived: {ex.Message}");
+                Logger.LogError(ex, "Error in HandleStreamChunkReceived");
             }
         });
     }
@@ -470,11 +462,9 @@
     /// <summary>
     /// Handles keyboard events in textarea (Enter to send, Shift+Enter for newline).
     /// </summary>
-    /// <param name="e">Keyboard event args</param>
-    /// <returns>Task representing the async key handling</returns>
     private async Task HandleKeyPressAsync(KeyboardEventArgs e)
     {
-        // Send message on Enter (without Shift)
+        // Shift+Enter is left to the textarea as a newline
         if (e is { Key: "Enter", ShiftKey: false })
             await SendMessageAsync();
     }
@@ -485,10 +475,9 @@
     /// </summary>
     /// <param name="reply">Selected quick reply definition</param>
     /// <param name="message">Message containing the quick replies</param>
-    /// <returns>Task representing the async selection handling</returns>
     private async Task SelectQuickReplyAsync(QuickReply reply, ChatMessage message)
     {
-        // Prevent multiple selections
+        // A row answers once: a second click on it would send a second turn
         if (message.SelectedQuickReplyId != null)
             return;
 
@@ -511,6 +500,7 @@
     /// </summary>
     private void ShowConfirmModal()
     {
+        // Starting over discards the transcript: the visitor must confirm first
         showConfirmModal = true;
         StateHasChanged();
     }
@@ -520,6 +510,7 @@
     /// </summary>
     private void HideConfirmModal()
     {
+        // The visitor kept the conversation
         showConfirmModal = false;
         StateHasChanged();
     }
@@ -548,8 +539,12 @@
     }
 
 
+    /// <summary>
+    /// Removes a banner that faded or was closed.
+    /// </summary>
     private void HandleMessageDismissed(ChannelMessage message)
     {
+        // The banner leaves the list so it stops rendering
         ChatStateService.DismissTemporaryMessage(message);
         StateHasChanged();
     }
@@ -558,48 +553,52 @@
     // UI STATE QUERIES
     // =========================================================================
 
+    /// <summary>
+    /// True when the composer is locked or holds nothing to send.
+    /// </summary>
     private bool IsSendButtonDisabled =>
-        !ChatStateService.IsConnected ||
-        ChatStateService.IsSending ||
-        string.IsNullOrWhiteSpace(inputText) ||
-        !ChatStateService.IsInitialized ||
-        ChatStateService.HasActiveQuickReplies() ||
-        ChatStateService.HasTypingIndicator() ||
-        IsAwaitingFirstBackendMessage ||
-        ChatStateService.IsConversationDeadFromDust();
+        IsTextareaDisabled || string.IsNullOrWhiteSpace(inputText);
 
+    /// <summary>
+    /// True when the visitor can start over: a conversation exists and the chat is live or terminally spent.
+    /// </summary>
     private bool IsNewConversationButtonVisible =>
+        // The bootstrap has run: before it there is nothing to start over from
         ChatStateService.HasCheckedStorage
+        // A conversation exists, so there is one to end
         && !string.IsNullOrWhiteSpace(ChatStateService.ConversationId)
-        // A dust-dead conversation MUST always expose its only escape hatch, even if
-        // IsConnected/IsInitialized/ChatMessages momentarily say otherwise — the
-        // terminal banner never fades, so a hidden button would strand the user.
+        // A dust-dead conversation always shows its only way out, whatever the gates below say:
+        // its banner never fades, so a hidden button would strand the visitor
         && (ChatStateService.IsConversationDeadFromDust()
+            // Otherwise only on a live chat: connected to Morgana...
             || (ChatStateService.IsConnected
+                // ...past the start or resume...
                 && ChatStateService.IsInitialized
+                // ...with Morgana having spoken at least once
                 && ChatStateService.ChatMessages.Count > 0));
 
+    /// <summary>
+    /// True when the composer must stay shut because no turn can be sent right now.
+    /// </summary>
     private bool IsTextareaDisabled =>
+        // Offline: a reply would be pushed to a connection that is not there
         !ChatStateService.IsConnected ||
+        // A turn is in flight: one turn at a time
         ChatStateService.IsSending ||
+        // The start or resume has not finished: there is no conversation to write into yet
         !ChatStateService.IsInitialized ||
+        // Quick replies are waiting: the visitor answers with a button
         ChatStateService.HasActiveQuickReplies() ||
+        // Morgana is still answering, including a turn resumed after a reload
         ChatStateService.HasTypingIndicator() ||
+        // The loader is up: a turn typed now would race the presentation
         IsAwaitingFirstBackendMessage ||
-        // Conversation is dust-dead: the input is locked so the user can't waste a
-        // keystroke on a turn the backend will reject — the terminal banner (pushed
-        // proactively at end of turn) and the New Conversation button are the only
-        // affordances left.
+        // Dust budget spent: Morgana would reject the turn, only New Conversation is left
         ChatStateService.IsConversationDeadFromDust();
 
     /// <summary>
-    /// True while the magical loader is still spinning — Morgana has connected and
-    /// the conversation has started, but the first backend message (the presentation,
-    /// or the rehydrated history on resume) has not landed yet. Mirrors the loader's
-    /// own <c>ChatMessages.Count == 0</c> condition and is the Cauldron analogue of
-    /// Rune's initial <c>awaitingResponse = true</c> gate: typing/sending into this
-    /// window would race the presentation and scramble the conversation, so the input
-    /// stays locked until Morgana has spoken once.
+    /// True while the loader is up: the presentation, or the history on a resume, has not landed
+    /// yet. Same condition as the loader's own in the markup.
     /// </summary>
     private bool IsAwaitingFirstBackendMessage =>
         ChatStateService.ChatMessages.Count == 0;
@@ -609,13 +608,11 @@
     // =========================================================================
 
     /// <summary>
-    /// Disposes component resources.
-    /// Unsubscribes from SignalR events and stops connection.
+    /// Unsubscribes from the services that outlive the page and stops the connection.
     /// </summary>
-    /// <returns>ValueTask representing the async dispose operation</returns>
     public async ValueTask DisposeAsync()
     {
-        // Unsubscribe from events
+        // The services are scoped to the circuit and would keep calling a disposed page
         SignalRService.OnMessageReceived -= HandleMessageReceivedAsync;
         SignalRService.OnStreamChunkReceived -= HandleStreamChunkReceivedAsync;
         if (onConnectionStateChanged is not null)
@@ -625,7 +622,10 @@
         if (onReplyDeadlineExpired is not null)
             ConversationLifecycleService.OnReplyDeadlineExpired -= onReplyDeadlineExpired;
 
+        // The typewriter must not tick into a page that is gone
         await StreamingService.DisposeAsync();
+
+        // Closes the hub connection that belongs to this visitor
         await SignalRService.StopAsync();
     }
 }

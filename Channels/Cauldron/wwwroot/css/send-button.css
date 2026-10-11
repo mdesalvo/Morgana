@@ -134,15 +134,6 @@
     }
 }
 
-@keyframes fade-out {
-    0%, 85% {
-        opacity: 1;
-    }
-    100% {
-        opacity: 0;
-    }
-}
-
 .send-button.sending .cauldron-icon {
     animation: cauldronShake 1.5s ease-in-out infinite;
 }

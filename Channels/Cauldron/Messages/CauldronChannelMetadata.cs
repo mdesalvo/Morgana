@@ -9,6 +9,9 @@ namespace Cauldron.Messages;
 /// </summary>
 public static class CauldronChannelMetadata
 {
+    /// <summary>
+    /// The handshake that Cauldron presents to Morgana when it starts a conversation.
+    /// </summary>
     public static readonly ChannelMetadata Profile = new()
     {
         Coordinates = new ChannelCoordinates

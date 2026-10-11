@@ -7,7 +7,7 @@
     @onclick="OnClick"
     disabled="@IsDisabled"
     aria-label="@(IsSending ? "Sending message" : "Send message")"
-    class="send-button @(IsSending ? "sending" : "") @(IsSpecializedAgent ? "agent" : "morgana")">
+    class="send-button @(IsSending ? "sending" : "") @AgentClass">
     <span class="cauldron-wrapper" aria-hidden="true">
         <span class="cauldron-icon">
             <svg viewBox="115 500 160 250" xmlns="http://www.w3.org/2000/svg" class="cauldron-svg" preserveAspectRatio="xMidYMid meet">
@@ -34,20 +34,27 @@
 </button>
 
 @code {
+    /// <summary>
+    /// CSS class that themes the button after the agent that is answering.
+    /// </summary>
     [Parameter]
-    public string AgentName { get; set; } = "Morgana";
+    public string AgentClass { get; set; } = string.Empty;
 
+    /// <summary>
+    /// True while a message is in flight: the button announces and animates the sending state.
+    /// </summary>
     [Parameter]
     public bool IsSending { get; set; }
 
+    /// <summary>
+    /// True when sending is not allowed right now.
+    /// </summary>
     [Parameter]
     public bool IsDisabled { get; set; }
 
+    /// <summary>
+    /// Raised when the visitor presses the button.
+    /// </summary>
     [Parameter]
     public EventCallback OnClick { get; set; }
-
-    // Specialized agents are named "Morgana (Billing)"; the base one is plain "Morgana"
-    private bool IsSpecializedAgent =>
-        !string.IsNullOrEmpty(AgentName) && AgentName.Contains("(") && AgentName.Contains(")");
 }
-

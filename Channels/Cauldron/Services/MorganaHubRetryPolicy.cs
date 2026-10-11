@@ -38,10 +38,12 @@ public sealed class MorganaHubRetryPolicy : IRetryPolicy
     /// </summary>
     public TimeSpan? NextRetryDelay(RetryContext retryContext)
     {
+        // The quick schedule covers the opening attempts and the steady one every attempt after
         TimeSpan baseDelay = retryContext.PreviousRetryCount < QuickRetryDelays.Length
             ? QuickRetryDelays[retryContext.PreviousRetryCount]
             : SteadyRetryDelay;
 
+        // Jitter spreads the circuits that lost Morgana together
         return baseDelay + baseDelay * (Random.Shared.NextDouble() * MaximumJitterShare);
     }
 }

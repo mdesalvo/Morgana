@@ -20,10 +20,15 @@
 
 @code {
     /// <summary>
+    /// Seconds that a notice stays up when its message does not say.
+    /// </summary>
+    private const int DefaultDurationSeconds = 10;
+
+    /// <summary>
     /// The channel message to display in the banner.
     /// </summary>
     [Parameter]
-    public ChannelMessage Message { get; set; } = null!;
+    public required ChannelMessage Message { get; set; }
 
     /// <summary>
     /// Callback invoked when the message is auto-dismissed after duration expires.
@@ -34,11 +39,11 @@
     public EventCallback<ChannelMessage> OnDismissed { get; set; }
 
     /// <summary>
-    /// Total duration in seconds before auto-dismiss.
-    /// Default: 10 seconds (8s visible + 2s fade-out).
+    /// Total duration in seconds before auto-dismiss (8s visible + 2s fade-out by default).
+    /// Null means the default.
     /// </summary>
     [Parameter]
-    public int DurationSeconds { get; set; } = 10;
+    public int? DurationSeconds { get; set; }
 
     /// <summary>
     /// Controls banner visibility (for smooth mount/unmount).
@@ -48,7 +53,7 @@
     /// <summary>
     /// Tracks if banner is in fading state (last 2 seconds before removal).
     /// </summary>
-    private bool isFading = false;
+    private bool isFading;
 
     /// <summary>
     /// Cancellation token for cleanup on component disposal.
@@ -63,63 +68,70 @@
     private bool IsTerminal =>
         string.Equals(Message.ErrorReason, ChannelErrorReasons.DustBudgetExhausted, StringComparison.Ordinal);
 
+    /// <summary>
+    /// True for a notice that reports an error rather than a warning.
+    /// </summary>
+    private bool IsError =>
+        string.Equals(Message.MessageType, ChannelMessageTypes.Error, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Starts the countdown of a transient notice.
+    /// </summary>
     protected override void OnInitialized()
     {
         // Transient notices fade away; a terminal notice stays put until the user acts.
-        if (!IsTerminal)
-            StartAutoDismissTimer();
-    }
+        if (IsTerminal)
+            return;
 
-    /// <summary>
-    /// Starts the auto-dismiss timer with fade-out animation.
-    /// Timeline: (duration-2)s visible → 2s fading → dismiss
-    /// </summary>
-    private void StartAutoDismissTimer()
-    {
         // Cancelled on disposal, so a banner removed early does not keep a timer running
         cancellationTokenSource = new CancellationTokenSource();
 
+        // Detached on purpose: the caller renders the banner now and must not await its lifetime
+        _ = DismissAfterDurationAsync(cancellationTokenSource.Token);
+    }
+
+    /// <summary>
+    /// Keeps the banner visible, fades it out and hands it back to the parent.
+    /// Timeline: (duration-2)s visible → 2s fading → dismiss
+    /// </summary>
+    private async Task DismissAfterDurationAsync(CancellationToken cancellationToken)
+    {
         // The fade is the tail of the total duration, not an extra: a 10s banner sits still for 8s
         // and fades for 2. Floored at 1s so a very short DurationSeconds still shows something.
-        int visibleDuration = Math.Max(1, DurationSeconds - 2) * 1000;
+        int visibleDuration = Math.Max(1, (DurationSeconds ?? DefaultDurationSeconds) - 2) * 1000;
         const int fadeDuration = 2000;
 
-        // Detached on purpose: the caller renders the banner now and must not await its lifetime
-        _ = Task.Run(async () =>
+        try
         {
-            try
-            {
-                // Phase 1: fully visible, no styling change
-                await Task.Delay(visibleDuration, cancellationTokenSource.Token);
+            // Phase 1: fully visible, no styling change
+            await Task.Delay(visibleDuration, cancellationToken);
 
-                // Phase 2: the "fading" class hands the fade-out over to CSS
-                isFading = true;
-                await InvokeAsync(StateHasChanged);
+            // Phase 2: the "fading" class hands the fade-out over to CSS
+            isFading = true;
+            await InvokeAsync(StateHasChanged);
 
-                await Task.Delay(fadeDuration, cancellationTokenSource.Token);
+            await Task.Delay(fadeDuration, cancellationToken);
 
-                // Phase 3: hide the markup once the animation has actually finished
-                isVisible = false;
-                await InvokeAsync(StateHasChanged);
+            // Phase 3: hide the markup once the animation has actually finished
+            isVisible = false;
+            await InvokeAsync(StateHasChanged);
 
-                // Hand the message back so the parent drops it from its list: the component alone
-                // cannot remove itself from a collection it does not own. Dispatched through
-                // InvokeAsync because this still runs on the timer thread: invoked directly, the
-                // parent's StateHasChanged throws off-dispatcher, the exception dies inside this
-                // fire-and-forget task and the emptied container silently never leaves the DOM.
-                await InvokeAsync(() => OnDismissed.InvokeAsync(Message));
-            }
-            catch (TaskCanceledException)
-            {
-                // Disposed mid-wait: nothing to clean up here, Dispose owns the token source
-            }
-        }, cancellationTokenSource.Token);
+            // Hand the message back so the parent drops it from its list: the component alone
+            // cannot remove itself from a collection it does not own. Dispatched through
+            // InvokeAsync so the parent's repaint always runs on the circuit: an exception thrown
+            // off it would die inside this detached task and the emptied container would never
+            // leave the DOM.
+            await InvokeAsync(() => OnDismissed.InvokeAsync(Message));
+        }
+        catch (TaskCanceledException)
+        {
+            // Disposed mid-wait: nothing to clean up here, Dispose owns the token source
+        }
     }
 
     /// <summary>
     /// Gets the appropriate icon based on error reason.
     /// </summary>
-    /// <returns>Emoji icon string</returns>
     private string GetIcon()
     {
         return Message.ErrorReason switch
@@ -133,15 +145,16 @@
     /// <summary>
     /// Gets the CSS class for banner styling.
     /// </summary>
-    /// <returns>"dust-exhausted" for the terminal notice, "error" for errors, empty for warnings.</returns>
     private string GetBannerClass()
     {
-        // Checked first: the terminal notice gets a calm purple of its own, never the alarming
-        // red of an error, which would misread as something the user could retry past.
-        if (IsTerminal)
-            return "dust-exhausted";
-
-        return string.Equals(Message.MessageType, ChannelMessageTypes.Error, StringComparison.OrdinalIgnoreCase) ? "error" : "";
+        // The terminal notice is matched first: it gets a calm purple of its own, never the
+        // alarming red of an error, which would misread as something the user could retry past.
+        return (IsTerminal, IsError) switch
+        {
+            (true, _) => "dust-exhausted",
+            (_, true) => "error",
+            _ => ""
+        };
     }
 
     /// <summary>
@@ -149,7 +162,7 @@
     /// </summary>
     public void Dispose()
     {
-        // Cancelling first unblocks the detached task, which then exits through its
+        // Cancelling first unblocks the delayed task, which then exits through its
         // TaskCanceledException arm instead of firing OnDismissed on a dead component.
         cancellationTokenSource?.Cancel();
         cancellationTokenSource?.Dispose();

@@ -12,10 +12,19 @@ namespace Cauldron.Services;
 /// </summary>
 public class SignalRService : IAsyncDisposable
 {
+    /// <summary>Supplies Morgana's base address.</summary>
     private readonly IConfiguration configuration;
+
+    /// <summary>Mints the token that authenticates every connection attempt.</summary>
     private readonly MorganaAuthHandler authHandler;
+
+    /// <summary>Paces the first connection attempts and the automatic reconnection.</summary>
     private readonly IRetryPolicy retryPolicy;
+
+    /// <summary>The hub connection; null until started and again after being stopped.</summary>
     private HubConnection? hubConnection;
+
+    /// <summary>Receives the connection lifecycle log lines.</summary>
     private readonly ILogger logger;
 
     /// <summary>
@@ -58,6 +67,9 @@ public class SignalRService : IAsyncDisposable
     /// </summary>
     public bool IsConnected => hubConnection?.State == HubConnectionState.Connected;
 
+    /// <summary>
+    /// Creates the SignalR client of one chat session.
+    /// </summary>
     public SignalRService(IConfiguration configuration, MorganaAuthHandler authHandler, IRetryPolicy retryPolicy, ILogger logger)
     {
         this.configuration = configuration;
@@ -70,7 +82,6 @@ public class SignalRService : IAsyncDisposable
     /// Opens the hub connection and wires up the backend event subscriptions. Completes only once
     /// connected: while Morgana is unreachable it keeps retrying at the pace of the retry policy.
     /// </summary>
-    /// <returns>Task representing the async start operation</returns>
     /// <exception cref="OperationCanceledException">The service was stopped before a connection was established.</exception>
     public async Task StartAsync()
     {
@@ -78,6 +89,7 @@ public class SignalRService : IAsyncDisposable
         if (hubConnection != null)
             return;
 
+        // Validated at startup, so it is present and absolute
         string apiBaseUrl = configuration["Cauldron:MorganaURL"]!;
 
         hubConnection = new HubConnectionBuilder()
@@ -106,12 +118,14 @@ public class SignalRService : IAsyncDisposable
                 "📩 SignalR message received: {AgentName} -> {ConversationId} (type: {MessageType}, completed: {AgentCompleted})",
                 message.AgentName, message.ConversationId, message.MessageType, message.AgentCompleted);
 
+            // Subscribers put the message on screen; with none, it is dropped
             await (OnMessageReceived?.Invoke(message) ?? Task.CompletedTask);
         });
 
         // Streaming chunks: forwarded raw and unlogged, they arrive one per token
         hubConnection.On<string>("ReceiveStreamChunk", async (chunkText) =>
         {
+            // Subscribers feed the typewriter; with none, the chunk is dropped
             await (OnStreamChunkReceived?.Invoke(chunkText) ?? Task.CompletedTask);
         });
 
@@ -141,7 +155,10 @@ public class SignalRService : IAsyncDisposable
             OnConnectionStateChanged?.Invoke(true);
         };
 
+        // Lets StopAsync end a first connection that keeps failing
         startCancellation = new CancellationTokenSource();
+
+        // Completes only once Morgana answers
         await ConnectWithRetriesAsync(hubConnection, startCancellation.Token);
         logger.LogInformation("✅ SignalR connected and listening for messages");
 
@@ -153,17 +170,19 @@ public class SignalRService : IAsyncDisposable
     /// <summary>
     /// Stops the SignalR connection gracefully.
     /// </summary>
-    /// <returns>Task representing the async stop operation</returns>
     public async Task StopAsync()
     {
+        // Nothing to stop when no connection was ever built
         if (hubConnection != null)
         {
             // Ends a first connection still being attempted, which would otherwise outlive the circuit
             startCancellation?.Cancel();
 
+            // Closes the connection and releases the groups held on the server
             await hubConnection.StopAsync();
             await hubConnection.DisposeAsync();
 
+            // The attempts are over: the token source has no one left to cancel
             startCancellation?.Dispose();
             startCancellation = null;
 
@@ -174,6 +193,7 @@ public class SignalRService : IAsyncDisposable
             lock (joinedConversationsLock)
                 joinedConversations.Clear();
 
+            // The page shows Offline now that the connection is gone
             OnConnectionStateChanged?.Invoke(false);
             logger.LogWarning("🛑 SignalR connection stopped");
         }
@@ -184,13 +204,13 @@ public class SignalRService : IAsyncDisposable
     /// conversation's messages. The subscription outlives reconnects until it is left.
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation to join</param>
-    /// <returns>Task representing the async join operation</returns>
     public async Task JoinConversation(string conversationId)
     {
         // Recorded even when the join below cannot go out: a reconnect in progress joins it then
         lock (joinedConversationsLock)
             joinedConversations.Add(conversationId);
 
+        // Connected: the server adds this connection to the conversation's group right away
         if (hubConnection?.State == HubConnectionState.Connected)
         {
             await hubConnection.InvokeAsync("JoinConversation", conversationId);
@@ -208,7 +228,6 @@ public class SignalRService : IAsyncDisposable
     /// Leaves a conversation group to stop receiving messages for that conversation.
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation to leave</param>
-    /// <returns>Task representing the async leave operation</returns>
     public async Task LeaveConversation(string conversationId)
     {
         // Forgotten even while disconnected, so a later reconnect does not join it again
@@ -218,6 +237,7 @@ public class SignalRService : IAsyncDisposable
         // Nothing to leave when disconnected: the group membership died with the connection
         if (hubConnection?.State == HubConnectionState.Connected)
         {
+            // The server drops this connection from the group so nothing more is pushed to it
             await hubConnection.InvokeAsync("LeaveConversation", conversationId);
             logger.LogInformation("👋 Left SignalR group: {ConversationId}", conversationId);
         }
@@ -230,17 +250,21 @@ public class SignalRService : IAsyncDisposable
     /// </summary>
     private async Task ConnectWithRetriesAsync(HubConnection connection, CancellationToken cancellationToken)
     {
+        // Handed to the retry policy so it can tell how long Morgana has been unreachable
         Stopwatch elapsedSinceFirstAttempt = Stopwatch.StartNew();
 
+        // Loops until connected: only a cancellation or a policy that gives up leaves it
         for (long previousAttempts = 0; ; previousAttempts++)
         {
             try
             {
+                // Success ends the loop: the connection is up
                 await connection.StartAsync(cancellationToken);
                 return;
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {
+                // The policy decides how long to wait before the next attempt
                 TimeSpan? retryDelay = retryPolicy.NextRetryDelay(new RetryContext
                 {
                     PreviousRetryCount = previousAttempts,
@@ -256,6 +280,7 @@ public class SignalRService : IAsyncDisposable
                 logger.LogWarning("⚠️ Morgana unreachable (attempt {Attempt}): {Reason}. Retrying in {RetryDelay}",
                     previousAttempts + 1, ex.Message, retryDelay.Value);
 
+                // Cancelled by StopAsync so a stopped service does not keep retrying
                 await Task.Delay(retryDelay.Value, cancellationToken);
             }
         }
@@ -268,6 +293,7 @@ public class SignalRService : IAsyncDisposable
     /// </summary>
     private async Task RejoinConversationsAsync()
     {
+        // Copied under the lock so the joins below run without holding it
         string[] conversationIds;
         lock (joinedConversationsLock)
             conversationIds = [.. joinedConversations];
@@ -276,15 +302,18 @@ public class SignalRService : IAsyncDisposable
         if (hubConnection is not { } connection)
             return;
 
+        // Each conversation is rejoined on its own so one failure does not strand the others
         foreach (string conversationId in conversationIds)
         {
             try
             {
+                // The new connection id is in no group until it asks to be
                 await connection.InvokeAsync("JoinConversation", conversationId);
                 logger.LogInformation("✅ Rejoined SignalR group after reconnect: {ConversationId}", conversationId);
             }
             catch (Exception ex)
             {
+                // Skipped: the next reconnect retries it
                 logger.LogWarning(ex, "⚠️ Cannot rejoin SignalR group after reconnect: {ConversationId}", conversationId);
             }
         }
@@ -294,11 +323,12 @@ public class SignalRService : IAsyncDisposable
     /// Disposes the SignalR connection resources.
     /// Called by the container when the visitor's circuit closes, after the page's own <see cref="StopAsync"/>.
     /// </summary>
-    /// <returns>ValueTask representing the async dispose operation</returns>
     public async ValueTask DisposeAsync()
     {
+        // Ends a first connection attempt that would otherwise outlive the circuit
         startCancellation?.Cancel();
 
+        // Reached with a live connection only when the page never stopped it
         if (hubConnection != null)
             await hubConnection.DisposeAsync();
 

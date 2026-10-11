@@ -72,6 +72,7 @@ public class MarkdownRendererService : IMarkdownRendererService
         if (html.StartsWith("<p>", StringComparison.Ordinal) && html.EndsWith("</p>", StringComparison.Ordinal))
             html = html[3..^4];
 
+        // Safe to render as markup: it went through the sanitizer in Render
         return new MarkupString(html);
     }
 

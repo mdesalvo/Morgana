@@ -11,6 +11,7 @@ CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
 
+// Configuration and logging come with the builder: everything below registers on it
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // ==============================================================================
@@ -32,9 +33,9 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 // else (a bare host:port, a path, a scheme nobody serves) is parsed happily and only fails
 // once the first call is already on its way.
 static bool IsReachableUrl(string? value) =>
-    Uri.TryCreate(value, UriKind.Absolute, out Uri? url)
-    && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps);
+    Uri.TryCreate(value, UriKind.Absolute, out Uri? url) && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps);
 
+// One entry per setting: null when it is sound, otherwise the sentence that names the problem
 string?[] requiredSettings =
 [
     IsReachableUrl(builder.Configuration["Cauldron:MorganaURL"])
@@ -46,8 +47,10 @@ string?[] requiredSettings =
         ? "Cauldron:Authentication:SymmetricKey is required and must match Morgana's Authentication:Issuers entry for Name=cauldron. Supply it through user-secrets or an environment variable."
         : null
 ];
+// Any problem is fatal: the list is printed in full and Cauldron exits without starting
 if (requiredSettings.Any(problem => problem is not null))
 {
+    // Stderr rather than the logger: no host exists yet at this point
     Console.Error.WriteLine("Cauldron cannot start with the configuration it was given:");
     foreach (string problem in requiredSettings.OfType<string>())
         Console.Error.WriteLine($"  - {problem}");
@@ -60,8 +63,11 @@ if (requiredSettings.Any(problem => problem is not null))
 // Blazor Server provides server-side rendering with real-time UI updates via SignalR.
 // The UI state lives on the server and DOM updates are sent to the client via WebSocket.
 
-builder.Services.AddRazorPages();       // Razor Pages, used only to serve _Host.cshtml
-builder.Services.AddServerSideBlazor(); // Blazor Server: UI state lives here, DOM diffs go over SignalR
+// Razor Pages serve only _Host.cshtml, the shell that boots the Blazor circuit
+builder.Services.AddRazorPages();
+
+// The chat state lives on the server and the DOM diffs travel to the browser over SignalR
+builder.Services.AddServerSideBlazor();
 
 // ============================================================================
 // 2. HTTP CLIENT CONFIGURATION
@@ -77,7 +83,8 @@ builder.Services.AddTransient<MorganaAuthHandler>();
 // Used by Index.razor and ConversationHistoryService for Morgana API calls
 builder.Services.AddHttpClient("Morgana", client =>
 {
-    client.BaseAddress = new Uri(builder.Configuration["Cauldron:MorganaURL"]!); // Morgana (Backend)
+    // Already validated by the configuration gate above: every relative path resolves against Morgana
+    client.BaseAddress = new Uri(builder.Configuration["Cauldron:MorganaURL"]!);
 }).AddHttpMessageHandler<MorganaAuthHandler>();
 
 // Default scoped HttpClient resolved from the named "Morgana" registration
@@ -88,6 +95,7 @@ builder.Services.AddScoped(sp =>
 // ==============================================================================
 // 3. LOGGING INFRASTRUCTURE
 // ==============================================================================
+// One shared logger under the category "Cauldron", so services take a plain ILogger
 builder.Services.AddSingleton<ILogger>(sp =>
     sp.GetRequiredService<ILoggerFactory>().CreateLogger("Cauldron"));
 
@@ -116,6 +124,8 @@ builder.Services.AddSingleton<IMarkdownRendererService, MarkdownRendererService>
 // Stores conversation ID in browser localStorage with automatic AES-256 encryption
 // Enables seamless conversation resume across browser sessions
 builder.Services.AddScoped<IConversationStorageService, ProtectedLocalStorageService>();
+
+// Reads back what Morgana kept of a conversation
 builder.Services.AddScoped<IConversationHistoryService, ConversationHistoryService>();
 
 // Chat state, conversation lifecycle and streaming services
@@ -130,17 +140,21 @@ builder.Services.AddScoped<IStreamingService, StreamingService>();
 // ============================================================================
 // Build the application and configure the HTTP request processing pipeline.
 
+// Registrations are frozen here: the pipeline is configured on the built application
 WebApplication app = builder.Build();
 
 // Production-only middleware
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error");  // Global exception handler page
-    app.UseHsts();                      // HTTP Strict Transport Security
+    // Visitors see the error page instead of a stack trace
+    app.UseExceptionHandler("/Error");
+
+    // Browsers that reached Cauldron once keep to HTTPS afterwards
+    app.UseHsts();
 }
 
-// Request pipeline configuration
-app.UseHttpsRedirection();              // Redirect HTTP → HTTPS
+// Plain HTTP requests are bounced to HTTPS before anything else sees them
+app.UseHttpsRedirection();
 
 // ============================================================================
 // 6. EMBEDDING CONTROL (frame-ancestors)
@@ -152,26 +166,36 @@ app.UseHttpsRedirection();              // Redirect HTTP → HTTPS
 // Closed unless configured: with no origins listed, only Cauldron's own pages may frame it
 // ('self', which is what makes /widget/morgana.html work out of the box). Each origin an
 // operator adds to Cauldron:Widget:AllowedEmbedOrigins is a site allowed to host the widget.
+// Origins an operator has allowed to frame the widget; none by default
 string[] allowedEmbedOrigins = app.Configuration
     .GetSection("Cauldron:Widget:AllowedEmbedOrigins")
     .Get<string[]>() ?? [];
+// The policy value emitted on every response: Cauldron's own pages plus the listed origins
 string frameAncestors = allowedEmbedOrigins.Length > 0
     ? $"frame-ancestors 'self' {string.Join(' ', allowedEmbedOrigins)}"
     : "frame-ancestors 'self'";
+// The header goes out before the response starts, whichever endpoint answers
 app.Use(async (context, next) =>
 {
+    // Tells browsers which sites may frame the page
     context.Response.Headers.ContentSecurityPolicy = frameAncestors;
     await next();
 });
 
-app.UseStaticFiles();                   // Serve static files (CSS, JS, images)
-app.UseRouting();                       // Enable endpoint routing
+// Serves the stylesheets, scripts and images of the chat and the embeddable widget under /widget/
+app.UseStaticFiles();
 
-// Blazor Server endpoints
-app.MapBlazorHub();                     // SignalR hub carrying Blazor's own UI updates
-app.MapFallbackToPage("/_Host");        // Every unmatched route renders the single page (SPA behavior)
+// Endpoint routing is what the Blazor hub and the fallback page are mapped on
+app.UseRouting();
+
+// The hub that carries Blazor's own UI updates between the circuit and the browser
+app.MapBlazorHub();
+
+// Every unmatched route renders the single chat page
+app.MapFallbackToPage("/_Host");
 
 // Health check endpoint for monitoring (status + uptime)
+// Uptime is measured from here: the pipeline is fully built
 DateTimeOffset startedAt = DateTimeOffset.UtcNow;
 app.MapGet("/health", () => Results.Ok(new
 {
@@ -184,4 +208,5 @@ app.MapGet("/health", () => Results.Ok(new
 // ============================================================================
 // Start the application and listen for requests.
 
+// Blocks until the host is shut down
 await app.RunAsync();

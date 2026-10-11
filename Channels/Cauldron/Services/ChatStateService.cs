@@ -5,20 +5,15 @@ using Morgana.Contracts;
 namespace Cauldron.Services;
 
 /// <summary>
-/// Manages the chat UI state: message list, temporary messages, agent tracking and sending state.
-/// </summary>
-/// <summary>
 /// Holds every piece of UI state for one chat session: the message list, the transient banners,
 /// the active agent and the flags that gate the input. Scoped, so one instance per Blazor circuit.
 /// </summary>
 public class ChatStateService : IChatStateService
 {
-    private readonly IConfiguration _configuration;
-
-    public ChatStateService(IConfiguration configuration)
-    {
-        _configuration = configuration;
-    }
+    /// <summary>
+    /// Name of the base agent: the one that speaks when no specialist is engaged.
+    /// </summary>
+    public const string BaseAgentName = "Morgana";
 
     // =========================================================================
     // STATE
@@ -42,7 +37,7 @@ public class ChatStateService : IChatStateService
     /// <summary>
     /// Name of the currently active agent ("Morgana", "Morgana (Billing)", etc.).
     /// </summary>
-    public string CurrentAgentName { get; set; } = "Morgana";
+    public string CurrentAgentName { get; set; } = BaseAgentName;
 
     /// <summary>
     /// True when connected to SignalR and ready to receive messages.
@@ -118,36 +113,25 @@ public class ChatStateService : IChatStateService
     }
 
     /// <summary>
-    /// Removes the last typing indicator from the message list.
+    /// Removes the last typing indicator from the message list, if there is one.
     /// </summary>
-    /// <returns>True if a typing indicator was found and removed.</returns>
-    public bool RemoveTypingIndicator()
+    public void RemoveTypingIndicator()
     {
         // Last, not first: only the most recent turn can legitimately still be waiting
         ChatMessage? typingMessage = ChatMessages.LastOrDefault(m => m.IsTyping);
+
+        // No indicator means the turn already got its first chunk or its reply
         if (typingMessage != null)
-        {
             ChatMessages.Remove(typingMessage);
-            return true;
-        }
-        return false;
     }
 
     /// <summary>
     /// Adds a chat error message to both the temporary banner list and the permanent chat history.
     /// </summary>
-    public void AddChatError(string text, string errorReason, int? fadingDurationSeconds = 10)
+    public void AddChatError(string text, string errorReason, int? fadingDurationSeconds = null)
     {
         // The banner carries the technical detail and fades on its own
-        TemporaryMessages.Add(new ChannelMessage
-        {
-            ConversationId = ConversationId,
-            Text = text,
-            Timestamp = DateTime.UtcNow,
-            MessageType = ChannelMessageTypes.Error,
-            ErrorReason = errorReason,
-            FadingMessageDurationSeconds = fadingDurationSeconds
-        });
+        AddErrorBanner(text, errorReason, fadingDurationSeconds);
 
         // The chat line stays forever and is deliberately vague: it marks where the
         // conversation broke without leaving a status code in the transcript.
@@ -165,8 +149,9 @@ public class ChatStateService : IChatStateService
     /// <summary>
     /// Adds a temporary error banner (no permanent chat message).
     /// </summary>
-    public void AddErrorBanner(string text, string errorReason, int? fadingDurationSeconds = 10)
+    public void AddErrorBanner(string text, string errorReason, int? fadingDurationSeconds = null)
     {
+        // Stamped here with this conversation: the banner is born on this client, not received
         TemporaryMessages.Add(new ChannelMessage
         {
             ConversationId = ConversationId,
@@ -176,6 +161,24 @@ public class ChatStateService : IChatStateService
             ErrorReason = errorReason,
             FadingMessageDurationSeconds = fadingDurationSeconds
         });
+    }
+
+    /// <summary>
+    /// Shows a banner that Morgana sent, keeping at most one terminal dust-exhaustion notice on screen.
+    /// </summary>
+    public void AddTemporaryMessage(ChannelMessage message)
+    {
+        // The dust-exhausted notice is terminal and never fades, so further blocked sends must
+        // not stack duplicate persistent banners. Transient notices (rate limit) fade on their own.
+        bool isDustExhausted = string.Equals(
+            message.ErrorReason, ChannelErrorReasons.DustBudgetExhausted, StringComparison.Ordinal);
+
+        // The terminal banner is already showing: a second one would say nothing new
+        if (isDustExhausted && IsConversationDeadFromDust())
+            return;
+
+        // Shown as it arrived: Morgana already set its text and fade duration
+        TemporaryMessages.Add(message);
     }
 
     /// <summary>
@@ -197,6 +200,7 @@ public class ChatStateService : IChatStateService
     /// </summary>
     public void DismissTemporaryMessage(ChannelMessage message)
     {
+        // The banner faded or was closed by the user: it leaves the list so it stops rendering
         TemporaryMessages.Remove(message);
     }
 
@@ -221,29 +225,34 @@ public class ChatStateService : IChatStateService
         IsSpecializedAgent(agentName) ? "agent" : "morgana";
 
     /// <summary>
-    /// Gets the CSS color variable for the avatar border based on agent type.
-    /// </summary>
-    public string GetAvatarBorderColor(string? agentName) =>
-        IsSpecializedAgent(agentName ?? "Morgana") ? "var(--secondary-color)" : "var(--primary-color)";
-
-    /// <summary>
     /// Updates the current agent name based on a received SignalR message.
     /// </summary>
-    /// <returns>True if agent name was actually changed.</returns>
-    public bool UpdateAgentFromMessage(ChannelMessage message)
+    public void UpdateAgentFromMessage(ChannelMessage message)
     {
         // A completed agent hands control back, so the header returns to base Morgana even
         // though the message itself was signed by the specialist that just finished.
-        string newAgentName = message.AgentCompleted || string.IsNullOrEmpty(message.AgentName)
-            ? "Morgana"
+        CurrentAgentName = message.AgentCompleted || string.IsNullOrEmpty(message.AgentName)
+            ? BaseAgentName
             : message.AgentName;
+    }
 
-        if (!string.Equals(CurrentAgentName, newAgentName, StringComparison.OrdinalIgnoreCase))
+    /// <summary>
+    /// Sets the current agent from the specialist that Morgana reports engaged on a resumed conversation.
+    /// </summary>
+    public void ResumeAgent(string? activeAgent)
+    {
+        // The base agent is stored as a row of its own: it is not a specialist to put in parentheses
+        if (string.IsNullOrEmpty(activeAgent)
+            || string.Equals(activeAgent, BaseAgentName, StringComparison.OrdinalIgnoreCase))
         {
-            CurrentAgentName = newAgentName;
-            return true;
+            // No specialist engaged: Morgana herself
+            CurrentAgentName = BaseAgentName;
         }
-        return false;
+        else
+        {
+            // Specialists are stored lowercase while the header shows them capitalised
+            CurrentAgentName = $"{BaseAgentName} ({char.ToUpperInvariant(activeAgent[0]) + activeAgent[1..]})";
+        }
     }
 
     // =========================================================================
@@ -256,13 +265,6 @@ public class ChatStateService : IChatStateService
     /// </summary>
     public bool HasActiveQuickReplies() =>
         ChatMessages.Any(m => m is { QuickReplies: { Count: > 0 }, SelectedQuickReplyId: null, IsLastHistoryMessage: not false });
-
-    /// <summary>
-    /// True if any message has a rich card that is still the latest context
-    /// (live messages with IsLastHistoryMessage == null, or the last message of a resumed history).
-    /// </summary>
-    public bool HasActiveRichCard() =>
-        ChatMessages.Any(m => m is { RichCard: not null, IsLastHistoryMessage: not false });
 
     /// <summary>
     /// True if any message is currently showing a typing indicator.
@@ -280,21 +282,4 @@ public class ChatStateService : IChatStateService
     public bool IsConversationDeadFromDust() =>
         TemporaryMessages.Any(m =>
             string.Equals(m.ErrorReason, ChannelErrorReasons.DustBudgetExhausted, StringComparison.Ordinal));
-
-    /// <summary>
-    /// Resets all state for a fresh start.
-    /// </summary>
-    public void Reset()
-    {
-        ChatMessages.Clear();
-        TemporaryMessages.Clear();
-        ConversationId = string.Empty;
-        CurrentAgentName = "Morgana";
-        IsConnected = false;
-        IsSending = false;
-        IsInitialized = false;
-        HasCheckedStorage = false;
-        DustLevel = null;
-        LatestDeliveredTimestamp = DateTime.MinValue;
-    }
 }

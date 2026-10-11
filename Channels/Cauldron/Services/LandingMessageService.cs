@@ -8,9 +8,15 @@ namespace Cauldron.Services;
 /// </summary>
 public class LandingMessageService : ILandingMessageService
 {
+    /// <summary>The pool of loader lines that a visitor may be shown.</summary>
     private readonly string[] landingMessages;
+
+    /// <summary>Picks the line; also the lock that guards its own state.</summary>
     private readonly Random random = new Random();
 
+    /// <summary>
+    /// Reads the pool of loader lines from configuration.
+    /// </summary>
     public LandingMessageService(IConfiguration configuration)
     {
         // Falls back to a single hardcoded line so the loader is never left with nothing to say
@@ -27,6 +33,7 @@ public class LandingMessageService : ILandingMessageService
         // so the lock keeps two simultaneous page loads from corrupting its internal state.
         lock (random)
         {
+            // Any line of the pool is as good as another
             return landingMessages[random.Next(landingMessages.Length)];
         }
     }

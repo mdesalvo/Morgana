@@ -27,27 +27,48 @@ namespace Cauldron.Handlers;
 /// </remarks>
 public class MorganaAuthHandler : DelegatingHandler
 {
+    /// <summary>Key and algorithm that sign every token, shared with Morgana's entry for this channel.</summary>
     private readonly SigningCredentials _credentials;
+
+    /// <summary>Issuer claim that Morgana looks up among its declared channels.</summary>
     private readonly string _issuer;
+
+    /// <summary>Audience claim that Morgana requires on every token.</summary>
     private readonly string _audience;
+
+    /// <summary>Serializes and signs the tokens.</summary>
     private readonly JsonWebTokenHandler _tokenHandler = new();
 
+    /// <summary>
+    /// Reads the signing key and the token claims from <c>Cauldron:Authentication</c>.
+    /// </summary>
     public MorganaAuthHandler(IConfiguration configuration)
     {
+        // Everything the handler needs sits in one configuration section
         IConfigurationSection authSection = configuration.GetSection("Cauldron:Authentication");
+
+        // Without the key no token can be signed: startup fails here instead of on the first request
         string symmetricKey = authSection["SymmetricKey"]
             ?? throw new InvalidOperationException("Cauldron:Authentication:SymmetricKey is required for Cauldron authentication.");
+
+        // The defaults match what Morgana expects from an unmodified channel entry
         _issuer = authSection["Issuer"] ?? "cauldron";
         _audience = authSection["Audience"] ?? "morgana.ai";
+
+        // Signed with HMAC-SHA256 like Morgana's validator expects
         _credentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(symmetricKey)), SecurityAlgorithms.HmacSha256);
     }
 
+    /// <summary>
+    /// Signs the outgoing request with a fresh token before it reaches Morgana.
+    /// </summary>
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
         // Minted per request rather than cached: tokens live five minutes and a long-lived
         // circuit would otherwise keep presenting an expired one.
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken());
+        // The request continues down the pipeline now that it carries its credentials
         return base.SendAsync(request, cancellationToken);
     }
 
@@ -73,6 +94,7 @@ public class MorganaAuthHandler : DelegatingHandler
                 SigningCredentials = _credentials
             };
 
+        // Signed and serialized: the compact JWT that goes into the Bearer header or the hub query
         return _tokenHandler.CreateToken(descriptor);
     }
 }

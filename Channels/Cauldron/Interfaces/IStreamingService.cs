@@ -37,7 +37,7 @@ public interface IStreamingService : IAsyncDisposable
 
     /// <summary>
     /// Closes a response Morgana stopped sending, leaving what was revealed on screen as the
-    /// partial reply it is. Returns whether there was such a response to close.
+    /// partial reply it is. Does nothing when no response is being streamed.
     /// </summary>
-    bool AbandonStreaming();
+    void AbandonStreaming();
 }

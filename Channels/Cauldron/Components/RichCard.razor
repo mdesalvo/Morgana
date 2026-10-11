@@ -4,16 +4,14 @@
 @* Renders a rich card: header, then each component in declared order. *@
 
 <div class="rich-card">
-    @* Card header *@
     <div class="rich-card-header">
-        <h3 class="rich-card-title">@MarkdownRenderer.ToInlineHtml(Card!.Title)</h3>
+        <h3 class="rich-card-title">@MarkdownRenderer.ToInlineHtml(Card.Title)</h3>
         @if (!string.IsNullOrWhiteSpace(Card.Subtitle))
         {
             <p class="rich-card-subtitle">@MarkdownRenderer.ToInlineHtml(Card.Subtitle)</p>
         }
     </div>
 
-    @* Card body with components *@
     <div class="rich-card-body">
         @foreach (CardComponent component in Card.Components)
         {
@@ -29,7 +27,7 @@
     /// through untouched — no pre-sanitization step that would strip that Markdown away.
     /// </summary>
     [Parameter]
-    public Morgana.Contracts.RichCard? Card { get; set; }
+    public required Morgana.Contracts.RichCard Card { get; set; }
 
     /// <summary>
     /// The card currently on screen. A card is an immutable contract, so the same instance means

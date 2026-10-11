@@ -3,7 +3,7 @@
 
 @* Renders an image with optional caption. Lazy-loaded: cards may sit far up the history. *@
 
-<div class="rich-card-image rich-card-image-@Component.Size.ToString().ToLower()">
+<div class="rich-card-image rich-card-image-@Component.Size.ToString().ToLowerInvariant()">
     <img src="@Component.Src" 
          alt="@(Component.Alt ?? "Image")" 
          class="rich-card-image-content"

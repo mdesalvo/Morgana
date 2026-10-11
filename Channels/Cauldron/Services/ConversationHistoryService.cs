@@ -10,9 +10,15 @@ namespace Cauldron.Services;
 /// </summary>
 public class ConversationHistoryService : IConversationHistoryService
 {
+    /// <summary>Calls Morgana's conversation REST API with the channel's token.</summary>
     private readonly HttpClient _httpClient;
+
+    /// <summary>Receives the history fetch outcomes.</summary>
     private readonly ILogger _logger;
 
+    /// <summary>
+    /// Creates the history service of one chat session.
+    /// </summary>
     public ConversationHistoryService(
         HttpClient httpClient,
         ILogger logger)
@@ -28,9 +34,11 @@ public class ConversationHistoryService : IConversationHistoryService
         {
             _logger.LogInformation("Retrieving history for conversation {ConversationId}", conversationId);
 
+            // Morgana's persisted record of the conversation
             HttpResponseMessage response = await _httpClient.GetAsync(
                 $"/api/morgana/conversation/{conversationId}/history");
 
+            // The record was found: its messages go to the caller as they are
             if (response.IsSuccessStatusCode)
             {
                 ConversationHistoryResponse? history = await response.Content
@@ -39,6 +47,7 @@ public class ConversationHistoryService : IConversationHistoryService
                 _logger.LogInformation(
                     "Retrieved {MessagesLength} messages for conversation {ConversationId}", history?.Messages?.Length ?? 0, conversationId);
 
+                // The caller redraws the transcript or looks for missed replies in it
                 return history;
             }
 
@@ -54,10 +63,13 @@ public class ConversationHistoryService : IConversationHistoryService
             string errorContent = await response.Content.ReadAsStringAsync();
             _logger.LogError(
                 "Failed to retrieve history for {ConversationId}: {ResponseStatusCode} - {ErrorContent}", conversationId, response.StatusCode, errorContent);
+
+            // A history that cannot be read is reported as absent: the caller decides how to recover
             return null;
         }
         catch (Exception ex)
         {
+            // Morgana unreachable or the body unreadable: same outcome as any other failure
             _logger.LogError(ex, "Exception retrieving history for conversation {ConversationId}", conversationId);
             return null;
         }

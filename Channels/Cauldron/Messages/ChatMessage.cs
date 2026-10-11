@@ -1,3 +1,4 @@
+using Cauldron.Services;
 using Morgana.Contracts;
 
 namespace Cauldron.Messages;
@@ -54,7 +55,7 @@ public class ChatMessage
     /// Examples: "Morgana", "Morgana (Billing)", "Morgana (Contract)", ...
     /// Used to display agent avatar and header color.
     /// </summary>
-    public string AgentName { get; set; } = "Morgana";
+    public string AgentName { get; set; } = ChatStateService.BaseAgentName;
 
     /// <summary>
     /// Indicates whether the agent has completed its task after this message.
@@ -86,7 +87,6 @@ public class ChatMessage
     /// Indicates whether this message is a typing indicator.
     /// When true, displays animated three-dot typing indicator instead of text.
     /// </summary>
-
     public bool IsTyping { get; set; }
 
     /// <summary>
@@ -124,12 +124,6 @@ public enum MessageType
     /// Displayed on the left side with agent avatar and assistant styling.
     /// </summary>
     Assistant,
-
-    /// <summary>
-    /// Welcome or completion message with special styling.
-    /// Typically includes quick reply buttons for user interaction.
-    /// </summary>
-    Presentation,
 
     /// <summary>
     /// Error message with error styling.

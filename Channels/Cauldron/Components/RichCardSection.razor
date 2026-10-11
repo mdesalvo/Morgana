@@ -4,7 +4,6 @@
 @* Renders a section: a titled group that can nest further components inside itself. *@
 
 <div class="rich-card-section rich-card-section-depth-@Depth">
-    @* Section header *@
     <div class="rich-card-section-header">
         <h4 class="rich-card-section-title">@MarkdownRenderer.ToInlineHtml(Component.Title)</h4>
         @if (!string.IsNullOrWhiteSpace(Component.Subtitle))
@@ -13,7 +12,6 @@
         }
     </div>
 
-    @* Section body with nested components *@
     <div class="rich-card-section-body">
         @foreach (CardComponent child in Component.Components)
         {
@@ -25,11 +23,14 @@
 </div>
 
 @code {
+    /// <summary>
+    /// The section to render.
+    /// </summary>
     [Parameter]
     public required SectionComponent Component { get; set; }
 
     /// <summary>
-    /// Current nesting depth. Used for styling and validation.
+    /// Current nesting depth. Selects the CSS class that indents and de-emphasises nested sections.
     /// </summary>
     [Parameter]
     public int Depth { get; set; } = 1;

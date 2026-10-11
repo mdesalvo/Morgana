@@ -15,7 +15,10 @@ namespace Cauldron.Services;
 /// </remarks>
 public class StreamingService : IStreamingService
 {
+    /// <summary>Holds the message list that the streaming message is added to.</summary>
     private readonly IChatStateService _chatStateService;
+
+    /// <summary>Supplies the typewriter pace.</summary>
     private readonly IConfiguration _configuration;
 
     /// <summary>
@@ -25,8 +28,13 @@ public class StreamingService : IStreamingService
     /// </summary>
     private readonly Lock _sessionLock = new();
 
+    /// <summary>Holds the received text that the typewriter has not revealed yet.</summary>
     private string _streamingBuffer = string.Empty;
+
+    /// <summary>Releases the buffer into the message; null when no response is being typed out.</summary>
     private Timer? _typewriterTimer;
+
+    /// <summary>The message on screen that the typewriter is writing into; null between responses.</summary>
     private ChatMessage? _currentStreamingMessage;
 
     /// <summary>
@@ -60,6 +68,9 @@ public class StreamingService : IStreamingService
         }
     }
 
+    /// <summary>
+    /// Creates the streaming service of one chat session.
+    /// </summary>
     public StreamingService(IChatStateService chatState, IConfiguration configuration)
     {
         _chatStateService = chatState;
@@ -72,8 +83,9 @@ public class StreamingService : IStreamingService
     /// </summary>
     public async Task HandleChunkAsync(string chunkText)
     {
+        // Set only when a session begins here: the previous timer is disposed outside the lock
         Timer? leftoverTimer = null;
-        bool sessionStarted = false;
+        bool isNewSession = false;
 
         lock (_sessionLock)
         {
@@ -97,14 +109,17 @@ public class StreamingService : IStreamingService
                     IsStreaming = true
                 };
 
+                // On screen from the first chunk, empty, so the message appears where the typing indicator was
                 _chatStateService.ChatMessages.Add(_currentStreamingMessage);
+
+                // A previous session's leftovers must not leak into this response
                 _streamingBuffer = string.Empty;
 
                 // Typewriter pace, re-read per session so a config change needs no restart.
                 // Both fall back to their defaults on a missing, unparsable or non-positive value.
-                int.TryParse(_configuration["Cauldron:StreamingResponse:TypewriterTickMilliseconds"], NumberStyles.Integer, CultureInfo.InvariantCulture, out int tickMs);
-                if (tickMs <= 0)
-                    tickMs = 15;
+                int.TryParse(_configuration["Cauldron:StreamingResponse:TypewriterTickMilliseconds"], NumberStyles.Integer, CultureInfo.InvariantCulture, out int tickMilliseconds);
+                if (tickMilliseconds <= 0)
+                    tickMilliseconds = 15;
                 int.TryParse(_configuration["Cauldron:StreamingResponse:TypewriterTickChars"], NumberStyles.Integer, CultureInfo.InvariantCulture, out int tickChars);
                 if (tickChars <= 0)
                     tickChars = 1;
@@ -114,8 +129,8 @@ public class StreamingService : IStreamingService
                 leftoverTimer = _typewriterTimer;
 
                 // Chars-per-tick travels as the timer state, so the callback stays stateless
-                _typewriterTimer = new Timer(TypewriterTick, tickChars, 0, tickMs);
-                sessionStarted = true;
+                _typewriterTimer = new Timer(TypewriterTick, tickChars, 0, tickMilliseconds);
+                isNewSession = true;
             }
 
             // Chunks are queued, never rendered directly: the timer decides the pace at which
@@ -123,10 +138,12 @@ public class StreamingService : IStreamingService
             _streamingBuffer += chunkText;
         }
 
+        // Disposed outside the lock: waiting for an in-flight tick that needs the lock would deadlock
         if (leftoverTimer is not null)
             await leftoverTimer.DisposeAsync();
 
-        if (sessionStarted)
+        // The streaming message just appeared: the page repaints to show it
+        if (isNewSession)
             OnStateChanged?.Invoke();
     }
 
@@ -166,16 +183,17 @@ public class StreamingService : IStreamingService
     /// partial reply it is, because it is what Morgana actually said; the session is freed so the
     /// next turn does not write into a message belonging to the abandoned one.
     /// </summary>
-    public bool AbandonStreaming()
+    public void AbandonStreaming()
     {
         lock (_sessionLock)
         {
+            // No response was being streamed: nothing to close
             if (_currentStreamingMessage is null)
-                return false;
+                return;
 
+            // The message stays on screen as it is, no longer growing
             _currentStreamingMessage.IsStreaming = false;
             StopStreaming();
-            return true;
         }
     }
 
@@ -191,6 +209,7 @@ public class StreamingService : IStreamingService
             if (_currentStreamingMessage == null)
                 return;
 
+            // Nothing left to reveal: the session either ends here or waits for more text
             if (string.IsNullOrEmpty(_streamingBuffer))
             {
                 // Buffer drained and the server has spoken: the session is genuinely over. If the
@@ -211,7 +230,6 @@ public class StreamingService : IStreamingService
 
         // Raised outside the lock: the repaint may run right here on the timer thread and incoming
         // chunks must not wait for it to finish
-
         OnStateChanged?.Invoke();
     }
 
@@ -220,23 +238,31 @@ public class StreamingService : IStreamingService
     /// </summary>
     private void StopStreaming()
     {
+        // No more ticks: the response is over or abandoned
         _typewriterTimer?.Dispose();
         _typewriterTimer = null;
+
+        // Text still queued belongs to a response that is no longer being typed
         _streamingBuffer = string.Empty;
 
         // Frees the service for the next response
         _currentStreamingMessage = null;
     }
 
+    /// <summary>Stops the typewriter when the visitor's circuit closes.</summary>
     public async ValueTask DisposeAsync()
     {
+        // Taken under the lock so a tick cannot be rearmed while the timer is being released
         Timer? timer;
         lock (_sessionLock)
         {
             timer = _typewriterTimer;
+
+            // A tick already queued finds no session and returns
             _typewriterTimer = null;
         }
 
+        // Waited out so no tick runs against a service that is already gone
         if (timer is not null)
             await timer.DisposeAsync();
     }

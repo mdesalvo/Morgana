@@ -15,8 +15,7 @@
     {
         <img src="images/morgana-avatar.jpg"
              alt="@Message.AgentName"
-             class="message-avatar"
-             style="border: 2px solid @ChatStateService.GetAvatarBorderColor(Message.AgentName);"/>
+             class="message-avatar @ChatStateService.GetAgentClass(Message.AgentName)" />
     }
     <div class="message-bubble @(Message.IsStreaming ? "streaming" : "")">
         @* A typing row is a placeholder: it holds the spot the real answer
@@ -33,7 +32,7 @@
         }
         else
         {
-            <div class="message-text @(Message.Type == MessageType.Presentation ? "completion-text" : "")">
+            <div class="message-text">
                 @renderedHtml
             </div>
 
@@ -62,8 +61,8 @@
     /// The message to display. Streaming and quick-reply selection mutate it in place, so the
     /// same instance arrives again with different content.
     /// </summary>
-    [Parameter, EditorRequired]
-    public ChatMessage Message { get; set; } = null!;
+    [Parameter]
+    public required ChatMessage Message { get; set; }
 
     /// <summary>
     /// Raised with the reply the user picked on this message's quick replies.

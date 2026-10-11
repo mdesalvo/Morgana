@@ -81,20 +81,24 @@ public interface IChatStateService
     void AddTypingIndicator();
 
     /// <summary>
-    /// Removes the last typing indicator from the message list.
+    /// Removes the last typing indicator from the message list, if there is one.
     /// </summary>
-    /// <returns>True if a typing indicator was found and removed.</returns>
-    bool RemoveTypingIndicator();
+    void RemoveTypingIndicator();
 
     /// <summary>
     /// Adds a chat error message to both the temporary banner list and the permanent chat history.
     /// </summary>
-    void AddChatError(string text, string errorReason, int? fadingDurationSeconds = 10);
+    void AddChatError(string text, string errorReason, int? fadingDurationSeconds = null);
 
     /// <summary>
     /// Adds a temporary error banner (no permanent chat message).
     /// </summary>
-    void AddErrorBanner(string text, string errorReason, int? fadingDurationSeconds = 10);
+    void AddErrorBanner(string text, string errorReason, int? fadingDurationSeconds = null);
+
+    /// <summary>
+    /// Shows a banner that Morgana sent, keeping at most one terminal dust-exhaustion notice on screen.
+    /// </summary>
+    void AddTemporaryMessage(ChannelMessage message);
 
     /// <summary>
     /// Removes all error-type temporary messages.
@@ -109,8 +113,13 @@ public interface IChatStateService
     /// <summary>
     /// Updates the current agent name based on a received SignalR message.
     /// </summary>
-    /// <returns>True if agent name was actually changed.</returns>
-    bool UpdateAgentFromMessage(ChannelMessage message);
+    void UpdateAgentFromMessage(ChannelMessage message);
+
+    /// <summary>
+    /// Sets the current agent from the specialist that Morgana reports engaged on a resumed conversation.
+    /// Null or empty means the base agent.
+    /// </summary>
+    void ResumeAgent(string? activeAgent);
 
     /// <summary>
     /// Checks if an agent name represents a specialized agent (not base Morgana).
@@ -124,19 +133,9 @@ public interface IChatStateService
     string GetAgentClass(string? agentName);
 
     /// <summary>
-    /// Gets the CSS color variable for the avatar border based on agent type.
-    /// </summary>
-    string GetAvatarBorderColor(string? agentName);
-
-    /// <summary>
     /// True if any message has unselected quick replies from a history restore.
     /// </summary>
     bool HasActiveQuickReplies();
-
-    /// <summary>
-    /// True if any message has a rich card from a history restore.
-    /// </summary>
-    bool HasActiveRichCard();
 
     /// <summary>
     /// True if any message is currently showing a typing indicator.
@@ -151,9 +150,4 @@ public interface IChatStateService
     /// would otherwise hide it.
     /// </summary>
     bool IsConversationDeadFromDust();
-
-    /// <summary>
-    /// Resets all state for a fresh start.
-    /// </summary>
-    void Reset();
 }
