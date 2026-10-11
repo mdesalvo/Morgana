@@ -249,12 +249,12 @@ public class CodeEmitService : ICodeEmitService
 
         foreach (Records.WorkflowEdge edge in workflow.Edges)
         {
-            string carrying = edge.Carrying is { Count: > 0 }
+            string cargoArgument = edge.Carrying is { Count: > 0 }
                 ? $", carrying: [{string.Join(", ", edge.Carrying.Select(name => $"nameof({PropertyName(name)})"))}]"
                 : string.Empty;
 
             sb.AppendLine(CultureInfo.InvariantCulture,
-                $"        {(edge.OnFailure ? "AddFailureEdge" : "AddEdge")}({edge.Source}, {edge.Target}, {ToolReference(edge.Tool)}{carrying});");
+                $"        {(edge.OnFailure ? "AddFailureEdge" : "AddEdge")}({edge.Source}, {edge.Target}, {ToolReference(edge.Tool)}{cargoArgument});");
         }
 
         sb.AppendLine("    }");

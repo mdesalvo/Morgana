@@ -35,7 +35,7 @@
                     @foreach (string trait in Traits)
                     {
                         <FluentToggleButton Shape="ButtonShape.Circular"
-                                            Pressed="@picked.Contains(trait)" OnClick="() => Toggle(trait)">@trait</FluentToggleButton>
+                                            Pressed="@voiceWords.Contains(trait)" OnClick="() => Toggle(trait)">@trait</FluentToggleButton>
                     }
                 </FluentStack>
             }
@@ -165,12 +165,12 @@
     /// <summary>
     /// The last answer sent, offered back when its turn fails instead of asked for again.
     /// </summary>
-    private string sent = string.Empty;
+    private string lastAnswer = string.Empty;
 
     /// <summary>
     /// The voice words the client holds lit.
     /// </summary>
-    private readonly HashSet<string> picked = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> voiceWords = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Whether the client touched the cloud this question.
@@ -181,7 +181,7 @@
     /// <summary>
     /// The turn the box was last primed for.
     /// </summary>
-    private int primedOn = -1;
+    private int primeTurn = -1;
 
     /// <summary>
     /// Whether the box still reads exactly as the example was written.
@@ -202,14 +202,14 @@
     /// <summary>
     /// What the cloud adds to the answer. Nothing when it is not the client speaking.
     /// </summary>
-    private string Voice(string typed)
+    private string Voice(string text)
     {
         // A sentence typed beside an untouched cloud is the client's whole answer.
-        if (!touched && typed.Length > 0)
+        if (!touched && text.Length > 0)
             return string.Empty;
 
-        if (picked.Count > 0)
-            return $"The voice I would want here: {string.Join(", ", picked)}.";
+        if (voiceWords.Count > 0)
+            return $"The voice I would want here: {string.Join(", ", voiceWords)}.";
 
         return touched ? "None of those words is the voice I want." : string.Empty;
     }
@@ -217,34 +217,34 @@
     /// <summary>
     /// The example the box was last primed with.
     /// </summary>
-    private string primedWith = string.Empty;
+    private string primeExample = string.Empty;
 
     /// <summary>
     /// Primes the box and the cloud once per question; a failed turn gets its answer back.
     /// </summary>
     protected override void OnParametersSet()
     {
-        if (Error is not null && answer.Length == 0 && sent.Length > 0)
-            answer = sent;
+        if (Error is not null && answer.Length == 0 && lastAnswer.Length > 0)
+            answer = lastAnswer;
 
-        if (Turn == primedOn)
+        if (Turn == primeTurn)
         {
             // A turn can bring an example and leave the question standing: the box takes it unless the client wrote there.
-            if (Prompting != primedWith && (answer.Length == 0 || answer == primedWith))
+            if (Prompting != primeExample && (answer.Length == 0 || answer == primeExample))
                 answer = Prompting;
 
-            primedWith = Prompting;
+            primeExample = Prompting;
             return;
         }
 
-        primedOn = Turn;
-        primedWith = Prompting;
+        primeTurn = Turn;
+        primeExample = Prompting;
         answer = Prompting;
         touched = false;
-        picked.Clear();
+        voiceWords.Clear();
 
         foreach (string trait in Taken ?? [])
-            picked.Add(trait);
+            voiceWords.Add(trait);
     }
 
     /// <summary>
@@ -263,8 +263,8 @@
     {
         touched = true;
 
-        if (!picked.Remove(trait))
-            picked.Add(trait);
+        if (!voiceWords.Remove(trait))
+            voiceWords.Add(trait);
     }
 
     /// <summary>
@@ -272,13 +272,13 @@
     /// </summary>
     private async Task SendAsync()
     {
-        string said = Said;
+        string reply = Said;
 
-        sent = said;
+        lastAnswer = reply;
         answer = string.Empty;
         touched = false;
-        picked.Clear();
+        voiceWords.Clear();
 
-        await OnAnswer.InvokeAsync(said);
+        await OnAnswer.InvokeAsync(reply);
     }
 }

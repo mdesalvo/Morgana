@@ -57,12 +57,12 @@ public class DraftValidationService : IDraftValidationService
         // against each other.
         foreach (AgentDraft agent in draft.Agents)
         {
-            List<ValidationFinding> own = [];
+            List<ValidationFinding> agentFindings = [];
 
             ValidateAgent(agent, draft.Intents.FirstOrDefault(i =>
-                string.Equals(i.Name, agent.ID, StringComparison.OrdinalIgnoreCase)), own);
+                string.Equals(i.Name, agent.ID, StringComparison.OrdinalIgnoreCase)), agentFindings);
 
-            findings.AddRange(own.Select(finding => finding with { Agent = agent.ID, Check = CheckOf(finding) }));
+            findings.AddRange(agentFindings.Select(finding => finding with { Agent = agent.ID, Check = CheckOf(finding) }));
         }
 
         // Errors first, then warnings, each group keeping the order the domain declares its
@@ -78,13 +78,13 @@ public class DraftValidationService : IDraftValidationService
     // an intent reaches carries the intent's own name.
     private static void Collect(List<ValidationFinding> findings, ValidationCheck check, Action<List<ValidationFinding>> validate)
     {
-        List<ValidationFinding> found = [];
-        validate(found);
+        List<ValidationFinding> familyFindings = [];
+        validate(familyFindings);
 
-        findings.AddRange(found.Select(finding => finding with
+        findings.AddRange(familyFindings.Select(finding => finding with
         {
             Check = check,
-            Agent = QuotedName.Match(finding.Where) is { Success: true } quoted ? quoted.Groups[1].Value : null
+            Agent = QuotedName.Match(finding.Where) is { Success: true } quote ? quote.Groups[1].Value : null
         }));
     }
 
@@ -109,7 +109,7 @@ public class DraftValidationService : IDraftValidationService
     /// </summary>
     private static void ValidateIntents(DomainDraft draft, List<ValidationFinding> findings)
     {
-        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> intentNames = new(StringComparer.OrdinalIgnoreCase);
 
         foreach (IntentDraft intent in draft.Intents)
         {
@@ -123,7 +123,7 @@ public class DraftValidationService : IDraftValidationService
                 continue;
             }
 
-            if (!seen.Add(intent.Name))
+            if (!intentNames.Add(intent.Name))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                     "Two intents carry this name.",
                     "Prompt IDs are matched case-insensitively, so two intents differing only in case are one intent to Morgana."));
@@ -198,7 +198,7 @@ public class DraftValidationService : IDraftValidationService
     /// </remarks>
     private static void ValidateConsultations(DomainDraft draft, List<ValidationFinding> findings)
     {
-        HashSet<string> handled = new(
+        HashSet<string> agentIds = new(
             draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)).Select(a => a.ID!),
             StringComparer.OrdinalIgnoreCase);
 
@@ -226,7 +226,7 @@ public class DraftValidationService : IDraftValidationService
                     continue;
                 }
 
-                if (!handled.Contains(colleague.Intent))
+                if (!agentIds.Contains(colleague.Intent))
                 {
                     findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                         $"It consults '{colleague.Intent}', which no agent of this domain handles.",
@@ -234,9 +234,9 @@ public class DraftValidationService : IDraftValidationService
                     continue;
                 }
 
-                AgentDraft? far = draft.Agents.FirstOrDefault(a => string.Equals(a.ID, colleague.Intent, StringComparison.OrdinalIgnoreCase));
+                AgentDraft? colleagueAgent = draft.Agents.FirstOrDefault(a => string.Equals(a.ID, colleague.Intent, StringComparison.OrdinalIgnoreCase));
 
-                if (far?.Code.Consults.Count > 0)
+                if (colleagueAgent?.Code.Consults.Count > 0)
                     findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                         $"It consults '{colleague.Intent}', which consults a colleague of its own.",
                         "While it answers a consultation the framework withholds its peer functions, so the second hop never happens: whatever the far agent would have asked for is not in the answer this one gets."));
@@ -279,14 +279,14 @@ public class DraftValidationService : IDraftValidationService
 
         if (!string.IsNullOrWhiteSpace(territory))
         {
-            string? named = agent.Tools
+            string? toolName = agent.Tools
                 .Select(tool => tool.Name)
                 .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)
                                         && territory.Contains(name!, StringComparison.OrdinalIgnoreCase));
 
-            if (named is not null)
+            if (toolName is not null)
                 findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
-                    $"What this agent publishes to a colleague names its own tool '{named}'.",
+                    $"What this agent publishes to a colleague names its own tool '{toolName}'.",
                     "Territory states a territory: a colleague handed an inventory of functions rules its question out instead of asking it.") { Step = InterviewStep.AgentTerritory });
 
             if (intent is not null && string.Equals(Compact(territory), Compact(intent.Description), StringComparison.OrdinalIgnoreCase))
@@ -346,7 +346,7 @@ public class DraftValidationService : IDraftValidationService
     /// </remarks>
     private static void ValidateWorkflows(AgentDraft agent, string where, List<ValidationFinding> findings)
     {
-        List<WorkflowDraft> projectable = [];
+        List<WorkflowDraft> projections = [];
 
         foreach (WorkflowDraft workflow in agent.Workflows)
         {
@@ -365,12 +365,12 @@ public class DraftValidationService : IDraftValidationService
                     $"Workflow '{workflow.Name}' has a step '{step.Name}' named like a value that one of its edges carries.",
                     "The workflow's class would declare the step and the carried value under one name and would not compile.") { Step = InterviewStep.AgentWorkflows });
 
-            projectable.Add(workflow);
+            projections.Add(workflow);
         }
 
         IEnumerable<string> refusals = HandlesIntentAgentRegistryService.ValidateWorkflows(
             agent.ID ?? string.Empty,
-            [.. projectable.Select(DraftProjection.ToWorkflowDefinition)],
+            [.. projections.Select(DraftProjection.ToWorkflowDefinition)],
             agent.Tools.Select(DraftProjection.ToToolDefinition),
             agent.Code.MCPServers.Count > 0);
 

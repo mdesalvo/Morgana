@@ -249,11 +249,11 @@
         if (entry < 0 || entry >= Entries.Count)
             return _ => { };
 
-        ShellPoint landing = Frontier.OnAgent && entry == Frontier.Entry ? Frontier : new ShellPoint(entry, 1);
+        ShellPoint destination = Frontier.OnAgent && entry == Frontier.Entry ? Frontier : new ShellPoint(entry, 1);
         string position = $"{entry + 1}/{Entries.Count}";
 
-        return @<FluentButton Appearance="ButtonAppearance.Outline" Class="arrow" Disabled="@(landing > Frontier)"
-                              Title="@label" OnClick="() => OnLook.InvokeAsync(landing)">
+        return @<FluentButton Appearance="ButtonAppearance.Outline" Class="arrow" Disabled="@(destination > Frontier)"
+                              Title="@label" OnClick="() => OnLook.InvokeAsync(destination)">
                     @if (glyph == "‹")
                     {
                         @glyph<FluentBadge Appearance="BadgeAppearance.Outline" Color="BadgeColor.Informative" Shape="BadgeShape.Circular" Class="pos">@position</FluentBadge>

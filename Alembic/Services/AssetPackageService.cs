@@ -116,8 +116,8 @@ public class AssetPackageService : IAssetPackageService
         snapshot.ImportedFrom = string.Create(CultureInfo.InvariantCulture, $"the archive of {emittedAt.UtcDateTime:yyyy-MM-dd HH:mm} UTC");
 
         // The saved copy keeps the sitting and carries the snapshot, so the next resume diffs against this archive.
-        DomainDraft saved = await CloneAsync(draft, cancellationToken);
-        saved.Baseline = snapshot;
+        DomainDraft copy = await CloneAsync(draft, cancellationToken);
+        copy.Baseline = snapshot;
 
         using MemoryStream buffer = new MemoryStream();
 
@@ -132,7 +132,7 @@ public class AssetPackageService : IAssetPackageService
                 progress, cancellationToken);
 
             await WriteAsync(archive, ConfigurationFileName, Encoding.UTF8.GetString(draftExportService.Export(draft)), progress, cancellationToken);
-            await WriteAsync(archive, DraftFileName, Encoding.UTF8.GetString(draftSerializationService.Serialize(saved)), progress, cancellationToken);
+            await WriteAsync(archive, DraftFileName, Encoding.UTF8.GetString(draftSerializationService.Serialize(copy)), progress, cancellationToken);
             await WriteAsync(archive, MigrationFileName, migrationReportService.Build(draft).Markdown, progress, cancellationToken);
             await WriteAsync(archive, ReadmeFileName, Readme, progress, cancellationToken);
 

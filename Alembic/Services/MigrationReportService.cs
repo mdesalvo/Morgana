@@ -36,9 +36,9 @@ public class MigrationReportService : IMigrationReportService
 
         // Sorted by what it costs to act on, not by where it sits in the file: a removed tool and a
         // changed signature are work, a revised sentence is a re-read.
-        List<MigrationEntry> ordered = [.. entries.OrderBy(e => e.Change).ThenBy(e => e.Where, StringComparer.Ordinal)];
+        List<MigrationEntry> sequence = [.. entries.OrderBy(e => e.Change).ThenBy(e => e.Where, StringComparer.Ordinal)];
 
-        return new MigrationReport(draft.Baseline?.ImportedFrom, ordered, Render(draft, ordered));
+        return new MigrationReport(draft.Baseline?.ImportedFrom, sequence, Render(draft, sequence));
     }
 
     /// <summary>
@@ -57,16 +57,16 @@ public class MigrationReportService : IMigrationReportService
         foreach (IntentDraft intent in draft.Intents.Where(i =>
                      !string.IsNullOrWhiteSpace(i.Name) && !string.Equals(i.Name, DomainDraft.FallbackIntent, StringComparison.OrdinalIgnoreCase)))
         {
-            IntentDraft? was = Find(baseline.Intents, intent.Name);
+            IntentDraft? baselineIntent = Find(baseline.Intents, intent.Name);
 
-            if (was is null)
+            if (baselineIntent is null)
             {
                 entries.Add(new MigrationEntry(MigrationKind.Intent, intent.Name!, MigrationChange.Added,
                     "New intent. Its agent class must be registered by the plugin and the classifier now weighs this description against every other."));
                 continue;
             }
 
-            if (!string.Equals(was.Description, intent.Description, StringComparison.Ordinal))
+            if (!string.Equals(baselineIntent.Description, intent.Description, StringComparison.Ordinal))
                 entries.Add(new MigrationEntry(MigrationKind.Intent, intent.Name!, MigrationChange.Revised,
                     "The classifier's description changed. Nothing to compile; routing behaviour changes from the next conversation."));
         }
@@ -88,14 +88,14 @@ public class MigrationReportService : IMigrationReportService
     {
         foreach (AgentDraft agent in draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)))
         {
-            AgentDraft? was = Find(baseline.Agents, agent.ID);
+            AgentDraft? baselineAgent = Find(baseline.Agents, agent.ID);
 
-            if (was is null)
+            if (baselineAgent is null)
             {
                 entries.Add(new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Added,
                     $"New agent. Its generated class and {(agent.Tools.Count > 0 ? "tool class are" : "class is")} in this archive and do not exist in your tree yet."));
             }
-            else if (Prose(was) != Prose(agent))
+            else if (Prose(baselineAgent) != Prose(agent))
             {
                 entries.Add(new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised,
                     "Prose changed. It lives entirely in agents.json — replace the file and the change is live, with nothing to rebuild."));
@@ -104,7 +104,7 @@ public class MigrationReportService : IMigrationReportService
             // Separately from the prose, because it lands somewhere else: [ConsultsAgent] is on the
             // agent class, so a gained colleague means re-emitting a file, where a reworded sentence
             // means replacing agents.json and nothing more. A baseline carries none of these — the attribute lives in C# — so only what this sitting declared can show up here.
-            if (was is not null && !Same(was.Code.Consults, agent.Code.Consults))
+            if (baselineAgent is not null && !Same(baselineAgent.Code.Consults, agent.Code.Consults))
                 entries.Add(new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised,
                     $"Colleagues changed to {PeerNaming.Describe(agent.Code.Consults)}. "
                     + "[ConsultsAgent] lives on the agent class: re-emit it and check the intent it names is one your plugin registers."));
@@ -119,8 +119,8 @@ public class MigrationReportService : IMigrationReportService
                 agent.Code.Consults.Where(c => c.Instance is not null)
                                    .Select(colleague => new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised, $"Consults '{colleague.Intent}' at system '{colleague.Instance}'. Declare that system under " + $"Morgana:AgentToAgent:Partners with its Url, the key you share with it and \"OutboundPolicy\": {{ \"Enabled\": true }}, under exactly the name " + $"'{colleague.Instance}' — spelling and spacing included, or startup refuses the agent. Neither the " + "address nor the key is in this archive. That the system really publishes an agent for " + $"'{colleague.Intent}' is its own card's word, read on the first consultation: a mistake there is a " + "warning at run time and the colleague quietly missing, not a startup error.")));
 
-            CompareTools(agent, was, entries);
-            CompareWorkflows(agent, was, entries);
+            CompareTools(agent, baselineAgent, entries);
+            CompareWorkflows(agent, baselineAgent, entries);
         }
 
         entries.AddRange(
@@ -133,52 +133,52 @@ public class MigrationReportService : IMigrationReportService
     /// Whether two colleague lists say the same thing, order and casing aside — an agent declares
     /// each colleague once and which order the attributes sit in changes nothing.
     /// </summary>
-    private static bool Same(IEnumerable<string> was, IEnumerable<string> now) =>
-        new HashSet<string>(was, StringComparer.OrdinalIgnoreCase)
-            .SetEquals(new HashSet<string>(now, StringComparer.OrdinalIgnoreCase));
+    private static bool Same(IEnumerable<string> baseline, IEnumerable<string> revision) =>
+        new HashSet<string>(baseline, StringComparer.OrdinalIgnoreCase)
+            .SetEquals(new HashSet<string>(revision, StringComparer.OrdinalIgnoreCase));
 
     /// <summary>Whether two colleague sets name the same colleagues, instances included.</summary>
-    /// <param name="was">The baseline's colleagues.</param>
-    /// <param name="now">The draft's colleagues.</param>
+    /// <param name="baseline">The baseline's colleagues.</param>
+    /// <param name="revision">The draft's colleagues.</param>
     private static bool Same(
-        IEnumerable<Morgana.AI.Records.PeerReference> was,
-        IEnumerable<Morgana.AI.Records.PeerReference> now) =>
-        Same(was.Select(PeerNaming.Describe), now.Select(PeerNaming.Describe));
+        IEnumerable<Morgana.AI.Records.PeerReference> baseline,
+        IEnumerable<Morgana.AI.Records.PeerReference> revision) =>
+        Same(baseline.Select(PeerNaming.Describe), revision.Select(PeerNaming.Describe));
 
     /// <summary>
     /// One agent's toolkit, with the signature comparison the compiled half depends on.
     /// </summary>
     /// <param name="agent">The agent as it stands now.</param>
-    /// <param name="was">The same agent at baseline, or <c>null</c> if the agent itself is new — in
+    /// <param name="baselineAgent">The same agent at baseline, or <c>null</c> if the agent itself is new — in
     /// which case every tool it declares is reported as new too, folded into the agent's own entry
-    /// rather than repeated per tool (see the <c>was is not null</c> guard below).</param>
+    /// rather than repeated per tool (see the <c>baselineAgent is not null</c> guard below).</param>
     /// <param name="entries">The report under construction — findings are appended, never returned.</param>
-    private static void CompareTools(AgentDraft agent, AgentDraft? was, List<MigrationEntry> entries)
+    private static void CompareTools(AgentDraft agent, AgentDraft? baselineAgent, List<MigrationEntry> entries)
     {
-        List<ToolDraft> before = was?.Tools ?? [];
+        List<ToolDraft> baselineTools = baselineAgent?.Tools ?? [];
 
         foreach (ToolDraft tool in agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name)))
         {
             string where = $"{agent.ID}.{tool.Name}";
-            ToolDraft? previous = before.FirstOrDefault(t => string.Equals(t.Name, tool.Name, StringComparison.Ordinal));
+            ToolDraft? baselineTool = baselineTools.FirstOrDefault(t => string.Equals(t.Name, tool.Name, StringComparison.Ordinal));
 
-            if (previous is null)
+            if (baselineTool is null)
             {
-                if (was is not null)
+                if (baselineAgent is not null)
                     entries.Add(new MigrationEntry(MigrationKind.Signature, where, MigrationChange.Added,
                         $"New tool. The generated half declares `public partial Task<{CodeEmitService.ResultTypeName(tool.Name!)}> {tool.Name}({Signature(tool)})` with its record and the file will not compile until you implement the method in the half you own."));
 
                 continue;
             }
 
-            bool returnsChanged = ReturnsChanged(previous, tool);
+            bool returnsChanged = ReturnsChanged(baselineTool, tool);
 
-            if (Signature(previous) != Signature(tool))
+            if (Signature(baselineTool) != Signature(tool))
                 entries.Add(new MigrationEntry(MigrationKind.Signature, where, MigrationChange.SignatureChanged,
-                    $"`{Signature(previous)}` became `{Signature(tool)}`. The generated declaration moves on its own: change your implementation to match, since the two parts of a partial method must agree to compile."));
-            else if (!string.Equals(previous.Description, tool.Description, StringComparison.Ordinal)
-                     || previous.Parameters.Zip(tool.Parameters).Any(p => !string.Equals(p.First.Description, p.Second.Description, StringComparison.Ordinal))
-                     || (!returnsChanged && previous.Returns.Zip(tool.Returns).Any(r => !string.Equals(r.First.Description, r.Second.Description, StringComparison.Ordinal))))
+                    $"`{Signature(baselineTool)}` became `{Signature(tool)}`. The generated declaration moves on its own: change your implementation to match, since the two parts of a partial method must agree to compile."));
+            else if (!string.Equals(baselineTool.Description, tool.Description, StringComparison.Ordinal)
+                     || baselineTool.Parameters.Zip(tool.Parameters).Any(p => !string.Equals(p.First.Description, p.Second.Description, StringComparison.Ordinal))
+                     || (!returnsChanged && baselineTool.Returns.Zip(tool.Returns).Any(r => !string.Equals(r.First.Description, r.Second.Description, StringComparison.Ordinal))))
                 entries.Add(new MigrationEntry(MigrationKind.Tool, where, MigrationChange.Revised,
                     "Description changed. It is an attribute in the generated half, so overwriting that file is all it takes."));
 
@@ -186,17 +186,17 @@ public class MigrationReportService : IMigrationReportService
             // and the client's half builds it, so only the client can bring that code in line.
             if (returnsChanged)
                 entries.Add(new MigrationEntry(MigrationKind.Signature, where, MigrationChange.SignatureChanged,
-                    $"What it hands back changed: `{Fields(previous)}` became `{Fields(tool)}`. The generated half declares `{CodeEmitService.ResultTypeName(tool.Name!)}` with the new fields: change the code in your half that builds it to match."));
+                    $"What it hands back changed: `{Fields(baselineTool)}` became `{Fields(tool)}`. The generated half declares `{CodeEmitService.ResultTypeName(tool.Name!)}` with the new fields: change the code in your half that builds it to match."));
 
             // Reported on its own entry, whatever else changed: a client reading only the signature entry
             // would never learn that a parameter now comes from the context or is shared.
-            if (previous.Parameters.Zip(tool.Parameters).Any(p => !string.Equals(p.First.Scope, p.Second.Scope, StringComparison.Ordinal) || p.First.Shared != p.Second.Shared))
+            if (baselineTool.Parameters.Zip(tool.Parameters).Any(p => !string.Equals(p.First.Scope, p.Second.Scope, StringComparison.Ordinal) || p.First.Shared != p.Second.Shared))
                 entries.Add(new MigrationEntry(MigrationKind.Tool, where, MigrationChange.Revised,
                     "A parameter's scope or sharing changed. It is an attribute on the parameter in the generated half, so overwriting that file is all it takes."));
 
             // Reported on its own entry, whatever else changed: a client reading only the signature entry
             // would never learn the tool now waits for the user.
-            if (previous.RequiresExecutionApproval != tool.RequiresExecutionApproval)
+            if (baselineTool.RequiresExecutionApproval != tool.RequiresExecutionApproval)
                 entries.Add(new MigrationEntry(MigrationKind.Tool, where, MigrationChange.Revised,
                     tool.RequiresExecutionApproval
                         ? "Now waits for the user's approval before it runs. It is an attribute in the generated half, so overwriting that file is all it takes."
@@ -204,7 +204,7 @@ public class MigrationReportService : IMigrationReportService
         }
 
         entries.AddRange(
-            before.Where(t => !string.IsNullOrWhiteSpace(t.Name)
+            baselineTools.Where(t => !string.IsNullOrWhiteSpace(t.Name)
                                 && !agent.Tools.Any(x => string.Equals(x.Name, t.Name, StringComparison.Ordinal)))
                   .Select(gone => new MigrationEntry(MigrationKind.Signature, $"{agent.ID}.{gone.Name}", MigrationChange.Removed, $"Gone from the configuration. Its generated declaration and record disappear, so `{gone.Name}` in the half you own becomes an orphan method — delete it or the partial no longer matches.")));
     }
@@ -217,26 +217,26 @@ public class MigrationReportService : IMigrationReportService
     /// the plugin rebuilt. A removed one is reported as removed since its file leaves the archive. An agent
     /// that is itself new is skipped, since its own entry already says everything in it is new.
     /// </remarks>
-    private static void CompareWorkflows(AgentDraft agent, AgentDraft? was, List<MigrationEntry> entries)
+    private static void CompareWorkflows(AgentDraft agent, AgentDraft? baselineAgent, List<MigrationEntry> entries)
     {
-        if (was is null)
+        if (baselineAgent is null)
             return;
 
         foreach (WorkflowDraft workflow in agent.Workflows.Where(w => !string.IsNullOrWhiteSpace(w.Name)))
         {
             string where = $"{agent.ID}.{workflow.Name}";
-            WorkflowDraft? previous = was.Workflows.FirstOrDefault(w => string.Equals(w.Name, workflow.Name, StringComparison.Ordinal));
+            WorkflowDraft? baselineWorkflow = baselineAgent.Workflows.FirstOrDefault(w => string.Equals(w.Name, workflow.Name, StringComparison.Ordinal));
 
-            if (previous is null)
+            if (baselineWorkflow is null)
                 entries.Add(new MigrationEntry(MigrationKind.Workflow, where, MigrationChange.Added,
                     $"New workflow. Its class {workflow.Name}Workflow is generated, so the plugin needs rebuilding."));
-            else if (Serialized(previous) != Serialized(workflow))
+            else if (Serialized(baselineWorkflow) != Serialized(workflow))
                 entries.Add(new MigrationEntry(MigrationKind.Workflow, where, MigrationChange.SignatureChanged,
                     $"Workflow changed. Its class {workflow.Name}Workflow is regenerated, so the plugin needs rebuilding."));
         }
 
         entries.AddRange(
-            was.Workflows.Where(w => !string.IsNullOrWhiteSpace(w.Name)
+            baselineAgent.Workflows.Where(w => !string.IsNullOrWhiteSpace(w.Name)
                                      && !agent.Workflows.Any(x => string.Equals(x.Name, w.Name, StringComparison.Ordinal)))
                          .Select(gone => new MigrationEntry(MigrationKind.Workflow, $"{agent.ID}.{gone.Name}", MigrationChange.Removed,
                              $"Workflow removed. Its class {gone.Name}Workflow is no longer emitted, so delete that file from the plugin and rebuild it.")));
@@ -251,8 +251,8 @@ public class MigrationReportService : IMigrationReportService
     /// <summary>
     /// Whether the names or the types of the fields a tool hands back differ between two states of it.
     /// </summary>
-    private static bool ReturnsChanged(ToolDraft was, ToolDraft now) =>
-        !was.Returns.Select(r => (r.Name, r.Type)).ToHashSet().SetEquals(now.Returns.Select(r => (r.Name, r.Type)));
+    private static bool ReturnsChanged(ToolDraft baselineTool, ToolDraft tool) =>
+        !baselineTool.Returns.Select(r => (r.Name, r.Type)).ToHashSet().SetEquals(tool.Returns.Select(r => (r.Name, r.Type)));
 
     /// <summary>
     /// Renders the fields a tool hands back as the report shows them, each with its type.

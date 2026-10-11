@@ -136,7 +136,7 @@
     /// <summary>
     /// Where the client is looking when it is not the work in hand; <c>null</c> means the work in hand.
     /// </summary>
-    private ShellPoint? looking;
+    private ShellPoint? focus;
 
     /// <summary>
     /// The agents on the track, in map order.
@@ -146,14 +146,14 @@
     /// <summary>
     /// The interview that owns the frontier: the one a correction set aside, else the running one.
     /// </summary>
-    private InterviewState? Standing => InterviewService.Current?.Resume ?? InterviewService.Current;
+    private InterviewState? FrontierInterview => InterviewService.Current?.Resume ?? InterviewService.Current;
 
     /// <summary>
     /// Where the interview stands; in the domain, the Archive, so everything is open.
     /// </summary>
     private ShellPoint Frontier =>
         inDomain ? Archive
-        : Standing is { } standing ? ShellPoint.FrontierOf(standing)
+        : FrontierInterview is { } owner ? ShellPoint.FrontierOf(owner)
         : ShellPoint.Map;
 
     /// <summary>
@@ -168,7 +168,7 @@
     /// <summary>
     /// Where the client is looking.
     /// </summary>
-    private ShellPoint Pointer => looking ?? Working;
+    private ShellPoint Pointer => focus ?? Working;
 
     /// <summary>
     /// Whether the open question corrects an agent that already exists.
@@ -199,11 +199,11 @@
         if (inDomain && point.OnDomain && InterviewService.Current is null)
         {
             domainAt = point;
-            looking = null;
+            focus = null;
             return;
         }
 
-        looking = point == Working || point > Frontier ? null : point;
+        focus = point == Working || point > Frontier ? null : point;
     }
 
     /// <summary>
@@ -248,8 +248,8 @@
         if (InterviewService.Current is { } interview && (inDomain || interview.Resume is not null) && entry == EntryOf(interview.Intent))
             return interview.Agent;
 
-        if (!inDomain && Standing is { } standing && standing.OnAnEntry && entry == standing.At)
-            return standing.Agent;
+        if (!inDomain && FrontierInterview is { } owner && owner.OnAnEntry && entry == owner.At)
+            return owner.Agent;
 
         if (entry < 0 || entry >= entries.Count)
             return null;
@@ -287,7 +287,7 @@
 
             // Correcting starts on the first agent: whoever comes to correct recognises the problem by reading.
             if (Door == "walk")
-                looking = new ShellPoint(0, 1);
+                focus = new ShellPoint(0, 1);
 
             StateHasChanged();
             return;
@@ -306,9 +306,9 @@
     /// <summary>
     /// Sends a typed answer; the answer that settles the last step hands the shell to the domain.
     /// </summary>
-    private async Task SendAsync(string said)
+    private async Task SendAsync(string reply)
     {
-        await TurnAsync(() => InterviewService.AnswerAsync(said));
+        await TurnAsync(() => InterviewService.AnswerAsync(reply));
         AfterTurn();
     }
 
@@ -364,7 +364,7 @@
         finally
         {
             busy = false;
-            looking = null;
+            focus = null;
             Refresh();
         }
     }
@@ -387,7 +387,7 @@
     {
         inDomain = true;
         domainAt = Collaboration;
-        looking = null;
+        focus = null;
         Refresh();
     }
 
@@ -397,9 +397,9 @@
     // A correction takes its agent out of the domain while it runs, so the track keeps the list it had.
     private void Refresh()
     {
-        if (!inDomain && Standing is { } standing)
+        if (!inDomain && FrontierInterview is { } owner)
         {
-            entries = [.. standing.Map];
+            entries = [.. owner.Map];
             return;
         }
 

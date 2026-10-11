@@ -327,10 +327,10 @@ public sealed class InterviewState
              at >= 0;
              at = prose.IndexOf(trait, at + 1, StringComparison.OrdinalIgnoreCase))
         {
-            int after = at + trait.Length;
+            int end = at + trait.Length;
 
             if ((at == 0 || !char.IsLetter(prose[at - 1]))
-                && (after == prose.Length || !char.IsLetter(prose[after])))
+                && (end == prose.Length || !char.IsLetter(prose[end])))
                 return true;
         }
 
@@ -420,23 +420,23 @@ public sealed class InterviewState
         if (Map.Count == 0)
             return ["the domain map: not one kind of request has been named yet"];
 
-        List<string> missing = [];
+        List<string> gaps = [];
 
         foreach (IntentDraft intent in Map)
         {
-            string named = intent.Name ?? "(unnamed)";
+            string intentName = intent.Name ?? "(unnamed)";
 
             if (string.IsNullOrWhiteSpace(intent.Description))
-                missing.Add($"what routes to '{named}'");
+                gaps.Add($"what routes to '{intentName}'");
 
             if (string.IsNullOrWhiteSpace(intent.Label))
-                missing.Add($"the button for '{named}'");
+                gaps.Add($"the button for '{intentName}'");
 
             if (string.IsNullOrWhiteSpace(intent.DefaultValue))
-                missing.Add($"what pressing '{named}' sends");
+                gaps.Add($"what pressing '{intentName}' sends");
         }
 
-        return missing;
+        return gaps;
     }
 
     /// <summary>
@@ -449,12 +449,12 @@ public sealed class InterviewState
     /// </remarks>
     private List<string> MissingTarget()
     {
-        List<string> missing = [];
+        List<string> gaps = [];
 
         if (string.IsNullOrWhiteSpace(Agent.Target))
-            missing.Add("agentTarget");
+            gaps.Add("agentTarget");
 
-        return missing;
+        return gaps;
     }
 
     /// <summary>

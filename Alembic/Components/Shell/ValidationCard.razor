@@ -9,8 +9,8 @@
 *@
 
 @{
-    IReadOnlyList<ValidationFinding> deterministic = DraftValidationService.Validate(Draft);
-    int chosen = rows.Count(row => row.Chosen);
+    IReadOnlyList<ValidationFinding> findings = DraftValidationService.Validate(Draft);
+    int choiceCount = rows.Count(row => row.Chosen);
 }
 
 <section class="open">
@@ -25,12 +25,12 @@
             <FluentStack Orientation="Orientation.Vertical" VerticalGap="4px">
                 @foreach (CheckRow row in rows)
                 {
-                    List<ValidationFinding> own = row.Check is { } check ? [.. deterministic.Where(finding => finding.Check == check)] : [];
-                    List<CoherenceFinding> judged = row.Check is null ? [.. coherence.Where(finding => string.Equals(finding.Kind, row.Id, StringComparison.OrdinalIgnoreCase))] : [];
-                    int count = own.Count + judged.Count;
-                    bool ranThis = ran.Contains(row.Id);
-                    bool errors = own.Any(finding => finding.Severity == FindingSeverity.Error);
-                    bool isOpen = open.Contains(row.Id);
+                    List<ValidationFinding> rowFindings = row.Check is { } check ? [.. findings.Where(finding => finding.Check == check)] : [];
+                    List<CoherenceFinding> judgements = row.Check is null ? [.. coherence.Where(finding => string.Equals(finding.Kind, row.Id, StringComparison.OrdinalIgnoreCase))] : [];
+                    int count = rowFindings.Count + judgements.Count;
+                    bool ranThis = checksRun.Contains(row.Id);
+                    bool errors = rowFindings.Any(finding => finding.Severity == FindingSeverity.Error);
+                    bool isOpen = checksOpen.Contains(row.Id);
 
                     @if (row != rows[0])
                     {
@@ -77,7 +77,7 @@
                                     }
 
                                     <FluentStack Orientation="Orientation.Vertical" VerticalGap="9px">
-                                        @foreach (ValidationFinding finding in own)
+                                        @foreach (ValidationFinding finding in rowFindings)
                                         {
                                             bool error = finding.Severity == FindingSeverity.Error;
 
@@ -100,7 +100,7 @@
                                             </FluentMessageBar>
                                         }
 
-                                        @foreach (CoherenceFinding finding in judged)
+                                        @foreach (CoherenceFinding finding in judgements)
                                         {
                                             <FluentMessageBar Intent="MessageBarIntent.Warning" Layout="MessageBarLayout.MultiLine" AllowDismiss="false" Class="message-fits">
                                                 <ChildContent>
@@ -115,7 +115,7 @@
                                                         You may leave it as it is, but it is worth fixing: @WithNames(finding.Why)
                                                     </FluentText>
 
-                                                    @if (applying == finding)
+                                                    @if (fixInFlight == finding)
                                                     {
                                                         <Waiting Text="Rewriting the agents this finding names…" />
                                                     }
@@ -125,10 +125,10 @@
                                                     }
                                                 </ChildContent>
                                                 <ActionsTemplate>
-                                                    @if (applying != finding)
+                                                    @if (fixInFlight != finding)
                                                     {
                                                         <FluentButton Appearance="ButtonAppearance.Outline"
-                                                                      Disabled="@(applying is not null)" OnClick="() => ApplyAsync(finding)">
+                                                                      Disabled="@(fixInFlight is not null)" OnClick="() => ApplyAsync(finding)">
                                                             Apply the correction
                                                         </FluentButton>
                                                     }
@@ -147,10 +147,10 @@
 
     <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.SpaceBetween" VerticalAlignment="VerticalAlignment.Center" Class="actions">
         <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px" Width="auto">
-            <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Large" Disabled="@(chosen == 0 || running)" OnClick="RunAsync">
+            <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Large" Disabled="@(choiceCount == 0 || running)" OnClick="RunAsync">
                 Run validation
             </FluentButton>
-            <FluentText Class="muted">@(chosen == 0 ? "choose at least one check" : $"{chosen} of {rows.Count}")</FluentText>
+            <FluentText Class="muted">@(choiceCount == 0 ? "choose at least one check" : $"{choiceCount} of {rows.Count}")</FluentText>
         </FluentStack>
 
         <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Width="auto">
@@ -236,12 +236,12 @@
     /// <summary>
     /// The checks the last run carried: only those show outcomes.
     /// </summary>
-    private readonly HashSet<string> ran = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> checksRun = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The checks open on their findings.
     /// </summary>
-    private readonly HashSet<string> open = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> checksOpen = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// What the model found and the client has not yet corrected.
@@ -251,7 +251,7 @@
     /// <summary>
     /// Corrections applied this sitting, so a later run tells a fixed finding from one still present.
     /// </summary>
-    private readonly List<ResolvedCoherenceFinding> resolved = [];
+    private readonly List<ResolvedCoherenceFinding> corrections = [];
 
     /// <summary>
     /// Whether a judged run is on the wire.
@@ -261,7 +261,7 @@
     /// <summary>
     /// The correction being applied, so only one runs at a time.
     /// </summary>
-    private CoherenceFinding? applying;
+    private CoherenceFinding? fixInFlight;
 
     /// <summary>
     /// Lays out the families decided by reading, then the classes the model's own prompt declares.
@@ -280,37 +280,37 @@
     /// </summary>
     private async Task RunAsync()
     {
-        List<CheckRow> chosen = [.. rows.Where(row => row.Chosen)];
+        List<CheckRow> choices = [.. rows.Where(row => row.Chosen)];
 
-        if (chosen.Count == 0)
+        if (choices.Count == 0)
             return;
 
-        ran.Clear();
-        ran.UnionWith(chosen.Where(row => row.Check is not null).Select(row => row.Id));
+        checksRun.Clear();
+        checksRun.UnionWith(choices.Where(row => row.Check is not null).Select(row => row.Id));
 
-        List<string> aspects = [.. chosen.Where(row => row.Check is null).Select(row => row.Id)];
+        List<string> aspects = [.. choices.Where(row => row.Check is null).Select(row => row.Id)];
 
         // The judged part costs a model call and can be turned away, which the summary below must know.
         bool refused = aspects.Count > 0 && await JudgeAsync(aspects);
 
         // What came back with something opens on its own: it is what was asked.
-        IReadOnlyList<ValidationFinding> deterministic = DraftValidationService.Validate(Draft);
-        open.Clear();
-        open.UnionWith(rows.Where(row => ran.Contains(row.Id)
+        IReadOnlyList<ValidationFinding> findings = DraftValidationService.Validate(Draft);
+        checksOpen.Clear();
+        checksOpen.UnionWith(rows.Where(row => checksRun.Contains(row.Id)
                                          && (row.Check is { } check
-                                             ? deterministic.Any(finding => finding.Check == check)
+                                             ? findings.Any(finding => finding.Check == check)
                                              : coherence.Any(finding => string.Equals(finding.Kind, row.Id, StringComparison.OrdinalIgnoreCase))))
                            .Select(row => row.Id));
 
-        int found = deterministic.Count(FamilyRan)
-                    + coherence.Count(finding => ran.Contains(finding.Kind));
-        int checks = rows.Count(row => ran.Contains(row.Id));
-        bool blocking = deterministic.Any(finding => finding.Severity == FindingSeverity.Error && FamilyRan(finding));
+        int findingCount = findings.Count(FamilyRan)
+                    + coherence.Count(finding => checksRun.Contains(finding.Kind));
+        int checks = rows.Count(row => checksRun.Contains(row.Id));
+        bool blocking = findings.Any(finding => finding.Severity == FindingSeverity.Error && FamilyRan(finding));
 
         if (!refused && checks > 0)
-            await OnNotify.InvokeAsync(found == 0
+            await OnNotify.InvokeAsync(findingCount == 0
                 ? new Notice($"Nothing to fix in the {checks} check(s) run.", NoticeKind.Success)
-                : new Notice($"{found} thing(s) worth a look in the {checks} check(s) run.", blocking ? NoticeKind.Failure : NoticeKind.Warning));
+                : new Notice($"{findingCount} thing(s) worth a look in the {checks} check(s) run.", blocking ? NoticeKind.Failure : NoticeKind.Warning));
     }
 
     /// <summary>
@@ -333,7 +333,7 @@
 
         try
         {
-            report = await CoherenceService.ReviewAsync(Draft, aspects, resolved);
+            report = await CoherenceService.ReviewAsync(Draft, aspects, corrections);
         }
         finally
         {
@@ -348,14 +348,14 @@
         }
 
         coherence = [.. report.Findings];
-        ran.UnionWith(aspects);
+        checksRun.UnionWith(aspects);
 
         // A kind outside the classes asked for is kept under its own row rather than dropped.
         foreach (string kind in coherence.Select(finding => finding.Kind).Distinct(StringComparer.OrdinalIgnoreCase)
                      .Where(kind => rows.All(row => !string.Equals(row.Id, kind, StringComparison.OrdinalIgnoreCase))))
         {
             rows.Add(new CheckRow { Id = kind, Label = kind, Chosen = true });
-            ran.Add(kind);
+            checksRun.Add(kind);
         }
 
         return false;
@@ -365,14 +365,14 @@
     /// Whether a finding decided by reading belongs to a family the last run carried.
     /// </summary>
     private bool FamilyRan(ValidationFinding finding) =>
-        rows.Any(row => row.Check == finding.Check && ran.Contains(row.Id));
+        rows.Any(row => row.Check == finding.Check && checksRun.Contains(row.Id));
 
     /// <summary>
     /// Applies one finding's own fix; an applied finding disappears.
     /// </summary>
     private async Task ApplyAsync(CoherenceFinding finding)
     {
-        applying = finding;
+        fixInFlight = finding;
         CoherenceApplyResult result;
 
         try
@@ -381,7 +381,7 @@
         }
         finally
         {
-            applying = null;
+            fixInFlight = null;
         }
 
         // Refreshed even after a declared failure: the applier may have written before it stopped.
@@ -390,7 +390,7 @@
         if (result.Applied)
         {
             coherence.Remove(finding);
-            resolved.Add(new ResolvedCoherenceFinding(finding, result.Summary));
+            corrections.Add(new ResolvedCoherenceFinding(finding, result.Summary));
         }
 
         await OnNotify.InvokeAsync(new Notice(result.Summary, result.Applied ? NoticeKind.Success : NoticeKind.Failure));
@@ -402,9 +402,9 @@
     private void SetOpen(CheckRow row, bool expanded)
     {
         if (expanded)
-            open.Add(row.Id);
+            checksOpen.Add(row.Id);
         else
-            open.Remove(row.Id);
+            checksOpen.Remove(row.Id);
     }
 
     /// <summary>
@@ -452,8 +452,8 @@
     /// by reading spells one element's path, and neither the quotes, the backticks nor the dots it was written with
     /// reach the badge.
     /// </summary>
-    private static IEnumerable<string> Places(string where) =>
-        where.Split([',', '.'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+    private static IEnumerable<string> Places(string location) =>
+        location.Split([',', '.'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
              .Select(place => place.Replace("'", string.Empty).Replace("\"", string.Empty).Replace("`", string.Empty).Trim())
              .Where(place => place.Length > 0);
 

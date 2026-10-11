@@ -53,10 +53,10 @@
 
     @if (Revealed is { } draft)
     {
-        @if (Resuming(draft) is { } resuming)
+        @if (Resuming(draft) is { } resumeNote)
         {
             <FluentMessageBar Intent="MessageBarIntent.Info" Layout="MessageBarLayout.MultiLine" AllowDismiss="false" Class="import-news message-fits">
-                <FluentText Size="TextSize.Size400">@resuming</FluentText>
+                <FluentText Size="TextSize.Size400">@resumeNote</FluentText>
             </FluentMessageBar>
         }
 
@@ -232,14 +232,14 @@
     /// <summary>
     /// Goes through a door into the shell.
     /// </summary>
-    private void Go(string where) => NavigationManager.NavigateTo(where);
+    private void Go(string destination) => NavigationManager.NavigateTo(destination);
 
     /// <summary>
     /// The interrupted interview, if the file carried one: why the client came back.
     /// </summary>
     private static string? Resuming(DomainDraft draft) =>
-        draft.Sitting is { } sitting && Named(sitting) is { } named
-            ? $"{named} — still here, right where you left it."
+        draft.Sitting is { } sitting && Named(sitting) is { } subject
+            ? $"{subject} — still here, right where you left it."
             : null;
 
     /// <summary>
@@ -269,17 +269,17 @@
         if (string.IsNullOrWhiteSpace(name))
             return "—";
 
-        StringBuilder spaced = new StringBuilder();
+        StringBuilder phrase = new StringBuilder();
 
         foreach (char letter in name)
         {
-            if (char.IsUpper(letter) && spaced.Length > 0)
-                spaced.Append(' ');
+            if (char.IsUpper(letter) && phrase.Length > 0)
+                phrase.Append(' ');
 
-            spaced.Append(char.ToLowerInvariant(letter));
+            phrase.Append(char.ToLowerInvariant(letter));
         }
 
-        return spaced.ToString();
+        return phrase.ToString();
     }
 
     /// <summary>
@@ -313,16 +313,16 @@
                 // An archive is Alembic's only where it carries the marker its own emit writes: any other zip is somebody else's.
                 arrivedAsArchive = HasMarker(buffer);
 
-                await using MemoryStream? inner = arrivedAsArchive ? await ExtractSaveFileAsync(buffer) : null;
+                await using MemoryStream? saveFile = arrivedAsArchive ? await ExtractSaveFileAsync(buffer) : null;
 
-                if (inner is null)
+                if (saveFile is null)
                 {
                     error = $"{file.Name} is not an archive of mine. {OnlyOwnFiles}";
                     return;
                 }
 
-                inner.Position = 0;
-                await ResumeAsync(inner, file.Name);
+                saveFile.Position = 0;
+                await ResumeAsync(saveFile, file.Name);
                 return;
             }
 
@@ -336,9 +336,9 @@
             error = $"{file.Name} is not a save file of mine. {OnlyOwnFiles}";
         }
         // Too large, a broken zip or JSON that is not what it claims: each is told to the client, never a dropped circuit.
-        catch (Exception unreadable) when (unreadable is not OperationCanceledException)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            error = unreadable.Message;
+            error = exception.Message;
         }
         finally
         {

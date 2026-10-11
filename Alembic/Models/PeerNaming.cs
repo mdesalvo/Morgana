@@ -20,9 +20,9 @@ public static class PeerNaming
     /// <param name="peers">The declared colleagues.</param>
     public static string Describe(IEnumerable<Morgana.AI.Records.PeerReference> peers)
     {
-        string[] described = [.. peers.Select(Describe)];
+        string[] descriptions = [.. peers.Select(Describe)];
 
-        return described.Length > 0 ? string.Join(", ", described) : "none";
+        return descriptions.Length > 0 ? string.Join(", ", descriptions) : "none";
     }
 
     /// <summary>

@@ -14,11 +14,11 @@
             <FluentText Class="panel-title">Agents on your Morgana</FluentText>
 
             <FluentStack Orientation="Orientation.Vertical" VerticalGap="8px">
-                @foreach (AgentDraft asking in Agents)
+                @foreach (AgentDraft asker in Agents)
                 {
-                    List<ConsultCell> row = [.. cells.Where(cell => cell.Asking == asking)];
+                    List<ConsultCell> row = [.. cells.Where(cell => cell.Asking == asker)];
 
-                    @if (asking != Agents[0])
+                    @if (asker != Agents[0])
                     {
                         <FluentDivider />
                     }
@@ -28,7 +28,7 @@
                        from one asking agent to the next. *@
                     <FluentGrid Spacing="1" Class="a2a-row">
                         <FluentGridItem Xs="3">
-                            <FluentText Size="TextSize.Size400">@Named(asking)</FluentText>
+                            <FluentText Size="TextSize.Size400">@Named(asker)</FluentText>
                         </FluentGridItem>
 
                         @for (int index = 0; index < row.Count; index++)
@@ -226,25 +226,25 @@
     {
         cells = [];
 
-        foreach (AgentDraft asking in Agents)
+        foreach (AgentDraft asker in Agents)
         {
-            foreach (AgentDraft other in Agents.Where(other => other != asking))
+            foreach (AgentDraft colleague in Agents.Where(colleague => colleague != asker))
                 cells.Add(new ConsultCell
                 {
-                    Asking = asking,
-                    Intent = other.ID!,
-                    Label = Named(other),
-                    On = Consults(asking, other.ID!, null)
+                    Asking = asker,
+                    Intent = colleague.ID!,
+                    Label = Named(colleague),
+                    On = Consults(asker, colleague.ID!, null)
                 });
 
             foreach (RemoteRow row in remotes.Where(row => row.Complete))
                 cells.Add(new ConsultCell
                 {
-                    Asking = asking,
+                    Asking = asker,
                     Intent = row.AppliedIntent,
                     Instance = row.AppliedInstance,
                     Label = row.AppliedIntent,
-                    On = Consults(asking, row.AppliedIntent, row.AppliedInstance)
+                    On = Consults(asker, row.AppliedIntent, row.AppliedInstance)
                 });
         }
     }

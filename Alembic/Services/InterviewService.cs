@@ -107,12 +107,12 @@ public class InterviewService : IInterviewService
     /// gesture is refused here rather than queued — pressing twice for one action is the same
     /// instruction arriving again, never a second instruction.
     /// </remarks>
-    private int running;
+    private int turnClaim;
 
     /// <summary>Claims the interview for one turn, or reports that somebody else holds it.</summary>
     private bool EnterTurn()
     {
-        if (Interlocked.CompareExchange(ref running, 1, 0) == 0)
+        if (Interlocked.CompareExchange(ref turnClaim, 1, 0) == 0)
             return true;
 
         logger.LogWarning("A second gesture arrived while a turn was still running and was ignored");
@@ -120,7 +120,7 @@ public class InterviewService : IInterviewService
     }
 
     /// <summary>Gives the interview back, whatever the turn did.</summary>
-    private void LeaveTurn() => Interlocked.Exchange(ref running, 0);
+    private void LeaveTurn() => Interlocked.Exchange(ref turnClaim, 0);
     
     /// <summary>
     /// Initializes the interview service.
@@ -323,25 +323,25 @@ public class InterviewService : IInterviewService
             agentDraft = draft.Agents.FirstOrDefault(a =>
                 string.Equals(a.ID, intentDraft.Name, StringComparison.OrdinalIgnoreCase));
 
-            IntentDraft? committed = draft.Intents.FirstOrDefault(i =>
+            IntentDraft? domainIntent = draft.Intents.FirstOrDefault(i =>
                 string.Equals(i.Name, intentDraft.Name, StringComparison.OrdinalIgnoreCase));
 
-            if (agentDraft is null || committed is null)
+            if (agentDraft is null || domainIntent is null)
                 return false;
 
             // Out of the domain for the length of the correction, so accepting it cannot write it twice.
             revision = new AgentRevision
             {
-                IntentAt = draft.Intents.IndexOf(committed),
+                IntentAt = draft.Intents.IndexOf(domainIntent),
                 AgentAt = draft.Agents.IndexOf(agentDraft),
                 Origin = agentDraft.Origin
             };
 
             draft.Agents.Remove(agentDraft);
-            draft.Intents.Remove(committed);
+            draft.Intents.Remove(domainIntent);
             draftStateService.Set(draft);
 
-            intentDraft = committed;
+            intentDraft = domainIntent;
         }
 
         InterviewState correction = new InterviewState
@@ -497,9 +497,9 @@ public class InterviewService : IInterviewService
 
         // The agent in hand never left the interview it was reopened from, so it goes back there
         // rather than into the domain.
-        if (interviewState.Resume is { } holding && HoldsInHand(interviewState, holding))
+        if (interviewState.Resume is { } resumption && HoldsInHand(interviewState, resumption))
         {
-            await ResumeAsync(interviewState, holding, cancellationToken);
+            await ResumeAsync(interviewState, resumption, cancellationToken);
             return true;
         }
 
@@ -678,15 +678,15 @@ public class InterviewService : IInterviewService
     /// </remarks>
     private static string LastAsked(AgentResponse response)
     {
-        string[] said = [.. response.Messages
+        string[] texts = [.. response.Messages
             .Where(m => m.Role == ChatRole.Assistant)
             .Select(m => m.Text?.Trim())
             .Where(t => !string.IsNullOrWhiteSpace(t))
             .Select(t => t!)];
 
-        string? asked = said.LastOrDefault(t => t.Contains('?'));
+        string? question = texts.LastOrDefault(t => t.Contains('?'));
 
-        return asked ?? said.LastOrDefault() ?? response.Text?.Trim() ?? string.Empty;
+        return question ?? texts.LastOrDefault() ?? response.Text?.Trim() ?? string.Empty;
     }
 
     /// <summary>
@@ -749,13 +749,13 @@ public class InterviewService : IInterviewService
         if (draftStateService.Current is not { } draft)
             return;
 
-        AgentDraft? committed = draft.Agents.FirstOrDefault(a =>
+        AgentDraft? domainAgent = draft.Agents.FirstOrDefault(a =>
             string.Equals(a.ID, interviewState.Intent.Name, StringComparison.OrdinalIgnoreCase));
 
-        if (committed is not null)
+        if (domainAgent is not null)
         {
-            draft.Agents.Remove(committed);
-            interviewState.Agent = committed;
+            draft.Agents.Remove(domainAgent);
+            interviewState.Agent = domainAgent;
         }
 
         draft.Intents.RemoveAll(i =>
@@ -875,7 +875,7 @@ public class InterviewService : IInterviewService
         // before it — an edit walks every one of the five exactly the way a compose does and all of
         // them arrive here identically, because to the pass in front of the client it is one
         // situation either way: the agent is written and this is not a first draft.
-        string standing = correcting
+        string status = correcting
             ? Reads(interviewState.Agent)
             : Stands(interviewState.Agent);
 
@@ -884,7 +884,7 @@ public class InterviewService : IInterviewService
                    ("total", interviewState.Map.Count.ToString(CultureInfo.InvariantCulture)),
                    ("intent", interviewState.Intent.Name ?? string.Empty),
                    ("description", interviewState.Intent.Description ?? string.Empty))
-               + " " + standing + " "
+               + " " + status + " "
                + Opening(interviewPass)
                + Known(interviewState);
     }
@@ -908,28 +908,28 @@ public class InterviewService : IInterviewService
         if (trade.Count == 0 && agent.Count == 0 && neighbours.Count == 0)
             return string.Empty;
 
-        string told = " " + Said("KnownHeader");
+        string header = " " + Said("KnownHeader");
 
         if (trade.Count > 0)
-            told += "\n" + Said("KnownBusiness") + " " + Facts(trade);
+            header += "\n" + Said("KnownBusiness") + " " + Facts(trade);
 
         if (agent.Count > 0)
-            told += "\n" + Said("KnownAgent") + " " + Facts(agent);
+            header += "\n" + Said("KnownAgent") + " " + Facts(agent);
 
         // The other agents arrive as subjects rather than as sentences: nine of them read whole would
         // be forty sentences carried into every question, nearly all about counters this step will
         // never touch. What is listed is enough to know whether one of them bears on the question in
         // hand, which is the only moment the sentences themselves are worth fetching.
         if (neighbours.Count > 0)
-            told += "\n" + Said("KnownNeighbours") + " " + string.Join(" ", neighbours);
+            header += "\n" + Said("KnownNeighbours") + " " + string.Join(" ", neighbours);
 
         // Said and read are not worth the same and the difference is stated once, at the foot of the
         // list: an agent that arrived in an upload carries finished prose and no memory of the
         // conversation behind it, so everything known about it is Alembic's own reading.
         if (trade.Concat(agent).Any(fact => fact.Inferred))
-            told += "\n" + Said("KnownInferredNote");
+            header += "\n" + Said("KnownInferredNote");
 
-        return told;
+        return header;
     }
 
     /// <summary>
@@ -954,27 +954,27 @@ public class InterviewService : IInterviewService
     {
         DomainDraft draft = draftStateService.Current ?? new DomainDraft();
 
-        Dictionary<string, List<KnownFact>> written = draft.Agents
+        Dictionary<string, List<KnownFact>> factsByAgent = draft.Agents
             .Where(agent => agent.ID is not null)
             .ToDictionary(agent => agent.ID!, agent => agent.Known, StringComparer.OrdinalIgnoreCase);
 
-        List<string> others = [];
+        List<string> neighbours = [];
 
         foreach (IntentDraft intent in draft.Intents.Concat(interviewState.Map))
         {
             if (intent.Name is not { Length: > 0 } name
                 || string.Equals(name, interviewState.Intent.Name, StringComparison.OrdinalIgnoreCase)
-                || others.Any(line => line.StartsWith($"- {name}:", StringComparison.OrdinalIgnoreCase)))
+                || neighbours.Any(line => line.StartsWith($"- {name}:", StringComparison.OrdinalIgnoreCase)))
                 continue;
 
-            string about = written.TryGetValue(name, out List<KnownFact>? facts) && facts.Count > 0
+            string topics = factsByAgent.TryGetValue(name, out List<KnownFact>? facts) && facts.Count > 0
                 ? string.Join(", ", facts.Select(fact => fact.Subject).Distinct(StringComparer.OrdinalIgnoreCase))
                 : intent.Description ?? Said("NeighbourUnknown");
 
-            others.Add($"- {name}: {about}");
+            neighbours.Add($"- {name}: {topics}");
         }
 
-        return others;
+        return neighbours;
     }
 
     /// <summary>
@@ -1056,26 +1056,26 @@ public class InterviewService : IInterviewService
     /// </remarks>
     private string Stands(AgentDraft agent)
     {
-        List<string> written = [];
+        List<string> sections = [];
 
         if (!string.IsNullOrWhiteSpace(agent.Target))
-            written.Add(Said("StandsTarget"));
+            sections.Add(Said("StandsTarget"));
 
         if (!string.IsNullOrWhiteSpace(agent.Personality))
-            written.Add(Said("StandsPersonality"));
+            sections.Add(Said("StandsPersonality"));
 
         if (agent.Tools.Count > 0)
-            written.Add(Said("StandsToolkit"));
+            sections.Add(Said("StandsToolkit"));
 
         if (!string.IsNullOrWhiteSpace(agent.Instructions))
-            written.Add(Said("StandsInstructions"));
+            sections.Add(Said("StandsInstructions"));
 
         if (!string.IsNullOrWhiteSpace(agent.Formatting))
-            written.Add(Said("StandsFormatting"));
+            sections.Add(Said("StandsFormatting"));
 
-        return written.Count == 0
+        return sections.Count == 0
             ? Said("StandsBlank")
-            : Said("StandsPartial", ("written", string.Join(", ", written)));
+            : Said("StandsPartial", ("written", string.Join(", ", sections)));
     }
 
     /// <summary>
@@ -1144,7 +1144,7 @@ public class InterviewService : IInterviewService
         // A before/after diff of every field Snapshot exposes, rather than trusting the tools
         // themselves to report what they touched: a tool answers the model, it does not report to
         // the UI, so this is the one place that knows which panel rows actually changed this turn.
-        Dictionary<string, string?> before = interviewState.Snapshot();
+        Dictionary<string, string?> baseline = interviewState.Snapshot();
 
         long startedAt = Stopwatch.GetTimestamp();
         logger.LogInformation(
@@ -1164,10 +1164,10 @@ public class InterviewService : IInterviewService
                 interviewState.Pass.ToString(), Stopwatch.GetElapsedTime(startedAt).TotalSeconds);
 
             foreach ((string field, string? value) in interviewState.Snapshot())
-                if (!string.Equals(value, before[field], StringComparison.Ordinal))
+                if (!string.Equals(value, baseline[field], StringComparison.Ordinal))
                     interviewState.Changed.Add(field);
 
-            string asked = LastAsked(response);
+            string question = LastAsked(response);
 
             // A turn that spent itself entirely on tool calls is legitimate (reading findings or a
             // composed prompt takes a round trip that has nothing to say to the client) and the
@@ -1178,9 +1178,9 @@ public class InterviewService : IInterviewService
             // on screen now deserves a shortcut button) and gating all four on the same condition
             // silently dropped a button the model genuinely offered, with no way for it to reappear on
             // a later turn either, since PendingChoice is reset to null at the top of every exchange.
-            if (asked.Length > 0)
+            if (question.Length > 0)
             {
-                interviewState.Question = asked;
+                interviewState.Question = question;
                 interviewState.Exchanges++;
             }
 

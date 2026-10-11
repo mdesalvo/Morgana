@@ -105,18 +105,18 @@ public class CoherenceService : ICoherenceService
         // class is not sent at all, rather than sent with a line asking the model to ignore it. A
         // rule a prompt states and then withdraws is read as a rule with an exception and the
         // exception is the part a model gets wrong.
-        List<CoherenceAspect> asked =
+        List<CoherenceAspect> selection =
             [.. coherence.GetAdditionalPropertyOrDefault<List<CoherenceAspect>>(AspectsPropertyName, [])
                     .Where(a => aspects.Contains(a.Id, StringComparer.OrdinalIgnoreCase))];
 
-        if (asked.Count == 0)
+        if (selection.Count == 0)
             return new CoherenceReport([], "Nothing was asked for: tick at least one thing to look for.");
 
         string instructions = (coherence.Instructions ?? string.Empty)
-            .Replace(AspectsPlaceholder, string.Join("\n\n", asked.Select(a => a.Description)), StringComparison.Ordinal);
+            .Replace(AspectsPlaceholder, string.Join("\n\n", selection.Select(a => a.Description)), StringComparison.Ordinal);
 
         string formatting = (coherence.Formatting ?? string.Empty)
-            .Replace(KindsPlaceholder, string.Join(", ", asked.Select(a => $"`{a.Id}`")), StringComparison.Ordinal);
+            .Replace(KindsPlaceholder, string.Join(", ", selection.Select(a => $"`{a.Id}`")), StringComparison.Ordinal);
 
         // The framework first, this pass's own prose under it. Every class this pass reports turns
         // on a rule settled above the agent (prose restating one, a boundary the framework already
@@ -177,9 +177,9 @@ public class CoherenceService : ICoherenceService
     /// that would smooth the overlap away before the model ever sees it.
     /// </remarks>
     /// <param name="draft">The domain to render — read whole, never summarized.</param>
-    /// <param name="resolved">Prior fixes this sitting, rendered first and by name so the model can
+    /// <param name="corrections">Prior fixes this sitting, rendered first and by name so the model can
     /// tell a lingering defect from one it already dealt with.</param>
-    private string Describe(DomainDraft draft, IReadOnlyList<ResolvedCoherenceFinding>? resolved)
+    private string Describe(DomainDraft draft, IReadOnlyList<ResolvedCoherenceFinding>? corrections)
     {
         StringBuilder sb = new StringBuilder();
 
@@ -187,14 +187,14 @@ public class CoherenceService : ICoherenceService
         // without this a client who fixed something and asked to run it again would face a pass
         // with no way to tell "still there" from "reads like something already dealt with" — it
         // would just see the domain and say what it always says about it.
-        if (resolved is { Count: > 0 })
+        if (corrections is { Count: > 0 })
         {
             sb.AppendLine(Said("AddressedHeader"));
             sb.AppendLine();
             sb.AppendLine(Said("AddressedInstruction"));
             sb.AppendLine();
 
-            foreach (ResolvedCoherenceFinding r in resolved)
+            foreach (ResolvedCoherenceFinding r in corrections)
                 sb.AppendLine(Said("AddressedFinding",
                     ("kind", r.Finding.Kind), ("where", r.Finding.Where), ("what", r.Finding.What), ("resolution", r.Resolution)));
 

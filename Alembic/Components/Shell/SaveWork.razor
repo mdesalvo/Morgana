@@ -49,17 +49,17 @@
     {
         using MemoryStream stream = new MemoryStream(work);
 
-        if (await DraftSerializationService.DeserializeAsync(stream) is not { } saved)
+        if (await DraftSerializationService.DeserializeAsync(stream) is not { } draft)
             return new Notice($"{FileName} could not be read back.", NoticeKind.Failure);
 
-        InterviewSitting? sitting = saved.Sitting;
-        int mapped = sitting?.Map.Count ?? 0;
+        InterviewSitting? sitting = draft.Sitting;
+        int mapSize = sitting?.Map.Count ?? 0;
 
-        string where = sitting is { At: >= 0 } && sitting.At < sitting.Map.Count
+        string position = sitting is { At: >= 0 } && sitting.At < sitting.Map.Count
             ? $"in hand: {sitting.Map[sitting.At].Name}"
             : "in hand: the map";
 
-        return new Notice($"{FileName} · read back: {mapped} on the map · {saved.Agents.Count} agents in the domain · {where} · {Sized(work.Length)}", NoticeKind.Success);
+        return new Notice($"{FileName} · read back: {mapSize} on the map · {draft.Agents.Count} agents in the domain · {position} · {Sized(work.Length)}", NoticeKind.Success);
     }
 
     /// <summary>

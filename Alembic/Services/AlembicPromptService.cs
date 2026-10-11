@@ -274,29 +274,29 @@ public class AlembicPromptService : IAlembicPromptService
         // with nothing behind it, which is the state this block was rebuilt to leave; one glossed
         // here and since removed from the framework teaches a rule that no longer binds. Both are
         // authoring defects nothing downstream can notice, so both stop the interview here.
-        string[] unglossed = [.. policies.Select(policy => policy.Name).Where(name => !glosses.ContainsKey(name))];
-        string[] stale = [.. glosses.Keys.Where(name => policies.All(policy => policy.Name != name))];
+        string[] glosslessPolicies = [.. policies.Select(policy => policy.Name).Where(name => !glosses.ContainsKey(name))];
+        string[] strayGlosses = [.. glosses.Keys.Where(name => policies.All(policy => policy.Name != name))];
 
-        if (unglossed.Length > 0 || stale.Length > 0)
+        if (glosslessPolicies.Length > 0 || strayGlosses.Length > 0)
             throw new InvalidOperationException(
                 $"The {MorganaPrimerPromptId} prompt no longer matches morgana.json's policies — "
-                + $"missing a line for: {string.Join(", ", unglossed)}; carrying a line for policies that no longer exist: {string.Join(", ", stale)}.");
+                + $"missing a line for: {string.Join(", ", glosslessPolicies)}; carrying a line for policies that no longer exist: {string.Join(", ", strayGlosses)}.");
 
-        string[] silent = [.. policies.Select(policy => policy.Name).Where(name => !ExpressivenessPolicies.Contains(name))];
-        string[] expressive = [.. policies.Select(policy => policy.Name).Where(name => ExpressivenessPolicies.Contains(name))];
+        string[] silentPolicies = [.. policies.Select(policy => policy.Name).Where(name => !ExpressivenessPolicies.Contains(name))];
+        string[] expressivePolicies = [.. policies.Select(policy => policy.Name).Where(name => ExpressivenessPolicies.Contains(name))];
 
         StringBuilder sb = new StringBuilder();
 
-        if (silent.Length > 0)
+        if (silentPolicies.Length > 0)
         {
             sb.AppendLine(ResolvePromptInjection(AlembicPromptId, "BindingPoliciesSilent"));
-            AppendGlossed(sb, silent, glosses);
+            AppendGlossed(sb, silentPolicies, glosses);
         }
 
-        if (expressive.Length > 0)
+        if (expressivePolicies.Length > 0)
         {
             sb.AppendLine(ResolvePromptInjection(AlembicPromptId, "BindingPoliciesExpressive"));
-            AppendGlossed(sb, expressive, glosses);
+            AppendGlossed(sb, expressivePolicies, glosses);
         }
 
         return sb.ToString().TrimEnd();
@@ -363,8 +363,8 @@ public class AlembicPromptService : IAlembicPromptService
         // Unlike the framework's resolver, this one does not degrade to an empty set: Alembic
         // without its own prose is not a diminished Alembic, it is an interviewer with nothing to
         // say. Failing here, loudly, beats conducting an interview on an empty system prompt.
-        return collection?.Prompts is { Length: > 0 } loaded
-            ? loaded
+        return collection?.Prompts is { Length: > 0 } prompts
+            ? prompts
             : throw new InvalidOperationException("alembic.json declares no prompts.");
     }
 }

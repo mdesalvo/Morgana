@@ -59,7 +59,7 @@ public static class StreamedCompletion
         while (true)
         {
             // Where this round starts, so a round that adds nothing is recognised below.
-            int before = answer.Length;
+            int start = answer.Length;
 
             // One round: the model writes until it stops or the provider cuts it off.
             ChatFinishReason? finishReason = await RoundAsync(chatClient, conversation, answer, onStall, cancellationToken);
@@ -70,7 +70,7 @@ public static class StreamedCompletion
             // No progress means resuming is not working and another round would only spend money to
             // produce the same nothing. This is the loop's only exit besides completion and it is a
             // fact about the last response rather than a budget.
-            if (answer.Length == before)
+            if (answer.Length == start)
                 break;
 
             onResume?.Invoke(answer.Length);
@@ -102,7 +102,7 @@ public static class StreamedCompletion
         CancellationToken cancellationToken)
     {
         // Where the round starts, so a stalled attempt can be rolled back to it.
-        int before = answer.Length;
+        int start = answer.Length;
 
         for (int attempt = 1; ; attempt++)
         {
@@ -138,14 +138,14 @@ public static class StreamedCompletion
                 // Rolled back to where the round started: the resume hands the model
                 // everything written so far, so a half-round left in place would have the retry
                 // continue from text the provider never finished sending.
-                answer.Length = before;
+                answer.Length = start;
 
                 if (attempt > 1)
                     throw new TimeoutException(
                         $"The model stopped sending for {StallTimeout.TotalSeconds:0} seconds, twice. "
                         + "Nothing was written for this artifact.");
 
-                onStall?.Invoke(before);
+                onStall?.Invoke(start);
             }
         }
     }
@@ -170,8 +170,8 @@ public static class StreamedCompletion
             return text;
 
         text = text[(firstNewline + 1)..];
-        int closing = text.LastIndexOf("```", StringComparison.Ordinal);
+        int fence = text.LastIndexOf("```", StringComparison.Ordinal);
 
-        return (closing >= 0 ? text[..closing] : text).TrimEnd() + "\n";
+        return (fence >= 0 ? text[..fence] : text).TrimEnd() + "\n";
     }
 }

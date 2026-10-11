@@ -145,11 +145,11 @@ public class InterviewTools
                 string.Equals(i.Name, cleanName, StringComparison.OrdinalIgnoreCase)) == true)
             return ToolReply.Refused(Said("IntentTaken", ("name", cleanName)));
 
-        IntentDraft? existing = interviewState.Map.FirstOrDefault(i =>
+        IntentDraft? match = interviewState.Map.FirstOrDefault(i =>
             string.Equals(i.Name, cleanName, StringComparison.OrdinalIgnoreCase));
 
-        bool revision = existing is not null;
-        IntentDraft intent = existing ?? new IntentDraft { Origin = Provenance.Authored };
+        bool revision = match is not null;
+        IntentDraft intent = match ?? new IntentDraft { Origin = Provenance.Authored };
 
         intent.Name = cleanName;
         intent.Description = description?.Trim();
@@ -191,10 +191,10 @@ public class InterviewTools
     public ToolReply DropIntent(
         [Description("The name of the entry to remove.")] [ToolParameter(Records.ToolScope.Request)] string name)
     {
-        int removed = interviewState.Map.RemoveAll(i =>
+        int removals = interviewState.Map.RemoveAll(i =>
             string.Equals(i.Name, name?.Trim(), StringComparison.OrdinalIgnoreCase));
 
-        return removed > 0
+        return removals > 0
             ? new ToolReply(Said("IntentDropped", ("name", name ?? string.Empty)))
             : ToolReply.Refused(Said("IntentNotOnMap", ("name", name ?? string.Empty)));
     }
@@ -340,10 +340,10 @@ public class InterviewTools
         if (cleanName.Length == 0)
             return ToolReply.Refused(Said("ToolNameMissing"));
 
-        ToolDraft? existing = Find(cleanName);
-        bool revision = existing is not null;
+        ToolDraft? match = Find(cleanName);
+        bool revision = match is not null;
 
-        ToolDraft tool = existing ?? new ToolDraft { Name = cleanName, Origin = Provenance.Authored };
+        ToolDraft tool = match ?? new ToolDraft { Name = cleanName, Origin = Provenance.Authored };
         tool.Description = description?.Trim();
         tool.RequiresExecutionApproval = requiresApproval;
 
@@ -396,11 +396,11 @@ public class InterviewTools
 
         string? resolvedScope = ResolveScope(scope);
 
-        ToolParameterDraft? existing = tool.Parameters.FirstOrDefault(p =>
+        ToolParameterDraft? match = tool.Parameters.FirstOrDefault(p =>
             string.Equals(p.Name, cleanName, StringComparison.Ordinal));
 
-        bool revision = existing is not null;
-        ToolParameterDraft parameter = existing ?? new ToolParameterDraft { Name = cleanName };
+        bool revision = match is not null;
+        ToolParameterDraft parameter = match ?? new ToolParameterDraft { Name = cleanName };
 
         parameter.Description = description?.Trim();
         parameter.Scope = resolvedScope;
@@ -486,10 +486,10 @@ public class InterviewTools
         if (Find(toolName) is not { } tool)
             return ToolReply.Refused(Said("DropToolUnknown", ("tool", toolName ?? string.Empty)));
 
-        int removed = tool.Parameters.RemoveAll(p =>
+        int removals = tool.Parameters.RemoveAll(p =>
             string.Equals(p.Name, parameterName?.Trim(), StringComparison.Ordinal));
 
-        return removed > 0
+        return removals > 0
             ? new ToolReply(Said("ParameterDropped", ("name", parameterName ?? string.Empty), ("tool", tool.Name ?? string.Empty)))
             : ToolReply.Refused(Said("ParameterAbsent", ("tool", tool.Name ?? string.Empty), ("name", parameterName ?? string.Empty)));
     }
@@ -576,10 +576,10 @@ public class InterviewTools
         if (Find(toolName) is not { } tool)
             return ToolReply.Refused(Said("DropToolUnknown", ("tool", toolName ?? string.Empty)));
 
-        int removed = tool.Returns.RemoveAll(r =>
+        int removals = tool.Returns.RemoveAll(r =>
             string.Equals(r.Name, name?.Trim(), StringComparison.Ordinal));
 
-        return removed > 0
+        return removals > 0
             ? new ToolReply(Said("ReturnDropped", ("name", name ?? string.Empty), ("tool", tool.Name ?? string.Empty)))
             : ToolReply.Refused(Said("ReturnAbsent", ("tool", tool.Name ?? string.Empty), ("name", name ?? string.Empty)));
     }
@@ -598,20 +598,20 @@ public class InterviewTools
     {
         string cleanName = toolName?.Trim() ?? string.Empty;
 
-        int removed = interviewState.Agent.Tools.RemoveAll(t =>
+        int removals = interviewState.Agent.Tools.RemoveAll(t =>
             string.Equals(t.Name, cleanName, StringComparison.Ordinal));
 
-        if (removed == 0)
+        if (removals == 0)
             return ToolReply.Refused(Said("DropToolUnknown", ("tool", toolName ?? string.Empty)));
 
-        List<string> orphaned =
+        List<string> orphans =
         [.. interviewState.Agent.Workflows.SelectMany(workflow => workflow.Steps
                 .Where(step => step.Tools.Contains(cleanName, StringComparer.Ordinal))
                 .Select(step => Said("ToolStillInStep",
                     ("tool", cleanName), ("step", step.Name), ("workflow", workflow.Name ?? string.Empty))))];
 
         return new ToolReply(Said("ToolDropped", ("name", toolName ?? string.Empty))
-               + (orphaned.Count > 0 ? " " + string.Join(" ", orphaned) : string.Empty));
+               + (orphans.Count > 0 ? " " + string.Join(" ", orphans) : string.Empty));
     }
 
     /// <summary>
@@ -625,7 +625,7 @@ public class InterviewTools
             return new ToolReply(Said("ToolkitEmpty") + "\n\n"
                    + DescribeWorkflows(alembicPromptService, interviewState.Agent.Workflows));
 
-        IEnumerable<string> rendered = interviewState.Agent.Tools.Select(t =>
+        IEnumerable<string> lines = interviewState.Agent.Tools.Select(t =>
             $"- {t.Name}{(t.RequiresExecutionApproval ? " " + Said("ToolWaitsForApproval") : string.Empty)}: {t.Description ?? "(no description)"}"
             + (t.Parameters.Count == 0
                 ? "\n    " + Said("ToolTakesNothing")
@@ -640,7 +640,7 @@ public class InterviewTools
                     $"\n    returns {r.Name} ({r.Type ?? Said("NoTypeYet")}){(r.Name == Constants.Workflows.FailureField ? " [" + Said("ReturnIsFailure") + "]" : string.Empty)}: "
                     + (string.IsNullOrWhiteSpace(r.Description) ? "(no description)" : r.Description)))));
 
-        return new ToolReply(Said("ToolkitHeader") + "\n" + string.Join("\n", rendered)
+        return new ToolReply(Said("ToolkitHeader") + "\n" + string.Join("\n", lines)
                + "\n\n" + DescribeWorkflows(alembicPromptService, interviewState.Agent.Workflows));
     }
 
@@ -670,14 +670,14 @@ public class InterviewTools
         if (complaint.Length > 0)
             return ToolReply.Refused(Said("WorkflowNotRecorded") + " " + complaint);
 
-        WorkflowDraft? existing = FindWorkflow(cleanName);
-        WorkflowDraft workflow = existing ?? new WorkflowDraft { Name = cleanName, Origin = Provenance.Authored };
+        WorkflowDraft? match = FindWorkflow(cleanName);
+        WorkflowDraft workflow = match ?? new WorkflowDraft { Name = cleanName, Origin = Provenance.Authored };
         workflow.Description = description?.Trim();
 
-        if (existing is null)
+        if (match is null)
             interviewState.Agent.Workflows.Add(workflow);
 
-        return new ToolReply((existing is not null ? Said("WorkflowRevised", ("name", cleanName)) : Said("WorkflowDeclared", ("name", cleanName)))
+        return new ToolReply((match is not null ? Said("WorkflowRevised", ("name", cleanName)) : Said("WorkflowDeclared", ("name", cleanName)))
                + (string.IsNullOrWhiteSpace(description) ? " " + Said("WorkflowDescriptionMissing") : string.Empty));
     }
 
@@ -729,13 +729,13 @@ public class InterviewTools
         if (complaints.Count > 0)
             return ToolReply.Refused(Said("StepNotRecorded") + " " + string.Join(" ", complaints) + " " + Said("StepCorrect"));
 
-        Records.WorkflowStep recorded = new(cleanName, stepTools);
+        Records.WorkflowStep stepRecord = new(cleanName, stepTools);
         int position = owner.Steps.FindIndex(step => string.Equals(step.Name, cleanName, StringComparison.Ordinal));
 
         if (position >= 0)
-            owner.Steps[position] = recorded;
+            owner.Steps[position] = stepRecord;
         else
-            owner.Steps.Add(recorded);
+            owner.Steps.Add(stepRecord);
 
         return new ToolReply(position >= 0
             ? Said("StepRevised", ("name", cleanName), ("workflow", owner.Name ?? string.Empty))
@@ -782,10 +782,10 @@ public class InterviewTools
         if (FindWorkflow(workflow) is not { } owner)
             return ToolReply.Refused(Said("DropWorkflowUnknown", ("workflow", workflow ?? string.Empty)));
 
-        int removed = owner.Edges.RemoveAll(edge => IsEdge(edge, source, tool, failure));
+        int removals = owner.Edges.RemoveAll(edge => IsEdge(edge, source, tool, failure));
         string edgeKind = Said(failure ? "EdgeKindFailure" : "EdgeKindSuccess");
 
-        return removed > 0
+        return removals > 0
             ? new ToolReply(Said("EdgeDropped",
                 ("edge", edgeKind), ("tool", tool ?? string.Empty), ("source", source ?? string.Empty), ("workflow", owner.Name ?? string.Empty)))
             : ToolReply.Refused(Said("EdgeAbsent",
@@ -822,16 +822,16 @@ public class InterviewTools
         if (complaints.Count > 0)
             return ToolReply.Refused(Said("EdgeNotRecorded") + " " + string.Join(" ", complaints) + " " + Said("EdgeCorrect"));
 
-        List<string> carried = [.. (carrying ?? []).Select(name => name?.Trim() ?? string.Empty)
+        List<string> cargo = [.. (carrying ?? []).Select(name => name?.Trim() ?? string.Empty)
                                                    .Where(name => name.Length > 0)
                                                    .Distinct(StringComparer.Ordinal)];
-        Records.WorkflowEdge recorded = new(cleanSource, cleanTarget, cleanTool, onFailure, carried);
+        Records.WorkflowEdge edgeRecord = new(cleanSource, cleanTarget, cleanTool, onFailure, cargo);
         int position = owner.Edges.FindIndex(edge => IsEdge(edge, cleanSource, cleanTool, onFailure));
 
         if (position >= 0)
-            owner.Edges[position] = recorded;
+            owner.Edges[position] = edgeRecord;
         else
-            owner.Edges.Add(recorded);
+            owner.Edges.Add(edgeRecord);
 
         return new ToolReply(Said("EdgeRecorded",
             ("edge", Said(onFailure ? "EdgeKindFailure" : "EdgeKindSuccess")),
@@ -863,9 +863,9 @@ public class InterviewTools
             return ToolReply.Refused(Said("DropWorkflowUnknown", ("workflow", workflow ?? string.Empty)));
 
         string cleanStep = step?.Trim() ?? string.Empty;
-        int removed = owner.Steps.RemoveAll(candidate => string.Equals(candidate.Name, cleanStep, StringComparison.Ordinal));
+        int removals = owner.Steps.RemoveAll(candidate => string.Equals(candidate.Name, cleanStep, StringComparison.Ordinal));
 
-        if (removed == 0)
+        if (removals == 0)
             return ToolReply.Refused(Said("StepAbsent", ("workflow", owner.Name ?? string.Empty), ("step", step ?? string.Empty)));
 
         // An edge whose end is gone would name a step that no longer exists.
@@ -885,10 +885,10 @@ public class InterviewTools
     public ToolReply DropWorkflow(
         [Description("The exact name of the workflow to remove.")] [ToolParameter(Records.ToolScope.Request)] string name)
     {
-        int removed = interviewState.Agent.Workflows.RemoveAll(workflow =>
+        int removals = interviewState.Agent.Workflows.RemoveAll(workflow =>
             string.Equals(workflow.Name, name?.Trim(), StringComparison.Ordinal));
 
-        return removed > 0
+        return removals > 0
             ? new ToolReply(Said("WorkflowDropped", ("name", name ?? string.Empty)))
             : ToolReply.Refused(Said("DropWorkflowUnknown", ("workflow", name ?? string.Empty)));
     }
@@ -993,10 +993,10 @@ public class InterviewTools
     {
         try
         {
-            List<string>? parsed = JsonSerializer.Deserialize<List<string>>(
+            List<string>? values = JsonSerializer.Deserialize<List<string>>(
                 traits, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-            List<string> words = [.. (parsed ?? []).Select(w => w.Trim()).Where(w => w.Length > 0)];
+            List<string> words = [.. (values ?? []).Select(w => w.Trim()).Where(w => w.Length > 0)];
 
             if (words.Count == 0)
                 return ToolReply.Refused(Said("TraitsNone"));
@@ -1058,32 +1058,32 @@ public class InterviewTools
         [Description("One short sentence about their work, in their vocabulary, never about the agent: 'the catalogue changes with the season', 'custom cakes are quoted at an appointment, never over the counter'. Standing on one entry of the map it is kept with that agent; drawing the map or closing the domain it is kept for the business as a whole.")] [ToolParameter(Records.ToolScope.Request)] string fact,
         [Description("Any part of the sentence already on record that this puts right, where they have just contradicted it — a reading taken off their upload most of all. Leave it out when nothing is being corrected.")] [ToolParameter(Records.ToolScope.Request)] string? corrects = null)
     {
-        string written = fact.Trim();
-        string about = subject.Trim();
+        string sentence = fact.Trim();
+        string topic = subject.Trim();
 
-        if (written.Length == 0 || about.Length == 0)
+        if (sentence.Length == 0 || topic.Length == 0)
             return ToolReply.Refused(Said("FactIncomplete"));
 
-        List<KnownFact> kept = Memory;
-        int dropped = corrects is { Length: > 0 } wrong ? Forget(kept, wrong) : 0;
+        List<KnownFact> facts = Memory;
+        int removals = corrects is { Length: > 0 } mistake ? Forget(facts, mistake) : 0;
 
         // What the client says stands over what Alembic read off their upload about the same
         // subject: a reading of somebody else's prose loses to the person whose shop it is.
-        dropped += kept.RemoveAll(known =>
-            known.Inferred && string.Equals(known.Subject, about, StringComparison.OrdinalIgnoreCase));
+        removals += facts.RemoveAll(entry =>
+            entry.Inferred && string.Equals(entry.Subject, topic, StringComparison.OrdinalIgnoreCase));
 
-        if (kept.Any(known => string.Equals(known.Fact, written, StringComparison.OrdinalIgnoreCase)))
+        if (facts.Any(entry => string.Equals(entry.Fact, sentence, StringComparison.OrdinalIgnoreCase)))
             return new ToolReply(Said("FactDuplicate"));
 
-        if (kept.Count >= MemoryCeiling)
-            return ToolReply.Refused(Said("FactMemoryFull", ("count", kept.Count.ToString(CultureInfo.InvariantCulture))));
+        if (facts.Count >= MemoryCeiling)
+            return ToolReply.Refused(Said("FactMemoryFull", ("count", facts.Count.ToString(CultureInfo.InvariantCulture))));
 
-        kept.Add(new KnownFact(about, written, Inferred: false));
+        facts.Add(new KnownFact(topic, sentence, Inferred: false));
 
         return new ToolReply(Said("FactWritten",
-            ("subject", about),
-            ("replaced", dropped > 0 ? Said("FactReplaced", ("count", dropped.ToString(CultureInfo.InvariantCulture))) : string.Empty),
-            ("count", kept.Count.ToString(CultureInfo.InvariantCulture))));
+            ("subject", topic),
+            ("replaced", removals > 0 ? Said("FactReplaced", ("count", removals.ToString(CultureInfo.InvariantCulture))) : string.Empty),
+            ("count", facts.Count.ToString(CultureInfo.InvariantCulture))));
     }
 
     /// <summary>
@@ -1101,16 +1101,16 @@ public class InterviewTools
     public ToolReply DropDomainFact(
         [Description("Any part of the sentence to remove, or its subject, enough to tell it from the others on record.")] [ToolParameter(Records.ToolScope.Request)] string fact)
     {
-        string wrong = fact.Trim();
+        string mistake = fact.Trim();
 
-        if (wrong.Length == 0)
+        if (mistake.Length == 0)
             return ToolReply.Refused(Said("FactDropEmpty"));
 
-        int dropped = Forget(Memory, wrong);
+        int removals = Forget(Memory, mistake);
 
-        return dropped == 0
+        return removals == 0
             ? ToolReply.Refused(Said("FactAbsent"))
-            : new ToolReply(Said("FactsDropped", ("count", dropped.ToString(CultureInfo.InvariantCulture))));
+            : new ToolReply(Said("FactsDropped", ("count", removals.ToString(CultureInfo.InvariantCulture))));
     }
 
     /// <summary>
@@ -1129,7 +1129,7 @@ public class InterviewTools
     public ToolReply RecallAgent(
         [Description("The agent's own intent name, exactly as the opening message lists it.")] [ToolParameter(Records.ToolScope.Request)] string intent)
     {
-        string named = intent.Trim();
+        string intentName = intent.Trim();
         DomainDraft draft = draftStateService.Current ?? new DomainDraft();
 
         // An agent of this domain is an entry of the map, written or still ahead — the same universe
@@ -1137,35 +1137,35 @@ public class InterviewTools
         // this denied the existence of every agent the interview had not reached yet, which is most
         // of them on the first agent and all of them the client had just dictated.
         IntentDraft? entry = draft.Intents.Concat(interviewState.Map).FirstOrDefault(candidate =>
-            string.Equals(candidate.Name, named, StringComparison.OrdinalIgnoreCase));
+            string.Equals(candidate.Name, intentName, StringComparison.OrdinalIgnoreCase));
 
         AgentDraft? agent = draft.Agents.FirstOrDefault(agent =>
-            string.Equals(agent.ID, named, StringComparison.OrdinalIgnoreCase));
+            string.Equals(agent.ID, intentName, StringComparison.OrdinalIgnoreCase));
 
         if (entry is null && agent is null)
-            return ToolReply.Refused(Said("RecallUnknown", ("name", named)));
+            return ToolReply.Refused(Said("RecallUnknown", ("name", intentName)));
 
         // What the map says about an agent nobody has opened yet is the whole of what is known about
         // it. It is worth more than a refusal: the routing sentence the client dictated is the
         // only account of that counter anybody has.
         if (agent is null || agent.Known.Count == 0)
             return new ToolReply(string.IsNullOrWhiteSpace(entry?.Description)
-                ? Said("RecallNothing", ("name", named))
-                : Said("RecallMapOnly", ("name", named), ("description", entry.Description)));
+                ? Said("RecallNothing", ("name", intentName))
+                : Said("RecallMapOnly", ("name", intentName), ("description", entry.Description)));
 
-        return new ToolReply(Said("RecallHeader", ("name", named)) + "\n"
-               + string.Join("\n", agent.Known.Select(known =>
-                   $"- {known.Subject}: {known.Fact}" + (known.Inferred ? " " + Said("RecalledInferred") : string.Empty))));
+        return new ToolReply(Said("RecallHeader", ("name", intentName)) + "\n"
+               + string.Join("\n", agent.Known.Select(entry =>
+                   $"- {entry.Subject}: {entry.Fact}" + (entry.Inferred ? " " + Said("RecalledInferred") : string.Empty))));
     }
 
     /// <summary>
     /// Removes whatever on record carries the wrong sentence, by subject or by wording.
     /// </summary>
-    private static int Forget(List<KnownFact> kept, string wrong) =>
-        kept.RemoveAll(known =>
-            known.Fact.Contains(wrong, StringComparison.OrdinalIgnoreCase)
-            || wrong.Contains(known.Fact, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(known.Subject, wrong, StringComparison.OrdinalIgnoreCase));
+    private static int Forget(List<KnownFact> facts, string mistake) =>
+        facts.RemoveAll(entry =>
+            entry.Fact.Contains(mistake, StringComparison.OrdinalIgnoreCase)
+            || mistake.Contains(entry.Fact, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(entry.Subject, mistake, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Says what the step about to be asked adds to the agent in hand, over its question.
@@ -1183,12 +1183,12 @@ public class InterviewTools
     public ToolReply SetStepPlacing(
         [Description("One short sentence in the second person, naming what THEY will be able to do once this step is settled, in the things their work is actually made of — the orders, the counter, the people who write in. Name neither the agent nor the step: both already stand lit on the screen. Where the sentence needs a subject it is the part of their work this agent stands for, in their own words. Two things it is never: a line about what software becomes able to do ('this is where the catalogue stops being just words and becomes something you can really consult' is a brochure and tells a baker nothing) or a restatement of why this stage exists, which is written above for you and not for them. The test is simple: if the same sentence could open this step for a garage, a vet and a bank alike, it places nothing. Never place it at the expense of the steps behind it: what those settled is already their configuration, so a step announcing that things now finally become real tells them the screens they have just filled in were a game.")] [ToolParameter(Records.ToolScope.Request)] string placing)
     {
-        string written = placing.Trim();
+        string placingText = placing.Trim();
 
-        if (written.Length == 0)
+        if (placingText.Length == 0)
             return ToolReply.Refused(Said("PlacingEmpty"));
 
-        interviewState.PendingPlacing = written;
+        interviewState.PendingPlacing = placingText;
 
         return new ToolReply(Said("PlacingSet"));
     }
@@ -1238,12 +1238,12 @@ public class InterviewTools
     {
         // The box holds it as the client's own text, so a pair of quotation marks around it is text
         // they would be sending. One at a single end is what a half-escaped payload leaves behind.
-        string written = example.Trim().Trim('"').Trim();
+        string exampleText = example.Trim().Trim('"').Trim();
 
-        if (written.Length == 0)
+        if (exampleText.Length == 0)
             return ToolReply.Refused(Said("ExampleEmpty"));
 
-        interviewState.PendingExample = written;
+        interviewState.PendingExample = exampleText;
 
         return new ToolReply(Said("ExampleSet"));
     }
@@ -1289,19 +1289,19 @@ public class InterviewTools
     [RequiresApproval(false)]
     public ToolReply GetExistingIntents()
     {
-        IEnumerable<string> written = (draftStateService.Current?.Intents ?? [])
+        IEnumerable<string> domainLines = (draftStateService.Current?.Intents ?? [])
             .Where(i => !string.Equals(i.Name, interviewState.Intent.Name, StringComparison.OrdinalIgnoreCase))
             .Select(i => $"- {i.Name}: {i.Description} {Said("IntentAlreadyInDomain")}");
 
-        IEnumerable<string> planned = interviewState.Map
+        IEnumerable<string> mapLines = interviewState.Map
             .Where(i => !ReferenceEquals(i, interviewState.Intent))
             .Select(i => $"- {i.Name}: {i.Description} {Said("IntentOnMapNotWritten")}");
 
-        List<string> all = [.. written, .. planned];
+        List<string> lines = [.. domainLines, .. mapLines];
 
-        return new ToolReply(all.Count == 0
+        return new ToolReply(lines.Count == 0
             ? Said("IntentsNone")
-            : Said("IntentsHeader") + "\n" + string.Join("\n", all));
+            : Said("IntentsHeader") + "\n" + string.Join("\n", lines));
     }
 
     /// <summary>
@@ -1381,14 +1381,14 @@ public class InterviewTools
     public ToolReply SetIntentDescription(
         [Description("What lands on this agent, said for the classifier: the subject and the kinds of request that belong to it, in the client's own words. Never the agent's boundaries, its tools or its voice.")] [ToolParameter(Records.ToolScope.Request)] string description)
     {
-        string written = (description ?? string.Empty).Trim();
+        string descriptionText = (description ?? string.Empty).Trim();
 
-        if (written.Length == 0)
+        if (descriptionText.Length == 0)
             return ToolReply.Refused(Said("IntentDescriptionEmpty"));
 
-        interviewState.Intent.Description = written;
+        interviewState.Intent.Description = descriptionText;
 
-        return new ToolReply(Said("IntentRoutesOn", ("name", interviewState.Intent.Name ?? string.Empty), ("description", written)));
+        return new ToolReply(Said("IntentRoutesOn", ("name", interviewState.Intent.Name ?? string.Empty), ("description", descriptionText)));
     }
 
     /// <summary>
@@ -1408,20 +1408,20 @@ public class InterviewTools
         if (string.IsNullOrWhiteSpace(interviewState.Intent.Name))
             return new ToolReply(Said("FindingsNoIntent"));
 
-        DomainDraft existing = draftStateService.Current ?? new DomainDraft();
+        DomainDraft draft = draftStateService.Current ?? new DomainDraft();
 
         DomainDraft probe = new DomainDraft
         {
-            Intents = [.. existing.Intents, interviewState.Intent],
-            Agents = [.. existing.Agents, interviewState.Agent]
+            Intents = [.. draft.Intents, interviewState.Intent],
+            Agents = [.. draft.Agents, interviewState.Agent]
         };
 
-        string mine = interviewState.Intent.Name!;
+        string intentName = interviewState.Intent.Name!;
 
         List<ValidationFinding> findings =
             [.. draftValidationService.Validate(probe)
-                .Where(f => f.Where.Contains($"'{mine}'", StringComparison.OrdinalIgnoreCase)
-                            || f.Where.StartsWith($"{mine}.", StringComparison.OrdinalIgnoreCase)
+                .Where(f => f.Where.Contains($"'{intentName}'", StringComparison.OrdinalIgnoreCase)
+                            || f.Where.StartsWith($"{intentName}.", StringComparison.OrdinalIgnoreCase)
                             || f.Where == "domain")];
 
         return new ToolReply(findings.Count == 0
@@ -1448,17 +1448,17 @@ public class InterviewTools
         if (interviewState.Revision is not null && interviewState.Exchanges == interviewState.PassOpenedAt)
             return ToolReply.Refused(Said("PassNotYetSaid"));
 
-        IReadOnlyList<string> missing = interviewState.Missing();
+        IReadOnlyList<string> gaps = interviewState.Missing();
 
-        if (missing.Count > 0)
+        if (gaps.Count > 0)
             return ToolReply.Refused(Said("PassIncomplete",
-                ("missing", string.Join(", ", missing)),
-                ("advice", Said(missing.Count == 1 ? "PassMissingOne" : "PassMissingMany"))));
+                ("missing", string.Join(", ", gaps)),
+                ("advice", Said(gaps.Count == 1 ? "PassMissingOne" : "PassMissingMany"))));
 
         interviewState.ReadyForReview = true;
 
         // What comes next is told by the pass that has just closed, so the model announces it without waiting for the state machine to open it.
-        string next = interviewState.Pass switch
+        string nextStep = interviewState.Pass switch
         {
             // The map closes onto the first entry of the list it just drew.
             InterviewStep.DomainMapper => Said("NextAfterMap", ("count", interviewState.Map.Count.ToString(CultureInfo.InvariantCulture))),
@@ -1472,7 +1472,7 @@ public class InterviewTools
             _ => Said("NextAfterAgent")
         };
 
-        return new ToolReply(Said("PassSettled", ("next", next)));
+        return new ToolReply(Said("PassSettled", ("next", nextStep)));
     }
 
     /// <summary>
@@ -1558,15 +1558,15 @@ public class InterviewTools
         if (string.IsNullOrWhiteSpace(value))
             return 0;
 
-        string trimmed = value.Trim();
+        string text = value.Trim();
         int count = 0;
 
-        for (int i = 0; i < trimmed.Length; i++)
+        for (int i = 0; i < text.Length; i++)
         {
-            if (trimmed[i] is not ('.' or '!' or '?'))
+            if (text[i] is not ('.' or '!' or '?'))
                 continue;
 
-            if (i == trimmed.Length - 1 || char.IsWhiteSpace(trimmed[i + 1]))
+            if (i == text.Length - 1 || char.IsWhiteSpace(text[i + 1]))
                 count++;
         }
 

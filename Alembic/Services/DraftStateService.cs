@@ -36,7 +36,7 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
     /// <summary>
     /// The most recent snapshot, kept only so Save my work is never left with nothing to hand over.
     /// </summary>
-    private byte[]? latest;
+    private byte[]? reserve;
 
     /// <summary>
     /// Binds the state service to the serializer its snapshots go through.
@@ -88,7 +88,7 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
 
         try
         {
-            return latest = drafts.Serialize(draft);
+            return reserve = drafts.Serialize(draft);
         }
         catch (Exception ex)
         {
@@ -104,7 +104,7 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
     /// <inheritdoc />
     /// <returns>The most recent snapshot taken, by timer or by an explicit <see cref="Snapshot"/>
     /// call — never re-serializes on its own, so this is a cheap read even mid-turn.</returns>
-    public byte[]? Latest() => latest;
+    public byte[]? Latest() => reserve;
 
     /// <inheritdoc />
     public void Dispose() => timer.Dispose();

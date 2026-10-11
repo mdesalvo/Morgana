@@ -191,9 +191,9 @@ public class CoherenceApplyTools
         if (cleanName.Length == 0)
             return ToolReply.Refused(Said("ApplyToolNameMissing"));
 
-        ToolDraft? existing = FindTool(agent, cleanName);
-        bool revision = existing is not null;
-        ToolDraft tool = existing ?? new ToolDraft { Name = cleanName, Origin = Provenance.Authored };
+        ToolDraft? match = FindTool(agent, cleanName);
+        bool revision = match is not null;
+        ToolDraft tool = match ?? new ToolDraft { Name = cleanName, Origin = Provenance.Authored };
         tool.Description = description?.Trim();
         tool.RequiresExecutionApproval = requiresApproval;
 
@@ -242,11 +242,11 @@ public class CoherenceApplyTools
         // rather than being silently coerced into one of the two known ones.
         string? resolvedScope = InterviewTools.ResolveScope(scope);
 
-        ToolParameterDraft? existing = tool.Parameters.FirstOrDefault(p =>
+        ToolParameterDraft? match = tool.Parameters.FirstOrDefault(p =>
             string.Equals(p.Name, cleanName, StringComparison.Ordinal));
 
-        bool revision = existing is not null;
-        ToolParameterDraft parameter = existing ?? new ToolParameterDraft { Name = cleanName };
+        bool revision = match is not null;
+        ToolParameterDraft parameter = match ?? new ToolParameterDraft { Name = cleanName };
 
         parameter.Description = description?.Trim();
         parameter.Scope = resolvedScope;
@@ -277,13 +277,13 @@ public class CoherenceApplyTools
         if (Find(agentId) is not { } agent || FindTool(agent, toolName) is not { } tool)
             return ToolReply.Refused(Said("ApplyDropToolUnknown", ("agent", agentId ?? string.Empty)));
 
-        int removed = tool.Parameters.RemoveAll(p =>
+        int removals = tool.Parameters.RemoveAll(p =>
             string.Equals(p.Name, parameterName?.Trim(), StringComparison.Ordinal));
 
-        if (removed > 0)
+        if (removals > 0)
             MarkRevised(agent);
 
-        return removed > 0
+        return removals > 0
             ? new ToolReply(Said("ApplyParameterDropped", ("name", parameterName ?? string.Empty), ("agent", agentId), ("tool", tool.Name ?? string.Empty)))
             : ToolReply.Refused(Said("ParameterAbsent", ("tool", tool.Name ?? string.Empty), ("name", parameterName ?? string.Empty)));
     }
@@ -300,13 +300,13 @@ public class CoherenceApplyTools
         if (Find(agentId) is not { } agent)
             return ToolReply.Refused(Said("ApplyDropAgentMissing", ("agent", agentId ?? string.Empty)));
 
-        int removed = agent.Tools.RemoveAll(t =>
+        int removals = agent.Tools.RemoveAll(t =>
             string.Equals(t.Name, toolName?.Trim(), StringComparison.Ordinal));
 
-        if (removed > 0)
+        if (removals > 0)
             MarkRevised(agent);
 
-        return removed > 0
+        return removals > 0
             ? new ToolReply(Said("ApplyToolDropped", ("name", toolName ?? string.Empty), ("agent", agentId)))
             : ToolReply.Refused(Said("ApplyToolAbsent", ("agent", agentId), ("name", toolName ?? string.Empty)));
     }

@@ -103,12 +103,12 @@ public class ToolMockService : IToolMockService
 
         IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 
-        string authored = await CompleteAsync(chatClient, system, request.ToString(), agent, cancellationToken);
+        string source = await CompleteAsync(chatClient, system, request.ToString(), agent, cancellationToken);
 
         // Thrown rather than returned, so the packager's per-agent catch writes a file that says
         // what happened instead of one that is silently empty. An empty source file is the one
         // outcome here that looks like success and is not.
-        if (authored.Length == 0)
+        if (source.Length == 0)
             throw new InvalidOperationException(
                 $"The model returned no source for {className}: the whole response was "
                 + "reasoning and no text. That is what a MaxOutputTokens too small for a source file produces — Alembic's "
@@ -121,7 +121,7 @@ public class ToolMockService : IToolMockService
         // declared there too, so a second declaration collides with them. A type that a record names
         // and nobody declares is the opposite case: it exists only if this half declares it. Told once
         // and written anyway, the model is told what it did and asked again.
-        MockDefects defects = MockDefects.Of(authored, agent, className);
+        MockDefects defects = MockDefects.Of(source, agent, className);
 
         if (defects.Any)
         {
@@ -143,10 +143,10 @@ public class ToolMockService : IToolMockService
                 request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "TypesUndeclared", ("types", string.Join(", ", defects.MissingTypes))));
             }
 
-            authored = await CompleteAsync(chatClient, system, request.ToString(), agent, cancellationToken);
+            source = await CompleteAsync(chatClient, system, request.ToString(), agent, cancellationToken);
 
             // The second answer is judged on its own: what the first got wrong is no evidence against it.
-            defects = MockDefects.Of(authored, agent, className);
+            defects = MockDefects.Of(source, agent, className);
         }
 
         // Thrown rather than returned, for the same reason as an empty answer: a file that says what
@@ -167,7 +167,7 @@ public class ToolMockService : IToolMockService
                 $"The model left {string.Join(", ", defects.MissingTypes)} undeclared twice over. The generated half names those "
                 + "types as the type of a returned field and only the half written here can declare them, so the archive would not build.");
 
-        return StripDuplicateToolAttribute(authored);
+        return StripDuplicateToolAttribute(source);
     }
 
     /// <summary>
@@ -198,8 +198,8 @@ public class ToolMockService : IToolMockService
         public bool Any => WroteConstructor || RedeclaredRecords.Count > 0 || MissingTypes.Count > 0;
 
         /// <summary>Reads the three defects off an authored source.</summary>
-        public static MockDefects Of(string authored, AgentDraft agent, string className) =>
-            new(DeclaresConstructor(authored, className), RedeclaredResultRecords(authored, agent), UndeclaredClientTypes(authored, agent));
+        public static MockDefects Of(string source, AgentDraft agent, string className) =>
+            new(DeclaresConstructor(source, className), RedeclaredResultRecords(source, agent), UndeclaredClientTypes(source, agent));
     }
 
     /// <summary>Whether authored source declares a constructor of the class it is one half of.</summary>
@@ -220,18 +220,18 @@ public class ToolMockService : IToolMockService
     {
         foreach (ToolDraft tool in agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name)))
         {
-            List<ToolParameterDraft> described =
+            List<ToolParameterDraft> parameters =
             [
                 .. tool.Parameters.Where(p => !string.IsNullOrWhiteSpace(p.Name) && !string.IsNullOrWhiteSpace(p.Description))
             ];
 
-            if (described.Count == 0)
+            if (parameters.Count == 0)
                 continue;
 
             request.AppendLine();
             request.AppendLine(alembicPromptService.ResolvePromptInjection(MockPromptId, "ArgumentContract", ("tool", tool.Name!)));
 
-            foreach (ToolParameterDraft parameter in described)
+            foreach (ToolParameterDraft parameter in parameters)
                 request.AppendLine(CultureInfo.InvariantCulture, $"  {parameter.Name}: {parameter.Description}");
         }
     }
@@ -263,15 +263,15 @@ public class ToolMockService : IToolMockService
     /// </remarks>
     private static HashSet<(string Tool, string Field)> FieldsReadByWorkflows(AgentDraft agent)
     {
-        HashSet<(string Tool, string Field)> read = [];
+        HashSet<(string Tool, string Field)> fields = [];
 
         foreach (Records.WorkflowEdge edge in agent.Workflows.SelectMany(workflow => workflow.Edges))
-            foreach (string carried in edge.Carrying ?? [])
+            foreach (string name in edge.Carrying ?? [])
                 if (agent.Tools.FirstOrDefault(t => string.Equals(t.Name, edge.Tool, StringComparison.Ordinal)) is { } tool
-                    && tool.Returns.FirstOrDefault(r => string.Equals(r.Name, carried, StringComparison.OrdinalIgnoreCase)) is { } field)
-                    read.Add((edge.Tool, field.Name!));
+                    && tool.Returns.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase)) is { } field)
+                    fields.Add((edge.Tool, field.Name!));
 
-        return read;
+        return fields;
     }
 
     /// <summary>
