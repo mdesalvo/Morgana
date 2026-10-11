@@ -25,76 +25,56 @@
     <Message Text="[Morgana Docker] Generating .env.versions file..." Importance="high" />
     <Message Text="════════════════════════════════════════════════════════════" Importance="high" />
 
-    <!-- Read Morgana version -->
-    <XmlPeek
-      XmlInputPath="$(MorganaPropsFile)"
-      Query="/Project/PropertyGroup/Version/text()"
-      Condition="Exists('$(MorganaPropsFile)')">
-      <Output TaskParameter="Result" ItemName="MorganaVersionResult" />
-    </XmlPeek>
-
+    <!-- Read Morgana version: VersionPrefix, followed by -VersionSuffix when the props declare one -->
     <PropertyGroup>
-      <MorganaVersion>@(MorganaVersionResult)</MorganaVersion>
+      <MorganaProps Condition="Exists('$(MorganaPropsFile)')">$([System.IO.File]::ReadAllText('$(MorganaPropsFile)'))</MorganaProps>
+      <MorganaVersion>$([System.Text.RegularExpressions.Regex]::Match('$(MorganaProps)', '(?&lt;=&lt;VersionPrefix&gt;)[^&lt;]+'))</MorganaVersion>
+      <MorganaSuffix>$([System.Text.RegularExpressions.Regex]::Match('$(MorganaProps)', '(?&lt;=&lt;VersionSuffix&gt;)[^&lt;]+'))</MorganaSuffix>
+      <MorganaVersion Condition="'$(MorganaVersion)' != '' AND '$(MorganaSuffix)' != ''">$(MorganaVersion)-$(MorganaSuffix)</MorganaVersion>
     </PropertyGroup>
 
     <Message Text="[Morgana Docker] ✓ Morgana version:  $(MorganaVersion)" Importance="high" Condition="'$(MorganaVersion)' != ''" />
     <Warning Text="[Morgana Docker] Could not find $(MorganaPropsFile)" Condition="'$(MorganaVersion)' == ''" />
 
-    <!-- Read Cauldron version -->
-    <XmlPeek
-      XmlInputPath="$(CauldronPropsFile)"
-      Query="/Project/PropertyGroup/Version/text()"
-      Condition="Exists('$(CauldronPropsFile)')">
-      <Output TaskParameter="Result" ItemName="CauldronVersionResult" />
-    </XmlPeek>
-
+    <!-- Read Cauldron version: VersionPrefix, followed by -VersionSuffix when the props declare one -->
     <PropertyGroup>
-      <CauldronVersion>@(CauldronVersionResult)</CauldronVersion>
+      <CauldronProps Condition="Exists('$(CauldronPropsFile)')">$([System.IO.File]::ReadAllText('$(CauldronPropsFile)'))</CauldronProps>
+      <CauldronVersion>$([System.Text.RegularExpressions.Regex]::Match('$(CauldronProps)', '(?&lt;=&lt;VersionPrefix&gt;)[^&lt;]+'))</CauldronVersion>
+      <CauldronSuffix>$([System.Text.RegularExpressions.Regex]::Match('$(CauldronProps)', '(?&lt;=&lt;VersionSuffix&gt;)[^&lt;]+'))</CauldronSuffix>
+      <CauldronVersion Condition="'$(CauldronVersion)' != '' AND '$(CauldronSuffix)' != ''">$(CauldronVersion)-$(CauldronSuffix)</CauldronVersion>
     </PropertyGroup>
 
     <Message Text="[Morgana Docker] ✓ Cauldron version: $(CauldronVersion)" Importance="high" Condition="'$(CauldronVersion)' != ''" />
     <Warning Text="[Morgana Docker] Could not find $(CauldronPropsFile)" Condition="'$(CauldronVersion)' == ''" />
 
-    <!-- Read Rune version -->
-    <XmlPeek
-      XmlInputPath="$(RunePropsFile)"
-      Query="/Project/PropertyGroup/Version/text()"
-      Condition="Exists('$(RunePropsFile)')">
-      <Output TaskParameter="Result" ItemName="RuneVersionResult" />
-    </XmlPeek>
-
+    <!-- Read Rune version: VersionPrefix, followed by -VersionSuffix when the props declare one -->
     <PropertyGroup>
-      <RuneVersion>@(RuneVersionResult)</RuneVersion>
+      <RuneProps Condition="Exists('$(RunePropsFile)')">$([System.IO.File]::ReadAllText('$(RunePropsFile)'))</RuneProps>
+      <RuneVersion>$([System.Text.RegularExpressions.Regex]::Match('$(RuneProps)', '(?&lt;=&lt;VersionPrefix&gt;)[^&lt;]+'))</RuneVersion>
+      <RuneSuffix>$([System.Text.RegularExpressions.Regex]::Match('$(RuneProps)', '(?&lt;=&lt;VersionSuffix&gt;)[^&lt;]+'))</RuneSuffix>
+      <RuneVersion Condition="'$(RuneVersion)' != '' AND '$(RuneSuffix)' != ''">$(RuneVersion)-$(RuneSuffix)</RuneVersion>
     </PropertyGroup>
 
     <Message Text="[Morgana Docker] ✓ Rune version:     $(RuneVersion)" Importance="high" Condition="'$(RuneVersion)' != ''" />
     <Warning Text="[Morgana Docker] Could not find $(RunePropsFile)" Condition="'$(RuneVersion)' == ''" />
 
-    <!-- Read Grimoire version -->
-    <XmlPeek
-      XmlInputPath="$(GrimoirePropsFile)"
-      Query="/Project/PropertyGroup/Version/text()"
-      Condition="Exists('$(GrimoirePropsFile)')">
-      <Output TaskParameter="Result" ItemName="GrimoireVersionResult" />
-    </XmlPeek>
-
+    <!-- Read Grimoire version: VersionPrefix, followed by -VersionSuffix when the props declare one -->
     <PropertyGroup>
-      <GrimoireVersion>@(GrimoireVersionResult)</GrimoireVersion>
+      <GrimoireProps Condition="Exists('$(GrimoirePropsFile)')">$([System.IO.File]::ReadAllText('$(GrimoirePropsFile)'))</GrimoireProps>
+      <GrimoireVersion>$([System.Text.RegularExpressions.Regex]::Match('$(GrimoireProps)', '(?&lt;=&lt;VersionPrefix&gt;)[^&lt;]+'))</GrimoireVersion>
+      <GrimoireSuffix>$([System.Text.RegularExpressions.Regex]::Match('$(GrimoireProps)', '(?&lt;=&lt;VersionSuffix&gt;)[^&lt;]+'))</GrimoireSuffix>
+      <GrimoireVersion Condition="'$(GrimoireVersion)' != '' AND '$(GrimoireSuffix)' != ''">$(GrimoireVersion)-$(GrimoireSuffix)</GrimoireVersion>
     </PropertyGroup>
 
     <Message Text="[Morgana Docker] ✓ Grimoire version: $(GrimoireVersion)" Importance="high" Condition="'$(GrimoireVersion)' != ''" />
     <Warning Text="[Morgana Docker] Could not find $(GrimoirePropsFile)" Condition="'$(GrimoireVersion)' == ''" />
 
-    <!-- Read Alembic version -->
-    <XmlPeek
-      XmlInputPath="$(AlembicPropsFile)"
-      Query="/Project/PropertyGroup/Version/text()"
-      Condition="Exists('$(AlembicPropsFile)')">
-      <Output TaskParameter="Result" ItemName="AlembicVersionResult" />
-    </XmlPeek>
-
+    <!-- Read Alembic version: VersionPrefix, followed by -VersionSuffix when the props declare one -->
     <PropertyGroup>
-      <AlembicVersion>@(AlembicVersionResult)</AlembicVersion>
+      <AlembicProps Condition="Exists('$(AlembicPropsFile)')">$([System.IO.File]::ReadAllText('$(AlembicPropsFile)'))</AlembicProps>
+      <AlembicVersion>$([System.Text.RegularExpressions.Regex]::Match('$(AlembicProps)', '(?&lt;=&lt;VersionPrefix&gt;)[^&lt;]+'))</AlembicVersion>
+      <AlembicSuffix>$([System.Text.RegularExpressions.Regex]::Match('$(AlembicProps)', '(?&lt;=&lt;VersionSuffix&gt;)[^&lt;]+'))</AlembicSuffix>
+      <AlembicVersion Condition="'$(AlembicVersion)' != '' AND '$(AlembicSuffix)' != ''">$(AlembicVersion)-$(AlembicSuffix)</AlembicVersion>
     </PropertyGroup>
 
     <Message Text="[Morgana Docker] ✓ Alembic version:  $(AlembicVersion)" Importance="high" Condition="'$(AlembicVersion)' != ''" />
