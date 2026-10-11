@@ -19,6 +19,9 @@ An interrupted workflow picks up where it left off, even after a restart. Native
 A tool performing a dispositive action (e.g: placing an order, signing a contract) can now **wait for the user's go-ahead**: mark it **`[RequiresApproval(true)]`** and Morgana holds the call until the user approves or declines it with one click.
 
 ### ✨ Added
+- **`[ProvidesWorkflowForIntent("intent")]`** — a new attribute binding a `MorganaWorkflow` to its agent, which can start it as a tool (e.g: `PlaceOrderWorkflow` becomes `StartPlaceOrder`)
+- **`[RequiresApproval(true)]`** — a new attribute holding a tool's call until the user approves it, through `Microsoft.Extensions.AI`'s `ApprovalRequiredAIFunction`
+- **`[ToolParameter(scope, shared)]`** — a new attribute declaring where a tool parameter's value comes from: `Request` when the user supplies it, `Context` when the framework resolves it from the session, optionally shared with the other agents
 
 ### 🔄 Changed
 - Prompt aspects of tools no longer live in `agents.json`: they are now based on **`Microsoft.Extensions.AI`**. A tool and each of its parameters are described with the standard **`[Description]`** attribute on the public methods of a `MorganaTool`: `Microsoft.Extensions.AI` turns it into the tool schema handed to the model.
