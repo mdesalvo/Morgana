@@ -233,6 +233,7 @@ public class ContractTool : MorganaTool
     /// </summary>
     /// <returns>The plan details including name, features, fees, termination terms and notice period.</returns>
     [Description("Retrieves the Green Care Plan's own terms as structured JSON — planCode, name, visitFrequency, coverage, guarantee, monthlyFee, includedFeatures, noticePeriodDays, earlyTerminationFee. Needs no customer code and no existing schedule: this is the ONE tool that answers what the plan itself offers and costs, for a prospect who does not hold one yet as much as for a customer who already does. Never answer a 'what does it include / what does it cost' question from GetContractDetails or from memory: always call this tool first.")]
+    [OfferedToUser(1, "🌱 What the plan offers")]
     [RequiresApproval(false)]
     public async Task<PlanOverviewResult> GetPlanOverview()
     {
@@ -332,6 +333,7 @@ public class ContractTool : MorganaTool
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <returns>The complete plan overview, or the error saying that no plan is held</returns>
     [Description("Retrieves comprehensive Green Care Plan information for that customer as structured JSON including: contractId, customerName, status (with icon), plan details (name, visit frequency, garden coverage, plant-health guarantee, included features), plan period (with remaining days/months), fee (amount and cycle), optional services array, termination basics and available clauses list. This tool has only informative capabilities: you will NOT find here dispositive actions on an EXISTING plan (e.g: 'Change plan', 'Book a visit', 'Terminate plan', ...). A code no plan hangs from is reported as having none — that is an answer, not a failure; enrolling one is SubscribeToGreenCarePlan's job, not this tool's and only once the customer asks.")]
+    [OfferedToUser(2, "📜 My care plan")]
     [RequiresApproval(false)]
     public async Task<ContractDetailsResult> GetContractDetails(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode)
@@ -402,6 +404,7 @@ public class ContractTool : MorganaTool
     /// <param name="clauseNumber">Clause number to retrieve (1-7)</param>
     /// <returns>The complete clause details, or the error saying why none can be read</returns>
     [Description("Retrieves a specific plan clause as structured JSON including: clauseNumber, title, type, summary, fullText and relatedInfo. The plan has 7 clauses: (1) Plant Health Guarantee, (2) Payment Terms, (3) Visit Schedule and Rescheduling, (4) Termination Terms, (5) Auto-Renewal, (6) Limitation of Liability, (7) Data Privacy (GDPR). The clauses are the plan's own terms, identical for everyone who signs it; the dates and fees specific to this customer are in GetContractDetails. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Modify clause', ...).")]
+    [OfferedToUser(3, "📑 A contract clause")]
     [RequiresApproval(false)]
     public async Task<ContractClauseResult> GetContractClause(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode,
@@ -449,6 +452,7 @@ public class ContractTool : MorganaTool
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <returns>The recent visits, the upcoming dates and this month's allowance, or the error saying that no plan is held</returns>
     [Description("Retrieves the customer's tending calendar as structured JSON: visitFrequency, visitDays, allowance (includedPerMonth, takenThisMonth, remainingThisMonth, extraVisitFee), upcoming (the next dates, computed from the plan's own visit days) and recentVisits (date, kind Included/Extra, outcome Completed/Missed, notes and — where an extra visit was charged — the invoiceId it appears on). This tool has only informative capabilities: it does NOT book, move or cancel a visit and no tool here does.")]
+    [OfferedToUser(4, "🗓️ My tending visits")]
     [RequiresApproval(false)]
     public async Task<VisitScheduleResult> GetVisitSchedule(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode)
@@ -558,6 +562,7 @@ public class ContractTool : MorganaTool
     /// <param name="reason">Optional termination reason for internal tracking</param>
     /// <returns>The complete termination guide, or the error saying that no plan is held</returns>
     [Description("Retrieves the plan termination procedure as structured JSON including: contractId, noticePeriod (requiredDays, earliestEffectiveDate), fees (earlyTermination amount and applicability, waiverEligibility), procedure (steps array, requiredDocuments array), refundPolicy and importantNotes. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Terminate plan', ...) — it explains the steps, it does not take them.")]
+    [OfferedToUser(5, "✂️ How to end my plan")]
     [RequiresApproval(false)]
     public async Task<TerminationProcedureResult> GetTerminationProcedure(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode,

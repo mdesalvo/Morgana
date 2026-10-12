@@ -150,6 +150,7 @@ public class InventoryTool : MorganaTool
     /// </summary>
     /// <returns>The products with their stock status icons.</returns>
     [Description("Retrieves the full greenhouse/nursery catalog as structured JSON: totalProducts and an array of plants with sku, name, category, quantityOnHand, unitPrice, stockStatus (InStock/LowStock/OutOfStock) and statusIcon. This tool has only informative capabilities: it does NOT reserve, order, or modify anything.")]
+    [OfferedToUser(1, "🌿 Browse the catalog")]
     [RequiresApproval(false)]
     public async Task<ProductCatalogResult> GetProductCatalog()
     {
@@ -186,6 +187,7 @@ public class InventoryTool : MorganaTool
     /// <param name="sku">Product SKU to inspect (e.g. "RSE-100").</param>
     /// <returns>The quantity, threshold, price and stock status, or the error listing the SKUs that exist.</returns>
     [Description("Retrieves the current stock level for a single plant as structured JSON: sku, name, category, quantityOnHand, reorderThreshold, unitPrice, stockStatus, statusIcon, maxOrderableQuantity. Returns an error with the list of valid SKUs if the sku is unknown. This tool has only informative capabilities: it does NOT reserve, order, or modify anything.")]
+    [OfferedToUser(2, "🌼 A specific plant")]
     [RequiresApproval(false)]
     public async Task<StockLevelResult> CheckStockLevel(
         [Description("Product SKU to inspect (e.g. 'RSE-100'). The user should specify which plant they mean, or you should present the catalog and let them choose. Do NOT guess or assume which plant the user wants.")] [ToolParameter(Records.ToolScope.Request)] string sku)
@@ -439,6 +441,7 @@ public class InventoryTool : MorganaTool
     /// <param name="orderId">Identifier of the order to inspect. Tracked from the conversation itself, NOT a single stored context value: a customer may have more than one order in flight.</param>
     /// <returns>The order status and timestamps, or the error saying that no order matches.</returns>
     [Description("Retrieves the current status and lifecycle timestamps of an existing order as structured JSON: orderId, sku, quantity, status (Pending/Confirmed/Cancelled), createdAt, confirmedAt, cancelledAt. Keyed on the orderId alone: NO seal word is required, because reading a status commits nothing — the same fields are already listed by GetOrders and GetOrderHistory. An orderId nothing is filed under is reported as 'no order matches'. This tool has only informative capabilities: it does NOT modify the order.")]
+    [OfferedToUser(5, "📍 An order's status")]
     [RequiresApproval(false)]
     public async Task<OrderStatusResult> GetOrderStatus(
         [Description("Identifier of the order to inspect, as originally returned by CreatePurchaseOrder. May belong to a past session — always trust this tool's answer over what you remember.")] [ToolParameter(Records.ToolScope.Request)] string orderId)
@@ -599,6 +602,7 @@ public class InventoryTool : MorganaTool
     /// <param name="customerCode">Customer code (retrieved from shared context).</param>
     /// <returns>That customer's order history across all conversations (without sealWords).</returns>
     [Description("Lists EVERY order a customer has ever placed, across ALL conversations/sessions — not just this one — as structured JSON: customerCode, customerName, totalOrders and an array of order summaries (orderId, sku, quantity, status, createdAt, confirmedAt, cancelledAt). Does NOT include sealWord (shown only once, by CreatePurchaseOrder) so this listing alone is never enough to confirm or cancel any order it names — that pair is what ConfirmOrder and CancelOrder require. To re-read one single order by its identifier, use GetOrderStatus. This tool has only informative capabilities.")]
+    [OfferedToUser(4, "📦 My orders")]
     [RequiresApproval(false)]
     public async Task<OrderHistoryResult> GetOrderHistory(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code. It scopes the listing to that one customer and is not a selector for choosing whose history to read.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode)

@@ -4,25 +4,25 @@
       "Name": "billing",
       "Description": "requests to view the list of invoices the nursery issued to the customer, extract or explain the charges on a specific invoice (fees, one-off services, discounts, credits, taxes), check what is still due or overdue, check payment history or review billing statements",
       "Label": "🧾 Invoices",
-      "DefaultValue": "I would like to check my invoices"
+      "DefaultValue": "What can you do with my invoices?"
     },
     {
       "Name": "contract",
       "Description": "requests to summarize the customer's Green Care Plan contract, extract or explain specific detail items, read a contract clause, understand what the garden-care subscription covers (its visits, fees and plant-health guarantee) or inquire about renewal and termination procedures",
       "Label": "📜 Care Plan",
-      "DefaultValue": "Show me my care plan contract"
+      "DefaultValue": "What can you tell me about the care plan?"
     },
     {
       "Name": "monkeys",
       "Description": "requests to get information about monkeys, list all available monkey species or find details about a specific monkey by name",
       "Label": "🐒 Primate Almanac",
-      "DefaultValue": "Tell me about monkeys"
+      "DefaultValue": "What can you tell me about monkeys?"
     },
     {
       "Name": "inventory",
       "Description": "requests to browse the nursery catalog of plants and flowers (flowering shrubs, exotic blooms, aromatic herbs, seeds, bulbs, foliage plants, succulents), check stock levels, place or confirm a plant order, check an existing order's status or cancel an order",
       "Label": "🌿 Greenhouse",
-      "DefaultValue": "Show me the greenhouse catalog"
+      "DefaultValue": "What can you do for me in the greenhouse?"
     }
   ],
   "Agents": [

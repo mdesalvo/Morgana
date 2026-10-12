@@ -63,11 +63,6 @@ public class MorganaAgent : MorganaActor
     protected MorganaChatHistoryProvider aiChatHistoryProvider;
 
     /// <summary>
-    /// Whether this agent's tier can be made to call a specific tool, which decides if the opening tool of a turn is forced.
-    /// </summary>
-    private readonly bool canForceOpeningTool;
-
-    /// <summary>
     /// Persistence service used to load, save and resume serialized <see cref="AgentSession"/>s
     /// across actor restarts and conversation resumes.
     /// </summary>
@@ -113,11 +108,6 @@ public class MorganaAgent : MorganaActor
         // Persistence and logger are the agent's own; the base class already holds everything an actor shares.
         this.persistenceService = persistenceService;
         this.agentLogger = agentLogger;
-
-        // The tier is the agent's fixed declaration, so what its model can be forced to do is read once here.
-        // An agent without the attribute is refused at startup and is never forced.
-        RequiresLLMTierAttribute? tierAttribute = GetType().GetCustomAttribute<RequiresLLMTierAttribute>();
-        canForceOpeningTool = tierAttribute is not null && llmService.CanForceToolCall(tierAttribute.Tier);
 
         // The user's turn, dispatched by the router once the supervisor has routed the intent here.
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
@@ -393,17 +383,8 @@ public class MorganaAgent : MorganaActor
         // The text the user will read, whichever way the model delivers it.
         StringBuilder fullResponse = new StringBuilder();
 
-        // A landing opens with the agent presenting itself and a pressed action with the tool it leads to.
-        string? openingTool = req.IsLanding ? Constants.Tools.Present : pressedActionTool;
-
-        // The first pass alone is held to the opening tool, where the tier can force one: the user's press
-        // already decided what the turn does, so the model only gives it a voice.
-        AgentRunOptions? openingRunOptions = openingTool is not null && canForceOpeningTool
-            ? new ChatClientAgentRunOptions(new ChatOptions { ToolMode = ChatToolMode.RequireSpecific(openingTool) })
-            : null;
-
         // One pass of the model over the session, its text streamed or batched into fullResponse.
-        async Task RunModelAsync(AgentRunOptions? runOptions = null)
+        async Task RunModelAsync()
         {
             // Streaming is used only when both signals allow it and otherwise the whole answer arrives in one piece.
             if (useStreaming)
@@ -415,7 +396,7 @@ public class MorganaAgent : MorganaActor
 
                 // The whole turn runs here — tool calls included, which surface as chunks carrying no text.
                 // The phrase being answered is the one already filed above, so nothing is handed in here.
-                await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(session, runOptions))
+                await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(session))
                 {
                     // Text chunks are appended to the reply, while chunks without text only keep the agent alive.
                     if (!string.IsNullOrEmpty(chunk.Text))
@@ -472,7 +453,7 @@ public class MorganaAgent : MorganaActor
                 Stopwatch responseStopwatch = Stopwatch.StartNew();
                 // Same turn as the streaming branch, answering the same already-filed phrase: nothing
                 // reaches the channel until the model and every tool it decided to call, are done.
-                AgentResponse response = await aiAgent.RunAsync(session, runOptions);
+                AgentResponse response = await aiAgent.RunAsync(session);
                 responseStopwatch.Stop();
 
                 // Assembled message by message rather than through AgentResponse.Text, which is
@@ -502,7 +483,7 @@ public class MorganaAgent : MorganaActor
         }
 
         // The first pass answers the user's phrase.
-        await RunModelAsync(openingRunOptions);
+        await RunModelAsync();
 
         // A call that needs approval, to the very tool whose button opened this turn, was approved by
         // that press: it runs now and the user is never asked to confirm the same thing twice.
