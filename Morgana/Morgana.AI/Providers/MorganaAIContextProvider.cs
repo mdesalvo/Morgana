@@ -43,6 +43,11 @@ public class MorganaAIContextProvider : AIContextProvider
     public IReadOnlyList<Records.WorkflowDefinition> Workflows { get; }
 
     /// <summary>
+    /// The agent's menu: the actions that its offered tools and workflows put in front of the user, in menu order.
+    /// </summary>
+    public IReadOnlyList<Records.ReplyAction> Menu { get; }
+
+    /// <summary>
     /// Keys used by the framework to store and retrieve this provider's state within <see cref="AgentSession"/>.
     /// </summary>
     public override IReadOnlyList<string> StateKeys => [ nameof(MorganaAIContextProvider) ];
@@ -61,16 +66,19 @@ public class MorganaAIContextProvider : AIContextProvider
     /// Defaults to <c>AgentAbstractionsJsonUtilities.DefaultOptions</c>.
     /// </param>
     /// <param name="workflows">The workflows that the agent runs; none for an agent that declares no workflow.</param>
+    /// <param name="menu">The actions that the agent offers to the user; none for an agent that offers nothing.</param>
     public MorganaAIContextProvider(
         ILogger logger,
         IEnumerable<string>? sharedVariableNames = null,
         JsonSerializerOptions? jsonSerializerOptions = null,
-        IReadOnlyList<Records.WorkflowDefinition>? workflows = null)
+        IReadOnlyList<Records.WorkflowDefinition>? workflows = null,
+        IReadOnlyList<Records.ReplyAction>? menu = null)
     {
         // A provider built without shared names persists nothing across agents.
         this.logger = logger;
         this.sharedVariableNames = [.. sharedVariableNames ?? []];
         Workflows = workflows ?? [];
+        Menu = menu ?? [];
 
         // A session that holds no variables yet starts with an empty set, so the first turn needs no special case.
         sessionState = new ProviderSessionState<MorganaContextState>(

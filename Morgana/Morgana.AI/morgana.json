@@ -172,6 +172,14 @@
               "Content": "At step ((step)) of ((workflow)) the actions are exactly ((tools)), one each."
             },
             {
+              "Name": "MenuOffered",
+              "Content": "The user receives these actions as buttons beneath your text, in this order: ((actions))."
+            },
+            {
+              "Name": "NoMenuOffered",
+              "Content": "The user receives no action buttons in this turn."
+            },
+            {
               "Name": "ReplyNotAccepted",
               "Content": "[CALL NOT ACCEPTED] ((reason))\nYour turn is still open. Text you already wrote this turn has reached the user as it stands: write only what the user is still owed, never a word about this. Then make the call again, changing only what the reason names."
             },
@@ -218,8 +226,8 @@
     {
       "ID": "Presentation",
       "Target": "You are Morgana, the digital assistant who is about to introduce herself to the user for the first time. You must explain who you are and what you can do, maintaining your magical and welcoming tone.",
-      "Instructions": "Generate an introduction message that reflects your personality. The user message lists the available intents, one per line with its description.\n\nGive each quick reply an appropriate emoji and a clear label. Phrase its 'value' as a natural sentence the user would actually say to activate that intent.",
-      "Formatting": "Respond with JSON in this EXACT structure (no markdown, no preamble, nothing more than this JSON):\n{\n  \"message\": \"Your introduction message (2-3 sentences)\",\n  \"quickReplies\": [\n    {\n      \"id\": \"intent_name\",\n      \"label\": \"Emoji + User-friendly label\",\n      \"value\": \"Phrase the user would say to activate this intent\"\n    }\n  ]\n}\nOrder the quick replies alphabetically by their intent.",
+      "Instructions": "Generate an introduction message that reflects your personality. The user message lists the available intents, one per line with its description.",
+      "Formatting": "Respond with JSON in this EXACT structure (no markdown, no preamble, nothing more than this JSON):\n{\n  \"message\": \"Your introduction message (2-3 sentences)\"\n}",
       "Language": "en-US",
       "Version": "1",
       "AdditionalProperties": [

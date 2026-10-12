@@ -273,6 +273,12 @@ public static class Constants
 
         /// <summary>Wraps the result of the workflow tool that ended the workflow.</summary>
         public const string WorkflowEnded = "WorkflowEnded";
+
+        /// <summary>Present gave the agent's menu: the actions that the user receives as buttons.</summary>
+        public const string MenuOffered = "MenuOffered";
+
+        /// <summary>Present found no menu: the agent offers the user no action.</summary>
+        public const string NoMenuOffered = "NoMenuOffered";
     }
 
     /// <summary>
@@ -283,6 +289,9 @@ public static class Constants
     {
         /// <summary>Closes the agent's turn: whether it awaits the user, the actions that it offers and its card.</summary>
         public const string Reply = "Reply";
+
+        /// <summary>Presents the agent's domain to the user and returns the menu that closes the turn.</summary>
+        public const string Present = "Present";
     }
 
     /// <summary>
@@ -320,6 +329,9 @@ public static class Constants
     {
         /// <summary>Set by <see cref="Tools.Reply"/>; read once, then dropped.</summary>
         public const string TurnReply = "turn_reply";
+
+        /// <summary>Marks a turn that opens an agent's presentation, the only turn in which <see cref="Tools.Present"/> is offered; dropped when the turn ends.</summary>
+        public const string Landing = "landing";
 
         /// <summary>Marks the turn as serving a colleague, which is what refuses a second hop.</summary>
         public const string ServingConsultation = "peer_consultation";
@@ -435,6 +447,9 @@ public static class Constants
 
         /// <summary>In <see cref="ToolInjections.ReplyNotAccepted"/> — why the closure was refused.</summary>
         public const string ReplyNotAcceptedReason = "((reason))";
+
+        /// <summary>In <see cref="ToolInjections.MenuOffered"/> — the labels of the menu, comma-joined.</summary>
+        public const string Actions = "((actions))";
 
         /// <summary>In <see cref="PromptInjections.ColleaguesDeclaration"/> — one line per colleague: function name and territory.</summary>
         public const string Colleagues = "((colleagues))";

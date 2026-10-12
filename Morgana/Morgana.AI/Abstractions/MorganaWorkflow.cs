@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Reflection;
+using Morgana.AI.Attributes;
 
 namespace Morgana.AI.Abstractions;
 
@@ -69,11 +70,14 @@ public abstract class MorganaWorkflow
             .GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
             .Select(property => property.Name)];
 
+        // The class attribute, when present, puts the launcher in the agent's menu.
+        OfferedToUserAttribute? offered = workflowClass.GetCustomAttribute<OfferedToUserAttribute>();
+
         // Distinct by instance: two steps sharing a name stay two, so validation can refuse the clash.
         List<Records.WorkflowStep> orderedSteps = [start, .. steps.Where(step => !ReferenceEquals(step, start))];
 
         // The definition is a snapshot: startup validation and the engine read it and never the class again.
-        return new Records.WorkflowDefinition(name, description, orderedSteps, [.. edges], parameters);
+        return new Records.WorkflowDefinition(name, description, orderedSteps, [.. edges], parameters, offered is null ? null : new Records.ToolOffering(offered.Ordinal, offered.Label));
     }
 
     /// <summary>Records one edge and the steps it names.</summary>

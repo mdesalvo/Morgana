@@ -89,8 +89,12 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         Records.WorkflowPosition? position = workflows.Count == 0 ? null : contextProvider.GetWorkflowPosition(session);
         (Records.WorkflowDefinition Definition, Records.WorkflowStep Step)? runningWorkflow = position?.Resolve(workflows);
 
-        // With no workflow declared and every colleague within reach the agent is offered exactly the tools it was given.
-        if (workflows.Count == 0 && !colleaguesOutOfReach)
+        // Present exists only in a landing: the flag is set at the opening of the turn that presents the agent.
+        bool isLanding = contextProvider.GetVariable(session, Constants.ContextKeys.Landing) is not null;
+
+        // With no workflow declared and every colleague within reach the agent is offered exactly the tools it was given,
+        // unless Present is among them and no landing is under way.
+        if (workflows.Count == 0 && !colleaguesOutOfReach && (isLanding || !tools.Any(tool => tool.Name == Constants.Tools.Present)))
             return options;
 
         // The tools the model is offered on this call, each one weighed against the state of the session.
@@ -109,6 +113,10 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
             if (isServingConsultation && tool is WorkflowLauncherFunction)
                 continue;
 
+            // Only a landing presents the agent: any other turn, a consultation included, is never offered Present.
+            if (!isLanding && tool.Name == Constants.Tools.Present)
+                continue;
+
             // At a choice step Reply is offered with the step's tools as the only actions it may propose.
             if (runningWorkflow is { Step.Tools.Count: > 1 } && tool.Name == Constants.Tools.Reply)
                 offeredTools.Add(WithStepActions(tool, runningWorkflow.Value.Step.Tools));
@@ -125,6 +133,11 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         // The caller's options are shared across turns, so the narrowed tool list goes on a clone.
         ChatOptions offeredOptions = options.Clone();
         offeredOptions.Tools = offeredTools;
+
+        // A press that leads to a tool which the running step hides must not make the provider fail on a forced tool it was not given.
+        if (offeredOptions.ToolMode is RequiredChatToolMode { RequiredFunctionName: { } requiredFunctionName }
+            && !offeredTools.Any(tool => tool.Name == requiredFunctionName))
+            offeredOptions.ToolMode = null;
 
         // The model reads only the tools that the session's state allows.
         return offeredOptions;

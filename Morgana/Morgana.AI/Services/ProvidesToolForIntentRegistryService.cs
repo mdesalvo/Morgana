@@ -363,14 +363,18 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
                 parameter.GetCustomAttribute<ToolParameterAttribute>()?.Shared ?? false))
         ];
 
-        // A tool is its method: the name, the description and the approval flag all come from the declaration.
+        // The method's attribute, when present, puts the tool in the agent's menu.
+        OfferedToUserAttribute? offered = method.GetCustomAttribute<OfferedToUserAttribute>();
+
+        // A tool is its method: the name, the description, the approval flag and the offering all come from the declaration.
         return new Records.ToolDefinition(
             method.Name,
             method.GetCustomAttribute<DescriptionAttribute>()?.Description ?? string.Empty,
             parameters,
             Reserved: false,
             RequiresExecutionApproval: method.GetCustomAttribute<RequiresApprovalAttribute>()?.Required ?? false,
-            Returns: ProjectReturns(method.ReturnType));
+            Returns: ProjectReturns(method.ReturnType),
+            Offering: offered is null ? null : new Records.ToolOffering(offered.Ordinal, offered.Label));
     }
 
     /// <summary>

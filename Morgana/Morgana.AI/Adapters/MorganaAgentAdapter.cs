@@ -88,7 +88,7 @@ public class MorganaAgentAdapter
     protected readonly Records.Prompt morganaPrompt;
 
     /// <summary>
-    /// The framework's base tool (Reply), projected from <see cref="ReplyTool"/> and stamped <c>Reserved = true</c> exactly
+    /// The framework's base tools (Reply and Present), projected from <see cref="ReplyTool"/> and <see cref="PresentTool"/> and stamped <c>Reserved = true</c> exactly
     /// once here — the only place in the codebase that ever sets it true. Every other reader of a
     /// ToolDefinition's Reserved flag (domain tools included) sees false by construction, never by
     /// a check: see the Reserved remarks on Records.ToolDefinition.
@@ -142,8 +142,9 @@ public class MorganaAgentAdapter
         // The framework prompt is read once because the adapter is built before any turn runs and cannot await.
         morganaPrompt = promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
 
-        // The base tool is projected from its class and reserved here, so that no domain tool can ever be reserved.
+        // The base tools are projected from their classes and reserved here, so that no domain tool can ever be reserved.
         morganaTools = [.. ProvidesToolForIntentRegistryService.ProjectToolDefinitions(typeof(ReplyTool))
+            .Concat(ProvidesToolForIntentRegistryService.ProjectToolDefinitions(typeof(PresentTool)))
             .Select(t => t with { Reserved = true })];
     }
 
@@ -231,12 +232,25 @@ public class MorganaAgentAdapter
             ? KeepSoundWorkflows(intentAttribute.Intent, agentType, toolRegistryService.GetWorkflowDefinitions(intentAttribute.Intent), [.. domainTools, .. mcpToolDefinitions])
             : toolRegistryService.GetWorkflowDefinitions(intentAttribute.Intent);
 
+        // The menu is written by code from the declared offerings: a workflow withdrawn above is no button.
+        // An MCP tool carries no offering. A tool leads to itself and a workflow to its launcher.
+        IReadOnlyList<Records.ReplyAction> menu =
+        [
+            .. domainTools.Where(tool => tool.Offering is not null)
+                .Select(tool => (tool.Offering!.Ordinal, Action: new Records.ReplyAction(tool.Name, tool.Offering.Label, tool.Offering.Label)))
+                .Concat(workflowDefinitions.Where(workflow => workflow.Offering is not null)
+                    .Select(workflow => (workflow.Offering!.Ordinal, Action: new Records.ReplyAction(Constants.Workflows.LauncherPrefix + workflow.Name, workflow.Offering.Label, workflow.Offering.Label))))
+                .OrderBy(entry => entry.Ordinal)
+                .Select(entry => entry.Action)
+        ];
+
         // The variable store that context-scoped parameters resolve from. The callback carries every
         // shared write into the conversation's cross-agent registry.
         MorganaAIContextProvider morganaAIContextProvider = CreateAIContextProvider(
             intentAttribute.Intent,
             agentTools,
             workflowDefinitions,
+            menu,
             sharedContextCallback);
 
         // Filled once every tool is known below and read by Reply at every call: the tools that a user
@@ -598,6 +612,7 @@ public class MorganaAgentAdapter
     /// <param name="agentName">Name of the agent for logging purposes (e.g., "billing")</param>
     /// <param name="tools">Tool definitions to scan for shared variable declarations</param>
     /// <param name="workflows">The agent's workflows, which the provider hands to whoever resolves a stored position.</param>
+    /// <param name="menu">The agent's menu, which the provider hands to whoever closes a presenting turn.</param>
     /// <param name="sharedContextCallback">
     /// Optional callback invoked when a shared variable is set. Wired to agent's
     /// OnSharedContextUpdate which persists the value via IConversationPersistenceService.
@@ -607,6 +622,7 @@ public class MorganaAgentAdapter
         string agentName,
         IEnumerable<Records.ToolDefinition> tools,
         IReadOnlyList<Records.WorkflowDefinition> workflows,
+        IReadOnlyList<Records.ReplyAction> menu,
         Func<string, object, Task>? sharedContextCallback = null)
     {
         // A parameter is shared across agents only when it is both flagged shared and context-scoped: a
@@ -625,7 +641,7 @@ public class MorganaAgentAdapter
                 : $"Agent '{agentName}' has NO shared variables");
 
         // Only a write to a name in this set reaches the registry: every other variable stays with the agent.
-        MorganaAIContextProvider aiContextProvider = new MorganaAIContextProvider(logger, sharedVariables, workflows: workflows);
+        MorganaAIContextProvider aiContextProvider = new MorganaAIContextProvider(logger, sharedVariables, workflows: workflows, menu: menu);
 
         // An agent created outside the actor path has no callback: its shared writes stay local.
         if (sharedContextCallback != null)
@@ -653,16 +669,17 @@ public class MorganaAgentAdapter
         // at invocation, so the model never looks a value up nor stores one itself.
         MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(logger, toolContextFactory, promptComposerService);
 
-        // The merged set is split back into Reply and the intent's own tools. They are compared by name
+        // The merged set is split back into the base tools and the intent's own tools. They are compared by name
         // because the merge may carry distinct instances of the same tool, whose identity is its name.
         Records.ToolDefinition[] agentSpecificTools = [.. agentTools.Except(morganaTools, new ToolDefinitionNameComparer())];
 
-        // Every agent registers Reply, so all of them close their turns the same way, even an MCP-only one.
-        MorganaTool baseTool = new ReplyTool(logger, toolContextFactory);
-        RegisterToolsInAdapter(morganaToolAdapter, baseTool, morganaTools);
+        // Every agent registers Reply and Present, so all of them close their turns and present themselves the same way, even an MCP-only one.
+        // Each definition binds to the instance of its own class.
+        RegisterToolsInAdapter(morganaToolAdapter, new ReplyTool(logger, toolContextFactory), [.. morganaTools.Where(tool => tool.Name == Constants.Tools.Reply)]);
+        RegisterToolsInAdapter(morganaToolAdapter, new PresentTool(logger, toolContextFactory), [.. morganaTools.Where(tool => tool.Name == Constants.Tools.Present)]);
         logger.LogInformation("Registered {BaseToolsLength} base tools for intent '{Intent}'", morganaTools.Length, intent);
 
-        // An agent that declares no domain tool is complete with Reply alone.
+        // An agent that declares no domain tool is complete with its base tools alone.
         if (agentSpecificTools.Length == 0)
         {
             logger.LogInformation("No intent-specific tools defined for intent '{Intent}' (agent has base tools only)", intent);
@@ -692,7 +709,7 @@ public class MorganaAgentAdapter
                 $"(ILogger, Func<MorganaTool.ToolContext>).", ex);
         }
 
-        // Reply is already bound to its own instance above, so only the domain definitions bind here.
+        // The base tools are already bound to their own instances above, so only the domain definitions bind here.
         RegisterToolsInAdapter(morganaToolAdapter, customToolInstance, agentSpecificTools);
         logger.LogInformation("Registered {Length} custom tools for intent '{Intent}'", agentSpecificTools.Length, intent);
 

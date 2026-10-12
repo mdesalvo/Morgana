@@ -63,6 +63,11 @@ public class MorganaAgent : MorganaActor
     protected MorganaChatHistoryProvider aiChatHistoryProvider;
 
     /// <summary>
+    /// Whether this agent's tier can be made to call a specific tool, which decides if the opening tool of a turn is forced.
+    /// </summary>
+    private readonly bool canForceOpeningTool;
+
+    /// <summary>
     /// Persistence service used to load, save and resume serialized <see cref="AgentSession"/>s
     /// across actor restarts and conversation resumes.
     /// </summary>
@@ -108,6 +113,11 @@ public class MorganaAgent : MorganaActor
         // Persistence and logger are the agent's own; the base class already holds everything an actor shares.
         this.persistenceService = persistenceService;
         this.agentLogger = agentLogger;
+
+        // The tier is the agent's fixed declaration, so what its model can be forced to do is read once here.
+        // An agent without the attribute is refused at startup and is never forced.
+        RequiresLLMTierAttribute? tierAttribute = GetType().GetCustomAttribute<RequiresLLMTierAttribute>();
+        canForceOpeningTool = tierAttribute is not null && llmService.CanForceToolCall(tierAttribute.Tier);
 
         // The user's turn, dispatched by the router once the supervisor has routed the intent here.
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);
@@ -206,7 +216,7 @@ public class MorganaAgent : MorganaActor
             // The turn is filed before the model runs, then run, then closed and recorded.
             Records.TurnOpening opening = await OpenTurnAsync(req, frameworkReplies, agentSpan);
             Records.TurnOutcome turnOutcome = await RunTurnAsync(opening.Session, req, opening.PressedActionTool, senderRef, agentSpan);
-            Records.TurnClosure closure = CloseTurn(opening.Session, turnOutcome, morganaPrompt, frameworkReplies);
+            Records.TurnClosure closure = CloseTurn(opening.Session, turnOutcome, morganaPrompt, frameworkReplies, req.IsLanding);
             DateTime? recordedAt = await RecordTurnAsync(opening.Session, closure, opening.HistoryBaseline, agentSpan);
 
             // Dated as the history keeps it, so a client catching up recognises the reply it was pushed.
@@ -242,6 +252,7 @@ public class MorganaAgent : MorganaActor
             {
                 // The turn's closure is dropped from the session, so it cannot close the next turn as well.
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnReply);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.Landing);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ConsultationRounds);
             }
         }
@@ -329,6 +340,11 @@ public class MorganaAgent : MorganaActor
         // read before this message joins the history it is compared against.
         string? pressedActionTool = PressedActionTool(aiAgentSession, req.Content);
 
+        // A landing is the one turn in which the agent can present itself: the flag is set before the model
+        // runs and dropped with the turn.
+        if (req.IsLanding)
+            await aiContextProvider.SetVariableAsync(aiAgentSession, Constants.ContextKeys.Landing, true);
+
         // A phrase that arrived while no agent was active is already saved as Morgana's own.
         // This agent keeps it because its model has to read it, marked as somebody else's so a
         // transcript shows the user their own words once.
@@ -377,8 +393,17 @@ public class MorganaAgent : MorganaActor
         // The text the user will read, whichever way the model delivers it.
         StringBuilder fullResponse = new StringBuilder();
 
+        // A landing opens with the agent presenting itself and a pressed action with the tool it leads to.
+        string? openingTool = req.IsLanding ? Constants.Tools.Present : pressedActionTool;
+
+        // The first pass alone is held to the opening tool, where the tier can force one: the user's press
+        // already decided what the turn does, so the model only gives it a voice.
+        AgentRunOptions? openingRunOptions = openingTool is not null && canForceOpeningTool
+            ? new ChatClientAgentRunOptions(new ChatOptions { ToolMode = ChatToolMode.RequireSpecific(openingTool) })
+            : null;
+
         // One pass of the model over the session, its text streamed or batched into fullResponse.
-        async Task RunModelAsync()
+        async Task RunModelAsync(AgentRunOptions? runOptions = null)
         {
             // Streaming is used only when both signals allow it and otherwise the whole answer arrives in one piece.
             if (useStreaming)
@@ -390,7 +415,7 @@ public class MorganaAgent : MorganaActor
 
                 // The whole turn runs here — tool calls included, which surface as chunks carrying no text.
                 // The phrase being answered is the one already filed above, so nothing is handed in here.
-                await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(session))
+                await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(session, runOptions))
                 {
                     // Text chunks are appended to the reply, while chunks without text only keep the agent alive.
                     if (!string.IsNullOrEmpty(chunk.Text))
@@ -447,7 +472,7 @@ public class MorganaAgent : MorganaActor
                 Stopwatch responseStopwatch = Stopwatch.StartNew();
                 // Same turn as the streaming branch, answering the same already-filed phrase: nothing
                 // reaches the channel until the model and every tool it decided to call, are done.
-                AgentResponse response = await aiAgent.RunAsync(session);
+                AgentResponse response = await aiAgent.RunAsync(session, runOptions);
                 responseStopwatch.Stop();
 
                 // Assembled message by message rather than through AgentResponse.Text, which is
@@ -477,7 +502,7 @@ public class MorganaAgent : MorganaActor
         }
 
         // The first pass answers the user's phrase.
-        await RunModelAsync();
+        await RunModelAsync(openingRunOptions);
 
         // A call that needs approval, to the very tool whose button opened this turn, was approved by
         // that press: it runs now and the user is never asked to confirm the same thing twice.
@@ -515,7 +540,7 @@ public class MorganaAgent : MorganaActor
     }
 
     /// <summary>Decides the text, buttons and card that the user receives, from what the model wrote and how Reply closed the turn.</summary>
-    private Records.TurnClosure CloseTurn(AgentSession session, Records.TurnOutcome turnOutcome, Records.Prompt morganaPrompt, Records.FrameworkReplies frameworkReplies)
+    private Records.TurnClosure CloseTurn(AgentSession session, Records.TurnOutcome turnOutcome, Records.Prompt morganaPrompt, Records.FrameworkReplies frameworkReplies, bool isLanding)
     {
         // An approval asked with no word of the model's own is asked in Morgana's words.
         string llmResponseText = turnOutcome.Text;
@@ -530,6 +555,12 @@ public class MorganaAgent : MorganaActor
         // The closure belongs to this turn alone: left in the session it would close the next turn too.
         aiContextProvider.DropVariable(session, Constants.ContextKeys.TurnReply);
 
+        // The landing ends with the turn, before the session is saved: a restart must not find it set.
+        aiContextProvider.DropVariable(session, Constants.ContextKeys.Landing);
+
+        // The consultation budget is spent per turn, before the session is saved: a restart must not start the next turn with it already spent.
+        aiContextProvider.DropVariable(session, Constants.ContextKeys.ConsultationRounds);
+
         // A user who leaves abandons the workflow where it stands, undoing nothing. Silence, a disconnection
         // or a restart leave it in place, so the next message resumes at the pending step.
         if (turnReply.UserIsLeaving)
@@ -543,6 +574,11 @@ public class MorganaAgent : MorganaActor
             if (aiContextProvider.GetWorkflowPosition(session)?.Resolve(aiContextProvider.Workflows) is { Step.Tools.Count: > 1 } choicePosition)
                 turnReply = turnReply.WithStepActions(choicePosition.Step.Tools);
         }
+
+        // A landing turn is the agent presenting itself, so it closes with its menu whatever the model closed with:
+        // the buttons are written by code and the model only gave them a voice.
+        if (isLanding && !turnReply.UserIsLeaving && !turnOutcome.AwaitsApproval)
+            turnReply = turnReply.WithMenu(aiContextProvider.Menu);
 
         // A turn waiting for an approval offers exactly the two answers to it; any other turn gets the
         // buttons its closure calls for.

@@ -134,7 +134,8 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             .. ValidateDeclaredTiers(registry),
             .. ValidatePeerDeclarations(registry),
             .. ValidateToolContracts(registry),
-            .. ValidateWorkflowDeclarations(registry)
+            .. ValidateWorkflowDeclarations(registry),
+            .. ValidateOfferingDeclarations(registry)
         ];
 
         // One exception carrying every problem, so a deployment is fixed in one pass.
@@ -287,8 +288,9 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         // declaration there is ignored all the same.
         errors.AddRange(ValidateNoDeclarationsInJson(prompts));
 
-        // The framework's own tool is held to the contract that a domain tool is.
+        // The framework's own tools are held to the contract that a domain tool is.
         errors.AddRange(ValidateToolContract(Constants.Morgana, typeof(ReplyTool)));
+        errors.AddRange(ValidateToolContract(Constants.Morgana, typeof(PresentTool)));
 
         // An intent has a tool class only when its agent uses native tools.
         foreach (string intent in registry.Keys)
@@ -376,6 +378,95 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     }
 
     /// <summary>
+    /// Weighs the menu of every agent: the buttons that its tools and workflows offer to the user.
+    /// </summary>
+    /// <param name="registry">The discovered intent-to-agent map, which is the roster of intents to weigh.</param>
+    /// <returns>One message per violation, empty when every menu holds.</returns>
+    private List<string> ValidateOfferingDeclarations(Dictionary<string, Type> registry)
+    {
+        // The offering faults of every agent are collected here.
+        List<string> errors = [];
+
+        // Each agent's menu is weighed on its own, since the numbering is per agent.
+        foreach (string intent in registry.Keys)
+        {
+            // Tools and workflows share one numbering, so both are handed over together.
+            errors.AddRange(ValidateOfferings(
+                intent,
+                toolRegistryService.GetToolDefinitions(intent),
+                toolRegistryService.GetWorkflowDefinitions(intent)));
+        }
+
+        // Every agent is weighed before the list is handed back, so one startup refusal reports every faulty menu.
+        return errors;
+    }
+
+    /// <summary>
+    /// Refuses a menu whose numbering, labels or entries could not be pressed as one expects.
+    /// </summary>
+    /// <param name="intent">The intent that owns the menu, named in the messages.</param>
+    /// <param name="tools">The domain tools that the intent's tool class declares.</param>
+    /// <param name="workflows">The workflows that the classes of the intent declare.</param>
+    /// <returns>One message per violation, empty when the menu holds.</returns>
+    public static List<string> ValidateOfferings(
+        string intent,
+        IReadOnlyList<Records.ToolDefinition> tools,
+        IReadOnlyList<Records.WorkflowDefinition> workflows)
+    {
+        // The offering faults of this intent are collected here and an empty list means the menu holds.
+        List<string> errors = [];
+
+        // Every offered entry of the agent as its subject and its offering, tools and workflows alike.
+        List<(string Subject, Records.ToolOffering Offering)> offeredEntries =
+        [
+            .. tools.Where(tool => tool.Offering is not null)
+                    .Select(tool => ($"Tool '{tool.Name}' of intent '{intent}'", tool.Offering!)),
+            .. workflows.Where(workflow => workflow.Offering is not null)
+                        .Select(workflow => ($"Workflow '{workflow.Name}' of intent '{intent}'", workflow.Offering!))
+        ];
+
+        // The first tools of every workflow, which are never offered outside it.
+        HashSet<string> entryTools = [.. workflows.SelectMany(workflow => workflow.EntryTools)];
+
+        // Ordinals already taken, so a second entry on the same number is caught.
+        HashSet<int> ordinals = [];
+
+        // Numbering and labels are weighed alike for tools and workflows, since both make a button.
+        foreach ((string subject, Records.ToolOffering offering) in offeredEntries)
+        {
+            // The menu counts from 1, so a lower number has no place in it.
+            if (offering.Ordinal < 1)
+                errors.Add($"{subject} is offered to the user with ordinal {offering.Ordinal}: an ordinal starts at 1");
+
+            // Tools and workflows share the numbering, so two entries on one number have no order between them.
+            else if (!ordinals.Add(offering.Ordinal))
+                errors.Add($"{subject} is offered to the user with ordinal {offering.Ordinal}, which another entry of the agent already holds");
+
+            // The label is the button's text and the message that its press sends.
+            if (string.IsNullOrWhiteSpace(offering.Label))
+                errors.Add($"{subject} is offered to the user with no label");
+        }
+
+        // Only a tool can require approval or open a workflow, so these two faults are weighed on the offered tools.
+        foreach (Records.ToolDefinition tool in tools.Where(tool => tool.Offering is not null))
+        {
+            // How the tool is named back to whoever has to fix it.
+            string subject = $"Tool '{tool.Name}' of intent '{intent}'";
+
+            // A press chooses a path and cannot approve a call that does not exist yet: a dispositive path is offered as a workflow.
+            if (tool.RequiresExecutionApproval)
+                errors.Add($"{subject} is offered to the user and requires approval: a press cannot approve a call that does not exist yet, so a dispositive path is offered as a workflow");
+
+            // The entry of a workflow is entered through its launcher alone, so a button leading to it would never run.
+            if (entryTools.Contains(tool.Name))
+                errors.Add($"{subject} is offered to the user and is the first step of a workflow: it is never offered outside its workflow");
+        }
+
+        // Every entry is weighed, so one pass reports all the faults of the menu.
+        return errors;
+    }
+
+    /// <summary>
     /// Weighs the workflows of one intent against its tools and against one another.
     /// </summary>
     /// <remarks>
@@ -432,7 +523,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
             // MAAI would fail the turn on two functions of one name, so a launcher may not share one with a tool.
             string launcherName = Constants.Workflows.LauncherPrefix + workflow.Name;
-            if (launcherName == Constants.Tools.Reply || tools.ContainsKey(launcherName))
+            if (launcherName == Constants.Tools.Reply || launcherName == Constants.Tools.Present || tools.ContainsKey(launcherName))
                 errors.Add($"{subject}: its launcher '{launcherName}' has the name of a tool of the agent");
 
             // Steps first, then the edges between them: the edges are weighed against the steps' tools.
@@ -482,9 +573,10 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             // Each tool a step offers is checked against the framework's own names and the agent's declared tools.
             foreach (string tool in stepTools)
             {
-                // The framework's own tools belong to no step: Reply closes every turn, a launcher starts a workflow
-                // and a colleague is a private method of the workflow, never one of its steps.
+                // The framework's own tools belong to no step: Reply closes every turn, Present opens the agent's menu,
+                // a launcher starts a workflow and a colleague is a private method of the workflow, never one of its steps.
                 if (tool == Constants.Tools.Reply
+                    || tool == Constants.Tools.Present
                     || launcherNames.Contains(tool)
                     || tool.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
                     errors.Add($"{stepSubject}: '{tool}' belongs to the framework and cannot be a step's tool");
