@@ -17,11 +17,15 @@ Agents can now follow **a process**, not just a conversation. Workflows, based o
 An interrupted workflow picks up where it left off, even after a restart. Native and MCP tools mix freely.
 ### 🎯 Major Feature: Execution approval
 A tool performing a dispositive action (e.g: placing an order, signing a contract) can now **wait for the user's go-ahead**: mark it **`[RequiresApproval(true)]`** and Morgana holds the call until the user approves or declines it with one click.
+### 🎯 Major Feature: Agents that present themselves
+Morgana's welcome works like a phone menu: pressing one of her buttons takes the user straight to that agent, which presents itself with its own menu. Pressing an entry of that menu is the request itself.
+The buttons on both levels are written by code, from the intents and from the tools marked **`[OfferedToUser]`**: the model only gives them a voice.
 
 ### ✨ Added
 - **`[ProvidesWorkflowForIntent("intent")]`** — a new attribute binding a `MorganaWorkflow` to its agent, which can start it as a tool (e.g: `PlaceOrderWorkflow` becomes `StartPlaceOrder`)
 - **`[RequiresApproval(true)]`** — a new attribute holding a tool's call until the user approves it, through `Microsoft.Extensions.AI`'s `ApprovalRequiredAIFunction`
 - **`[ToolParameter(scope, shared)]`** — a new attribute declaring where a tool parameter's value comes from: `Request` when the user supplies it, `Context` when the framework resolves it from the session, optionally shared with the other agents
+- **`[OfferedToUser(ordinal, label)]`** — a new attribute putting a tool or a workflow on its agent's menu, as a button the user finds when arriving at that agent
 
 ### 🔄 Changed
 - Prompt aspects of tools no longer live in `agents.json`: they are now based on **`Microsoft.Extensions.AI`**. A tool and each of its parameters are described with the standard **`[Description]`** attribute on the public methods of a `MorganaTool`: `Microsoft.Extensions.AI` turns it into the tool schema handed to the model.
@@ -29,6 +33,7 @@ A tool performing a dispositive action (e.g: placing an order, signing a contrac
 - Morgana graduates from 0.x: 1.0 previews begin, heading for a stable release consolidating architecture and quality
 
 ### 🐛 Fixed
+- Morgana's welcome buttons were worded by the model and could start an agent on a request the user never made
 - Ending an unknown conversation brought its actors to life just to stop them and to answer OK
 - The history of a conversation where nobody had spoken yet was answered with 404, as if the conversation did not exist
 - **Grimoire (1)**
