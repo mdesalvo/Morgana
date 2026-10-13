@@ -28,7 +28,7 @@ public class PresentTool : MorganaTool
     /// Tells the agent which actions the user receives as buttons, so that its presentation can speak of them.
     /// </summary>
     /// <returns>The named result the tool loop turns into its authored text: the menu's labels or the fact that there is none.</returns>
-    [Description("Introduce yourself to the user: what you can do for them, in a few sentences.")]
+    [Description("Returns the actions the user receives as buttons beneath your text. Your introduction is the text you write after it: a few sentences of your own on what you can do for them.")]
     [RequiresApproval(false)]
     public Task<Records.FrameworkToolResult> Present()
     {

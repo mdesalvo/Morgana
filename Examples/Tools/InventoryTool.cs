@@ -190,7 +190,7 @@ public class InventoryTool : MorganaTool
     [OfferedToUser(2, "🌼 A specific plant")]
     [RequiresApproval(false)]
     public async Task<StockLevelResult> CheckStockLevel(
-        [Description("Product SKU to inspect (e.g. 'RSE-100'). The user should specify which plant they mean, or you should present the catalog and let them choose. Do NOT guess or assume which plant the user wants.")] [ToolParameter(Records.ToolScope.Request)] string sku)
+        [Description("Product SKU to inspect (e.g. 'RSE-100'). Until the user has named the plant they mean, ask them which one. Do NOT guess or assume which plant the user wants.")] [ToolParameter(Records.ToolScope.Request)] string sku)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
