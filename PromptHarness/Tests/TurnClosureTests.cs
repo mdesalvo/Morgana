@@ -8,6 +8,7 @@ using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.ChatClients;
+using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 using Morgana.AI.Services;
 using Morgana.AI.Tools;
@@ -404,6 +405,55 @@ public sealed class TurnClosureTests
         }
     }
 
+    [Fact]
+    public async Task TurnClosure_Welcome_buttons_are_the_configured_intents_whatever_the_model_wrote()
+    {
+        // The model wrote the welcome text alone: nothing in its answer names a button.
+        Records.PresentationResult welcome = await PresentAsync("welcome-written", """{"message":"Welcome to the greenhouse."}""");
+
+        // One button per intent in configuration order: the id is the intent, the value is what a press sends.
+        Assert.Equal("Welcome to the greenhouse.", welcome.Message);
+        Assert.Equal(["billing", "contract", "monkeys", "inventory"], welcome.QuickReplies.Select(button => button.Id));
+        Assert.Equal(["🧾 Invoices", "📜 Care Plan", "🐒 Primate Almanac", "🌿 Greenhouse"], welcome.QuickReplies.Select(button => button.Label));
+        Assert.Equal(
+            ["What can you do with my invoices?", "What can you tell me about the care plan?", "What can you tell me about monkeys?", "What can you do for me in the greenhouse?"],
+            welcome.QuickReplies.Select(button => button.Value));
+    }
+
+    [Fact]
+    public async Task TurnClosure_Welcome_fallback_carries_the_same_buttons_when_the_model_fails()
+    {
+        // No answer to give: the model call throws, as a provider outage would.
+        Records.PresentationResult welcome = await PresentAsync("welcome-failed", welcomeAnswer: null);
+
+        // The user is still greeted and the buttons are the ones that a written welcome carries.
+        Assert.False(string.IsNullOrWhiteSpace(welcome.Message));
+        Assert.Equal(["billing", "contract", "monkeys", "inventory"], welcome.QuickReplies.Select(button => button.Id));
+        Assert.Equal(["🧾 Invoices", "📜 Care Plan", "🐒 Primate Almanac", "🌿 Greenhouse"], welcome.QuickReplies.Select(button => button.Label));
+        Assert.Equal(
+            ["What can you do with my invoices?", "What can you tell me about the care plan?", "What can you tell me about monkeys?", "What can you do for me in the greenhouse?"],
+            welcome.QuickReplies.Select(button => button.Value));
+    }
+
+    /// <summary>Presents the example plugin's four intents on a channel of the given name, over a model that answers as given.</summary>
+    private static async Task<Records.PresentationResult> PresentAsync(string channelName, string? welcomeAnswer)
+    {
+        // The presenter caches by channel name for the whole process: every case brings a channel of its own.
+        ConfigurationPromptResolverService resolver = new ConfigurationPromptResolverService(new ScriptedDomain());
+        WelcomeModel model = new WelcomeModel(welcomeAnswer);
+        LLMPresenterService presenter = new LLMPresenterService(
+            model, resolver, new SingleChannelStore(channelName), new MorganaChannelAdapter(model, resolver, NullLogger.Instance), NullLogger.Instance);
+
+        // The intents as Examples/agents.json declares them.
+        return await presenter.GenerateAsync(
+        [
+            new Records.IntentDefinition("billing", "Invoices and payments.", "🧾 Invoices", "What can you do with my invoices?"),
+            new Records.IntentDefinition("contract", "The care plan.", "📜 Care Plan", "What can you tell me about the care plan?"),
+            new Records.IntentDefinition("monkeys", "Primates.", "🐒 Primate Almanac", "What can you tell me about monkeys?"),
+            new Records.IntentDefinition("inventory", "The greenhouse catalogue.", "🌿 Greenhouse", "What can you do for me in the greenhouse?")
+        ], "welcome-conversation");
+    }
+
     /// <summary>Reads a closure as MorganaAgent reads what Reply recorded.</summary>
     private static Records.TurnReply Deserialize(string json)
         => JsonSerializer.Deserialize<Records.TurnReply>(json, new JsonSerializerOptions { AllowOutOfOrderMetadataProperties = true })!;
@@ -488,5 +538,46 @@ public sealed class TurnClosureTests
         /// <summary>The closure recorded on the session; null when none was.</summary>
         public Records.TurnReply? Recorded()
             => provider.GetVariable(session, "turn_reply") is string json ? Deserialize(json) : null;
+    }
+
+    /// <summary>The framework tier's model as the presenter meets it: it answers the welcome as given or fails when it has none.</summary>
+    /// <param name="welcomeAnswer">The JSON that the model returns; null makes the call fail.</param>
+    private sealed class WelcomeModel(string? welcomeAnswer) : ILLMService
+    {
+        /// <inheritdoc />
+        public Records.LLMTier FrameworkTier => Records.LLMTier.Economy;
+
+        /// <inheritdoc />
+        public Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt)
+            => welcomeAnswer is null ? throw new InvalidOperationException("The model is unreachable") : Task.FromResult(welcomeAnswer);
+
+        /// <inheritdoc />
+        public IChatClient GetChatClient(Records.LLMTier tier) => throw new InvalidOperationException("The presenter asks for text, never a chat client");
+
+        /// <inheritdoc />
+        public bool CanForceToolCall(Records.LLMTier tier) => false;
+
+        /// <inheritdoc />
+        public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => new();
+    }
+
+    /// <summary>The metadata store of a conversation on one fully capable channel, so the welcome is never degraded.</summary>
+    /// <param name="channelName">The channel that every conversation is on.</param>
+    private sealed class SingleChannelStore(string channelName) : IChannelMetadataStore
+    {
+        /// <inheritdoc />
+        public Task<ChannelMetadata> RegisterChannelMetadataAsync(string conversationId, ChannelMetadata declaredChannelMetadata)
+            => throw new InvalidOperationException("The presenter only reads the handshake");
+
+        /// <inheritdoc />
+        public void EvictChannelMetadata(string conversationId) { }
+
+        /// <inheritdoc />
+        public ValueTask<ChannelMetadata> GetChannelMetadataAsync(string conversationId)
+            => ValueTask.FromResult(new ChannelMetadata
+            {
+                Coordinates = new ChannelCoordinates { ChannelName = channelName, DeliveryMode = "webhook" },
+                Capabilities = ChannelCapabilities.Default
+            });
     }
 }
