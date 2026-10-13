@@ -1,0 +1,42 @@
+id: behaviour-landing-presents-the-agent
+description: >-
+  A press of one of Morgana's welcome buttons lands on that intent's agent, which presents itself
+  with its menu: two levels, like a phone menu. The first press is the choice of the agent and
+  nothing else, so no classifier runs and no domain tool is called; the agent speaks with Present and
+  closes with the menu that its tools declare, written by code and asserted exactly. The second press
+  is a menu entry and is an ordinary request: the agent reaches for the tool behind it and, holding no
+  customer code yet, asks for one.
+
+turns:
+  - press: billing
+    expect:
+      agent: BillingAgent
+      # The press is the choice: nothing is left for the classifier to decide.
+      classified: false
+      toolsCalled: [Present]
+      toolsNotCalled: [GetInvoices, GetInvoiceDetails, GetOutstandingBalance, GetPaymentHistory]
+      # The menu in its declared order, then the framework's escape pair.
+      quickReplyLabels:
+        - "🧾 My recent invoices"
+        - "🔎 A specific invoice"
+        - "💰 What I still owe"
+        - "💳 Payments I made"
+        - "💬 Ask me something else"
+        - "✨ We're done, thanks"
+      richCard: absent
+      textNotEmpty: true
+      textNotContains: ["#INT#"]
+    judge:
+      - "The response tells the user what can be done for them about their invoices or payments."
+
+  - press: GetInvoices
+    expect:
+      agent: BillingAgent
+      # A menu entry is the user's request: the tool comes first and the missing code is what it reports.
+      toolsCalledFirst: [GetInvoices]
+      toolsNotCalled: [Present]
+      contextReads: [Miss:customerCode]
+      textNotEmpty: true
+      textNotContains: ["#INT#"]
+    judge:
+      - "The response asks the user for an identifier or customer code."

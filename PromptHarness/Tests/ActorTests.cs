@@ -51,6 +51,17 @@ public sealed class ActorTests
 
         try
         {
+            // The buttons are written by code from the configured intents, so they are asserted exactly and in configuration order.
+            Assert.Equal(
+                [
+                    ("billing", "🧾 Invoices", "What can you do with my invoices?"),
+                    ("contract", "📜 Care Plan", "What can you tell me about the care plan?"),
+                    ("monkeys", "🐒 Primate Almanac", "What can you tell me about monkeys?"),
+                    ("inventory", "🌿 Greenhouse", "What can you do for me in the greenhouse?")
+                ],
+                (presentation.QuickReplies ?? []).Select(button => (button.Id, button.Label, button.Value)));
+
+            // The judge weighs only what the model wrote: an introduction and an invitation to ask.
             IReadOnlyList<string> failures = await fixture.Judge.EvaluateAsync(
                 judge: ["The message introduces itself as Morgana and invites the user to say what they need."],
                 judgeNot: ["The message asks for personal or account information before the user has said anything."],

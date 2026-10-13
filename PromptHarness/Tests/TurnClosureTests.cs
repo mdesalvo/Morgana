@@ -90,6 +90,101 @@ public sealed class TurnClosureTests
         Assert.Equal("Confirm my order", buttons[0].Value);
     }
 
+    [Fact]
+    public void TurnClosure_Menu_replaces_the_closure_actions_and_drops_the_card()
+    {
+        // A closure that carried an action and a card, as a model might write on a landing.
+        Records.TurnReply turnReply = Deserialize("""
+            {"awaits":"typed_answer","userIsLeaving":false,
+             "actions":[{"tool":"GetBalance","label":"Balance","value":"What is my balance?"}],
+             "card":{"title":"Account","subtitle":null,"components":[{"type":"divider"}]}}
+            """);
+        List<Records.ReplyAction> menu =
+        [
+            new Records.ReplyAction("GetInvoices", "Invoices", "Show my invoices"),
+            new Records.ReplyAction("OpenAccount", "Open an account", "I want to open an account")
+        ];
+
+        Records.TurnReply presented = turnReply.WithMenu(menu);
+        List<QuickReply> buttons = presented.ToDelivery(FrameworkReplies).QuickReplies!;
+
+        // The two menu buttons come first and the framework's escape pair follows; the card is gone.
+        Assert.Equal(["GetInvoices#1", "OpenAccount#2", "continue_agent", "exit_agent"], buttons.Select(button => button.Id));
+        Assert.Equal(["Invoices", "Open an account", "💬 Ask me something else", "✨ We're done, thanks"], buttons.Select(button => button.Label));
+        Assert.Null(presented.Card);
+        Assert.Equal(Records.AwaitedFromUser.ActionChoice, presented.Awaits);
+    }
+
+    [Fact]
+    public void TurnClosure_Empty_menu_closes_the_turn_with_the_closure_pair()
+    {
+        Records.TurnReply turnReply = Deserialize("""{"awaits":"typed_answer","userIsLeaving":false,"actions":[],"card":null}""");
+
+        Records.TurnReply presented = turnReply.WithMenu([]);
+        (List<QuickReply>? quickReplies, bool handsBack) = presented.ToDelivery(FrameworkReplies);
+
+        // An agent with nothing to offer awaits nothing and keeps the conversation behind the closure buttons.
+        Assert.Equal(Records.AwaitedFromUser.Nothing, presented.Awaits);
+        Assert.Equal(["continue_agent", "exit_agent"], quickReplies!.Select(button => button.Id));
+        Assert.Equal(["🔮 I still need you", "✨ We're done, thanks"], quickReplies!.Select(button => button.Label));
+        Assert.False(handsBack);
+    }
+
+    [Fact]
+    public async Task TurnClosure_Landing_offers_the_model_only_Present_and_Reply()
+    {
+        // The model, the session and the context store that decide which tools the model is offered.
+        (ScriptedChatClient model, AgentSession session, MorganaAIContextProvider provider) = await ToolNarrowingAsync();
+
+        // The landing flag is what the agent sets before its model runs on a pressed welcome button.
+        await provider.SetVariableAsync(session, "landing", true);
+
+        // The request crosses the narrowing client the way a turn of the agent does.
+        await new WorkflowToolsChatClient(model, () => session, provider, [], 3)
+            .GetResponseAsync([new ChatMessage(ChatRole.User, "What can you do with my invoices?")], AgentOptions(), TestContext.Current.CancellationToken);
+
+        // Whatever else the agent holds stays out: the turn is the agent introducing itself.
+        Assert.Equal(["Present", "Reply"], model.Requests.Single().Options!.Tools!.Select(tool => tool.Name).Order());
+    }
+
+    [Fact]
+    public async Task TurnClosure_Ordinary_turn_is_never_offered_Present()
+    {
+        // A session with no landing flag: the turn of a user who is already talking to the agent.
+        (ScriptedChatClient model, AgentSession session, MorganaAIContextProvider provider) = await ToolNarrowingAsync();
+
+        // The request crosses the narrowing client the way a turn of the agent does.
+        await new WorkflowToolsChatClient(model, () => session, provider, [], 3)
+            .GetResponseAsync([new ChatMessage(ChatRole.User, "Show my invoices")], AgentOptions(), TestContext.Current.CancellationToken);
+
+        // Presenting the agent belongs to a landing alone: any other turn keeps the domain tools and Reply.
+        Assert.Equal(["GetInvoices", "Reply"], model.Requests.Single().Options!.Tools!.Select(tool => tool.Name).Order());
+    }
+
+    /// <summary>A scripted model answering once beside the session and context store that decide which tools it is offered.</summary>
+    private static async Task<(ScriptedChatClient Model, AgentSession Session, MorganaAIContextProvider Provider)> ToolNarrowingAsync()
+    {
+        // One plain answer is enough: the case reads the tools of the request, not the response.
+        ScriptedChatClient model = new ScriptedChatClient(Text("Here you are."));
+        // The session belongs to an agent that never talks to a model: it only carries the context variables.
+        AgentSession session = await new ChatClientAgent(new ScriptedChatClient()).CreateSessionAsync();
+
+        // The context store is the one the narrowing client reads the landing flag from.
+        return (model, session, new MorganaAIContextProvider(NullLogger.Instance));
+    }
+
+    /// <summary>The options of an agent holding the base tools Present and Reply beside one domain tool.</summary>
+    private static ChatOptions AgentOptions()
+        => new ChatOptions
+        {
+            Tools =
+            [
+                AIFunctionFactory.Create(() => "menu", "Present"),
+                AIFunctionFactory.Create(() => "closed", "Reply"),
+                AIFunctionFactory.Create(() => "invoices", "GetInvoices")
+            ]
+        };
+
     [Theory]
     [InlineData("ConfirmOrder#1", "ConfirmOrder")]
     [InlineData("continue_agent", null)]

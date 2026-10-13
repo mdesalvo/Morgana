@@ -48,9 +48,20 @@ public sealed class FrameworkPromptTests
         {
             "TurnClosed", "ContextValueMissing", "ReplyWithoutText", "CardTooDeep", "CardTooLarge", "ConsultationChained",
             "ConsultationRoundsExhausted", "ColleagueCouldNotAnswer", "PeerAtCapacity", "PeerOutOfBudget", "PeerTimedOut", "PeerFailed",
-            "WorkflowStarted", "ToolNotAtThisStep", "StepActionsRequired",
+            "WorkflowStarted", "ToolNotAtThisStep", "StepActionsRequired", "MenuOffered", "NoMenuOffered",
             "ReplyNotAccepted", "EarlierToolResult", "ExecutionApprovalGuidance", "WorkflowStepReached", "WorkflowEnded"
         }, toolInjections);
+    }
+
+    [Fact]
+    public async Task FrameworkPrompt_Menu_offered_names_the_actions_where_the_agent_presents_itself()
+    {
+        List<Records.Injection> toolInjections = (await resolver.ResolveAsync("Morgana"))
+            .GetAdditionalProperty<List<Records.Injection>>("ToolInjections");
+
+        // The labels are spliced into this placeholder, so a text that lost it would present an empty menu.
+        Assert.Contains("((actions))", toolInjections.Single(injection => injection.Name == "MenuOffered").Content, StringComparison.Ordinal);
+        Assert.False(string.IsNullOrWhiteSpace(toolInjections.Single(injection => injection.Name == "NoMenuOffered").Content));
     }
 
     [Fact]

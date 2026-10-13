@@ -27,6 +27,8 @@ public sealed class BehaviourTests
     [InlineData("behaviour-workflow-typed-confirmation")]
     [InlineData("behaviour-workflow-user-leaves-at-choice")]
     [InlineData("behaviour-approval-declined")]
+    [InlineData("behaviour-landing-presents-the-agent")]
+    [InlineData("behaviour-landing-only-on-a-press")]
     public async Task Behaviour_scenario_holds(string scenarioId)
     {
         // Same shape as the context-handling group's test, but this group runs at the harness's

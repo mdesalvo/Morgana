@@ -115,14 +115,15 @@ public sealed class ScenarioRunner
                 string say;
                 if (turnDefinition.Press is { } pressedTool)
                 {
-                    // The button's value is written by the model at runtime, so the scenario names the tool and the run reads the value from what was offered.
+                    // The button's value is written at runtime, so the scenario names the tool of an action button or the exact id of a welcome or disambiguation button and the run reads the value from what was offered.
                     QuickReply? pressed = (lastReceived.QuickReplies ?? [])
-                        .FirstOrDefault(quickReply => string.Equals(Records.TurnReply.ActionTool(quickReply.Id), pressedTool, StringComparison.Ordinal));
+                        .FirstOrDefault(quickReply => string.Equals(Records.TurnReply.ActionTool(quickReply.Id), pressedTool, StringComparison.Ordinal)
+                            || string.Equals(quickReply.Id, pressedTool, StringComparison.Ordinal));
 
                     if (pressed is null)
                     {
                         // Later turns presuppose the press happened, so the run stops here like an aborted one.
-                        failures.Add($"turn {transcript.Count + 1}: no button leading to '{pressedTool}' was offered");
+                        failures.Add($"turn {transcript.Count + 1}: no button leading to or identified as '{pressedTool}' was offered");
                         break;
                     }
 
