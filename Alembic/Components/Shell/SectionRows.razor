@@ -37,6 +37,11 @@
                                 <FluentBadge Appearance="BadgeAppearance.Ghost" Color="BadgeColor.Informative">approval</FluentBadge>
                             }
 
+                            @if (tool.Offering is not null)
+                            {
+                                <FluentBadge Appearance="BadgeAppearance.Ghost" Color="BadgeColor.Informative">menu @tool.Offering.Ordinal · @tool.Offering.Label</FluentBadge>
+                            }
+
                             @foreach (ToolParameterDraft parameter in tool.Parameters)
                             {
                                 <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="3px" Width="auto">
@@ -70,7 +75,14 @@
                 @foreach (WorkflowDraft workflow in Agent.Workflows)
                 {
                     <FluentStack Orientation="Orientation.Vertical" VerticalGap="4px" Class="tool">
-                        <FluentText Font="TextFont.Monospace" Size="TextSize.Size300" Class="tool-signature">@(workflow.Name ?? "(unnamed)")</FluentText>
+                        <FluentStack Orientation="Orientation.Horizontal" Wrap="true" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="10px" VerticalGap="6px">
+                            <FluentText Font="TextFont.Monospace" Size="TextSize.Size300" Class="tool-signature">@(workflow.Name ?? "(unnamed)")</FluentText>
+
+                            @if (workflow.Offering is not null)
+                            {
+                                <FluentBadge Appearance="BadgeAppearance.Ghost" Color="BadgeColor.Informative">menu @workflow.Offering.Ordinal · @workflow.Offering.Label</FluentBadge>
+                            }
+                        </FluentStack>
                         <FluentText Size="TextSize.Size400">@workflow.Description</FluentText>
 
                         @for (int position = 0; position < workflow.Steps.Count; position++)

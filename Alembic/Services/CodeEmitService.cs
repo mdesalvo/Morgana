@@ -153,6 +153,10 @@ public class CodeEmitService : ICodeEmitService
             sb.AppendLine();
             sb.AppendLine(CultureInfo.InvariantCulture, $"    [Description({Literal(tool.Description)})]");
             sb.AppendLine(CultureInfo.InvariantCulture, $"    [RequiresApproval({(tool.RequiresExecutionApproval ? "true" : "false")})]");
+            // A tool on the agent's menu carries its button as an attribute: the framework reads the menu off the method.
+            if (tool.Offering is not null)
+                sb.AppendLine(CultureInfo.InvariantCulture, $"    [OfferedToUser({tool.Offering.Ordinal}, {Literal(tool.Offering.Label)})]");
+
             // The signature is followed by the record that the tool returns.
             AppendMethod(sb, tool);
 
@@ -205,6 +209,9 @@ public class CodeEmitService : ICodeEmitService
         sb.AppendLine();
         sb.AppendLine(CultureInfo.InvariantCulture, $"[ProvidesWorkflowForIntent(\"{intentName}\")]");
         sb.AppendLine(CultureInfo.InvariantCulture, $"[Description({Literal(workflow.Description)})]");
+        // A workflow on the agent's menu carries its button on the class.
+        if (workflow.Offering is not null)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"[OfferedToUser({workflow.Offering.Ordinal}, {Literal(workflow.Offering.Label)})]");
         sb.AppendLine(CultureInfo.InvariantCulture, $"public sealed class {workflow.Name}Workflow : MorganaWorkflow");
         sb.AppendLine("{");
 

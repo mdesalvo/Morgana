@@ -49,6 +49,8 @@ public static class DraftProjection
             tool.Description ?? string.Empty,
             [.. tool.Parameters.Select(ToToolParameter)],
             RequiresExecutionApproval: tool.RequiresExecutionApproval,
+            // The menu button travels with the tool so the framework's own menu check can read the projection.
+            Offering: tool.Offering,
             // A tool that declared no field leaves Returns out, the way a method returning no record projects none.
             Returns: tool.Returns.Count > 0
                 ? [.. tool.Returns.Select(field => new Records.ToolReturn(
@@ -66,7 +68,9 @@ public static class DraftProjection
             workflow.Description ?? string.Empty,
             [.. workflow.Steps],
             [.. workflow.Edges],
-            CarriedNames(workflow));
+            CarriedNames(workflow),
+            // The menu button travels with the workflow for the same check.
+            workflow.Offering);
 
     /// <summary>
     /// The names that a workflow's edges carry, distinct and in order of first appearance.

@@ -7,6 +7,7 @@ using Alembic.Services;
 using Morgana.Contracts;
 using Morgana.AI;
 using Morgana.AI.Attributes;
+using Morgana.AI.Services;
 
 namespace Alembic.Tools;
 
@@ -81,7 +82,7 @@ public class InterviewTools
         [Description("A single bare lowercase word, no spaces or punctuation (e.g. 'billing', 'appointments'). It becomes a C# attribute argument and a prompt ID. 'other' is reserved for the classifier's fallback and will be refused.")] [ToolParameter(Records.ToolScope.Request)] string name,
         [Description("The kinds of request that belong here — 'requests to check an order's status, place a new order, or cancel one' — never what an agent does about them. The classifier reads this and nothing else, weighed against every other entry's description.")] [ToolParameter(Records.ToolScope.Request)] string description,
         [Description("A leading emoji then one to three words (e.g. '📄 Billing'). It is read on a button beside every other intent's button, so it names what is got, not what the system does. Omit it on a first pass and add it when the set is written together.")] [ToolParameter(Records.ToolScope.Request)] string? label = null,
-        [Description("The sentence that button sends. First person, phrased the way it would actually be typed (e.g. 'I need to book an appointment for my dog'). Omit it on a first pass and add it with the label.")] [ToolParameter(Records.ToolScope.Request)] string? defaultValue = null)
+        [Description("The sentence that button sends, which opens this agent's presentation of itself and its menu: a first-person question about what it can do, never a request it would act on (e.g. 'What can you do about my dog's appointments?'). Omit it on a first pass and add it with the label.")] [ToolParameter(Records.ToolScope.Request)] string? defaultValue = null)
     {
         // The name becomes an attribute argument and a prompt ID, so a blank one cannot be recorded.
         string cleanName = (name ?? string.Empty).Trim();
@@ -594,7 +595,7 @@ public class InterviewTools
 
         // Each tool is listed with its approval requirement then its parameters with scope and flags then the fields it hands back.
         IEnumerable<string> lines = interviewState.Agent.Tools.Select(t =>
-            $"- {t.Name}{(t.RequiresExecutionApproval ? " " + Said("ToolWaitsForApproval") : string.Empty)}: {t.Description ?? "(no description)"}"
+            $"- {t.Name}{(t.RequiresExecutionApproval ? " " + Said("ToolWaitsForApproval") : string.Empty)}{DescribeOffering(alembicPromptService, t.Offering)}: {t.Description ?? "(no description)"}"
             + (t.Parameters.Count == 0
                 ? "\n    " + Said("ToolTakesNothing")
                 : string.Concat(t.Parameters.Select(p =>
@@ -611,6 +612,121 @@ public class InterviewTools
         // The toolkit and the workflows built on it are read back together.
         return new ToolReply(Said("ToolkitHeader") + "\n" + string.Join("\n", lines)
                + "\n\n" + DescribeWorkflows(alembicPromptService, interviewState.Agent.Workflows));
+    }
+
+    /// <summary>
+    /// Writes the agent's whole menu at once, replacing the one before.
+    /// </summary>
+    /// <remarks>The ordinal is the position in the array and never the model's to write, so the numbering cannot clash.</remarks>
+    /// <param name="entries">JSON array in menu order of objects carrying the exact name of a tool or a workflow and the label of its button.</param>
+    [Description("Writes this agent's menu whole, replacing the one before: the buttons a user finds on arriving at this agent from Morgana's own, each pressing one tool or one workflow of this agent. A label is both what the button shows and the message its press sends, so it reads as the user's own request: a leading emoji then two to five words ('🧾 My recent invoices'). Offer what a customer would come here to start. Never put on it a tool that only serves another or one that waits for approval; the first tool of a workflow never goes on it either, the workflow does. An empty array leaves the agent with no menu.")]
+    [RequiresApproval(false)]
+    public ToolReply SetMenu(
+        [Description("JSON array in menu order, first button first: [{\"entry\":\"GetInvoices\",\"label\":\"🧾 My recent invoices\"}]. Each entry is the exact name of a tool or a workflow of this agent.")] [ToolParameter(Records.ToolScope.Request)] string entries)
+    {
+        // The menu as the model wrote it: an entry name and a label, in button order.
+        List<(string Entry, string Label)> requestedEntries = [];
+
+        try
+        {
+            // The model sends the menu as a JSON array of objects.
+            List<Dictionary<string, string?>>? parsedEntries = JsonSerializer.Deserialize<List<Dictionary<string, string?>>>(
+                entries, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            // A payload of null is not a menu at all.
+            if (parsedEntries is null)
+                return ToolReply.Refused(Said("MenuMalformed", ("reason", "null")));
+
+            foreach (Dictionary<string, string?> parsedEntry in parsedEntries)
+            {
+                // Property names are matched ignoring case, like every other payload that the model writes.
+                Dictionary<string, string?> caseInsensitiveEntry = new(parsedEntry, StringComparer.OrdinalIgnoreCase);
+
+                // A missing property reads as blank: a blank entry is told as unknown and a blank label is refused by the framework's own check.
+                caseInsensitiveEntry.TryGetValue("entry", out string? entryName);
+                caseInsensitiveEntry.TryGetValue("label", out string? label);
+                requestedEntries.Add(((entryName ?? string.Empty).Trim(), (label ?? string.Empty).Trim()));
+            }
+        }
+        // A payload that is not a JSON array of objects is refused with the parser's reason so the model resends it well formed.
+        catch (Exception exception) when (exception is JsonException or ArgumentException)
+        {
+            return ToolReply.Refused(Said("MenuMalformed", ("reason", exception.Message)));
+        }
+
+        // An empty menu withdraws every offering the agent carries.
+        if (requestedEntries.Count == 0)
+        {
+            ApplyOfferings(new Dictionary<string, Records.ToolOffering>(StringComparer.Ordinal));
+            return new ToolReply(Said("MenuCleared"));
+        }
+
+        // The candidate offerings by entry name, built before anything is recorded so a refusal leaves the previous menu untouched.
+        Dictionary<string, Records.ToolOffering> candidateOfferings = new(StringComparer.Ordinal);
+
+        foreach ((string entryName, string label) in requestedEntries)
+        {
+            // Tools and workflows are told apart by exact name, which is how the framework looks them up.
+            bool namesTool = interviewState.Agent.Tools.Any(tool => string.Equals(tool.Name, entryName, StringComparison.Ordinal));
+            bool namesWorkflow = interviewState.Agent.Workflows.Any(workflow => string.Equals(workflow.Name, entryName, StringComparison.Ordinal));
+
+            // An entry naming nothing of this agent has no button to press.
+            if (!namesTool && !namesWorkflow)
+                return ToolReply.Refused(Said("MenuEntryUnknown", ("entry", entryName)));
+
+            // A name held by both would press an unpredictable one of them.
+            if (namesTool && namesWorkflow)
+                return ToolReply.Refused(Said("MenuEntryAmbiguous", ("entry", entryName)));
+
+            // One entry twice would be two buttons for the same press.
+            if (candidateOfferings.ContainsKey(entryName))
+                return ToolReply.Refused(Said("MenuEntryTwice", ("entry", entryName)));
+
+            // The ordinal is the position in the menu, counting from 1.
+            candidateOfferings[entryName] = new Records.ToolOffering(candidateOfferings.Count + 1, label);
+        }
+
+        // The agent as the framework would read it with the candidate menu in place.
+        List<Records.ToolDefinition> candidateTools =
+        [
+            .. interviewState.Agent.Tools.Select(tool => DraftProjection.ToToolDefinition(tool) with
+            {
+                Offering = tool.Name is not null && candidateOfferings.TryGetValue(tool.Name, out Records.ToolOffering? toolOffering) ? toolOffering : null
+            })
+        ];
+        List<Records.WorkflowDefinition> candidateWorkflows =
+        [
+            .. interviewState.Agent.Workflows.Select(workflow => DraftProjection.ToWorkflowDefinition(workflow) with
+            {
+                Offering = workflow.Name is not null && candidateOfferings.TryGetValue(workflow.Name, out Records.ToolOffering? workflowOffering) ? workflowOffering : null
+            })
+        ];
+
+        // Morgana's own menu check runs here so the refusal at startup is heard while it costs nothing to change.
+        List<string> refusals = HandlesIntentAgentRegistryService.ValidateOfferings(interviewState.Agent.ID ?? string.Empty, candidateTools, candidateWorkflows);
+        if (refusals.Count > 0)
+            return ToolReply.Refused(Said("MenuRefused", ("reasons", string.Join("; ", refusals))));
+
+        // Only a menu that holds replaces the previous one.
+        ApplyOfferings(candidateOfferings);
+
+        // The reply reads the menu back in button order.
+        return new ToolReply(Said("MenuRecorded", ("entries", string.Join("; ", candidateOfferings.Select(candidate =>
+            $"{candidate.Value.Ordinal.ToString(CultureInfo.InvariantCulture)}. {candidate.Key} '{candidate.Value.Label}'")))));
+    }
+
+    /// <summary>
+    /// Replaces the offering of every tool and workflow of the agent in hand with the one that the menu gives it, none for the rest.
+    /// </summary>
+    private void ApplyOfferings(Dictionary<string, Records.ToolOffering> offeringsByEntry)
+    {
+        // Every tool is rewritten so an entry dropped from the menu loses its button.
+        foreach (ToolDraft tool in interviewState.Agent.Tools)
+            tool.Offering = tool.Name is not null && offeringsByEntry.TryGetValue(tool.Name, out Records.ToolOffering? toolOffering) ? toolOffering : null;
+
+        // Workflows follow the same rule as tools.
+        foreach (WorkflowDraft workflow in interviewState.Agent.Workflows)
+            workflow.Offering = workflow.Name is not null && offeringsByEntry.TryGetValue(workflow.Name, out Records.ToolOffering? workflowOffering) ? workflowOffering : null;
     }
 
     /// <summary>
@@ -909,7 +1025,7 @@ public class InterviewTools
         // Each workflow is rendered with its steps in order and the edges that connect them.
         return alembicPromptService.ResolveToolInjection("WorkflowsHeader") + "\n\n"
                + string.Join("\n\n", workflows.Select(workflow =>
-                   $"Workflow {workflow.Name ?? "(unnamed)"}: {workflow.Description ?? "(no description)"}"
+                   $"Workflow {workflow.Name ?? "(unnamed)"}{DescribeOffering(alembicPromptService, workflow.Offering)}: {workflow.Description ?? "(no description)"}"
                    + (workflow.Steps.Count == 0
                        ? "\n  (no step yet)"
                        : string.Concat(workflow.Steps.Select((step, position) =>
@@ -917,6 +1033,17 @@ public class InterviewTools
                            + (step.Tools.Count == 0 ? "(none yet)" : string.Join(", ", step.Tools)))))
                    + string.Concat(workflow.Edges.Select(edge => "\n  " + DescribeEdge(edge)))));
     }
+
+    /// <summary>
+    /// Renders the bracketed note that says a tool or a workflow stands on the agent's menu, empty for one that does not.
+    /// </summary>
+    internal static string DescribeOffering(IAlembicPromptService alembicPromptService, Records.ToolOffering? offering) =>
+        // Only an offered entry carries the note: the model reads the menu back beside the head line of what it offers.
+        offering is null
+            ? string.Empty
+            : " [" + alembicPromptService.ResolveToolInjection("OnMenu",
+                ("ordinal", offering.Ordinal.ToString(CultureInfo.InvariantCulture)),
+                ("label", offering.Label)) + "]";
 
     /// <summary>
     /// Renders one edge as a line saying where the call leads and the values it carries.

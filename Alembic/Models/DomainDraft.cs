@@ -293,6 +293,11 @@ public sealed class ToolDraft
     public bool RequiresExecutionApproval { get; set; }
 
     /// <summary>
+    /// The button that offers the tool on the agent's menu, declared on the method as <c>[OfferedToUser]</c>; <c>null</c> when only the model calls it.
+    /// </summary>
+    public Records.ToolOffering? Offering { get; set; }
+
+    /// <summary>
     /// The fields of the record the tool's method returns, in the order the record declares them.
     /// </summary>
     public List<ToolReturnDraft> Returns { get; set; } = [];
@@ -354,6 +359,11 @@ public sealed class WorkflowDraft
     /// The transitions in declaration order; the properties the workflow carries are the distinct names across them.
     /// </summary>
     public List<Records.WorkflowEdge> Edges { get; set; } = [];
+
+    /// <summary>
+    /// The button that offers the workflow on the agent's menu, declared on its class as <c>[OfferedToUser]</c>; <c>null</c> when only the model starts it.
+    /// </summary>
+    public Records.ToolOffering? Offering { get; set; }
 
     /// <summary>
     /// Where this workflow came from.
