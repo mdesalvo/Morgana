@@ -343,7 +343,7 @@ public static class Records
         int MaxOutputTokens)
     {
         /// <summary>
-        /// Builds the <see cref="ChatOptions"/> that <see cref="ChatClients.TierDefaultsChatClient"/> fills into every call on this tier.
+        /// Builds the <see cref="ChatOptions"/> that the tier's client fills into every call on this tier that leaves them unset.
         /// </summary>
         public ChatOptions ToChatOptions() => new()
         {

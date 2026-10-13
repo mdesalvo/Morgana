@@ -36,7 +36,7 @@ public class ConfigurationLLMService : ILLMService
 
     /// <summary>
     /// Logger factory used to instrument the chat client pipeline (in particular,
-    /// <see cref="OpenTelemetryChatClient"/> via <see cref="WrapWithTelemetry"/>). May be
+    /// <see cref="OpenTelemetryChatClient"/> via <see cref="UseTelemetryWhenEnabled"/>). May be
     /// <c>null</c> in test scenarios; in that case the telemetry decorator is skipped.
     /// </summary>
     private readonly ILoggerFactory? loggerFactory;
@@ -173,12 +173,20 @@ public class ConfigurationLLMService : ILLMService
                 throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier}:Connection:{ex.Message}", ex);
             }
 
-            // Applied as the OUTERMOST decorator so it sees (and only fills in, never overrides) the
-            // ChatOptions the caller — Microsoft.Agents.AI for domain agents, CompleteWithSystemPromptAsync
-            // for framework actors — actually sent, whatever sits underneath it.
-            IChatClient client = new TierDefaultsChatClient(
-                WrapWithTelemetry(languageModel.CreateChatClient(definition.Connection, definition.Options)),
-                definition.Options.ToChatOptions());
+            // The tier's chain, outermost first: the defaults layer sees (and only fills in, never overrides) the
+            // ChatOptions that every caller above sent, Microsoft.Agents.AI for domain agents and
+            // CompleteWithSystemPromptAsync for framework actors alike.
+            // Provider SDKs disagree on null fields (the Anthropic adapter falls back to a 1024-token ceiling), hence both are filled.
+            ChatOptions tierDefaultOptions = definition.Options.ToChatOptions();
+            ChatClientBuilder tierBuilder = new ChatClientBuilder(languageModel.CreateChatClient(definition.Connection, definition.Options))
+                .ConfigureOptions(callerOptions =>
+                {
+                    // The callback receives a copy, so the caller's reusable options stay unchanged.
+                    callerOptions.ModelId ??= tierDefaultOptions.ModelId;
+                    callerOptions.MaxOutputTokens ??= tierDefaultOptions.MaxOutputTokens;
+                });
+            UseTelemetryWhenEnabled(tierBuilder);
+            IChatClient client = tierBuilder.Build();
 
             // The tier is served from here on: its client, its price and whether a tool call can be forced on it.
             tierClients[tier] = (client, definition.MagicDust, languageModel.CanForceToolCall);
@@ -210,29 +218,20 @@ public class ConfigurationLLMService : ILLMService
     public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => tierClients[tier].Pricing;
 
     /// <summary>
-    /// Wraps the supplied <paramref name="innerChatClient"/> chat client with the MEAI
-    /// <see cref="OpenTelemetryChatClient"/> decorator so every request emits OTel spans and
-    /// metrics under the standard <c>gen_ai.*</c> semantic conventions (input/output token
-    /// counts, cache_read input tokens, model name, response latency, errors).
+    /// Adds the MEAI <see cref="OpenTelemetryChatClient"/> layer to a tier's <paramref name="tierBuilder"/> when telemetry is enabled,
+    /// so every request emits spans and metrics under the standard <c>gen_ai.*</c> semantic conventions.
     /// </summary>
-    /// <param name="innerChatClient">The chat client to wrap (typically the raw provider client, possibly
-    /// already wrapped by a provider-specific decorator like Anthropic's no-prefill guard).</param>
-    /// <returns>
-    /// The instrumented chat client when <see cref="loggerFactory"/> is available and
-    /// <c>Morgana:OpenTelemetry:Enabled</c> is true; otherwise <paramref name="innerChatClient"/>
-    /// unchanged. Provider-agnostic — every tier goes through this single hook.
-    /// </returns>
-    private IChatClient WrapWithTelemetry(IChatClient innerChatClient)
+    private void UseTelemetryWhenEnabled(ChatClientBuilder tierBuilder)
     {
         // Without a logger factory or with telemetry switched off the tier is served bare.
         if (loggerFactory is null || !configuration.GetValue("Morgana:OpenTelemetry:Enabled", true))
-            return innerChatClient;
+            return;
 
         // Prompt and response bodies reach the exporters only where the deployer opted in.
         bool enableSensitiveData = configuration.GetValue("Morgana:OpenTelemetry:EnableSensitiveData", false);
-        return new ChatClientBuilder(innerChatClient)
-            .UseOpenTelemetry(loggerFactory, Telemetry.LLMChatClientSourceName, otel => otel.EnableSensitiveData = enableSensitiveData)
-            .Build();
+
+        // The layer sits below the defaults layer, so the spans carry the model and ceiling that were actually sent.
+        tierBuilder.UseOpenTelemetry(loggerFactory, Telemetry.LLMChatClientSourceName, otel => otel.EnableSensitiveData = enableSensitiveData);
     }
 
     /// <summary>

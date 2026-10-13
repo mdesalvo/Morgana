@@ -333,29 +333,34 @@ public class MorganaAgentAdapter
         MorganaChatHistoryProvider chatHistoryProvider = new MorganaChatHistoryProvider(
             intentAttribute.Intent, chatReducer, logger, promptComposerService: promptComposerService);
 
-        // The tool loop the agent runs on. Reply's argument errors go back to the model in full, so a
-        // card breaking its schema is repaired on the next call rather than lost; every other tool
-        // fails tersely, keeping a domain tool's internals out of the model's sight.
-        // Below the loop, a response asking for the user's approval waits for the turn's text and loses its
-        // Reply: that turn is the framework's to close, with the approval buttons.
-        // Between the loop and the approval client, the tools that the workflow state allows are what the model is offered.
-        FunctionInvokingChatClient toolLoopChatClient = new FunctionInvokingChatClient(
-            new WorkflowToolsChatClient(
-                new ApprovalTurnChatClient(agentChatClient, await promptComposerService.ComposeReplyNotAcceptedAsync(
-                    await promptComposerService.ComposeToolInjectionAsync(Constants.ToolInjections.ReplyWithoutText))),
-                sessionAccessor, morganaAIContextProvider, workflowDefinitions, MaxConsultationRoundsPerTurn))
-        {
-            FunctionInvoker = (context, cancellationToken) => InvokeToolAsync(context, agentWorkflows, cancellationToken)
-        };
+        // What the model is told when Reply is dropped from an approval turn, and when a turn ends without Reply.
+        string approvalTextMissingRefusal = await promptComposerService.ComposeReplyNotAcceptedAsync(
+            await promptComposerService.ComposeToolInjectionAsync(Constants.ToolInjections.ReplyWithoutText));
+        string? turnClosureRequest = await promptComposerService.ComposeTurnClosureRequestAsync();
+        string turnClosedResult = await promptComposerService.ComposeToolInjectionAsync(Constants.ToolInjections.TurnClosed);
 
-        // Above the loop, where a whole turn is visible: a turn that the model wrote without Reply is
-        // closed here, on whichever path the provider supports.
-        TurnClosingChatClient turnClosingChatClient = new TurnClosingChatClient(
-            toolLoopChatClient,
-            await promptComposerService.ComposeTurnClosureRequestAsync(),
-            await promptComposerService.ComposeToolInjectionAsync(Constants.ToolInjections.TurnClosed),
-            llmService.CanForceToolCall(tierAttribute.Tier),
-            logger);
+        // The agent's client chain, outermost first: the builder wraps the first registration around all the others.
+        IChatClient agentChain = new ChatClientBuilder(agentChatClient)
+            // Above the loop, where a whole turn is visible: a turn that the model wrote without Reply is
+            // closed here, on whichever path the provider supports.
+            .Use(innerClient => new TurnClosingChatClient(
+                innerClient,
+                turnClosureRequest,
+                turnClosedResult,
+                llmService.CanForceToolCall(tierAttribute.Tier),
+                logger))
+            // The tool loop the agent runs on. Reply's argument errors go back to the model in full, so a
+            // card breaking its schema is repaired on the next call rather than lost; every other tool
+            // fails tersely, keeping a domain tool's internals out of the model's sight.
+            .UseFunctionInvocation(configure: toolLoop =>
+                toolLoop.FunctionInvoker = (context, cancellationToken) => InvokeToolAsync(context, agentWorkflows, cancellationToken))
+            // Between the loop and the approval client, the tools that the workflow state allows are what the model is offered.
+            .Use(innerClient => new WorkflowToolsChatClient(
+                innerClient, sessionAccessor, morganaAIContextProvider, workflowDefinitions, MaxConsultationRoundsPerTurn))
+            // Below the loop, a response asking for the user's approval waits for the turn's text and loses its
+            // Reply: that turn is the framework's to close, with the approval buttons.
+            .Use(innerClient => new ApprovalTurnChatClient(innerClient, approvalTextMissingRefusal))
+            .Build();
 
         // A launcher exists only for a workflow that the agent keeps.
         List<AIFunction> launcherFunctions = agentWorkflows is null
@@ -366,7 +371,7 @@ public class MorganaAgentAdapter
                 () => LaunchWorkflowAsync(workflow, agentWorkflows)))];
 
         // The agent: its providers, a stable id per intent and conversation with its composed instructions and tools.
-        AIAgent aiAgent = turnClosingChatClient.AsAIAgent(
+        AIAgent aiAgent = agentChain.AsAIAgent(
             new ChatClientAgentOptions
             {
                 AIContextProviders = [morganaAIContextProvider],
@@ -378,7 +383,6 @@ public class MorganaAgentAdapter
                     // The instructions close with the colleagues declaration where the agent holds colleagues.
                     Instructions = await ComposeInstructionsWithColleaguesAsync(
                         agentPrompt,
-
                         // Both ends of the topology, not just the asking one: an agent that consults
                         // nobody still reads the peer-consultation rules, because with the ring raised
                         // whole a colleague's question can land on it at any turn.
