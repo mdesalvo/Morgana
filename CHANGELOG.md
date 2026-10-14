@@ -33,7 +33,6 @@ The buttons on both levels are written by code, from the intents and from the to
 - Morgana graduates from 0.x: 1.0 previews begin, heading for a stable release consolidating architecture and quality
 
 ### 🐛 Fixed
-- Morgana's welcome buttons were worded by the model and could start an agent on a request the user never made
 - Ending an unknown conversation brought its actors to life just to stop them and to answer OK
 - The history of a conversation where nobody had spoken yet was answered with 404, as if the conversation did not exist
 - **Grimoire (1)**
@@ -42,6 +41,7 @@ The buttons on both levels are written by code, from the intents and from the to
   - A scenario continuing past a completed agent read Morgana's closing line as the next turn's reply, so every later turn was judged one reply behind
 
 ### 📦 Dependencies
+- Updated `A2A` to 1.0.0-preview3
 - Updated `Microsoft.Agents.AI` to 1.24.0
 - Update `Microsoft.Extensions.AI` to 10.11.0
 - Updated `OllamaSharp` to 5.5.0
