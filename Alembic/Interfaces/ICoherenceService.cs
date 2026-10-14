@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Alembic.Models;
 
 namespace Alembic.Interfaces;
@@ -44,12 +45,13 @@ public sealed record CoherenceReport(IReadOnlyList<CoherenceFinding> Findings, s
 /// <param name="What">The observation, in one sentence.</param>
 /// <param name="Why">What it will cost at runtime.</param>
 /// <param name="Fix">The change proposed, stated concretely enough to apply.</param>
+[Description("One defect that is only visible from the whole domain.")]
 public sealed record CoherenceFinding(
-    string Kind,
-    string Where,
-    string What,
-    string Why,
-    string Fix);
+    [Description("The class of defect.")] string Kind,
+    [Description("The agents, intents or variables involved, comma separated.")] string Where,
+    [Description("The observation in one sentence of at most twenty-five words.")] string What,
+    [Description("What it costs at runtime in one sentence of at most twenty words, quoting a user's message only when that message is the whole point.")] string Why,
+    [Description("One change in at most two short sentences, written as a single instruction with no decision left in it for whoever applies it.")] string Fix);
 
 /// <summary>
 /// A finding fixed earlier this sitting and what the applier said it changed.

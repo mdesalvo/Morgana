@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -620,9 +621,12 @@ public static class Records
     /// </summary>
     /// <param name="Compliant">True if message passes policy checks, false if violation detected</param>
     /// <param name="Violation">Description of policy violation if Compliant is false</param>
+    [Description("The verdict on the user's message.")]
     public record GuardCheckResponse(
-        [property: JsonPropertyName("compliant")] bool Compliant,
-        [property: JsonPropertyName("violation")] string? Violation);
+        [property: JsonPropertyName("compliant")]
+        [property: Description("True when the message breaks none of the rules above.")] bool Compliant,
+        [property: JsonPropertyName("violation")]
+        [property: Description("Your refusal, in Morgana's own voice, exactly as the user will read it; null when the message is compliant.")] string? Violation);
 
     /// <summary>
     /// IGuardRailService result: Compliant (true=passes all checks, false=violated). Violation: human-readable
@@ -650,16 +654,21 @@ public static class Records
     /// <see cref="Services.LLMClassifierService"/> for how that distinction gets made.
     /// </summary>
     /// <param name="Intents">Candidate intents, ranked by confidence (highest first).</param>
+    [Description("The intents that the request matches.")]
     public record ClassificationResponse(
-        [property: JsonPropertyName("intents")] List<IntentScore> Intents);
+        [property: JsonPropertyName("intents")]
+        [property: Description("The matching intents, most confident first.")] List<IntentScore> Intents);
 
     /// <summary>One candidate intent with its confidence score, as scored by the classifier LLM.</summary>
     /// <param name="Intent">Candidate intent name (e.g., "billing", "contract", or
     /// <see cref="Constants.Intents.Other"/>).</param>
     /// <param name="Confidence">Confidence 0.0-1.0, this intent's own match quality — not a rank.</param>
+    [Description("One intent and how well it matches the request.")]
     public record IntentScore(
-        [property: JsonPropertyName("intent")] string Intent,
-        [property: JsonPropertyName("confidence")] double Confidence);
+        [property: JsonPropertyName("intent")]
+        [property: Description("The intent.")] string Intent,
+        [property: JsonPropertyName("confidence")]
+        [property: Description("How well this intent alone matches the request, from 0 to 1.")] double Confidence);
 
     /// <summary>
     /// Internal classification result used by the conversation pipeline.
@@ -841,8 +850,10 @@ public static class Records
     /// The welcome message as the presentation prompt returns it; the buttons are the configured intents and the model never writes them.
     /// </summary>
     /// <param name="Message">Welcome/presentation message text (2-4 sentences)</param>
+    [Description("Morgana's introduction.")]
     public record PresentationResponse(
-        [property: JsonPropertyName("message")] string Message);
+        [property: JsonPropertyName("message")]
+        [property: Description("The introduction message.")] string Message);
 
     /// <summary>
     /// LLM-generated rewrite produced by the ChannelAdapter prompt. Contains the degraded
@@ -851,9 +862,27 @@ public static class Records
     /// </summary>
     /// <param name="Text">Rewritten message text, channel-compliant and free of unsupported features.</param>
     /// <param name="QuickReplies">Quick replies preserved by the rewrite or null when the channel cannot carry them.</param>
+    [Description("The message rewritten for the channel.")]
     public record ChannelAdapterResponse(
-        [property: JsonPropertyName("text")] string Text,
-        [property: JsonPropertyName("quickReplies")] List<QuickReply>? QuickReplies);
+        [property: JsonPropertyName("text")]
+        [property: Description("The rewritten message.")] string Text,
+        [property: JsonPropertyName("quickReplies")]
+        [property: Description("The buttons kept for the channel, each exactly as received; null when the channel shows no buttons or the message had none.")] List<QuickReply>? QuickReplies);
+
+    /// <summary>
+    /// What the channel adapter's rewrite works on: the message without the transport metadata that must not influence it.
+    /// </summary>
+    /// <param name="Text">The message text as its author wrote it.</param>
+    /// <param name="RichCard">The card of the message; null when it has none.</param>
+    /// <param name="QuickReplies">The buttons of the message; null when it has none.</param>
+    [Description("The message to rewrite.")]
+    public record ChannelAdapterInput(
+        [property: JsonPropertyName("text")]
+        [property: Description("The message text.")] string Text,
+        [property: JsonPropertyName("richCard")]
+        [property: Description("The card of the message; null when it has none.")] RichCard? RichCard,
+        [property: JsonPropertyName("quickReplies")]
+        [property: Description("The buttons of the message; null when it has none.")] List<QuickReply>? QuickReplies);
 
     /// <summary>
     /// Result returned by <see cref="Interfaces.IPresenterService.GenerateAsync"/> containing
@@ -1210,6 +1239,10 @@ public static class Records
     /// Consumers skip a reserved tool because the framework controls its output.
     /// </param>
     /// <param name="Offering">The button that offers the tool to the user, declared with <see cref="Attributes.OfferedToUserAttribute"/>; null for a tool that only the model calls.</param>
+    /// <param name="ReturnSchema">
+    /// The JSON schema of the record that the tool returns, as Microsoft.Extensions.AI publishes it. Null when the tool
+    /// returns no record or a <see cref="FrameworkToolResult"/>, which becomes authored text and is no contract.
+    /// </param>
     public record ToolDefinition(
         string Name,
         string Description,
@@ -1217,7 +1250,8 @@ public static class Records
         bool Reserved = false,
         bool RequiresExecutionApproval = false,
         IReadOnlyList<ToolReturn>? Returns = null,
-        ToolOffering? Offering = null);
+        ToolOffering? Offering = null,
+        JsonElement? ReturnSchema = null);
 
     /// <summary>
     /// The place of a tool or a workflow in its agent's menu.
@@ -1384,9 +1418,12 @@ public static class Records
     /// <param name="Label">What the button shows.</param>
     /// <param name="Value">The message sent on the user's behalf when the button is pressed.</param>
     public record ReplyAction(
-        [property: JsonPropertyName("tool")] string Tool,
-        [property: JsonPropertyName("label")] string Label,
-        [property: JsonPropertyName("value")] string Value);
+        [property: JsonPropertyName("tool")]
+        [property: Description("The name of one of your own tools that the button leads to.")] string Tool,
+        [property: JsonPropertyName("label")]
+        [property: Description("The button text; an emoji is welcome.")] string Label,
+        [property: JsonPropertyName("value")]
+        [property: Description("The message sent on the user's behalf when the button is pressed, written as the user would type it.")] string Value);
 
     /// <summary>
     /// The two pairs of buttons the framework adds to an agent's turn so the user can stay or leave,

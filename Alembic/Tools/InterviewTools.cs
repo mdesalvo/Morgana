@@ -188,7 +188,7 @@ public class InterviewTools
     /// Records the agent's Target section.
     /// </summary>
     /// <remarks>The last call stands. The reply tells the model whether the prose fits the section's shape without blocking it.</remarks>
-    [Description("Records the agent's TARGET section: what it does well and existentially, then what it is significant to say it does NOT do. Only edges that will actually be walked into — a limit nobody would test is noise. This section opens the composed prompt, so a capability claimed here and not backed by a tool is the most expensive mistake available to you.")]
+    [Description("Records the agent's TARGET section: what it does well and existentially, then what it is significant to say it does not do. Only edges that will actually be walked into — a limit nobody would test is noise. This section opens the composed prompt, so a capability claimed here and not backed by a tool is the most expensive mistake available to you.")]
     [RequiresApproval(false)]
     public ToolReply SetAgentTarget(
         [Description("Two to four sentences, addressed to the agent as 'you'. Purpose first, then edges. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string target)
@@ -220,7 +220,7 @@ public class InterviewTools
     /// Records the agent's Personality section.
     /// </summary>
     /// <remarks>Only the <c>AgentPersonality</c> pass holds this tool: it is the one place a voice is written.</remarks>
-    [Description("Records the agent's PERSONALITY section: the empathy, language, tone and humanity it meets a conversation with. Voice only — a sentence telling the agent what to DO belongs in its instructions. Name which facet of Morgana this agent is; do not list adjectives.")]
+    [Description("Records the agent's PERSONALITY section: the empathy, language, tone and humanity it meets a conversation with. Voice only — a sentence telling the agent what to do belongs in its instructions. Name which facet of Morgana this agent is; do not list adjectives.")]
     [RequiresApproval(false)]
     public ToolReply SetAgentPersonality(
         [Description("Two to three sentences, addressed to the agent as 'you'. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string personality)
@@ -236,7 +236,7 @@ public class InterviewTools
     /// Records the agent's Instructions section.
     /// </summary>
     /// <remarks>Instructions speak about the agent's tools, so no pass before the toolkit exists holds this tool.</remarks>
-    [Description("Records the agent's INSTRUCTIONS section: how it does what it does, what it is trying to achieve on the way and what it is significant to say it must NOT do. The order of the work and its refusals. Only what is true of this domain.")]
+    [Description("Records the agent's INSTRUCTIONS section: how it does what it does, what it is trying to achieve on the way and what it is significant to say it must not do. The order of the work and its refusals. Only what is true of this domain.")]
     [RequiresApproval(false)]
     public ToolReply SetAgentInstructions(
         [Description("Four to twelve sentences, addressed to the agent as 'you', in the order the work happens. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string instructions)
@@ -272,7 +272,7 @@ public class InterviewTools
     [RequiresApproval(false)]
     public ToolReply DeclareTool(
         [Description("PascalCase, no spaces or punctuation, a verb the agent performs (e.g. 'GetInvoices', 'CancelBooking'). It becomes a C# method name verbatim.")] [ToolParameter(Records.ToolScope.Request)] string name,
-        [Description("What the tool does, what it returns and WHEN to call it. Two to four sentences. Say what it does not cover where a neighbouring tool covers it. A description that names only the action leaves the timing to guesswork.")] [ToolParameter(Records.ToolScope.Request)] string description,
+        [Description("What the tool does and when to call it, never the fields it returns: those are its record's own contract. Two to four sentences. Say what it does not cover where a neighbouring tool covers it. A description that names only the action leaves the timing to guesswork.")] [ToolParameter(Records.ToolScope.Request)] string description,
         [Description("True when the tool changes something real — it places, books, bills, sends, cancels or deletes — so Morgana runs it only once the user has approved that very call. False when it only looks something up. Inferred from what the tool does, never asked.")] [ToolParameter(Records.ToolScope.Request)] bool requiresApproval)
     {
         // The name becomes a C# method name, so a blank one cannot be recorded.
@@ -618,41 +618,16 @@ public class InterviewTools
     /// Writes the agent's whole menu at once, replacing the one before.
     /// </summary>
     /// <remarks>The ordinal is the position in the array and never the model's to write, so the numbering cannot clash.</remarks>
-    /// <param name="entries">JSON array in menu order of objects carrying the exact name of a tool or a workflow and the label of its button.</param>
+    /// <param name="entries">The buttons in menu order, each naming the tool or the workflow it presses and carrying its label.</param>
     [Description("Writes this agent's menu whole, replacing the one before: the buttons a user finds on arriving at this agent from Morgana's own, each pressing one tool or one workflow of this agent. A label is both what the button shows and the message its press sends, so it reads as the user's own request: a leading emoji then two to five words ('🧾 My recent invoices'). Offer what a customer would come here to start. Never put on it a tool that only serves another or one that waits for approval; the first tool of a workflow never goes on it either, the workflow does. An empty array leaves the agent with no menu.")]
     [RequiresApproval(false)]
     public ToolReply SetMenu(
-        [Description("JSON array in menu order, first button first: [{\"entry\":\"GetInvoices\",\"label\":\"🧾 My recent invoices\"}]. Each entry is the exact name of a tool or a workflow of this agent.")] [ToolParameter(Records.ToolScope.Request)] string entries)
+        [Description("The buttons of the menu in order, first button first. Each entry is the exact name of a tool or a workflow of this agent.")] [ToolParameter(Records.ToolScope.Request)] List<MenuEntry> entries)
     {
         // The menu as the model wrote it: an entry name and a label, in button order.
-        List<(string Entry, string Label)> requestedEntries = [];
-
-        try
-        {
-            // The model sends the menu as a JSON array of objects.
-            List<Dictionary<string, string?>>? parsedEntries = JsonSerializer.Deserialize<List<Dictionary<string, string?>>>(
-                entries, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-            // A payload of null is not a menu at all.
-            if (parsedEntries is null)
-                return ToolReply.Refused(Said("MenuMalformed", ("reason", "null")));
-
-            foreach (Dictionary<string, string?> parsedEntry in parsedEntries)
-            {
-                // Property names are matched ignoring case, like every other payload that the model writes.
-                Dictionary<string, string?> caseInsensitiveEntry = new(parsedEntry, StringComparer.OrdinalIgnoreCase);
-
-                // A missing property reads as blank: a blank entry is told as unknown and a blank label is refused by the framework's own check.
-                caseInsensitiveEntry.TryGetValue("entry", out string? entryName);
-                caseInsensitiveEntry.TryGetValue("label", out string? label);
-                requestedEntries.Add(((entryName ?? string.Empty).Trim(), (label ?? string.Empty).Trim()));
-            }
-        }
-        // A payload that is not a JSON array of objects is refused with the parser's reason so the model resends it well formed.
-        catch (Exception exception) when (exception is JsonException or ArgumentException)
-        {
-            return ToolReply.Refused(Said("MenuMalformed", ("reason", exception.Message)));
-        }
+        // A missing text reads as blank: a blank entry is told as unknown and a blank label is refused by the framework's own check.
+        List<(string Entry, string Label)> requestedEntries =
+            [.. entries.Select(menuEntry => ((menuEntry.Entry ?? string.Empty).Trim(), (menuEntry.Label ?? string.Empty).Trim()))];
 
         // An empty menu withdraws every offering the agent carries.
         if (requestedEntries.Count == 0)
@@ -1101,36 +1076,24 @@ public class InterviewTools
     /// Offers words for the agent's voice, to be picked from freely.
     /// </summary>
     /// <remarks>Traits are taken several at a time and none is an answer on its own, which is why they are not buttons.</remarks>
-    [Description("Offers words for this agent's voice under the question you are about to ask, to be picked from freely — several, one, or none and the text box stays open beside them. Call it BEFORE writing the question. Every word must be a way Morgana herself could speak: this section specialises her voice and never replaces it.")]
+    [Description("Offers words for this agent's voice under the question you are about to ask, to be picked from freely — several, one, or none and the text box stays open beside them. Call it before writing the question. Every word must be a way Morgana herself could speak: this section specialises her voice and never replaces it.")]
     [RequiresApproval(false)]
     public ToolReply SetTraits(
-        [Description("JSON array of eight to fourteen single adjectives, in the client's language: [\"precise\",\"unhurried\",\"reassuring\"]. Real alternatives rather than shades of one temper, each plausible for THIS domain and none of them a way Morgana would never speak.")] [ToolParameter(Records.ToolScope.Request)] string traits)
+        [Description("Eight to fourteen single adjectives, in the client's language. Real alternatives rather than shades of one temper, each plausible for this domain and none of them a way Morgana would never speak.")] [ToolParameter(Records.ToolScope.Request)] List<string> traits)
     {
-        try
-        {
-            // The model sends the words as a JSON array of adjectives.
-            List<string>? values = JsonSerializer.Deserialize<List<string>>(
-                traits, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        // Blank entries would draw empty chips under the question.
+        List<string> words = [.. traits.Select(trait => trait.Trim()).Where(trait => trait.Length > 0)];
 
-            // Blank entries would draw empty chips under the question.
-            List<string> words = [.. (values ?? []).Select(w => w.Trim()).Where(w => w.Length > 0)];
+        // A list with no word offers the client nothing to pick from.
+        if (words.Count == 0)
+            return ToolReply.Refused(Said("TraitsNone"));
 
-            // An array with no word offers the client nothing to pick from.
-            if (words.Count == 0)
-                return ToolReply.Refused(Said("TraitsNone"));
+        // The words replace any earlier offer and are drawn under the next question.
+        interviewState.PendingTraits.Clear();
+        interviewState.PendingTraits.AddRange(words);
 
-            // The words replace any earlier offer and are drawn under the next question.
-            interviewState.PendingTraits.Clear();
-            interviewState.PendingTraits.AddRange(words);
-
-            // The reply says how many words will be drawn.
-            return new ToolReply(Said("TraitsDrawn", ("count", words.Count.ToString(CultureInfo.InvariantCulture))));
-        }
-        // A payload that is not a JSON array is refused with the parser's reason so the model resends it well formed.
-        catch (JsonException ex)
-        {
-            return ToolReply.Refused(Said("TraitsMalformed", ("reason", ex.Message)));
-        }
+        // The reply says how many words will be drawn.
+        return new ToolReply(Said("TraitsDrawn", ("count", words.Count.ToString(CultureInfo.InvariantCulture))));
     }
 
     /// <summary>The number of facts one agent or the business may hold on record before the pass has to tidy them.</summary>
@@ -1155,7 +1118,7 @@ public class InterviewTools
     [Description("Writes down one thing the client has just told you about how their work actually goes — not what you decided about it. Every step after this one opens holding what is on record for the agent in hand and for the business, so call it the moment an answer says something a later step would otherwise have to ask again: what they sell, who writes in and about what, what they open to answer it, what goes wrong, what they never do. One fact per call, in their own words. Never what you wrote into a section — that is already in the configuration and a second copy of it here is a second thing to keep true. Where what they just said contradicts something on record, say so in 'corrects' and the wrong one goes: a record nobody can correct is worse than no record, because every step after you will hold it and none of them can doubt it.")]
     [RequiresApproval(false)]
     public ToolReply NoteDomainFact(
-        [Description("What this is about, in one or two of THEIR words — 'prices', 'deposits', 'custom cakes'. Facts about the same thing take the same subject: it is what another agent's step reads to decide whether to fetch this at all.")] [ToolParameter(Records.ToolScope.Request)] string subject,
+        [Description("What this is about, in one or two of their words — 'prices', 'deposits', 'custom cakes'. Facts about the same thing take the same subject: it is what another agent's step reads to decide whether to fetch this at all.")] [ToolParameter(Records.ToolScope.Request)] string subject,
         [Description("One short sentence about their work, in their vocabulary, never about the agent: 'the catalogue changes with the season', 'custom cakes are quoted at an appointment, never over the counter'. Standing on one entry of the map it is kept with that agent; drawing the map or closing the domain it is kept for the business as a whole.")] [ToolParameter(Records.ToolScope.Request)] string fact,
         [Description("Any part of the sentence already on record that this puts right, where they have just contradicted it — a reading taken off their upload most of all. Leave it out when nothing is being corrected.")] [ToolParameter(Records.ToolScope.Request)] string? corrects = null)
     {
@@ -1227,7 +1190,7 @@ public class InterviewTools
     /// </summary>
     /// <remarks>A step opens holding only the subjects of the other agents: this reaches the rest when one of them bears on the question in hand.</remarks>
     /// <param name="intent">The agent's own intent name, as the opening message lists it.</param>
-    [Description("Hands back what is on record about one of the OTHER agents of this domain. You open holding what is known about the agent in hand and about the business; for every other agent you hold only the subjects it keeps — a domain read whole would be forty sentences carried into every question, nearly all about counters this step will never touch. Call this when a subject listed against another agent bears on the question you are about to ask: whether the counter next door already takes deposits decides whether this one should.")]
+    [Description("Hands back what is on record about one of the other agents of this domain. You open holding what is known about the agent in hand and about the business; for every other agent you hold only the subjects it keeps — a domain read whole would be forty sentences carried into every question, nearly all about counters this step will never touch. Call this when a subject listed against another agent bears on the question you are about to ask: whether the counter next door already takes deposits decides whether this one should.")]
     [RequiresApproval(false)]
     public ToolReply RecallAgent(
         [Description("The agent's own intent name, exactly as the opening message lists it.")] [ToolParameter(Records.ToolScope.Request)] string intent)
@@ -1279,7 +1242,7 @@ public class InterviewTools
     [Description("States, over the question you are about to ask, what this step adds to the agent in hand. Call it in the turn a step lands on, before the question, every time without exception: a step that lands with nothing but a question leaves the client working out what this screen is for from the question alone. Call it in no other turn — a confirmation or a follow-up is not a landing and what stands there would say the interview had moved on when it has not. It is not room for anything else: never an answer to what they just said, never an apology, never a correction of your own last turn. Those belong in the question.")]
     [RequiresApproval(false)]
     public ToolReply SetStepPlacing(
-        [Description("One short sentence in the second person, naming what THEY will be able to do once this step is settled, in the things their work is actually made of — the orders, the counter, the people who write in. Name neither the agent nor the step: both already stand lit on the screen. Where the sentence needs a subject it is the part of their work this agent stands for, in their own words. Two things it is never: a line about what software becomes able to do ('this is where the catalogue stops being just words and becomes something you can really consult' is a brochure and tells a baker nothing) or a restatement of why this stage exists, which is written above for you and not for them. The test is simple: if the same sentence could open this step for a garage, a vet and a bank alike, it places nothing. Never place it at the expense of the steps behind it: what those settled is already their configuration, so a step announcing that things now finally become real tells them the screens they have just filled in were a game.")] [ToolParameter(Records.ToolScope.Request)] string placing)
+        [Description("One short sentence in the second person, naming what they will be able to do once this step is settled, in the things their work is actually made of — the orders, the counter, the people who write in. Name neither the agent nor the step: both already stand lit on the screen. Where the sentence needs a subject it is the part of their work this agent stands for, in their own words. Two things it is never: a line about what software becomes able to do ('this is where the catalogue stops being just words and becomes something you can really consult' is a brochure and tells a baker nothing) or a restatement of why this stage exists, which is written above for you and not for them. The test is simple: if the same sentence could open this step for a garage, a vet and a bank alike, it places nothing. Never place it at the expense of the steps behind it: what those settled is already their configuration, so a step announcing that things now finally become real tells them the screens they have just filled in were a game.")] [ToolParameter(Records.ToolScope.Request)] string placing)
     {
         // The sentence the client reads over the question.
         string placingText = placing.Trim();
@@ -1326,7 +1289,7 @@ public class InterviewTools
     [Description("Puts a worked example in the answer box under the question you are about to ask, greyed out, for them to take and cut about or to type over.")]
     [RequiresApproval(false)]
     public ToolReply SetExample(
-        [Description("An answer somebody in THEIR trade might have given to the question you are about to ask, cut to the size of that question — forty to sixty words where it opens a step, ten to twenty where it follows one up — in their vocabulary and about their own work — never about another business, never a description of what to write and never the question itself put into their mouth: an example that says what the question says adds nothing to the screen it stands on. It teaches the register, the length and the level of detail at once. Send it unquoted: it stands in the box as text they can send as it is, so quotation marks around it arrive as part of their own answer. Make it close enough to their work to be worth editing and specific enough that it cannot be agreed with as it stands: an example that fits them exactly is one they will press past without adding what only they know.")] [ToolParameter(Records.ToolScope.Request)] string example)
+        [Description("An answer somebody in their trade might have given to the question you are about to ask, cut to the size of that question — forty to sixty words where it opens a step, ten to twenty where it follows one up — in their vocabulary and about their own work — never about another business, never a description of what to write and never the question itself put into their mouth: an example that says what the question says adds nothing to the screen it stands on. It teaches the register, the length and the level of detail at once. Send it unquoted: it stands in the box as text they can send as it is, so quotation marks around it arrive as part of their own answer. Make it close enough to their work to be worth editing and specific enough that it cannot be agreed with as it stands: an example that fits them exactly is one they will press past without adding what only they know.")] [ToolParameter(Records.ToolScope.Request)] string example)
     {
         // The box holds it as the client's own text, so quotation marks around it would be sent as part of the answer.
         string exampleText = example.Trim().Trim('"').Trim();
@@ -1346,10 +1309,10 @@ public class InterviewTools
     /// Attaches to the question about to be asked the one button that answers it without adding anything.
     /// </summary>
     /// <remarks>There is exactly one button because the answer that adds nothing is the only one Alembic knows the whole of.</remarks>
-    [Description("Attaches to the question you are about to ask the one button that answers it without adding anything — agreement, or that there is nothing to add — so a client in that position settles the turn with one press instead of a typed sentence. Call it BEFORE writing the question: the button renders below it. The text box stays open either way.")]
+    [Description("Attaches to the question you are about to ask the one button that answers it without adding anything — agreement, or that there is nothing to add — so a client in that position settles the turn with one press instead of a typed sentence. Call it before writing the question: the button renders below it. The text box stays open either way.")]
     [RequiresApproval(false)]
     public ToolReply SetChoice(
-        [Description("What the client reads on the button. It carries the answer that adds nothing and has to answer the question AS YOU PUT IT — 'That's everything' where you asked whether that is everything, 'Nothing missing' where you asked whether anything is missing, 'No, nothing like that' where you asked whether there is something the agent should never do.")] [ToolParameter(Records.ToolScope.Request)] string label,
+        [Description("What the client reads on the button. It carries the answer that adds nothing and has to answer the question as you put it — 'That's everything' where you asked whether that is everything, 'Nothing missing' where you asked whether anything is missing, 'No, nothing like that' where you asked whether there is something the agent should never do.")] [ToolParameter(Records.ToolScope.Request)] string label,
         [Description("The complete answer the button sends, in the client's register, reading as something they would plausibly have typed.")] [ToolParameter(Records.ToolScope.Request)] string value)
     {
         // A button needs both the text the client reads and the answer it sends.

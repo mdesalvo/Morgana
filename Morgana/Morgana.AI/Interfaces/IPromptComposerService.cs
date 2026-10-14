@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
@@ -26,11 +28,19 @@ public interface IPromptComposerService
     Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false);
 
     /// <summary>
-    /// Produces the description that a tool presents to the model: the authored one, closed by the
-    /// framework's guidance when the tool requires execution approval.
+    /// Produces the description that a tool presents to the model: the authored one, followed by the
+    /// schema of what it returns and closed by the framework's guidance when the tool requires execution approval.
     /// </summary>
     /// <param name="toolDefinition">The tool definition from <c>morgana.json</c> or <c>agents.json</c>.</param>
     Task<string> ComposeToolDescriptionAsync(Records.ToolDefinition toolDefinition);
+
+    /// <summary>
+    /// Appends to a description the schema of what the tool returns, since no provider transmits a function's return schema.
+    /// </summary>
+    /// <param name="description">The tool's description as authored.</param>
+    /// <param name="returnSchema">The tool's return schema; null or not a JSON object leaves the description as it is.</param>
+    /// <returns>The description followed by the return contract; the description unchanged when there is nothing to append.</returns>
+    Task<string> ComposeReturnContractAsync(string description, JsonElement? returnSchema);
 
     /// <summary>
     /// Produces the description under which a colleague is offered as a callable function: the

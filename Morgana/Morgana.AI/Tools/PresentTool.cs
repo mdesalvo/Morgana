@@ -35,14 +35,11 @@ public class PresentTool : MorganaTool
         // The menu is the agent's own and was fixed when the agent was built: the model gives it a voice and never chooses it.
         IReadOnlyList<Records.ReplyAction> menu = getToolContext().Provider.Menu;
 
-        // An agent that offers nothing says so, so the presentation does not promise buttons that will not come.
-        if (menu.Count == 0)
-            return Task.FromResult(new Records.FrameworkToolResult(Constants.ToolInjections.NoMenuOffered));
-
-        // The labels in menu order are what the presentation can refer to.
+        // The labels in menu order are what the presentation can refer to; an agent that offers nothing says so,
+        // so the presentation does not promise buttons that will not come.
         return Task.FromResult(new Records.FrameworkToolResult(Constants.ToolInjections.MenuOffered, new Dictionary<string, string>
         {
-            [Constants.Placeholders.Actions] = string.Join(", ", menu.Select(action => action.Label))
+            [Constants.Placeholders.Actions] = menu.Count == 0 ? "none" : string.Join(", ", menu.Select(action => action.Label))
         }));
     }
 }

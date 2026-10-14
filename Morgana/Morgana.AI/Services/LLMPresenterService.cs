@@ -1,5 +1,4 @@
 ﻿using System.Collections.Concurrent;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Adapters;
 using Morgana.AI.Interfaces;
@@ -166,12 +165,10 @@ public class LLMPresenterService : IPresenterService
                     Records.Prompt.Labeled(Constants.SectionLabels.Formatting, presentationPrompt.Formatting));
 
             // The intent list is the model's input, as the message to adapt is the channel adapter's.
-            string llmResponse = await llmService.CompleteWithSystemPromptAsync(
-                PresentationLabel, presentationSystemPrompt, formattedIntents);
-
             // A null payload carries no presentation: it is treated as a failure so that the fallback answers.
-            Records.PresentationResponse? presentation =
-                JsonSerializer.Deserialize<Records.PresentationResponse>(llmResponse, Records.DefaultJsonSerializerOptions)
+            Records.PresentationResponse presentation =
+                await llmService.CompleteStructuredAsync<Records.PresentationResponse>(
+                    PresentationLabel, presentationSystemPrompt, formattedIntents)
                  ?? throw new InvalidOperationException("LLM returned null presentation");
 
             // The model wrote the welcome alone: the buttons are the configured intents, never the model's.

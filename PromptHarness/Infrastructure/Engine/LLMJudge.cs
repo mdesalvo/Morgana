@@ -53,15 +53,8 @@ public sealed class LLMJudge
     /// <exception cref="InvalidOperationException">Thrown when a tier is not configured.</exception>
     public static LLMJudge Create(IConfiguration configuration, ILoggerFactory loggerFactory)
     {
-        // These two exist only to satisfy the LLM classes' constructors — the judge never resolves
-        // an agent's own prompt, so a minimal, standalone chain is enough here rather than the
-        // full agent-configuration stack the host itself builds.
-        IAgentConfigurationService agentConfigurationService =
-            new EmbeddedAgentConfigurationService(loggerFactory.CreateLogger("Harness.Judge"));
-        IPromptResolverService promptResolverService =
-            new ConfigurationPromptResolverService(agentConfigurationService);
-
-        return new LLMJudge(new Morgana.AI.Services.ConfigurationLLMService(configuration, promptResolverService, loggerFactory));
+        // The judge reuses the tiers of the deployment under test and nothing else of the host.
+        return new LLMJudge(new Morgana.AI.Services.ConfigurationLLMService(configuration, loggerFactory));
     }
 
     /// <summary>
@@ -142,7 +135,7 @@ public sealed class LLMJudge
         {
             try
             {
-                // Resolved by tier rather than through CompleteWithSystemPromptAsync, which follows
+                // Resolved by tier rather than through CompleteStructuredAsync, which follows
                 // Morgana:ActorSystem:Tier: the judge's model must not move with the deployment under test.
                 ChatResponse response = await llmService.GetChatClient(Morgana.AI.Records.LLMTier.Efficiency).GetResponseAsync(
                     [new ChatMessage(ChatRole.System, SystemPrompt), new ChatMessage(ChatRole.User, userPrompt)],

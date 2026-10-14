@@ -257,7 +257,7 @@ uses them. **There is no cross-tier fallback**. Validation never asks which agen
 entry carries `Provider`, `Connection` (each provider reads only the fields it uses), `Options` — a
 deliberately narrow mirror of `ChatOptions` (`MaxOutputTokens` mandatory), see `Records.TierConfiguration` — plus its own `MagicDust`.
 
-Two consumption modes: `CompleteWithSystemPromptAsync` (stateless, on `Morgana:ActorSystem:Tier`) and
+Two consumption modes: `CompleteStructuredAsync` (stateless, answered under a JSON schema, on `Morgana:ActorSystem:Tier`) and
 `GetChatClient(tier)` / `GetPricing(tier)` (an agent's own `[RequiresLLMTier]`).
 
 ## Agent Authoring

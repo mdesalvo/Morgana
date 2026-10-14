@@ -149,7 +149,7 @@ public class InventoryTool : MorganaTool
     /// Lists every plant in the greenhouse catalog with its current stock status.
     /// </summary>
     /// <returns>The products with their stock status icons.</returns>
-    [Description("Retrieves the full greenhouse/nursery catalog as structured JSON: totalProducts and an array of plants with sku, name, category, quantityOnHand, unitPrice, stockStatus (InStock/LowStock/OutOfStock) and statusIcon. This tool has only informative capabilities: it does NOT reserve, order, or modify anything.")]
+    [Description("Retrieves the full greenhouse/nursery catalog with the stock status of every plant. This tool has only informative capabilities: it does not reserve, order or modify anything.")]
     [OfferedToUser(1, "🌿 Browse the catalog")]
     [RequiresApproval(false)]
     public async Task<ProductCatalogResult> GetProductCatalog()
@@ -186,11 +186,11 @@ public class InventoryTool : MorganaTool
     /// </summary>
     /// <param name="sku">Product SKU to inspect (e.g. "RSE-100").</param>
     /// <returns>The quantity, threshold, price and stock status, or the error listing the SKUs that exist.</returns>
-    [Description("Retrieves the current stock level for a single plant as structured JSON: sku, name, category, quantityOnHand, reorderThreshold, unitPrice, stockStatus, statusIcon, maxOrderableQuantity. Returns an error with the list of valid SKUs if the sku is unknown. This tool has only informative capabilities: it does NOT reserve, order, or modify anything.")]
+    [Description("Retrieves the current stock level of a single plant. An unknown sku comes back as an error listing the valid SKUs. This tool has only informative capabilities: it does not reserve, order or modify anything.")]
     [OfferedToUser(2, "🌼 A specific plant")]
     [RequiresApproval(false)]
     public async Task<StockLevelResult> CheckStockLevel(
-        [Description("Product SKU to inspect (e.g. 'RSE-100'). Until the user has named the plant they mean, ask them which one. Do NOT guess or assume which plant the user wants.")] [ToolParameter(Records.ToolScope.Request)] string sku)
+        [Description("Product SKU to inspect (e.g. 'RSE-100'). Until the user has named the plant they mean, ask them which one. Never guess or assume which plant the user wants.")] [ToolParameter(Records.ToolScope.Request)] string sku)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -224,7 +224,7 @@ public class InventoryTool : MorganaTool
     /// <param name="quantity">Quantity requested (must not exceed current stock).</param>
     /// <param name="customerCode">Identifier of the requesting customer (retrieved from shared context).</param>
     /// <returns>The new orderId, one-time sealWord, quote and pending status, or the error saying why no order was created.</returns>
-    [Description("Creates a new purchase order in 'Pending' status and returns a quote as structured JSON: orderId, sealWord, sku, productName, quantity, unitPrice, totalPrice, status, note. This is a QUOTE ONLY: stock is validated but NOT decremented. sealWord is shown ONLY this once and is required, together with orderId, by ConfirmOrder/CancelOrder — including in a future session. It has dispositive potential only once ConfirmOrder is called afterwards — on its own it commits nothing.")]
+    [Description("Creates a new purchase order in 'Pending' status and returns its quote. This is a quote only: stock is validated but not decremented. The seal word is shown only this once and is required, together with the orderId, by ConfirmOrder and CancelOrder — including in a future session. It has dispositive potential only once ConfirmOrder is called afterwards — on its own it commits nothing.")]
     [RequiresApproval(false)]
     public async Task<PurchaseOrderResult> CreatePurchaseOrder(
         [Description("Product SKU to order (e.g. 'RSE-100').")] [ToolParameter(Records.ToolScope.Request)] string sku,
@@ -306,7 +306,7 @@ public class InventoryTool : MorganaTool
     /// <param name="orderId">Identifier of the order to confirm, as returned by CreatePurchaseOrder.</param>
     /// <param name="sealWord">One-time seal word from CreatePurchaseOrder for this exact orderId.</param>
     /// <returns>The confirmed order with its remaining stock and invoiceId; the error instead when the order was not confirmed.</returns>
-    [Description("Commits a Pending order: the ONLY tool that actually decrements stock AND the ONLY tool that bills the customer. Requires the exact orderId AND sealWord pair returned by CreatePurchaseOrder — a mismatch on either is reported identically as 'no order matches', to avoid confirming or denying whether an orderId exists. Re-validates availability at commit time and returns structured JSON: orderId, sku, quantity, status ('Confirmed'), confirmedAt, remainingStock, invoiceId, note. invoiceId identifies the invoice this order was just billed to — the accounts agent (Billing), never you, is where the customer sees its total or line items. This tool has dispositive capabilities: it commits a real, persistent change to greenhouse stock and to the customer's account.")]
+    [Description("Commits a Pending order: the only tool that actually decrements stock and the only tool that bills the customer. Requires the exact orderId and sealWord pair returned by CreatePurchaseOrder — a mismatch on either is reported identically as 'no order matches', to avoid confirming or denying whether an orderId exists. Re-validates availability at commit time. The invoice it bills is the accounts agent's (Billing), never yours: that is where the customer sees its total or line items. This tool has dispositive capabilities: it commits a real, persistent change to greenhouse stock and to the customer's account.")]
     [RequiresApproval(true)]
     public async Task<ConfirmOrderResult> ConfirmOrder(
         [Description("Identifier of the Pending order to confirm, exactly as returned by CreatePurchaseOrder.")] [ToolParameter(Records.ToolScope.Request)] string orderId,
@@ -440,7 +440,7 @@ public class InventoryTool : MorganaTool
     /// </summary>
     /// <param name="orderId">Identifier of the order to inspect. Tracked from the conversation itself, NOT a single stored context value: a customer may have more than one order in flight.</param>
     /// <returns>The order status and timestamps, or the error saying that no order matches.</returns>
-    [Description("Retrieves the current status and lifecycle timestamps of an existing order as structured JSON: orderId, sku, quantity, status (Pending/Confirmed/Cancelled), createdAt, confirmedAt, cancelledAt. Keyed on the orderId alone: NO seal word is required, because reading a status commits nothing — the same fields are already listed by GetOrders and GetOrderHistory. An orderId nothing is filed under is reported as 'no order matches'. This tool has only informative capabilities: it does NOT modify the order.")]
+    [Description("Retrieves the current status and lifecycle timestamps of an existing order. Keyed on the orderId alone: no seal word is required, because reading a status commits nothing. An orderId nothing is filed under is reported as 'no order matches'. This tool has only informative capabilities: it does not modify the order.")]
     [OfferedToUser(5, "📍 An order's status")]
     [RequiresApproval(false)]
     public async Task<OrderStatusResult> GetOrderStatus(
@@ -470,7 +470,7 @@ public class InventoryTool : MorganaTool
     /// <param name="sealWord">One-time seal word returned by CreatePurchaseOrder for this exact orderId. Tracked from the conversation itself, one per order — a customer with multiple orders in flight has a different seal word for each.</param>
     /// <param name="reason">Optional free-text cancellation reason, recorded for logging only.</param>
     /// <returns>The cancellation outcome, or the error saying why the order was not cancelled.</returns>
-    [Description("Cancels a Pending or Confirmed order and returns structured JSON: orderId, previousStatus, status ('Cancelled'), cancelledAt, stockRestored, reason. Requires the exact orderId AND sealWord pair returned by CreatePurchaseOrder — a mismatch on either is reported identically as 'no order matches'. If the order had been Confirmed, stock is restored; a Pending order never touched stock so none is restored. This tool has dispositive capabilities: it commits a real, persistent change to an order and possibly to greenhouse stock.")]
+    [Description("Cancels a Pending or Confirmed order. Requires the exact orderId and sealWord pair returned by CreatePurchaseOrder — a mismatch on either is reported identically as 'no order matches'. If the order had been Confirmed, stock is restored; a Pending order never touched stock so none is restored. This tool has dispositive capabilities: it commits a real, persistent change to an order and possibly to greenhouse stock.")]
     [RequiresApproval(true)]
     public async Task<CancelOrderResult> CancelOrder(
         [Description("Identifier of the order to cancel, exactly as returned by CreatePurchaseOrder or previously discussed.")] [ToolParameter(Records.ToolScope.Request)] string orderId,
@@ -562,7 +562,7 @@ public class InventoryTool : MorganaTool
     /// Lists the orders placed during this conversation.
     /// </summary>
     /// <returns>This conversation's orders (without sealWords).</returns>
-    [Description("Lists the orders placed during THIS conversation as structured JSON: totalOrders and an array of order summaries (orderId, sku, quantity, status, createdAt, confirmedAt, cancelledAt). Does NOT include sealWord (shown only once, by CreatePurchaseOrder) so this listing alone is never enough to confirm or cancel anything. This tool has only informative capabilities.")]
+    [Description("Lists the orders placed during this conversation. It never carries a seal word (shown only once, by CreatePurchaseOrder), so this listing alone is never enough to confirm or cancel anything. This tool has only informative capabilities.")]
     [RequiresApproval(false)]
     public async Task<OrdersResult> GetOrders()
     {
@@ -601,7 +601,7 @@ public class InventoryTool : MorganaTool
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from shared context).</param>
     /// <returns>That customer's order history across all conversations (without sealWords).</returns>
-    [Description("Lists EVERY order a customer has ever placed, across ALL conversations/sessions — not just this one — as structured JSON: customerCode, customerName, totalOrders and an array of order summaries (orderId, sku, quantity, status, createdAt, confirmedAt, cancelledAt). Does NOT include sealWord (shown only once, by CreatePurchaseOrder) so this listing alone is never enough to confirm or cancel any order it names — that pair is what ConfirmOrder and CancelOrder require. To re-read one single order by its identifier, use GetOrderStatus. This tool has only informative capabilities.")]
+    [Description("Lists every order a customer has ever placed, across all conversations and sessions — not just this one. It never carries a seal word (shown only once, by CreatePurchaseOrder), so this listing alone is never enough to confirm or cancel any order it names — that pair is what ConfirmOrder and CancelOrder require. To re-read one single order by its identifier, use GetOrderStatus. This tool has only informative capabilities.")]
     [OfferedToUser(4, "📦 My orders")]
     [RequiresApproval(false)]
     public async Task<OrderHistoryResult> GetOrderHistory(

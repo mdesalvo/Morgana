@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Alembic.Interfaces;
 using Alembic.Models;
 using Alembic.Tools;
@@ -11,9 +12,9 @@ using Morgana.AI.Interfaces;
 namespace Alembic.Services;
 
 /// <summary>
-/// Reads the whole domain in one call and reports the relational defects between its agents as JSON.
+/// Reads the whole domain in one call and reports the relational defects between its agents as typed findings.
 /// </summary>
-/// <remarks>The answer is JSON because the findings are sorted and counted in a table.</remarks>
+/// <remarks>The answer is held to a schema because the findings are sorted and counted in a table.</remarks>
 public class CoherenceService : ICoherenceService
 {
     /// <summary>The <c>alembic.json</c> prompt that composes the coherence pass.</summary>
@@ -28,8 +29,11 @@ public class CoherenceService : ICoherenceService
     /// <summary>Marks where the Instructions carry the classes asked for in this run.</summary>
     private const string AspectsPlaceholder = "((aspects))";
 
-    /// <summary>Marks where the Formatting carries the <c>kind</c> values those classes may answer with.</summary>
-    private const string KindsPlaceholder = "((kinds))";
+    /// <summary>The name under which the findings travel in the answer: a schema root is an object and the findings are its list.</summary>
+    private const string FindingsPropertyName = "findings";
+
+    /// <summary>The options that write the schema of a finding and read the answer, so the two cannot disagree on a name.</summary>
+    private static readonly JsonSerializerOptions FindingSerializerOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>Resolves the validator's prompt and the primer from <c>alembic.json</c>.</summary>
     private readonly IAlembicPromptService alembicPromptService;
@@ -90,10 +94,6 @@ public class CoherenceService : ICoherenceService
         string instructions = (coherence.Instructions ?? string.Empty)
             .Replace(AspectsPlaceholder, string.Join("\n\n", selection.Select(a => a.Description)), StringComparison.Ordinal);
 
-        // The Formatting names the kind values the ticked classes may answer with.
-        string formatting = (coherence.Formatting ?? string.Empty)
-            .Replace(KindsPlaceholder, string.Join(", ", selection.Select(a => $"`{a.Id}`")), StringComparison.Ordinal);
-
         // The primer comes first: each class turns on a rule settled above the agent and a reader never told those rules judges by resemblance.
         string system = string.Join("\n\n",
             new[]
@@ -101,7 +101,7 @@ public class CoherenceService : ICoherenceService
                 await alembicPromptService.ComposeFrameworkPrimerAsync(),
                 Records.Prompt.Labeled(Constants.SectionLabels.Target, coherence.Target),
                 Records.Prompt.Labeled(Constants.SectionLabels.Instructions, instructions),
-                Records.Prompt.Labeled(Constants.SectionLabels.Formatting, formatting)
+                Records.Prompt.Labeled(Constants.SectionLabels.Formatting, coherence.Formatting)
             }.Where(section => !string.IsNullOrWhiteSpace(section)));
 
         // The judgement of prose that must not contradict itself runs on the Efficiency tier.
@@ -115,15 +115,15 @@ public class CoherenceService : ICoherenceService
                 alembicPromptService.ResolvePromptInjection(AlembicPromptId, "ContinuationRequest"),
                 length => logger.LogInformation("The coherence pass was cut at {Length} characters; resuming", length),
                 length => logger.LogWarning("The coherence pass went silent after {Length} characters; retrying once", length),
-                cancellationToken);
+                cancellationToken,
+                ChatResponseFormat.ForJsonSchema(BuildFindingsSchema(selection.Select(aspect => aspect.Id)), "CoherenceFindings"));
 
             // An empty answer is a failed run, not a clean domain.
             if (answer.Length == 0)
                 return new CoherenceReport([], "The model returned nothing.");
 
-            // The answer is the list of findings in the shape the Formatting asks for.
-            CoherenceFinding[]? findings = JsonSerializer.Deserialize<CoherenceFinding[]>(
-                answer, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            // The answer is the list of findings, under the one property that the schema root carries.
+            CoherenceFinding[]? findings = JsonNode.Parse(answer)?[FindingsPropertyName]?.Deserialize<CoherenceFinding[]>(FindingSerializerOptions);
 
             // A literal null in the answer reads as no findings.
             return new CoherenceReport(findings ?? []);
@@ -142,6 +142,35 @@ public class CoherenceService : ICoherenceService
             // The client is told why the pass could not run.
             return new CoherenceReport([], $"The pass could not run: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Derives the answer schema from <see cref="CoherenceFinding"/> and closes the kind of each finding to the classes that were ticked.
+    /// </summary>
+    /// <param name="kinds">The ids of the classes that this run looks for.</param>
+    private static JsonElement BuildFindingsSchema(IEnumerable<string> kinds)
+    {
+        // The schema of one finding, with the descriptions of its properties travelling in it.
+        JsonNode findingSchema = JsonNode.Parse(
+            AIJsonUtilities.CreateJsonSchema(typeof(CoherenceFinding), serializerOptions: FindingSerializerOptions).GetRawText())!;
+
+        // A class that was not ticked is not a kind the answer can carry, which is what keeps it out of the report.
+        findingSchema["properties"]!["kind"]!.AsObject()["enum"] = new JsonArray([.. kinds.Select(kind => (JsonNode?)JsonValue.Create(kind))]);
+
+        // The report is a list of findings, held in an object because a provider takes an object as the root of a schema.
+        JsonObject schema = new()
+        {
+            ["type"] = "object",
+            ["properties"] = new JsonObject
+            {
+                [FindingsPropertyName] = new JsonObject { ["type"] = "array", ["items"] = findingSchema }
+            },
+            ["required"] = new JsonArray(FindingsPropertyName),
+            ["additionalProperties"] = false
+        };
+
+        // The finished schema is handed to the provider as it is.
+        return JsonSerializer.SerializeToElement(schema);
     }
 
     /// <summary>

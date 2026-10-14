@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json.Serialization;
 
 namespace Morgana.Contracts;
@@ -21,10 +22,19 @@ namespace Morgana.Contracts;
 /// <item>Components must be from known dictionary (unknown types fallback to text in Cauldron)</item>
 /// </list>
 /// </remarks>
+[Description("A card presenting the structured data of the turn.")]
 public record RichCard(
-    [property: JsonPropertyName("title")] string Title,
-    [property: JsonPropertyName("subtitle")] string? Subtitle,
-    [property: JsonPropertyName("components")] List<CardComponent> Components
+    [property: JsonPropertyName("title")]
+    [property: Description("The main title of the card.")]
+    string Title,
+
+    [property: JsonPropertyName("subtitle")]
+    [property: Description("A secondary line under the title.")]
+    string? Subtitle,
+
+    [property: JsonPropertyName("components")]
+    [property: Description("The components of the card in reading order.")]
+    List<CardComponent> Components
 )
 {
     /// <summary>The title counts this many characters beyond its text when the card is measured against a channel's length budget.</summary>
@@ -61,13 +71,6 @@ public record RichCard(
 /// <item><term>badge</term><description>Status indicators (success, warning, error, info, neutral)</description></item>
 /// <item><term>image</term><description>Multimedia content of type image</description></item>
 /// </list>
-/// <para><strong>Extensibility:</strong></para>
-/// <para>Implementers can add new component types by:</para>
-/// <list type="number">
-/// <item>Adding new record inheriting from CardComponent</item>
-/// <item>Adding JsonDerivedType attribute to CardComponent</item>
-/// <item>Creating corresponding Razor component in Cauldron</item>
-/// </list>
 /// </remarks>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(TextBlockComponent), "text_block")]
@@ -78,6 +81,7 @@ public record RichCard(
 [JsonDerivedType(typeof(GridComponent), "grid")]
 [JsonDerivedType(typeof(BadgeComponent), "badge")]
 [JsonDerivedType(typeof(ImageComponent), "image")]
+[Description("One component of a card; its type field tells which kind it is.")]
 public abstract record CardComponent
 {
     /// <summary>
@@ -93,9 +97,15 @@ public abstract record CardComponent
 /// </summary>
 /// <param name="Content">Text content (supports multiline)</param>
 /// <param name="Style">Visual styling for the text</param>
+[Description("Prose: free-form narrative text.")]
 public record TextBlockComponent(
-    [property: JsonPropertyName("content")] string Content,
-    [property: JsonPropertyName("style")] TextStyle Style = TextStyle.Normal) : CardComponent
+    [property: JsonPropertyName("content")]
+    [property: Description("The text to show; it may span several lines.")]
+    string Content,
+
+    [property: JsonPropertyName("style")]
+    [property: Description("How the text is styled.")]
+    TextStyle Style = TextStyle.Normal) : CardComponent
 {
     /// <summary>A text block counts this many characters beyond its text when the card is measured against a channel's length budget.</summary>
     private const int Overhead = 2;
@@ -110,10 +120,19 @@ public record TextBlockComponent(
 /// <param name="Key">Label/field name (e.g., "Cliente", "Totale")</param>
 /// <param name="Value">Corresponding value (e.g., "Acme Corp", "€1.250,00")</param>
 /// <param name="Emphasize">True to highlight this pair visually (e.g., bold, larger font)</param>
+[Description("One labeled field.")]
 public record KeyValueComponent(
-    [property: JsonPropertyName("key")] string Key,
-    [property: JsonPropertyName("value")] string Value,
-    [property: JsonPropertyName("emphasize")] bool Emphasize = false) : CardComponent
+    [property: JsonPropertyName("key")]
+    [property: Description("The label of the field.")]
+    string Key,
+
+    [property: JsonPropertyName("value")]
+    [property: Description("The value of the field.")]
+    string Value,
+
+    [property: JsonPropertyName("emphasize")]
+    [property: Description("True to highlight the pair, for the datum that matters most.")]
+    bool Emphasize = false) : CardComponent
 {
     /// <summary>A key-value pair counts this many characters beyond its key and value when the card is measured against a channel's length budget.</summary>
     private const int Overhead = 4;
@@ -126,6 +145,7 @@ public record KeyValueComponent(
 /// Visual divider/separator component.
 /// Renders as horizontal line to separate logical sections.
 /// </summary>
+[Description("A separator placed between groups of components.")]
 public record DividerComponent : CardComponent
 {
     /// <summary>A divider counts this many characters when the card is measured against a channel's length budget.</summary>
@@ -140,9 +160,15 @@ public record DividerComponent : CardComponent
 /// </summary>
 /// <param name="Items">Array of text items to display</param>
 /// <param name="Style">List presentation style (bullet, numbered, plain)</param>
+[Description("An enumeration of items.")]
 public record ListComponent(
-    [property: JsonPropertyName("items")] List<string> Items,
-    [property: JsonPropertyName("style")] ListStyle Style = ListStyle.Bullet) : CardComponent
+    [property: JsonPropertyName("items")]
+    [property: Description("The texts of the list, one per item.")]
+    List<string> Items,
+
+    [property: JsonPropertyName("style")]
+    [property: Description("Markers shown before each item.")]
+    ListStyle Style = ListStyle.Bullet) : CardComponent
 {
     /// <summary>Each list item counts this many characters beyond its text when the card is measured against a channel's length budget.</summary>
     private const int ItemOverhead = 3;
@@ -158,10 +184,19 @@ public record ListComponent(
 /// <param name="Title">Section title/heading</param>
 /// <param name="Subtitle">Optional section subtitle</param>
 /// <param name="Components">Child components within this section (can include nested sections)</param>
+[Description("A group of related components under a title; may nest further sections.")]
 public record SectionComponent(
-    [property: JsonPropertyName("title")] string Title,
-    [property: JsonPropertyName("subtitle")] string? Subtitle,
-    [property: JsonPropertyName("components")] List<CardComponent> Components) : CardComponent
+    [property: JsonPropertyName("title")]
+    [property: Description("The heading of the group.")]
+    string Title,
+
+    [property: JsonPropertyName("subtitle")]
+    [property: Description("A secondary line under the section title.")]
+    string? Subtitle,
+
+    [property: JsonPropertyName("components")]
+    [property: Description("The components grouped by the section.")]
+    List<CardComponent> Components) : CardComponent
 {
     /// <summary>The section title counts this many characters beyond its text when the card is measured against a channel's length budget.</summary>
     private const int TitleOverhead = 4;
@@ -181,9 +216,15 @@ public record SectionComponent(
 /// </summary>
 /// <param name="Columns">Number of columns (2-4 recommended)</param>
 /// <param name="Items">Grid cells with key-value pairs</param>
+[Description("Several homogeneous key-value pairs laid out side by side.")]
 public record GridComponent(
-    [property: JsonPropertyName("columns")] int Columns,
-    [property: JsonPropertyName("items")] List<GridItem> Items) : CardComponent
+    [property: JsonPropertyName("columns")]
+    [property: Description("How many pairs sit on one row: 2 to 4.")]
+    int Columns,
+
+    [property: JsonPropertyName("items")]
+    [property: Description("The key-value pairs of the grid.")]
+    List<GridItem> Items) : CardComponent
 {
     /// <summary>Each grid pair counts this many characters beyond its key and value when the card is measured against a channel's length budget.</summary>
     private const int ItemOverhead = 4;
@@ -198,18 +239,30 @@ public record GridComponent(
 /// </summary>
 /// <param name="Key">Label for this grid cell</param>
 /// <param name="Value">Value for this grid cell</param>
+[Description("One key-value pair of a grid.")]
 public record GridItem(
-    [property: JsonPropertyName("key")] string Key,
-    [property: JsonPropertyName("value")] string Value);
+    [property: JsonPropertyName("key")]
+    [property: Description("The label of the pair.")]
+    string Key,
+
+    [property: JsonPropertyName("value")]
+    [property: Description("The value of the pair.")]
+    string Value);
 
 /// <summary>
 /// Badge component for status indicators and categorical labels.
 /// </summary>
 /// <param name="Text">Badge text (e.g., "Pagata", "In sospeso")</param>
 /// <param name="Variant">Visual variant determining color/style</param>
+[Description("A status shown as a colored label.")]
 public record BadgeComponent(
-    [property: JsonPropertyName("text")] string Text,
-    [property: JsonPropertyName("variant")] BadgeVariant Variant = BadgeVariant.Neutral) : CardComponent
+    [property: JsonPropertyName("text")]
+    [property: Description("The text of the label.")]
+    string Text,
+
+    [property: JsonPropertyName("variant")]
+    [property: Description("The status conveyed: its color follows the variant.")]
+    BadgeVariant Variant = BadgeVariant.Neutral) : CardComponent
 {
     /// <summary>A badge counts this many characters beyond its text when the card is measured against a channel's length budget.</summary>
     private const int Overhead = 2;
@@ -226,11 +279,23 @@ public record BadgeComponent(
 /// <param name="Alt">Alternative text for accessibility (optional but recommended)</param>
 /// <param name="Caption">Optional caption displayed below the image</param>
 /// <param name="Size">Display size variant (small, medium, large, or full)</param>
+[Description("A picture shown from its URL.")]
 public record ImageComponent(
-    [property: JsonPropertyName("src")] string Src,
-    [property: JsonPropertyName("alt")] string? Alt = null,
-    [property: JsonPropertyName("caption")] string? Caption = null,
-    [property: JsonPropertyName("size")] ImageSize Size = ImageSize.Medium) : CardComponent
+    [property: JsonPropertyName("src")]
+    [property: Description("The public URL of the picture.")]
+    string Src,
+
+    [property: JsonPropertyName("alt")]
+    [property: Description("What the picture shows, for readers who cannot see it.")]
+    string? Alt = null,
+
+    [property: JsonPropertyName("caption")]
+    [property: Description("A line displayed below the picture.")]
+    string? Caption = null,
+
+    [property: JsonPropertyName("size")]
+    [property: Description("How large the picture is displayed.")]
+    ImageSize Size = ImageSize.Medium) : CardComponent
 {
     /// <summary>An image counts this many characters for the placeholder that stands for it when the card is measured against a channel's length budget.</summary>
     private const int PlaceholderOverhead = 10;
@@ -250,74 +315,68 @@ public record ImageComponent(
 /// <summary>
 /// Text styling options for TextBlockComponent.
 /// </summary>
+[Description("How a text block is styled.")]
 [JsonConverter(typeof(JsonStringEnumConverter<TextStyle>))]
 public enum TextStyle
 {
     /// <summary>Default body text.</summary>
-    [JsonPropertyName("normal")] Normal,
+    [JsonStringEnumMemberName("normal")] Normal,
     /// <summary>Bold emphasis.</summary>
-    [JsonPropertyName("bold")] Bold,
+    [JsonStringEnumMemberName("bold")] Bold,
     /// <summary>De-emphasized / secondary text.</summary>
-    [JsonPropertyName("muted")] Muted,
+    [JsonStringEnumMemberName("muted")] Muted,
     /// <summary>Reduced font size, typically for captions or footnotes.</summary>
-    [JsonPropertyName("small")] Small
+    [JsonStringEnumMemberName("small")] Small
 }
 
 /// <summary>
 /// List presentation styles for ListComponent.
 /// </summary>
+[Description("The markers shown before the items of a list.")]
 [JsonConverter(typeof(JsonStringEnumConverter<ListStyle>))]
 public enum ListStyle
 {
     /// <summary>Unordered list with bullet markers.</summary>
-    [JsonPropertyName("bullet")] Bullet,
+    [JsonStringEnumMemberName("bullet")] Bullet,
     /// <summary>Ordered list with numeric markers.</summary>
-    [JsonPropertyName("numbered")] Numbered,
+    [JsonStringEnumMemberName("numbered")] Numbered,
     /// <summary>List with no markers.</summary>
-    [JsonPropertyName("plain")] Plain
+    [JsonStringEnumMemberName("plain")] Plain
 }
 
 /// <summary>
 /// Badge color variants for BadgeComponent.
 /// </summary>
+[Description("The status that a badge conveys, which sets its color.")]
 [JsonConverter(typeof(JsonStringEnumConverter<BadgeVariant>))]
 public enum BadgeVariant
 {
     /// <summary>Positive outcome (green).</summary>
-    [JsonPropertyName("success")] Success,
+    [JsonStringEnumMemberName("success")] Success,
     /// <summary>Cautionary state (amber).</summary>
-    [JsonPropertyName("warning")] Warning,
+    [JsonStringEnumMemberName("warning")] Warning,
     /// <summary>Failure or blocking condition (red).</summary>
-    [JsonPropertyName("error")] Error,
+    [JsonStringEnumMemberName("error")] Error,
     /// <summary>Informational note (blue).</summary>
-    [JsonPropertyName("info")] Info,
+    [JsonStringEnumMemberName("info")] Info,
     /// <summary>Unstyled / default badge.</summary>
-    [JsonPropertyName("neutral")] Neutral
+    [JsonStringEnumMemberName("neutral")] Neutral
 }
 
 /// <summary>
 /// Size variants for image components.
 /// Controls maximum width of displayed images with responsive behavior.
 /// </summary>
-/// <remarks>
-/// <para><strong>Size Guidelines:</strong></para>
-/// <list type="bullet">
-/// <item><term>Small</term><description>200px max-width - for thumbnails, icons, small avatars</description></item>
-/// <item><term>Medium</term><description>400px max-width - default, good for most images</description></item>
-/// <item><term>Large</term><description>600px max-width - for detailed images, diagrams</description></item>
-/// <item><term>Full</term><description>100% container width - for banners, wide images</description></item>
-/// </list>
-/// <para>On mobile devices (&lt;768px), Medium and Large automatically scale to 100% width.</para>
-/// </remarks>
+[Description("How large a picture is displayed.")]
 [JsonConverter(typeof(JsonStringEnumConverter<ImageSize>))]
 public enum ImageSize
 {
     /// <summary>200px max-width — thumbnails, icons, avatars.</summary>
-    [JsonPropertyName("small")] Small,
+    [JsonStringEnumMemberName("small")] Small,
     /// <summary>400px max-width — default for most images.</summary>
-    [JsonPropertyName("medium")] Medium,
+    [JsonStringEnumMemberName("medium")] Medium,
     /// <summary>600px max-width — detailed images or diagrams.</summary>
-    [JsonPropertyName("large")] Large,
+    [JsonStringEnumMemberName("large")] Large,
     /// <summary>100% container width — banners and wide images.</summary>
-    [JsonPropertyName("full")] Full
+    [JsonStringEnumMemberName("full")] Full
 }

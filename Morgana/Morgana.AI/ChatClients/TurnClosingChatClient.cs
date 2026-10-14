@@ -144,7 +144,7 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
             // The provider's capability decides how the closure is obtained: a forced call or a structured answer.
             IDictionary<string, object?>? arguments = canForceToolCall
                 ? await RequestForcedClosureAsync(agentTools, options?.Instructions, closingMessages, cancellationToken)
-                : await RequestStructuredClosureAsync(options?.Instructions, closingMessages, cancellationToken);
+                : await RequestStructuredClosureAsync(reply, options?.Instructions, closingMessages, cancellationToken);
 
             // Recorded exactly as if the model had called Reply, its refusals included.
             if (arguments is not null)
@@ -193,28 +193,48 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
     }
 
     /// <summary>
-    /// Asks the model for the closure as a JSON document shaped like Reply's arguments.
+    /// Asks the model for the closure as a JSON document under the very schema that Reply publishes.
     /// </summary>
+    /// <param name="reply">Reply as the agent holds it, whose schema is the one that the answer must satisfy.</param>
+    /// <param name="instructions">The agent's instructions.</param>
+    /// <param name="closingMessages">The exchange being closed and the request to close it.</param>
+    /// <param name="cancellationToken">Cancels the request.</param>
     private async Task<IDictionary<string, object?>?> RequestStructuredClosureAsync(
+        AIFunction reply,
         string? instructions,
         List<ChatMessage> closingMessages,
         CancellationToken cancellationToken)
     {
-        // The answer is constrained to the shape of Reply's arguments, since the provider cannot be forced to call it.
-        ChatResponse<Records.TurnReply> response = await InnerClient.GetResponseAsync<Records.TurnReply>(
-            closingMessages,
-            Records.DefaultJsonSerializerOptions,
-            new ChatOptions { Instructions = instructions },
-            useJsonSchemaResponseFormat: true,
-            cancellationToken);
+        // The provider cannot be forced to call Reply, so its schema becomes the shape of the answer. Reply travels
+        // with the request as well: the client that narrows tools to the session turns that copy into the format.
+        ChatResponse response = await InnerClient.GetResponseAsync(closingMessages, new ChatOptions
+        {
+            Instructions = instructions,
+            Tools = [reply.AsDeclarationOnly()],
+            ResponseFormat = ChatResponseFormat.ForJsonSchema(reply.JsonSchema, Constants.Tools.Reply, reply.Description)
+        }, cancellationToken);
 
-        // An answer that does not parse into a closure leaves the turn unclosed.
-        if (!response.TryGetResult(out Records.TurnReply? turnReply))
+        // An empty answer leaves the turn unclosed.
+        if (string.IsNullOrWhiteSpace(response.Text))
             return null;
 
-        // Handed to Reply as the arguments that the model would have passed it, property by property.
-        return JsonSerializer.SerializeToElement(turnReply, Records.DefaultJsonSerializerOptions)
-            .EnumerateObject()
-            .ToDictionary(property => property.Name, property => (object?)property.Value.Clone());
+        try
+        {
+            // The answer is the document that Reply's arguments would have formed.
+            using JsonDocument answer = JsonDocument.Parse(response.Text);
+
+            // Anything but an object cannot be handed over as arguments.
+            if (answer.RootElement.ValueKind != JsonValueKind.Object)
+                return null;
+
+            // Handed to Reply as the arguments that the model would have passed it, property by property.
+            return answer.RootElement.EnumerateObject()
+                .ToDictionary(property => property.Name, property => (object?)property.Value.Clone());
+        }
+        catch (JsonException)
+        {
+            // An answer that is not JSON leaves the turn unclosed.
+            return null;
+        }
     }
 }

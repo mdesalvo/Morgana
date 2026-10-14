@@ -1,5 +1,7 @@
 ﻿using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
@@ -37,6 +39,11 @@ public class LLMClassifierService : IClassifierService
     /// Pre-computed classifier system prompt
     /// </summary>
     private readonly string classifierSystemPrompt;
+
+    /// <summary>
+    /// The schema of the classifier's answer, narrowed so that an intent can only be one that the domain declares or the complement.
+    /// </summary>
+    private readonly JsonElement classificationSchema;
 
     /// <summary>
     /// Fallback result returned when classification fails.
@@ -98,6 +105,11 @@ public class LLMClassifierService : IClassifierService
             intentCollection.AsDictionary().Select(kvp => $"{kvp.Key} ({kvp.Value})")
                 .Append($"{Constants.Intents.Other} ({classifierPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.ComplementIntentDescription)})"));
 
+        // The vocabulary above as a closed set: the provider cannot answer with a name that no agent answers to,
+        // so a routing decision never lands on an intent that does not exist.
+        classificationSchema = BuildClassificationSchema(
+            [.. intentCollection.AsDictionary().Keys, Constants.Intents.Other]);
+
         // What the classifier reads on every turn of this process's life: the three authored sections
         // with the domain's vocabulary spliced into the first. Composed here so no turn pays for it.
         classifierSystemPrompt =
@@ -105,6 +117,24 @@ public class LLMClassifierService : IClassifierService
                 Records.Prompt.Labeled(Constants.SectionLabels.Target, classifierPrompt.Target.Replace(Constants.Placeholders.FormattedIntents, formattedIntents)),
                 Records.Prompt.Labeled(Constants.SectionLabels.Instructions, classifierPrompt.Instructions),
                 Records.Prompt.Labeled(Constants.SectionLabels.Formatting, classifierPrompt.Formatting));
+    }
+
+    /// <summary>
+    /// Derives the answer schema from <see cref="Records.ClassificationResponse"/> and closes the intent of each candidate to <paramref name="intentNames"/>.
+    /// </summary>
+    /// <param name="intentNames">The intents that the domain declares plus the complement.</param>
+    private static JsonElement BuildClassificationSchema(IReadOnlyList<string> intentNames)
+    {
+        // The schema that Microsoft.Extensions.AI derives from the record, so the descriptions on its properties travel with it.
+        JsonNode schema = JsonNode.Parse(
+            AIJsonUtilities.CreateJsonSchema(typeof(Records.ClassificationResponse), serializerOptions: Records.DefaultJsonSerializerOptions).GetRawText())!;
+
+        // The intent of a candidate is the one string of the schema that the domain closes.
+        JsonObject intentProperty = schema["properties"]!["intents"]!["items"]!["properties"]!["intent"]!.AsObject();
+        intentProperty["enum"] = new JsonArray([.. intentNames.Select(intentName => (JsonNode?)JsonValue.Create(intentName))]);
+
+        // The narrowed schema is handed to the provider as it is.
+        return JsonSerializer.SerializeToElement(schema);
     }
 
     /// <inheritdoc/>
@@ -119,15 +149,15 @@ public class LLMClassifierService : IClassifierService
         {
             // The only model call of a classification, always on the framework tier: choosing
             // which agent a sentence belongs to is a routing decision, not domain reasoning.
-            string response = await llmService.CompleteWithSystemPromptAsync(
+            Records.ClassificationResponse? classificationResponse = await llmService.CompleteStructuredAsync<Records.ClassificationResponse>(
                 conversationId,
                 classifierSystemPrompt,
-                message);
+                message,
+                classificationSchema);
 
-            // The model answers in the shape the Classifier prompt's Formatting section asked for, so
-            // anything unparseable here is that prompt drifting from this record.
-            Records.ClassificationResponse? classificationResponse =
-                JsonSerializer.Deserialize<Records.ClassificationResponse>(response, Records.DefaultJsonSerializerOptions);
+            // An answer that could not be read leaves nothing to rank, so the turn takes the fail-safe route.
+            if (classificationResponse is null)
+                return FallbackResult;
 
             // The order of the candidates is meaningful downstream: the best candidate leads.
             List<Records.IntentScore> rankedIntentScores =

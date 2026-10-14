@@ -366,6 +366,12 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         // The method's attribute, when present, puts the tool in the agent's menu.
         OfferedToUserAttribute? offered = method.GetCustomAttribute<OfferedToUserAttribute>();
 
+        // The schema of the returned record is derived once: the contract shown to the model and the field projection both read it.
+        JsonElement? returnSchema = DeriveReturnSchema(method.ReturnType);
+
+        // A framework result becomes authored text, so its schema is no contract to show the model.
+        bool returnsFrameworkResult = HandlesIntentAgentRegistryService.UnwrapReturnType(method.ReturnType) == typeof(Records.FrameworkToolResult);
+
         // A tool is its method: the name, the description, the approval flag and the offering all come from the declaration.
         return new Records.ToolDefinition(
             method.Name,
@@ -373,24 +379,34 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
             parameters,
             Reserved: false,
             RequiresExecutionApproval: method.GetCustomAttribute<RequiresApprovalAttribute>()?.Required ?? false,
-            Returns: ProjectReturns(method.ReturnType),
-            Offering: offered is null ? null : new Records.ToolOffering(offered.Ordinal, offered.Label));
+            Returns: ProjectReturns(returnSchema),
+            Offering: offered is null ? null : new Records.ToolOffering(offered.Ordinal, offered.Label),
+            ReturnSchema: returnsFrameworkResult ? null : returnSchema);
     }
 
     /// <summary>
-    /// Projects the top-level fields of the record a tool returns; null when the method returns no record.
+    /// Derives the schema of the record a tool returns; null when the method returns no record.
     /// </summary>
     /// <param name="methodReturnType">The return type as the method declares it.</param>
-    private static List<Records.ToolReturn>? ProjectReturns(Type methodReturnType)
+    private static JsonElement? DeriveReturnSchema(Type methodReturnType)
     {
-        // A method returning no record has no fields to project.
+        // A method returning no record has no schema to derive.
         Type? returnType = HandlesIntentAgentRegistryService.UnwrapReturnType(methodReturnType);
         if (returnType is null)
             return null;
 
-        // The same schema that the model is shown, so the projection can never list a field the model does not see.
-        JsonElement schema = MorganaToolAdapter.CreateReturnSchema(returnType);
-        if (!schema.TryGetProperty("properties", out JsonElement properties))
+        // The exact schema that AIFunctionFactory publishes for the function.
+        return MorganaToolAdapter.CreateReturnSchema(returnType);
+    }
+
+    /// <summary>
+    /// Projects the top-level fields of the record a tool returns; null when it declares no properties.
+    /// </summary>
+    /// <param name="returnSchema">The schema of the returned record; null when the method returns no record.</param>
+    private static List<Records.ToolReturn>? ProjectReturns(JsonElement? returnSchema)
+    {
+        // A method returning no record or a record without properties has no fields to project.
+        if (returnSchema is not { } schema || !schema.TryGetProperty("properties", out JsonElement properties))
             return null;
 
         // One entry per field, flagging the one that marks a failed call.

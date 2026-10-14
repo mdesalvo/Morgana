@@ -194,17 +194,105 @@ public sealed class TurnClosureTests
         => Assert.Equal(tool, Records.TurnReply.ActionTool(buttonId));
 
     [Fact]
-    public async Task TurnClosure_Reply_discards_an_action_leading_to_a_tool_the_agent_lacks()
+    public async Task TurnClosure_Reply_refuses_an_action_leading_to_a_tool_the_agent_lacks()
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
 
-        await reply.Function.InvokeAsync(Arguments("""
+        // Refused with the fact stated: what the action leads to and the tools that it could have led to.
+        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments("""
             {"awaits":"action_choice","userIsLeaving":false,"actions":[
               {"tool":"GetInvoices","label":"📄 Invoices","value":"Show my invoices"},
               {"tool":"DownloadPdf","label":"⬇️ PDF","value":"Download it as PDF"}]}
-            """));
+            """)).AsTask());
+        Assert.Equal("the action '⬇️ PDF' leads to 'DownloadPdf', which is not one of your tools: GetInvoices", refusal.Message);
+        Assert.Null(reply.Recorded());
+    }
 
-        Assert.Equal("GetInvoices", Assert.Single(reply.Recorded()!.Actions).Tool);
+    [Theory]
+    [InlineData("""{"awaits":"action_choice","userIsLeaving":false,"actions":[null]}""", "actions[0]")]
+    [InlineData("""{"awaits":"nothing","userIsLeaving":false,"card":{"title":"t","subtitle":null,"components":[{"type":"divider"},{"type":"section","title":"s","subtitle":null,"components":[null]}]}}""", "card.components[1].components[0]")]
+    public async Task TurnClosure_Reply_refuses_a_null_element_in_a_list(string arguments, string place)
+    {
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
+
+        // Refused with the place of the hole, never as a failure of the code that reads the list.
+        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments(arguments)).AsTask());
+        Assert.Equal($"{place} is null and a list holds no null element", refusal.Message);
+        Assert.Null(reply.Recorded());
+    }
+
+    [Fact]
+    public async Task TurnClosure_Reply_schema_states_which_fields_may_be_null()
+    {
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
+        JsonElement properties = reply.Function.JsonSchema.GetProperty("properties");
+        JsonElement card = properties.GetProperty("card");
+
+        // The card itself is optional.
+        Assert.Equal(["object", "null"], card.GetProperty("type").EnumerateArray().Select(type => type.GetString()));
+
+        // A title is declared non-nullable while a subtitle is declared nullable.
+        Assert.Equal("string", card.GetProperty("properties").GetProperty("title").GetProperty("type").GetString());
+        Assert.Equal(["string", "null"], card.GetProperty("properties").GetProperty("subtitle").GetProperty("type").EnumerateArray().Select(type => type.GetString()));
+
+        // The elements of the lists are declared non-nullable too.
+        Assert.Equal("object", properties.GetProperty("actions").GetProperty("items").GetProperty("type").GetString());
+        Assert.Equal("object", card.GetProperty("properties").GetProperty("components").GetProperty("items").GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public async Task TurnClosure_Reply_schema_offers_actions_only_toward_the_tools_of_the_agent()
+    {
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices", "DownloadPdf"]);
+
+        JsonElement tool = reply.Function.JsonSchema.GetProperty("properties").GetProperty("actions")
+            .GetProperty("items").GetProperty("properties").GetProperty("tool");
+        Assert.Equal(["GetInvoices", "DownloadPdf"], tool.GetProperty("enum").EnumerateArray().Select(name => name.GetString()));
+
+        // An agent with nothing to lead to has no actions to offer.
+        ReplyUnderTest toollessReply = await ReplyUnderTest.CreateAsync(actionableToolNames: []);
+        Assert.False(toollessReply.Function.JsonSchema.GetProperty("properties").TryGetProperty("actions", out _));
+    }
+
+    [Fact]
+    public async Task TurnClosure_Reply_schema_admits_the_card_depth_that_the_validation_accepts_and_no_deeper()
+    {
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
+        JsonElement components = reply.Function.JsonSchema.GetProperty("properties").GetProperty("card")
+            .GetProperty("properties").GetProperty("components");
+
+        // Levels at which a section is still offered: the card's components, then the section's, then the nested section's.
+        int levelsOfferingSection = 0;
+        JsonElement level = components.GetProperty("items");
+        while (true)
+        {
+            JsonElement? section = level.GetProperty("anyOf").EnumerateArray()
+                .Where(alternative => alternative.GetProperty("properties").GetProperty("type").GetProperty("const").GetString() == "section")
+                .Select(alternative => (JsonElement?)alternative).FirstOrDefault();
+            if (section is null)
+                break;
+            levelsOfferingSection++;
+            level = section.Value.GetProperty("properties").GetProperty("components").GetProperty("items");
+        }
+        Assert.Equal(2, levelsOfferingSection);
+
+        // The deepest card that the schema allows is accepted by the validation.
+        object? deepestCardResult = await reply.Function.InvokeAsync(Arguments("""
+            {"awaits":"nothing","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
+              {"type":"section","title":"1","subtitle":null,"components":[
+                {"type":"section","title":"2","subtitle":null,"components":[{"type":"divider"}]}]}]}}
+            """));
+        Assert.Equal("TurnClosed", Assert.IsType<Records.FrameworkToolResult>(deepestCardResult).Name);
+
+        // One level deeper is what the validation refuses, so the schema does not offer it.
+        ReplyUnderTest replyForDeeperCard = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
+        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => replyForDeeperCard.Function.InvokeAsync(Arguments("""
+            {"awaits":"nothing","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
+              {"type":"section","title":"1","subtitle":null,"components":[
+                {"type":"section","title":"2","subtitle":null,"components":[
+                  {"type":"section","title":"3","subtitle":null,"components":[{"type":"divider"}]}]}]}]}}
+            """)).AsTask());
+        Assert.Equal("the card nests 4 levels and at most 3 are allowed", refusal.Message);
     }
 
     [Fact]
@@ -249,17 +337,40 @@ public sealed class TurnClosureTests
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
 
-        // Refused by name, with the values that the authored reason splices in; the tool loop words it.
-        object? result = await reply.Function.InvokeAsync(Arguments("""
+        // Refused with the fact stated: the depth the card reaches and the limit; the tool loop hands it back to the model.
+        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments("""
             {"awaits":"nothing","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
               {"type":"section","title":"1","subtitle":null,"components":[
                 {"type":"section","title":"2","subtitle":null,"components":[
                   {"type":"section","title":"3","subtitle":null,"components":[{"type":"divider"}]}]}]}]}}
-            """));
+            """)).AsTask());
+        Assert.Equal("the card nests 4 levels and at most 3 are allowed", refusal.Message);
+        Assert.Null(reply.Recorded());
+    }
 
-        Records.FrameworkToolResult refusal = Assert.IsType<Records.FrameworkToolResult>(result);
-        Assert.Equal("CardTooDeep", refusal.Name);
-        Assert.Equal("4", refusal.Values!["((depth))"]);
+    [Fact]
+    public async Task TurnClosure_Reply_refuses_a_card_holding_more_components_than_the_channels_lay_out()
+    {
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
+        string dividers = string.Join(",", Enumerable.Repeat("""{"type":"divider"}""", 51));
+
+        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments(
+            """{"awaits":"nothing","userIsLeaving":false,"card":{"title":"Long","subtitle":null,"components":[""" + dividers + "]}}")).AsTask());
+        Assert.Equal("the card holds 51 components and at most 50 are allowed", refusal.Message);
+        Assert.Null(reply.Recorded());
+    }
+
+    [Fact]
+    public async Task TurnClosure_Reply_at_a_choice_step_refuses_actions_other_than_the_steps_tools()
+    {
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(
+            actionableToolNames: ["Pay", "Postpone"], choiceStep: ("Settle", "Choose", ["Pay", "Postpone"]));
+
+        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments("""
+            {"awaits":"action_choice","userIsLeaving":false,"actions":[
+              {"tool":"Pay","label":"Pay now","value":"Pay now"}]}
+            """)).AsTask());
+        Assert.Equal("the actions offered lead to [Pay] while step 'Choose' of workflow 'Settle' takes exactly one action to each of: Pay, Postpone", refusal.Message);
         Assert.Null(reply.Recorded());
     }
 
@@ -309,6 +420,23 @@ public sealed class TurnClosureTests
         Assert.Equal(2, model.Requests.Count);
         Assert.Equal(canForceToolCall, model.Requests[1].Options?.ToolMode is RequiredChatToolMode { RequiredFunctionName: "Reply" });
         Assert.Equal(canForceToolCall, model.Requests[1].Options?.ResponseFormat is null);
+        Assert.Equal(Records.AwaitedFromUser.TypedAnswer, reply.Recorded()!.Awaits);
+    }
+
+    [Fact]
+    public async Task TurnClosure_Structured_closure_is_requested_under_the_schema_that_Reply_publishes()
+    {
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
+        ScriptedChatClient model = new ScriptedChatClient(
+            Text("Which invoice do you mean?"),
+            Text("""{"awaits":"typed_answer","userIsLeaving":false,"actions":[],"card":null}"""));
+
+        await RunTurnAsync(model, reply, canForceToolCall: false);
+
+        // The answer is constrained to the schema of Reply as the agent publishes it: its descriptions, its nullability, its actions enum and its card depth.
+        ChatResponseFormatJson format = Assert.IsType<ChatResponseFormatJson>(model.Requests[1].Options?.ResponseFormat);
+        Assert.Equal("Reply", format.SchemaName);
+        Assert.Equal(reply.Function.JsonSchema.GetRawText(), format.Schema!.Value.GetRawText());
         Assert.Equal(Records.AwaitedFromUser.TypedAnswer, reply.Recorded()!.Awaits);
     }
 
@@ -510,7 +638,10 @@ public sealed class TurnClosureTests
         /// Builds Reply over a session of an agent that never talks to a model.
         /// </summary>
         /// <param name="actionableToolNames">The agent's tools that an action may lead to; null accepts any.</param>
-        public static async Task<ReplyUnderTest> CreateAsync(IReadOnlyCollection<string>? actionableToolNames = null)
+        /// <param name="choiceStep">The choice step that the turn stands at, if any.</param>
+        public static async Task<ReplyUnderTest> CreateAsync(
+            IReadOnlyCollection<string>? actionableToolNames = null,
+            (string Workflow, string Step, IReadOnlyList<string> Tools)? choiceStep = null)
         {
             ReplyUnderTest reply = new ReplyUnderTest();
             reply.session = await new ChatClientAgent(new ScriptedChatClient()).CreateSessionAsync();
@@ -524,13 +655,16 @@ public sealed class TurnClosureTests
             ]);
 
             ReplyTool baseTool = new ReplyTool(NullLogger.Instance,
-                () => new MorganaTool.ToolContext(reply.provider, reply.session, "turn-closure", actionableToolNames));
+                () => new MorganaTool.ToolContext(reply.provider, reply.session, "turn-closure", actionableToolNames, choiceStep));
             MorganaToolAdapter adapter = new MorganaToolAdapter(NullLogger.Instance,
                 () => new MorganaTool.ToolContext(reply.provider, reply.session, "turn-closure"));
 
             Func<Records.AwaitedFromUser, bool, List<Records.ReplyAction>?, RichCard?, Task<Records.FrameworkToolResult>> implementation = baseTool.Reply;
             adapter.AddTool(definition.Name, implementation, definition);
-            reply.Function = await adapter.CreateFunctionAsync(definition.Name);
+            AIFunction createdReply = await adapter.CreateFunctionAsync(definition.Name);
+
+            // An agent that declares the tools its actions lead to publishes Reply shaped to them.
+            reply.Function = actionableToolNames is null ? createdReply : ReplyTool.NarrowSchemaToAgent(createdReply, actionableToolNames);
 
             return reply;
         }
@@ -548,8 +682,10 @@ public sealed class TurnClosureTests
         public Records.LLMTier FrameworkTier => Records.LLMTier.Economy;
 
         /// <inheritdoc />
-        public Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt)
-            => welcomeAnswer is null ? throw new InvalidOperationException("The model is unreachable") : Task.FromResult(welcomeAnswer);
+        public Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null)
+            => welcomeAnswer is null
+                ? throw new InvalidOperationException("The model is unreachable")
+                : Task.FromResult(JsonSerializer.Deserialize<T>(welcomeAnswer, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
 
         /// <inheritdoc />
         public IChatClient GetChatClient(Records.LLMTier tier) => throw new InvalidOperationException("The presenter asks for text, never a chat client");

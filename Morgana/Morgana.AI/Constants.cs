@@ -118,6 +118,25 @@ public static class Constants
     }
 
     /// <summary>
+    /// Names of the entries in the <c>ChannelAdapter</c> prompt's <c>PromptInjections</c> array: one sentence per thing
+    /// that a channel cannot show, a contract between <c>morgana.json</c>, which authors them and the adapter that picks them.
+    /// </summary>
+    public static class ChannelConstraints
+    {
+        /// <summary>The channel cannot render a rich card.</summary>
+        public const string NoCards = "NoCards";
+
+        /// <summary>The channel cannot render quick reply buttons.</summary>
+        public const string NoButtons = "NoButtons";
+
+        /// <summary>The channel shows markdown syntax raw.</summary>
+        public const string NoMarkdown = "NoMarkdown";
+
+        /// <summary>The channel caps the length of a message.</summary>
+        public const string MaxLength = "MaxLength";
+    }
+
+    /// <summary>
     /// The keys of a prompt's <c>AdditionalProperties</c>: everything a prompt declares beside its
     /// four authored sections: a contract between the prompt files and the resolver and composer. Each is written in <c>morgana.json</c> or a plugin's <c>agents.json</c>
     /// and read by code that never sees that file, which is exactly the contract this glossary holds.
@@ -220,47 +239,17 @@ public static class Constants
         /// <summary>A tool did not run because a context-scoped value is held by nobody yet.</summary>
         public const string ContextValueMissing = "ContextValueMissing";
 
-        /// <summary>Reply refused: nothing of the turn has reached the user.</summary>
-        public const string ReplyWithoutText = "ReplyWithoutText";
-
-        /// <summary>Reply refused: the card nests too deep.</summary>
-        public const string CardTooDeep = "CardTooDeep";
-
-        /// <summary>Reply refused: the card holds too many components.</summary>
-        public const string CardTooLarge = "CardTooLarge";
-
-        /// <summary>A colleague answering a consultation tried to consult another.</summary>
-        public const string ConsultationChained = "ConsultationChained";
-
-        /// <summary>A turn spent its consultation rounds.</summary>
-        public const string ConsultationRoundsExhausted = "ConsultationRoundsExhausted";
-
-        /// <summary>A colleague of this installation failed while answering.</summary>
+        /// <summary>A colleague failed to answer, whether it runs in this installation or at a partner.</summary>
         public const string ColleagueCouldNotAnswer = "ColleagueCouldNotAnswer";
 
-        /// <summary>A published agent refused a partner's new conversation.</summary>
-        public const string PeerAtCapacity = "PeerAtCapacity";
-
-        /// <summary>A published agent's conversation has no dust left.</summary>
-        public const string PeerOutOfBudget = "PeerOutOfBudget";
-
-        /// <summary>A published agent did not answer within the wait.</summary>
-        public const string PeerTimedOut = "PeerTimedOut";
-
-        /// <summary>A published agent failed while answering.</summary>
-        public const string PeerFailed = "PeerFailed";
-
-        /// <summary>A workflow launcher started a workflow.</summary>
-        public const string WorkflowStarted = "WorkflowStarted";
-
-        /// <summary>A tool was called that the running workflow does not offer at its current step.</summary>
-        public const string ToolNotAtThisStep = "ToolNotAtThisStep";
-
-        /// <summary>A Reply at a choice step did not offer exactly the step's tools, one action each.</summary>
-        public const string StepActionsRequired = "StepActionsRequired";
+        /// <summary>A tool was called that cannot run now: the agent is answering a colleague, the turn spent its consultation rounds or the running workflow does not offer it at its step.</summary>
+        public const string CallNotAvailable = "CallNotAvailable";
 
         /// <summary>Answers a Reply the framework refused, with the reason it was refused.</summary>
         public const string ReplyNotAccepted = "ReplyNotAccepted";
+
+        /// <summary>Follows the description of a tool that returns a record, carrying the JSON schema of that record.</summary>
+        public const string ReturnContract = "ReturnContract";
 
         /// <summary>Closes the description of a tool requiring execution approval, telling the model that the user approves it.</summary>
         public const string ExecutionApprovalGuidance = "ExecutionApprovalGuidance";
@@ -274,11 +263,8 @@ public static class Constants
         /// <summary>Wraps the result of the workflow tool that ended the workflow.</summary>
         public const string WorkflowEnded = "WorkflowEnded";
 
-        /// <summary>Present gave the agent's menu: the actions that the user receives as buttons.</summary>
+        /// <summary>Present gave the agent's menu: the actions that the user receives as buttons, or none.</summary>
         public const string MenuOffered = "MenuOffered";
-
-        /// <summary>Present found no menu: the agent offers the user no action.</summary>
-        public const string NoMenuOffered = "NoMenuOffered";
     }
 
     /// <summary>
@@ -412,23 +398,14 @@ public static class Constants
         /// <summary>In <see cref="PromptInjections.PeerConsultationGuardrail"/> — the colleague's question, inside the fence that marks it as data.</summary>
         public const string ConsultationQuestion = "((question))";
 
+        /// <summary>In <see cref="ToolInjections.ReturnContract"/> — the compact JSON schema of the record that the tool returns.</summary>
+        public const string ReturnSchema = "((schema))";
+
         /// <summary>In a tool result — the framework tool or colleague the text is about.</summary>
         public const string ToolName = "((tool))";
 
         /// <summary>In <see cref="ToolInjections.ContextValueMissing"/> — the context-scoped values no one holds yet.</summary>
         public const string MissingValues = "((missing))";
-
-        /// <summary>In <see cref="ToolInjections.CardTooDeep"/> — how many levels the refused card nests.</summary>
-        public const string CardDepth = "((depth))";
-
-        /// <summary>In <see cref="ToolInjections.CardTooLarge"/> — how many components the refused card holds.</summary>
-        public const string CardComponents = "((count))";
-
-        /// <summary>In the card refusals — the limit the card broke.</summary>
-        public const string Limit = "((max))";
-
-        /// <summary>In <see cref="ToolInjections.ConsultationRoundsExhausted"/> — the rounds already spent.</summary>
-        public const string ConsultationRounds = "((rounds))";
 
         /// <summary>In the colleague fallbacks — the intent of the colleague that did not answer.</summary>
         public const string AgentIntent = "((agent))";
@@ -439,16 +416,13 @@ public static class Constants
         /// <summary>In the workflow texts — the step at which the workflow stands.</summary>
         public const string Step = "((step))";
 
-        /// <summary>In <see cref="ToolInjections.StepActionsRequired"/> — the tools of the step, comma-joined.</summary>
-        public const string Tools = "((tools))";
-
         /// <summary>In <see cref="ToolInjections.EarlierToolResult"/> and the workflow injections — the result as the tool returned it.</summary>
         public const string EarlierToolResultContent = "((result))";
 
-        /// <summary>In <see cref="ToolInjections.ReplyNotAccepted"/> — why the closure was refused.</summary>
+        /// <summary>In <see cref="ToolInjections.ReplyNotAccepted"/> and <see cref="ToolInjections.CallNotAvailable"/> — why the closure was refused or the call is not available.</summary>
         public const string ReplyNotAcceptedReason = "((reason))";
 
-        /// <summary>In <see cref="ToolInjections.MenuOffered"/> — the labels of the menu, comma-joined.</summary>
+        /// <summary>In <see cref="ToolInjections.MenuOffered"/> — the labels of the menu, comma-joined; "none" when no button is offered.</summary>
         public const string Actions = "((actions))";
 
         /// <summary>In <see cref="PromptInjections.ColleaguesDeclaration"/> — one line per colleague: function name and territory.</summary>
@@ -457,8 +431,11 @@ public static class Constants
         /// <summary>In the <see cref="Prompts.Classifier"/> prompt — the configured intents, formatted for ranking.</summary>
         public const string FormattedIntents = "((formattedIntents))";
 
-        /// <summary>In the <see cref="Prompts.ChannelAdapter"/> prompt — the target channel's capability budget, as JSON.</summary>
-        public const string ChannelCapabilities = "((channel_capabilities))";
+        /// <summary>In the <see cref="Prompts.ChannelAdapter"/> prompt — what the target channel cannot show, as plain sentences.</summary>
+        public const string ChannelConstraints = "((channel_constraints))";
+
+        /// <summary>In <see cref="Constants.ChannelConstraints.MaxLength"/> — the longest message the channel carries, in characters.</summary>
+        public const string MaxLength = "((max))";
     }
 
     /// <summary>

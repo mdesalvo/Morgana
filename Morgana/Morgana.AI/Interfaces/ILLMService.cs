@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 
 namespace Morgana.AI.Interfaces;
@@ -13,29 +14,24 @@ namespace Morgana.AI.Interfaces;
 /// provider, so one installation can mix them.</para>
 /// <para><strong>Usage Patterns:</strong></para>
 /// <list type="bullet">
-/// <item><term>Actors</term><description>GuardActor, ClassifierActor use CompleteWithSystemPromptAsync for stateless operations</description></item>
+/// <item><term>Actors</term><description>Guard, Classifier, Presenter and ChannelAdapter use CompleteStructuredAsync for stateless operations</description></item>
 /// <item><term>Agents</term><description>MorganaAgent uses the IChatClient of its declared tier (via GetChatClient(tier)) for stateful conversations with tool calling</description></item>
 /// </list>
 /// </remarks>
 public interface ILLMService
 {
     /// <summary>
-    /// Performs a completion with an explicit system prompt and user prompt, on the <see cref="FrameworkTier"/>.
-    /// Commonly used by actors for stateless LLM operations (classification, guard checks, etc.).
+    /// Asks the <see cref="FrameworkTier"/> one stateless question and reads the answer as a <typeparamref name="T"/>, whose shape the provider is held to by a JSON schema.
     /// </summary>
-    /// <param name="conversationId">Unique identifier of the conversation (used for logging, not history)</param>
+    /// <param name="conversationId">Unique identifier of the conversation (used for attribution, not history)</param>
     /// <param name="systemPrompt">System prompt defining LLM behavior and role</param>
     /// <param name="userPrompt">User message to process</param>
-    /// <returns>LLM response text (typically JSON for structured operations)</returns>
+    /// <param name="responseSchema">The schema that the answer must satisfy; the one derived from <typeparamref name="T"/> where null. Passed to narrow what the type alone allows.</param>
+    /// <returns>The answer, or null when it does not deserialize into <typeparamref name="T"/>.</returns>
     /// <remarks>
-    /// <para><strong>Stateless vs Stateful:</strong></para>
-    /// <para>This method is stateless—it doesn't rely on conversation history. Each call is independent,
-    /// making it suitable for classification, guard checks and other single-turn operations.</para>
-    /// <para><strong>JSON Response Pattern:</strong></para>
-    /// <para>Most actors using this method expect JSON responses. The system prompt should instruct
-    /// the LLM to respond only with JSON (no markdown, no preamble) for reliable parsing.</para>
+    /// A provider-level content filter rejection and any other failure of the call are thrown, so that each caller applies its own fallback.
     /// </remarks>
-    Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt);
+    Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null);
 
     /// <summary>
     /// Gets the Microsoft.Extensions.AI IChatClient configured for a specific <see cref="Records.LLMTier"/>.
