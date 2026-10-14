@@ -20,6 +20,13 @@ and you carry it out to the letter. The architect reviews your work and answers 
   asks for.
 - When you touch prose: never a comma before "and", nor "— and", nor a sentence opening with "And".
 
+## The comma check
+
+Yours after every implementer hand-back, on every file it touched:
+`grep -nE ', and |\. And |\. Or |— and|— or' <file>` plus the one across line breaks:
+`grep -nP -A1 '(,|—)\s*$' <file> | grep -P '^\d+-\s*(///|//|\*)?\s*and\b'`.
+Report each hit with `file:line`; fix none unless the brief asks.
+
 ## The report
 
 - **Complete and checkable**: every entry carries `file:line`, so the architect can verify it.
