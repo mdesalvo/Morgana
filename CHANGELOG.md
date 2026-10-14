@@ -43,6 +43,7 @@ The buttons on both levels are written by code, from the intents and from the to
 
 ### 📦 Dependencies
 - Updated `Microsoft.Agents.AI` to 1.24.0
+- Update `Microsoft.Extensions.AI` to 10.11.0
 - Updated `OllamaSharp` to 5.5.0
 
 ### 🚀 Future Enablement
