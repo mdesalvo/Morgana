@@ -42,9 +42,10 @@ The buttons on both levels are written by code, from the intents and from the to
 
 ### 📦 Dependencies
 - Updated `A2A` to 1.0.0-preview3
-- Updated `Microsoft.Agents.AI` to 1.24.0
+- Updated `Microsoft.Agents.AI` to 1.25.0
 - Update `Microsoft.Extensions.AI` to 10.11.0
 - Updated `OllamaSharp` to 5.5.0
+- Updated `OpenTelemetry` to 1.20.0
 
 ### 🚀 Future Enablement
 - **Processes that must go by the book**: workflows keep the steps in order and approval asks the user before every dispositive action, a natural foundation for procedures such as a claim or a customer onboarding
