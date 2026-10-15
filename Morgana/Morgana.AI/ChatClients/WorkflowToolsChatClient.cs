@@ -66,9 +66,32 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         => base.GetStreamingResponseAsync(chatMessages, NarrowToSession(options), cancellationToken);
 
     /// <summary>
-    /// Rewrites the options' tools for the state of the session; the caller's options are never mutated.
+    /// Presents the call as the session allows: the tools narrowedOptions to its state and, for a request of the turn's closure,
+    /// the answer's format taken from the Reply that the model is offered.
     /// </summary>
     private ChatOptions? NarrowToSession(ChatOptions? options)
+    {
+        // The tools are narrowedOptions first, so that a choice step has already shaped the Reply that the format is taken from.
+        ChatOptions? narrowedOptions = NarrowTools(options);
+
+        // A closure request names Reply in its format: the model is asked for what Reply would have been called with.
+        if (options?.ResponseFormat is not ChatResponseFormatJson { SchemaName: Constants.Tools.Reply })
+            return narrowedOptions;
+
+        // Reply travelled only to carry its schema through the narrowing: the model is given the format and no tool.
+        AIFunction? offeredReply = narrowedOptions?.Tools?.OfType<AIFunction>().FirstOrDefault(tool => tool.Name == Constants.Tools.Reply);
+        ChatOptions closureOptions = (narrowedOptions ?? options).Clone();
+        closureOptions.Tools = null;
+        closureOptions.ToolMode = null;
+        if (offeredReply is not null)
+            closureOptions.ResponseFormat = ChatResponseFormat.ForJsonSchema(offeredReply.JsonSchema, Constants.Tools.Reply, offeredReply.Description);
+        return closureOptions;
+    }
+
+    /// <summary>
+    /// Rewrites the options' tools for the state of the session; the caller's options are never mutated.
+    /// </summary>
+    private ChatOptions? NarrowTools(ChatOptions? options)
     {
         // The session is read on every call: a step reached halfway through a turn changes what the next call offers.
         AgentSession? session = sessionAccessor();
@@ -89,8 +112,18 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         Records.WorkflowPosition? position = workflows.Count == 0 ? null : contextProvider.GetWorkflowPosition(session);
         (Records.WorkflowDefinition Definition, Records.WorkflowStep Step)? runningWorkflow = position?.Resolve(workflows);
 
-        // With no workflow declared and every colleague within reach the agent is offered exactly the tools it was given.
-        if (workflows.Count == 0 && !colleaguesOutOfReach)
+        // A landing is the user's choice of this agent and nothing else: the turn holds only what presents the
+        // agent and closes the turn, so the model has nothing to do but introduce itself.
+        if (contextProvider.GetVariable(session, Constants.ContextKeys.Landing) is not null)
+        {
+            // The clone carries Present and Reply alone, whatever else the agent holds.
+            ChatOptions landingOptions = options.Clone();
+            landingOptions.Tools = [.. tools.Where(tool => tool.Name is Constants.Tools.Present or Constants.Tools.Reply)];
+            return landingOptions;
+        }
+
+        // With no workflow declared and every colleague within reach the agent is offered exactly the tools it was given, Present aside.
+        if (workflows.Count == 0 && !colleaguesOutOfReach && !tools.Any(tool => tool.Name == Constants.Tools.Present))
             return options;
 
         // The tools the model is offered on this call, each one weighed against the state of the session.
@@ -109,6 +142,10 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
             if (isServingConsultation && tool is WorkflowLauncherFunction)
                 continue;
 
+            // Only a landing presents the agent: any other turn, a consultation included, is never offered Present.
+            if (tool.Name == Constants.Tools.Present)
+                continue;
+
             // At a choice step Reply is offered with the step's tools as the only actions it may propose.
             if (runningWorkflow is { Step.Tools.Count: > 1 } && tool.Name == Constants.Tools.Reply)
                 offeredTools.Add(WithStepActions(tool, runningWorkflow.Value.Step.Tools));
@@ -122,7 +159,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
                 offeredTools.Add(tool);
         }
 
-        // The caller's options are shared across turns, so the narrowed tool list goes on a clone.
+        // The caller's options are shared across turns, so the narrowedOptions tool list goes on a clone.
         ChatOptions offeredOptions = options.Clone();
         offeredOptions.Tools = offeredTools;
 
@@ -165,7 +202,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
                 .Select(name => name!.DeepClone())]);
 
         // The tool goes on offer under the schema without the bound parameters.
-        return Rewritten(function, schema);
+        return PresentUnderSchema(function, schema);
     }
 
     /// <summary>
@@ -185,7 +222,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         // The actions property is where Reply offers buttons; its schema becomes the proposal of the step's choices.
         JsonObject actions = schema["properties"]!["actions"]!.AsObject();
 
-        // A null in the place of the array would leave the step with no button, so the type is narrowed to the array.
+        // A null in the place of the array would leave the step with no button, so the type is narrowedOptions to the array.
         actions["type"] = "array";
         actions.Remove("default");
 
@@ -201,17 +238,17 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         schema["required"] = required;
 
         // The model reads Reply with its actions fixed to the step's tools.
-        return Rewritten(replyFunction, schema);
+        return PresentUnderSchema(replyFunction, schema);
     }
 
     /// <summary>The schema of a tool, parsed for editing.</summary>
-    private static JsonObject SchemaOf(AIFunction function)
+    internal static JsonObject SchemaOf(AIFunction function)
         => JsonNode.Parse(function.JsonSchema.GetRawText())!.AsObject();
 
     /// <summary>
     /// Presents a tool under an edited schema.
     /// </summary>
-    private static AITool Rewritten(AIFunction function, JsonObject schema)
+    internal static AIFunction PresentUnderSchema(AIFunction function, JsonObject schema)
     {
         // Only a declaration reaches the model from here: the tool loop above runs the original function.
         // The approval wrapper is put back on top because the client below recognizes a tool needing approval by it.

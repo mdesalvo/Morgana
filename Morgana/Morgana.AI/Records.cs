@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -343,7 +344,7 @@ public static class Records
         int MaxOutputTokens)
     {
         /// <summary>
-        /// Builds the <see cref="ChatOptions"/> that <see cref="ChatClients.TierDefaultsChatClient"/> fills into every call on this tier.
+        /// Builds the <see cref="ChatOptions"/> that the tier's client fills into every call on this tier that leaves them unset.
         /// </summary>
         public ChatOptions ToChatOptions() => new()
         {
@@ -620,9 +621,12 @@ public static class Records
     /// </summary>
     /// <param name="Compliant">True if message passes policy checks, false if violation detected</param>
     /// <param name="Violation">Description of policy violation if Compliant is false</param>
+    [Description("The verdict on the user's message.")]
     public record GuardCheckResponse(
-        [property: JsonPropertyName("compliant")] bool Compliant,
-        [property: JsonPropertyName("violation")] string? Violation);
+        [property: JsonPropertyName("compliant")]
+        [property: Description("True when the message breaks none of the rules above.")] bool Compliant,
+        [property: JsonPropertyName("violation")]
+        [property: Description("Your refusal, in Morgana's own voice, exactly as the user will read it; null when the message is compliant.")] string? Violation);
 
     /// <summary>
     /// IGuardRailService result: Compliant (true=passes all checks, false=violated). Violation: human-readable
@@ -650,16 +654,21 @@ public static class Records
     /// <see cref="Services.LLMClassifierService"/> for how that distinction gets made.
     /// </summary>
     /// <param name="Intents">Candidate intents, ranked by confidence (highest first).</param>
+    [Description("The intents that the request matches.")]
     public record ClassificationResponse(
-        [property: JsonPropertyName("intents")] List<IntentScore> Intents);
+        [property: JsonPropertyName("intents")]
+        [property: Description("The matching intents, most confident first.")] List<IntentScore> Intents);
 
     /// <summary>One candidate intent with its confidence score, as scored by the classifier LLM.</summary>
     /// <param name="Intent">Candidate intent name (e.g., "billing", "contract", or
     /// <see cref="Constants.Intents.Other"/>).</param>
     /// <param name="Confidence">Confidence 0.0-1.0, this intent's own match quality — not a rank.</param>
+    [Description("One intent and how well it matches the request.")]
     public record IntentScore(
-        [property: JsonPropertyName("intent")] string Intent,
-        [property: JsonPropertyName("confidence")] double Confidence);
+        [property: JsonPropertyName("intent")]
+        [property: Description("The intent.")] string Intent,
+        [property: JsonPropertyName("confidence")]
+        [property: Description("How well this intent alone matches the request, from 0 to 1.")] double Confidence);
 
     /// <summary>
     /// Internal classification result used by the conversation pipeline.
@@ -682,6 +691,7 @@ public static class Records
     /// <summary>
     /// Request to an agent: the user's Content (null for a tool-only request), the Classification (null on a follow-up to the active agent),
     /// the TurnContext of the OTel span and the channel Capabilities (null means a channel without limits).
+    /// IsLanding marks the press of a button that Morgana offered to choose this agent: the turn opens with the agent presenting itself.
     /// </summary>
     public record AgentRequest(
         string ConversationId,
@@ -689,7 +699,8 @@ public static class Records
         ClassificationResult? Classification,
         ActivityContext TurnContext = default,
         ChannelCapabilities? Capabilities = null,
-        bool ContentAlreadyStored = false);
+        bool ContentAlreadyStored = false,
+        bool IsLanding = false);
 
     /// <summary>
     /// An agent's answer: text, IsCompleted (true returns the conversation to Morgana; false keeps the agent active),
@@ -836,13 +847,13 @@ public static class Records
         [property: JsonPropertyName("dustConsumed")] double? DustConsumed = null);
 
     /// <summary>
-    /// The welcome message and quick replies as the presentation prompt returns them.
+    /// The welcome message as the presentation prompt returns it; the buttons are the configured intents and the model never writes them.
     /// </summary>
     /// <param name="Message">Welcome/presentation message text (2-4 sentences)</param>
-    /// <param name="QuickReplies">List of quick reply button definitions</param>
+    [Description("Morgana's introduction.")]
     public record PresentationResponse(
-        [property: JsonPropertyName("message")] string Message,
-        [property: JsonPropertyName("quickReplies")] List<QuickReply> QuickReplies);
+        [property: JsonPropertyName("message")]
+        [property: Description("The introduction message.")] string Message);
 
     /// <summary>
     /// LLM-generated rewrite produced by the ChannelAdapter prompt. Contains the degraded
@@ -851,9 +862,27 @@ public static class Records
     /// </summary>
     /// <param name="Text">Rewritten message text, channel-compliant and free of unsupported features.</param>
     /// <param name="QuickReplies">Quick replies preserved by the rewrite or null when the channel cannot carry them.</param>
+    [Description("The message rewritten for the channel.")]
     public record ChannelAdapterResponse(
-        [property: JsonPropertyName("text")] string Text,
-        [property: JsonPropertyName("quickReplies")] List<QuickReply>? QuickReplies);
+        [property: JsonPropertyName("text")]
+        [property: Description("The rewritten message.")] string Text,
+        [property: JsonPropertyName("quickReplies")]
+        [property: Description("The buttons kept for the channel, each exactly as received; null when the channel shows no buttons or the message had none.")] List<QuickReply>? QuickReplies);
+
+    /// <summary>
+    /// What the channel adapter's rewrite works on: the message without the transport metadata that must not influence it.
+    /// </summary>
+    /// <param name="Text">The message text as its author wrote it.</param>
+    /// <param name="RichCard">The card of the message; null when it has none.</param>
+    /// <param name="QuickReplies">The buttons of the message; null when it has none.</param>
+    [Description("The message to rewrite.")]
+    public record ChannelAdapterInput(
+        [property: JsonPropertyName("text")]
+        [property: Description("The message text.")] string Text,
+        [property: JsonPropertyName("richCard")]
+        [property: Description("The card of the message; null when it has none.")] RichCard? RichCard,
+        [property: JsonPropertyName("quickReplies")]
+        [property: Description("The buttons of the message; null when it has none.")] List<QuickReply>? QuickReplies);
 
     /// <summary>
     /// Result returned by <see cref="Interfaces.IPresenterService.GenerateAsync"/> containing
@@ -885,19 +914,13 @@ public static class Records
     public record GeneratePresentationMessage;
 
     /// <summary>
-    /// The welcome message together with the intents it can offer, carried to the point where the supervisor sends it.
+    /// The welcome message together with the buttons that lead to the agents, carried to the point where the supervisor sends it.
     /// </summary>
     /// <param name="Message">Welcome message text (either LLM-generated or fallback)</param>
-    /// <param name="Intents">List of available intent definitions</param>
+    /// <param name="IntentButtons">One button per displayable intent, in the order the intents are configured</param>
     public record PresentationContext(
         string Message,
-        List<IntentDefinition> Intents)
-    {
-        /// <summary>
-        /// Quick replies written by the model; they take precedence over the Intents, from which the replies are derived when this is null.
-        /// </summary>
-        public List<QuickReply>? LLMQuickReplies { get; init; }
-    }
+        List<QuickReply> IntentButtons);
 
     // ==========================================================================
     // CONTEXT WRAPPERS FOR BECOME/PIPETO PATTERN
@@ -922,13 +945,15 @@ public static class Records
     /// agent engaged a moment later would otherwise make the answer unreadable, since by then one is
     /// active although none was when the user spoke.
     /// </param>
+    /// <param name="IsLanding">True when the user pressed a button of Morgana's that chooses an agent: the turn skips the guard and the classifier.</param>
     public record ProcessingContext(
         UserMessage OriginalMessage,
         IActorRef OriginalSender,
         ChannelCapabilities ChannelCapabilities,
         ClassificationResult? Classification = null,
         ActivityContext TurnContext = default,
-        bool UserMessageAlreadyStored = false);
+        bool UserMessageAlreadyStored = false,
+        bool IsLanding = false);
 
     // --- MorganaAgent Contexts ---
 
@@ -953,7 +978,7 @@ public static class Records
     /// <param name="Name">Intent identifier (lowercase, e.g., "billing", "contract")</param>
     /// <param name="Description">Intent description for classifier LLM</param>
     /// <param name="Label">User-facing label with emoji (e.g., "📄 Billing") for quick replies; required at startup.</param>
-    /// <param name="DefaultValue">Sample user message for this intent (used in quick reply value); required at startup.</param>
+    /// <param name="DefaultValue">The message that a press of the intent's button sends, opening that agent's presentation; required at startup.</param>
     public record IntentDefinition(
         [property: JsonPropertyName("Name")] string Name,
         [property: JsonPropertyName("Description")] string Description,
@@ -1210,8 +1235,13 @@ public static class Records
     /// Microsoft.Extensions.AI's, through <c>ApprovalRequiredAIFunction</c>.
     /// </param>
     /// <param name="Reserved">
-    /// True for the framework's base tool (Reply) alone: the projection of a domain tool's class leaves it false.
+    /// True for the framework's base tools (Reply and Present) alone: the projection of a domain tool's class leaves it false.
     /// Consumers skip a reserved tool because the framework controls its output.
+    /// </param>
+    /// <param name="MenuEntry">The button that offers the tool to the user, declared with <see cref="Attributes.UserToolAttribute"/>; null for a tool declared <c>[SystemTool]</c>.</param>
+    /// <param name="ReturnSchema">
+    /// The JSON schema of the record that the tool returns, as Microsoft.Extensions.AI publishes it. Null when the tool
+    /// returns no record or a <see cref="FrameworkToolResult"/>, which becomes authored text and is no contract.
     /// </param>
     public record ToolDefinition(
         string Name,
@@ -1219,7 +1249,16 @@ public static class Records
         IReadOnlyList<ToolParameter> Parameters,
         bool Reserved = false,
         bool RequiresExecutionApproval = false,
-        IReadOnlyList<ToolReturn>? Returns = null);
+        IReadOnlyList<ToolReturn>? Returns = null,
+        MenuEntry? MenuEntry = null,
+        JsonElement? ReturnSchema = null);
+
+    /// <summary>
+    /// One entry of an agent's menu: its position and its button's text.
+    /// </summary>
+    /// <param name="Ordinal">Position of the button, starting at 1.</param>
+    /// <param name="Label">Text of the button and message that its press sends.</param>
+    public record MenuEntry(int Ordinal, string Label);
 
     /// <summary>
     /// One parameter of a tool, projected from the method parameter, its <c>[Description]</c> and its <see cref="Attributes.ToolParameterAttribute"/>.
@@ -1248,6 +1287,16 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
+    /// What one scan of the loaded assemblies finds of the workflows: the definitions that the engine runs
+    /// and the classes that startup checks, both per intent.
+    /// </summary>
+    /// <param name="DefinitionsByIntent">The projected definitions per intent, case-insensitive.</param>
+    /// <param name="TypesByIntent">The classes that declare them per intent, case-insensitive.</param>
+    public record WorkflowDiscovery(
+        IReadOnlyDictionary<string, IReadOnlyList<WorkflowDefinition>> DefinitionsByIntent,
+        IReadOnlyDictionary<string, IReadOnlyList<Type>> TypesByIntent);
+
+    /// <summary>
     /// A procedure of one agent whose steps are kept in order by the framework: declared by a
     /// <c>MorganaWorkflow</c> class beside the agent's tools and run by the workflow engine.
     /// </summary>
@@ -1256,12 +1305,14 @@ public static class Records
     /// <param name="Steps">The steps of the procedure; the first one is where it starts.</param>
     /// <param name="Edges">Every transition of the procedure, in the order the class declared them.</param>
     /// <param name="Parameters">The public instance properties that the class declares itself: the values that edges may carry.</param>
+    /// <param name="MenuEntry">The button that offers the procedure to the user, declared with <see cref="Attributes.UserToolAttribute"/> on the class; null for a class declared <c>[SystemTool]</c>.</param>
     public record WorkflowDefinition(
         string Name,
         string Description,
         IReadOnlyList<WorkflowStep> Steps,
         IReadOnlyList<WorkflowEdge> Edges,
-        IReadOnlyList<string> Parameters)
+        IReadOnlyList<string> Parameters,
+        MenuEntry? MenuEntry = null)
     {
         /// <summary>Every tool that a step of the workflow names.</summary>
         public HashSet<string> ToolSignature()
@@ -1377,9 +1428,12 @@ public static class Records
     /// <param name="Label">What the button shows.</param>
     /// <param name="Value">The message sent on the user's behalf when the button is pressed.</param>
     public record ReplyAction(
-        [property: JsonPropertyName("tool")] string Tool,
-        [property: JsonPropertyName("label")] string Label,
-        [property: JsonPropertyName("value")] string Value);
+        [property: JsonPropertyName("tool")]
+        [property: Description("The name of one of your own tools that the button leads to.")] string Tool,
+        [property: JsonPropertyName("label")]
+        [property: Description("The button text; an emoji is welcome.")] string Label,
+        [property: JsonPropertyName("value")]
+        [property: Description("The message sent on the user's behalf when the button is pressed, written as the user would type it.")] string Value);
 
     /// <summary>
     /// The two pairs of buttons the framework adds to an agent's turn so the user can stay or leave,
@@ -1472,6 +1526,14 @@ public static class Records
             // The turn now awaits a choice among exactly those buttons; the model's other decisions are kept.
             return new TurnReply(AwaitedFromUser.ActionChoice, UserIsLeaving, actions, Card);
         }
+
+        /// <summary>
+        /// The turn as the agent's presentation closes it: awaiting a choice among the menu when it has entries and nothing otherwise.
+        /// </summary>
+        /// <param name="menu">The agent's menu, in menu order.</param>
+        public TurnReply WithMenu(IReadOnlyList<ReplyAction> menu)
+            // The menu is the turn's only action list and the card is dropped, since a presentation carries none.
+            => new TurnReply(menu.Count > 0 ? AwaitedFromUser.ActionChoice : AwaitedFromUser.Nothing, UserIsLeaving, menu, null);
 
         /// <summary>Words a tool name as a button label: <c>ConfirmOrder</c> becomes <c>Confirm order</c>.</summary>
         private static string LabelFromToolName(string toolName)

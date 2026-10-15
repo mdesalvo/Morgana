@@ -172,7 +172,7 @@ public sealed class LanguageModelTests
                 values.Remove(key);
 
         IConfiguration configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
-        return new ConfigurationLLMService(configuration, new MinimalPromptResolver());
+        return new ConfigurationLLMService(configuration);
     }
 
     /// <summary>A complete configuration with Anthropic on every tier, with the given keys replaced.</summary>
@@ -194,14 +194,5 @@ public sealed class LanguageModelTests
             values[key] = value;
 
         return values;
-    }
-
-    /// <summary>Stands in for prompt resolution: the service reads only the framework prompt's messages.</summary>
-    private sealed class MinimalPromptResolver : IPromptResolverService
-    {
-        public Task<Records.Prompt[]> GetAllPromptsAsync() => Task.FromResult(Array.Empty<Records.Prompt>());
-
-        public Task<Records.Prompt> ResolveAsync(string promptID)
-            => Task.FromResult(new Records.Prompt(promptID, string.Empty, string.Empty, string.Empty, null, null, "en", "1"));
     }
 }

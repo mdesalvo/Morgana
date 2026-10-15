@@ -1,0 +1,41 @@
+id: behaviour-landing-only-on-a-press
+description: >-
+  An agent presents itself only when the user pressed one of Morgana's buttons, never on text. A
+  concrete first message is classified and served at once. Asking the same agent for something else
+  is a short invitation, since Present is not even offered outside a landing. After the farewell the
+  very words of a welcome button, typed rather than pressed, are classified like any other message:
+  Morgana's last line is the farewell and carries no button to press.
+
+turns:
+  - say: "Hi, my customer code is P994E — show me my last 3 invoices"
+    expect:
+      agent: BillingAgent
+      classified: true
+      toolsCalled: [GetInvoices]
+      toolsNotCalled: [Present]
+      textNotEmpty: true
+
+  - press: continue_agent
+    expect:
+      agent: BillingAgent
+      agentCompleted: false
+      toolsNotCalled: [Present]
+      richCard: absent
+      textNotEmpty: true
+    judge:
+      - "The response invites the user to say what else they need."
+
+  # The invitation awaits a typed answer and offers no button, so the farewell is typed.
+  - say: "We're done, thanks"
+    expect:
+      agent: BillingAgent
+      agentCompleted: true
+      textNotEmpty: true
+
+  - say: "What can you do with my invoices?"
+    expect:
+      agent: BillingAgent
+      # Typed after the farewell, the button's words are a message like any other.
+      classified: true
+      toolsNotCalled: [Present]
+      textNotEmpty: true

@@ -57,7 +57,7 @@ public sealed class TurnDefinition
     /// <summary>What the user says. Exactly one of <c>say:</c> and <c>press:</c> is set.</summary>
     public string Say { get; init; } = string.Empty;
 
-    /// <summary>The name of the tool whose offered action button this turn presses instead of typing.</summary>
+    /// <summary>The tool name of an offered action button or the exact id of a welcome or disambiguation button (an intent name) that this turn presses instead of typing.</summary>
     public string? Press { get; init; }
 
     /// <summary>Structural expectations, evaluated deterministically. Optional.</summary>
@@ -83,6 +83,9 @@ public sealed class ExpectSpec
 
     /// <summary>Quick-reply ids that must all be present.</summary>
     public List<string>? QuickReplyIds { get; init; }
+
+    /// <summary>The delivered buttons' labels, exactly and in order: the whole list must be equal.</summary>
+    public List<string>? QuickReplyLabels { get; init; }
 
     /// <summary>Quick-reply ids that must all be absent.</summary>
     public List<string>? NoQuickReplyIds { get; init; }
@@ -162,6 +165,9 @@ public sealed class ExpectSpec
 
     /// <summary>Expected <c>guard.compliant</c> verdict from the <c>morgana.guard</c> span.</summary>
     public bool? GuardCompliant { get; init; }
+
+    /// <summary>Whether a <c>morgana.classifier</c> span was seen in the turn: false for a landing or a follow-up turn.</summary>
+    public bool? Classified { get; init; }
 
     /// <summary>Expected intent from the <c>morgana.classifier</c> span.</summary>
     public string? ClassifierIntent { get; init; }

@@ -214,12 +214,12 @@ public sealed class WorkflowTests
             ["CancelOrder", "ConfirmOrder", "Refund", "Reply", "StartPlaceOrder", "Stock"],
             Names(ToolsOfferedAt(agent.Model, 0)));
 
-        AgentUnderTest serving = await AgentUnderTest.CreateAsync(PlaceOrder());
-        await serving.Provider.SetVariableAsync(serving.Session, Constants.ContextKeys.ServingConsultation, true);
-        serving.Model.Enqueue(Answer(Closing("Hello.")));
-        await serving.TurnAsync("a colleague's question");
+        AgentUnderTest servingAgent = await AgentUnderTest.CreateAsync(PlaceOrder());
+        await servingAgent.Provider.SetVariableAsync(servingAgent.Session, Constants.ContextKeys.ServingConsultation, true);
+        servingAgent.Model.Enqueue(Answer(Closing("Hello.")));
+        await servingAgent.TurnAsync("a colleague's question");
 
-        string[] offered = [.. ToolsOfferedAt(serving.Model, 0).Select(tool => tool.Name)];
+        string[] offered = [.. ToolsOfferedAt(servingAgent.Model, 0).Select(tool => tool.Name)];
         Assert.DoesNotContain("StartPlaceOrder", offered);
         Assert.DoesNotContain("CreatePurchaseOrder", offered);
     }
@@ -233,7 +233,7 @@ public sealed class WorkflowTests
 
         await agent.TurnAsync("I want a rose");
 
-        Assert.Contains("CreatePurchaseOrder is not available at this step of PlaceOrder.", agent.FunctionResults());
+        Assert.Contains("CreatePurchaseOrder is not available now: workflow 'PlaceOrder' is entered through its launcher only.", agent.FunctionResults());
         Assert.DoesNotContain(InventoryTools.Calls, call => call.StartsWith("CreatePurchaseOrder", StringComparison.Ordinal));
         Assert.Null(agent.Provider.GetWorkflowPosition(agent.Session));
     }
@@ -319,7 +319,7 @@ public sealed class WorkflowTests
 
         string[] results = agent.FunctionResults();
 
-        Assert.Contains("PlaceOrder has started at its step Quote.", results);
+        Assert.Contains("[WORKFLOW PlaceOrder — NOW AT ITS STEP Quote]", results);
         Assert.Contains(results, result => result.StartsWith("[WORKFLOW PlaceOrder — NOW AT ITS STEP Decide]\n{", StringComparison.Ordinal) && result.Contains("ORD-1", StringComparison.Ordinal));
         Assert.Equal("Decide", agent.Provider.GetWorkflowPosition(agent.Session)!.Step);
     }
@@ -357,17 +357,17 @@ public sealed class WorkflowTests
     }
 
     [Theory]
-    [InlineData("""{"awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"}]}""")]
-    [InlineData("""{"awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"CancelOrder","label":"Cancel","value":"cancel"},{"tool":"Stock","label":"Stock","value":"stock"}]}""")]
-    [InlineData("""{"awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"ConfirmOrder","label":"Again","value":"again"}]}""")]
-    [InlineData("""{"awaits":"nothing","userIsLeaving":false}""")]
-    public async Task Workflow_Reply_at_a_choice_step_is_refused_unless_it_offers_each_step_tool_once(string refused)
+    [InlineData("""{"awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"}]}""", "ConfirmOrder")]
+    [InlineData("""{"awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"CancelOrder","label":"Cancel","value":"cancel"},{"tool":"Stock","label":"Stock","value":"stock"}]}""", "ConfirmOrder, CancelOrder, Stock")]
+    [InlineData("""{"awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"ConfirmOrder","label":"Again","value":"again"}]}""", "ConfirmOrder, ConfirmOrder")]
+    [InlineData("""{"awaits":"nothing","userIsLeaving":false}""", "")]
+    public async Task Workflow_Reply_at_a_choice_step_is_refused_unless_it_offers_each_step_tool_once(string refusedReply, string offeredTools)
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
-        await agent.RunQuoteTurnAsync(refused, ExactReply);
+        await agent.RunQuoteTurnAsync(refusedReply, ExactReply);
 
-        // The refusal names the step and its tools. The repaired closure is the one that was recorded.
-        Assert.Contains(agent.FunctionResults(), result => result.Contains("At step Decide of PlaceOrder the actions are exactly ConfirmOrder, CancelOrder, one each.", StringComparison.Ordinal));
+        // The refusal states what was offered and what the step takes. The repaired closure is the one that was recorded.
+        Assert.Contains(agent.FunctionResults(), result => result.StartsWith("[CALL NOT ACCEPTED] the actions offered lead to [" + offeredTools + "] while step 'Decide' of workflow 'PlaceOrder' takes exactly one action to each of: ConfirmOrder, CancelOrder\n", StringComparison.Ordinal));
         Assert.Equal(["ConfirmOrder", "CancelOrder"], ClosureOf(agent).Actions.Select(action => action.Tool));
     }
 
@@ -379,7 +379,7 @@ public sealed class WorkflowTests
 
         Records.TurnReply closure = ClosureOf(agent);
 
-        Assert.DoesNotContain(agent.FunctionResults(), result => result.Contains("one each", StringComparison.Ordinal));
+        Assert.DoesNotContain(agent.FunctionResults(), result => result.Contains("takes exactly one action", StringComparison.Ordinal));
         Assert.Equal(Records.AwaitedFromUser.ActionChoice, closure.Awaits);
         Assert.Equal([("ConfirmOrder", "Take it"), ("CancelOrder", "Drop it")], closure.Actions.Select(action => (action.Tool, action.Label)));
     }
@@ -391,7 +391,7 @@ public sealed class WorkflowTests
         await agent.RunQuoteTurnAsync("""{"awaits":"nothing","userIsLeaving":true}""");
 
         Assert.True(ClosureOf(agent).UserIsLeaving);
-        Assert.DoesNotContain(agent.FunctionResults(), result => result.Contains("one each", StringComparison.Ordinal));
+        Assert.DoesNotContain(agent.FunctionResults(), result => result.Contains("takes exactly one action", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -435,10 +435,26 @@ public sealed class WorkflowTests
         await agent.TurnAsync("I want a rose");
 
         string[] results = agent.FunctionResults();
-        Assert.Contains("CancelOrder is not available at this step of PlaceOrder.", results);
-        Assert.Contains("StartPlaceOrder is not available at this step of PlaceOrder.", results);
+        Assert.Contains("CancelOrder is not available now: step 'Quote' of workflow 'PlaceOrder' does not hold it.", results);
+        Assert.Contains("StartPlaceOrder is not available now: step 'Quote' of workflow 'PlaceOrder' does not hold it.", results);
         Assert.DoesNotContain(InventoryTools.Calls, call => call.StartsWith("CancelOrder", StringComparison.Ordinal));
         Assert.Equal("Quote", agent.Provider.GetWorkflowPosition(agent.Session)!.Step);
+    }
+
+    [Fact]
+    public async Task Workflow_A_launcher_called_while_answering_a_colleague_is_not_run_and_is_told_why()
+    {
+        AgentUnderTest servingAgent = await AgentUnderTest.CreateAsync(PlaceOrder());
+        await servingAgent.Provider.SetVariableAsync(servingAgent.Session, Constants.ContextKeys.ServingConsultation, true);
+        servingAgent.Model.Enqueue(Answer([Call("StartPlaceOrder", "{}")]));
+        servingAgent.Model.Enqueue(Answer(Closing("Nothing to start.")));
+
+        await servingAgent.TurnAsync("a colleague's question");
+
+        Assert.Contains(
+            "StartPlaceOrder is not available now: you are answering a colleague and a colleague consults no further colleague.",
+            servingAgent.FunctionResults());
+        Assert.Null(servingAgent.Provider.GetWorkflowPosition(servingAgent.Session));
     }
 
     [Fact]
@@ -969,6 +985,7 @@ public sealed class WorkflowTests
 
     /// <summary>Quote, then decide: a refused confirmation goes back to the quote.</summary>
     [Description("Placing an order.")]
+    [SystemTool]
     public sealed class PlaceOrderWorkflow : MorganaWorkflow
     {
         public string? OrderId { get; init; }
@@ -986,6 +1003,7 @@ public sealed class WorkflowTests
 
     /// <summary>Quote, then pay with the order and its price taken from the quote.</summary>
     [Description("Settling an order.")]
+    [SystemTool]
     public sealed class SettleWorkflow : MorganaWorkflow
     {
         public string? OrderId { get; init; }
@@ -1000,6 +1018,7 @@ public sealed class WorkflowTests
 
     /// <summary>Quote with a native tool, then ship the order with an MCP tool.</summary>
     [Description("Quoting then shipping.")]
+    [SystemTool]
     public sealed class MixedWorkflow : MorganaWorkflow
     {
         public string? OrderId { get; init; }
@@ -1013,6 +1032,7 @@ public sealed class WorkflowTests
 
     /// <summary>Reserve with an MCP tool, then ship what it reserved; a failed reservation stays at the reservation.</summary>
     [Description("Reserving then shipping.")]
+    [SystemTool]
     public sealed class ReserveWorkflow : MorganaWorkflow
     {
         public string? OrderId { get; init; }
@@ -1029,6 +1049,7 @@ public sealed class WorkflowTests
 
     /// <summary>A tool that always fails, then a note read once it has.</summary>
     [Description("Trying then noting.")]
+    [SystemTool]
     public sealed class FragileWorkflow : MorganaWorkflow
     {
         private static readonly Records.WorkflowStep Try = new("Try", ["FailHard"]);
@@ -1040,6 +1061,7 @@ public sealed class WorkflowTests
 
     /// <summary>Carries a field out of a tool whose server declares no output schema.</summary>
     [Description("Reading then shipping.")]
+    [SystemTool]
     public sealed class BlindWorkflow : MorganaWorkflow
     {
         public string? OrderId { get; init; }
@@ -1053,6 +1075,7 @@ public sealed class WorkflowTests
 
     /// <summary>Cites a tool that no server offers.</summary>
     [Description("Calling a ghost.")]
+    [SystemTool]
     public sealed class PhantomWorkflow : MorganaWorkflow
     {
         private static readonly Records.WorkflowStep Haunt = new("Haunt", ["NoSuchTool"]);
@@ -1063,6 +1086,7 @@ public sealed class WorkflowTests
     }
 
     /// <summary>Declares its edge from the later step first, so that the start has to be put in front.</summary>
+    [SystemTool]
     public sealed class BackwardsWorkflow : MorganaWorkflow
     {
         private static readonly Records.WorkflowStep Quote = new("Quote", [nameof(InventoryTools.CreatePurchaseOrder)]);
@@ -1073,6 +1097,7 @@ public sealed class WorkflowTests
     }
 
     /// <summary>Holds the property that a derived workflow inherits.</summary>
+    [SystemTool]
     public abstract class InheritedPropertyWorkflow : MorganaWorkflow
     {
         public string? Inherited { get; init; }
@@ -1083,6 +1108,7 @@ public sealed class WorkflowTests
     }
 
     /// <summary>Declares one property of its own beside the inherited one.</summary>
+    [SystemTool]
     public sealed class DerivedWorkflow : InheritedPropertyWorkflow
     {
         public string? Own { get; init; }
@@ -1299,7 +1325,7 @@ public sealed class WorkflowTests
 
         public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => new();
 
-        public Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt)
+        public Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null)
             => throw new InvalidOperationException("No model is reached by this group");
     }
 
@@ -1316,6 +1342,8 @@ public sealed class WorkflowTests
 
         public IReadOnlyDictionary<string, IReadOnlyList<Records.WorkflowDefinition>> GetAllRegisteredWorkflows()
             => new Dictionary<string, IReadOnlyList<Records.WorkflowDefinition>> { ["inventory"] = workflows };
+
+        public IReadOnlyList<Type> FindWorkflowTypesForIntent(string intent) => [];
     }
 
     /// <summary>A budget that is never spent.</summary>

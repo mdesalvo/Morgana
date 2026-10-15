@@ -169,7 +169,8 @@ public class MorganaToolAdapter
                         parameter.Name is not null
                         && parameterDescriptions.TryGetValue(parameter.Name, out string? parameterDescription)
                             ? parameterDescription
-                            : null
+                            : null,
+                    TransformSchemaNode = (context, node) => DeclareNullabilityAsAnnotated(context, node, implementation.Method.GetParameters())
                 }
             });
 
@@ -193,6 +194,64 @@ public class MorganaToolAdapter
         return toolDefinition.RequiresExecutionApproval
             ? new ApprovalRequiredAIFunction(resolvedFunction)
             : resolvedFunction;
+    }
+
+    /// <summary>
+    /// Makes the schema of a tool's argument say what the validator accepts: a property or a collection element
+    /// declared non-nullable loses <c>null</c> from its type, which a nullable parameter would otherwise publish for every nested one.
+    /// </summary>
+    /// <param name="context">Where the node sits in the argument's type.</param>
+    /// <param name="node">The node as Microsoft.Extensions.AI wrote it.</param>
+    /// <param name="methodParameters">The tool method's parameters, which the library does not hand to the context for a node that stands for an argument.</param>
+    private static JsonNode DeclareNullabilityAsAnnotated(AIJsonSchemaCreateContext context, JsonNode node, ParameterInfo[] methodParameters)
+    {
+        // Only a schema object carries a type to correct: anything else is left as it is.
+        if (node is not JsonObject schema)
+            return node;
+
+        // The validator refuses null for a property declared non-nullable, so the schema must not offer it.
+        if (context.PropertyInfo is { IsSetNullable: false })
+            RemoveNullFromType(schema);
+
+        // The member whose declaration says whether the elements of a collection may be null: a property or the tool's own parameter.
+        NullabilityInfoContext nullabilityContext = new NullabilityInfoContext();
+        NullabilityInfo? declaration = context.PropertyInfo?.AttributeProvider switch
+        {
+            // A property of an argument's type is read from its own annotations.
+            PropertyInfo property => nullabilityContext.Create(property),
+            // A node standing for an argument is matched to the method parameter of its type; two of one type leave it unmatched.
+            _ when context.Path.Length == 0 && methodParameters.Where(parameter => parameter.ParameterType == context.TypeInfo.Type).ToArray() is [var parameter]
+                => nullabilityContext.Create(parameter),
+            // Any other node declares nothing about its elements.
+            _ => null
+        };
+
+        // A collection whose element type is declared non-nullable offers no null element.
+        NullabilityInfo? element = declaration?.ElementType ?? declaration?.GenericTypeArguments.FirstOrDefault();
+        if (element is { ReadState: NullabilityState.NotNull } && schema["items"] is JsonObject items)
+            RemoveNullFromType(items);
+
+        // The corrected node replaces the one that the library wrote.
+        return schema;
+    }
+
+    /// <summary>Drops <c>null</c> from the type of a schema node, leaving a single remaining type as a plain string.</summary>
+    /// <param name="schema">The node whose type is corrected.</param>
+    private static void RemoveNullFromType(JsonObject schema)
+    {
+        // A node whose type is not a list of alternatives does not admit null to begin with.
+        if (schema["type"] is not JsonArray types)
+            return;
+
+        // The alternatives other than null are what the validator accepts.
+        string[] acceptedTypes = [.. types.Select(type => type!.GetValue<string>()).Where(type => type != "null")];
+        if (acceptedTypes.Length == 0)
+            return;
+
+        // A lone type is written plain, as the library writes a type that never admitted null.
+        schema["type"] = acceptedTypes.Length == 1
+            ? acceptedTypes[0]
+            : new JsonArray([.. acceptedTypes.Select(type => (JsonNode)JsonValue.Create(type)!)]);
     }
 
     /// <summary>
@@ -229,6 +288,29 @@ public class MorganaToolAdapter
             if (defParam.Required && methodParam.HasDefaultValue)
                 throw new ArgumentException($"Parameter '{methodParam.Name}' is required in definition but optional in method");
         }
+    }
+
+    /// <summary>
+    /// A tool that the model reads under a description other than the one that it was generated with, every other member being the tool's own.
+    /// </summary>
+    internal sealed class DescribedFunction : DelegatingAIFunction
+    {
+        /// <summary>The description that the model reads for the tool.</summary>
+        private readonly string description;
+
+        /// <summary>
+        /// Wraps a tool to present it under another description.
+        /// </summary>
+        /// <param name="innerFunction">The tool as generated or discovered</param>
+        /// <param name="description">The description that the model reads in its place</param>
+        public DescribedFunction(AIFunction innerFunction, string description) : base(innerFunction)
+        {
+            // The wrapper keeps the description it presents in place of the tool's own.
+            this.description = description;
+        }
+
+        /// <inheritdoc />
+        public override string Description => description;
     }
 
     /// <summary>

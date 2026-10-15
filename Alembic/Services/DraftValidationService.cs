@@ -302,6 +302,7 @@ public class DraftValidationService : IDraftValidationService
         HashSet<string> reservedToolNames =
         [
             Constants.Tools.Reply,
+            Constants.Tools.Present,
             .. agent.Workflows
                 .Where(workflow => !string.IsNullOrWhiteSpace(workflow.Name))
                 .Select(workflow => Constants.Workflows.LauncherPrefix + workflow.Name)
@@ -313,6 +314,29 @@ public class DraftValidationService : IDraftValidationService
 
         // The workflows are judged last since they refer to the tools just checked.
         ValidateWorkflows(agent, where, findings);
+
+        // The menu is judged after both its kinds of entry have been.
+        ValidateMenu(agent, where, findings);
+    }
+
+    /// <summary>Replays the framework's own startup check of an agent's menu over the Draft.</summary>
+    /// <remarks>A nameless tool or workflow is left out, since the checks above have already reported it and the framework's message could not name it.</remarks>
+    private static void ValidateMenu(AgentDraft agent, string where, List<ValidationFinding> findings)
+    {
+        // The menu is written by the workflows pass when the agent has any workflow and by the toolkit pass otherwise.
+        InterviewStep menuStep = agent.Workflows.Count > 0 ? InterviewStep.AgentWorkflows : InterviewStep.AgentToolkit;
+
+        // The framework's own refusals for the menu against the agent's named tools and workflows.
+        IEnumerable<string> refusals = HandlesIntentAgentRegistryService.ValidateMenu(
+            agent.ID ?? string.Empty,
+            [.. agent.Tools.Where(tool => !string.IsNullOrWhiteSpace(tool.Name)).Select(DraftProjection.ToToolDefinition)],
+            [.. agent.Workflows.Where(workflow => !string.IsNullOrWhiteSpace(workflow.Name)).Select(DraftProjection.ToWorkflowDefinition)]);
+
+        // Each refusal is reported with the framework's own wording.
+        foreach (string refusal in refusals)
+            findings.Add(new ValidationFinding(FindingSeverity.Error, where,
+                refusal,
+                "Morgana refuses it at startup: an agent's menu is checked against its tools and workflows before the first conversation.") { Step = menuStep });
     }
 
     /// <summary>Replays the framework's own startup check of an agent's workflows over the Draft.</summary>

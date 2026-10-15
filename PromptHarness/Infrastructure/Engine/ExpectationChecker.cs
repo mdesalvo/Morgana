@@ -115,6 +115,10 @@ public static partial class ExpectationChecker
     /// <summary>Intent and confidence of the <c>morgana.classifier</c> span.</summary>
     private static void CheckClassifier(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
+        // A classifier span carries the intent, so an intent-less turn is one the classifier never ran for.
+        if (expect.Classified is { } expectedClassified && (turn.ClassifierIntent is not null) != expectedClassified)
+            failures.Add($"classified: expected {expectedClassified}, got {turn.ClassifierIntent is not null}");
+
         if (expect.ClassifierIntent is { Length: > 0 } expectedIntent
             && !string.Equals(turn.ClassifierIntent, expectedIntent, StringComparison.OrdinalIgnoreCase))
             failures.Add($"classifierIntent: expected {expectedIntent}, got {turn.ClassifierIntent ?? "(none — was this a follow-up turn?)"}");
@@ -183,6 +187,11 @@ public static partial class ExpectationChecker
             if (!quickReplies.Any(reply => string.Equals(reply.Id, id, StringComparison.OrdinalIgnoreCase)))
                 failures.Add($"quickReplyIds: '{id}' missing (got {FormatIds(quickReplies)})");
         }
+
+        // Whole-list equality: the labels are what the user reads, so their order and count are part of the contract.
+        if (expect.QuickReplyLabels is { } expectedLabels
+            && !quickReplies.Select(reply => reply.Label).SequenceEqual(expectedLabels, StringComparer.Ordinal))
+            failures.Add($"quickReplyLabels: expected [{string.Join(" | ", expectedLabels)}], got [{string.Join(" | ", quickReplies.Select(reply => reply.Label))}]");
 
         foreach (string id in expect.NoQuickReplyIds ?? [])
         {

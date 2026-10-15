@@ -92,6 +92,8 @@ public interface IConversationPersistenceService
     /// leaves on another — so implementations must read, extend and write back as one step.</para>
     /// <para>The row is never left active: the orchestrator is not an agent a conversation can be
     /// resumed onto. What reports the active agent must keep naming real agents only.</para>
+    /// <para>Every assistant message appended is marked user-facing, since the orchestrator has no scratchpad:
+    /// the history then shows the buttons that a line records beside it, like an agent's turn.</para>
     /// </remarks>
     Task AppendOrchestratorMessagesAsync(
         string conversationId,

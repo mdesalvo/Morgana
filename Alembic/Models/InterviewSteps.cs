@@ -88,6 +88,7 @@ public static class InterviewSteps
             nameof(InterviewTools.DropToolReturn),
             nameof(InterviewTools.GetToolkit),
             nameof(InterviewTools.SetExample),
+            nameof(InterviewTools.SetMenu),
             nameof(InterviewTools.SetToolParameter),
             nameof(InterviewTools.SetToolReturn),
             nameof(InterviewTools.ShowWhatIsWritten)
@@ -109,6 +110,7 @@ public static class InterviewSteps
             nameof(InterviewTools.GetToolkit),
             nameof(InterviewTools.GetWorkflows),
             nameof(InterviewTools.SetExample),
+            nameof(InterviewTools.SetMenu),
             nameof(InterviewTools.SetWorkflowStep)
         ]);
 

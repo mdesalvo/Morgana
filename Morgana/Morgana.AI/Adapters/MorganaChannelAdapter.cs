@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Markdig;
@@ -36,6 +37,11 @@ public class MorganaChannelAdapter
     /// rewrite fails and the template fallback takes over.
     /// </summary>
     private readonly ILogger logger;
+
+    /// <summary>
+    /// The options with which the channels' wire carries a message, used for the part of it that the rewrite reads.
+    /// </summary>
+    private static readonly JsonSerializerOptions ChannelWireSerializerOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
     /// Initialises a new instance of <see cref="MorganaChannelAdapter"/>.
@@ -91,27 +97,22 @@ public class MorganaChannelAdapter
             // How a message is rewritten for a poorer channel is authored in morgana.json, under its own prompt.
             Records.Prompt adapterPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.ChannelAdapter);
 
-            // The model reads the channel's budget as data, in the placeholder the prompt names.
-            string capabilitiesJson = JsonSerializer.Serialize(
-                channelCapabilities, Records.DefaultJsonSerializerOptions);
-
             // The prompt is composed with the same labelled sections as every other framework prompt.
             string systemPrompt = string.Join("\n\n",
                     Records.Prompt.Labeled(Constants.SectionLabels.Target, adapterPrompt.Target),
                     Records.Prompt.Labeled(Constants.SectionLabels.Instructions, adapterPrompt.Instructions),
                     Records.Prompt.Labeled(Constants.SectionLabels.Formatting, adapterPrompt.Formatting))
-                .Replace(Constants.Placeholders.ChannelCapabilities, capabilitiesJson);
+                .Replace(Constants.Placeholders.ChannelConstraints, DescribeConstraints(adapterPrompt, channelCapabilities));
 
-            // The whole message travels as the model's input, so that the rewrite sees the card and the buttons it must absorb.
-            string userPrompt = JsonSerializer.Serialize(channelMessage, Records.DefaultJsonSerializerOptions);
+            // The text, the card and the buttons travel as the model's input, so that the rewrite sees what it must absorb and no transport metadata.
+            string userPrompt = JsonSerializer.Serialize(
+                new Records.ChannelAdapterInput(channelMessage.Text, channelMessage.RichCard, channelMessage.QuickReplies),
+                ChannelWireSerializerOptions);
 
             // A single stateless call on the framework's tier, charged to the conversation whose message it adapts.
-            string llmResponse = await llmService.CompleteWithSystemPromptAsync(
+            // An answer that cannot be read comes back null and is treated as no answer.
+            Records.ChannelAdapterResponse? channelAdapterResponse = await llmService.CompleteStructuredAsync<Records.ChannelAdapterResponse>(
                 channelMessage.ConversationId, systemPrompt, userPrompt);
-
-            // An answer that is not the expected JSON is treated as no answer.
-            Records.ChannelAdapterResponse? channelAdapterResponse =
-                JsonSerializer.Deserialize<Records.ChannelAdapterResponse>(llmResponse, Records.DefaultJsonSerializerOptions);
 
             // Only a rewrite with text to read is delivered: buttons alone would leave the user without the answer.
             if (channelAdapterResponse != null && !string.IsNullOrWhiteSpace(channelAdapterResponse.Text))
@@ -154,6 +155,36 @@ public class MorganaChannelAdapter
 
         // The deterministic rendering that needs no model.
         return BuildTemplateFallback(channelMessage, channelCapabilities);
+    }
+
+    // Says in plain sentences what the channel cannot show, in the fixed order of the rewrite rules; a feature the channel has adds nothing.
+    private static string DescribeConstraints(Records.Prompt adapterPrompt, ChannelCapabilities channelCapabilities)
+    {
+        // The sentences are authored with the prompt, so the adapter only picks the ones that apply.
+        List<Records.Injection> constraintSentences = adapterPrompt.GetAdditionalProperty<List<Records.Injection>>(Constants.PromptProperties.PromptInjections);
+        List<string> constraints = [];
+
+        // A channel without cards makes the rewrite carry the card in its prose.
+        if (!channelCapabilities.SupportsRichCards)
+            constraints.Add(Records.Injection.Resolve(constraintSentences, Constants.ChannelConstraints.NoCards));
+
+        // A channel without buttons makes the rewrite weave the choices into its prose.
+        if (!channelCapabilities.SupportsQuickReplies)
+            constraints.Add(Records.Injection.Resolve(constraintSentences, Constants.ChannelConstraints.NoButtons));
+
+        // A channel without markdown would show its syntax raw.
+        if (!channelCapabilities.SupportsMarkdown)
+            constraints.Add(Records.Injection.Resolve(constraintSentences, Constants.ChannelConstraints.NoMarkdown));
+
+        // Only a positive limit binds the text: zero or a sign would state a budget nobody can meet.
+        if (channelCapabilities.MaxMessageLength is { } maxMessageLength && maxMessageLength > 0)
+            constraints.Add(Records.Injection.Resolve(
+                constraintSentences,
+                Constants.ChannelConstraints.MaxLength,
+                new Dictionary<string, string> { [Constants.Placeholders.MaxLength] = maxMessageLength.ToString(CultureInfo.InvariantCulture) }));
+
+        // The sentences stand side by side in the line that the prompt reserves for them.
+        return string.Join(" ", constraints);
     }
 
     // A message fits when the channel carries every feature it uses and its visual cost is within the length budget.

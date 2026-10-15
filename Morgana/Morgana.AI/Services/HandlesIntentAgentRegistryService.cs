@@ -134,7 +134,8 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             .. ValidateDeclaredTiers(registry),
             .. ValidatePeerDeclarations(registry),
             .. ValidateToolContracts(registry),
-            .. ValidateWorkflowDeclarations(registry)
+            .. ValidateWorkflowDeclarations(registry),
+            .. ValidateMenuDeclarations(registry)
         ];
 
         // One exception carrying every problem, so a deployment is fixed in one pass.
@@ -287,8 +288,9 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         // declaration there is ignored all the same.
         errors.AddRange(ValidateNoDeclarationsInJson(prompts));
 
-        // The framework's own tool is held to the contract that a domain tool is.
+        // The framework's own tools are held to the contract that a domain tool is.
         errors.AddRange(ValidateToolContract(Constants.Morgana, typeof(ReplyTool)));
+        errors.AddRange(ValidateToolContract(Constants.Morgana, typeof(PresentTool)));
 
         // An intent has a tool class only when its agent uses native tools.
         foreach (string intent in registry.Keys)
@@ -356,6 +358,10 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         // Each agent's workflows are checked against the tools that its own class declares.
         foreach ((string intent, Type agentType) in registry)
         {
+            // Every workflow class declares whose it is, also where the definitions below are skipped.
+            foreach (Type workflowType in toolRegistryService.FindWorkflowTypesForIntent(intent))
+                errors.AddRange(ValidateWorkflowClass(intent, workflowType));
+
             // An agent that declares no workflow has nothing to weigh here.
             IReadOnlyList<Records.WorkflowDefinition> workflows = toolRegistryService.GetWorkflowDefinitions(intent);
             if (workflows.Count == 0)
@@ -372,6 +378,113 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         }
 
         // The list covers every agent, so one startup refusal reports every faulty workflow.
+        return errors;
+    }
+
+    /// <summary>
+    /// Weighs a workflow class on its own: it declares itself the user's or the system's, exactly one of the two.
+    /// </summary>
+    /// <param name="intent">The intent that owns the workflow, named in the messages.</param>
+    /// <param name="workflowType">The workflow class to weigh.</param>
+    /// <returns>One message when the class declares neither attribute or both, empty otherwise.</returns>
+    public static List<string> ValidateWorkflowClass(string intent, Type workflowType)
+    {
+        // The faults of the class are collected here and an empty list means it holds.
+        List<string> errors = [];
+
+        // The kind check is the same one that every tool method goes through.
+        ValidateToolKind($"Workflow class '{workflowType.Name}' of intent '{intent}'", workflowType, errors);
+
+        // The list is handed back as it is, since a class has at most one fault of this kind.
+        return errors;
+    }
+
+    /// <summary>
+    /// Weighs the menu of every agent: the buttons that its tools and workflows offer to the user.
+    /// </summary>
+    /// <param name="registry">The discovered intent-to-agent map, which is the roster of intents to weigh.</param>
+    /// <returns>One message per violation, empty when every menu holds.</returns>
+    private List<string> ValidateMenuDeclarations(Dictionary<string, Type> registry)
+    {
+        // The menu faults of every agent are collected here.
+        List<string> errors = [];
+
+        // Each agent's menu is weighed on its own, since the numbering is per agent.
+        foreach (string intent in registry.Keys)
+        {
+            // Tools and workflows share one numbering, so both are handed over together.
+            errors.AddRange(ValidateMenu(
+                intent,
+                toolRegistryService.GetToolDefinitions(intent),
+                toolRegistryService.GetWorkflowDefinitions(intent)));
+        }
+
+        // Every agent is weighed before the list is handed back, so one startup refusal reports every faulty menu.
+        return errors;
+    }
+
+    /// <summary>
+    /// Refuses a menu whose numbering, labels or entries could not be pressed as one expects.
+    /// </summary>
+    /// <param name="intent">The intent that owns the menu, named in the messages.</param>
+    /// <param name="tools">The domain tools that the intent's tool class declares.</param>
+    /// <param name="workflows">The workflows that the classes of the intent declare.</param>
+    /// <returns>One message per violation, empty when the menu holds.</returns>
+    public static List<string> ValidateMenu(
+        string intent,
+        IReadOnlyList<Records.ToolDefinition> tools,
+        IReadOnlyList<Records.WorkflowDefinition> workflows)
+    {
+        // The menu faults of this intent are collected here and an empty list means the menu holds.
+        List<string> errors = [];
+
+        // Every menu entry of the agent with its subject, tools and workflows alike.
+        List<(string Subject, Records.MenuEntry MenuEntry)> menuEntries =
+        [
+            .. tools.Where(tool => tool.MenuEntry is not null)
+                    .Select(tool => ($"Tool '{tool.Name}' of intent '{intent}'", tool.MenuEntry!)),
+            .. workflows.Where(workflow => workflow.MenuEntry is not null)
+                        .Select(workflow => ($"Workflow '{workflow.Name}' of intent '{intent}'", workflow.MenuEntry!))
+        ];
+
+        // The first tools of every workflow, which are never offered outside it.
+        HashSet<string> entryTools = [.. workflows.SelectMany(workflow => workflow.EntryTools)];
+
+        // Ordinals already taken, so a second entry on the same number is caught.
+        HashSet<int> ordinals = [];
+
+        // Numbering and labels are weighed alike for tools and workflows, since both make a button.
+        foreach ((string subject, Records.MenuEntry menuEntry) in menuEntries)
+        {
+            // The menu counts from 1, so a lower number has no place in it.
+            if (menuEntry.Ordinal < 1)
+                errors.Add($"{subject} is offered to the user with ordinal {menuEntry.Ordinal}: an ordinal starts at 1");
+
+            // Tools and workflows share the numbering, so two entries on one number have no order between them.
+            else if (!ordinals.Add(menuEntry.Ordinal))
+                errors.Add($"{subject} is offered to the user with ordinal {menuEntry.Ordinal}, which another entry of the agent already holds");
+
+            // The label is the button's text and the message that its press sends.
+            if (string.IsNullOrWhiteSpace(menuEntry.Label))
+                errors.Add($"{subject} is offered to the user with no label");
+        }
+
+        // Only a tool can require approval or open a workflow, so these two faults are weighed on the tools of the menu.
+        foreach (Records.ToolDefinition tool in tools.Where(tool => tool.MenuEntry is not null))
+        {
+            // How the tool is named back to whoever has to fix it.
+            string subject = $"Tool '{tool.Name}' of intent '{intent}'";
+
+            // A press chooses a path and cannot approve a call that does not exist yet: a dispositive path is offered as a workflow.
+            if (tool.RequiresExecutionApproval)
+                errors.Add($"{subject} is offered to the user and requires approval: a press cannot approve a call that does not exist yet, so a dispositive path is offered as a workflow");
+
+            // The entry of a workflow is entered through its launcher alone, so a button leading to it would never run.
+            if (entryTools.Contains(tool.Name))
+                errors.Add($"{subject} is offered to the user and is the first step of a workflow: it is never offered outside its workflow");
+        }
+
+        // Every entry is weighed, so one pass reports all the faults of the menu.
         return errors;
     }
 
@@ -432,7 +545,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
             // MAAI would fail the turn on two functions of one name, so a launcher may not share one with a tool.
             string launcherName = Constants.Workflows.LauncherPrefix + workflow.Name;
-            if (launcherName == Constants.Tools.Reply || tools.ContainsKey(launcherName))
+            if (launcherName == Constants.Tools.Reply || launcherName == Constants.Tools.Present || tools.ContainsKey(launcherName))
                 errors.Add($"{subject}: its launcher '{launcherName}' has the name of a tool of the agent");
 
             // Steps first, then the edges between them: the edges are weighed against the steps' tools.
@@ -482,9 +595,10 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             // Each tool a step offers is checked against the framework's own names and the agent's declared tools.
             foreach (string tool in stepTools)
             {
-                // The framework's own tools belong to no step: Reply closes every turn, a launcher starts a workflow
-                // and a colleague is a private method of the workflow, never one of its steps.
+                // The framework's own tools belong to no step: Reply closes every turn, Present opens the agent's menu,
+                // a launcher starts a workflow and a colleague is a private method of the workflow, never one of its steps.
                 if (tool == Constants.Tools.Reply
+                    || tool == Constants.Tools.Present
                     || launcherNames.Contains(tool)
                     || tool.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
                     errors.Add($"{stepSubject}: '{tool}' belongs to the framework and cannot be a step's tool");
@@ -646,9 +760,8 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             if (string.IsNullOrWhiteSpace(method.GetCustomAttribute<DescriptionAttribute>()?.Description))
                 errors.Add($"{subject} has no [Description]: the model reads it to know what the tool does");
 
-            // Approval is never defaulted: each tool states whether a user must agree before it runs.
-            if (method.GetCustomAttribute<RequiresApprovalAttribute>() is null)
-                errors.Add($"{subject} has no [RequiresApproval]: whether the user must approve each call is always declared");
+            // A tool is the user's or the system's, never undeclared and never both.
+            ValidateToolKind(subject, method, errors);
 
             // Parameters and return record carry the rest of what the model and the workflow engine read.
             foreach (ParameterInfo parameter in method.GetParameters())
@@ -660,6 +773,27 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
         // Every method of the class is weighed, so one pass reports all of its faults.
         return errors;
+    }
+
+    /// <summary>
+    /// Refuses a tool method or a workflow class that declares neither <c>[UserTool]</c> nor <c>[SystemTool]</c> or both.
+    /// </summary>
+    /// <param name="subject">The declaration, named in the message.</param>
+    /// <param name="declaration">The method or class whose attributes are read.</param>
+    /// <param name="errors">The list that receives the message.</param>
+    private static void ValidateToolKind(string subject, MemberInfo declaration, List<string> errors)
+    {
+        // Whether the user is offered the tool is read from the two attributes that answer it.
+        bool isUserTool = declaration.GetCustomAttribute<UserToolAttribute>() is not null;
+        bool isSystemTool = declaration.GetCustomAttribute<SystemToolAttribute>() is not null;
+
+        // Neither attribute leaves the question of the menu unanswered.
+        if (!isUserTool && !isSystemTool)
+            errors.Add($"{subject} declares neither [UserTool] nor [SystemTool]: whether the user is offered it is always declared");
+
+        // Both attributes answer it twice and contradict each other.
+        else if (isUserTool && isSystemTool)
+            errors.Add($"{subject} declares both [UserTool] and [SystemTool]: a tool is either the user's or the system's");
     }
 
     /// <summary>

@@ -98,7 +98,7 @@ different purpose.
 | `Personality` | the empathy, language, tone and humanity it meets the user with — voice only | 2-3 sentences |
 | `Territory` | the competence this agent is characteristically the one to answer for | 1-2 sentences |
 | `Instructions` | how it goes about it, what it is trying to achieve, what it must **not** do on the way | 2-5 sentences |
-| `Formatting` | how it presents its **own** information: which shape suits which tool's output | brief, concrete |
+| `Formatting` | how it presents its **own** information: which card or buttons suit which tool's result, never the fields | brief, concrete |
 
 An authored agent is **one agent of Morgana**, never a separate creature — never "a virtual
 assistant". `Personality` **names which facet she is here** ("a formal and exacting witch"). Where the

@@ -57,14 +57,13 @@ a clear question is a good outcome; a silent choice is not.
 
 1. `dotnet build` of the solution you touched: zero errors, no new warnings.
 2. The deterministic tests of the project you touched, where they exist (never PromptHarness).
-3. The comma check on every file you touched:
-   `grep -nE ', and |\. And |\. Or |— and|— or' <file>` plus the one across line breaks:
-   `grep -nP -A1 '(,|—)\s*$' <file> | grep -P '^\d+-\s*(///|//|\*)?\s*and\b'`.
+
+No style checks: the comma grep and every other mechanical check belong to the clerk, run after you hand back.
 
 ## The report
 
 Short and flat, for the architect:
 - the files you touched, one line each on what changed;
-- the outcome of build, tests and the comma check, with the output wherever something is not green;
+- the outcome of build and tests, with the output wherever something is not green;
 - every point where you departed from the brief or stopped, with the reason;
 - whatever you noticed outside the scope and did **not** touch.

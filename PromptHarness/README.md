@@ -217,12 +217,14 @@ runs: 5            # default: Harness:DefaultRuns
 minPasses: 4       # default: Harness:DefaultMinPasses
 
 turns:
-  - say: "what the user types"   # or press: ConfirmOrder — sends the value of the offered action button leading to that tool
+  - say: "what the user types"   # or press: ConfirmOrder — sends the value of the offered action button leading to that tool, or of the welcome or disambiguation button whose id is that name (billing)
     expect:
       agent: BillingAgent
       agentCompleted: false
+      classified: false               # whether a morgana.classifier span was seen in the turn
       quickReplies: none          # none | any | count:N | min:N
       quickReplyIds: [continue_agent]
+      quickReplyLabels: [Invoices, Stay]   # the delivered labels, exactly and in order
       noQuickReplyIds: [exit_agent]
       richCard: absent            # absent | present
       toolsCalled: [GetInvoices]

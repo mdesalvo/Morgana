@@ -48,30 +48,30 @@
     <PackageReference Include="Akka" Version="1.5.*" />
     <PackageReference Include="Akka.DependencyInjection" Version="1.5.*" />
     <!-- Agents -->
-    <PackageReference Include="A2A" Version="1.0.0-preview2" />
+    <PackageReference Include="A2A" Version="1.0.0-preview3" />
     <PackageReference Include="Azure.AI.OpenAI" Version="2.9.0-beta.1" />
-    <PackageReference Include="Microsoft.Agents.AI" Version="1.24.0" />
-    <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.24.0" />
-    <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.24.0" />
-    <PackageReference Include="Microsoft.Agents.AI.A2A" Version="1.24.0-preview.261006.1" />
-    <PackageReference Include="Microsoft.Agents.AI.Hosting" Version="1.24.0-preview.261006.1" />
-    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.24.0" />
-    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.24.0" />
-    <PackageReference Include="Microsoft.Extensions.AI" Version="10.10.0" />
-    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.1" />
-    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.1" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.25.0" />
+    <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.25.0" />
+    <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.25.0" />
+    <PackageReference Include="Microsoft.Agents.AI.A2A" Version="1.25.0-preview.261014.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Hosting" Version="1.25.0-preview.261014.1" />
+    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="1.25.0" />
+    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.25.0" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.11.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.11.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.11.0" />
     <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
     <PackageReference Include="OllamaSharp" Version="5.5.0" />
     <!-- Services -->
     <PackageReference Include="Markdig" Version="1.4.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.*" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.*" />
-    <PackageReference Include="OpenTelemetry" Version="1.19.*" />
-    <PackageReference Include="OpenTelemetry.Api" Version="1.19.*" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.19.*" />
-    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.19.*" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.19.*" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.19.*" />
+    <PackageReference Include="OpenTelemetry" Version="1.20.*" />
+    <PackageReference Include="OpenTelemetry.Api" Version="1.20.*" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.*" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.20.*" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.*" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.*" />
   </ItemGroup>
 
 </Project>

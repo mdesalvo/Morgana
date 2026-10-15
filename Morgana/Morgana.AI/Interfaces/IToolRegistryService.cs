@@ -52,4 +52,11 @@ public interface IToolRegistryService
     /// not an agent handles that intent.
     /// </summary>
     IReadOnlyDictionary<string, IReadOnlyList<Records.WorkflowDefinition>> GetAllRegisteredWorkflows();
+
+    /// <summary>
+    /// Finds the MorganaWorkflow types that the specified intent's agent runs.
+    /// </summary>
+    /// <param name="intent">The intent to find workflow classes for (case-insensitive).</param>
+    /// <returns>The classes decorated with [ProvidesWorkflowForIntent(intent)]; an empty list when the intent declares no workflow.</returns>
+    IReadOnlyList<Type> FindWorkflowTypesForIntent(string intent);
 }

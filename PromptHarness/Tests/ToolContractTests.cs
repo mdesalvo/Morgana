@@ -52,8 +52,12 @@ public sealed class ToolContractTests
     }
 
     [Fact]
-    public void ToolContract_A_tool_method_without_an_approval_declaration_is_refused()
-        => Assert.Contains(Validate(typeof(NoApprovalTool)), error => error.Contains("[RequiresApproval]", StringComparison.Ordinal) && error.Contains("'Run'", StringComparison.Ordinal));
+    public void ToolContract_A_tool_method_declaring_neither_kind_is_refused()
+        => Assert.Equal(["Tool 'Run' of intent 'sample' declares neither [UserTool] nor [SystemTool]: whether the user is offered it is always declared"], Validate(typeof(NoKindTool)));
+
+    [Fact]
+    public void ToolContract_A_tool_method_declaring_both_kinds_is_refused()
+        => Assert.Equal(["Tool 'Run' of intent 'sample' declares both [UserTool] and [SystemTool]: a tool is either the user's or the system's"], Validate(typeof(BothKindsTool)));
 
     [Fact]
     public void ToolContract_A_parameter_without_a_description_is_refused()
@@ -280,7 +284,7 @@ public sealed class ToolContractTests
     public sealed class HonestTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run([Description("A code")] [ToolParameter(Records.ToolScope.Request)] string code)
             => Task.FromResult(new SampleResult(OrderId: "ORD-1", Quantity: 2, Line: new SampleLine("RSE-100", 2)));
     }
@@ -289,22 +293,38 @@ public sealed class ToolContractTests
     public sealed class StringTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<string> Run([Description("A code")] [ToolParameter(Records.ToolScope.Request)] string code) => Task.FromResult("{}");
+    }
+
+    /// <summary>A tool method declaring neither whose it is.</summary>
+    public sealed class NoKindTool
+    {
+        [Description("Runs.")]
+        public Task<SampleResult> Run() => Task.FromResult(new SampleResult());
+    }
+
+    /// <summary>A tool method declaring itself both the user's and the system's.</summary>
+    public sealed class BothKindsTool
+    {
+        [Description("Runs.")]
+        [UserTool(1, "Run")]
+        [SystemTool]
+        public Task<SampleResult> Run() => Task.FromResult(new SampleResult());
     }
 
     /// <summary>A tool returning a record that has no property.</summary>
     public sealed class EmptyRecordTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<EmptyResult> Run() => Task.FromResult(new EmptyResult());
     }
 
     /// <summary>A tool whose method carries no description.</summary>
     public sealed class NoMethodDescriptionTool
     {
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run() => Task.FromResult(new SampleResult());
     }
 
@@ -312,22 +332,16 @@ public sealed class ToolContractTests
     public sealed class BlankMethodDescriptionTool
     {
         [Description(" ")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run() => Task.FromResult(new SampleResult());
     }
 
-    /// <summary>A tool that does not say whether it needs approval.</summary>
-    public sealed class NoApprovalTool
-    {
-        [Description("Runs.")]
-        public Task<SampleResult> Run() => Task.FromResult(new SampleResult());
-    }
 
     /// <summary>A tool with a parameter that carries no description.</summary>
     public sealed class NoParameterDescriptionTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run([ToolParameter(Records.ToolScope.Request)] string code) => Task.FromResult(new SampleResult());
     }
 
@@ -335,7 +349,7 @@ public sealed class ToolContractTests
     public sealed class BlankParameterDescriptionTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run([Description("")] [ToolParameter(Records.ToolScope.Request)] string code) => Task.FromResult(new SampleResult());
     }
 
@@ -343,7 +357,7 @@ public sealed class ToolContractTests
     public sealed class NoScopeTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run([Description("A code")] string code) => Task.FromResult(new SampleResult());
     }
 
@@ -351,7 +365,7 @@ public sealed class ToolContractTests
     public sealed class RequestRequiredTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run([Description("A code")] [ToolParameter(Records.ToolScope.Request)] string code) => Task.FromResult(new SampleResult());
     }
 
@@ -359,7 +373,7 @@ public sealed class ToolContractTests
     public sealed class RequestOptionalTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run([Description("A code")] [ToolParameter(Records.ToolScope.Request)] string code = "x") => Task.FromResult(new SampleResult());
     }
 
@@ -367,7 +381,7 @@ public sealed class ToolContractTests
     public sealed class RequestSharedTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run([Description("A code")] [ToolParameter(Records.ToolScope.Request, shared: true)] string code) => Task.FromResult(new SampleResult());
     }
 
@@ -375,7 +389,7 @@ public sealed class ToolContractTests
     public sealed class ContextRequiredTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run([Description("A code")] [ToolParameter(Records.ToolScope.Context)] string code) => Task.FromResult(new SampleResult());
     }
 
@@ -383,7 +397,7 @@ public sealed class ToolContractTests
     public sealed class ContextSharedRequiredTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run([Description("A code")] [ToolParameter(Records.ToolScope.Context, shared: true)] string code) => Task.FromResult(new SampleResult());
     }
 
@@ -391,7 +405,7 @@ public sealed class ToolContractTests
     public sealed class ContextOptionalTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run([Description("A code")] [ToolParameter(Records.ToolScope.Context)] string code = "x") => Task.FromResult(new SampleResult());
     }
 
@@ -399,7 +413,7 @@ public sealed class ToolContractTests
     public sealed class ContextSharedOptionalTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run([Description("A code")] [ToolParameter(Records.ToolScope.Context, shared: true)] string code = "x") => Task.FromResult(new SampleResult());
     }
 
@@ -407,7 +421,7 @@ public sealed class ToolContractTests
     public sealed class ContextIntegerTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run([Description("A count")] [ToolParameter(Records.ToolScope.Context)] int count) => Task.FromResult(new SampleResult());
     }
 
@@ -415,11 +429,11 @@ public sealed class ToolContractTests
     public sealed class OverloadedTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run() => Task.FromResult(new SampleResult());
 
         [Description("Runs with a code.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run([Description("A code")] [ToolParameter(Records.ToolScope.Request)] string code) => Task.FromResult(new SampleResult());
     }
 
@@ -427,7 +441,7 @@ public sealed class ToolContractTests
     public sealed class NonNullableFailureTool
     {
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<NonNullableFailureResult> Run() => Task.FromResult(new NonNullableFailureResult("no"));
     }
 
@@ -435,11 +449,12 @@ public sealed class ToolContractTests
     public sealed class ProjectedTool
     {
         [Description("Runs second.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Second() => Task.FromResult(new SampleResult());
 
         [Description("Runs first.")]
-        [RequiresApproval(true)]
+        [SystemTool]
+        [RequiresApproval]
         public Task<DescribedResult> First(
             [Description("A code")] [ToolParameter(Records.ToolScope.Context, shared: true)] string code,
             [Description("A note")] [ToolParameter(Records.ToolScope.Request)] string? note = null)
@@ -453,7 +468,7 @@ public sealed class ToolContractTests
         public string Label { get; set; } = "";
 
         [Description("Runs.")]
-        [RequiresApproval(false)]
+        [SystemTool]
         public Task<SampleResult> Run() => Task.FromResult(new SampleResult());
 
         /// <summary>Not public, so not a tool.</summary>

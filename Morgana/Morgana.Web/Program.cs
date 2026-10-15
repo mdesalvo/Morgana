@@ -178,16 +178,15 @@ builder.Services.AddSingleton<IClassifierService, LLMClassifierService>();
 builder.Services.AddSingleton<IPresenterService, LLMPresenterService>();
 builder.Services.AddSingleton<ICommandRegistryService, CommandRegistryService>();
 builder.Services.AddSingleton<ICommand, CompactHistoryCommand>();
-// A factory because the service needs the configuration, the prompt resolver and the logger factory to build its tiers.
+// A factory because the service needs the configuration and the logger factory to build its tiers.
 builder.Services.AddSingleton<ILLMService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
-    IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
 
     // The tiers are built here, from the configuration, so a tier left unconfigured refuses the boot.
-    ConfigurationLLMService llm = new ConfigurationLLMService(config, promptResolver, loggerFactory);
+    ConfigurationLLMService llm = new ConfigurationLLMService(config, loggerFactory);
 
-    // Wire dust accounting for the framework-actor path (CompleteWithSystemPromptAsync).
+    // Wire dust accounting for the framework-actor path (CompleteStructuredAsync).
     // Done post-construction because the dust limiter depends on conversation persistence,
     // which is registered after this factory. Lazy resolution makes the order safe.
     llm.EnableDustAccounting(sp.GetRequiredService<IDustLimitService>());

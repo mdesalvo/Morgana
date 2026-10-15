@@ -1,5 +1,4 @@
 ﻿using System.Collections.Concurrent;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Adapters;
 using Morgana.AI.Interfaces;
@@ -166,16 +165,14 @@ public class LLMPresenterService : IPresenterService
                     Records.Prompt.Labeled(Constants.SectionLabels.Formatting, presentationPrompt.Formatting));
 
             // The intent list is the model's input, as the message to adapt is the channel adapter's.
-            string llmResponse = await llmService.CompleteWithSystemPromptAsync(
-                PresentationLabel, presentationSystemPrompt, formattedIntents);
-
             // A null payload carries no presentation: it is treated as a failure so that the fallback answers.
-            Records.PresentationResponse? presentation =
-                JsonSerializer.Deserialize<Records.PresentationResponse>(llmResponse, Records.DefaultJsonSerializerOptions)
+            Records.PresentationResponse presentation =
+                await llmService.CompleteStructuredAsync<Records.PresentationResponse>(
+                    PresentationLabel, presentationSystemPrompt, formattedIntents)
                  ?? throw new InvalidOperationException("LLM returned null presentation");
 
-            // The model's buttons become the quick replies that every channel receives.
-            List<QuickReply> quickReplies = [.. presentation.QuickReplies.Select(qr => new QuickReply(qr.Id, qr.Label, qr.Value))];
+            // The model wrote the welcome alone: the buttons are the configured intents, never the model's.
+            List<QuickReply> quickReplies = BuildIntentButtons(displayableIntents);
 
             // Distinguishes a generated presentation from the fallback in the log.
             logger.LogInformation(
@@ -191,6 +188,14 @@ public class LLMPresenterService : IPresenterService
             return BuildFallbackMessage(presentationPrompt, displayableIntents);
         }
     }
+
+    /// <summary>
+    /// Builds the buttons of the welcome: one per displayable intent in its configured order, which the model neither chooses nor words.
+    /// </summary>
+    /// <param name="displayableIntents">The intents the welcome offers; each button carries the intent's name as its id and its default value as the message that a press sends.</param>
+    private static List<QuickReply> BuildIntentButtons(IReadOnlyList<Records.IntentDefinition> displayableIntents)
+        // The id names the intent that a press chooses and the supervisor reads it back to land the turn on that agent.
+        => [.. displayableIntents.Select(intent => new QuickReply(intent.Name, intent.Label, intent.DefaultValue))];
 
     /// <summary>
     /// Builds a presentation purely from configuration: the static <c>Fallback</c> message from
@@ -210,11 +215,7 @@ public class LLMPresenterService : IPresenterService
         string fallbackMessage = presentationPrompt.GetMessage(Constants.Messages.Fallback);
 
         // One quick reply per intent, worded as the domain authored it.
-        List<QuickReply> fallbackReplies =
-        [
-            .. displayableIntents
-                .Select(intent => new QuickReply(intent.Name, intent.Label, intent.DefaultValue))
-        ];
+        List<QuickReply> fallbackReplies = BuildIntentButtons(displayableIntents);
 
         // Distinguishes the fallback from a generated presentation in the log.
         logger.LogInformation(

@@ -1,4 +1,8 @@
 using System.Reflection;
+using Morgana.AI;
+using Morgana.AI.Abstractions;
+using Morgana.AI.Attributes;
+using Morgana.AI.Services;
 using PromptHarness.Infrastructure.Wiring;
 using Xunit;
 
@@ -46,6 +50,121 @@ public sealed class StartupValidationTests
 
     /// <summary>Placeholder the shipped configuration carries where a real secret belongs.</summary>
     private const string SecureOverride = "_SECURE_OVERRIDE_";
+
+    [Fact]
+    public void StartupValidation_Menu_is_refused_when_an_ordinal_starts_below_one()
+    {
+        // The menu counts from 1, so an entry numbered 0 has no place in it.
+        List<string> refusals = HandlesIntentAgentRegistryService.ValidateMenu(
+            "billing", [OfferedTool("GetInvoices", 0, "Invoices")], []);
+
+        Assert.Equal(["Tool 'GetInvoices' of intent 'billing' is offered to the user with ordinal 0: an ordinal starts at 1"], refusals);
+    }
+
+    [Fact]
+    public void StartupValidation_Menu_is_refused_when_a_tool_and_a_workflow_share_an_ordinal()
+    {
+        // Tools and workflows share one numbering, so the workflow taking the tool's number is the repeat.
+        List<string> refusals = HandlesIntentAgentRegistryService.ValidateMenu(
+            "billing",
+            [OfferedTool("GetInvoices", 1, "Invoices")],
+            [OfferedWorkflow("OpenAccount", 1, "Open an account")]);
+
+        Assert.Equal(["Workflow 'OpenAccount' of intent 'billing' is offered to the user with ordinal 1, which another entry of the agent already holds"], refusals);
+    }
+
+    [Fact]
+    public void StartupValidation_Menu_is_refused_when_an_offered_entry_has_no_label()
+    {
+        // The label is the button's text and the message that its press sends: a blank one sends nothing.
+        List<string> refusals = HandlesIntentAgentRegistryService.ValidateMenu(
+            "billing", [OfferedTool("GetInvoices", 1, "  ")], []);
+
+        Assert.Equal(["Tool 'GetInvoices' of intent 'billing' is offered to the user with no label"], refusals);
+    }
+
+    [Fact]
+    public void StartupValidation_Menu_is_refused_when_an_offered_tool_requires_approval()
+    {
+        // A press cannot approve a call that does not exist yet.
+        List<string> refusals = HandlesIntentAgentRegistryService.ValidateMenu(
+            "billing", [OfferedTool("ConfirmOrder", 1, "Confirm", requiresExecutionApproval: true)], []);
+
+        Assert.Equal(["Tool 'ConfirmOrder' of intent 'billing' is offered to the user and requires approval: a press cannot approve a call that does not exist yet, so a dispositive path is offered as a workflow"], refusals);
+    }
+
+    [Fact]
+    public void StartupValidation_Menu_is_refused_when_an_offered_tool_opens_a_workflow()
+    {
+        // The first step of a workflow is entered through its launcher alone, so a button leading to it would never run.
+        List<string> refusals = HandlesIntentAgentRegistryService.ValidateMenu(
+            "billing",
+            [OfferedTool("CollectAddress", 1, "Address")],
+            [new Records.WorkflowDefinition("OpenAccount", "Opens an account.", [new Records.WorkflowStep("Collect", ["CollectAddress"])], [], [])]);
+
+        Assert.Equal(["Tool 'CollectAddress' of intent 'billing' is offered to the user and is the first step of a workflow: it is never offered outside its workflow"], refusals);
+    }
+
+    [Fact]
+    public void StartupValidation_Menu_of_two_tools_and_a_workflow_holds()
+    {
+        // The entry tool of the offered workflow is declared but not offered itself, which is the sound shape.
+        List<string> refusals = HandlesIntentAgentRegistryService.ValidateMenu(
+            "billing",
+            [OfferedTool("GetInvoices", 1, "Invoices"), OfferedTool("GetBalance", 2, "Balance"), OfferedTool("CollectAddress", null, null)],
+            [new Records.WorkflowDefinition("OpenAccount", "Opens an account.", [new Records.WorkflowStep("Collect", ["CollectAddress"])], [], [], new Records.MenuEntry(3, "Open an account"))]);
+
+        Assert.Empty(refusals);
+    }
+
+    [Fact]
+    public void StartupValidation_Workflow_class_declaring_neither_kind_is_refused()
+    {
+        // The class answers neither whether it is on the menu nor that it is not.
+        List<string> refusals = HandlesIntentAgentRegistryService.ValidateWorkflowClass("billing", typeof(NoKindWorkflow));
+
+        Assert.Equal(["Workflow class 'NoKindWorkflow' of intent 'billing' declares neither [UserTool] nor [SystemTool]: whether the user is offered it is always declared"], refusals);
+    }
+
+    [Fact]
+    public void StartupValidation_Workflow_class_declaring_both_kinds_is_refused()
+    {
+        // The class answers twice and the two answers contradict each other.
+        List<string> refusals = HandlesIntentAgentRegistryService.ValidateWorkflowClass("billing", typeof(BothKindsWorkflow));
+
+        Assert.Equal(["Workflow class 'BothKindsWorkflow' of intent 'billing' declares both [UserTool] and [SystemTool]: a tool is either the user's or the system's"], refusals);
+    }
+
+    [Fact]
+    public void StartupValidation_Workflow_class_declaring_the_system_kind_alone_holds()
+    {
+        // One answer is the sound shape.
+        List<string> refusals = HandlesIntentAgentRegistryService.ValidateWorkflowClass("billing", typeof(SystemWorkflow));
+
+        Assert.Empty(refusals);
+    }
+
+    /// <summary>A workflow class declaring neither whose it is.</summary>
+    public sealed class NoKindWorkflow() : MorganaWorkflow(new Records.WorkflowStep("Start", ["Run"]));
+
+    /// <summary>A workflow class declaring itself both the user's and the system's.</summary>
+    [UserTool(1, "Open an account")]
+    [SystemTool]
+    public sealed class BothKindsWorkflow() : MorganaWorkflow(new Records.WorkflowStep("Start", ["Run"]));
+
+    /// <summary>A workflow class declaring itself the system's alone.</summary>
+    [SystemTool]
+    public sealed class SystemWorkflow() : MorganaWorkflow(new Records.WorkflowStep("Start", ["Run"]));
+
+    /// <summary>A tool declaration as the registry projects it, offered when an ordinal is given.</summary>
+    private static Records.ToolDefinition OfferedTool(string name, int? ordinal, string? label, bool requiresExecutionApproval = false)
+        => new Records.ToolDefinition(name, "A tool.", [], RequiresExecutionApproval: requiresExecutionApproval,
+            MenuEntry: ordinal is { } position ? new Records.MenuEntry(position, label!) : null);
+
+    /// <summary>A workflow declaration with one step, offered at the given place in the menu.</summary>
+    private static Records.WorkflowDefinition OfferedWorkflow(string name, int ordinal, string label)
+        => new Records.WorkflowDefinition(name, "A workflow.", [new Records.WorkflowStep("Start", [$"{name}Entry"])], [], [],
+            new Records.MenuEntry(ordinal, label));
 
     [Fact]
     public void StartupValidation_Boot_is_refused_when_a_partner_has_no_usable_key()

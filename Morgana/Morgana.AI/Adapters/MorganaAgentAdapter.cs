@@ -88,7 +88,7 @@ public class MorganaAgentAdapter
     protected readonly Records.Prompt morganaPrompt;
 
     /// <summary>
-    /// The framework's base tool (Reply), projected from <see cref="ReplyTool"/> and stamped <c>Reserved = true</c> exactly
+    /// The framework's base tools (Reply and Present), projected from <see cref="ReplyTool"/> and <see cref="PresentTool"/> and stamped <c>Reserved = true</c> exactly
     /// once here — the only place in the codebase that ever sets it true. Every other reader of a
     /// ToolDefinition's Reserved flag (domain tools included) sees false by construction, never by
     /// a check: see the Reserved remarks on Records.ToolDefinition.
@@ -142,8 +142,9 @@ public class MorganaAgentAdapter
         // The framework prompt is read once because the adapter is built before any turn runs and cannot await.
         morganaPrompt = promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
 
-        // The base tool is projected from its class and reserved here, so that no domain tool can ever be reserved.
+        // The base tools are projected from their classes and reserved here, so that no domain tool can ever be reserved.
         morganaTools = [.. ProvidesToolForIntentRegistryService.ProjectToolDefinitions(typeof(ReplyTool))
+            .Concat(ProvidesToolForIntentRegistryService.ProjectToolDefinitions(typeof(PresentTool)))
             .Select(t => t with { Reserved = true })];
     }
 
@@ -231,12 +232,25 @@ public class MorganaAgentAdapter
             ? KeepSoundWorkflows(intentAttribute.Intent, agentType, toolRegistryService.GetWorkflowDefinitions(intentAttribute.Intent), [.. domainTools, .. mcpToolDefinitions])
             : toolRegistryService.GetWorkflowDefinitions(intentAttribute.Intent);
 
+        // The menu is written by code from the declared menu entries: a workflow withdrawn above is no button.
+        // An MCP tool carries no menu entry. A tool leads to itself and a workflow to its launcher.
+        IReadOnlyList<Records.ReplyAction> menu =
+        [
+            .. domainTools.Where(tool => tool.MenuEntry is not null)
+                .Select(tool => (tool.MenuEntry!.Ordinal, Action: new Records.ReplyAction(tool.Name, tool.MenuEntry.Label, tool.MenuEntry.Label)))
+                .Concat(workflowDefinitions.Where(workflow => workflow.MenuEntry is not null)
+                    .Select(workflow => (workflow.MenuEntry!.Ordinal, Action: new Records.ReplyAction(Constants.Workflows.LauncherPrefix + workflow.Name, workflow.MenuEntry.Label, workflow.MenuEntry.Label))))
+                .OrderBy(entry => entry.Ordinal)
+                .Select(entry => entry.Action)
+        ];
+
         // The variable store that context-scoped parameters resolve from. The callback carries every
         // shared write into the conversation's cross-agent registry.
         MorganaAIContextProvider morganaAIContextProvider = CreateAIContextProvider(
             intentAttribute.Intent,
             agentTools,
             workflowDefinitions,
+            menu,
             sharedContextCallback);
 
         // Filled once every tool is known below and read by Reply at every call: the tools that a user
@@ -319,29 +333,34 @@ public class MorganaAgentAdapter
         MorganaChatHistoryProvider chatHistoryProvider = new MorganaChatHistoryProvider(
             intentAttribute.Intent, chatReducer, logger, promptComposerService: promptComposerService);
 
-        // The tool loop the agent runs on. Reply's argument errors go back to the model in full, so a
-        // card breaking its schema is repaired on the next call rather than lost; every other tool
-        // fails tersely, keeping a domain tool's internals out of the model's sight.
-        // Below the loop, a response asking for the user's approval waits for the turn's text and loses its
-        // Reply: that turn is the framework's to close, with the approval buttons.
-        // Between the loop and the approval client, the tools that the workflow state allows are what the model is offered.
-        FunctionInvokingChatClient toolLoopChatClient = new FunctionInvokingChatClient(
-            new WorkflowToolsChatClient(
-                new ApprovalTurnChatClient(agentChatClient, await promptComposerService.ComposeReplyNotAcceptedAsync(
-                    await promptComposerService.ComposeToolInjectionAsync(Constants.ToolInjections.ReplyWithoutText))),
-                sessionAccessor, morganaAIContextProvider, workflowDefinitions, MaxConsultationRoundsPerTurn))
-        {
-            FunctionInvoker = (context, cancellationToken) => InvokeToolAsync(context, agentWorkflows, cancellationToken)
-        };
+        // What the model is told when Reply is dropped from an approval turn, and when a turn ends without Reply.
+        string approvalTextMissingRefusal = await promptComposerService.ComposeReplyNotAcceptedAsync(
+            ReplyTool.NoTextReason());
+        string? turnClosureRequest = await promptComposerService.ComposeTurnClosureRequestAsync();
+        string turnClosedResult = await promptComposerService.ComposeToolInjectionAsync(Constants.ToolInjections.TurnClosed);
 
-        // Above the loop, where a whole turn is visible: a turn that the model wrote without Reply is
-        // closed here, on whichever path the provider supports.
-        TurnClosingChatClient turnClosingChatClient = new TurnClosingChatClient(
-            toolLoopChatClient,
-            await promptComposerService.ComposeTurnClosureRequestAsync(),
-            await promptComposerService.ComposeToolInjectionAsync(Constants.ToolInjections.TurnClosed),
-            llmService.CanForceToolCall(tierAttribute.Tier),
-            logger);
+        // The agent's client chain, outermost first: the builder wraps the first registration around all the others.
+        IChatClient agentChain = new ChatClientBuilder(agentChatClient)
+            // Above the loop, where a whole turn is visible: a turn that the model wrote without Reply is
+            // closed here, on whichever path the provider supports.
+            .Use(innerClient => new TurnClosingChatClient(
+                innerClient,
+                turnClosureRequest,
+                turnClosedResult,
+                llmService.CanForceToolCall(tierAttribute.Tier),
+                logger))
+            // The tool loop the agent runs on. Reply's argument errors go back to the model in full, so a
+            // card breaking its schema is repaired on the next call rather than lost; every other tool
+            // fails tersely, keeping a domain tool's internals out of the model's sight.
+            .UseFunctionInvocation(configure: toolLoop =>
+                toolLoop.FunctionInvoker = (context, cancellationToken) => InvokeToolAsync(context, agentWorkflows, cancellationToken))
+            // Between the loop and the approval client, the tools that the workflow state allows are what the model is offered.
+            .Use(innerClient => new WorkflowToolsChatClient(
+                innerClient, sessionAccessor, morganaAIContextProvider, workflowDefinitions, MaxConsultationRoundsPerTurn))
+            // Below the loop, a response asking for the user's approval waits for the turn's text and loses its
+            // Reply: that turn is the framework's to close, with the approval buttons.
+            .Use(innerClient => new ApprovalTurnChatClient(innerClient, approvalTextMissingRefusal))
+            .Build();
 
         // A launcher exists only for a workflow that the agent keeps.
         List<AIFunction> launcherFunctions = agentWorkflows is null
@@ -352,7 +371,7 @@ public class MorganaAgentAdapter
                 () => LaunchWorkflowAsync(workflow, agentWorkflows)))];
 
         // The agent: its providers, a stable id per intent and conversation with its composed instructions and tools.
-        AIAgent aiAgent = turnClosingChatClient.AsAIAgent(
+        AIAgent aiAgent = agentChain.AsAIAgent(
             new ChatClientAgentOptions
             {
                 AIContextProviders = [morganaAIContextProvider],
@@ -364,19 +383,31 @@ public class MorganaAgentAdapter
                     // The instructions close with the colleagues declaration where the agent holds colleagues.
                     Instructions = await ComposeInstructionsWithColleaguesAsync(
                         agentPrompt,
-
-                        // Both ends of the topology, not just the asking one: an agent that consults
-                        // nobody still reads the peer-consultation rules, because with the ring raised
-                        // whole a colleague's question can land on it at any turn.
                         PeerConsultationEnabled,
                         peerTerritories),
-                    Tools = [.. await morganaToolAdapter.CreateAllFunctionsAsync(), .. mcpTools, .. peerAgents, .. launcherFunctions]
+                    Tools = [.. await CreateNativeFunctionsAsync(morganaToolAdapter, actionableToolNames), .. mcpTools, .. peerAgents, .. launcherFunctions]
                 }
             });
 
         // The caller keeps both providers beside the agent, since it reads and rewrites context and
         // history between turns, outside the agent's own runs.
         return (aiAgent, morganaAIContextProvider, chatHistoryProvider);
+    }
+
+    /// <summary>
+    /// Creates the agent's native tools, Reply among them shaped to the tools that an action of this agent may lead to.
+    /// </summary>
+    /// <param name="morganaToolAdapter">The adapter holding the agent's native tools.</param>
+    /// <param name="actionableToolNames">The tools that an action may lead to; complete by the time the tools are created.</param>
+    private static async Task<AIFunction[]> CreateNativeFunctionsAsync(MorganaToolAdapter morganaToolAdapter, IReadOnlyCollection<string> actionableToolNames)
+    {
+        // The tools as the adapter built them.
+        AIFunction[] functions = await morganaToolAdapter.CreateAllFunctionsAsync();
+
+        // Reply alone is shaped: the schema it publishes must state what its own validation accepts for this agent.
+        return [.. functions.Select(function => string.Equals(function.Name, Constants.Tools.Reply, StringComparison.Ordinal)
+            ? ReplyTool.NarrowSchemaToAgent(function, actionableToolNames)
+            : function)];
     }
 
     /// <summary>
@@ -424,8 +455,10 @@ public class MorganaAgentAdapter
 
             // The model reads a note in place of the result, so it is told the fact.
             return await promptComposerService.ComposeToolInjectionAsync(
-                Constants.ToolInjections.ToolNotAtThisStep,
-                ToolNotAtThisStepValues(context.Function.Name, workflowName));
+                Constants.ToolInjections.CallNotAvailable,
+                CallNotAvailableValues(
+                    context.Function.Name,
+                    UnavailableReason(workflow: workflowName, step: runningWorkflow?.Step.Name)));
         }
 
         // The values that the previous step carried are written into the call, over what the model passed.
@@ -441,7 +474,7 @@ public class MorganaAgentAdapter
         }
         catch (Exception ex) when (ex is not OperationCanceledException && isReply)
         {
-            // Arguments breaking their schema: the reason is the deserializer's own account of what is wrong.
+            // Arguments breaking their schema or the rules Reply holds them to: the reason is the account of what is wrong.
             logger.LogWarning("Reply refused: {Reason}", ex.Message);
             return await promptComposerService.ComposeReplyNotAcceptedAsync(ex.Message);
         }
@@ -546,13 +579,38 @@ public class MorganaAgentAdapter
         return await promptComposerService.ComposeWorkflowResultAsync(workflowName, nextPosition?.Step, resultText) ?? result;
     }
 
-    /// <summary>The values of <see cref="Constants.ToolInjections.ToolNotAtThisStep"/>.</summary>
-    private static Dictionary<string, string> ToolNotAtThisStepValues(string toolName, string workflowName)
+    /// <summary>The values of <see cref="Constants.ToolInjections.CallNotAvailable"/>.</summary>
+    private static Dictionary<string, string> CallNotAvailableValues(string toolName, string reason)
         => new()
         {
             [Constants.Placeholders.ToolName] = toolName,
-            [Constants.Placeholders.Workflow] = workflowName
+            [Constants.Placeholders.ReplyNotAcceptedReason] = reason
         };
+
+    /// <summary>
+    /// States as a fact why a call cannot run now: the one place where the reasons of <see cref="Constants.ToolInjections.CallNotAvailable"/> are worded.
+    /// </summary>
+    /// <param name="answeringColleague">True when the agent is serving a colleague's question.</param>
+    /// <param name="spentRounds">The consultation rounds that the turn has spent; null when the reason is not the budget.</param>
+    /// <param name="workflow">The workflow that holds the agent; null when the reason is not a workflow.</param>
+    /// <param name="step">The step at which the running workflow stands; null when no workflow runs.</param>
+    private static string UnavailableReason(bool answeringColleague = false, int? spentRounds = null, string? workflow = null, string? step = null)
+    {
+        // A colleague's answer is final: the agent that serves it consults no further colleague.
+        if (answeringColleague)
+            return "you are answering a colleague and a colleague consults no further colleague";
+
+        // The budget of rounds is per turn and the turn has used all of it.
+        if (spentRounds is { } rounds)
+            return string.Create(CultureInfo.InvariantCulture, $"this turn has spent its {rounds} consultation rounds");
+
+        // A running workflow offers only the tools of its current step.
+        if (step is not null)
+            return $"step '{step}' of workflow '{workflow}' does not hold it";
+
+        // With no workflow running, a first-step tool is reached through the launcher of its workflow alone.
+        return $"workflow '{workflow}' is entered through its launcher only";
+    }
 
     /// <summary>
     /// Starts one workflow of the agent and stores where it stands, unless the call is not one that may open a workflow.
@@ -575,19 +633,20 @@ public class MorganaAgentAdapter
         bool isRunning = storedPosition?.Resolve(workflows.Definitions) is not null;
         if (isRunning || isServingConsultation)
             return new Records.FrameworkToolResult(
-                Constants.ToolInjections.ToolNotAtThisStep,
-                ToolNotAtThisStepValues(launcherName, isRunning ? storedPosition!.Workflow : definition.Name));
+                Constants.ToolInjections.CallNotAvailable,
+                CallNotAvailableValues(
+                    launcherName,
+                    isServingConsultation
+                        ? UnavailableReason(answeringColleague: true)
+                        : UnavailableReason(workflow: storedPosition!.Workflow, step: storedPosition.Step)));
 
         // The workflow starts at its first step and the session keeps the position across turns.
         Records.WorkflowPosition position = await workflows.Engine.LaunchAsync(definition.Name);
         workflows.ContextProvider.SetWorkflowPosition(session, position);
 
-        // The model learns which workflow and step it stands at.
-        return new Records.FrameworkToolResult(Constants.ToolInjections.WorkflowStarted, new Dictionary<string, string>
-        {
-            [Constants.Placeholders.Workflow] = definition.Name,
-            [Constants.Placeholders.Step] = position.Step
-        });
+        // The model learns which workflow and step it stands at: the header of the step reached, with no result to follow it yet.
+        string? stepReached = await promptComposerService.ComposeWorkflowResultAsync(definition.Name, position.Step, string.Empty);
+        return stepReached?.TrimEnd();
     }
 
     /// <summary>
@@ -598,6 +657,7 @@ public class MorganaAgentAdapter
     /// <param name="agentName">Name of the agent for logging purposes (e.g., "billing")</param>
     /// <param name="tools">Tool definitions to scan for shared variable declarations</param>
     /// <param name="workflows">The agent's workflows, which the provider hands to whoever resolves a stored position.</param>
+    /// <param name="menu">The agent's menu, which the provider hands to whoever closes a presenting turn.</param>
     /// <param name="sharedContextCallback">
     /// Optional callback invoked when a shared variable is set. Wired to agent's
     /// OnSharedContextUpdate which persists the value via IConversationPersistenceService.
@@ -607,6 +667,7 @@ public class MorganaAgentAdapter
         string agentName,
         IEnumerable<Records.ToolDefinition> tools,
         IReadOnlyList<Records.WorkflowDefinition> workflows,
+        IReadOnlyList<Records.ReplyAction> menu,
         Func<string, object, Task>? sharedContextCallback = null)
     {
         // A parameter is shared across agents only when it is both flagged shared and context-scoped: a
@@ -625,7 +686,7 @@ public class MorganaAgentAdapter
                 : $"Agent '{agentName}' has NO shared variables");
 
         // Only a write to a name in this set reaches the registry: every other variable stays with the agent.
-        MorganaAIContextProvider aiContextProvider = new MorganaAIContextProvider(logger, sharedVariables, workflows: workflows);
+        MorganaAIContextProvider aiContextProvider = new MorganaAIContextProvider(logger, sharedVariables, workflows: workflows, menu: menu);
 
         // An agent created outside the actor path has no callback: its shared writes stay local.
         if (sharedContextCallback != null)
@@ -653,16 +714,17 @@ public class MorganaAgentAdapter
         // at invocation, so the model never looks a value up nor stores one itself.
         MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(logger, toolContextFactory, promptComposerService);
 
-        // The merged set is split back into Reply and the intent's own tools. They are compared by name
+        // The merged set is split back into the base tools and the intent's own tools. They are compared by name
         // because the merge may carry distinct instances of the same tool, whose identity is its name.
         Records.ToolDefinition[] agentSpecificTools = [.. agentTools.Except(morganaTools, new ToolDefinitionNameComparer())];
 
-        // Every agent registers Reply, so all of them close their turns the same way, even an MCP-only one.
-        MorganaTool baseTool = new ReplyTool(logger, toolContextFactory);
-        RegisterToolsInAdapter(morganaToolAdapter, baseTool, morganaTools);
+        // Every agent registers Reply and Present, so all of them close their turns and present themselves the same way, even an MCP-only one.
+        // Each definition binds to the instance of its own class.
+        RegisterToolsInAdapter(morganaToolAdapter, new ReplyTool(logger, toolContextFactory), [.. morganaTools.Where(tool => tool.Name == Constants.Tools.Reply)]);
+        RegisterToolsInAdapter(morganaToolAdapter, new PresentTool(logger, toolContextFactory), [.. morganaTools.Where(tool => tool.Name == Constants.Tools.Present)]);
         logger.LogInformation("Registered {BaseToolsLength} base tools for intent '{Intent}'", morganaTools.Length, intent);
 
-        // An agent that declares no domain tool is complete with Reply alone.
+        // An agent that declares no domain tool is complete with its base tools alone.
         if (agentSpecificTools.Length == 0)
         {
             logger.LogInformation("No intent-specific tools defined for intent '{Intent}' (agent has base tools only)", intent);
@@ -692,7 +754,7 @@ public class MorganaAgentAdapter
                 $"(ILogger, Func<MorganaTool.ToolContext>).", ex);
         }
 
-        // Reply is already bound to its own instance above, so only the domain definitions bind here.
+        // The base tools are already bound to their own instances above, so only the domain definitions bind here.
         RegisterToolsInAdapter(morganaToolAdapter, customToolInstance, agentSpecificTools);
         logger.LogInformation("Registered {Length} custom tools for intent '{Intent}'", agentSpecificTools.Length, intent);
 
@@ -979,7 +1041,9 @@ public class MorganaAgentAdapter
         if (contextProvider.GetVariable(callerSession, Constants.ContextKeys.ServingConsultation) is not null)
         {
             logger.LogWarning("Agent '{CallerIntent}' attempted to consult '{PeerIntent}' while itself answering a colleague", callerIntent, peerIntent);
-            return RefusalEnvelope(await promptComposerService.ComposeToolInjectionAsync(Constants.ToolInjections.ConsultationChained));
+            return RefusalEnvelope(await promptComposerService.ComposeToolInjectionAsync(
+                Constants.ToolInjections.CallNotAvailable,
+                CallNotAvailableValues(peerIntent, UnavailableReason(answeringColleague: true))));
         }
 
         // The second rule: a cap on how many rounds one user turn may spend talking to colleagues. Once it
@@ -989,8 +1053,8 @@ public class MorganaAgentAdapter
         {
             logger.LogWarning("Agent '{CallerIntent}' exhausted its {MaxRounds} consultation round(s) for this turn", callerIntent, maxRoundsPerTurn);
             return RefusalEnvelope(await promptComposerService.ComposeToolInjectionAsync(
-                Constants.ToolInjections.ConsultationRoundsExhausted,
-                new Dictionary<string, string> { [Constants.Placeholders.ConsultationRounds] = roundsSoFar.ToString(CultureInfo.InvariantCulture) }));
+                Constants.ToolInjections.CallNotAvailable,
+                CallNotAvailableValues(peerIntent, UnavailableReason(spentRounds: roundsSoFar))));
         }
 
         // Charged before the colleague is called, not after it answers: a consultation that hangs or
@@ -1139,7 +1203,10 @@ public class MorganaAgentAdapter
 
                     // The name is taken from here on, so a later server cannot repeat it.
                     heldNames.Add(discoveredTool.Name);
-                    mcpTools.Add(discoveredTool);
+
+                    // The server's output schema reaches the model through the description, since no provider transmits a return schema.
+                    string contractDescription = await promptComposerService.ComposeReturnContractAsync(discoveredTool.Description, discoveredTool.ReturnJsonSchema);
+                    mcpTools.Add(new MorganaToolAdapter.DescribedFunction(discoveredTool, contractDescription));
                 }
             }
             catch (Exception ex)

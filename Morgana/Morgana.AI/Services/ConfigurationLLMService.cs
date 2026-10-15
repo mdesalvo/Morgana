@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -21,12 +22,6 @@ public class ConfigurationLLMService : ILLMService
     private readonly IConfiguration configuration;
 
     /// <summary>
-    /// Morgana framework prompt loaded at construction time. Provides user-facing error message
-    /// templates used when LLM calls fail or return unusable content.
-    /// </summary>
-    private readonly Records.Prompt morganaPrompt;
-
-    /// <summary>
     /// Per-tier client, pricing and forced-tool capability. All three tiers are always present.
     /// </summary>
     private readonly Dictionary<Records.LLMTier, (IChatClient Client, Records.MagicDustPricing Pricing, bool CanForceToolCall)> tierClients = new();
@@ -36,7 +31,7 @@ public class ConfigurationLLMService : ILLMService
 
     /// <summary>
     /// Logger factory used to instrument the chat client pipeline (in particular,
-    /// <see cref="OpenTelemetryChatClient"/> via <see cref="WrapWithTelemetry"/>). May be
+    /// <see cref="OpenTelemetryChatClient"/> via <see cref="UseTelemetryWhenEnabled"/>). May be
     /// <c>null</c> in test scenarios; in that case the telemetry decorator is skipped.
     /// </summary>
     private readonly ILoggerFactory? loggerFactory;
@@ -45,7 +40,7 @@ public class ConfigurationLLMService : ILLMService
     /// Dust limiter, wired post-construction by <see cref="EnableDustAccounting"/> from
     /// Program.cs (DI ordering: the limiter depends on persistence, registered after the LLM).
     /// Null until wired or whenever dust limiting is disabled — in which case
-    /// <see cref="CompleteWithSystemPromptAsync"/> uses the bare chat client.
+    /// <see cref="CompleteStructuredAsync{T}"/> uses the bare chat client.
     /// </summary>
     private IDustLimitService? dustLimitService;
 
@@ -57,7 +52,7 @@ public class ConfigurationLLMService : ILLMService
 
     /// <summary>
     /// Wires dust accounting for framework-actor LLM calls (guard, classifier, presenter,
-    /// channel adapter) routed through <see cref="CompleteWithSystemPromptAsync"/>. Called
+    /// channel adapter) routed through <see cref="CompleteStructuredAsync{T}"/>. Called
     /// once from Program.cs after both this service and <see cref="IDustLimitService"/> are
     /// constructed. Agent calls are metered separately by
     /// <see cref="Adapters.MorganaAgentAdapter"/> with a per-agent role.
@@ -72,10 +67,9 @@ public class ConfigurationLLMService : ILLMService
     }
 
     /// <summary>
-    /// Builds the client of each of the three tiers and loads the Morgana framework prompt for error message templates.
+    /// Builds the client of each of the three tiers.
     /// </summary>
     /// <param name="configuration">Application configuration holding <c>Morgana:LLM:Tiers</c> and <c>Morgana:ActorSystem:Tier</c></param>
-    /// <param name="promptResolverService">Service for resolving prompt templates</param>
     /// <param name="loggerFactory">
     /// Optional logger factory used to instrument the chat client with the MEAI OpenTelemetry
     /// decorator. Pass <c>null</c> to skip the decorator (test paths, unit tests).
@@ -86,15 +80,10 @@ public class ConfigurationLLMService : ILLMService
     /// </exception>
     public ConfigurationLLMService(
         IConfiguration configuration,
-        IPromptResolverService promptResolverService,
         ILoggerFactory? loggerFactory = null)
     {
         this.configuration = configuration;
         this.loggerFactory = loggerFactory;
-
-        // Loads the framework prompt once at startup, so the error-message templates it
-        // carries are ready before the first LLM call ever happens.
-        morganaPrompt = promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
 
         // Checked before binding: the binder's own message for a record constructor parameter
         // that finds no configuration does not name the key that the deployer has to add.
@@ -173,12 +162,20 @@ public class ConfigurationLLMService : ILLMService
                 throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier}:Connection:{ex.Message}", ex);
             }
 
-            // Applied as the OUTERMOST decorator so it sees (and only fills in, never overrides) the
-            // ChatOptions the caller — Microsoft.Agents.AI for domain agents, CompleteWithSystemPromptAsync
-            // for framework actors — actually sent, whatever sits underneath it.
-            IChatClient client = new TierDefaultsChatClient(
-                WrapWithTelemetry(languageModel.CreateChatClient(definition.Connection, definition.Options)),
-                definition.Options.ToChatOptions());
+            // The tier's chain, outermost first: the defaults layer sees (and only fills in, never overrides) the
+            // ChatOptions that every caller above sent, Microsoft.Agents.AI for domain agents and
+            // CompleteStructuredAsync for framework actors alike.
+            // Provider SDKs disagree on null fields (the Anthropic adapter falls back to a 1024-token ceiling), hence both are filled.
+            ChatOptions tierDefaultOptions = definition.Options.ToChatOptions();
+            ChatClientBuilder tierBuilder = new ChatClientBuilder(languageModel.CreateChatClient(definition.Connection, definition.Options))
+                .ConfigureOptions(callerOptions =>
+                {
+                    // The callback receives a copy, so the caller's reusable options stay unchanged.
+                    callerOptions.ModelId ??= tierDefaultOptions.ModelId;
+                    callerOptions.MaxOutputTokens ??= tierDefaultOptions.MaxOutputTokens;
+                });
+            UseTelemetryWhenEnabled(tierBuilder);
+            IChatClient client = tierBuilder.Build();
 
             // The tier is served from here on: its client, its price and whether a tool call can be forced on it.
             tierClients[tier] = (client, definition.MagicDust, languageModel.CanForceToolCall);
@@ -210,94 +207,70 @@ public class ConfigurationLLMService : ILLMService
     public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => tierClients[tier].Pricing;
 
     /// <summary>
-    /// Wraps the supplied <paramref name="innerChatClient"/> chat client with the MEAI
-    /// <see cref="OpenTelemetryChatClient"/> decorator so every request emits OTel spans and
-    /// metrics under the standard <c>gen_ai.*</c> semantic conventions (input/output token
-    /// counts, cache_read input tokens, model name, response latency, errors).
+    /// Adds the MEAI <see cref="OpenTelemetryChatClient"/> layer to a tier's <paramref name="tierBuilder"/> when telemetry is enabled,
+    /// so every request emits spans and metrics under the standard <c>gen_ai.*</c> semantic conventions.
     /// </summary>
-    /// <param name="innerChatClient">The chat client to wrap (typically the raw provider client, possibly
-    /// already wrapped by a provider-specific decorator like Anthropic's no-prefill guard).</param>
-    /// <returns>
-    /// The instrumented chat client when <see cref="loggerFactory"/> is available and
-    /// <c>Morgana:OpenTelemetry:Enabled</c> is true; otherwise <paramref name="innerChatClient"/>
-    /// unchanged. Provider-agnostic — every tier goes through this single hook.
-    /// </returns>
-    private IChatClient WrapWithTelemetry(IChatClient innerChatClient)
+    private void UseTelemetryWhenEnabled(ChatClientBuilder tierBuilder)
     {
         // Without a logger factory or with telemetry switched off the tier is served bare.
         if (loggerFactory is null || !configuration.GetValue("Morgana:OpenTelemetry:Enabled", true))
-            return innerChatClient;
+            return;
 
         // Prompt and response bodies reach the exporters only where the deployer opted in.
         bool enableSensitiveData = configuration.GetValue("Morgana:OpenTelemetry:EnableSensitiveData", false);
-        return new ChatClientBuilder(innerChatClient)
-            .UseOpenTelemetry(loggerFactory, Telemetry.LLMChatClientSourceName, otel => otel.EnableSensitiveData = enableSensitiveData)
-            .Build();
+
+        // The layer sits below the defaults layer, so the spans carry the model and ceiling that were actually sent.
+        tierBuilder.UseOpenTelemetry(loggerFactory, Telemetry.LLMChatClientSourceName, otel => otel.EnableSensitiveData = enableSensitiveData);
     }
 
-    /// <summary>
-    /// Performs a completion with an explicit system prompt and user message.
-    /// Primary method for actors performing stateless LLM operations (classification, guard checks).
-    /// </summary>
-    /// <param name="conversationId">Unique identifier of the conversation (used for logging)</param>
-    /// <param name="systemPrompt">System prompt defining LLM behavior</param>
-    /// <param name="userPrompt">User message to process</param>
-    /// <returns>
-    /// LLM response text with markdown code fences removed.
-    /// On error, returns user-friendly error message from Morgana prompt configuration.
-    /// </returns>
-    public async Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt)
+    /// <inheritdoc/>
+    public async Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null)
     {
+        // This is how Morgana's own framework actors get an LLM, as opposed to how a
+        // domain agent gets one: Guard, Classifier, Presenter and ChannelAdapter all call
+        // THIS method (never GetChatClient(tier)), so they always run on the tier that
+        // Morgana:ActorSystem:Tier names. They have no [RequiresLLMTier] of their own;
+        // a domain agent, by contrast, is built by MorganaAgentAdapter against its own
+        // declared tier via GetChatClient(tier)/GetPricing(tier) and never touches this method.
+        //
+        // Framework-actor calls are metered under the bare framework role, which is what tells a
+        // reader of the ledger that a charge belongs to the pipeline rather than to any agent.
+        IChatClient frameworkChatClient = GetChatClient(FrameworkTier);
+        IChatClient client = dustLimitService is not null && dustPricing is not null
+            ? new DustAccountingChatClient(frameworkChatClient, dustLimitService, dustPricing, Constants.Morgana)
+            : frameworkChatClient;
+
+        // The provider is held to a schema: the caller's narrowed one where it gave one, else the one
+        // generated from the type with the options that deserialize the answer, so the two cannot drift.
+        ChatResponseFormat responseFormat = responseSchema is { } narrowedSchema
+            ? ChatResponseFormat.ForJsonSchema(narrowedSchema, typeof(T).Name)
+            : ChatResponseFormat.ForJsonSchema<T>(Records.DefaultJsonSerializerOptions);
+
+        // These two messages are the entire request: no history, no session, no tools and nothing
+        // carried over from the caller's previous call. That is what makes this method the
+        // stateless half of the LLM surface — a framework actor asks one question and is answered
+        // once, where an agent's turn accumulates in a session. The conversation id travels on the
+        // options so the call is attributable to the conversation that provoked it.
+        ChatResponse response = await client.GetResponseAsync(
+            [
+                new ChatMessage(ChatRole.System, systemPrompt),
+                new ChatMessage(ChatRole.User, userPrompt)
+            ],
+            new ChatOptions
+            {
+                ConversationId = conversationId,
+                ResponseFormat = responseFormat
+            });
+
         try
         {
-            // This is how Morgana's own framework actors get an LLM, as opposed to how a
-            // domain agent gets one: Guard, Classifier, Presenter and ChannelAdapter all call
-            // THIS method (never GetChatClient(tier)), so they always run on the tier that
-            // Morgana:ActorSystem:Tier names. They have no [RequiresLLMTier] of their own;
-            // a domain agent, by contrast, is built by MorganaAgentAdapter against its own
-            // declared tier via GetChatClient(tier)/GetPricing(tier) and never touches this method.
-            //
-            // Framework-actor calls are metered under the bare framework role, which is what tells a
-            // reader of the ledger that a charge belongs to the pipeline rather than to any agent.
-            IChatClient frameworkChatClient = GetChatClient(FrameworkTier);
-            IChatClient client = dustLimitService is not null && dustPricing is not null
-                ? new DustAccountingChatClient(frameworkChatClient, dustLimitService, dustPricing, Constants.Morgana)
-                : frameworkChatClient;
-
-            // These two messages are the entire request: no history, no session, no tools and nothing
-            // carried over from the caller's previous call. That is what makes this method the
-            // stateless half of the LLM surface — a framework actor asks one question and is answered
-            // once, where an agent's turn accumulates in a session. The conversation id travels on the
-            // options so the call is attributable to the conversation that provoked it.
-            ChatResponse response = await client.GetResponseAsync(
-                [
-                    new ChatMessage(ChatRole.System, systemPrompt),
-                    new ChatMessage(ChatRole.User, userPrompt)
-                ],
-                new ChatOptions
-                {
-                    ConversationId = conversationId
-                });
-
-            // The framework actors parse JSON, which a model sometimes wraps in a markdown fence.
-            return response.Text
-                .Replace("```json", string.Empty)
-                .Replace("```", string.Empty);
+            // The schema constrains the provider, not the deserializer: an answer that still does not fit the type is no answer.
+            return JsonSerializer.Deserialize<T>(response.Text, Records.DefaultJsonSerializerOptions);
         }
-        catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } cre
-                                     && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
+        catch (JsonException)
         {
-            // A provider-level content filter rejection (e.g. Azure Prompt Shields) is not a
-            // transient service error — swallowing it into the generic fallback text below would
-            // hide a genuine signal from callers equipped to act on it (see LLMGuardRailService,
-            // which treats this as compliant:false rather than fail-open). Classifier/Presenter/
-            // ChannelAdapter have their own broad catch-all fallbacks and handle it there instead.
-            throw;
-        }
-        catch (Exception)
-        {
-            // Any other failure is answered in Morgana's voice: the framework actors cannot act on a provider error.
-            return morganaPrompt.GetMessage(Constants.Messages.GenericError);
+            // The caller owns the fallback for a missing answer; a malformed one is the same case.
+            return default;
         }
     }
 }

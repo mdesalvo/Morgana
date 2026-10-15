@@ -445,6 +445,14 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
         if (messages.Count == 0)
             return;
 
+        // Every assistant line on Morgana's row is user-facing by nature, since she has no scratchpad: marking
+        // it here, where her row is written, lets the history show the buttons recorded beside it like an agent's turn.
+        foreach (ChatMessage assistantMessage in messages.Where(message => message.Role == ChatRole.Assistant))
+        {
+            assistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
+            assistantMessage.AdditionalProperties[Constants.MessageProperties.UserFacing] = true;
+        }
+
         // Morgana's row is keyed like an agent's so every participant is reached the same way.
         string orchestratorIdentifier = $"{Constants.Morgana}-{conversationId}";
 

@@ -22,6 +22,7 @@ public static class StreamedCompletion
     /// <param name="onResume">Reports the length written so far each time the answer is resumed.</param>
     /// <param name="onStall">Reports the length reached each time a silent round is retried.</param>
     /// <param name="cancellationToken">Stops the completion when the client leaves the page.</param>
+    /// <param name="responseFormat">The schema that the provider holds the answer to; null leaves the answer free text.</param>
     /// <returns>The whole answer, fence stripped; empty when the model produced no text at all.</returns>
     /// <exception cref="TimeoutException">The round went silent twice.</exception>
     public static async Task<string> RunAsync(
@@ -31,7 +32,8 @@ public static class StreamedCompletion
         string continuationRequest,
         Action<int>? onResume = null,
         Action<int>? onStall = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ChatResponseFormat? responseFormat = null)
     {
         // The conversation opens with the artifact's composed prompt and the request to write it.
         List<ChatMessage> conversation =
@@ -50,7 +52,7 @@ public static class StreamedCompletion
             int start = answer.Length;
 
             // One round: the model writes until it stops or the provider cuts it off.
-            ChatFinishReason? finishReason = await RoundAsync(chatClient, conversation, answer, onStall, cancellationToken);
+            ChatFinishReason? finishReason = await RoundAsync(chatClient, conversation, answer, onStall, responseFormat, cancellationToken);
 
             // Any end other than the output limit means the artifact is finished.
             if (finishReason != ChatFinishReason.Length)
@@ -85,6 +87,7 @@ public static class StreamedCompletion
         List<ChatMessage> conversation,
         StringBuilder answer,
         Action<int>? onStall,
+        ChatResponseFormat? responseFormat,
         CancellationToken cancellationToken)
     {
         // Where the round starts, so a stalled attempt can be rolled back to it.
@@ -106,7 +109,7 @@ public static class StreamedCompletion
             {
                 // The output ceiling is Alembic's own since a source file's length is a property of the toolkit it describes.
                 await foreach (ChatResponseUpdate update in chatClient.GetStreamingResponseAsync(
-                                   conversation, new ChatOptions { MaxOutputTokens = CodeEmitService.OutputCeiling }, stall.Token))
+                                   conversation, new ChatOptions { MaxOutputTokens = CodeEmitService.OutputCeiling, ResponseFormat = responseFormat }, stall.Token))
                 {
                     // A token arrived: the silence deadline starts again.
                     stall.CancelAfter(StallTimeout);

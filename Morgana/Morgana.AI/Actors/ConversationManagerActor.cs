@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Akka.Actor;
 using Akka.Event;
 using Microsoft.Extensions.AI;
@@ -285,9 +286,21 @@ public class ConversationManagerActor : MorganaActor
         // the conversation — otherwise a client rereading the history finds its own question with
         // no answer under it.
         if (response.RecordedTimestamp is null)
-            await conversationPersistenceService.AppendOrchestratorMessagesAsync(
-                conversationId,
-                [new ChatMessage(ChatRole.Assistant, response.Response) { CreatedAt = answerTimestamp }]);
+        {
+            // Morgana's line is filed dated like the push it accompanies.
+            ChatMessage morganaMessage = new ChatMessage(ChatRole.Assistant, response.Response) { CreatedAt = answerTimestamp };
+
+            // The buttons she offered are recorded beside the line, so that a press of one is recognised as the
+            // choice of an agent at the next turn: this is what records the disambiguation buttons.
+            if (response.QuickReplies is { Count: > 0 })
+            {
+                morganaMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
+                morganaMessage.AdditionalProperties[Constants.MessageProperties.TurnQuickReplies] =
+                    JsonSerializer.Serialize(response.QuickReplies, Records.DefaultJsonSerializerOptions);
+            }
+
+            await conversationPersistenceService.AppendOrchestratorMessagesAsync(conversationId, [morganaMessage]);
+        }
 
         try
         {

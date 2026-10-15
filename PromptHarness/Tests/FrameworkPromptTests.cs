@@ -1,5 +1,12 @@
+using System.Text.Json;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Morgana.AI;
+using Morgana.AI.Adapters;
+using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
+using Morgana.Contracts;
 using PromptHarness.Infrastructure;
 using Xunit;
 
@@ -46,11 +53,19 @@ public sealed class FrameworkPromptTests
 
         Assert.Equivalent(new[]
         {
-            "TurnClosed", "ContextValueMissing", "ReplyWithoutText", "CardTooDeep", "CardTooLarge", "ConsultationChained",
-            "ConsultationRoundsExhausted", "ColleagueCouldNotAnswer", "PeerAtCapacity", "PeerOutOfBudget", "PeerTimedOut", "PeerFailed",
-            "WorkflowStarted", "ToolNotAtThisStep", "StepActionsRequired",
-            "ReplyNotAccepted", "EarlierToolResult", "ExecutionApprovalGuidance", "WorkflowStepReached", "WorkflowEnded"
+            "TurnClosed", "ContextValueMissing", "ColleagueCouldNotAnswer", "CallNotAvailable", "MenuOffered",
+            "ReplyNotAccepted", "EarlierToolResult", "ReturnContract", "ExecutionApprovalGuidance", "WorkflowStepReached", "WorkflowEnded"
         }, toolInjections);
+    }
+
+    [Fact]
+    public async Task FrameworkPrompt_Menu_offered_names_the_actions_where_the_agent_presents_itself()
+    {
+        List<Records.Injection> toolInjections = (await resolver.ResolveAsync("Morgana"))
+            .GetAdditionalProperty<List<Records.Injection>>("ToolInjections");
+
+        // The labels are spliced into this placeholder, so a text that lost it would present an empty menu.
+        Assert.Contains("((actions))", toolInjections.Single(injection => injection.Name == "MenuOffered").Content, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -104,5 +119,111 @@ public sealed class FrameworkPromptTests
         Assert.Equal("[TARGET] Answer billing questions.", Records.Prompt.Labeled("[TARGET]", "Answer billing questions."));
         Assert.Equal("[TARGET] Answer billing questions.", Records.Prompt.Labeled("[TARGET]", "[TARGET] Answer billing questions."));
         Assert.Equal("", Records.Prompt.Labeled("[TARGET]", "  "));
+    }
+
+    [Fact]
+    public async Task FrameworkPrompt_ChannelAdapter_prompt_authors_one_sentence_per_thing_a_channel_cannot_show()
+    {
+        string[] constraints = [.. (await resolver.ResolveAsync("ChannelAdapter"))
+            .GetAdditionalProperty<List<Records.Injection>>("PromptInjections").Select(injection => injection.Name)];
+
+        Assert.Equal(["NoCards", "NoButtons", "NoMarkdown", "MaxLength"], constraints);
+    }
+
+    [Theory]
+    [InlineData(false, false, false, 200, "This channel shows no cards. This channel shows no buttons. This channel renders no markdown. Its messages hold at most 200 characters.")]
+    [InlineData(true, false, true, null, "This channel shows no buttons.")]
+    [InlineData(true, true, true, 1000, "Its messages hold at most 1000 characters.")]
+    [InlineData(true, false, true, 0, "This channel shows no buttons.")]
+    public async Task FrameworkPrompt_ChannelAdapter_tells_the_model_the_facts_of_the_channel_in_plain_sentences(
+        bool supportsRichCards, bool supportsQuickReplies, bool supportsMarkdown, int? maxMessageLength, string expectedConstraints)
+    {
+        CapturingModel model = new CapturingModel();
+        MorganaChannelAdapter adapter = new MorganaChannelAdapter(model, resolver, NullLogger.Instance);
+
+        // Buttons on a message longer than the limit make every capability set above fall short, so the model is always asked.
+        ChannelMessage message = new ChannelMessage
+        {
+            ConversationId = "conversation-1",
+            Text = new string('a', 1500),
+            QuickReplies = [new QuickReply("id", "Label", "value")]
+        };
+        await adapter.AdaptAsync(message, new ChannelCapabilities(supportsRichCards, supportsQuickReplies, false, supportsMarkdown, maxMessageLength));
+
+        // The sentences stand where the prompt reserved them, with no capability object and no placeholder left.
+        Assert.Contains($"its card and its buttons. {expectedConstraints}\n", model.SystemPrompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("((", model.SystemPrompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FrameworkPrompt_Classifier_holds_the_model_to_the_intents_of_the_domain_and_the_complement()
+    {
+        CapturingModel model = new CapturingModel();
+        LLMClassifierService classifier = new LLMClassifierService(
+            model,
+            resolver,
+            new IntentsDomain(
+                new Records.IntentDefinition("billing", "Invoices.", "Invoices", "My invoices"),
+                new Records.IntentDefinition("contract", "Plans.", "Plans", "My plan")),
+            new ConfigurationBuilder().Build(),
+            NullLogger.Instance);
+
+        await classifier.ClassifyAsync("conversation-1", "hello");
+
+        JsonElement intentSchema = model.ResponseSchema!.Value
+            .GetProperty("properties").GetProperty("intents").GetProperty("items").GetProperty("properties").GetProperty("intent");
+        Assert.Equal(["billing", "contract", "other"], intentSchema.GetProperty("enum").EnumerateArray().Select(intent => intent.GetString()));
+    }
+
+    [Fact]
+    public async Task FrameworkPrompt_A_section_that_says_nothing_leaves_no_label_in_the_composed_prompt()
+    {
+        ConfigurationPromptComposerService composer = new ConfigurationPromptComposerService(resolver);
+
+        string withFormatting = await composer.ComposeAgentInstructionsAsync(new Records.Prompt("billing", "Target.", "Instructions.", "Plain text.", null, null, "en-US", "1"));
+        string withoutFormatting = await composer.ComposeAgentInstructionsAsync(new Records.Prompt("billing", "Target.", "Instructions.", "", null, null, "en-US", "1"));
+
+        // The framework layer keeps its own section, so the domain's absence is exactly one label fewer.
+        Assert.Equal(withFormatting.Split("[FORMATTING]").Length - 2, withoutFormatting.Split("[FORMATTING]").Length - 1);
+    }
+
+    /// <summary>The framework tier's model as the actors meet it: it answers nothing and keeps what it was asked.</summary>
+    private sealed class CapturingModel : ILLMService
+    {
+        /// <summary>The system prompt of the last call.</summary>
+        public string SystemPrompt { get; private set; } = string.Empty;
+
+        /// <summary>The schema that the last call narrowed the answer to; null when it was left to the type.</summary>
+        public JsonElement? ResponseSchema { get; private set; }
+
+        /// <inheritdoc />
+        public Records.LLMTier FrameworkTier => Records.LLMTier.Economy;
+
+        /// <inheritdoc />
+        public Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null)
+        {
+            SystemPrompt = systemPrompt;
+            ResponseSchema = responseSchema;
+            return Task.FromResult<T?>(default);
+        }
+
+        /// <inheritdoc />
+        public IChatClient GetChatClient(Records.LLMTier tier) => throw new InvalidOperationException("The actors ask for answers, never a chat client");
+
+        /// <inheritdoc />
+        public bool CanForceToolCall(Records.LLMTier tier) => false;
+
+        /// <inheritdoc />
+        public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => new();
+    }
+
+    /// <summary>A domain declaring the given intents and no agent prompt.</summary>
+    private sealed class IntentsDomain(params Records.IntentDefinition[] intents) : IAgentConfigurationService
+    {
+        /// <inheritdoc />
+        public Task<List<Records.IntentDefinition>> GetIntentsAsync() => Task.FromResult(new List<Records.IntentDefinition>(intents));
+
+        /// <inheritdoc />
+        public Task<List<Records.Prompt>> GetAgentPromptsAsync() => Task.FromResult(new List<Records.Prompt>());
     }
 }

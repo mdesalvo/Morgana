@@ -180,6 +180,19 @@ public class MigrationReportService : IMigrationReportService
                     tool.RequiresExecutionApproval
                         ? "Now waits for the user's approval before it runs. It is an attribute in the generated half, so overwriting that file is all it takes."
                         : "No longer waits for the user's approval before it runs. It is an attribute in the generated half, so overwriting that file is all it takes."));
+
+            // Reported on its own entry since the button is an attribute of the method that the signature entry does not mention.
+            if (baselineTool.MenuEntry != tool.MenuEntry)
+                entries.Add(new MigrationEntry(MigrationKind.Tool, where, MigrationChange.Revised,
+                    (tool.MenuEntry, baselineTool.MenuEntry) switch
+                    {
+                        // The tool never stood on the menu before.
+                        ({ } now, null) => string.Create(CultureInfo.InvariantCulture, $"Now offered on the agent's menu as button {now.Ordinal}, '{now.Label}'."),
+                        // The tool left the menu.
+                        (null, _) => "No longer offered on the agent's menu.",
+                        // The tool stays on the menu with another number or another label.
+                        ({ } now, { } before) => string.Create(CultureInfo.InvariantCulture, $"Now on the agent's menu as button {now.Ordinal}, '{now.Label}' instead of button {before.Ordinal}, '{before.Label}'.")
+                    } + " It is an attribute in the generated half, so overwriting that file is all it takes."));
         }
 
         // A baseline tool that the draft no longer has leaves an orphan method in the client's half.

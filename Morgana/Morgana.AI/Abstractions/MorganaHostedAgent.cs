@@ -189,7 +189,7 @@ public sealed class MorganaHostedAgent : AIAgent
             {
                 // The admission refusal goes back as the answer, in the words this deployment wrote for it.
                 return BuildAgentResponseFromMessage(
-                    refusal.RefusalMessage ?? await ComposeFallbackAsync(Constants.ToolInjections.PeerAtCapacity));
+                    refusal.RefusalMessage ?? await ComposeFallbackAsync());
             }
 
             // Opened before the turn, because a partner's exchange has none until now: the ledger is
@@ -206,8 +206,8 @@ public sealed class MorganaHostedAgent : AIAgent
                     "Hosted agent '{Intent}' refused a request from '{CallerIntent}': conversation '{ConversationId}' is over budget",
                     intent, callerIntent, hostedAgentSession.ConversationId);
 
-                // A conversation that is over budget is answered with the out-of-budget wording.
-                return BuildAgentResponseFromMessage(await ComposeFallbackAsync(Constants.ToolInjections.PeerOutOfBudget));
+                // A conversation that is over budget is answered like any request that cannot be served; the cause stays in the log.
+                return BuildAgentResponseFromMessage(await ComposeFallbackAsync());
             }
 
             // The actor system exists only after the host has started, which is later than this singleton's construction.
@@ -257,13 +257,9 @@ public sealed class MorganaHostedAgent : AIAgent
         {
             logger.LogError(ex, "Hosted agent '{Intent}' failed to serve a request from '{CallerIntent}' on conversation '{ConversationId}'", intent, callerIntent, hostedAgentSession.ConversationId);
 
-            // Only an agent that went silent is reported as one. Anything else — an answer that would
-            // not serialize, an actor that could not be reached — told the asking model to expect a
-            // slow colleague when what it had was a broken one, which is a different thing to decide
-            // against. Either way the instruction is the same: this answer is not coming.
-            return BuildAgentResponseFromMessage(await ComposeFallbackAsync(ex is AskTimeoutException or OperationCanceledException
-                ? Constants.ToolInjections.PeerTimedOut
-                : Constants.ToolInjections.PeerFailed));
+            // A silent agent and a broken one read the same to the asking model: this answer is not coming.
+            // The cause is in the log above and never in the text.
+            return BuildAgentResponseFromMessage(await ComposeFallbackAsync());
         }
     }
 
@@ -271,9 +267,9 @@ public sealed class MorganaHostedAgent : AIAgent
     /// The answer that a caller's model reads when this agent does not serve its request, worded in
     /// morgana.json and naming the agent that did not answer.
     /// </summary>
-    private Task<string> ComposeFallbackAsync(string toolInjectionName)
+    private Task<string> ComposeFallbackAsync()
         => promptComposerService.ComposeToolInjectionAsync(
-            toolInjectionName, new Dictionary<string, string> { [Constants.Placeholders.AgentIntent] = intent });
+            Constants.ToolInjections.ColleagueCouldNotAnswer, new Dictionary<string, string> { [Constants.Placeholders.AgentIntent] = intent });
 
     /// <summary>Streaming form of <see cref="RunCoreAsync"/>, emitting the answer as a single update.</summary>
     /// <remarks>

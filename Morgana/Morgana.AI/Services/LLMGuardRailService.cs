@@ -71,15 +71,12 @@ public class LLMGuardRailService : IGuardRailService
         {
             // The first call of every turn, on the framework tier: it stands between the user
             // and the whole pipeline, so nothing downstream runs until it has answered.
-            string response = await llmService.CompleteWithSystemPromptAsync(
+            // The verdict arrives in the shape of its record, which the provider is held to by schema.
+            // It is null only when the answer could not be read.
+            Records.GuardCheckResponse? llmResult = await llmService.CompleteStructuredAsync<Records.GuardCheckResponse>(
                 conversationId,
                 guardSystemPrompt,
                 message);
-
-            // The verdict, in the shape the Guard prompt's Formatting section asked for. Nothing here
-            // is null when the model answered as instructed.
-            Records.GuardCheckResponse? llmResult = JsonSerializer.Deserialize<Records.GuardCheckResponse>(
-                response, Records.DefaultJsonSerializerOptions);
 
             // For the log line alone. The answer below is decided on the verdict itself.
             bool compliant = llmResult?.Compliant ?? true;

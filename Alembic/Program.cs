@@ -87,11 +87,10 @@ builder.Services.AddSingleton<IAssetPackageService, AssetPackageService>();
 builder.Services.AddSingleton<ILLMService>(sp =>
 {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
-    IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
 
     // The factory builds the chat client of a tier on the first model call.
-    return new ConfigurationLLMService(config, promptResolver, loggerFactory);
+    return new ConfigurationLLMService(config, loggerFactory);
 });
 
 // ============================================================================

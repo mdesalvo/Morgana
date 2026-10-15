@@ -164,7 +164,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                         // Startup stops here, since an intent without a label or a default value cannot be offered as a welcome button.
                         throw new InvalidOperationException(
                             $"Plugin '{declaringAssembly}' declares the intent '{intent.Name}' without a Label or a DefaultValue. "
-                            + "Both are required: the welcome offers every intent as a button that shows its Label and sends its DefaultValue.");
+                            + "Both are required: the welcome offers every intent as a button that shows its Label and sends its DefaultValue, the message that opens that agent's presentation.");
                     }
 
                     // One intent name is one agent: a second plugin claiming it leaves the routing ambiguous.

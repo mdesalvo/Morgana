@@ -346,6 +346,8 @@ public sealed class PeerFederationTests
 
         public IReadOnlyDictionary<string, IReadOnlyList<Records.WorkflowDefinition>> GetAllRegisteredWorkflows()
             => new Dictionary<string, IReadOnlyList<Records.WorkflowDefinition>>();
+
+        public IReadOnlyList<Type> FindWorkflowTypesForIntent(string intent) => [];
     }
 
     /// <summary>Reports an address for this installation, which only a colleague of its own ring is reached at.</summary>

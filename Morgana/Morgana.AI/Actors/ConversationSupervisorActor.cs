@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using Akka.Actor;
 using Akka.Event;
 using Microsoft.Extensions.AI;
@@ -201,6 +202,19 @@ public class ConversationSupervisorActor : MorganaActor
         // Every later stage parents its span on this one.
         ActivityContext turnContext = turnSpan?.Context ?? default;
 
+        // A press of a button that Morgana offered to choose an agent lands the turn on that agent: the
+        // press is the choice, so neither the guard nor the classifier has anything left to decide.
+        string? landingIntent = noActiveAgent ? await FindLandingIntentAsync(msg.Text) : null;
+        if (landingIntent is not null)
+        {
+            // The turn goes to the router with certainty, marked as a landing so that the agent presents itself.
+            actorLogger.Info($"Landing on intent '{landingIntent}': the message is the press of Morgana's button");
+            DispatchToRouter(
+                new Records.ProcessingContext(msg, originalSender, turnCapabilities, TurnContext: turnContext, UserMessageAlreadyStored: noActiveAgent, IsLanding: true),
+                new Records.ClassificationResult(landingIntent, new Dictionary<string, string> { ["confidence"] = "1.00" }));
+            return;
+        }
+
         // Starts "morgana.guard", the first child span under morgana.turn — it exists so the guard
         // check's own latency and compliance verdict show up as their own row in a trace, separate
         // from classification/routing/agent time. Started here, before the Tell to GuardActor
@@ -217,6 +231,43 @@ public class ConversationSupervisorActor : MorganaActor
 
         // The guard sees the message before the classifier or an agent does.
         guard.Tell(new Records.GuardCheckRequest(msg.ConversationId, msg.Text));
+    }
+
+    /// <summary>
+    /// Finds the intent that the user's message chooses when it is the press of a button on Morgana's last line.
+    /// </summary>
+    /// <param name="userText">What the user sent: a pressed button sends its own value.</param>
+    /// <returns>The configured intent that the pressed button names; <c>null</c> when the message is not such a press.</returns>
+    private async Task<string?> FindLandingIntentAsync(string userText)
+    {
+        // Morgana's own line is the one that offered the button, whoever spoke after it.
+        IReadOnlyList<ChatMessage> morganaMessages = await conversationPersistenceService.LoadParticipantMessagesAsync(conversationId, Constants.Morgana);
+        ChatMessage? lastMorganaLine = morganaMessages.LastOrDefault(message => message.Role == ChatRole.Assistant);
+
+        // A saved row hands the recorded buttons back as JSON and a live one as the string that was stored.
+        string? recordedButtons = lastMorganaLine?.AdditionalProperties?.GetValueOrDefault(Constants.MessageProperties.TurnQuickReplies) switch
+        {
+            string text => text,
+            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
+            _ => null
+        };
+
+        // A last line without buttons (a farewell for one) leaves the message an ordinary request.
+        if (string.IsNullOrEmpty(recordedButtons))
+            return null;
+
+        // A press sends the button's own value, so the text that matches an offered value is that button.
+        List<QuickReply>? buttons = JsonSerializer.Deserialize<List<QuickReply>>(recordedButtons, Records.DefaultJsonSerializerOptions);
+        QuickReply? pressedButton = buttons?.FirstOrDefault(button =>
+            string.Equals(button.Value, userText.Trim(), StringComparison.OrdinalIgnoreCase));
+        // Typed text that matches no offered button is an ordinary request.
+        if (pressedButton is null)
+            return null;
+
+        // Only a button naming a configured intent chooses an agent: the framework's own buttons lead nowhere.
+        List<Records.IntentDefinition> configuredIntents = await agentConfigService.GetIntentsAsync();
+        return configuredIntents
+            .FirstOrDefault(intent => string.Equals(intent.Name, pressedButton.Id, StringComparison.OrdinalIgnoreCase))?.Name;
     }
 
     /// <summary>
@@ -248,10 +299,7 @@ public class ConversationSupervisorActor : MorganaActor
         // writing the welcome and delivering it stay two failure domains: a channel outage is never
         // taken for a generation fault.
         Records.PresentationResult result = await presenterService.GenerateAsync(displayableIntents, conversationId);
-        Self.Tell(new Records.PresentationContext(result.Message, displayableIntents)
-        {
-            LLMQuickReplies = result.QuickReplies
-        });
+        Self.Tell(new Records.PresentationContext(result.Message, result.QuickReplies));
     }
 
     /// <summary>
@@ -262,9 +310,8 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("Sending presentation to client via channel");
 
-        // Only Id, Label and Value of each button reach the user: the presentation prompt never asks
-        // the model for a termination flag, so a button here can never end the conversation.
-        List<QuickReply> quickReplies = [.. ctx.LLMQuickReplies?.Select(qr => new QuickReply(qr.Id, qr.Label, qr.Value)) ?? []];
+        // Only Id, Label and Value of each button reach the user, so a button here can never end the conversation.
+        List<QuickReply> quickReplies = [.. ctx.IntentButtons.Select(button => new QuickReply(button.Id, button.Label, button.Value))];
 
         try
         {
@@ -272,9 +319,14 @@ public class ConversationSupervisorActor : MorganaActor
             // anything: dated once here, so the record and the push agree and a returning client
             // recognises the greeting it already has.
             DateTime presentationTimestamp = DateTime.UtcNow;
-            await conversationPersistenceService.AppendOrchestratorMessagesAsync(
-                conversationId,
-                [new ChatMessage(ChatRole.Assistant, ctx.Message) { CreatedAt = presentationTimestamp }]);
+            ChatMessage welcomeMessage = new ChatMessage(ChatRole.Assistant, ctx.Message) { CreatedAt = presentationTimestamp };
+
+            // The buttons are recorded beside the welcome, so that a press of one is recognised as the choice of an agent
+            // at the next turn and the history shows them after a reload.
+            welcomeMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
+            welcomeMessage.AdditionalProperties[Constants.MessageProperties.TurnQuickReplies] =
+                JsonSerializer.Serialize(quickReplies, Records.DefaultJsonSerializerOptions);
+            await conversationPersistenceService.AppendOrchestratorMessagesAsync(conversationId, [welcomeMessage]);
 
             // The channel service degrades the message to the channel's capabilities before the transport sees it.
             await channelService.SendMessageAsync(new ChannelMessage
@@ -549,7 +601,8 @@ public class ConversationSupervisorActor : MorganaActor
             classification,
             ctx.TurnContext,
             ctx.ChannelCapabilities,
-            ctx.UserMessageAlreadyStored));
+            ctx.UserMessageAlreadyStored,
+            ctx.IsLanding));
     }
 
     /// <summary>

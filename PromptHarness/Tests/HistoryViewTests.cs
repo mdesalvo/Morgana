@@ -150,6 +150,7 @@ public sealed class HistoryViewTests
 
         public Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false) => throw new NotSupportedException();
         public Task<string> ComposeToolDescriptionAsync(Records.ToolDefinition toolDefinition) => throw new NotSupportedException();
+        public Task<string> ComposeReturnContractAsync(string description, System.Text.Json.JsonElement? returnSchema) => throw new NotSupportedException();
         public Task<string> ComposePeerDescriptionAsync(A2A.AgentCard peerCard) => throw new NotSupportedException();
         public Task<string?> ComposeColleaguesDeclarationAsync(IReadOnlyDictionary<string, string> colleagues) => throw new NotSupportedException();
         public Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question) => throw new NotSupportedException();

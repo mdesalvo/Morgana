@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
@@ -209,6 +210,37 @@ public sealed class ConversationApiTests
         ConversationHistoryResponse? history = await response.Content.ReadFromJsonAsync<ConversationHistoryResponse>();
         Assert.NotNull(history);
         Assert.Empty(history.Messages);
+    }
+
+    [Fact]
+    public async Task ConversationApi_History_reads_back_the_welcome_with_its_buttons()
+    {
+        string conversationId = ChannelApiClient.NewConversationId();
+        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: null);
+
+        // Morgana's welcome as the supervisor records it: the buttons serialized under the message property.
+        ChatMessage welcome = new ChatMessage(ChatRole.Assistant, "Welcome to the greenhouse.") { CreatedAt = DateTimeOffset.UtcNow.AddSeconds(-1) };
+        welcome.AdditionalProperties = new AdditionalPropertiesDictionary
+        {
+            ["morgana:turn_quick_replies"] = """[{"id":"billing","label":"🧾 Invoices","value":"What can you do with my invoices?"},{"id":"inventory","label":"🌿 Greenhouse","value":"What can you do for me in the greenhouse?"}]"""
+        };
+
+        // A later line of hers that offers no button.
+        ChatMessage plainLine = new ChatMessage(ChatRole.Assistant, "Anything else I can do?") { CreatedAt = DateTimeOffset.UtcNow };
+        await api.HostPersistenceService().AppendOrchestratorMessagesAsync(conversationId, [welcome, plainLine]);
+
+        HttpResponseMessage response = await api.SendAsync("GET", "/api/morgana/conversation/{id}/history", conversationId, api.HarnessToken());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        ConversationHistoryResponse? history = await response.Content.ReadFromJsonAsync<ConversationHistoryResponse>(TestContext.Current.CancellationToken);
+        Assert.NotNull(history);
+
+        // The welcome comes back first with its buttons in order and the line after it comes back without any.
+        Assert.Equal(["Welcome to the greenhouse.", "Anything else I can do?"], history.Messages.Select(message => message.Text));
+        Assert.Equal(["billing", "inventory"], history.Messages[0].QuickReplies!.Select(button => button.Id));
+        Assert.Equal(["🧾 Invoices", "🌿 Greenhouse"], history.Messages[0].QuickReplies!.Select(button => button.Label));
+        Assert.Equal(["What can you do with my invoices?", "What can you do for me in the greenhouse?"], history.Messages[0].QuickReplies!.Select(button => button.Value));
+        Assert.True(history.Messages[1].QuickReplies is null or { Count: 0 });
     }
 
     [Fact]

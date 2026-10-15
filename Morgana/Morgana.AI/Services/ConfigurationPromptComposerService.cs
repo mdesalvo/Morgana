@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Services;
@@ -123,15 +124,35 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// <inheritdoc />
     public async Task<string> ComposeToolDescriptionAsync(Records.ToolDefinition toolDefinition)
     {
-        // Without this the model asks for a go-ahead before calling and the user is asked twice.
-        // Said once here, never by each tool's author.
-        if (!toolDefinition.RequiresExecutionApproval)
-            return toolDefinition.Description;
+        // The return contract follows the authored description, so the guidance below stays last.
+        string description = await ComposeReturnContractAsync(toolDefinition.Description, toolDefinition.ReturnSchema);
 
-        // The approval guidance is the framework's text and follows the tool's own description.
+        // A tool that needs no approval ends with its contract.
+        if (!toolDefinition.RequiresExecutionApproval)
+            return description;
+
+        // Without the guidance the model asks for a go-ahead before calling and the user is asked twice.
+        // Said once here, never by each tool's author.
         FrameworkLayer framework = await frameworkLayer.Value;
         string guidance = Records.Injection.ResolveTemplate(framework.ToolInjections, Constants.ToolInjections.ExecutionApprovalGuidance);
-        return guidance.Length == 0 ? toolDefinition.Description : $"{toolDefinition.Description}\n\n{guidance}";
+        return guidance.Length == 0 ? description : $"{description}\n\n{guidance}";
+    }
+
+    /// <inheritdoc />
+    public async Task<string> ComposeReturnContractAsync(string description, JsonElement? returnSchema)
+    {
+        // A tool returning no record has no contract. A schema that is not an object describes nothing.
+        if (returnSchema is not { ValueKind: JsonValueKind.Object } schema)
+            return description;
+
+        // A deployment declaring no entry offers the model no return contract.
+        FrameworkLayer framework = await frameworkLayer.Value;
+        string contract = Records.Injection.ResolveTemplate(framework.ToolInjections, Constants.ToolInjections.ReturnContract);
+        if (contract.Length == 0)
+            return description;
+
+        // The schema is spliced compact, since every space of it is paid for on each turn.
+        return $"{description}\n\n{contract.Replace(Constants.Placeholders.ReturnSchema, schema.GetRawText(), StringComparison.Ordinal)}";
     }
 
     /// <summary>

@@ -1,0 +1,49 @@
+id: behaviour-approval-answered-in-words
+description: >-
+  The approval that a customer gives in words instead of pressing the button. Only the approve button
+  approves a held call, so the typed "yes" declines it and reaches the agent as an ordinary request,
+  beside the rejection that Microsoft.Extensions.AI writes for the declined call ("rejected by the
+  approver and must not be retried"). What the customer asked for is still the confirmation, so the
+  agent calls ConfirmOrder again and the framework holds it again for the approval buttons. It fails on
+  an agent that reads the rejection as a ban on the tool and leaves the order unconfirmed. It fails
+  as well on any path that runs ConfirmOrder before the button is pressed. Uses SEED-400 with the other confirmation
+  scenarios: 500 units cover every replay.
+
+turns:
+  - say: "Hi, I'd like to order 1 pack of the wildflower seed mix, my customer code is T780C"
+    expect:
+      agent: InventoryAgent
+      agentCompleted: false
+      toolsCalled: [StartPlaceOrder, CreatePurchaseOrder]
+      toolsNotCalled: [ConfirmOrder]
+      quickReplyIds: ["ConfirmOrder#1", "CancelOrder#2"]
+      textNotEmpty: true
+
+  # Typed rather than pressed: the confirmation is asked, so ConfirmOrder is held for the approval buttons.
+  - say: "Yes, please confirm it"
+    expect:
+      agent: InventoryAgent
+      agentCompleted: false
+      toolsNotCalled: [ConfirmOrder]
+      quickReplyIds: [approve_action, reject_action]
+      textNotEmpty: true
+
+  # The approval answered in words: it declines the held call and asks for the same thing again, so the
+  # call is made anew and held again. Structural only: the buttons are the evidence that it was re-proposed.
+  - say: "Yes, go ahead and confirm it"
+    expect:
+      agent: InventoryAgent
+      agentCompleted: false
+      toolsNotCalled: [ConfirmOrder]
+      quickReplyIds: [approve_action, reject_action]
+      textNotEmpty: true
+
+  - press: approve_action
+    expect:
+      agent: InventoryAgent
+      toolsCalled: [ConfirmOrder]
+      noQuickReplyIds: [approve_action, reject_action]
+      textNotEmpty: true
+      textNotContains: ["#INT#", "invoiceId", "InvoiceLines"]
+    judge:
+      - "The response confirms the order is now settled or binding."

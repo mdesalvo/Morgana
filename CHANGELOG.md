@@ -16,12 +16,16 @@ A new **Economy** tier joins Efficiency and Performance, taking over Morgana's o
 Agents can now follow **a process**, not just a conversation. Workflows, based on `Microsoft.Agents.AI` and the new **`MorganaWorkflow`** abstraction, give each step the tools that may be used and let every call decide where it leads.
 An interrupted workflow picks up where it left off, even after a restart. Native and MCP tools mix freely.
 ### 🎯 Major Feature: Execution approval
-A tool performing a dispositive action (e.g: placing an order, signing a contract) can now **wait for the user's go-ahead**: mark it **`[RequiresApproval(true)]`** and Morgana holds the call until the user approves or declines it with one click.
+A tool performing a dispositive action (e.g: placing an order, signing a contract) can now **wait for the user's go-ahead**: mark it **`[RequiresApproval]`** and Morgana holds the call until the user approves or declines it with one click.
+### 🎯 Major Feature: Agents that present themselves
+Morgana's welcome works like a phone menu: pressing one of her buttons takes the user straight to that agent, which presents itself with its own menu. Pressing an entry of that menu is the request itself.
+The buttons on both levels are written by code, from the intents and from the tools marked **`[UserTool]`**: the model only gives them a voice.
 
 ### ✨ Added
 - **`[ProvidesWorkflowForIntent("intent")]`** — a new attribute binding a `MorganaWorkflow` to its agent, which can start it as a tool (e.g: `PlaceOrderWorkflow` becomes `StartPlaceOrder`)
-- **`[RequiresApproval(true)]`** — a new attribute holding a tool's call until the user approves it, through `Microsoft.Extensions.AI`'s `ApprovalRequiredAIFunction`
+- **`[RequiresApproval]`** — a new attribute holding a tool's call until the user approves it, through `Microsoft.Extensions.AI`'s `ApprovalRequiredAIFunction`
 - **`[ToolParameter(scope, shared)]`** — a new attribute declaring where a tool parameter's value comes from: `Request` when the user supplies it, `Context` when the framework resolves it from the session, optionally shared with the other agents
+- **`[UserTool(ordinal, label)]`** and **`[SystemTool]`** — two new attributes, one of which every tool and workflow must declare: a user tool is a button on its agent's menu, found by the user on arriving at that agent; a system tool is called by the model alone
 
 ### 🔄 Changed
 - Prompt aspects of tools no longer live in `agents.json`: they are now based on **`Microsoft.Extensions.AI`**. A tool and each of its parameters are described with the standard **`[Description]`** attribute on the public methods of a `MorganaTool`: `Microsoft.Extensions.AI` turns it into the tool schema handed to the model.
@@ -37,8 +41,11 @@ A tool performing a dispositive action (e.g: placing an order, signing a contrac
   - A scenario continuing past a completed agent read Morgana's closing line as the next turn's reply, so every later turn was judged one reply behind
 
 ### 📦 Dependencies
-- Updated `Microsoft.Agents.AI` to 1.24.0
+- Updated `A2A` to 1.0.0-preview3
+- Updated `Microsoft.Agents.AI` to 1.25.0
+- Updated `Microsoft.Extensions.AI` to 10.11.0
 - Updated `OllamaSharp` to 5.5.0
+- Updated `OpenTelemetry` to 1.20.0
 
 ### 🚀 Future Enablement
 - **Processes that must go by the book**: workflows keep the steps in order and approval asks the user before every dispositive action, a natural foundation for procedures such as a claim or a customer onboarding
