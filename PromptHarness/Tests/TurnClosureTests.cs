@@ -141,11 +141,34 @@ public sealed class TurnClosureTests
         await provider.SetVariableAsync(session, "landing", true);
 
         // The request crosses the narrowing client the way a turn of the agent does.
-        await new WorkflowToolsChatClient(model, () => session, provider, [], 3)
+        await new WorkflowToolsChatClient(model, () => session, provider, [], 3, canForceToolCall: false)
             .GetResponseAsync([new ChatMessage(ChatRole.User, "What can you do with my invoices?")], AgentOptions(), TestContext.Current.CancellationToken);
 
         // Whatever else the agent holds stays out: the turn is the agent introducing itself.
         Assert.Equal(["Present", "Reply"], model.Requests.Single().Options!.Tools!.Select(tool => tool.Name).Order());
+    }
+
+    [Theory]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    public async Task TurnClosure_Landing_forces_Present_only_while_it_is_uncalled_and_the_provider_can_force_a_call(bool canForceToolCall, bool presentCalled, bool expectForced)
+    {
+        (ScriptedChatClient model, AgentSession session, MorganaAIContextProvider provider) = await ToolNarrowingAsync();
+        await provider.SetVariableAsync(session, "landing", true);
+
+        // A turn in which Present has already been called carries its call after the user's words.
+        List<ChatMessage> turn = [new ChatMessage(ChatRole.User, "What can you do with my invoices?")];
+        if (presentCalled)
+            turn.Add(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent("p1", "Present")]));
+
+        await new WorkflowToolsChatClient(model, () => session, provider, [], 3, canForceToolCall)
+            .GetResponseAsync(turn, AgentOptions(), TestContext.Current.CancellationToken);
+
+        // The first call of a landing names Present; once it ran the model writes its text and closes with Reply.
+        ChatToolMode? toolMode = model.Requests.Single().Options!.ToolMode;
+        Assert.Equal(expectForced, toolMode is RequiredChatToolMode { RequiredFunctionName: "Present" });
+        Assert.True(expectForced || toolMode is null);
     }
 
     [Fact]
@@ -155,7 +178,7 @@ public sealed class TurnClosureTests
         (ScriptedChatClient model, AgentSession session, MorganaAIContextProvider provider) = await ToolNarrowingAsync();
 
         // The request crosses the narrowing client the way a turn of the agent does.
-        await new WorkflowToolsChatClient(model, () => session, provider, [], 3)
+        await new WorkflowToolsChatClient(model, () => session, provider, [], 3, canForceToolCall: false)
             .GetResponseAsync([new ChatMessage(ChatRole.User, "Show my invoices")], AgentOptions(), TestContext.Current.CancellationToken);
 
         // Presenting the agent belongs to a landing alone: any other turn keeps the domain tools and Reply.

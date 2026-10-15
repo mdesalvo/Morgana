@@ -355,7 +355,8 @@ public class MorganaAgentAdapter
                 toolLoop.FunctionInvoker = (context, cancellationToken) => InvokeToolAsync(context, agentWorkflows, cancellationToken))
             // Between the loop and the approval client, the tools that the workflow state allows are what the model is offered.
             .Use(innerClient => new WorkflowToolsChatClient(
-                innerClient, sessionAccessor, morganaAIContextProvider, workflowDefinitions, MaxConsultationRoundsPerTurn))
+                innerClient, sessionAccessor, morganaAIContextProvider, workflowDefinitions, MaxConsultationRoundsPerTurn,
+                llmService.CanForceToolCall(tierAttribute.Tier)))
             // Below the loop, a response asking for the user's approval waits for the turn's text and loses its
             // Reply: that turn is the framework's to close, with the approval buttons.
             .Use(innerClient => new ApprovalTurnChatClient(innerClient, sessionAccessor, morganaAIContextProvider, approvalTextMissingRefusal))
