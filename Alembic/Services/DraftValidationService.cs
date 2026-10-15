@@ -316,18 +316,18 @@ public class DraftValidationService : IDraftValidationService
         ValidateWorkflows(agent, where, findings);
 
         // The menu is judged after both its kinds of entry have been.
-        ValidateOfferings(agent, where, findings);
+        ValidateMenu(agent, where, findings);
     }
 
     /// <summary>Replays the framework's own startup check of an agent's menu over the Draft.</summary>
     /// <remarks>A nameless tool or workflow is left out, since the checks above have already reported it and the framework's message could not name it.</remarks>
-    private static void ValidateOfferings(AgentDraft agent, string where, List<ValidationFinding> findings)
+    private static void ValidateMenu(AgentDraft agent, string where, List<ValidationFinding> findings)
     {
         // The menu is written by the workflows pass when the agent has any workflow and by the toolkit pass otherwise.
         InterviewStep menuStep = agent.Workflows.Count > 0 ? InterviewStep.AgentWorkflows : InterviewStep.AgentToolkit;
 
         // The framework's own refusals for the menu against the agent's named tools and workflows.
-        IEnumerable<string> refusals = HandlesIntentAgentRegistryService.ValidateOfferings(
+        IEnumerable<string> refusals = HandlesIntentAgentRegistryService.ValidateMenu(
             agent.ID ?? string.Empty,
             [.. agent.Tools.Where(tool => !string.IsNullOrWhiteSpace(tool.Name)).Select(DraftProjection.ToToolDefinition)],
             [.. agent.Workflows.Where(workflow => !string.IsNullOrWhiteSpace(workflow.Name)).Select(DraftProjection.ToWorkflowDefinition)]);

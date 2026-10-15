@@ -152,10 +152,16 @@ public class CodeEmitService : ICodeEmitService
             // The description and the approval are what the framework reads off the method.
             sb.AppendLine();
             sb.AppendLine(CultureInfo.InvariantCulture, $"    [Description({Literal(tool.Description)})]");
-            sb.AppendLine(CultureInfo.InvariantCulture, $"    [RequiresApproval({(tool.RequiresExecutionApproval ? "true" : "false")})]");
-            // A tool on the agent's menu carries its button as an attribute: the framework reads the menu off the method.
-            if (tool.Offering is not null)
-                sb.AppendLine(CultureInfo.InvariantCulture, $"    [OfferedToUser({tool.Offering.Ordinal}, {Literal(tool.Offering.Label)})]");
+
+            // Every tool is the user's or the system's: a tool on the agent's menu carries its button, any other is the system's.
+            if (tool.MenuEntry is not null)
+                sb.AppendLine(CultureInfo.InvariantCulture, $"    [UserTool({tool.MenuEntry.Ordinal}, {Literal(tool.MenuEntry.Label)})]");
+            else
+                sb.AppendLine("    [SystemTool]");
+
+            // Only a tool that waits for the user's approval declares it: the framework reads its absence as no approval.
+            if (tool.RequiresExecutionApproval)
+                sb.AppendLine("    [RequiresApproval]");
 
             // The signature is followed by the record that the tool returns.
             AppendMethod(sb, tool);
@@ -209,9 +215,11 @@ public class CodeEmitService : ICodeEmitService
         sb.AppendLine();
         sb.AppendLine(CultureInfo.InvariantCulture, $"[ProvidesWorkflowForIntent(\"{intentName}\")]");
         sb.AppendLine(CultureInfo.InvariantCulture, $"[Description({Literal(workflow.Description)})]");
-        // A workflow on the agent's menu carries its button on the class.
-        if (workflow.Offering is not null)
-            sb.AppendLine(CultureInfo.InvariantCulture, $"[OfferedToUser({workflow.Offering.Ordinal}, {Literal(workflow.Offering.Label)})]");
+        // Every workflow is the user's or the system's: one on the agent's menu carries its button on the class, any other is the system's.
+        if (workflow.MenuEntry is not null)
+            sb.AppendLine(CultureInfo.InvariantCulture, $"[UserTool({workflow.MenuEntry.Ordinal}, {Literal(workflow.MenuEntry.Label)})]");
+        else
+            sb.AppendLine("[SystemTool]");
         sb.AppendLine(CultureInfo.InvariantCulture, $"public sealed class {workflow.Name}Workflow : MorganaWorkflow");
         sb.AppendLine("{");
 

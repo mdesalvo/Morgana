@@ -71,13 +71,13 @@ public abstract class MorganaWorkflow
             .Select(property => property.Name)];
 
         // The class attribute, when present, puts the launcher in the agent's menu.
-        OfferedToUserAttribute? offered = workflowClass.GetCustomAttribute<OfferedToUserAttribute>();
+        UserToolAttribute? userTool = workflowClass.GetCustomAttribute<UserToolAttribute>();
 
         // Distinct by instance: two steps sharing a name stay two, so validation can refuse the clash.
         List<Records.WorkflowStep> orderedSteps = [start, .. steps.Where(step => !ReferenceEquals(step, start))];
 
         // The definition is a snapshot: startup validation and the engine read it and never the class again.
-        return new Records.WorkflowDefinition(name, description, orderedSteps, [.. edges], parameters, offered is null ? null : new Records.ToolOffering(offered.Ordinal, offered.Label));
+        return new Records.WorkflowDefinition(name, description, orderedSteps, [.. edges], parameters, userTool is null ? null : new Records.MenuEntry(userTool.Ordinal, userTool.Label));
     }
 
     /// <summary>Records one edge and the steps it names.</summary>

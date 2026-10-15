@@ -233,8 +233,7 @@ public class ContractTool : MorganaTool
     /// </summary>
     /// <returns>The plan details including name, features, fees, termination terms and notice period.</returns>
     [Description("Retrieves the Green Care Plan's own terms. Needs no customer code and no existing schedule: this is the one tool that answers what the plan itself offers and costs, for a prospect who does not hold one yet as much as for a customer who already does. Never answer a 'what does it include / what does it cost' question from GetContractDetails or from memory: always call this tool first.")]
-    [OfferedToUser(1, "🌱 What the plan offers")]
-    [RequiresApproval(false)]
+    [UserTool(1, "🌱 What the plan offers")]
     public async Task<PlanOverviewResult> GetPlanOverview()
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
@@ -262,7 +261,8 @@ public class ContractTool : MorganaTool
     /// <param name="customerCode">Customer code enrolling (retrieved from shared context).</param>
     /// <returns>The new contract with its dates and invoiceId; the error instead when a plan is already held.</returns>
     [Description("Enrolls a customer in the Green Care Plan: opens a new contract and bills its first month's fee in the same action. The invoice it bills is the accounts agent's (Billing), never yours: that is where the customer sees its total or line items. Fails with an error naming the existing contract if the customer already holds an Active or PendingRenewal plan — no code is ever rejected for being unregistered. This tool has dispositive capabilities: it commits a real, persistent change to the shop's books and to the customer's account.")]
-    [RequiresApproval(true)]
+    [SystemTool]
+    [RequiresApproval]
     public async Task<SubscriptionResult> SubscribeToGreenCarePlan(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode)
     {
@@ -333,8 +333,7 @@ public class ContractTool : MorganaTool
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <returns>The complete plan overview, or the error saying that no plan is held</returns>
     [Description("Retrieves the customer's own Green Care Plan as it stands. This tool has only informative capabilities: you will not find dispositive actions on an existing plan here (e.g: 'Change plan', 'Book a visit', 'Terminate plan', ...). A code no plan hangs from is reported as having none — that is an answer, not a failure; enrolling one is SubscribeToGreenCarePlan's job, not this tool's and only once the customer asks.")]
-    [OfferedToUser(2, "📜 My care plan")]
-    [RequiresApproval(false)]
+    [UserTool(2, "📜 My care plan")]
     public async Task<ContractDetailsResult> GetContractDetails(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode)
     {
@@ -404,8 +403,7 @@ public class ContractTool : MorganaTool
     /// <param name="clauseNumber">Clause number to retrieve (1-7)</param>
     /// <returns>The complete clause details, or the error saying why none can be read</returns>
     [Description("Retrieves one clause of the plan. The plan has 7 clauses: (1) Plant Health Guarantee, (2) Payment Terms, (3) Visit Schedule and Rescheduling, (4) Termination Terms, (5) Auto-Renewal, (6) Limitation of Liability, (7) Data Privacy (GDPR). The clauses are the plan's own terms, identical for everyone who signs it; the dates and fees specific to this customer are in GetContractDetails. This tool has only informative capabilities: you will not find dispositive actions here (e.g: 'Modify clause', ...).")]
-    [OfferedToUser(3, "📑 A contract clause")]
-    [RequiresApproval(false)]
+    [UserTool(3, "📑 A contract clause")]
     public async Task<ContractClauseResult> GetContractClause(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode,
         [Description("Clause number to retrieve (1-7). The user should specify which clause they want to read, or you should present the available clause topics and ask them to choose. Never guess or assume which clause the user wants.")] [ToolParameter(Records.ToolScope.Request)] int clauseNumber)
@@ -452,8 +450,7 @@ public class ContractTool : MorganaTool
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <returns>The recent visits, the upcoming dates and this month's allowance, or the error saying that no plan is held</returns>
     [Description("Retrieves the customer's tending calendar. This tool has only informative capabilities: it does not book, move or cancel a visit and no tool here does.")]
-    [OfferedToUser(4, "🗓️ My tending visits")]
-    [RequiresApproval(false)]
+    [UserTool(4, "🗓️ My tending visits")]
     public async Task<VisitScheduleResult> GetVisitSchedule(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode)
     {
@@ -562,8 +559,7 @@ public class ContractTool : MorganaTool
     /// <param name="reason">Optional termination reason for internal tracking</param>
     /// <returns>The complete termination guide, or the error saying that no plan is held</returns>
     [Description("Retrieves the plan termination procedure. This tool has only informative capabilities: you will not find dispositive actions here (e.g: 'Terminate plan', ...) — it explains the steps, it does not take them.")]
-    [OfferedToUser(5, "✂️ How to end my plan")]
-    [RequiresApproval(false)]
+    [UserTool(5, "✂️ How to end my plan")]
     public async Task<TerminationProcedureResult> GetTerminationProcedure(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode,
         [Description("Optional reason for considering termination (e.g., 'moving house', 'tending the garden myself', 'unhappy with the visits'). This is recorded for internal purposes but is not required. Ask the user if they'd like to provide a reason, but make it clear it's optional.")] [ToolParameter(Records.ToolScope.Request)] string? reason = null)

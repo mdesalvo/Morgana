@@ -182,9 +182,9 @@ public class MigrationReportService : IMigrationReportService
                         : "No longer waits for the user's approval before it runs. It is an attribute in the generated half, so overwriting that file is all it takes."));
 
             // Reported on its own entry since the button is an attribute of the method that the signature entry does not mention.
-            if (baselineTool.Offering != tool.Offering)
+            if (baselineTool.MenuEntry != tool.MenuEntry)
                 entries.Add(new MigrationEntry(MigrationKind.Tool, where, MigrationChange.Revised,
-                    (tool.Offering, baselineTool.Offering) switch
+                    (tool.MenuEntry, baselineTool.MenuEntry) switch
                     {
                         // The tool never stood on the menu before.
                         ({ } now, null) => string.Create(CultureInfo.InvariantCulture, $"Now offered on the agent's menu as button {now.Ordinal}, '{now.Label}'."),

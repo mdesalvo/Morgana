@@ -49,7 +49,7 @@ public class ReplyTool : MorganaTool
     /// throws instead, with the fact that broke the rules as its message, which the tool loop hands back to the model.
     /// </returns>
     [Description("Closes your turn. Call it exactly once, as your very last action, after your text to the user is written: nothing you write after it reaches the user. It carries everything of the turn that is not text: what it awaits from the user, whether the user is leaving, the actions offered as buttons and the card.")]
-    [RequiresApproval(false)]
+    [SystemTool]
     public async Task<Records.FrameworkToolResult> Reply(
         [Description("What the turn ends waiting for from the user. 'nothing': the request is answered. 'typed_answer': you asked for a value the user types in their own words. 'action_choice': you offer actions to pick from. A turn inviting the user to continue awaits them. A request naming one of several items without saying which is not answered yet: ask which, as a typed_answer or as an action_choice.")]
         [ToolParameter(Records.ToolScope.Request)] Records.AwaitedFromUser awaits,

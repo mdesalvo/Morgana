@@ -985,6 +985,7 @@ public sealed class WorkflowTests
 
     /// <summary>Quote, then decide: a refused confirmation goes back to the quote.</summary>
     [Description("Placing an order.")]
+    [SystemTool]
     public sealed class PlaceOrderWorkflow : MorganaWorkflow
     {
         public string? OrderId { get; init; }
@@ -1002,6 +1003,7 @@ public sealed class WorkflowTests
 
     /// <summary>Quote, then pay with the order and its price taken from the quote.</summary>
     [Description("Settling an order.")]
+    [SystemTool]
     public sealed class SettleWorkflow : MorganaWorkflow
     {
         public string? OrderId { get; init; }
@@ -1016,6 +1018,7 @@ public sealed class WorkflowTests
 
     /// <summary>Quote with a native tool, then ship the order with an MCP tool.</summary>
     [Description("Quoting then shipping.")]
+    [SystemTool]
     public sealed class MixedWorkflow : MorganaWorkflow
     {
         public string? OrderId { get; init; }
@@ -1029,6 +1032,7 @@ public sealed class WorkflowTests
 
     /// <summary>Reserve with an MCP tool, then ship what it reserved; a failed reservation stays at the reservation.</summary>
     [Description("Reserving then shipping.")]
+    [SystemTool]
     public sealed class ReserveWorkflow : MorganaWorkflow
     {
         public string? OrderId { get; init; }
@@ -1045,6 +1049,7 @@ public sealed class WorkflowTests
 
     /// <summary>A tool that always fails, then a note read once it has.</summary>
     [Description("Trying then noting.")]
+    [SystemTool]
     public sealed class FragileWorkflow : MorganaWorkflow
     {
         private static readonly Records.WorkflowStep Try = new("Try", ["FailHard"]);
@@ -1056,6 +1061,7 @@ public sealed class WorkflowTests
 
     /// <summary>Carries a field out of a tool whose server declares no output schema.</summary>
     [Description("Reading then shipping.")]
+    [SystemTool]
     public sealed class BlindWorkflow : MorganaWorkflow
     {
         public string? OrderId { get; init; }
@@ -1069,6 +1075,7 @@ public sealed class WorkflowTests
 
     /// <summary>Cites a tool that no server offers.</summary>
     [Description("Calling a ghost.")]
+    [SystemTool]
     public sealed class PhantomWorkflow : MorganaWorkflow
     {
         private static readonly Records.WorkflowStep Haunt = new("Haunt", ["NoSuchTool"]);
@@ -1079,6 +1086,7 @@ public sealed class WorkflowTests
     }
 
     /// <summary>Declares its edge from the later step first, so that the start has to be put in front.</summary>
+    [SystemTool]
     public sealed class BackwardsWorkflow : MorganaWorkflow
     {
         private static readonly Records.WorkflowStep Quote = new("Quote", [nameof(InventoryTools.CreatePurchaseOrder)]);
@@ -1089,6 +1097,7 @@ public sealed class WorkflowTests
     }
 
     /// <summary>Holds the property that a derived workflow inherits.</summary>
+    [SystemTool]
     public abstract class InheritedPropertyWorkflow : MorganaWorkflow
     {
         public string? Inherited { get; init; }
@@ -1099,6 +1108,7 @@ public sealed class WorkflowTests
     }
 
     /// <summary>Declares one property of its own beside the inherited one.</summary>
+    [SystemTool]
     public sealed class DerivedWorkflow : InheritedPropertyWorkflow
     {
         public string? Own { get; init; }
@@ -1332,6 +1342,8 @@ public sealed class WorkflowTests
 
         public IReadOnlyDictionary<string, IReadOnlyList<Records.WorkflowDefinition>> GetAllRegisteredWorkflows()
             => new Dictionary<string, IReadOnlyList<Records.WorkflowDefinition>> { ["inventory"] = workflows };
+
+        public IReadOnlyList<Type> FindWorkflowTypesForIntent(string intent) => [];
     }
 
     /// <summary>A budget that is never spent.</summary>

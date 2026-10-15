@@ -95,7 +95,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `LanguageModels/` | `Anthropic`, `AzureOpenAI`, `OpenAI`, `Ollama`: the implementations of `MorganaLanguageModel`, each building the client of one tier |
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
-| `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[ProvidesWorkflowForIntent]`, `[RequiresApproval]`, `[ToolParameter]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
+| `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[ProvidesWorkflowForIntent]`, `[RequiresApproval]`, `[UserTool]`, `[SystemTool]`, `[ToolParameter]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
 | `ChatClients/` | `IChatClient` decorators: `DustAccountingChatClient`, `MorganaAnthropicClient`, `ApprovalTurnChatClient` (drops `Reply` from a response asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model wrote without `Reply`: a forced tool call, structured output where the provider cannot force one), `WorkflowToolsChatClient` (offers the model only the tools that a running workflow's current step allows; no colleague while one is being answered or once the turn's consultation rounds are spent) |
 | `Workflows/` | `WorkflowEngine`: an agent's workflows on Microsoft.Agents.AI.Workflows, rebuilt at every call from the checkpoint kept in the agent's session. `WorkflowLauncherFunction`: the function that starts one workflow, recognised by its type |
 | `Tools/` | `ReplyTool`: the framework's own tool, declared on its method as a domain tool is |
@@ -269,15 +269,15 @@ Two consumption modes: `CompleteStructuredAsync` (stateless, answered under a JS
    (mandatory, validated at startup). The constructor calls `MorganaAgentAdapter.CreateAgent()`
 4. **Tool class** (optional) extending `MorganaTool`, with `[ProvidesToolForIntent("x")]`: the one
    declaration of the agent's tools. Every public instance method it declares is a tool, carrying
-   `[Description]` and `[RequiresApproval]`; every parameter carries `[Description]` and
+   `[Description]` and exactly one of `[UserTool]` (a button of the agent's menu) or `[SystemTool]`; every parameter carries `[Description]` and
    `[ToolParameter]`; the method returns a typed record whose properties carry `[Description]` and
    whose nullable `Error`, where present, marks a failed call. Constructor `(ILogger, Func<ToolContext>)`.
-   A tool declaring `[RequiresApproval(true)]` runs only once the user has approved that exact call,
+   A tool declaring `[RequiresApproval]` runs only once the user has approved that exact call,
    through MEAI's own `ApprovalRequiredAIFunction`. The framework offers the approval buttons; pressing
    an action button that leads to the tool is that approval already
 5. **Or MCP** — `[UsesMCPServer(...)]`, repeatable, tools discovered at runtime. They never ask for approval: where one changes something real, the agent's `Instructions` have it ask first
 6. **Colleagues** — `[ConsultsAgent("otherintent")]`, once each, validated at startup
-7. **Workflows** (optional) — a `MorganaWorkflow` class with `[ProvidesWorkflowForIntent("x")]`, shaped like a MAAI graph: steps are nodes holding their tools, each transition is one `AddEdge` or `AddFailureEdge` and a call with no edge ends the workflow. The class's public properties are the values that an edge carries by name. The agent gets one launcher per workflow, `Start{Name}`, described by the class; the order is the framework's, so no prose restates it. A step names an MCP tool by string and such a workflow is checked when the agent is born, withdrawn from it if it does not hold
+7. **Workflows** (optional) — a `MorganaWorkflow` class with `[ProvidesWorkflowForIntent("x")]`, shaped like a MAAI graph: steps are nodes holding their tools, each transition is one `AddEdge` or `AddFailureEdge` and a call with no edge ends the workflow. The class's public properties are the values that an edge carries by name and the class carries exactly one of `[UserTool]` or `[SystemTool]`, like a tool. The agent gets one launcher per workflow, `Start{Name}`, described by the class; the order is the framework's, so no prose restates it. A step names an MCP tool by string and such a workflow is checked when the agent is born, withdrawn from it if it does not hold
 8. **Package as a plugin DLL** into `plugins/`
 
 ## Tool System

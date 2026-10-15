@@ -293,9 +293,9 @@ public sealed class ToolDraft
     public bool RequiresExecutionApproval { get; set; }
 
     /// <summary>
-    /// The button that offers the tool on the agent's menu, declared on the method as <c>[OfferedToUser]</c>; <c>null</c> when only the model calls it.
+    /// The button that offers the tool on the agent's menu, declared on the method as <c>[UserTool]</c>; <c>null</c> when the method is declared <c>[SystemTool]</c>.
     /// </summary>
-    public Records.ToolOffering? Offering { get; set; }
+    public Records.MenuEntry? MenuEntry { get; set; }
 
     /// <summary>
     /// The fields of the record the tool's method returns, in the order the record declares them.
@@ -361,9 +361,9 @@ public sealed class WorkflowDraft
     public List<Records.WorkflowEdge> Edges { get; set; } = [];
 
     /// <summary>
-    /// The button that offers the workflow on the agent's menu, declared on its class as <c>[OfferedToUser]</c>; <c>null</c> when only the model starts it.
+    /// The button that offers the workflow on the agent's menu, declared on its class as <c>[UserTool]</c>; <c>null</c> when the class is declared <c>[SystemTool]</c>.
     /// </summary>
-    public Records.ToolOffering? Offering { get; set; }
+    public Records.MenuEntry? MenuEntry { get; set; }
 
     /// <summary>
     /// Where this workflow came from.

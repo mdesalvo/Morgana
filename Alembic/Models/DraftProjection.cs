@@ -50,7 +50,7 @@ public static class DraftProjection
             [.. tool.Parameters.Select(ToToolParameter)],
             RequiresExecutionApproval: tool.RequiresExecutionApproval,
             // The menu button travels with the tool so the framework's own menu check can read the projection.
-            Offering: tool.Offering,
+            MenuEntry: tool.MenuEntry,
             // A tool that declared no field leaves Returns out, the way a method returning no record projects none.
             Returns: tool.Returns.Count > 0
                 ? [.. tool.Returns.Select(field => new Records.ToolReturn(
@@ -70,7 +70,7 @@ public static class DraftProjection
             [.. workflow.Edges],
             CarriedNames(workflow),
             // The menu button travels with the workflow for the same check.
-            workflow.Offering);
+            workflow.MenuEntry);
 
     /// <summary>
     /// The names that a workflow's edges carry, distinct and in order of first appearance.

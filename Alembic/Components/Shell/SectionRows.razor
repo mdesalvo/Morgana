@@ -37,9 +37,9 @@
                                 <FluentBadge Appearance="BadgeAppearance.Ghost" Color="BadgeColor.Informative">approval</FluentBadge>
                             }
 
-                            @if (tool.Offering is not null)
+                            @if (tool.MenuEntry is not null)
                             {
-                                <FluentBadge Appearance="BadgeAppearance.Ghost" Color="BadgeColor.Informative">menu @tool.Offering.Ordinal · @tool.Offering.Label</FluentBadge>
+                                <FluentBadge Appearance="BadgeAppearance.Ghost" Color="BadgeColor.Informative">menu @tool.MenuEntry.Ordinal · @tool.MenuEntry.Label</FluentBadge>
                             }
 
                             @foreach (ToolParameterDraft parameter in tool.Parameters)
@@ -78,9 +78,9 @@
                         <FluentStack Orientation="Orientation.Horizontal" Wrap="true" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="10px" VerticalGap="6px">
                             <FluentText Font="TextFont.Monospace" Size="TextSize.Size300" Class="tool-signature">@(workflow.Name ?? "(unnamed)")</FluentText>
 
-                            @if (workflow.Offering is not null)
+                            @if (workflow.MenuEntry is not null)
                             {
-                                <FluentBadge Appearance="BadgeAppearance.Ghost" Color="BadgeColor.Informative">menu @workflow.Offering.Ordinal · @workflow.Offering.Label</FluentBadge>
+                                <FluentBadge Appearance="BadgeAppearance.Ghost" Color="BadgeColor.Informative">menu @workflow.MenuEntry.Ordinal · @workflow.MenuEntry.Label</FluentBadge>
                             }
                         </FluentStack>
                         <FluentText Size="TextSize.Size400">@workflow.Description</FluentText>

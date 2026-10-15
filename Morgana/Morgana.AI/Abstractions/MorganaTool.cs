@@ -13,7 +13,7 @@ namespace Morgana.AI.Abstractions;
 /// <remarks>
 /// <para>A domain tool is declared in one place: its method on the subclass. Every public instance method
 /// that the subclass declares is a tool: <c>[Description]</c> on the method is what the model reads,
-/// <c>[RequiresApproval]</c> says whether the user must approve each call. Every parameter carries
+/// <c>[RequiresApproval]</c>, where present, makes the user approve each call. Every parameter carries
 /// <c>[Description]</c> and <c>[ToolParameter]</c>. A parameter is required when it has no default value.
 /// A <c>Context</c> parameter must be a required <c>string</c>, since the context holds untyped text. Only
 /// a <c>Context</c> parameter may be shared. The method returns a typed record whose properties carry

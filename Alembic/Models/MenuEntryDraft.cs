@@ -7,7 +7,7 @@ namespace Alembic.Models;
 /// One button of an agent's menu as the model writes it: what the button leads to and what it shows.
 /// </summary>
 [Description("One button of the menu.")]
-public sealed record MenuEntry(
+public sealed record MenuEntryDraft(
     [property: JsonPropertyName("entry")]
     [property: Description("The exact name of the tool or the workflow that the button presses.")]
     string Entry,

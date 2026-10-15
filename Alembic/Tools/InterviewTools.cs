@@ -77,7 +77,6 @@ public class InterviewTools
     /// <param name="label">The quick-reply button text a user reads, if this call is also settling it.</param>
     /// <param name="defaultValue">The sentence pressing that button sends, as if the user had typed it.</param>
     [Description("Puts one process the client is handing to Morgana on the domain map, or revises one already there. It writes the whole intent — what it is called, what routes to it and the button a user presses to start it — because all three are read against the other entries and not on their own. One entry becomes one intent and one agent. Call it as soon as an entry is clear and again to add the button or sharpen the description.")]
-    [RequiresApproval(false)]
     public ToolReply DeclareIntent(
         [Description("A single bare lowercase word, no spaces or punctuation (e.g. 'billing', 'appointments'). It becomes a C# attribute argument and a prompt ID. 'other' is reserved for the classifier's fallback and will be refused.")] [ToolParameter(Records.ToolScope.Request)] string name,
         [Description("The kinds of request that belong here — 'requests to check an order's status, place a new order, or cancel one' — never what an agent does about them. The classifier reads this and nothing else, weighed against every other entry's description.")] [ToolParameter(Records.ToolScope.Request)] string description,
@@ -151,7 +150,6 @@ public class InterviewTools
     /// Takes a kind of request off the map.
     /// </summary>
     [Description("Takes an entry off the map, for when two turn out to be one or the client says it is not their business.")]
-    [RequiresApproval(false)]
     public ToolReply DropIntent(
         [Description("The name of the entry to remove.")] [ToolParameter(Records.ToolScope.Request)] string name)
     {
@@ -170,7 +168,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>Two descriptions overlap only when read side by side: the model weighs the map whole before settling.</remarks>
     [Description("Returns the map as it stands, in order. Read it before settling: whether two descriptions could claim the same message is only visible with both in front of you.")]
-    [RequiresApproval(false)]
     public ToolReply GetDomainMap()
     {
         // An empty map is reported so the model draws it before settling anything.
@@ -189,7 +186,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>The last call stands. The reply tells the model whether the prose fits the section's shape without blocking it.</remarks>
     [Description("Records the agent's TARGET section: what it does well and existentially, then what it is significant to say it does not do. Only edges that will actually be walked into — a limit nobody would test is noise. This section opens the composed prompt, so a capability claimed here and not backed by a tool is the most expensive mistake available to you.")]
-    [RequiresApproval(false)]
     public ToolReply SetAgentTarget(
         [Description("Two to four sentences, addressed to the agent as 'you'. Purpose first, then edges. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string target)
     {
@@ -205,7 +201,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>It names a territory and never lists what the agent can do, since a caller handed an inventory rules its question out.</remarks>
     [Description("Records what a colleague reads before consulting this agent: the scope of its agent, addressed to another agent instead of to itself. A territory, in one or two sentences — what falls here — never a list of what the agent can do, which a caller reads as grounds to rule its question out. Never asked of the client and never shown to them: you write it from the TARGET you have just settled.")]
-    [RequiresApproval(false)]
     public ToolReply SetAgentTerritory(
         [Description("The statement, without its section marker.")] [ToolParameter(Records.ToolScope.Request)] string territory)
     {
@@ -221,7 +216,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>Only the <c>AgentPersonality</c> pass holds this tool: it is the one place a voice is written.</remarks>
     [Description("Records the agent's PERSONALITY section: the empathy, language, tone and humanity it meets a conversation with. Voice only — a sentence telling the agent what to do belongs in its instructions. Name which facet of Morgana this agent is; do not list adjectives.")]
-    [RequiresApproval(false)]
     public ToolReply SetAgentPersonality(
         [Description("Two to three sentences, addressed to the agent as 'you'. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string personality)
     {
@@ -237,7 +231,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>Instructions speak about the agent's tools, so no pass before the toolkit exists holds this tool.</remarks>
     [Description("Records the agent's INSTRUCTIONS section: how it does what it does, what it is trying to achieve on the way and what it is significant to say it must not do. The order of the work and its refusals. Only what is true of this domain.")]
-    [RequiresApproval(false)]
     public ToolReply SetAgentInstructions(
         [Description("Four to twelve sentences, addressed to the agent as 'you', in the order the work happens. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string instructions)
     {
@@ -253,7 +246,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>The upper bound is wide because this section also names the exact card shape or button payload of each tool.</remarks>
     [Description("Records the agent's FORMATTING section: how it presents what its own tools return. The one thing no global policy can know for it — Morgana cannot know that an invoice leads with its due date, or that this agent's own confirm-or-cancel deserves two buttons. Say nothing about markdown or length, those are hers; if a button or a card belongs here, name it exactly.")]
-    [RequiresApproval(false)]
     public ToolReply SetAgentFormatting(
         [Description("Addressed to the agent as 'you', about this agent's own data: normally two to five sentences, longer only where naming an exact card shape per tool or an exact button payload takes the room it takes. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string formatting)
     {
@@ -269,7 +261,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>Revising keeps the parameters: a tool's contract is settled over several turns and re-declaring it must not empty it.</remarks>
     [Description("Opens a tool, or revises one already open — revising keeps its parameters. Declare it as soon as the action is described, before you know its inputs.")]
-    [RequiresApproval(false)]
     public ToolReply DeclareTool(
         [Description("PascalCase, no spaces or punctuation, a verb the agent performs (e.g. 'GetInvoices', 'CancelBooking'). It becomes a C# method name verbatim.")] [ToolParameter(Records.ToolScope.Request)] string name,
         [Description("What the tool does and when to call it, never the fields it returns: those are its record's own contract. Two to four sentences. Say what it does not cover where a neighbouring tool covers it. A description that names only the action leaves the timing to guesswork.")] [ToolParameter(Records.ToolScope.Request)] string description,
@@ -319,7 +310,6 @@ public class InterviewTools
     /// <param name="required">Whether the call fails without it — required parameters must precede optional ones and only a request parameter may be optional.</param>
     /// <param name="shared">Whether a resolved context value is published for other agents to hydrate from; only a <c>"context"</c> parameter may be shared.</param>
     [Description("Adds a parameter to a declared tool, or revises one already there by name and in place. Declaration order becomes the C# parameter order, which cannot put a required parameter after an optional one.")]
-    [RequiresApproval(false)]
     public ToolReply SetToolParameter(
         [Description("The exact name of a tool you have already declared.")] [ToolParameter(Records.ToolScope.Request)] string toolName,
         [Description("camelCase, no spaces or punctuation (e.g. 'invoiceId'). It becomes the C# parameter name verbatim.")] [ToolParameter(Records.ToolScope.Request)] string name,
@@ -431,7 +421,6 @@ public class InterviewTools
     /// Removes a parameter from a tool.
     /// </summary>
     [Description("Removes a parameter from a tool. Also how a parameter moves: drop it and add it again in the position you want.")]
-    [RequiresApproval(false)]
     public ToolReply DropToolParameter(
         [Description("The exact name of the tool.")] [ToolParameter(Records.ToolScope.Request)] string toolName,
         [Description("The exact name of the parameter to remove.")] [ToolParameter(Records.ToolScope.Request)] string parameterName)
@@ -459,7 +448,6 @@ public class InterviewTools
     /// <param name="description">What the model learns from this field of the result.</param>
     /// <param name="type">The C# type of the record's property, such as <c>string</c>, <c>decimal</c> or <c>List&lt;string&gt;</c>; <c>string</c> for the failure.</param>
     [Description("Adds a field to what a declared tool hands back, or revises one already there by name. The agent's model reads exactly these fields in the tool's result and the client's code fills exactly these. The field named 'error' is the failure: it holds why the call failed and stays empty whenever the call succeeds.")]
-    [RequiresApproval(false)]
     public ToolReply SetToolReturn(
         [Description("The exact name of a tool you have already declared.")] [ToolParameter(Records.ToolScope.Request)] string toolName,
         [Description("camelCase, no spaces or punctuation (e.g. 'orderId'). It is the name the agent's model reads in the result.")] [ToolParameter(Records.ToolScope.Request)] string name,
@@ -531,7 +519,6 @@ public class InterviewTools
     /// Removes a field from what a tool hands back.
     /// </summary>
     [Description("Removes a field from what a tool hands back.")]
-    [RequiresApproval(false)]
     public ToolReply DropToolReturn(
         [Description("The exact name of the tool.")] [ToolParameter(Records.ToolScope.Request)] string toolName,
         [Description("The exact name of the field to remove.")] [ToolParameter(Records.ToolScope.Request)] string name)
@@ -555,7 +542,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>Workflow steps that still name the tool are reported and left for the workflows pass to repair.</remarks>
     [Description("Removes a tool and every parameter on it. Use it when the agent turns out to have no such job, or when you have split one action into two tools that cannot be told apart.")]
-    [RequiresApproval(false)]
     public ToolReply DropTool(
         [Description("The exact name of the tool to remove.")] [ToolParameter(Records.ToolScope.Request)] string toolName)
     {
@@ -585,7 +571,6 @@ public class InterviewTools
     /// Returns the toolkit as it currently stands.
     /// </summary>
     [Description("Returns the agent's tools, their parameters and what each hands back.")]
-    [RequiresApproval(false)]
     public ToolReply GetToolkit()
     {
         // An agent without tools is told so, with its workflows still shown beside the empty toolkit.
@@ -595,7 +580,7 @@ public class InterviewTools
 
         // Each tool is listed with its approval requirement then its parameters with scope and flags then the fields it hands back.
         IEnumerable<string> lines = interviewState.Agent.Tools.Select(t =>
-            $"- {t.Name}{(t.RequiresExecutionApproval ? " " + Said("ToolWaitsForApproval") : string.Empty)}{DescribeOffering(alembicPromptService, t.Offering)}: {t.Description ?? "(no description)"}"
+            $"- {t.Name}{(t.RequiresExecutionApproval ? " " + Said("ToolWaitsForApproval") : string.Empty)}{DescribeMenuEntry(alembicPromptService, t.MenuEntry)}: {t.Description ?? "(no description)"}"
             + (t.Parameters.Count == 0
                 ? "\n    " + Said("ToolTakesNothing")
                 : string.Concat(t.Parameters.Select(p =>
@@ -620,24 +605,23 @@ public class InterviewTools
     /// <remarks>The ordinal is the position in the array and never the model's to write, so the numbering cannot clash.</remarks>
     /// <param name="entries">The buttons in menu order, each naming the tool or the workflow it presses and carrying its label.</param>
     [Description("Writes this agent's menu whole, replacing the one before: the buttons a user finds on arriving at this agent from Morgana's own, each pressing one tool or one workflow of this agent. A label is both what the button shows and the message its press sends, so it reads as the user's own request: a leading emoji then two to five words ('🧾 My recent invoices'). Offer what a customer would come here to start. Never put on it a tool that only serves another or one that waits for approval; the first tool of a workflow never goes on it either, the workflow does. An empty array leaves the agent with no menu.")]
-    [RequiresApproval(false)]
     public ToolReply SetMenu(
-        [Description("The buttons of the menu in order, first button first. Each entry is the exact name of a tool or a workflow of this agent.")] [ToolParameter(Records.ToolScope.Request)] List<MenuEntry> entries)
+        [Description("The buttons of the menu in order, first button first. Each entry is the exact name of a tool or a workflow of this agent.")] [ToolParameter(Records.ToolScope.Request)] List<MenuEntryDraft> entries)
     {
         // The menu as the model wrote it: an entry name and a label, in button order.
         // A missing text reads as blank: a blank entry is told as unknown and a blank label is refused by the framework's own check.
         List<(string Entry, string Label)> requestedEntries =
             [.. entries.Select(menuEntry => ((menuEntry.Entry ?? string.Empty).Trim(), (menuEntry.Label ?? string.Empty).Trim()))];
 
-        // An empty menu withdraws every offering the agent carries.
+        // An empty menu withdraws every menu entry the agent carries.
         if (requestedEntries.Count == 0)
         {
-            ApplyOfferings(new Dictionary<string, Records.ToolOffering>(StringComparer.Ordinal));
+            ApplyMenuEntries(new Dictionary<string, Records.MenuEntry>(StringComparer.Ordinal));
             return new ToolReply(Said("MenuCleared"));
         }
 
-        // The candidate offerings by entry name, built before anything is recorded so a refusal leaves the previous menu untouched.
-        Dictionary<string, Records.ToolOffering> candidateOfferings = new(StringComparer.Ordinal);
+        // The candidate menu entries by entry name, built before anything is recorded so a refusal leaves the previous menu untouched.
+        Dictionary<string, Records.MenuEntry> candidateMenuEntries = new(StringComparer.Ordinal);
 
         foreach ((string entryName, string label) in requestedEntries)
         {
@@ -654,11 +638,11 @@ public class InterviewTools
                 return ToolReply.Refused(Said("MenuEntryAmbiguous", ("entry", entryName)));
 
             // One entry twice would be two buttons for the same press.
-            if (candidateOfferings.ContainsKey(entryName))
+            if (candidateMenuEntries.ContainsKey(entryName))
                 return ToolReply.Refused(Said("MenuEntryTwice", ("entry", entryName)));
 
             // The ordinal is the position in the menu, counting from 1.
-            candidateOfferings[entryName] = new Records.ToolOffering(candidateOfferings.Count + 1, label);
+            candidateMenuEntries[entryName] = new Records.MenuEntry(candidateMenuEntries.Count + 1, label);
         }
 
         // The agent as the framework would read it with the candidate menu in place.
@@ -666,42 +650,42 @@ public class InterviewTools
         [
             .. interviewState.Agent.Tools.Select(tool => DraftProjection.ToToolDefinition(tool) with
             {
-                Offering = tool.Name is not null && candidateOfferings.TryGetValue(tool.Name, out Records.ToolOffering? toolOffering) ? toolOffering : null
+                MenuEntry = tool.Name is not null && candidateMenuEntries.TryGetValue(tool.Name, out Records.MenuEntry? toolMenuEntry) ? toolMenuEntry : null
             })
         ];
         List<Records.WorkflowDefinition> candidateWorkflows =
         [
             .. interviewState.Agent.Workflows.Select(workflow => DraftProjection.ToWorkflowDefinition(workflow) with
             {
-                Offering = workflow.Name is not null && candidateOfferings.TryGetValue(workflow.Name, out Records.ToolOffering? workflowOffering) ? workflowOffering : null
+                MenuEntry = workflow.Name is not null && candidateMenuEntries.TryGetValue(workflow.Name, out Records.MenuEntry? workflowMenuEntry) ? workflowMenuEntry : null
             })
         ];
 
         // Morgana's own menu check runs here so the refusal at startup is heard while it costs nothing to change.
-        List<string> refusals = HandlesIntentAgentRegistryService.ValidateOfferings(interviewState.Agent.ID ?? string.Empty, candidateTools, candidateWorkflows);
+        List<string> refusals = HandlesIntentAgentRegistryService.ValidateMenu(interviewState.Agent.ID ?? string.Empty, candidateTools, candidateWorkflows);
         if (refusals.Count > 0)
             return ToolReply.Refused(Said("MenuRefused", ("reasons", string.Join("; ", refusals))));
 
         // Only a menu that holds replaces the previous one.
-        ApplyOfferings(candidateOfferings);
+        ApplyMenuEntries(candidateMenuEntries);
 
         // The reply reads the menu back in button order.
-        return new ToolReply(Said("MenuRecorded", ("entries", string.Join("; ", candidateOfferings.Select(candidate =>
+        return new ToolReply(Said("MenuRecorded", ("entries", string.Join("; ", candidateMenuEntries.Select(candidate =>
             $"{candidate.Value.Ordinal.ToString(CultureInfo.InvariantCulture)}. {candidate.Key} '{candidate.Value.Label}'")))));
     }
 
     /// <summary>
-    /// Replaces the offering of every tool and workflow of the agent in hand with the one that the menu gives it, none for the rest.
+    /// Replaces the menu entry of every tool and workflow of the agent in hand with the one that the menu gives it, none for the rest.
     /// </summary>
-    private void ApplyOfferings(Dictionary<string, Records.ToolOffering> offeringsByEntry)
+    private void ApplyMenuEntries(Dictionary<string, Records.MenuEntry> menuEntriesByName)
     {
         // Every tool is rewritten so an entry dropped from the menu loses its button.
         foreach (ToolDraft tool in interviewState.Agent.Tools)
-            tool.Offering = tool.Name is not null && offeringsByEntry.TryGetValue(tool.Name, out Records.ToolOffering? toolOffering) ? toolOffering : null;
+            tool.MenuEntry = tool.Name is not null && menuEntriesByName.TryGetValue(tool.Name, out Records.MenuEntry? toolMenuEntry) ? toolMenuEntry : null;
 
         // Workflows follow the same rule as tools.
         foreach (WorkflowDraft workflow in interviewState.Agent.Workflows)
-            workflow.Offering = workflow.Name is not null && offeringsByEntry.TryGetValue(workflow.Name, out Records.ToolOffering? workflowOffering) ? workflowOffering : null;
+            workflow.MenuEntry = workflow.Name is not null && menuEntriesByName.TryGetValue(workflow.Name, out Records.MenuEntry? workflowMenuEntry) ? workflowMenuEntry : null;
     }
 
     /// <summary>
@@ -709,7 +693,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>Revising keeps the steps: a workflow is settled over several turns and re-declaring it must not empty it.</remarks>
     [Description("Opens a workflow, or revises the description of one already open — revising keeps its steps.")]
-    [RequiresApproval(false)]
     public ToolReply DeclareWorkflow(
         [Description("PascalCase, no spaces or punctuation (e.g. 'PlaceOrder'). The agent's model starts the workflow by this name.")] [ToolParameter(Records.ToolScope.Request)] string name,
         [Description("What the procedure achieves for the person, in one sentence. The agent's model reads it to decide when to start this workflow.")] [ToolParameter(Records.ToolScope.Request)] string description)
@@ -752,7 +735,6 @@ public class InterviewTools
     /// <param name="name">PascalCase, a short name for the moment of the procedure.</param>
     /// <param name="tools">The tools offered at this step, by their exact names.</param>
     [Description("Adds a step to a workflow, or revises the tools of one already there by name and in place. The first step set is where the workflow starts.")]
-    [RequiresApproval(false)]
     public ToolReply SetWorkflowStep(
         [Description("The exact name of a workflow you have already declared.")] [ToolParameter(Records.ToolScope.Request)] string workflow,
         [Description("PascalCase, a short name for the moment of the procedure (e.g. 'Quote', 'Decide').")] [ToolParameter(Records.ToolScope.Request)] string name,
@@ -814,7 +796,6 @@ public class InterviewTools
     /// Leads the successful call of a tool to the step that follows it, or revises where it leads.
     /// </summary>
     [Description("Leads the successful call of a tool to the step that follows it, or revises where it leads. Carries to that step the values that the call hands back.")]
-    [RequiresApproval(false)]
     public ToolReply AddEdge(
         [Description("The exact name of a workflow you have already declared.")] [ToolParameter(Records.ToolScope.Request)] string workflow,
         [Description("The exact name of the step that offers the tool.")] [ToolParameter(Records.ToolScope.Request)] string source,
@@ -827,7 +808,6 @@ public class InterviewTools
     /// Leads the failed call of a tool to another step, or revises where it leads.
     /// </summary>
     [Description("Leads the failed call of a tool to another step, usually the same one to try again, or revises where it leads. A tool whose failed call no edge leads anywhere ends the workflow when it fails.")]
-    [RequiresApproval(false)]
     public ToolReply AddFailureEdge(
         [Description("The exact name of a workflow you have already declared.")] [ToolParameter(Records.ToolScope.Request)] string workflow,
         [Description("The exact name of the step that offers the tool.")] [ToolParameter(Records.ToolScope.Request)] string source,
@@ -840,7 +820,6 @@ public class InterviewTools
     /// Removes the edge that a tool's call follows.
     /// </summary>
     [Description("Removes the edge that a tool's call follows, so that the call ends the workflow.")]
-    [RequiresApproval(false)]
     public ToolReply DropEdge(
         [Description("The exact name of a workflow you have already declared.")] [ToolParameter(Records.ToolScope.Request)] string workflow,
         [Description("The exact name of the step that offers the tool.")] [ToolParameter(Records.ToolScope.Request)] string source,
@@ -933,7 +912,6 @@ public class InterviewTools
     /// Removes a step from a workflow with every edge that leaves it or leads to it.
     /// </summary>
     [Description("Removes a step from a workflow with every edge that leaves it or leads to it.")]
-    [RequiresApproval(false)]
     public ToolReply DropWorkflowStep(
         [Description("The exact name of the workflow.")] [ToolParameter(Records.ToolScope.Request)] string workflow,
         [Description("The exact name of the step to remove.")] [ToolParameter(Records.ToolScope.Request)] string step)
@@ -964,7 +942,6 @@ public class InterviewTools
     /// Removes a workflow and every step of it.
     /// </summary>
     [Description("Removes a workflow and every step of it.")]
-    [RequiresApproval(false)]
     public ToolReply DropWorkflow(
         [Description("The exact name of the workflow to remove.")] [ToolParameter(Records.ToolScope.Request)] string name)
     {
@@ -982,7 +959,6 @@ public class InterviewTools
     /// Returns the workflows as they currently stand.
     /// </summary>
     [Description("Returns the agent's workflows as they stand, step by step. Call it before completing the pass.")]
-    [RequiresApproval(false)]
     public ToolReply GetWorkflows() => new ToolReply(DescribeWorkflows(alembicPromptService, interviewState.Agent.Workflows));
 
     /// <summary>
@@ -1000,7 +976,7 @@ public class InterviewTools
         // Each workflow is rendered with its steps in order and the edges that connect them.
         return alembicPromptService.ResolveToolInjection("WorkflowsHeader") + "\n\n"
                + string.Join("\n\n", workflows.Select(workflow =>
-                   $"Workflow {workflow.Name ?? "(unnamed)"}{DescribeOffering(alembicPromptService, workflow.Offering)}: {workflow.Description ?? "(no description)"}"
+                   $"Workflow {workflow.Name ?? "(unnamed)"}{DescribeMenuEntry(alembicPromptService, workflow.MenuEntry)}: {workflow.Description ?? "(no description)"}"
                    + (workflow.Steps.Count == 0
                        ? "\n  (no step yet)"
                        : string.Concat(workflow.Steps.Select((step, position) =>
@@ -1012,13 +988,13 @@ public class InterviewTools
     /// <summary>
     /// Renders the bracketed note that says a tool or a workflow stands on the agent's menu, empty for one that does not.
     /// </summary>
-    internal static string DescribeOffering(IAlembicPromptService alembicPromptService, Records.ToolOffering? offering) =>
-        // Only an offered entry carries the note: the model reads the menu back beside the head line of what it offers.
-        offering is null
+    internal static string DescribeMenuEntry(IAlembicPromptService alembicPromptService, Records.MenuEntry? menuEntry) =>
+        // Only a menu entry carries the note: the model reads the menu back beside the head line of what it offers.
+        menuEntry is null
             ? string.Empty
             : " [" + alembicPromptService.ResolveToolInjection("OnMenu",
-                ("ordinal", offering.Ordinal.ToString(CultureInfo.InvariantCulture)),
-                ("label", offering.Label)) + "]";
+                ("ordinal", menuEntry.Ordinal.ToString(CultureInfo.InvariantCulture)),
+                ("label", menuEntry.Label)) + "]";
 
     /// <summary>
     /// Renders one edge as a line saying where the call leads and the values it carries.
@@ -1039,7 +1015,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>Each pass starts with a fresh session, so the configuration this returns is all that carries over from earlier passes.</remarks>
     [Description("Returns the agent as it currently stands: the intent it answers, what it is for, where it stops, how it sounds and what it can reach. Each step runs with a fresh memory and only the configuration carries over, so this is the whole of what you know about it. On an agent already in the client's domain, all of it was written before today.")]
-    [RequiresApproval(false)]
     public ToolReply GetAgentSoFar()
     {
         // Without an intent on the map there is no agent to describe yet.
@@ -1077,7 +1052,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>Traits are taken several at a time and none is an answer on its own, which is why they are not buttons.</remarks>
     [Description("Offers words for this agent's voice under the question you are about to ask, to be picked from freely — several, one, or none and the text box stays open beside them. Call it before writing the question. Every word must be a way Morgana herself could speak: this section specialises her voice and never replaces it.")]
-    [RequiresApproval(false)]
     public ToolReply SetTraits(
         [Description("Eight to fourteen single adjectives, in the client's language. Real alternatives rather than shades of one temper, each plausible for this domain and none of them a way Morgana would never speak.")] [ToolParameter(Records.ToolScope.Request)] List<string> traits)
     {
@@ -1116,7 +1090,6 @@ public class InterviewTools
     /// <param name="fact">The fact itself, one sentence, in their vocabulary.</param>
     /// <param name="corrects">Any part of the sentence on record that the client has just contradicted: it is removed so the truth does not sit beside it.</param>
     [Description("Writes down one thing the client has just told you about how their work actually goes — not what you decided about it. Every step after this one opens holding what is on record for the agent in hand and for the business, so call it the moment an answer says something a later step would otherwise have to ask again: what they sell, who writes in and about what, what they open to answer it, what goes wrong, what they never do. One fact per call, in their own words. Never what you wrote into a section — that is already in the configuration and a second copy of it here is a second thing to keep true. Where what they just said contradicts something on record, say so in 'corrects' and the wrong one goes: a record nobody can correct is worse than no record, because every step after you will hold it and none of them can doubt it.")]
-    [RequiresApproval(false)]
     public ToolReply NoteDomainFact(
         [Description("What this is about, in one or two of their words — 'prices', 'deposits', 'custom cakes'. Facts about the same thing take the same subject: it is what another agent's step reads to decide whether to fetch this at all.")] [ToolParameter(Records.ToolScope.Request)] string subject,
         [Description("One short sentence about their work, in their vocabulary, never about the agent: 'the catalogue changes with the season', 'custom cakes are quoted at an appointment, never over the counter'. Standing on one entry of the map it is kept with that agent; drawing the map or closing the domain it is kept for the business as a whole.")] [ToolParameter(Records.ToolScope.Request)] string fact,
@@ -1165,7 +1138,6 @@ public class InterviewTools
     /// <remarks>A wrong fact left on record is held by every later step and none of them can doubt it.</remarks>
     /// <param name="fact">Any part of the sentence to remove, enough to tell it from the others.</param>
     [Description("Takes something off the record that is not true of their work. Use it the moment the client says otherwise. Use it on your own readings of their upload without hesitation — nobody confirmed those. Left standing, a wrong fact is held by every step after this one and none of them has any way to doubt it.")]
-    [RequiresApproval(false)]
     public ToolReply DropDomainFact(
         [Description("Any part of the sentence to remove, or its subject, enough to tell it from the others on record.")] [ToolParameter(Records.ToolScope.Request)] string fact)
     {
@@ -1191,7 +1163,6 @@ public class InterviewTools
     /// <remarks>A step opens holding only the subjects of the other agents: this reaches the rest when one of them bears on the question in hand.</remarks>
     /// <param name="intent">The agent's own intent name, as the opening message lists it.</param>
     [Description("Hands back what is on record about one of the other agents of this domain. You open holding what is known about the agent in hand and about the business; for every other agent you hold only the subjects it keeps — a domain read whole would be forty sentences carried into every question, nearly all about counters this step will never touch. Call this when a subject listed against another agent bears on the question you are about to ask: whether the counter next door already takes deposits decides whether this one should.")]
-    [RequiresApproval(false)]
     public ToolReply RecallAgent(
         [Description("The agent's own intent name, exactly as the opening message lists it.")] [ToolParameter(Records.ToolScope.Request)] string intent)
     {
@@ -1240,7 +1211,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>It belongs to the turn a step lands on and to no confirmation or follow-up after it.</remarks>
     [Description("States, over the question you are about to ask, what this step adds to the agent in hand. Call it in the turn a step lands on, before the question, every time without exception: a step that lands with nothing but a question leaves the client working out what this screen is for from the question alone. Call it in no other turn — a confirmation or a follow-up is not a landing and what stands there would say the interview had moved on when it has not. It is not room for anything else: never an answer to what they just said, never an apology, never a correction of your own last turn. Those belong in the question.")]
-    [RequiresApproval(false)]
     public ToolReply SetStepPlacing(
         [Description("One short sentence in the second person, naming what they will be able to do once this step is settled, in the things their work is actually made of — the orders, the counter, the people who write in. Name neither the agent nor the step: both already stand lit on the screen. Where the sentence needs a subject it is the part of their work this agent stands for, in their own words. Two things it is never: a line about what software becomes able to do ('this is where the catalogue stops being just words and becomes something you can really consult' is a brochure and tells a baker nothing) or a restatement of why this stage exists, which is written above for you and not for them. The test is simple: if the same sentence could open this step for a garage, a vet and a bank alike, it places nothing. Never place it at the expense of the steps behind it: what those settled is already their configuration, so a step announcing that things now finally become real tells them the screens they have just filled in were a game.")] [ToolParameter(Records.ToolScope.Request)] string placing)
     {
@@ -1264,7 +1234,6 @@ public class InterviewTools
     /// <remarks>The client approves exact words, so they stand apart from the sentence introducing them.</remarks>
     /// <param name="written">The section's prose exactly as it now stands, with nothing added around it.</param>
     [Description("Shows the client, word for word, the prose you have just written for their agent. Call it on the turn that asks whether a section is right, before the question: what they are approving is those exact words, so those words stand on their own and your own sentence introduces them rather than containing them. 'I have written a fond and careful voice that follows…' is one stretch of prose in which nothing marks where you stop speaking and their agent's text begins; an approval given to that approves nothing in particular. Only what is actually written — never a paraphrase, never a summary of it.")]
-    [RequiresApproval(false)]
     public ToolReply ShowWhatIsWritten(
         [Description("The section's prose exactly as it now stands, with nothing added around it and no quotation marks of your own.")] [ToolParameter(Records.ToolScope.Request)] string written)
     {
@@ -1287,7 +1256,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>It teaches register and length to a first-time client and is written per question, so it reads as an answer from the client's own trade.</remarks>
     [Description("Puts a worked example in the answer box under the question you are about to ask, greyed out, for them to take and cut about or to type over.")]
-    [RequiresApproval(false)]
     public ToolReply SetExample(
         [Description("An answer somebody in their trade might have given to the question you are about to ask, cut to the size of that question — forty to sixty words where it opens a step, ten to twenty where it follows one up — in their vocabulary and about their own work — never about another business, never a description of what to write and never the question itself put into their mouth: an example that says what the question says adds nothing to the screen it stands on. It teaches the register, the length and the level of detail at once. Send it unquoted: it stands in the box as text they can send as it is, so quotation marks around it arrive as part of their own answer. Make it close enough to their work to be worth editing and specific enough that it cannot be agreed with as it stands: an example that fits them exactly is one they will press past without adding what only they know.")] [ToolParameter(Records.ToolScope.Request)] string example)
     {
@@ -1310,7 +1278,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>There is exactly one button because the answer that adds nothing is the only one Alembic knows the whole of.</remarks>
     [Description("Attaches to the question you are about to ask the one button that answers it without adding anything — agreement, or that there is nothing to add — so a client in that position settles the turn with one press instead of a typed sentence. Call it before writing the question: the button renders below it. The text box stays open either way.")]
-    [RequiresApproval(false)]
     public ToolReply SetChoice(
         [Description("What the client reads on the button. It carries the answer that adds nothing and has to answer the question as you put it — 'That's everything' where you asked whether that is everything, 'Nothing missing' where you asked whether anything is missing, 'No, nothing like that' where you asked whether there is something the agent should never do.")] [ToolParameter(Records.ToolScope.Request)] string label,
         [Description("The complete answer the button sends, in the client's register, reading as something they would plausibly have typed.")] [ToolParameter(Records.ToolScope.Request)] string value)
@@ -1331,7 +1298,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>A description only has to be told apart from both sources: the domain's committed intents and the entries the map still has to write.</remarks>
     [Description("Returns the name and description of every intent already in the domain, the descriptions a new one is weighed against.")]
-    [RequiresApproval(false)]
     public ToolReply GetExistingIntents()
     {
         // Intents committed to the domain by earlier sittings or an upload, apart from the one in hand.
@@ -1367,7 +1333,6 @@ public class InterviewTools
     /// Returns the prompt this agent's model will really read.
     /// </summary>
     [Description("Returns the complete prompt this agent's model will read, composed as Morgana composes it — her layer, the fences and your sections beneath. Reading your own work composed is the only way to see whether your layer contradicts hers or merely repeats her.")]
-    [RequiresApproval(false)]
     public async Task<ToolReply> GetComposedPrompt()
     {
         // Without a Target the composed prompt would open on nothing.
@@ -1397,7 +1362,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>A territory that reads as a list of functions or never left the routing phrase is visible here and nowhere else in the interview.</remarks>
     [Description("Returns the card this agent will present to anyone who might consult it: what it answers for and the skills it advertises. Call it once the territory is written — a colleague weighing a question reads that description and nothing else, so this is where a sentence that reads as a list of functions is visible.")]
-    [RequiresApproval(false)]
     public ToolReply GetAgentCard()
     {
         // The card is packed as a caller will be handed it: the intent's name, the description as it stands and the tools as skills.
@@ -1414,7 +1378,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>Only this entry is written: every other description is read back first, which keeps this one distinct.</remarks>
     [Description("Rewrites what this entry routes on, in the sharper words the territory settled. The classifier reads it against every other entry's description, so read those back first and leave this one distinct from all of them. Only this entry: no other intent of the domain is yours.")]
-    [RequiresApproval(false)]
     public ToolReply SetIntentDescription(
         [Description("What lands on this agent, said for the classifier: the subject and the kinds of request that belong to it, in the client's own words. Never the agent's boundaries, its tools or its voice.")] [ToolParameter(Records.ToolScope.Request)] string description)
     {
@@ -1437,7 +1400,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>Findings about the client's other agents are filtered out: they are real but this pass cannot fix them.</remarks>
     [Description("Returns everything wrong with this agent that can be decided without a model. Fix what it reports rather than explaining it away.")]
-    [RequiresApproval(false)]
     public ToolReply GetFindings()
     {
         // Without an intent there is no agent to check.
@@ -1475,7 +1437,6 @@ public class InterviewTools
     /// </summary>
     /// <remarks>The state machine confirms the claim: which fields are set is a fact and not the model's to assert.</remarks>
     [Description("Declares this pass settled. The declaration lives in this call and nowhere else: never write a marker, a token or a closing formula into your text to mean it.")]
-    [RequiresApproval(false)]
     public ToolReply SetPassCompleted()
     {
         // When correcting, every section is already written, so a pass could settle the moment it opened and walk the client through an edit that asked nothing.

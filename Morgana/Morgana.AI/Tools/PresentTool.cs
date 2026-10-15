@@ -29,7 +29,7 @@ public class PresentTool : MorganaTool
     /// </summary>
     /// <returns>The named result the tool loop turns into its authored text: the menu's labels or the fact that there is none.</returns>
     [Description("Returns the actions the user receives as buttons beneath your text. Your introduction is the text you write after it: a few sentences of your own on what you can do for them.")]
-    [RequiresApproval(false)]
+    [SystemTool]
     public Task<Records.FrameworkToolResult> Present()
     {
         // The menu is the agent's own and was fixed when the agent was built: the model gives it a voice and never chooses it.

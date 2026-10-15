@@ -232,14 +232,14 @@ public class MorganaAgentAdapter
             ? KeepSoundWorkflows(intentAttribute.Intent, agentType, toolRegistryService.GetWorkflowDefinitions(intentAttribute.Intent), [.. domainTools, .. mcpToolDefinitions])
             : toolRegistryService.GetWorkflowDefinitions(intentAttribute.Intent);
 
-        // The menu is written by code from the declared offerings: a workflow withdrawn above is no button.
-        // An MCP tool carries no offering. A tool leads to itself and a workflow to its launcher.
+        // The menu is written by code from the declared menu entries: a workflow withdrawn above is no button.
+        // An MCP tool carries no menu entry. A tool leads to itself and a workflow to its launcher.
         IReadOnlyList<Records.ReplyAction> menu =
         [
-            .. domainTools.Where(tool => tool.Offering is not null)
-                .Select(tool => (tool.Offering!.Ordinal, Action: new Records.ReplyAction(tool.Name, tool.Offering.Label, tool.Offering.Label)))
-                .Concat(workflowDefinitions.Where(workflow => workflow.Offering is not null)
-                    .Select(workflow => (workflow.Offering!.Ordinal, Action: new Records.ReplyAction(Constants.Workflows.LauncherPrefix + workflow.Name, workflow.Offering.Label, workflow.Offering.Label))))
+            .. domainTools.Where(tool => tool.MenuEntry is not null)
+                .Select(tool => (tool.MenuEntry!.Ordinal, Action: new Records.ReplyAction(tool.Name, tool.MenuEntry.Label, tool.MenuEntry.Label)))
+                .Concat(workflowDefinitions.Where(workflow => workflow.MenuEntry is not null)
+                    .Select(workflow => (workflow.MenuEntry!.Ordinal, Action: new Records.ReplyAction(Constants.Workflows.LauncherPrefix + workflow.Name, workflow.MenuEntry.Label, workflow.MenuEntry.Label))))
                 .OrderBy(entry => entry.Ordinal)
                 .Select(entry => entry.Action)
         ];

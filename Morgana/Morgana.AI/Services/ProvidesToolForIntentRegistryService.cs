@@ -37,9 +37,9 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
     private readonly ConcurrentDictionary<string, IReadOnlyList<Records.ToolDefinition>> toolDefinitionsByIntent = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The workflows that classes declare, projected once per intent: a class does not change under a running process.
+    /// The workflows that classes declare, with their classes, found once per intent: a class does not change under a running process.
     /// </summary>
-    private readonly Lazy<Dictionary<string, IReadOnlyList<Records.WorkflowDefinition>>> workflowsByIntent;
+    private readonly Lazy<Records.WorkflowDiscovery> workflowDiscovery;
 
     /// <summary>
     /// Initializes a new instance of ProvidesToolForIntentRegistryService.
@@ -52,21 +52,24 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
 
         // Discovery is deferred to the first lookup because the plugins may not all be loaded when DI builds this service.
         intentToToolType = new Lazy<Dictionary<string, Type>>(InitializeRegistry);
-        workflowsByIntent = new Lazy<Dictionary<string, IReadOnlyList<Records.WorkflowDefinition>>>(DiscoverWorkflows);
+        workflowDiscovery = new Lazy<Records.WorkflowDiscovery>(DiscoverWorkflows);
     }
 
     /// <summary>
     /// Finds every <see cref="MorganaWorkflow"/> that declares an intent and projects each one once.
     /// </summary>
-    /// <returns>The definitions per intent, lowercased, case-insensitive.</returns>
+    /// <returns>The definitions and the classes per intent, lowercased, case-insensitive.</returns>
     /// <exception cref="InvalidOperationException">A workflow class cannot be instantiated.</exception>
-    private Dictionary<string, IReadOnlyList<Records.WorkflowDefinition>> DiscoverWorkflows()
+    private Records.WorkflowDiscovery DiscoverWorkflows()
     {
         // Announces the scan, which runs once on first use.
         Console.WriteLine("🔍 Scanning assemblies for MorganaWorkflow implementations...");
 
         // Grouped by intent: one agent may be served by several workflow classes.
         Dictionary<string, List<Records.WorkflowDefinition>> definitionsByIntent = new(StringComparer.OrdinalIgnoreCase);
+
+        // The classes beside their definitions, so that startup can check the attributes that each one declares.
+        Dictionary<string, List<Type>> typesByIntent = new(StringComparer.OrdinalIgnoreCase);
 
         // A workflow without the attribute belongs to no agent, so nothing could ever launch it.
         IEnumerable<Type> workflowTypes = FindConcreteTypesDeclaring<MorganaWorkflow, ProvidesWorkflowForIntentAttribute>();
@@ -100,6 +103,11 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
                 definitionsByIntent[intent] = definitions = [];
             definitions.Add(workflow.ToDefinition());
 
+            // The class is kept beside its definition, under the same intent.
+            if (!typesByIntent.TryGetValue(intent, out List<Type>? workflowTypesOfIntent))
+                typesByIntent[intent] = workflowTypesOfIntent = [];
+            workflowTypesOfIntent.Add(workflowType);
+
             // Lets the operator see at startup which agent each workflow will be launched from.
             Console.WriteLine($"  📦 Registered workflow: {workflowType.Name} for intent '{declaration.Intent}'");
         }
@@ -108,7 +116,9 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         Console.WriteLine();
 
         // Handed over read-only: the registry never changes after discovery.
-        return definitionsByIntent.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<Records.WorkflowDefinition>)pair.Value, StringComparer.OrdinalIgnoreCase);
+        return new Records.WorkflowDiscovery(
+            definitionsByIntent.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<Records.WorkflowDefinition>)pair.Value, StringComparer.OrdinalIgnoreCase),
+            typesByIntent.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<Type>)pair.Value, StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -308,11 +318,15 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
 
     /// <inheritdoc />
     public IReadOnlyList<Records.WorkflowDefinition> GetWorkflowDefinitions(string intent)
-        => string.IsNullOrWhiteSpace(intent) ? [] : workflowsByIntent.Value.GetValueOrDefault(intent) ?? [];
+        => string.IsNullOrWhiteSpace(intent) ? [] : workflowDiscovery.Value.DefinitionsByIntent.GetValueOrDefault(intent) ?? [];
 
     /// <inheritdoc />
     public IReadOnlyDictionary<string, IReadOnlyList<Records.WorkflowDefinition>> GetAllRegisteredWorkflows()
-        => workflowsByIntent.Value;
+        => workflowDiscovery.Value.DefinitionsByIntent;
+
+    /// <inheritdoc />
+    public IReadOnlyList<Type> FindWorkflowTypesForIntent(string intent)
+        => string.IsNullOrWhiteSpace(intent) ? [] : workflowDiscovery.Value.TypesByIntent.GetValueOrDefault(intent) ?? [];
 
     /// <summary>
     /// Lists the methods of a tool class that are tools: the public instance methods that it declares
@@ -364,7 +378,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         ];
 
         // The method's attribute, when present, puts the tool in the agent's menu.
-        OfferedToUserAttribute? offered = method.GetCustomAttribute<OfferedToUserAttribute>();
+        UserToolAttribute? userTool = method.GetCustomAttribute<UserToolAttribute>();
 
         // The schema of the returned record is derived once: the contract shown to the model and the field projection both read it.
         JsonElement? returnSchema = DeriveReturnSchema(method.ReturnType);
@@ -372,15 +386,15 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         // A framework result becomes authored text, so its schema is no contract to show the model.
         bool returnsFrameworkResult = HandlesIntentAgentRegistryService.UnwrapReturnType(method.ReturnType) == typeof(Records.FrameworkToolResult);
 
-        // A tool is its method: the name, the description, the approval flag and the offering all come from the declaration.
+        // A tool is its method: the name, the description, the approval flag and the menu entry all come from the declaration.
         return new Records.ToolDefinition(
             method.Name,
             method.GetCustomAttribute<DescriptionAttribute>()?.Description ?? string.Empty,
             parameters,
             Reserved: false,
-            RequiresExecutionApproval: method.GetCustomAttribute<RequiresApprovalAttribute>()?.Required ?? false,
+            RequiresExecutionApproval: method.GetCustomAttribute<RequiresApprovalAttribute>() is not null,
             Returns: ProjectReturns(returnSchema),
-            Offering: offered is null ? null : new Records.ToolOffering(offered.Ordinal, offered.Label),
+            MenuEntry: userTool is null ? null : new Records.MenuEntry(userTool.Ordinal, userTool.Label),
             ReturnSchema: returnsFrameworkResult ? null : returnSchema);
     }
 

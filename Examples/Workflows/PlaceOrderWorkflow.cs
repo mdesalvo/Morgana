@@ -10,7 +10,7 @@ namespace Examples.Workflows;
 /// The order procedure of the greenhouse: a quote is created, then the customer confirms or cancels it.
 /// </summary>
 [ProvidesWorkflowForIntent("inventory")]
-[OfferedToUser(3, "🛒 Place an order")]
+[UserTool(3, "🛒 Place an order")]
 [Description("Placing a new order for a plant, from its quote to its confirmation or cancellation.")]
 public sealed class PlaceOrderWorkflow : MorganaWorkflow
 {

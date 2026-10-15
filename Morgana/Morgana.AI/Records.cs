@@ -1238,7 +1238,7 @@ public static class Records
     /// True for the framework's base tools (Reply and Present) alone: the projection of a domain tool's class leaves it false.
     /// Consumers skip a reserved tool because the framework controls its output.
     /// </param>
-    /// <param name="Offering">The button that offers the tool to the user, declared with <see cref="Attributes.OfferedToUserAttribute"/>; null for a tool that only the model calls.</param>
+    /// <param name="MenuEntry">The button that offers the tool to the user, declared with <see cref="Attributes.UserToolAttribute"/>; null for a tool declared <c>[SystemTool]</c>.</param>
     /// <param name="ReturnSchema">
     /// The JSON schema of the record that the tool returns, as Microsoft.Extensions.AI publishes it. Null when the tool
     /// returns no record or a <see cref="FrameworkToolResult"/>, which becomes authored text and is no contract.
@@ -1250,15 +1250,15 @@ public static class Records
         bool Reserved = false,
         bool RequiresExecutionApproval = false,
         IReadOnlyList<ToolReturn>? Returns = null,
-        ToolOffering? Offering = null,
+        MenuEntry? MenuEntry = null,
         JsonElement? ReturnSchema = null);
 
     /// <summary>
-    /// The place of a tool or a workflow in its agent's menu.
+    /// One entry of an agent's menu: its position and its button's text.
     /// </summary>
     /// <param name="Ordinal">Position of the button, starting at 1.</param>
     /// <param name="Label">Text of the button and message that its press sends.</param>
-    public record ToolOffering(int Ordinal, string Label);
+    public record MenuEntry(int Ordinal, string Label);
 
     /// <summary>
     /// One parameter of a tool, projected from the method parameter, its <c>[Description]</c> and its <see cref="Attributes.ToolParameterAttribute"/>.
@@ -1287,6 +1287,16 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
+    /// What one scan of the loaded assemblies finds of the workflows: the definitions that the engine runs
+    /// and the classes that startup checks, both per intent.
+    /// </summary>
+    /// <param name="DefinitionsByIntent">The projected definitions per intent, case-insensitive.</param>
+    /// <param name="TypesByIntent">The classes that declare them per intent, case-insensitive.</param>
+    public record WorkflowDiscovery(
+        IReadOnlyDictionary<string, IReadOnlyList<WorkflowDefinition>> DefinitionsByIntent,
+        IReadOnlyDictionary<string, IReadOnlyList<Type>> TypesByIntent);
+
+    /// <summary>
     /// A procedure of one agent whose steps are kept in order by the framework: declared by a
     /// <c>MorganaWorkflow</c> class beside the agent's tools and run by the workflow engine.
     /// </summary>
@@ -1295,14 +1305,14 @@ public static class Records
     /// <param name="Steps">The steps of the procedure; the first one is where it starts.</param>
     /// <param name="Edges">Every transition of the procedure, in the order the class declared them.</param>
     /// <param name="Parameters">The public instance properties that the class declares itself: the values that edges may carry.</param>
-    /// <param name="Offering">The button that offers the procedure to the user, declared on the class; null when only the model starts it.</param>
+    /// <param name="MenuEntry">The button that offers the procedure to the user, declared with <see cref="Attributes.UserToolAttribute"/> on the class; null for a class declared <c>[SystemTool]</c>.</param>
     public record WorkflowDefinition(
         string Name,
         string Description,
         IReadOnlyList<WorkflowStep> Steps,
         IReadOnlyList<WorkflowEdge> Edges,
         IReadOnlyList<string> Parameters,
-        ToolOffering? Offering = null)
+        MenuEntry? MenuEntry = null)
     {
         /// <summary>Every tool that a step of the workflow names.</summary>
         public HashSet<string> ToolSignature()
