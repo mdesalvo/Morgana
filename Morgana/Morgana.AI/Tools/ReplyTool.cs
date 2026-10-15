@@ -250,7 +250,7 @@ public class ReplyTool : MorganaTool
         // Otherwise an action can only name one of the agent's tools, as the validation requires.
         else
             properties["actions"]!["items"]!["properties"]!["tool"]!.AsObject()["enum"] =
-                new JsonArray([.. actionableToolNames.Select(tool => (JsonNode)JsonValue.Create(tool)!)]);
+                new JsonArray([.. actionableToolNames.Select(JsonNode (tool) => JsonValue.Create(tool)!)]);
 
         // The card's recursive section is written out level by level, so that the schema stops at the depth the validation accepts.
         JsonObject components = properties["card"]!["properties"]!["components"]!.AsObject();

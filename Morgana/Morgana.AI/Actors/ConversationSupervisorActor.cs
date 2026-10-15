@@ -8,7 +8,6 @@ using Microsoft.Extensions.Configuration;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
-using Morgana.AI;
 using Morgana.Contracts;
 using Status = Akka.Actor.Status;
 

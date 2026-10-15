@@ -10,7 +10,6 @@ using Microsoft.Extensions.Logging;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
-using Morgana.AI;
 using Morgana.Contracts;
 using Status = Akka.Actor.Status;
 
@@ -316,7 +315,7 @@ public class MorganaAgent : MorganaActor
             // The user's answer approves the pending calls only when it is the approve button's own text.
             bool approved = frameworkReplies.Approval is [QuickReply approveButton, ..]
                             && string.Equals(req.Content?.Trim(), approveButton.Value, StringComparison.OrdinalIgnoreCase);
-            userContents.AddRange(pendingApprovals.Select(request => (AIContent)request.CreateResponse(approved)));
+            userContents.AddRange(pendingApprovals.Select(AIContent (request) => request.CreateResponse(approved)));
 
             agentLogger.LogInformation(
                 "Agent '{AgentIntent}' {Outcome} {Count} tool call(s) on the user's answer",
@@ -496,7 +495,7 @@ public class MorganaAgent : MorganaActor
 
             // The user's approval is recorded as the answer to the pending calls, so the model resumes with them.
             aiChatHistoryProvider.AppendMessage(session, new ChatMessage(ChatRole.User,
-                [.. approvedByPress.Select(request => (AIContent)request.CreateResponse(true))]) { CreatedAt = DateTimeOffset.UtcNow });
+                [.. approvedByPress.Select(AIContent (request) => request.CreateResponse(true))]) { CreatedAt = DateTimeOffset.UtcNow });
             await RunModelAsync();
         }
 
@@ -542,18 +541,24 @@ public class MorganaAgent : MorganaActor
         // The consultation budget is spent per turn, before the session is saved: a restart must not start the next turn with it already spent.
         aiContextProvider.DropVariable(session, Constants.ContextKeys.ConsultationRounds);
 
-        // A user who leaves abandons the workflow where it stands, undoing nothing. Silence, a disconnection
-        // or a restart leave it in place, so the next message resumes at the pending step.
-        if (turnReply.UserIsLeaving)
-            aiContextProvider.DropWorkflowPosition(session);
-
-        // A workflow that still stands at a choice step offers its tools as the buttons, whatever the model
-        // closed with: a model that never complied, the framework's own closure and a missing Reply all end here.
-        if (!turnReply.UserIsLeaving && !turnOutcome.AwaitsApproval)
+        // The workflow position is touched only by a leaving user or by a turn that awaits no approval:
+        // a turn awaiting approval keeps the approval buttons alone.
+        switch (turnReply.UserIsLeaving)
         {
-            // A workflow standing at a choice step offers the tools of that step as buttons.
-            if (aiContextProvider.GetWorkflowPosition(session)?.Resolve(aiContextProvider.Workflows) is { Step.Tools.Count: > 1 } choicePosition)
-                turnReply = turnReply.WithStepActions(choicePosition.Step.Tools);
+            // A user who leaves abandons the workflow where it stands, undoing nothing. Silence, a disconnection
+            // or a restart leave it in place, so the next message resumes at the pending step.
+            case true:
+                aiContextProvider.DropWorkflowPosition(session);
+                break;
+            // A workflow that still stands at a choice step offers its tools as the buttons, whatever the model
+            // closed with: a model that never complied, the framework's own closure and a missing Reply all end here.
+            case false when !turnOutcome.AwaitsApproval:
+            {
+                // A workflow standing at a choice step offers the tools of that step as buttons.
+                if (aiContextProvider.GetWorkflowPosition(session)?.Resolve(aiContextProvider.Workflows) is { Step.Tools.Count: > 1 } choicePosition)
+                    turnReply = turnReply.WithStepActions(choicePosition.Step.Tools);
+                break;
+            }
         }
 
         // A landing turn is the agent presenting itself, so it closes with its menu whatever the model closed with:

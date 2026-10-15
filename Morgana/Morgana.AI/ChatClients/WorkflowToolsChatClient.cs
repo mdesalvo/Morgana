@@ -123,7 +123,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         }
 
         // With no workflow declared and every colleague within reach the agent is offered exactly the tools it was given, Present aside.
-        if (workflows.Count == 0 && !colleaguesOutOfReach && !tools.Any(tool => tool.Name == Constants.Tools.Present))
+        if (workflows.Count == 0 && !colleaguesOutOfReach && tools.All(tool => tool.Name != Constants.Tools.Present))
             return options;
 
         // The tools the model is offered on this call, each one weighed against the state of the session.
@@ -146,17 +146,22 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
             if (tool.Name == Constants.Tools.Present)
                 continue;
 
-            // At a choice step Reply is offered with the step's tools as the only actions it may propose.
-            if (runningWorkflow is { Step.Tools.Count: > 1 } && tool.Name == Constants.Tools.Reply)
-                offeredTools.Add(WithStepActions(tool, runningWorkflow.Value.Step.Tools));
-
-            // A tool of the current step is offered without what the framework binds.
-            else if (runningWorkflow is { } workflowAndStep && workflowAndStep.Step.Tools.Contains(tool.Name))
-                offeredTools.Add(WithoutBoundParameters(tool, position!.Arguments.Keys));
-
-            // Any other tool that the workflows let through is offered as the agent holds it.
-            else
-                offeredTools.Add(tool);
+            // Each tool is offered in the form that the running workflow allows, as it is held where no workflow runs.
+            switch (runningWorkflow)
+            {
+                // At a choice step Reply is offered with the step's tools as the only actions it may propose.
+                case { Step.Tools.Count: > 1 } when tool.Name == Constants.Tools.Reply:
+                    offeredTools.Add(WithStepActions(tool, runningWorkflow.Value.Step.Tools));
+                    break;
+                // A tool of the current step is offered without what the framework binds.
+                case { } workflowAndStep when workflowAndStep.Step.Tools.Contains(tool.Name):
+                    offeredTools.Add(WithoutBoundParameters(tool, position!.Arguments.Keys));
+                    break;
+                // Any other tool that the workflows let through is offered as the agent holds it.
+                default:
+                    offeredTools.Add(tool);
+                    break;
+            }
         }
 
         // The caller's options are shared across turns, so the narrowedOptions tool list goes on a clone.
@@ -229,7 +234,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         // One button per tool of the step: the user chooses among exactly the moves that the step allows.
         actions["minItems"] = stepTools.Count;
         actions["maxItems"] = stepTools.Count;
-        actions["items"]!["properties"]!["tool"]!.AsObject()["enum"] = new JsonArray([.. stepTools.Select(tool => (JsonNode)JsonValue.Create(tool)!)]);
+        actions["items"]!["properties"]!["tool"]!.AsObject()["enum"] = new JsonArray([.. stepTools.Select(JsonNode (tool) => JsonValue.Create(tool)!)]);
 
         // Reply declares actions optional, but a choice step cannot be proposed without them.
         JsonArray required = schema["required"] as JsonArray ?? [];

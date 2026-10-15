@@ -154,7 +154,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
         => new ChatMessage(ChatRole.Tool, [.. response
             .SelectMany(message => message.Contents)
             .OfType<FunctionCallContent>()
-            .Select(call => (AIContent)new FunctionResultContent(call.CallId, textMissingRefusal))]);
+            .Select(AIContent (call) => new FunctionResultContent(call.CallId, textMissingRefusal))]);
 
     /// <summary>
     /// True when one of the calls is to a tool that this agent runs only with the user's approval.

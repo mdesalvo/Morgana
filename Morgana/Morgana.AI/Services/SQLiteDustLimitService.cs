@@ -3,7 +3,6 @@ using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Morgana.AI.Interfaces;
-using Morgana.AI;
 using static Morgana.AI.Records;
 
 namespace Morgana.AI.Services;

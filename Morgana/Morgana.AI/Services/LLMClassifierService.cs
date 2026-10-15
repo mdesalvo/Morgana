@@ -131,7 +131,7 @@ public class LLMClassifierService : IClassifierService
 
         // The intent of a candidate is the one string of the schema that the domain closes.
         JsonObject intentProperty = schema["properties"]!["intents"]!["items"]!["properties"]!["intent"]!.AsObject();
-        intentProperty["enum"] = new JsonArray([.. intentNames.Select(intentName => (JsonNode?)JsonValue.Create(intentName))]);
+        intentProperty["enum"] = new JsonArray([.. intentNames.Select(JsonNode? (intentName) => JsonValue.Create(intentName))]);
 
         // The narrowed schema is handed to the provider as it is.
         return JsonSerializer.SerializeToElement(schema);

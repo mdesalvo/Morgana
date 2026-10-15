@@ -6,7 +6,6 @@ using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
-using Morgana.AI;
 
 namespace Morgana.AI.Services;
 

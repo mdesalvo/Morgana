@@ -117,8 +117,8 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
 
         // Handed over read-only: the registry never changes after discovery.
         return new Records.WorkflowDiscovery(
-            definitionsByIntent.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<Records.WorkflowDefinition>)pair.Value, StringComparer.OrdinalIgnoreCase),
-            typesByIntent.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<Type>)pair.Value, StringComparer.OrdinalIgnoreCase));
+            definitionsByIntent.ToDictionary(pair => pair.Key, IReadOnlyList<Records.WorkflowDefinition> (pair) => pair.Value, StringComparer.OrdinalIgnoreCase),
+            typesByIntent.ToDictionary(pair => pair.Key, IReadOnlyList<Type> (pair) => pair.Value, StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>

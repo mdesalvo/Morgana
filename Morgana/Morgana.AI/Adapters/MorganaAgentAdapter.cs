@@ -333,9 +333,8 @@ public class MorganaAgentAdapter
         MorganaChatHistoryProvider chatHistoryProvider = new MorganaChatHistoryProvider(
             intentAttribute.Intent, chatReducer, logger, promptComposerService: promptComposerService);
 
-        // What the model is told when Reply is dropped from an approval turn, and when a turn ends without Reply.
-        string approvalTextMissingRefusal = await promptComposerService.ComposeReplyNotAcceptedAsync(
-            ReplyTool.NoTextReason());
+        // What the model is told when Reply is dropped from an approval turn and when a turn ends without Reply.
+        string approvalTextMissingRefusal = await promptComposerService.ComposeReplyNotAcceptedAsync(ReplyTool.NoTextReason());
         string? turnClosureRequest = await promptComposerService.ComposeTurnClosureRequestAsync();
         string turnClosedResult = await promptComposerService.ComposeToolInjectionAsync(Constants.ToolInjections.TurnClosed);
 
@@ -365,7 +364,7 @@ public class MorganaAgentAdapter
         // A launcher exists only for a workflow that the agent keeps.
         List<AIFunction> launcherFunctions = agentWorkflows is null
             ? []
-            : [.. workflowDefinitions.Select(workflow => (AIFunction)new WorkflowLauncherFunction(
+            : [.. workflowDefinitions.Select(AIFunction (workflow) => new WorkflowLauncherFunction(
                 Constants.Workflows.LauncherPrefix + workflow.Name,
                 workflow.Description,
                 () => LaunchWorkflowAsync(workflow, agentWorkflows)))];

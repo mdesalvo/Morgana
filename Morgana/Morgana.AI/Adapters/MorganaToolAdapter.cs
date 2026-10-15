@@ -251,7 +251,7 @@ public class MorganaToolAdapter
         // A lone type is written plain, as the library writes a type that never admitted null.
         schema["type"] = acceptedTypes.Length == 1
             ? acceptedTypes[0]
-            : new JsonArray([.. acceptedTypes.Select(type => (JsonNode)JsonValue.Create(type)!)]);
+            : new JsonArray([.. acceptedTypes.Select(JsonNode (type) => JsonValue.Create(type)!)]);
     }
 
     /// <summary>

@@ -787,13 +787,18 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         bool isUserTool = declaration.GetCustomAttribute<UserToolAttribute>() is not null;
         bool isSystemTool = declaration.GetCustomAttribute<SystemToolAttribute>() is not null;
 
-        // Neither attribute leaves the question of the menu unanswered.
-        if (!isUserTool && !isSystemTool)
-            errors.Add($"{subject} declares neither [UserTool] nor [SystemTool]: whether the user is offered it is always declared");
-
-        // Both attributes answer it twice and contradict each other.
-        else if (isUserTool && isSystemTool)
-            errors.Add($"{subject} declares both [UserTool] and [SystemTool]: a tool is either the user's or the system's");
+        // A declaration carrying exactly one of the two is sound and adds no message.
+        switch (isUserTool)
+        {
+            // Neither attribute leaves the question of the menu unanswered.
+            case false when !isSystemTool:
+                errors.Add($"{subject} declares neither [UserTool] nor [SystemTool]: whether the user is offered it is always declared");
+                break;
+            // Both attributes answer it twice and contradict each other.
+            case true when isSystemTool:
+                errors.Add($"{subject} declares both [UserTool] and [SystemTool]: a tool is either the user's or the system's");
+                break;
+        }
     }
 
     /// <summary>
@@ -813,16 +818,19 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
         // Without a scope the framework cannot tell a value asked of the user from one read from the context.
         ToolParameterAttribute? declaration = parameter.GetCustomAttribute<ToolParameterAttribute>();
-        if (declaration is null)
+
+        // Any other declaration passes on to the rules of context parameters below.
+        switch (declaration)
         {
             // A parameter without a scope is refused, since the framework cannot tell where its value comes from.
-            errors.Add($"{parameterSubject} has no [ToolParameter]: its scope is always declared");
-            return;
+            case null:
+                errors.Add($"{parameterSubject} has no [ToolParameter]: its scope is always declared");
+                return;
+            // Only what the context holds can be shared, so a value asked of the user has nothing to share.
+            case { Scope: Records.ToolScope.Request, Shared: true }:
+                errors.Add($"{parameterSubject} is a request parameter marked as shared: only what the context holds is shared");
+                break;
         }
-
-        // Only what the context holds can be shared, so a value asked of the user has nothing to share.
-        if (declaration is { Scope: Records.ToolScope.Request, Shared: true })
-            errors.Add($"{parameterSubject} is a request parameter marked as shared: only what the context holds is shared");
 
         // The remaining rules concern context parameters only.
         if (declaration.Scope != Records.ToolScope.Context)
