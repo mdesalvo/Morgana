@@ -358,7 +358,7 @@ public class MorganaAgentAdapter
                 innerClient, sessionAccessor, morganaAIContextProvider, workflowDefinitions, MaxConsultationRoundsPerTurn))
             // Below the loop, a response asking for the user's approval waits for the turn's text and loses its
             // Reply: that turn is the framework's to close, with the approval buttons.
-            .Use(innerClient => new ApprovalTurnChatClient(innerClient, approvalTextMissingRefusal))
+            .Use(innerClient => new ApprovalTurnChatClient(innerClient, sessionAccessor, morganaAIContextProvider, approvalTextMissingRefusal))
             .Build();
 
         // A launcher exists only for a workflow that the agent keeps.

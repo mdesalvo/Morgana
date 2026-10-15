@@ -242,6 +242,7 @@ public class MorganaAgent : MorganaActor
                 // The turn's closure is dropped from the session, so it cannot close the next turn as well.
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnReply);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.Landing);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.PressedActionTool);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ConsultationRounds);
             }
         }
@@ -333,6 +334,11 @@ public class MorganaAgent : MorganaActor
         // runs and dropped with the turn.
         if (req.IsLanding)
             await aiContextProvider.SetVariableAsync(aiAgentSession, Constants.ContextKeys.Landing, true);
+
+        // The model client reads the pressed tool to let that tool's approval request through without text:
+        // it is set before the model runs and dropped with the turn.
+        if (pressedActionTool is not null)
+            await aiContextProvider.SetVariableAsync(aiAgentSession, Constants.ContextKeys.PressedActionTool, pressedActionTool);
 
         // A phrase that arrived while no agent was active is already saved as Morgana's own.
         // This agent keeps it because its model has to read it, marked as somebody else's so a
@@ -537,6 +543,9 @@ public class MorganaAgent : MorganaActor
 
         // The landing ends with the turn, before the session is saved: a restart must not find it set.
         aiContextProvider.DropVariable(session, Constants.ContextKeys.Landing);
+
+        // The pressed tool ends with the turn too, before the session is saved: a restart must not find it set.
+        aiContextProvider.DropVariable(session, Constants.ContextKeys.PressedActionTool);
 
         // The consultation budget is spent per turn, before the session is saved: a restart must not start the next turn with it already spent.
         aiContextProvider.DropVariable(session, Constants.ContextKeys.ConsultationRounds);

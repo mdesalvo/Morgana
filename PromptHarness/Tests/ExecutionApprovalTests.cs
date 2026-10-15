@@ -78,7 +78,7 @@ public sealed class ExecutionApprovalTests
     {
         ScriptedChatClient model = new ScriptedChatClient(
             Answer(new TextContent("Here is your order."), new FunctionCallContent("r1", "Reply", new Dictionary<string, object?> { ["awaits"] = "nothing" })));
-        ApprovalTurnChatClient client = new ApprovalTurnChatClient(model);
+        ApprovalTurnChatClient client = new ApprovalTurnChatClient(model, () => null, new MorganaAIContextProvider(NullLogger.Instance));
 
         ChatResponse response = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "status of ORD-1")],
             new ChatOptions { Tools = [new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string orderId) => "", "ConfirmOrder"))] });
@@ -95,7 +95,7 @@ public sealed class ExecutionApprovalTests
         ScriptedChatClient model = new ScriptedChatClient(
             Answer(Confirm("c1")),
             Answer(new TextContent("I'll confirm ORD-1 for you."), Confirm("c2")));
-        ApprovalTurnChatClient client = new ApprovalTurnChatClient(model, "REFUSED: no text yet");
+        ApprovalTurnChatClient client = new ApprovalTurnChatClient(model, () => null, new MorganaAIContextProvider(NullLogger.Instance), "REFUSED: no text yet");
         List<ChatMessage> turn = [new ChatMessage(ChatRole.User, "Confirm ORD-1")];
         ChatOptions options = new ChatOptions { Tools = [new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string orderId) => "", "ConfirmOrder"))] };
 
@@ -115,7 +115,7 @@ public sealed class ExecutionApprovalTests
     {
         FunctionCallContent Confirm(string callId) => new FunctionCallContent(callId, "ConfirmOrder", new Dictionary<string, object?> { ["orderId"] = "ORD-1" });
         ScriptedChatClient model = new ScriptedChatClient(Answer(Confirm("c1")), Answer(Confirm("c2")), Answer(Confirm("c3")));
-        ApprovalTurnChatClient client = new ApprovalTurnChatClient(model, "REFUSED: no text yet");
+        ApprovalTurnChatClient client = new ApprovalTurnChatClient(model, () => null, new MorganaAIContextProvider(NullLogger.Instance), "REFUSED: no text yet");
 
         ChatResponse response = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "Confirm ORD-1")],
             new ChatOptions { Tools = [new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string orderId) => "", "ConfirmOrder"))] });
@@ -123,6 +123,27 @@ public sealed class ExecutionApprovalTests
         // Bounded, so a model that never writes cannot hold the turn: the framework's own question then speaks for it.
         Assert.Equal(3, model.Requests.Count);
         Assert.Equal("c3", Assert.Single(response.Messages.SelectMany(message => message.Contents).OfType<FunctionCallContent>()).CallId);
+    }
+
+    [Theory]
+    [InlineData("ConfirmOrder", 1)]
+    [InlineData("CancelOrder", 3)]
+    public async Task ExecutionApproval_Textless_request_is_refused_unless_it_is_to_the_tool_the_user_pressed(string pressedTool, int expectedRequests)
+    {
+        FunctionCallContent Confirm(string callId) => new FunctionCallContent(callId, "ConfirmOrder", new Dictionary<string, object?> { ["orderId"] = "ORD-1" });
+        ScriptedChatClient model = new ScriptedChatClient(Answer(Confirm("c1")), Answer(Confirm("c2")), Answer(Confirm("c3")));
+        MorganaAIContextProvider provider = new MorganaAIContextProvider(NullLogger.Instance);
+        // The session belongs to an agent that never talks to a model: it only carries the context variables.
+        AgentSession session = await new ChatClientAgent(new ScriptedChatClient()).CreateSessionAsync(TestContext.Current.CancellationToken);
+        await provider.SetVariableAsync(session, Constants.ContextKeys.PressedActionTool, pressedTool);
+        ApprovalTurnChatClient client = new ApprovalTurnChatClient(model, () => session, provider, "REFUSED: no text yet");
+
+        await client.GetResponseAsync([new ChatMessage(ChatRole.User, "Confirm ORD-1")],
+            new ChatOptions { Tools = [new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string orderId) => "", "ConfirmOrder"))] },
+            TestContext.Current.CancellationToken);
+
+        // The pressed tool's request goes through at the first ask; any other tool's is refused until the refusals are spent.
+        Assert.Equal(expectedRequests, model.Requests.Count);
     }
 
     /// <summary>One model answer made of the given contents.</summary>
@@ -165,7 +186,7 @@ public sealed class ExecutionApprovalTests
                 AIFunctionFactory.Create((string orderId) => { Confirmed.Add(orderId); return "confirmed"; }, "ConfirmOrder"));
             AIFunction reply = AIFunctionFactory.Create((string awaits) => { Replies.Add(awaits); return "Turn closed."; }, "Reply");
 
-            agent = new FunctionInvokingChatClient(new ApprovalTurnChatClient(model))
+            agent = new FunctionInvokingChatClient(new ApprovalTurnChatClient(model, () => null, new MorganaAIContextProvider(NullLogger.Instance)))
                 .AsAIAgent(new ChatClientAgentOptions { ChatHistoryProvider = history, ChatOptions = new ChatOptions { Tools = [confirmOrder, reply] } });
         }
 

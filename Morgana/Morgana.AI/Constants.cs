@@ -319,6 +319,9 @@ public static class Constants
         /// <summary>Marks a turn that opens an agent's presentation, the only turn in which <see cref="Tools.Present"/> is offered; dropped when the turn ends.</summary>
         public const string Landing = "landing";
 
+        /// <summary>Holds the name of the tool that the pressed action button leads to, whose press is already the user's approval of it; dropped when the turn ends.</summary>
+        public const string PressedActionTool = "pressed_action_tool";
+
         /// <summary>Marks the turn as serving a colleague, which is what refuses a second hop.</summary>
         public const string ServingConsultation = "peer_consultation";
 

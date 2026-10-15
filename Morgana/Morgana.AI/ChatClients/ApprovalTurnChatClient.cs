@@ -1,5 +1,7 @@
 using System.Runtime.CompilerServices;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Morgana.AI.Providers;
 using Morgana.AI.Tools;
 
 namespace Morgana.AI.ChatClients;
@@ -19,6 +21,12 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
     /// <summary>Refusals of a text-less approval request within one call, after which the request goes through as it is.</summary>
     private const int MaxTextlessRefusals = 2;
 
+    /// <summary>Returns the agent's current session, the one whose context names the tool that the user pressed.</summary>
+    private readonly Func<AgentSession?> sessionAccessor;
+
+    /// <summary>The store that the pressed tool is read from.</summary>
+    private readonly MorganaAIContextProvider contextProvider;
+
     /// <summary>What a call asking for approval in a turn with no text receives; null lets every request through.</summary>
     private readonly string? textMissingRefusal;
 
@@ -26,9 +34,19 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
     /// Wraps the model the agent's tool loop calls.
     /// </summary>
     /// <param name="innerClient">The metered model client.</param>
+    /// <param name="sessionAccessor">Returns the agent's current session.</param>
+    /// <param name="contextProvider">The agent's context store.</param>
     /// <param name="textMissingRefusal">The result handed to the calls of an approval request made before the turn has text.</param>
-    public ApprovalTurnChatClient(IChatClient innerClient, string? textMissingRefusal = null) : base(innerClient)
-        => this.textMissingRefusal = textMissingRefusal;
+    public ApprovalTurnChatClient(
+        IChatClient innerClient,
+        Func<AgentSession?> sessionAccessor,
+        MorganaAIContextProvider contextProvider,
+        string? textMissingRefusal = null) : base(innerClient)
+    {
+        this.sessionAccessor = sessionAccessor;
+        this.contextProvider = contextProvider;
+        this.textMissingRefusal = textMissingRefusal;
+    }
 
     /// <inheritdoc/>
     public override async Task<ChatResponse> GetResponseAsync(
@@ -143,11 +161,43 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
 
     /// <summary>
     /// True when a response asks for approval in a turn that has no text yet, counting the response's own.
+    /// A response whose approval calls are all to the tool that the user pressed is not one: the press is the approval.
     /// </summary>
     private bool IsTextlessApprovalRequest(List<ChatMessage> messages, IList<ChatMessage> response, ChatOptions? options)
-        => textMissingRefusal is not null
-            && AsksForApproval(response.SelectMany(message => message.Contents), options)
-            && !ReplyTool.HasTurnText([.. messages, .. response]);
+    {
+        // Without a refusal text no request is turned down.
+        if (textMissingRefusal is null)
+            return false;
+
+        // A response that asks for nothing needs no text before it.
+        List<AIContent> responseContents = [.. response.SelectMany(message => message.Contents)];
+        if (!AsksForApproval(responseContents, options))
+            return false;
+
+        // The turn that a button press opened holds the tool that the button leads to; any other turn holds none.
+        AgentSession? session = sessionAccessor();
+        string? pressedActionTool = session is null
+            ? null
+            : contextProvider.GetVariable(session, Constants.ContextKeys.PressedActionTool) as string;
+
+        // The press already told the user what is about to run, so its tool needs no sentence before it.
+        if (pressedActionTool is not null && ApprovalCallNames(responseContents, options).All(toolName => toolName == pressedActionTool))
+            return false;
+
+        // Any other approval request waits for the turn's text.
+        return !ReplyTool.HasTurnText([.. messages, .. response]);
+    }
+
+    /// <summary>The names of the tools that the calls are to, counting only those needing the user's approval.</summary>
+    private static IEnumerable<string> ApprovalCallNames(IEnumerable<AIContent> contents, ChatOptions? options)
+    {
+        // The agent's tools wrapped for approval are the ones whose calls need the user's consent.
+        HashSet<string> approvalRequired =
+            [.. (options?.Tools ?? []).OfType<ApprovalRequiredAIFunction>().Select(tool => tool.Name)];
+
+        // Calls to any other tool are not part of an approval request.
+        return contents.OfType<FunctionCallContent>().Select(call => call.Name).Where(approvalRequired.Contains);
+    }
 
     /// <summary>The tool message answering every call of a refused response with the refusal.</summary>
     private ChatMessage RefusalOf(IEnumerable<ChatMessage> response)
