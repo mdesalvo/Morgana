@@ -260,7 +260,7 @@ public class ContractTool : MorganaTool
     /// </summary>
     /// <param name="customerCode">Customer code enrolling (retrieved from shared context).</param>
     /// <returns>The new contract with its dates and invoiceId; the error instead when a plan is already held.</returns>
-    [Description("Enrolls a customer in the Green Care Plan: opens a new contract and bills its first month's fee in the same action. The invoice it bills is the accounts agent's (Billing), never yours: that is where the customer sees its total or line items. Fails with an error naming the existing contract if the customer already holds an Active or PendingRenewal plan — no code is ever rejected for being unregistered. This tool has dispositive capabilities: it commits a real, persistent change to the shop's books and to the customer's account.")]
+    [Description("Enrolls a customer in the Green Care Plan: opens a new contract and bills its first month's fee in the same action. It returns the invoice's identifier and nothing else about it. Fails with an error naming the existing contract if the customer already holds an Active or PendingRenewal plan — no code is ever rejected for being unregistered. This tool has dispositive capabilities: it commits a real, persistent change to the shop's books and to the customer's account.")]
     [SystemTool]
     [RequiresApproval]
     public async Task<SubscriptionResult> SubscribeToGreenCarePlan(
