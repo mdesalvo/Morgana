@@ -2,7 +2,7 @@ id: behaviour-landing-asks-for-the-plant
 description: >-
   The landing on InventoryAgent, an agent of the Efficiency tier, and a menu entry whose tool needs a
   value only the user can give. The press of Morgana's button must produce a presentation in words,
-  not a closure looking for text it never wrote. The press of "A specific plant" leads to
+  not a closure looking for text it never wrote. The press of "A specific plant or flower" leads to
   CheckStockLevel, whose sku the user has not named yet: the agent asks which plant, and never lays
   the catalogue out in its place, since browsing the catalogue is an entry of its own.
 
@@ -15,7 +15,7 @@ turns:
       toolsNotCalled: [GetProductCatalog, CheckStockLevel]
       quickReplyLabels:
         - "🌿 Browse the catalog"
-        - "🌼 A specific plant"
+        - "🌼 A specific plant or flower"
         - "🛒 Place an order"
         - "📦 My orders"
         - "📍 An order's status"
