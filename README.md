@@ -117,10 +117,19 @@ At startup, Morgana automatically discovers all agents across configured assembl
 Agents express their capabilities through **tools**, which can be native implementations (inherited from `MorganaTool`) and also dynamically acquired from external MCP servers:
 
 ```csharp
-[ProvidesToolForIntent("billing")]
-public class BillingTool : MorganaTool 
+[ProvidesToolForIntent("inventory")]
+public class InventoryTool : MorganaTool
 {
-    public async Task<string> GetInvoices(string customerCode, int count) { ... }
+    [Description("Retrieves the full catalog with the stock status of every plant.")]
+    [UserTool(1, "🌿 Browse the catalog")]                 // a button of the agent's menu
+    public async Task<ProductCatalogResult> GetProductCatalog() { ... }
+
+    [Description("Commits a pending order and bills the customer.")]
+    [SystemTool]                                           // called by the model alone
+    [RequiresApproval]                                     // runs once the user approves the call
+    public async Task<ConfirmOrderResult> ConfirmOrder(
+        [Description("The pending order")] [ToolParameter(Records.ToolScope.Request)] string orderId,
+        [Description("Its seal word")] [ToolParameter(Records.ToolScope.Request)] string sealWord) { ... }
 }
 ```
 
