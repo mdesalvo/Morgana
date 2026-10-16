@@ -11,9 +11,8 @@ namespace Morgana.AI.ChatClients;
 /// for the closure alone and records it through Reply itself.
 /// </summary>
 /// <remarks>
-/// A provider that can be told which tool to call is made to call Reply; one that cannot is asked for
-/// the same closure as structured output. Either answer reaches Reply as its arguments, so the card is
-/// held to the same contract whichever path produced it.
+/// The closure is asked for as structured output under the schema that Reply publishes: no provider is ever
+/// made to call a tool, so the card is held to the same contract as a Reply that the model called itself.
 /// </remarks>
 public sealed class TurnClosingChatClient : DelegatingChatClient
 {
@@ -26,9 +25,6 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
     /// <summary>What an accepted Reply answers, which tells a closed turn from one whose Reply was refused.</summary>
     private readonly string turnClosedResult;
 
-    /// <summary>Whether the provider honours a request naming the tool that the model must call.</summary>
-    private readonly bool canForceToolCall;
-
     /// <summary>Records each turn closed on the model's behalf, a sign the prose is not doing its job.</summary>
     private readonly ILogger logger;
 
@@ -38,13 +34,11 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
     /// <param name="innerClient">The tool loop the agent runs on.</param>
     /// <param name="turnClosureRequest">The request for a turn's closure; null closes nothing.</param>
     /// <param name="turnClosedResult">What an accepted Reply answers.</param>
-    /// <param name="canForceToolCall">Whether the provider can be made to call Reply.</param>
     /// <param name="logger">Receives a line for every turn closed on the model's behalf.</param>
-    public TurnClosingChatClient(IChatClient innerClient, string? turnClosureRequest, string turnClosedResult, bool canForceToolCall, ILogger logger) : base(innerClient)
+    public TurnClosingChatClient(IChatClient innerClient, string? turnClosureRequest, string turnClosedResult, ILogger logger) : base(innerClient)
     {
         this.turnClosureRequest = turnClosureRequest;
         this.turnClosedResult = turnClosedResult;
-        this.canForceToolCall = canForceToolCall;
         this.logger = logger;
     }
 
@@ -141,10 +135,8 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
 
         try
         {
-            // The provider's capability decides how the closure is obtained: a forced call or a structured answer.
-            IDictionary<string, object?>? arguments = canForceToolCall
-                ? await RequestForcedClosureAsync(agentTools, options?.Instructions, closingMessages, cancellationToken)
-                : await RequestStructuredClosureAsync(reply, options?.Instructions, closingMessages, cancellationToken);
+            // The closure is obtained as a structured answer under Reply's schema, never by making the provider call a tool.
+            IDictionary<string, object?>? arguments = await RequestStructuredClosureAsync(reply, options?.Instructions, closingMessages, cancellationToken);
 
             // Recorded exactly as if the model had called Reply, its refusals included.
             if (arguments is not null)
@@ -168,31 +160,6 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
     };
 
     /// <summary>
-    /// Makes the model call Reply, with every tool of the agent declared so its actions can name them.
-    /// </summary>
-    private async Task<IDictionary<string, object?>?> RequestForcedClosureAsync(
-        List<AITool> agentTools,
-        string? instructions,
-        List<ChatMessage> closingMessages,
-        CancellationToken cancellationToken)
-    {
-        // Declared and never run: the tool loop hands the call back instead of executing it.
-        ChatResponse response = await InnerClient.GetResponseAsync(closingMessages, new ChatOptions
-        {
-            Instructions = instructions,
-            Tools = [.. agentTools.Select(tool => tool is AIFunction function ? function.AsDeclarationOnly() : tool)],
-            ToolMode = ChatToolMode.RequireSpecific(Constants.Tools.Reply)
-        }, cancellationToken);
-
-        // The arguments of the forced call are the closure; none means the model produced nothing to record.
-        return response.Messages
-            .SelectMany(message => message.Contents)
-            .OfType<FunctionCallContent>()
-            .FirstOrDefault(call => call.Name == Constants.Tools.Reply)?
-            .Arguments;
-    }
-
-    /// <summary>
     /// Asks the model for the closure as a JSON document under the very schema that Reply publishes.
     /// </summary>
     /// <param name="reply">Reply as the agent holds it, whose schema is the one that the answer must satisfy.</param>
@@ -205,7 +172,7 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         List<ChatMessage> closingMessages,
         CancellationToken cancellationToken)
     {
-        // The provider cannot be forced to call Reply, so its schema becomes the shape of the answer. Reply travels
+        // Reply's schema is the shape of the answer. Reply travels
         // with the request as well: the client that narrows tools to the session turns that copy into the format.
         ChatResponse response = await InnerClient.GetResponseAsync(closingMessages, new ChatOptions
         {

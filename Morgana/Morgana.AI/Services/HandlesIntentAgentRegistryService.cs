@@ -288,9 +288,8 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         // declaration there is ignored all the same.
         errors.AddRange(ValidateNoDeclarationsInJson(prompts));
 
-        // The framework's own tools are held to the contract that a domain tool is.
+        // The framework's own tool is held to the contract that a domain tool is.
         errors.AddRange(ValidateToolContract(Constants.Morgana, typeof(ReplyTool)));
-        errors.AddRange(ValidateToolContract(Constants.Morgana, typeof(PresentTool)));
 
         // An intent has a tool class only when its agent uses native tools.
         foreach (string intent in registry.Keys)
@@ -545,7 +544,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
             // MAAI would fail the turn on two functions of one name, so a launcher may not share one with a tool.
             string launcherName = Constants.Workflows.LauncherPrefix + workflow.Name;
-            if (launcherName == Constants.Tools.Reply || launcherName == Constants.Tools.Present || tools.ContainsKey(launcherName))
+            if (launcherName == Constants.Tools.Reply || tools.ContainsKey(launcherName))
                 errors.Add($"{subject}: its launcher '{launcherName}' has the name of a tool of the agent");
 
             // Steps first, then the edges between them: the edges are weighed against the steps' tools.
@@ -595,10 +594,9 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             // Each tool a step offers is checked against the framework's own names and the agent's declared tools.
             foreach (string tool in stepTools)
             {
-                // The framework's own tools belong to no step: Reply closes every turn, Present opens the agent's menu,
-                // a launcher starts a workflow and a colleague is a private method of the workflow, never one of its steps.
+                // The framework's own tools belong to no step: Reply closes every turn, a launcher starts a workflow
+                // and a colleague is a private method of the workflow, never one of its steps.
                 if (tool == Constants.Tools.Reply
-                    || tool == Constants.Tools.Present
                     || launcherNames.Contains(tool)
                     || tool.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
                     errors.Add($"{stepSubject}: '{tool}' belongs to the framework and cannot be a step's tool");

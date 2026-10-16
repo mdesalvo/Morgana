@@ -104,17 +104,23 @@ public static class Constants
     /// </summary>
     public static class PromptInjections
     {
-        /// <summary>Placed in front of a colleague's question, telling the answering agent who its reader is.</summary>
+        /// <summary>Added to the instructions of a run serving a colleague, telling the answering agent who its reader is.</summary>
         public const string PeerConsultationDeclaration = "PeerConsultationDeclaration";
 
-        /// <summary>Fences a colleague's question and states what its text may not claim or be given.</summary>
+        /// <summary>Added to the instructions of a run serving a colleague, stating what the question's text may not claim or be given.</summary>
         public const string PeerConsultationGuardrail = "PeerConsultationGuardrail";
+
+        /// <summary>Fences a colleague's question in the message of the turn that answers it, marking where somebody else's text begins and ends.</summary>
+        public const string PeerConsultationQuestion = "PeerConsultationQuestion";
 
         /// <summary>Spliced into a peer-capable agent's own instructions, naming the colleagues it holds.</summary>
         public const string ColleaguesDeclaration = "ColleaguesDeclaration";
 
         /// <summary>Follows a turn that the model wrote without Reply, asking for that turn's closure alone.</summary>
         public const string TurnClosureRequest = "TurnClosureRequest";
+
+        /// <summary>Added to a landing turn's instructions: the agent introduces itself and learns the buttons beneath its text.</summary>
+        public const string LandingDeclaration = "LandingDeclaration";
     }
 
     /// <summary>
@@ -262,22 +268,16 @@ public static class Constants
 
         /// <summary>Wraps the result of the workflow tool that ended the workflow.</summary>
         public const string WorkflowEnded = "WorkflowEnded";
-
-        /// <summary>Present gave the agent's menu: the actions that the user receives as buttons, or none.</summary>
-        public const string MenuOffered = "MenuOffered";
     }
 
     /// <summary>
     /// The base tool name that the framework and the model agree on: it is the one call that closes a turn, so the
-    /// agent forces it when the model forgot it and returns its argument errors for repair.
+    /// agent closes the turn on the model's behalf when the model forgot it and returns its argument errors for repair.
     /// </summary>
     public static class Tools
     {
         /// <summary>Closes the agent's turn: whether it awaits the user, the actions that it offers and its card.</summary>
         public const string Reply = "Reply";
-
-        /// <summary>Presents the agent's domain to the user and returns the menu that closes the turn.</summary>
-        public const string Present = "Present";
     }
 
     /// <summary>
@@ -316,8 +316,11 @@ public static class Constants
         /// <summary>Set by <see cref="Tools.Reply"/>; read once, then dropped.</summary>
         public const string TurnReply = "turn_reply";
 
-        /// <summary>Marks a turn that opens an agent's presentation, the only turn in which <see cref="Tools.Present"/> is offered; dropped when the turn ends.</summary>
+        /// <summary>Marks a turn that opens with the user choosing this agent: the model is offered Reply alone and the run carries the landing declaration; dropped when the turn ends.</summary>
         public const string Landing = "landing";
+
+        /// <summary>The framework's instructions for this run alone, added to the agent's own by its context provider; dropped when the turn ends.</summary>
+        public const string RunInstructions = "run_instructions";
 
         /// <summary>Holds the name of the tool that the pressed action button leads to, whose press is already the user's approval of it; dropped when the turn ends.</summary>
         public const string PressedActionTool = "pressed_action_tool";
@@ -395,10 +398,10 @@ public static class Constants
     /// </summary>
     public static class Placeholders
     {
-        /// <summary>In <see cref="PromptInjections.PeerConsultationDeclaration"/> — the intent of the agent asking.</summary>
+        /// <summary>In the three PeerConsultation injections — the intent of the agent asking.</summary>
         public const string ConsultationCaller = "((caller))";
 
-        /// <summary>In <see cref="PromptInjections.PeerConsultationGuardrail"/> — the colleague's question, inside the fence that marks it as data.</summary>
+        /// <summary>In <see cref="PromptInjections.PeerConsultationQuestion"/> — the colleague's question, inside the fence that marks it as data.</summary>
         public const string ConsultationQuestion = "((question))";
 
         /// <summary>In <see cref="ToolInjections.ReturnContract"/> — the compact JSON schema of the record that the tool returns.</summary>
@@ -425,7 +428,7 @@ public static class Constants
         /// <summary>In <see cref="ToolInjections.ReplyNotAccepted"/> and <see cref="ToolInjections.CallNotAvailable"/> — why the closure was refused or the call is not available.</summary>
         public const string ReplyNotAcceptedReason = "((reason))";
 
-        /// <summary>In <see cref="ToolInjections.MenuOffered"/> — the labels of the menu, comma-joined; "none" when no button is offered.</summary>
+        /// <summary>In <see cref="PromptInjections.LandingDeclaration"/> — the labels of the menu, comma-joined; "none" when no button is offered.</summary>
         public const string Actions = "((actions))";
 
         /// <summary>In <see cref="PromptInjections.ColleaguesDeclaration"/> — one line per colleague: function name and territory.</summary>

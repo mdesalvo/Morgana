@@ -41,7 +41,7 @@ public sealed class FrameworkPromptTests
         string[] promptInjections = [.. morgana.GetAdditionalProperty<List<Records.Injection>>("PromptInjections").Select(injection => injection.Name)];
         Assert.Equivalent(new[]
         {
-            "ColleaguesDeclaration", "PeerConsultationDeclaration", "PeerConsultationGuardrail", "TurnClosureRequest"
+            "ColleaguesDeclaration", "PeerConsultationDeclaration", "PeerConsultationGuardrail", "PeerConsultationQuestion", "TurnClosureRequest", "LandingDeclaration"
         }, promptInjections);
     }
 
@@ -53,19 +53,35 @@ public sealed class FrameworkPromptTests
 
         Assert.Equivalent(new[]
         {
-            "TurnClosed", "ContextValueMissing", "ColleagueCouldNotAnswer", "CallNotAvailable", "MenuOffered",
+            "TurnClosed", "ContextValueMissing", "ColleagueCouldNotAnswer", "CallNotAvailable",
             "ReplyNotAccepted", "EarlierToolResult", "ReturnContract", "ExecutionApprovalGuidance", "WorkflowStepReached", "WorkflowEnded"
         }, toolInjections);
     }
 
     [Fact]
-    public async Task FrameworkPrompt_Menu_offered_names_the_actions_where_the_agent_presents_itself()
+    public async Task FrameworkPrompt_Landing_declaration_names_the_actions_of_the_agent_s_menu()
     {
-        List<Records.Injection> toolInjections = (await resolver.ResolveAsync("Morgana"))
-            .GetAdditionalProperty<List<Records.Injection>>("ToolInjections");
+        List<Records.Injection> promptInjections = (await resolver.ResolveAsync("Morgana"))
+            .GetAdditionalProperty<List<Records.Injection>>("PromptInjections");
 
-        // The labels are spliced into this placeholder, so a text that lost it would present an empty menu.
-        Assert.Contains("((actions))", toolInjections.Single(injection => injection.Name == "MenuOffered").Content, StringComparison.Ordinal);
+        // The labels are spliced into this placeholder, so a text that lost it would introduce an agent with an empty menu.
+        Assert.Contains("((actions))", promptInjections.Single(injection => injection.Name == "LandingDeclaration").Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FrameworkPrompt_Consultation_question_is_fenced_around_its_placeholder()
+    {
+        List<Records.Injection> promptInjections = (await resolver.ResolveAsync("Morgana"))
+            .GetAdditionalProperty<List<Records.Injection>>("PromptInjections");
+        string fence = promptInjections.Single(injection => injection.Name == "PeerConsultationQuestion").Content;
+        string guardrail = promptInjections.Single(injection => injection.Name == "PeerConsultationGuardrail").Content;
+
+        // The question is spliced between markers naming who asked, so a fence that lost either placeholder would mark nothing.
+        Assert.Contains("((question))", fence, StringComparison.Ordinal);
+        Assert.Contains("((caller))", fence, StringComparison.Ordinal);
+
+        // The rules travel in the run's instructions: a question placeholder there would put somebody else's words among them.
+        Assert.DoesNotContain("((question))", guardrail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -209,9 +225,6 @@ public sealed class FrameworkPromptTests
 
         /// <inheritdoc />
         public IChatClient GetChatClient(Records.LLMTier tier) => throw new InvalidOperationException("The actors ask for answers, never a chat client");
-
-        /// <inheritdoc />
-        public bool CanForceToolCall(Records.LLMTier tier) => false;
 
         /// <inheritdoc />
         public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => new();

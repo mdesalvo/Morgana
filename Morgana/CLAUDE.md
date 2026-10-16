@@ -96,7 +96,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[ProvidesWorkflowForIntent]`, `[RequiresApproval]`, `[UserTool]`, `[SystemTool]`, `[ToolParameter]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
-| `ChatClients/` | `IChatClient` decorators: `DustAccountingChatClient`, `MorganaAnthropicClient`, `ApprovalTurnChatClient` (drops `Reply` from a response asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model wrote without `Reply`: a forced tool call, structured output where the provider cannot force one), `WorkflowToolsChatClient` (offers the model only the tools that a running workflow's current step allows; no colleague while one is being answered or once the turn's consultation rounds are spent) |
+| `ChatClients/` | `IChatClient` decorators: `DustAccountingChatClient`, `MorganaAnthropicClient`, `ApprovalTurnChatClient` (drops `Reply` from a response asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model wrote without `Reply`, asking for its closure as structured output under `Reply`'s schema), `WorkflowToolsChatClient` (offers the model only the tools that a running workflow's current step allows; no colleague while one is being answered or once the turn's consultation rounds are spent) |
 | `Workflows/` | `WorkflowEngine`: an agent's workflows on Microsoft.Agents.AI.Workflows, rebuilt at every call from the checkpoint kept in the agent's session. `WorkflowLauncherFunction`: the function that starts one workflow, recognised by its type |
 | `Tools/` | `ReplyTool`: the framework's own tool, declared on its method as a domain tool is |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
@@ -339,8 +339,11 @@ from the array that it lives in**, never from a field inside it:
 - **`PromptInjections`** — texts spliced into the instructions or the conversation's messages, one
   splice site each, never rendered among the policies where they would instruct against nothing:
   `ColleaguesDeclaration` (closing a peer-capable agent's instructions), `PeerConsultationDeclaration`
-  and `PeerConsultationGuardrail` (in front of a colleague's question), `TurnClosureRequest` (after a
-  turn the model wrote without `Reply`).
+  and `PeerConsultationGuardrail` (the instructions of a run serving a colleague), `PeerConsultationQuestion`
+  (fencing the colleague's question as that run's message), `LandingDeclaration` (the instructions of a
+  landing run), `TurnClosureRequest` (after a turn the model wrote without `Reply`). The instructions of
+  a run reach the model through `MorganaAIContextProvider` as MAAI's per-run `AIContext.Instructions`,
+  held in the session for that run alone and never stored in the history.
 - **`ToolInjections`** — everything the model reads as part of a tool: what the framework's own tools
   return (`Reply`, the context wrapper, the consultation guards and fallbacks, the workflow results),
   `ReplyNotAccepted`, `EarlierToolResult`, `WorkflowStepReached` and `WorkflowEnded` around a result,

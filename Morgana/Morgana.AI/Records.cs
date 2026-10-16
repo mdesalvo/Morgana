@@ -819,14 +819,21 @@ public static class Records
     /// <param name="ConversationId">Conversation both agents belong to; scopes session and shared context.</param>
     /// <param name="CallerIntent">Intent of the asking agent or <c>null</c> when the A2A caller is
     /// not an agent of this installation and named none.</param>
-    /// <param name="Question">The colleague's question, already carrying the declaration spliced in
-    /// front of it, since the answering agent's prompt says nothing about serving a colleague.</param>
+    /// <param name="Question">The colleague's question as the message of the turn that answers it, fenced as data.</param>
+    /// <param name="Instructions">The framework's instructions for the run that answers it; <c>null</c> where the deployment declares none.</param>
     /// <param name="TurnContext">OTel context of the user turn that triggered the consultation.</param>
     public record PeerConsultation(
         string ConversationId,
         string? CallerIntent,
         string Question,
+        string? Instructions,
         ActivityContext TurnContext = default);
+
+    /// <summary>
+    /// What a run serving a colleague is made of: the framework's instructions for that run (<c>null</c> where the deployment declares none)
+    /// and the question as the message of the turn, fenced where a fence is declared.
+    /// </summary>
+    public record ConsultationRequest(string? Instructions, string Question);
 
     /// <summary>
     /// A colleague's answer, both as the actor reply and — serialized — as the tool result the
@@ -1235,7 +1242,7 @@ public static class Records
     /// Microsoft.Extensions.AI's, through <c>ApprovalRequiredAIFunction</c>.
     /// </param>
     /// <param name="Reserved">
-    /// True for the framework's base tools (Reply and Present) alone: the projection of a domain tool's class leaves it false.
+    /// True for the framework's base tool Reply alone: the projection of a domain tool's class leaves it false.
     /// Consumers skip a reserved tool because the framework controls its output.
     /// </param>
     /// <param name="MenuEntry">The button that offers the tool to the user, declared with <see cref="Attributes.UserToolAttribute"/>; null for a tool declared <c>[SystemTool]</c>.</param>

@@ -187,22 +187,46 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
-    public async Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question)
+    public async Task<string?> ComposeLandingDeclarationAsync(IReadOnlyList<Records.ReplyAction> menu)
     {
-        // Both templates are the framework's: the question is the only text here that somebody else wrote.
+        // The text that tells a landing agent its menu: the framework's own wording, resolved by name.
+        FrameworkLayer framework = await frameworkLayer.Value;
+        string declaration = Records.Injection.ResolveTemplate(framework.PromptInjections, Constants.PromptInjections.LandingDeclaration);
+
+        // A deployment declaring no text has its landing turn run on the agent's instructions alone.
+        if (declaration.Length == 0)
+            return null;
+
+        // The labels in menu order are what the introduction can refer to; an agent that offers nothing says so,
+        // so the introduction does not promise buttons that will not come.
+        string actions = menu.Count == 0 ? "none" : string.Join(", ", menu.Select(action => action.Label));
+
+        // The menu is the agent's own and was fixed when the agent was built: the model gives it a voice and never chooses it.
+        return declaration.Replace(Constants.Placeholders.Actions, actions);
+    }
+
+    /// <inheritdoc />
+    public async Task<Records.ConsultationRequest> ComposeConsultationRequestAsync(string? callerIntent, string question)
+    {
+        // All templates are the framework's: the question is the only text here that somebody else wrote.
         FrameworkLayer framework = await frameworkLayer.Value;
 
-        // How to answer a colleague. It is spliced in front of the incoming question instead of into
-        // the answering agent's prompt: that prompt is composed once, while whether a turn serves a
-        // colleague changes turn by turn.
+        // How to answer a colleague. It travels in the run's own instructions instead of the answering
+        // agent's prompt: that prompt is composed once, while whether a turn serves a colleague
+        // changes turn by turn.
         string declaration = Records.Injection.ResolveTemplate(
             framework.PromptInjections, Constants.PromptInjections.PeerConsultationDeclaration);
 
         // What the question may not claim and what asking cannot obtain, kept apart from the note on
         // how to answer: two rules of one length dilute each other, while only this one has to hold
-        // against text somebody else wrote. It also carries the fence the question is read inside.
+        // against text somebody else wrote.
         string guardrail = Records.Injection.ResolveTemplate(
             framework.PromptInjections, Constants.PromptInjections.PeerConsultationGuardrail);
+
+        // The fence the question is read inside, kept out of the rules: the rules sit in the run's
+        // instructions while the fenced question is the turn's message.
+        string fence = Records.Injection.ResolveTemplate(
+            framework.PromptInjections, Constants.PromptInjections.PeerConsultationQuestion);
 
         // The caller names itself or it does not and the wording of what an unnamed one is called
         // belongs here, with the rest of the prose this layer authors, rather than at the call site
@@ -211,13 +235,20 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         string caller = string.Format(
             CultureInfo.InvariantCulture,
             CallerQuotation, string.IsNullOrWhiteSpace(callerIntent) ? UnnamedCaller : callerIntent);
-        string composed = $"{declaration}\n{guardrail}".Replace(Constants.Placeholders.ConsultationCaller, caller);
+
+        // A deployment declaring neither text has the run carry no instructions of this kind.
+        string instructions = string.Join("\n", new[] { declaration, guardrail }.Where(text => text.Length > 0))
+            .Replace(Constants.Placeholders.ConsultationCaller, caller);
 
         // Nothing encloses the question where a deployment declares no fence, so it is handed over as
-        // it arrived rather than under a marker announcing a boundary that is not there.
-        return guardrail.Length == 0
-            ? $"{composed}\n{question}"
-            : composed.Replace(Constants.Placeholders.ConsultationQuestion, question);
+        // it arrived rather than under a marker announcing a boundary that is not there. The caller is
+        // filled before the question goes in, so the colleague's words are never read for placeholders.
+        string fencedQuestion = fence.Length == 0
+            ? question
+            : fence.Replace(Constants.Placeholders.ConsultationCaller, caller).Replace(Constants.Placeholders.ConsultationQuestion, question);
+
+        // The instructions go to the run and the question to the turn's message: what somebody else wrote never shares a message with the rules that bind it.
+        return new Records.ConsultationRequest(instructions.Length == 0 ? null : instructions, fencedQuestion);
     }
 
     /// <inheritdoc />

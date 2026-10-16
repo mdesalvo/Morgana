@@ -242,6 +242,7 @@ public class MorganaAgent : MorganaActor
                 // The turn's closure is dropped from the session, so it cannot close the next turn as well.
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnReply);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.Landing);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.RunInstructions);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.PressedActionTool);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ConsultationRounds);
             }
@@ -333,7 +334,13 @@ public class MorganaAgent : MorganaActor
         // A landing is the one turn in which the agent can present itself: the flag is set before the model
         // runs and dropped with the turn.
         if (req.IsLanding)
+        {
             await aiContextProvider.SetVariableAsync(aiAgentSession, Constants.ContextKeys.Landing, true);
+
+            // The landing run carries the declaration of the agent's menu, where the deployment declares one.
+            if (aiContextProvider.LandingDeclaration is not null)
+                await aiContextProvider.SetVariableAsync(aiAgentSession, Constants.ContextKeys.RunInstructions, aiContextProvider.LandingDeclaration);
+        }
 
         // The model client reads the pressed tool to let that tool's approval request through without text:
         // it is set before the model runs and dropped with the turn.
@@ -544,6 +551,9 @@ public class MorganaAgent : MorganaActor
         // The landing ends with the turn, before the session is saved: a restart must not find it set.
         aiContextProvider.DropVariable(session, Constants.ContextKeys.Landing);
 
+        // The run's instructions end with the turn too, before the session is saved: a restart must not find them set.
+        aiContextProvider.DropVariable(session, Constants.ContextKeys.RunInstructions);
+
         // The pressed tool ends with the turn too, before the session is saved: a restart must not find it set.
         aiContextProvider.DropVariable(session, Constants.ContextKeys.PressedActionTool);
 
@@ -701,12 +711,18 @@ public class MorganaAgent : MorganaActor
             // Who asked is on the span and in the line below, where something actually reads it.
             await aiContextProvider.SetVariableAsync(consultationSession, Constants.ContextKeys.ServingConsultation, true);
 
+            // The rules for answering a colleague are this run's instructions: the ephemeral session dies
+            // with the answer, so they never outlive it.
+            if (consultation.Instructions is not null)
+                await aiContextProvider.SetVariableAsync(consultationSession, Constants.ContextKeys.RunInstructions, consultation.Instructions);
+
             agentLogger.LogInformation(
                 "Agent '{AgentIntent}' is answering a consultation from '{CallerIntent}'", AgentIntent, consultation.CallerIntent);
 
-            // The colleague's question enters as a user message because that is the only role a turn can
-            // start from; who really asked is carried by the declaration spliced in front of it. Never
-            // streamed: the reader is an agent waiting for one whole answer, not a channel.
+            // The colleague's question is the turn's message, fenced as somebody else's text, because a
+            // user message is the only role a turn can start from; who really asked and what the text may
+            // not claim travel in the run's instructions. Never streamed: the reader is an agent waiting
+            // for one whole answer, not a channel.
             AgentResponse response = await aiAgent.RunAsync(
                 new ChatMessage(ChatRole.User, consultation.Question) { CreatedAt = DateTimeOffset.UtcNow },
                 consultationSession);

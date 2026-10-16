@@ -43,12 +43,6 @@ public interface ILLMService
     IChatClient GetChatClient(Records.LLMTier tier);
 
     /// <summary>
-    /// True when the provider that serves <paramref name="tier"/> honours a request naming the one tool that the model
-    /// must call. When it does not, a turn that the model closed without Reply is closed by asking for structured output instead.
-    /// </summary>
-    bool CanForceToolCall(Records.LLMTier tier);
-
-    /// <summary>
     /// Gets the dust pricing for a specific <see cref="Records.LLMTier"/> — the pricing embedded
     /// in that tier's <see cref="Records.TierDefinition"/>, not a single process-wide value.
     /// </summary>

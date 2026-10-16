@@ -21,9 +21,9 @@ public class ConfigurationLLMService : ILLMService
     private readonly IConfiguration configuration;
 
     /// <summary>
-    /// Per-tier client, pricing and forced-tool capability. All three tiers are always present.
+    /// Per-tier client and pricing. All three tiers are always present.
     /// </summary>
-    private readonly Dictionary<Records.LLMTier, (IChatClient Client, Records.MagicDustPricing Pricing, bool CanForceToolCall)> tierClients = new();
+    private readonly Dictionary<Records.LLMTier, (IChatClient Client, Records.MagicDustPricing Pricing)> tierClients = new();
 
     /// <inheritdoc/>
     public Records.LLMTier FrameworkTier { get; }
@@ -176,8 +176,8 @@ public class ConfigurationLLMService : ILLMService
             UseTelemetryWhenEnabled(tierBuilder);
             IChatClient client = tierBuilder.Build();
 
-            // The tier is served from here on: its client, its price and whether a tool call can be forced on it.
-            tierClients[tier] = (client, definition.MagicDust, languageModel.CanForceToolCall);
+            // The tier is served from here on: its client and its price.
+            tierClients[tier] = (client, definition.MagicDust);
         }
 
         // The tier that serves the guard, the classifier, the presenter and the channel adapter.
@@ -198,9 +198,6 @@ public class ConfigurationLLMService : ILLMService
 
     /// <inheritdoc/>
     public IChatClient GetChatClient(Records.LLMTier tier) => tierClients[tier].Client;
-
-    /// <inheritdoc/>
-    public bool CanForceToolCall(Records.LLMTier tier) => tierClients[tier].CanForceToolCall;
 
     /// <inheritdoc/>
     public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => tierClients[tier].Pricing;

@@ -16,10 +16,6 @@ namespace Morgana.AI.LanguageModels;
 public class Ollama : MorganaLanguageModel
 {
     /// <inheritdoc />
-    /// <remarks>Ollama's API has no way to name the tool a model must call and its client drops the request.</remarks>
-    public override bool CanForceToolCall => false;
-
-    /// <inheritdoc />
     public override void ValidateConnection(Records.TierConnection connection) =>
         RequireField(connection.Endpoint, nameof(Records.TierConnection.Endpoint));
 

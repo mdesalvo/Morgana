@@ -48,6 +48,11 @@ public class MorganaAIContextProvider : AIContextProvider
     public IReadOnlyList<Records.ReplyAction> Menu { get; }
 
     /// <summary>
+    /// The declaration that the agent's landing run carries, composed from <see cref="Menu"/> at the agent's birth; <c>null</c> where the deployment declares none.
+    /// </summary>
+    public string? LandingDeclaration { get; }
+
+    /// <summary>
     /// Keys used by the framework to store and retrieve this provider's state within <see cref="AgentSession"/>.
     /// </summary>
     public override IReadOnlyList<string> StateKeys => [ nameof(MorganaAIContextProvider) ];
@@ -67,24 +72,48 @@ public class MorganaAIContextProvider : AIContextProvider
     /// </param>
     /// <param name="workflows">The workflows that the agent runs; none for an agent that declares no workflow.</param>
     /// <param name="menu">The actions that the agent offers to the user; none for an agent that offers nothing.</param>
+    /// <param name="landingDeclaration">The declaration of the agent's menu that its landing run carries; none where the deployment declares none.</param>
     public MorganaAIContextProvider(
         ILogger logger,
         IEnumerable<string>? sharedVariableNames = null,
         JsonSerializerOptions? jsonSerializerOptions = null,
         IReadOnlyList<Records.WorkflowDefinition>? workflows = null,
-        IReadOnlyList<Records.ReplyAction>? menu = null)
+        IReadOnlyList<Records.ReplyAction>? menu = null,
+        string? landingDeclaration = null)
     {
         // A provider built without shared names persists nothing across agents.
         this.logger = logger;
         this.sharedVariableNames = [.. sharedVariableNames ?? []];
         Workflows = workflows ?? [];
         Menu = menu ?? [];
+        LandingDeclaration = landingDeclaration;
 
         // A session that holds no variables yet starts with an empty set, so the first turn needs no special case.
         sessionState = new ProviderSessionState<MorganaContextState>(
             stateInitializer: _ => new MorganaContextState(),
             stateKey: StateKeys[0],
             jsonSerializerOptions: jsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions);
+    }
+
+    /// <summary>
+    /// The model reads the framework's instructions for this run alone, never stored in the history.
+    /// </summary>
+    protected override ValueTask<AIContext> ProvideAIContextAsync(InvokingContext context, CancellationToken cancellationToken = default)
+    {
+        // A run without a session has nowhere to hold instructions, so the agent's own stand as composed.
+        if (context.Session is null)
+            return new ValueTask<AIContext>(new AIContext());
+
+        // Read without the per-variable access line: this runs on every turn of every agent and an ordinary turn holds none.
+        if (sessionState.GetOrInitializeState(context.Session).Variables.TryGetValue(Constants.ContextKeys.RunInstructions, out object? runInstructions)
+            && runInstructions is string { Length: > 0 } instructionsText)
+        {
+            // Instructions added here reach the model on every call of this run and are never stored in the history, so they vanish with the run.
+            return new ValueTask<AIContext>(new AIContext { Instructions = instructionsText });
+        }
+
+        // No instructions for this run: the agent's own are all the model reads.
+        return new ValueTask<AIContext>(new AIContext());
     }
 
     // =========================================================================

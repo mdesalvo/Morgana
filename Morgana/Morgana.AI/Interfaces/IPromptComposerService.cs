@@ -65,14 +65,25 @@ public interface IPromptComposerService
     Task<string?> ComposeColleaguesDeclarationAsync(IReadOnlyDictionary<string, string> colleagues);
 
     /// <summary>
-    /// Produces the whole of what an answering agent reads on a turn serving a colleague: the note
-    /// telling it its reader is not the user, then the question inside the fence marking it as data.
+    /// Produces the declaration added to the instructions of a landing turn, in which the agent introduces itself and learns the buttons beneath its text.
+    /// </summary>
+    /// <remarks>
+    /// Composed once per agent, since the menu is fixed at the agent's birth.
+    /// </remarks>
+    /// <param name="menu">The actions that the user receives as buttons beneath the agent's text, in order.</param>
+    /// <returns>The declaration to add; <c>null</c> when the deployment declares none.</returns>
+    Task<string?> ComposeLandingDeclarationAsync(IReadOnlyList<Records.ReplyAction> menu);
+
+    /// <summary>
+    /// Produces the whole of what an answering agent reads on a run serving a colleague. The instructions
+    /// tell it that its reader is not the user and what the question may not claim. The question itself
+    /// is the message of the turn, inside the fence marking it as data.
     /// </summary>
     /// <param name="callerIntent">Intent of the asking agent; <c>null</c> when the caller named none,
     /// which the composer renders as an unnamed caller rather than as a name.</param>
     /// <param name="question">What the colleague asked, in its own words.</param>
-    /// <returns>The composed turn, falling back to the bare question where no template is declared.</returns>
-    Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question);
+    /// <returns>The run's instructions (<c>null</c> where none is declared) and the question, falling back to the bare question where no fence is declared.</returns>
+    Task<Records.ConsultationRequest> ComposeConsultationRequestAsync(string? callerIntent, string question);
 
     /// <summary>
     /// Produces what the model reads after a turn that it wrote without closing it, asking for the closure alone.

@@ -218,10 +218,9 @@ public sealed class MorganaHostedAgent : AIAgent
             // agent per conversation, whoever knocks.
             IActorRef agentActor = await actorSystem.GetOrCreateAgentAsync(agentType, intent, hostedAgentSession.ConversationId);
 
-            // The note and the fence around the question are one composition: what a colleague wrote is
-            // the only text on this turn authored outside this installation. Where it begins and
-            // ends is stated by the same layer that says what it may not claim.
-            string declaredQuestion = await promptComposerService.ComposeConsultationRequestAsync(callerIntent, question);
+            // The rules for answering a colleague go to the run's instructions while the colleague's text alone
+            // is the turn's message, fenced as data: what somebody else wrote never shares a message with the rules that bind it.
+            Records.ConsultationRequest consultationRequest = await promptComposerService.ComposeConsultationRequestAsync(callerIntent, question);
 
             // Taken before the turn so the ledger can be asked afterwards what happened in between.
             // The reading is of the whole conversation rather than of this exchange, which has no
@@ -234,7 +233,7 @@ public sealed class MorganaHostedAgent : AIAgent
             // is the pipeline's own, so a silent actor lands in the catch below as an answer instead
             // of hanging the user's turn.
             Records.PeerConsultationResponse peerConsultationResponse = await agentActor.Ask<Records.PeerConsultationResponse>(
-                new Records.PeerConsultation(hostedAgentSession.ConversationId, callerIntent, declaredQuestion),
+                new Records.PeerConsultation(hostedAgentSession.ConversationId, callerIntent, consultationRequest.Question, consultationRequest.Instructions),
                 requestTimeout,
                 cancellationToken);
 

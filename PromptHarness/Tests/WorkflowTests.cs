@@ -255,7 +255,7 @@ public sealed class WorkflowTests
             await provider.SetVariableAsync(session, Constants.ContextKeys.ConsultationRounds, roundsSpent);
 
         // An agent declaring no workflow, whose turn may spend four consultations.
-        WorkflowToolsChatClient client = new WorkflowToolsChatClient(model, () => session, provider, [], maxConsultationRoundsPerTurn: 4, canForceToolCall: false);
+        WorkflowToolsChatClient client = new WorkflowToolsChatClient(model, () => session, provider, [], maxConsultationRoundsPerTurn: 4);
         await client.GetResponseAsync(
             [new ChatMessage(ChatRole.User, "hi")],
             new ChatOptions { Tools = [AIFunctionFactory.Create(() => "answer", "consult_billing"), AIFunctionFactory.Create(() => "12", "Stock")] });
@@ -1317,8 +1317,6 @@ public sealed class WorkflowTests
     /// <summary>Hands the adapter the scripted model on whichever tier it asks.</summary>
     private sealed class SampleLlm(IChatClient model) : ILLMService
     {
-        public bool CanForceToolCall(Records.LLMTier tier) => false;
-
         public Records.LLMTier FrameworkTier => Records.LLMTier.Efficiency;
 
         public IChatClient GetChatClient(Records.LLMTier tier) => model;

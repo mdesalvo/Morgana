@@ -88,7 +88,7 @@ public class MorganaAgentAdapter
     protected readonly Records.Prompt morganaPrompt;
 
     /// <summary>
-    /// The framework's base tools (Reply and Present), projected from <see cref="ReplyTool"/> and <see cref="PresentTool"/> and stamped <c>Reserved = true</c> exactly
+    /// The framework's base tool Reply, projected from <see cref="ReplyTool"/> and stamped <c>Reserved = true</c> exactly
     /// once here — the only place in the codebase that ever sets it true. Every other reader of a
     /// ToolDefinition's Reserved flag (domain tools included) sees false by construction, never by
     /// a check: see the Reserved remarks on Records.ToolDefinition.
@@ -142,9 +142,8 @@ public class MorganaAgentAdapter
         // The framework prompt is read once because the adapter is built before any turn runs and cannot await.
         morganaPrompt = promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
 
-        // The base tools are projected from their classes and reserved here, so that no domain tool can ever be reserved.
+        // The base tool is projected from its class and reserved here, so that no domain tool can ever be reserved.
         morganaTools = [.. ProvidesToolForIntentRegistryService.ProjectToolDefinitions(typeof(ReplyTool))
-            .Concat(ProvidesToolForIntentRegistryService.ProjectToolDefinitions(typeof(PresentTool)))
             .Select(t => t with { Reserved = true })];
     }
 
@@ -244,6 +243,9 @@ public class MorganaAgentAdapter
                 .Select(entry => entry.Action)
         ];
 
+        // The menu is fixed at the agent's birth, so the declaration of it that a landing turn adds is composed once.
+        string? landingDeclaration = await promptComposerService.ComposeLandingDeclarationAsync(menu);
+
         // The variable store that context-scoped parameters resolve from. The callback carries every
         // shared write into the conversation's cross-agent registry.
         MorganaAIContextProvider morganaAIContextProvider = CreateAIContextProvider(
@@ -251,6 +253,7 @@ public class MorganaAgentAdapter
             agentTools,
             workflowDefinitions,
             menu,
+            landingDeclaration,
             sharedContextCallback);
 
         // Filled once every tool is known below and read by Reply at every call: the tools that a user
@@ -341,12 +344,11 @@ public class MorganaAgentAdapter
         // The agent's client chain, outermost first: the builder wraps the first registration around all the others.
         IChatClient agentChain = new ChatClientBuilder(agentChatClient)
             // Above the loop, where a whole turn is visible: a turn that the model wrote without Reply is
-            // closed here, on whichever path the provider supports.
+            // closed here, with the closure asked for as structured output.
             .Use(innerClient => new TurnClosingChatClient(
                 innerClient,
                 turnClosureRequest,
                 turnClosedResult,
-                llmService.CanForceToolCall(tierAttribute.Tier),
                 logger))
             // The tool loop the agent runs on. Reply's argument errors go back to the model in full, so a
             // card breaking its schema is repaired on the next call rather than lost; every other tool
@@ -355,8 +357,7 @@ public class MorganaAgentAdapter
                 toolLoop.FunctionInvoker = (context, cancellationToken) => InvokeToolAsync(context, agentWorkflows, cancellationToken))
             // Between the loop and the approval client, the tools that the workflow state allows are what the model is offered.
             .Use(innerClient => new WorkflowToolsChatClient(
-                innerClient, sessionAccessor, morganaAIContextProvider, workflowDefinitions, MaxConsultationRoundsPerTurn,
-                llmService.CanForceToolCall(tierAttribute.Tier)))
+                innerClient, sessionAccessor, morganaAIContextProvider, workflowDefinitions, MaxConsultationRoundsPerTurn))
             // Below the loop, a response asking for the user's approval waits for the turn's text and loses its
             // Reply: that turn is the framework's to close, with the approval buttons.
             .Use(innerClient => new ApprovalTurnChatClient(innerClient, sessionAccessor, morganaAIContextProvider, approvalTextMissingRefusal))
@@ -658,6 +659,7 @@ public class MorganaAgentAdapter
     /// <param name="tools">Tool definitions to scan for shared variable declarations</param>
     /// <param name="workflows">The agent's workflows, which the provider hands to whoever resolves a stored position.</param>
     /// <param name="menu">The agent's menu, which the provider hands to whoever closes a presenting turn.</param>
+    /// <param name="landingDeclaration">The declaration of the menu that the provider adds to a landing turn's instructions; <c>null</c> when the deployment declares none.</param>
     /// <param name="sharedContextCallback">
     /// Optional callback invoked when a shared variable is set. Wired to agent's
     /// OnSharedContextUpdate which persists the value via IConversationPersistenceService.
@@ -668,6 +670,7 @@ public class MorganaAgentAdapter
         IEnumerable<Records.ToolDefinition> tools,
         IReadOnlyList<Records.WorkflowDefinition> workflows,
         IReadOnlyList<Records.ReplyAction> menu,
+        string? landingDeclaration,
         Func<string, object, Task>? sharedContextCallback = null)
     {
         // A parameter is shared across agents only when it is both flagged shared and context-scoped: a
@@ -686,7 +689,7 @@ public class MorganaAgentAdapter
                 : $"Agent '{agentName}' has NO shared variables");
 
         // Only a write to a name in this set reaches the registry: every other variable stays with the agent.
-        MorganaAIContextProvider aiContextProvider = new MorganaAIContextProvider(logger, sharedVariables, workflows: workflows, menu: menu);
+        MorganaAIContextProvider aiContextProvider = new MorganaAIContextProvider(logger, sharedVariables, workflows: workflows, menu: menu, landingDeclaration: landingDeclaration);
 
         // An agent created outside the actor path has no callback: its shared writes stay local.
         if (sharedContextCallback != null)
@@ -718,10 +721,9 @@ public class MorganaAgentAdapter
         // because the merge may carry distinct instances of the same tool, whose identity is its name.
         Records.ToolDefinition[] agentSpecificTools = [.. agentTools.Except(morganaTools, new ToolDefinitionNameComparer())];
 
-        // Every agent registers Reply and Present, so all of them close their turns and present themselves the same way, even an MCP-only one.
-        // Each definition binds to the instance of its own class.
+        // Every agent registers Reply, so all of them close their turns the same way, even an MCP-only one.
+        // The definition binds to the instance of its own class.
         RegisterToolsInAdapter(morganaToolAdapter, new ReplyTool(logger, toolContextFactory), [.. morganaTools.Where(tool => tool.Name == Constants.Tools.Reply)]);
-        RegisterToolsInAdapter(morganaToolAdapter, new PresentTool(logger, toolContextFactory), [.. morganaTools.Where(tool => tool.Name == Constants.Tools.Present)]);
         logger.LogInformation("Registered {BaseToolsLength} base tools for intent '{Intent}'", morganaTools.Length, intent);
 
         // An agent that declares no domain tool is complete with its base tools alone.

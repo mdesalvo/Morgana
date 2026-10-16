@@ -302,7 +302,6 @@ public class DraftValidationService : IDraftValidationService
         HashSet<string> reservedToolNames =
         [
             Constants.Tools.Reply,
-            Constants.Tools.Present,
             .. agent.Workflows
                 .Where(workflow => !string.IsNullOrWhiteSpace(workflow.Name))
                 .Select(workflow => Constants.Workflows.LauncherPrefix + workflow.Name)

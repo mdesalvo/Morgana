@@ -132,7 +132,7 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task TurnClosure_Landing_offers_the_model_only_Present_and_Reply()
+    public async Task TurnClosure_Landing_offers_the_model_only_Reply()
     {
         // The model, the session and the context store that decide which tools the model is offered.
         (ScriptedChatClient model, AgentSession session, MorganaAIContextProvider provider) = await ToolNarrowingAsync();
@@ -141,47 +141,53 @@ public sealed class TurnClosureTests
         await provider.SetVariableAsync(session, "landing", true);
 
         // The request crosses the narrowing client the way a turn of the agent does.
-        await new WorkflowToolsChatClient(model, () => session, provider, [], 3, canForceToolCall: false)
+        await new WorkflowToolsChatClient(model, () => session, provider, [], 3)
             .GetResponseAsync([new ChatMessage(ChatRole.User, "What can you do with my invoices?")], AgentOptions(), TestContext.Current.CancellationToken);
 
-        // Whatever else the agent holds stays out: the turn is the agent introducing itself.
-        Assert.Equal(["Present", "Reply"], model.Requests.Single().Options!.Tools!.Select(tool => tool.Name).Order());
+        // Whatever else the agent holds stays out: the turn is the agent introducing itself and closing.
+        Assert.Equal(["Reply"], model.Requests.Single().Options!.Tools!.Select(tool => tool.Name).Order());
     }
 
     [Theory]
-    [InlineData(true, false, true)]
-    [InlineData(true, true, false)]
-    [InlineData(false, false, false)]
-    public async Task TurnClosure_Landing_forces_Present_only_while_it_is_uncalled_and_the_provider_can_force_a_call(bool canForceToolCall, bool presentCalled, bool expectForced)
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TurnClosure_Run_instructions_reach_the_model_for_that_run_alone(bool withRunInstructions)
     {
-        (ScriptedChatClient model, AgentSession session, MorganaAIContextProvider provider) = await ToolNarrowingAsync();
-        await provider.SetVariableAsync(session, "landing", true);
+        // A plainly built context provider: it adds whatever the session holds for the run and knows nothing of why.
+        MorganaAIContextProvider provider = new MorganaAIContextProvider(NullLogger.Instance);
 
-        // A turn in which Present has already been called carries its call after the user's words.
-        List<ChatMessage> turn = [new ChatMessage(ChatRole.User, "What can you do with my invoices?")];
-        if (presentCalled)
-            turn.Add(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent("p1", "Present")]));
+        // The agent answers once, whatever it is asked: the case reads the instructions of the request.
+        ScriptedChatClient model = new ScriptedChatClient(Text("Welcome."));
+        ChatClientAgent agent = new ChatClientAgent(model, new ChatClientAgentOptions
+        {
+            AIContextProviders = [provider],
+            ChatOptions = new ChatOptions { Instructions = "You keep the accounts book." }
+        });
+        AgentSession session = await agent.CreateSessionAsync(TestContext.Current.CancellationToken);
 
-        await new WorkflowToolsChatClient(model, () => session, provider, [], 3, canForceToolCall)
-            .GetResponseAsync(turn, AgentOptions(), TestContext.Current.CancellationToken);
+        // The agent writes these before its model runs, on a landing or on a consultation.
+        if (withRunInstructions)
+            await provider.SetVariableAsync(session, "run_instructions", "[THE USER HAS JUST CHOSEN YOU]");
 
-        // The first call of a landing names Present; once it ran the model writes its text and closes with Reply.
-        ChatToolMode? toolMode = model.Requests.Single().Options!.ToolMode;
-        Assert.Equal(expectForced, toolMode is RequiredChatToolMode { RequiredFunctionName: "Present" });
-        Assert.True(expectForced || toolMode is null);
+        await agent.RunAsync("What can you do with my invoices?", session, cancellationToken: TestContext.Current.CancellationToken);
+
+        // The instructions are read when the session holds them and the agent's own are always there.
+        string instructions = model.Requests.Single().Options!.Instructions!;
+        Assert.Equal(withRunInstructions, instructions.Contains("[THE USER HAS JUST CHOSEN YOU]", StringComparison.Ordinal));
+        Assert.Contains("You keep the accounts book.", instructions, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task TurnClosure_Ordinary_turn_is_never_offered_Present()
+    public async Task TurnClosure_Ordinary_turn_is_offered_the_agent_s_tools()
     {
         // A session with no landing flag: the turn of a user who is already talking to the agent.
         (ScriptedChatClient model, AgentSession session, MorganaAIContextProvider provider) = await ToolNarrowingAsync();
 
         // The request crosses the narrowing client the way a turn of the agent does.
-        await new WorkflowToolsChatClient(model, () => session, provider, [], 3, canForceToolCall: false)
+        await new WorkflowToolsChatClient(model, () => session, provider, [], 3)
             .GetResponseAsync([new ChatMessage(ChatRole.User, "Show my invoices")], AgentOptions(), TestContext.Current.CancellationToken);
 
-        // Presenting the agent belongs to a landing alone: any other turn keeps the domain tools and Reply.
+        // Narrowing to Reply belongs to a landing alone: any other turn keeps the domain tools and Reply.
         Assert.Equal(["GetInvoices", "Reply"], model.Requests.Single().Options!.Tools!.Select(tool => tool.Name).Order());
     }
 
@@ -197,13 +203,12 @@ public sealed class TurnClosureTests
         return (model, session, new MorganaAIContextProvider(NullLogger.Instance));
     }
 
-    /// <summary>The options of an agent holding the base tools Present and Reply beside one domain tool.</summary>
+    /// <summary>The options of an agent holding the base tool Reply beside one domain tool.</summary>
     private static ChatOptions AgentOptions()
         => new ChatOptions
         {
             Tools =
             [
-                AIFunctionFactory.Create(() => "menu", "Present"),
                 AIFunctionFactory.Create(() => "closed", "Reply"),
                 AIFunctionFactory.Create(() => "invoices", "GetInvoices")
             ]
@@ -406,7 +411,7 @@ public sealed class TurnClosureTests
             Merge(Text("Farewell: may your garden bloom."),
                   Call("Reply", """{"awaits":"nothing","userIsLeaving":true}""")));
 
-        await RunTurnAsync(model, reply, canForceToolCall: true);
+        await RunTurnAsync(model, reply);
 
         // The first closure would have left the turn mute: refused, the model wrote and closed again.
         Assert.Equal(2, model.Requests.Count);
@@ -426,23 +431,21 @@ public sealed class TurnClosureTests
         Assert.Null(reply.Recorded());
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task TurnClosure_Turn_written_without_Reply_is_closed_on_the_model_s_behalf(bool canForceToolCall)
+    [Fact]
+    public async Task TurnClosure_Turn_written_without_Reply_is_closed_on_the_model_s_behalf()
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         const string closure = """{"awaits":"typed_answer","userIsLeaving":false,"actions":[],"card":null}""";
         ScriptedChatClient model = new ScriptedChatClient(
             Text("Which invoice do you mean?"),
-            canForceToolCall ? Call("Reply", closure) : Text(closure));
+            Text(closure));
 
-        await RunTurnAsync(model, reply, canForceToolCall);
+        await RunTurnAsync(model, reply);
 
-        // The provider able to be told which tool to call was told; the other was asked for JSON.
+        // The closure is asked for as JSON: no provider is ever made to call a tool.
         Assert.Equal(2, model.Requests.Count);
-        Assert.Equal(canForceToolCall, model.Requests[1].Options?.ToolMode is RequiredChatToolMode { RequiredFunctionName: "Reply" });
-        Assert.Equal(canForceToolCall, model.Requests[1].Options?.ResponseFormat is null);
+        Assert.Null(model.Requests[1].Options?.ToolMode);
+        Assert.IsType<ChatResponseFormatJson>(model.Requests[1].Options?.ResponseFormat);
         Assert.Equal(Records.AwaitedFromUser.TypedAnswer, reply.Recorded()!.Awaits);
     }
 
@@ -454,7 +457,7 @@ public sealed class TurnClosureTests
             Text("Which invoice do you mean?"),
             Text("""{"awaits":"typed_answer","userIsLeaving":false,"actions":[],"card":null}"""));
 
-        await RunTurnAsync(model, reply, canForceToolCall: false);
+        await RunTurnAsync(model, reply);
 
         // The answer is constrained to the schema of Reply as the agent publishes it: its descriptions, its nullability, its actions enum and its card depth.
         ChatResponseFormatJson format = Assert.IsType<ChatResponseFormatJson>(model.Requests[1].Options?.ResponseFormat);
@@ -471,7 +474,7 @@ public sealed class TurnClosureTests
             Merge(Text("Here are your invoices."),
                   Call("Reply", """{"awaits":"nothing","userIsLeaving":false}""")));
 
-        await RunTurnAsync(model, reply, canForceToolCall: true);
+        await RunTurnAsync(model, reply);
 
         Assert.Single(model.Requests);
         Assert.Equal(Records.AwaitedFromUser.Nothing, reply.Recorded()!.Awaits);
@@ -486,7 +489,7 @@ public sealed class TurnClosureTests
                         Call("Reply", """{"awaits":"typed_answer","userIsLeaving":false,"card":{"components":[{"content":"Overdue","type":"text_block"}],"title":"Invoices","subtitle":null}}""")),
                   Call("Reply", """{"awaits":"nothing","userIsLeaving":false}""")));
 
-        ChatResponse turn = await RunTurnAsync(model, reply, canForceToolCall: true);
+        ChatResponse turn = await RunTurnAsync(model, reply);
 
         // Every call of the response has its result: without one the next turn's history would be refused.
         List<AIContent> contents = [.. turn.Messages.SelectMany(message => message.Contents)];
@@ -504,7 +507,7 @@ public sealed class TurnClosureTests
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         ScriptedChatClient model = new ScriptedChatClient(Text(""));
 
-        await RunTurnAsync(model, reply, canForceToolCall: true);
+        await RunTurnAsync(model, reply);
 
         Assert.Single(model.Requests);
         Assert.Null(reply.Recorded());
@@ -629,13 +632,12 @@ public sealed class TurnClosureTests
     /// <summary>
     /// Runs one turn through the chain that an agent runs on: the tool loop, then the turn-closing client.
     /// </summary>
-    private static async Task<ChatResponse> RunTurnAsync(ScriptedChatClient model, ReplyUnderTest reply, bool canForceToolCall)
+    private static async Task<ChatResponse> RunTurnAsync(ScriptedChatClient model, ReplyUnderTest reply)
     {
         TurnClosingChatClient chain = new TurnClosingChatClient(
             new FunctionInvokingChatClient(model),
             "[TURN CLOSURE]\nDeclare how that turn closes.",
             "Turn closed.",
-            canForceToolCall,
             NullLogger.Instance);
 
         return await chain.GetResponseAsync(
@@ -712,9 +714,6 @@ public sealed class TurnClosureTests
 
         /// <inheritdoc />
         public IChatClient GetChatClient(Records.LLMTier tier) => throw new InvalidOperationException("The presenter asks for text, never a chat client");
-
-        /// <inheritdoc />
-        public bool CanForceToolCall(Records.LLMTier tier) => false;
 
         /// <inheritdoc />
         public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => new();

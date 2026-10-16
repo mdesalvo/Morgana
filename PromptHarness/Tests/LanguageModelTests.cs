@@ -148,17 +148,6 @@ public sealed class LanguageModelTests
         Assert.Contains("Morgana:ActorSystem:Tier", refusal.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void LanguageModel_A_forced_tool_call_follows_the_provider_of_the_tier()
-    {
-        ILLMService llm = Build(Configuration(
-            ("Morgana:LLM:Tiers:Economy:Provider", "Ollama"),
-            ("Morgana:LLM:Tiers:Economy:Connection:Endpoint", "http://localhost:11434")));
-
-        Assert.False(llm.CanForceToolCall(Records.LLMTier.Economy));
-        Assert.True(llm.CanForceToolCall(Records.LLMTier.Efficiency));
-    }
-
     /// <summary>The metadata that the client of a tier reports about the model that it runs.</summary>
     private static ChatClientMetadata MetadataOf(ILLMService llm, Records.LLMTier tier) =>
         llm.GetChatClient(tier).GetService<ChatClientMetadata>()

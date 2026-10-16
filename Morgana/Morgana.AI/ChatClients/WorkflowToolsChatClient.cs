@@ -30,9 +30,6 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
     /// <summary>The consultations that one user turn may spend, after which no colleague is offered.</summary>
     private readonly int maxConsultationRoundsPerTurn;
 
-    /// <summary>True when the provider can be made to call a named tool, which is what lets a landing force Present.</summary>
-    private readonly bool canForceToolCall;
-
     /// <summary>
     /// Wraps the model the agent's tool loop calls.
     /// </summary>
@@ -41,20 +38,17 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
     /// <param name="contextProvider">The agent's context store.</param>
     /// <param name="workflows">The workflows the agent declares.</param>
     /// <param name="maxConsultationRoundsPerTurn">The consultations that one user turn may spend.</param>
-    /// <param name="canForceToolCall">True when the provider honours a request to call one named tool.</param>
     public WorkflowToolsChatClient(
         IChatClient innerClient,
         Func<AgentSession?> sessionAccessor,
         MorganaAIContextProvider contextProvider,
         IReadOnlyList<Records.WorkflowDefinition> workflows,
-        int maxConsultationRoundsPerTurn,
-        bool canForceToolCall) : base(innerClient)
+        int maxConsultationRoundsPerTurn) : base(innerClient)
     {
         this.sessionAccessor = sessionAccessor;
         this.contextProvider = contextProvider;
         this.workflows = workflows;
         this.maxConsultationRoundsPerTurn = maxConsultationRoundsPerTurn;
-        this.canForceToolCall = canForceToolCall;
     }
 
     /// <inheritdoc/>
@@ -62,31 +56,23 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         IEnumerable<ChatMessage> chatMessages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
-    {
-        // The messages are read twice: by the narrowing to see what the turn has done and by the model below.
-        List<ChatMessage> messages = [.. chatMessages];
-        return base.GetResponseAsync(messages, NarrowToSession(messages, options), cancellationToken);
-    }
+        => base.GetResponseAsync(chatMessages, NarrowToSession(options), cancellationToken);
 
     /// <inheritdoc/>
     public override IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
         IEnumerable<ChatMessage> chatMessages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
-    {
-        // The messages are read twice: by the narrowing to see what the turn has done and by the model below.
-        List<ChatMessage> messages = [.. chatMessages];
-        return base.GetStreamingResponseAsync(messages, NarrowToSession(messages, options), cancellationToken);
-    }
+        => base.GetStreamingResponseAsync(chatMessages, NarrowToSession(options), cancellationToken);
 
     /// <summary>
     /// Presents the call as the session allows: the tools narrowedOptions to its state and, for a request of the turn's closure,
     /// the answer's format taken from the Reply that the model is offered.
     /// </summary>
-    private ChatOptions? NarrowToSession(List<ChatMessage> messages, ChatOptions? options)
+    private ChatOptions? NarrowToSession(ChatOptions? options)
     {
         // The tools are narrowedOptions first, so that a choice step has already shaped the Reply that the format is taken from.
-        ChatOptions? narrowedOptions = NarrowTools(messages, options);
+        ChatOptions? narrowedOptions = NarrowTools(options);
 
         // A closure request names Reply in its format: the model is asked for what Reply would have been called with.
         if (options?.ResponseFormat is not ChatResponseFormatJson { SchemaName: Constants.Tools.Reply })
@@ -105,7 +91,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
     /// <summary>
     /// Rewrites the options' tools for the state of the session; the caller's options are never mutated.
     /// </summary>
-    private ChatOptions? NarrowTools(List<ChatMessage> messages, ChatOptions? options)
+    private ChatOptions? NarrowTools(ChatOptions? options)
     {
         // The session is read on every call: a step reached halfway through a turn changes what the next call offers.
         AgentSession? session = sessionAccessor();
@@ -126,24 +112,20 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         Records.WorkflowPosition? position = workflows.Count == 0 ? null : contextProvider.GetWorkflowPosition(session);
         (Records.WorkflowDefinition Definition, Records.WorkflowStep Step)? runningWorkflow = position?.Resolve(workflows);
 
-        // A landing is the user's choice of this agent and nothing else: the turn holds only what presents the
-        // agent and closes the turn, so the model has nothing to do but introduce itself.
+        // A landing is the user's choice of this agent and nothing else: the turn holds Reply alone, so the model
+        // introduces itself from the declaration that its context provider adds and closes the turn.
         if (contextProvider.GetVariable(session, Constants.ContextKeys.Landing) is not null)
         {
-            // The clone carries Present and Reply alone, whatever else the agent holds.
+            // The clone carries Reply alone, whatever else the agent holds.
             ChatOptions landingOptions = options.Clone();
-            landingOptions.Tools = [.. tools.Where(tool => tool.Name is Constants.Tools.Present or Constants.Tools.Reply)];
+            landingOptions.Tools = [.. tools.Where(tool => tool.Name is Constants.Tools.Reply)];
 
-            // The framework knows that presenting the agent is the landing's first move: where the provider can be
-            // made to call it, the model does not get to invent a menu of its own with Reply.
-            if (canForceToolCall && !PresentCalledInTurn(messages))
-                landingOptions.ToolMode = ChatToolMode.RequireSpecific(Constants.Tools.Present);
-
+            // The landing's options go to the model with no tool mode: no provider is ever made to call a tool.
             return landingOptions;
         }
 
-        // With no workflow declared and every colleague within reach the agent is offered exactly the tools it was given, Present aside.
-        if (workflows.Count == 0 && !colleaguesOutOfReach && tools.All(tool => tool.Name != Constants.Tools.Present))
+        // With no workflow declared and every colleague within reach the agent is offered exactly the tools it was given.
+        if (workflows.Count == 0 && !colleaguesOutOfReach)
             return options;
 
         // The tools the model is offered on this call, each one weighed against the state of the session.
@@ -160,10 +142,6 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
 
             // A consultation answers a colleague and never takes the user's turn, so it never opens a wizard.
             if (isServingConsultation && tool is WorkflowLauncherFunction)
-                continue;
-
-            // Only a landing presents the agent: any other turn, a consultation included, is never offered Present.
-            if (tool.Name == Constants.Tools.Present)
                 continue;
 
             // Each tool is offered in the form that the running workflow allows, as it is held where no workflow runs.
@@ -190,20 +168,6 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
 
         // The model reads only the tools that the session's state allows.
         return offeredOptions;
-    }
-
-    /// <summary>True when Present was already called after the user's last message that carries text.</summary>
-    private static bool PresentCalledInTurn(List<ChatMessage> messages)
-    {
-        // The turn opens at the user's last message with text: a user message carrying only tool or approval content does not open one.
-        int turnStart = messages.FindLastIndex(message => message.Role == ChatRole.User
-            && message.Contents.OfType<TextContent>().Any(text => !string.IsNullOrWhiteSpace(text.Text)));
-
-        // A Present call after that point means the agent has already been presented in this turn.
-        return messages.Skip(turnStart + 1)
-            .SelectMany(message => message.Contents)
-            .OfType<FunctionCallContent>()
-            .Any(call => call.Name == Constants.Tools.Present);
     }
 
     /// <summary>

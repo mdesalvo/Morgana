@@ -13,12 +13,6 @@ public abstract class MorganaLanguageModel
     public abstract IChatClient CreateChatClient(Records.TierConnection connection, Records.TierConfiguration options);
 
     /// <summary>
-    /// True when the provider honours a request naming the one tool that the model must call.
-    /// </summary>
-    /// <remarks>True for every provider whose API names a required tool; a provider without one overrides it.</remarks>
-    public virtual bool CanForceToolCall => true;
-
-    /// <summary>
     /// Refuses a connection that lacks a field that this provider uses.
     /// </summary>
     /// <remarks>
