@@ -6,12 +6,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 
 ## [1.0.0-beta1] - UNDER DEVELOPMENT
-### 🎯 Major Feature: Model-proof protocols
-Morgana's application protocols no longer rely on the model's interpretation: they are now **capabilities of the framework itself**.
-Quick replies, rich cards and turn closure express nothing new: they simply reach the user reliably, whichever model is behind the agent.
 ### 🎯 Major Feature: Multi-vendor LLM tiers
 No more vendor lock-in: **each LLM tier now brings its own provider**, so Morgana can think with Anthropic, OpenAI, AzureOpenAI and Ollama at once.
 A new **Economy** tier joins Efficiency and Performance, taking over Morgana's own pipeline so that the premium models are spent only where an agent needs them.
+### 🎯 Major Feature: Model-proof protocols
+Morgana's application protocols no longer rely on the model's interpretation: they are now **capabilities of the framework itself**.
+Quick replies, rich cards and turn closure express nothing new: they simply reach the user reliably, whichever model is behind the agent.
 ### 🎯 Major Feature: Workflows
 Agents can now follow **a process**, not just a conversation. Workflows, based on `Microsoft.Agents.AI` and the new **`MorganaWorkflow`** abstraction, give each step the tools that may be used and let every call decide where it leads.
 An interrupted workflow picks up where it left off, even after a restart. Native and MCP tools mix freely.
@@ -30,7 +30,7 @@ The buttons on both levels are written by code, from the intents and from the to
 ### 🔄 Changed
 - Prompt aspects of tools no longer live in `agents.json`: they are now based on **`Microsoft.Extensions.AI`**. A tool and each of its parameters are described with the standard **`[Description]`** attribute on the public methods of a `MorganaTool`: `Microsoft.Extensions.AI` turns it into the tool schema handed to the model.
 - `morgana.json` is lighter: tools are no longer declared in it and `GlobalPolicies` drop from 9 to 5, now that the protocol is enforced in code. Some `AdditionalProperties` are renamed after what they do: `Injections` is split into `PromptInjections` and `ToolInjections`.
-- Morgana graduates from 0.x: 1.0 previews begin, heading for a stable release consolidating architecture and quality
+- Morgana graduates from 0.x: 1.0 beta begins, heading for a stable release consolidating architecture and quality
 
 ### 🐛 Fixed
 - Ending an unknown conversation brought its actors to life just to stop them and to answer OK
