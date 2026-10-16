@@ -45,7 +45,7 @@ public class MorganaAIContextProvider : AIContextProvider
     /// <summary>
     /// The agent's menu: the actions that its offered tools and workflows put in front of the user, in menu order.
     /// </summary>
-    public IReadOnlyList<Records.ReplyAction> Menu { get; }
+    public IReadOnlyList<Records.OfferedAction> Menu { get; }
 
     /// <summary>
     /// The declaration that the agent's landing run carries, composed from <see cref="Menu"/> at the agent's birth; <c>null</c> where the deployment declares none.
@@ -78,7 +78,7 @@ public class MorganaAIContextProvider : AIContextProvider
         IEnumerable<string>? sharedVariableNames = null,
         JsonSerializerOptions? jsonSerializerOptions = null,
         IReadOnlyList<Records.WorkflowDefinition>? workflows = null,
-        IReadOnlyList<Records.ReplyAction>? menu = null,
+        IReadOnlyList<Records.OfferedAction>? menu = null,
         string? landingDeclaration = null)
     {
         // A provider built without shared names persists nothing across agents.

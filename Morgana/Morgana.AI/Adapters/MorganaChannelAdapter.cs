@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Markdig;
+using Markdig.Helpers;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using Microsoft.Extensions.Logging;
@@ -319,7 +320,7 @@ public class MorganaChannelAdapter
 
                 // Code keeps every line as written, since its layout is part of what it says.
                 case CodeBlock code:
-                    foreach (var line in code.Lines.Lines)
+                    foreach (StringLine line in code.Lines.Lines)
                         sb.AppendLine(line.ToString());
                     sb.AppendLine();
                     break;

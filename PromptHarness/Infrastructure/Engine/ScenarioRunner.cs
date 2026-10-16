@@ -117,7 +117,7 @@ public sealed class ScenarioRunner
                 {
                     // The button's value is written at runtime, so the scenario names the tool of an action button or the exact id of a welcome or disambiguation button and the run reads the value from what was offered.
                     QuickReply? pressed = (lastReceived.QuickReplies ?? [])
-                        .FirstOrDefault(quickReply => string.Equals(Records.TurnReply.ActionTool(quickReply.Id), pressedTool, StringComparison.Ordinal)
+                        .FirstOrDefault(quickReply => string.Equals(Records.ClosingDeclaration.ActionTool(quickReply.Id), pressedTool, StringComparison.Ordinal)
                             || string.Equals(quickReply.Id, pressedTool, StringComparison.Ordinal));
 
                     if (pressed is null)

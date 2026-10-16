@@ -96,9 +96,9 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[ProvidesWorkflowForIntent]`, `[RequiresApproval]`, `[UserTool]`, `[SystemTool]`, `[ToolParameter]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
-| `ChatClients/` | `IChatClient` decorators: `DustAccountingChatClient`, `MorganaAnthropicClient`, `ApprovalTurnChatClient` (drops `Reply` from a response asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model wrote without `Reply`, asking for its closure as structured output under `Reply`'s schema), `WorkflowToolsChatClient` (offers the model only the tools that a running workflow's current step allows; no colleague while one is being answered or once the turn's consultation rounds are spent) |
+| `ChatClients/` | `IChatClient` decorators: `DustAccountingChatClient`, `MorganaAnthropicClient`, `ApprovalTurnChatClient` (drops `CloseTurn` from a response asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model wrote without `CloseTurn`, asking for its closure as structured output under `CloseTurn`'s schema), `WorkflowToolsChatClient` (offers the model only the tools that a running workflow's current step allows; no colleague while one is being answered or once the turn's consultation rounds are spent) |
 | `Workflows/` | `WorkflowEngine`: an agent's workflows on Microsoft.Agents.AI.Workflows, rebuilt at every call from the checkpoint kept in the agent's session. `WorkflowLauncherFunction`: the function that starts one workflow, recognised by its type |
-| `Tools/` | `ReplyTool`: the framework's own tool, declared on its method as a domain tool is |
+| `Tools/` | `CloseTurnTool`: the framework's own tool, declared on its method as a domain tool is |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
 | `Providers/` | `MorganaAIContextProvider` (context variables plus the shared registry), `MorganaChatHistoryProvider` (stores the whole history, hands the model the current episode only — since the user last left — with earlier tool results marked) |
 | `Records.cs` | Every immutable record: actor messages, configuration, DTOs |
@@ -165,11 +165,11 @@ Every endpoint but `health` authenticates through `ChannelAuthenticationFilter` 
 
 ### Multi-turn and shared context
 
-Every turn closes with one `Reply` call carrying what it awaits from the user (`nothing`,
+Every turn closes with one `CloseTurn` call carrying what it awaits from the user (`nothing`,
 `typed_answer`, `action_choice`), whether the user is leaving, the actions offered as buttons and the
 card — a typed argument whose schema is derived from `Morgana.Contracts`. The buttons that let the user
 stay or leave are the framework's (`FrameworkReplies` in `morgana.json`), chosen from that closure by
-`TurnReply.ToDelivery`: the agent stays `activeAgent` — later messages skip classification — until the
+`ClosingDeclaration.ToDelivery`: the agent stays `activeAgent` — later messages skip classification — until the
 user leaves.
 
 Tool parameters declared `[ToolParameter(ToolScope.Context, shared: true)]` route their values into a
@@ -282,7 +282,7 @@ Two consumption modes: `CompleteStructuredAsync` (stateless, answered under a JS
 
 ## Tool System
 
-Every agent gets the **base tool** `Reply` (`ReplyTool`) plus its domain tools; an agent declaring workflows also gets one launcher per workflow.
+Every agent gets the **base tool** `CloseTurn` (`CloseTurnTool`) plus its domain tools; an agent declaring workflows also gets one launcher per workflow.
 
 Every parameter declares its scope: `Context` or `Request` (asked of the user). Required is the
 signature's alone. Only a `Context` value is shared and a `Context` parameter is a required `string`.
@@ -292,7 +292,7 @@ nobody holds it. No prose tells the model any of this beyond one sentence of `To
 
 Parameter descriptions reach the model **only** through the JSON schema, via
 `AIJsonSchemaCreateOptions.ParameterDescriptionProvider`. No tool is declared in JSON: the framework's
-`Reply` is a method like any domain tool and a launcher is projected from its workflow's class. MCP tools never pass
+`CloseTurn` is a method like any domain tool and a launcher is projected from its workflow's class. MCP tools never pass
 through `MorganaToolAdapter`: they arrive carrying their server's schema and Morgana adapts nothing.
 A workflow reads an MCP step's outcome from `isError` and `structuredContent` and carries only the
 fields that the server's `outputSchema` declares.
@@ -332,8 +332,8 @@ The `Morgana` prompt's `AdditionalProperties` carry sibling arrays and **what an
 from the array that it lives in**, never from a field inside it:
 
 - **`GlobalPolicies`** — rendered into every agent's prompt in `Priority` order:
-  QuickReplyDoctrine, ToolGrounding, MandatoryTextualResponse, RichCardUsage, PeerConsultation.
-  `PeerConsultation` (P8) is the
+  QuickReplyDoctrine, ToolGrounding, UserFacingText, RichCardUsage, PeerConsultation.
+  `PeerConsultation` (P5) is the
   **only conditionally rendered** one (an agent outside the A2A topology never pays for it) and
   sits last so it names the policies it suspends instead of forward-referencing them.
 - **`PromptInjections`** — texts spliced into the instructions or the conversation's messages, one
@@ -341,12 +341,12 @@ from the array that it lives in**, never from a field inside it:
   `ColleaguesDeclaration` (closing a peer-capable agent's instructions), `PeerConsultationDeclaration`
   and `PeerConsultationGuardrail` (the instructions of a run serving a colleague), `PeerConsultationQuestion`
   (fencing the colleague's question as that run's message), `LandingDeclaration` (the instructions of a
-  landing run), `TurnClosureRequest` (after a turn the model wrote without `Reply`). The instructions of
+  landing run), `TurnClosureRequest` (after a turn the model wrote without `CloseTurn`). The instructions of
   a run reach the model through `MorganaAIContextProvider` as MAAI's per-run `AIContext.Instructions`,
   held in the session for that run alone and never stored in the history.
 - **`ToolInjections`** — everything the model reads as part of a tool: what the framework's own tools
-  return (`Reply`, the context wrapper, the consultation guards and fallbacks, the workflow results),
-  `ReplyNotAccepted`, `EarlierToolResult`, `WorkflowStepReached` and `WorkflowEnded` around a result,
+  return (`CloseTurn`, the context wrapper, the consultation guards and fallbacks, the workflow results),
+  `TurnClosureNotAccepted`, `EarlierToolResult`, `WorkflowStepReached` and `WorkflowEnded` around a result,
   `ExecutionApprovalGuidance` after an approval tool's description. Where the framework knows the model's
   next move, the code enforces it and the text only states the fact. A domain tool's return is the domain's own.
 - **`FrameworkReplies`** — the buttons the framework adds to let the user stay, leave or approve, as data.
@@ -492,7 +492,7 @@ or environment variables.
 - A domain tool is its method: no prose about it lives anywhere else
 - Prompts resolve by ID: the five framework ids or an intent name
 - Rich cards use polymorphic JSON with a `type` discriminator
-- A turn is closed out-of-band by `Reply`, never by a token inside the response text
+- A turn is closed out-of-band by `CloseTurn`, never by a token inside the response text
 - Channel names are normalized to lowercase at ingress
 - **Invariant culture everywhere**: every host sets it as its first statement and library code
   (`Morgana.AI`, `Morgana.Terminal`) still passes `CultureInfo.InvariantCulture` or

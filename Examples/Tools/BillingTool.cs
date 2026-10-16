@@ -234,7 +234,7 @@ public class BillingTool : MorganaTool
     [UserTool(2, "🔎 A specific invoice")]
     public async Task<InvoiceDetailsResult> GetInvoiceDetails(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode,
-        [Description("Unique alphanumeric identifier of the invoice to retrieve (e.g., 'INV-0512'). The user should specify which invoice they want to examine, or you should ask them to choose from the list of available invoices. Never guess or assume which invoice the user wants.")] [ToolParameter(Records.ToolScope.Request)] string invoiceId)
+        [Description("Unique alphanumeric identifier of the invoice to retrieve (e.g., 'INV-0512'). Which invoice is the user's choice: never guess it.")] [ToolParameter(Records.ToolScope.Request)] string invoiceId)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 

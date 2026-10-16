@@ -72,7 +72,7 @@ public interface IPromptComposerService
     /// </remarks>
     /// <param name="menu">The actions that the user receives as buttons beneath the agent's text, in order.</param>
     /// <returns>The declaration to add; <c>null</c> when the deployment declares none.</returns>
-    Task<string?> ComposeLandingDeclarationAsync(IReadOnlyList<Records.ReplyAction> menu);
+    Task<string?> ComposeLandingDeclarationAsync(IReadOnlyList<Records.OfferedAction> menu);
 
     /// <summary>
     /// Produces the whole of what an answering agent reads on a run serving a colleague. The instructions
@@ -92,11 +92,11 @@ public interface IPromptComposerService
     Task<string?> ComposeTurnClosureRequestAsync();
 
     /// <summary>
-    /// Produces what the model reads in place of Reply's result when the closure that it sent was refused.
+    /// Produces what the model reads in place of CloseTurn's result when the closure that it sent was refused.
     /// </summary>
     /// <param name="reason">Why the closure was refused, as a fact.</param>
     /// <returns>The composed answer, falling back to the bare reason where no template is declared.</returns>
-    Task<string> ComposeReplyNotAcceptedAsync(string reason);
+    Task<string> ComposeTurnClosureNotAcceptedAsync(string reason);
 
     /// <summary>
     /// Produces what the model reads in place of a tool result an earlier turn received.

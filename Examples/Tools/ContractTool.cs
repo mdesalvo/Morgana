@@ -406,7 +406,7 @@ public class ContractTool : MorganaTool
     [UserTool(3, "📑 A contract clause")]
     public async Task<ContractClauseResult> GetContractClause(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode,
-        [Description("Clause number to retrieve (1-7). The user should specify which clause they want to read, or you should present the available clause topics and ask them to choose. Never guess or assume which clause the user wants.")] [ToolParameter(Records.ToolScope.Request)] int clauseNumber)
+        [Description("Clause number to retrieve (1-7). Which clause is the user's choice: never guess it.")] [ToolParameter(Records.ToolScope.Request)] int clauseNumber)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -562,7 +562,7 @@ public class ContractTool : MorganaTool
     [UserTool(5, "✂️ How to end my plan")]
     public async Task<TerminationProcedureResult> GetTerminationProcedure(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode,
-        [Description("Optional reason for considering termination (e.g., 'moving house', 'tending the garden myself', 'unhappy with the visits'). This is recorded for internal purposes but is not required. Ask the user if they'd like to provide a reason, but make it clear it's optional.")] [ToolParameter(Records.ToolScope.Request)] string? reason = null)
+        [Description("Optional reason for considering termination, when the user gave one (e.g., 'moving house', 'tending the garden myself', 'unhappy with the visits'). Recorded for internal purposes.")] [ToolParameter(Records.ToolScope.Request)] string? reason = null)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 

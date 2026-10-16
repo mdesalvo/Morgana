@@ -220,7 +220,7 @@ public class CoherenceApplyTools
         [Description("The agent's ID.")] [ToolParameter(Records.ToolScope.Request)] string agentId,
         [Description("The exact name of a tool already declared on that agent.")] [ToolParameter(Records.ToolScope.Request)] string toolName,
         [Description("camelCase parameter name.")] [ToolParameter(Records.ToolScope.Request)] string name,
-        [Description("What the value is and what a good one looks like.")] [ToolParameter(Records.ToolScope.Request)] string description,
+        [Description("What the value is and what a good one looks like. Never say here how a context value is found or when it is asked for: Morgana settles that herself. Never an instruction to the agent about asking the user for the value either: a value the user has not given is asked for by rules the agent already holds.")] [ToolParameter(Records.ToolScope.Request)] string description,
         [Description("'request' or 'context'.")] [ToolParameter(Records.ToolScope.Request)] string scope,
         [Description("Whether the agent must supply this value on every call.")] [ToolParameter(Records.ToolScope.Request)] bool required,
         [Description("Whether the resolved value is published to the whole conversation. Only a 'context' parameter may be shared.")] [ToolParameter(Records.ToolScope.Request)] bool shared)

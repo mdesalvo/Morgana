@@ -116,7 +116,7 @@ public static class Constants
         /// <summary>Spliced into a peer-capable agent's own instructions, naming the colleagues it holds.</summary>
         public const string ColleaguesDeclaration = "ColleaguesDeclaration";
 
-        /// <summary>Follows a turn that the model wrote without Reply, asking for that turn's closure alone.</summary>
+        /// <summary>Follows a turn that the model wrote without CloseTurn, asking for that turn's closure alone.</summary>
         public const string TurnClosureRequest = "TurnClosureRequest";
 
         /// <summary>Added to a landing turn's instructions: the agent introduces itself and learns the buttons beneath its text.</summary>
@@ -239,7 +239,7 @@ public static class Constants
     /// </summary>
     public static class ToolInjections
     {
-        /// <summary>Reply accepted the closure.</summary>
+        /// <summary>CloseTurn accepted the closure.</summary>
         public const string TurnClosed = "TurnClosed";
 
         /// <summary>A tool did not run because a context-scoped value is held by nobody yet.</summary>
@@ -251,8 +251,8 @@ public static class Constants
         /// <summary>A tool was called that cannot run now: the agent is answering a colleague, the turn spent its consultation rounds or the running workflow does not offer it at its step.</summary>
         public const string CallNotAvailable = "CallNotAvailable";
 
-        /// <summary>Answers a Reply the framework refused, with the reason it was refused.</summary>
-        public const string ReplyNotAccepted = "ReplyNotAccepted";
+        /// <summary>Answers a CloseTurn the framework refused, with the reason it was refused.</summary>
+        public const string TurnClosureNotAccepted = "TurnClosureNotAccepted";
 
         /// <summary>Follows the description of a tool that returns a record, carrying the JSON schema of that record.</summary>
         public const string ReturnContract = "ReturnContract";
@@ -277,7 +277,7 @@ public static class Constants
     public static class Tools
     {
         /// <summary>Closes the agent's turn: whether it awaits the user, the actions that it offers and its card.</summary>
-        public const string Reply = "Reply";
+        public const string CloseTurn = "CloseTurn";
     }
 
     /// <summary>
@@ -313,10 +313,10 @@ public static class Constants
     /// </summary>
     public static class ContextKeys
     {
-        /// <summary>Set by <see cref="Tools.Reply"/>; read once, then dropped.</summary>
-        public const string TurnReply = "turn_reply";
+        /// <summary>Set by <see cref="Tools.CloseTurn"/>; read once, then dropped.</summary>
+        public const string ClosingDeclaration = "closing_declaration";
 
-        /// <summary>Marks a turn that opens with the user choosing this agent: the model is offered Reply alone and the run carries the landing declaration; dropped when the turn ends.</summary>
+        /// <summary>Marks a turn that opens with the user choosing this agent: the model is offered CloseTurn alone and the run carries the landing declaration; dropped when the turn ends.</summary>
         public const string Landing = "landing";
 
         /// <summary>The framework's instructions for this run alone, added to the agent's own by its context provider; dropped when the turn ends.</summary>
@@ -425,8 +425,8 @@ public static class Constants
         /// <summary>In <see cref="ToolInjections.EarlierToolResult"/> and the workflow injections — the result as the tool returned it.</summary>
         public const string EarlierToolResultContent = "((result))";
 
-        /// <summary>In <see cref="ToolInjections.ReplyNotAccepted"/> and <see cref="ToolInjections.CallNotAvailable"/> — why the closure was refused or the call is not available.</summary>
-        public const string ReplyNotAcceptedReason = "((reason))";
+        /// <summary>In <see cref="ToolInjections.TurnClosureNotAccepted"/> and <see cref="ToolInjections.CallNotAvailable"/> — why the closure was refused or the call is not available.</summary>
+        public const string TurnClosureNotAcceptedReason = "((reason))";
 
         /// <summary>In <see cref="PromptInjections.LandingDeclaration"/> — the labels of the menu, comma-joined; "none" when no button is offered.</summary>
         public const string Actions = "((actions))";

@@ -42,14 +42,14 @@ public sealed class HistoryViewTests
         ViewUnderTest agent = await ViewUnderTest.CreateAsync();
         agent.File(new ChatMessage(ChatRole.User, "We're done, thanks"));
         ChatMessage farewell = new ChatMessage(ChatRole.Assistant,
-            [new TextContent("Farewell!"), new FunctionCallContent("c1", "Reply")]);
+            [new TextContent("Farewell!"), new FunctionCallContent("c1", "CloseTurn")]);
         farewell.AdditionalProperties = new AdditionalPropertiesDictionary { ["morgana:episode_end"] = true };
         agent.File(farewell);
         agent.File(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("c1", "Turn closed.")]));
 
         IReadOnlyList<ChatMessage> view = await agent.RunTurnAsync("Show my payment history");
 
-        // The farewell's own Reply result belongs to the turn that ended, never to the one that opens.
+        // The farewell's own CloseTurn result belongs to the turn that ended, never to the one that opens.
         Assert.Equal(["Show my payment history"], view.Select(message => message.Text));
         Assert.DoesNotContain(view.SelectMany(message => message.Contents), content => content is FunctionResultContent);
     }
@@ -153,10 +153,10 @@ public sealed class HistoryViewTests
         public Task<string> ComposeReturnContractAsync(string description, System.Text.Json.JsonElement? returnSchema) => throw new NotSupportedException();
         public Task<string> ComposePeerDescriptionAsync(A2A.AgentCard peerCard) => throw new NotSupportedException();
         public Task<string?> ComposeColleaguesDeclarationAsync(IReadOnlyDictionary<string, string> colleagues) => throw new NotSupportedException();
-        public Task<string?> ComposeLandingDeclarationAsync(IReadOnlyList<Records.ReplyAction> menu) => throw new NotSupportedException();
+        public Task<string?> ComposeLandingDeclarationAsync(IReadOnlyList<Records.OfferedAction> menu) => throw new NotSupportedException();
         public Task<Records.ConsultationRequest> ComposeConsultationRequestAsync(string? callerIntent, string question) => throw new NotSupportedException();
         public Task<string?> ComposeTurnClosureRequestAsync() => throw new NotSupportedException();
-        public Task<string> ComposeReplyNotAcceptedAsync(string reason) => throw new NotSupportedException();
+        public Task<string> ComposeTurnClosureNotAcceptedAsync(string reason) => throw new NotSupportedException();
         public Task<string> ComposeToolInjectionAsync(string name, IReadOnlyDictionary<string, string>? values = null) => throw new NotSupportedException();
         public Task<string?> ComposeWorkflowResultAsync(string workflow, string? step, string result) => throw new NotSupportedException();
     }

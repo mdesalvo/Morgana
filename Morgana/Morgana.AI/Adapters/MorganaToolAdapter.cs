@@ -17,7 +17,7 @@ public class MorganaToolAdapter
 {
     /// <summary>
     /// How tool arguments are read and their schemas written. A structured argument, such as the card
-    /// Reply carries, is a contract: its schema declares what is required and an argument breaking it
+    /// CloseTurn carries, is a contract: its schema declares what is required and an argument breaking it
     /// is refused rather than half-read. The card's component type may sit anywhere in its object.
     /// </summary>
     private static readonly JsonSerializerOptions ToolSerializerOptions =
@@ -220,7 +220,7 @@ public class MorganaToolAdapter
             // A property of an argument's type is read from its own annotations.
             PropertyInfo property => nullabilityContext.Create(property),
             // A node standing for an argument is matched to the method parameter of its type; two of one type leave it unmatched.
-            _ when context.Path.Length == 0 && methodParameters.Where(parameter => parameter.ParameterType == context.TypeInfo.Type).ToArray() is [var parameter]
+            _ when context.Path.Length == 0 && methodParameters.Where(parameter => parameter.ParameterType == context.TypeInfo.Type).ToArray() is [ParameterInfo parameter]
                 => nullabilityContext.Create(parameter),
             // Any other node declares nothing about its elements.
             _ => null

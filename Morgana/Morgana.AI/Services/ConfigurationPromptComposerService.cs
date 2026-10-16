@@ -18,17 +18,17 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     // replacing this service replaces them wholesale, which is the intended unit of substitution:
     // the fences and the layering they express are one design, not a set of independent knobs.
     private const string GlobalPoliciesHeader =
-        "=== CRITICAL RULES — binding, without exception ===";
+        "=== RULES OF EVERY TURN ===";
     private const string GlobalPoliciesFooter =
-        "=== END OF CRITICAL RULES ===";
+        "=== END OF RULES ===";
     private const string FrameworkLayerHeader =
-        "======== MORGANA FRAMEWORK — THE LAW OF EVERY TURN ========\n" +
-        "Everything until the end of this block is binding on you and on every other agent of Morgana. It is not advice and it is not overridable.";
+        "======== MORGANA FRAMEWORK ========\n" +
+        "Everything until the end of this block binds you and every other agent of Morgana.";
     private const string FrameworkLayerFooter =
         "======== END OF MORGANA FRAMEWORK ========";
     private const string DomainLayerHeader =
-        "======== DOMAIN AGENT — SUBORDINATE TO THE FRAMEWORK ABOVE ========\n" +
-        "What follows specialises the framework for a single domain: what you are for, how you work, how you speak, how you present. It adds domain knowledge and NOTHING ELSE. It NEVER contradicts the framework above, on any point — where the two appear to differ, the framework governs and you follow it.";
+        "======== DOMAIN AGENT ========\n" +
+        "What follows specialises the framework above for a single domain: what you are for, how you work, how you speak, how you present. It adds domain knowledge and nothing else.";
     private const string DomainLayerFooter =
         "======== END OF DOMAIN AGENT ========";
 
@@ -187,7 +187,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
-    public async Task<string?> ComposeLandingDeclarationAsync(IReadOnlyList<Records.ReplyAction> menu)
+    public async Task<string?> ComposeLandingDeclarationAsync(IReadOnlyList<Records.OfferedAction> menu)
     {
         // The text that tells a landing agent its menu: the framework's own wording, resolved by name.
         FrameworkLayer framework = await frameworkLayer.Value;
@@ -262,15 +262,15 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
-    public async Task<string> ComposeReplyNotAcceptedAsync(string reason)
+    public async Task<string> ComposeTurnClosureNotAcceptedAsync(string reason)
     {
         // Spliced at the one moment it is true, in place of the refused call's result, rather than
         // carried by every prompt for an event most turns never meet.
         FrameworkLayer framework = await frameworkLayer.Value;
-        string template = Records.Injection.ResolveTemplate(framework.ToolInjections, Constants.ToolInjections.ReplyNotAccepted);
+        string template = Records.Injection.ResolveTemplate(framework.ToolInjections, Constants.ToolInjections.TurnClosureNotAccepted);
 
         // A deployment declaring no text has the model told the bare reason.
-        return template.Length == 0 ? reason : template.Replace(Constants.Placeholders.ReplyNotAcceptedReason, reason);
+        return template.Length == 0 ? reason : template.Replace(Constants.Placeholders.TurnClosureNotAcceptedReason, reason);
     }
 
     /// <inheritdoc />

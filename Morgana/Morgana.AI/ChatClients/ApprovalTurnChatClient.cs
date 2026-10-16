@@ -9,11 +9,11 @@ namespace Morgana.AI.ChatClients;
 /// <summary>
 /// DelegatingChatClient sitting between the model and the tool loop. A model response that calls a tool
 /// needing the user's approval closes the turn: it is let through only once the turn has text and it loses
-/// its Reply call, since that turn is closed by the framework with the approval buttons, never by the model.
+/// its CloseTurn call, since that turn is closed by the framework with the approval buttons, never by the model.
 /// </summary>
 /// <remarks>
 /// The tool loop holds back every call of a response that asks for approval and runs the ones needing
-/// none at the next request. Left in place, the Reply written for this turn would therefore run at the
+/// none at the next request. Left in place, the CloseTurn written for this turn would therefore run at the
 /// start of the next one and close that turn with this one's decision.
 /// </remarks>
 public sealed class ApprovalTurnChatClient : DelegatingChatClient
@@ -67,15 +67,15 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
             response = await base.GetResponseAsync(messages, options, cancellationToken);
         }
 
-        // A response that asks for nothing keeps its Reply call: the model closes that turn itself.
+        // A response that asks for nothing keeps its CloseTurn call: the model closes that turn itself.
         if (!AsksForApproval(response.Messages.SelectMany(message => message.Contents), options))
             return response;
 
-        // The turn is closed by the framework with the approval buttons, so the Reply written beside the request is dropped.
+        // The turn is closed by the framework with the approval buttons, so the CloseTurn written beside the request is dropped.
         foreach (ChatMessage message in response.Messages)
-            message.Contents = [.. message.Contents.Where(content => !IsReplyCall(content))];
+            message.Contents = [.. message.Contents.Where(content => !IsCloseTurnCall(content))];
 
-        // The response goes back with its Reply calls dropped, since the approval buttons close the turn.
+        // The response goes back with its CloseTurn calls dropped, since the approval buttons close the turn.
         return response;
     }
 
@@ -147,13 +147,13 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
         foreach (ChatResponseUpdate heldUpdate in heldUpdates)
             yield return heldUpdate;
 
-        // The calls are released with the Reply dropped when the response asks for approval, as in the non-streaming path.
+        // The calls are released with the CloseTurn dropped when the response asks for approval, as in the non-streaming path.
         bool asksForApproval = AsksForApproval(callUpdates.SelectMany(update => update.Contents), options);
         foreach (ChatResponseUpdate update in callUpdates)
         {
-            // A response that asks for approval loses its Reply calls, since the approval buttons close the turn.
+            // A response that asks for approval loses its CloseTurn calls, since the approval buttons close the turn.
             if (asksForApproval)
-                update.Contents = [.. update.Contents.Where(content => !IsReplyCall(content))];
+                update.Contents = [.. update.Contents.Where(content => !IsCloseTurnCall(content))];
 
             yield return update;
         }
@@ -185,7 +185,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
             return false;
 
         // Any other approval request waits for the turn's text.
-        return !ReplyTool.HasTurnText([.. messages, .. response]);
+        return !CloseTurnTool.HasTurnText([.. messages, .. response]);
     }
 
     /// <summary>The names of the tools that the calls are to, counting only those needing the user's approval.</summary>
@@ -220,7 +220,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
             && contents.OfType<FunctionCallContent>().Any(call => approvalRequired.Contains(call.Name));
     }
 
-    /// <summary>True for a call closing the turn through Reply.</summary>
-    private static bool IsReplyCall(AIContent content)
-        => content is FunctionCallContent { Name: Constants.Tools.Reply };
+    /// <summary>True for a call closing the turn through CloseTurn.</summary>
+    private static bool IsCloseTurnCall(AIContent content)
+        => content is FunctionCallContent { Name: Constants.Tools.CloseTurn };
 }

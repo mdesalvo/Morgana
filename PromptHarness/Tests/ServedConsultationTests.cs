@@ -178,7 +178,7 @@ public sealed class ServedConsultationTests
     private static readonly string[] InventoryToolNames =
     [
         "GetProductCatalog", "CheckStockLevel", "CreatePurchaseOrder", "ConfirmOrder",
-        "GetOrderStatus", "CancelOrder", "GetOrders", "GetOrderHistory"
+        "GetOrderStatus", "CancelOrder", "GetConversationOrders", "GetOrderHistory"
     ];
 
     /// <summary>

@@ -205,7 +205,7 @@ public class MorganaAgent : MorganaActor
             // The turn is filed before the model runs, then run, then closed and recorded.
             Records.TurnOpening opening = await OpenTurnAsync(req, frameworkReplies, agentSpan);
             Records.TurnOutcome turnOutcome = await RunTurnAsync(opening.Session, req, opening.PressedActionTool, senderRef, agentSpan);
-            Records.TurnClosure closure = CloseTurn(opening.Session, turnOutcome, morganaPrompt, frameworkReplies, req.IsLanding);
+            Records.TurnClosure closure = ConcludeTurn(opening.Session, turnOutcome, morganaPrompt, frameworkReplies, req.IsLanding);
             DateTime? recordedAt = await RecordTurnAsync(opening.Session, closure, opening.HistoryBaseline, agentSpan);
 
             // Dated as the history keeps it, so a client catching up recognises the reply it was pushed.
@@ -240,7 +240,7 @@ public class MorganaAgent : MorganaActor
             if (aiAgentSession is not null)
             {
                 // The turn's closure is dropped from the session, so it cannot close the next turn as well.
-                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnReply);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ClosingDeclaration);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.Landing);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.RunInstructions);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.PressedActionTool);
@@ -532,21 +532,21 @@ public class MorganaAgent : MorganaActor
         return new Records.TurnOutcome(fullResponse.ToString().Trim(), awaitsApproval);
     }
 
-    /// <summary>Decides the text, buttons and card that the user receives, from what the model wrote and how Reply closed the turn.</summary>
-    private Records.TurnClosure CloseTurn(AgentSession session, Records.TurnOutcome turnOutcome, Records.Prompt morganaPrompt, Records.FrameworkReplies frameworkReplies, bool isLanding)
+    /// <summary>Decides the text, buttons and card that the user receives, from what the model wrote and how the CloseTurn tool closed it.</summary>
+    private Records.TurnClosure ConcludeTurn(AgentSession session, Records.TurnOutcome turnOutcome, Records.Prompt morganaPrompt, Records.FrameworkReplies frameworkReplies, bool isLanding)
     {
         // An approval asked with no word of the model's own is asked in Morgana's words.
         string llmResponseText = turnOutcome.Text;
         if (llmResponseText.Length == 0)
             llmResponseText = morganaPrompt.GetMessage(Constants.Messages.Approval);
 
-        // How the turn closes, recorded by Reply whether the model called it or the framework closed
+        // How the turn closes, recorded by CloseTurn whether the model called it or the framework closed
         // the turn on its behalf. A turn that still declares nothing is answered and ends.
-        Records.TurnReply turnReply = GetTurnReplyFromContext(session)
-                                      ?? new Records.TurnReply(Records.AwaitedFromUser.Nothing, false, [], null);
+        Records.ClosingDeclaration closingDeclaration = GetClosingDeclarationFromContext(session)
+                                      ?? new Records.ClosingDeclaration(Records.AwaitedFromUser.Nothing, false, [], null);
 
         // The closure belongs to this turn alone: left in the session it would close the next turn too.
-        aiContextProvider.DropVariable(session, Constants.ContextKeys.TurnReply);
+        aiContextProvider.DropVariable(session, Constants.ContextKeys.ClosingDeclaration);
 
         // The landing ends with the turn, before the session is saved: a restart must not find it set.
         aiContextProvider.DropVariable(session, Constants.ContextKeys.Landing);
@@ -562,7 +562,7 @@ public class MorganaAgent : MorganaActor
 
         // The workflow position is touched only by a leaving user or by a turn that awaits no approval:
         // a turn awaiting approval keeps the approval buttons alone.
-        switch (turnReply.UserIsLeaving)
+        switch (closingDeclaration.UserIsLeaving)
         {
             // A user who leaves abandons the workflow where it stands, undoing nothing. Silence, a disconnection
             // or a restart leave it in place, so the next message resumes at the pending step.
@@ -570,36 +570,36 @@ public class MorganaAgent : MorganaActor
                 aiContextProvider.DropWorkflowPosition(session);
                 break;
             // A workflow that still stands at a choice step offers its tools as the buttons, whatever the model
-            // closed with: a model that never complied, the framework's own closure and a missing Reply all end here.
+            // closed with: a model that never complied, the framework's own closure and a missing CloseTurn all end here.
             case false when !turnOutcome.AwaitsApproval:
             {
                 // A workflow standing at a choice step offers the tools of that step as buttons.
                 if (aiContextProvider.GetWorkflowPosition(session)?.Resolve(aiContextProvider.Workflows) is { Step.Tools.Count: > 1 } choicePosition)
-                    turnReply = turnReply.WithStepActions(choicePosition.Step.Tools);
+                    closingDeclaration = closingDeclaration.WithStepActions(choicePosition.Step.Tools);
                 break;
             }
         }
 
         // A landing turn is the agent presenting itself, so it closes with its menu whatever the model closed with:
         // the buttons are written by code and the model only gave them a voice.
-        if (isLanding && !turnReply.UserIsLeaving && !turnOutcome.AwaitsApproval)
-            turnReply = turnReply.WithMenu(aiContextProvider.Menu);
+        if (isLanding && !closingDeclaration.UserIsLeaving && !turnOutcome.AwaitsApproval)
+            closingDeclaration = closingDeclaration.WithMenu(aiContextProvider.Menu);
 
         // A turn waiting for an approval offers exactly the two answers to it; any other turn gets the
         // buttons its closure calls for.
         (List<QuickReply>? quickReplies, bool isCompleted) = turnOutcome.AwaitsApproval
             ? (frameworkReplies.Approval is { Count: > 0 } approvalButtons ? [.. approvalButtons] : null, false)
-            : turnReply.ToDelivery(frameworkReplies);
+            : closingDeclaration.ToDelivery(frameworkReplies);
         // An approval question carries no card: the user is asked one thing.
-        RichCard? richCard = turnOutcome.AwaitsApproval ? null : turnReply.Card;
+        RichCard? richCard = turnOutcome.AwaitsApproval ? null : closingDeclaration.Card;
 
         // The line the harness and the operator read to see how the turn closed.
         agentLogger.LogInformation(
             "Agent response analysis: Awaits={Awaits}, UserIsLeaving={UserIsLeaving}, QuickReplies={QuickReplies}, HasRichCard={HasRichCard}, IsCompleted={IsCompleted}",
-            turnReply.Awaits, turnReply.UserIsLeaving, quickReplies?.Count ?? 0, richCard is not null, isCompleted);
+            closingDeclaration.Awaits, closingDeclaration.UserIsLeaving, quickReplies?.Count ?? 0, richCard is not null, isCompleted);
 
         // The closure carries the text, buttons, card and completion on to the delivery.
-        return new Records.TurnClosure(llmResponseText, quickReplies, richCard, isCompleted, turnReply.UserIsLeaving);
+        return new Records.TurnClosure(llmResponseText, quickReplies, richCard, isCompleted, closingDeclaration.UserIsLeaving);
     }
 
     /// <summary>Writes the delivered turn into the history and the record then closes the turn's span.</summary>
@@ -729,13 +729,13 @@ public class MorganaAgent : MorganaActor
 
             // The colleague's presentation decisions are handed over as data rather than drained:
             // the asking agent reads the options it was offered and may come back having chosen one.
-            Records.TurnReply? turnReply = GetTurnReplyFromContext(consultationSession);
-            bool awaitsReply = turnReply?.AwaitsUser == true;
+            Records.ClosingDeclaration? closingDeclaration = GetClosingDeclarationFromContext(consultationSession);
+            bool awaitsReply = closingDeclaration?.AwaitsUser == true;
 
             // The colleague's own actions and nothing of the framework's: staying or leaving is the
             // asking agent's user's choice, never the colleague's.
-            List<QuickReply>? quickReplies = turnReply?.ToDelivery(new Records.FrameworkReplies([], [])).QuickReplies;
-            RichCard? richCard = turnReply?.Card;
+            List<QuickReply>? quickReplies = closingDeclaration?.ToDelivery(new Records.FrameworkReplies([], [])).QuickReplies;
+            RichCard? richCard = closingDeclaration?.Card;
 
             // A baseline of 0 where a user turn passes its own: this session was created for the
             // exchange and holds nothing else, so every tool call in it belongs to this answer and
@@ -933,7 +933,7 @@ public class MorganaAgent : MorganaActor
             string.Equals(button.Value, userText.Trim(), StringComparison.OrdinalIgnoreCase));
 
         // Only an action button leads to a tool: with any other button or with none the message stays an ordinary request.
-        return pressed is null ? null : Records.TurnReply.ActionTool(pressed.Id);
+        return pressed is null ? null : Records.ClosingDeclaration.ActionTool(pressed.Id);
     }
 
     /// <summary>
@@ -951,28 +951,28 @@ public class MorganaAgent : MorganaActor
     }
 
     /// <summary>
-    /// Reads the closure that the Reply tool recorded on the current turn.
+    /// Reads the closure that the CloseTurn tool recorded on the current turn.
     /// </summary>
     /// <param name="session">Active agent session.</param>
     /// <returns>The turn's closure; <c>null</c> when none was recorded.</returns>
-    protected Records.TurnReply? GetTurnReplyFromContext(AgentSession session)
+    protected Records.ClosingDeclaration? GetClosingDeclarationFromContext(AgentSession session)
     {
-        // Written this process lifetime it is the string Reply stored; restored from a saved session it is JSON.
-        string? turnReplyJson = aiContextProvider.GetVariable(session, Constants.ContextKeys.TurnReply) switch
+        // Written this process lifetime it is the string CloseTurn stored; restored from a saved session it is JSON.
+        string? closingDeclarationJson = aiContextProvider.GetVariable(session, Constants.ContextKeys.ClosingDeclaration) switch
         {
             string text => text,
             JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
             _ => null
         };
 
-        // No closure was recorded, so the turn is answered as if Reply had said nothing.
-        if (string.IsNullOrEmpty(turnReplyJson))
+        // No closure was recorded, so the turn is answered as if CloseTurn had said nothing.
+        if (string.IsNullOrEmpty(closingDeclarationJson))
             return null;
 
         try
         {
-            // The closure is the record that Reply serialized.
-            return JsonSerializer.Deserialize<Records.TurnReply>(turnReplyJson, Records.DefaultJsonSerializerOptions);
+            // The closure is the record that CloseTurn serialized.
+            return JsonSerializer.Deserialize<Records.ClosingDeclaration>(closingDeclarationJson, Records.DefaultJsonSerializerOptions);
         }
         catch (JsonException ex)
         {

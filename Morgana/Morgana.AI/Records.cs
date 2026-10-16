@@ -1226,7 +1226,7 @@ public static class Records
 
     /// <summary>
     /// A callable tool as the model is offered it, projected from the tool's method: on the
-    /// <see cref="Abstractions.MorganaTool"/> subclass for a native domain tool and on <c>ReplyTool</c> for the framework's own.
+    /// <see cref="Abstractions.MorganaTool"/> subclass for a native domain tool and on <c>CloseTurnTool</c> for the framework's own.
     /// </summary>
     /// <param name="Name">Tool method name (the actual method name in the MorganaTool class)</param>
     /// <param name="Description">Tool description for LLM understanding</param>
@@ -1242,7 +1242,7 @@ public static class Records
     /// Microsoft.Extensions.AI's, through <c>ApprovalRequiredAIFunction</c>.
     /// </param>
     /// <param name="Reserved">
-    /// True for the framework's base tool Reply alone: the projection of a domain tool's class leaves it false.
+    /// True for the framework's base tool CloseTurn alone: the projection of a domain tool's class leaves it false.
     /// Consumers skip a reserved tool because the framework controls its output.
     /// </param>
     /// <param name="MenuEntry">The button that offers the tool to the user, declared with <see cref="Attributes.UserToolAttribute"/>; null for a tool declared <c>[SystemTool]</c>.</param>
@@ -1412,7 +1412,7 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// What a turn ends waiting for from the user, declared through the Reply tool. Anything but
+    /// What a turn ends waiting for from the user, declared through the CloseTurn tool. Anything but
     /// <see cref="Nothing"/> keeps the agent in service for the user's next message.
     /// </summary>
     [JsonConverter(typeof(JsonStringEnumConverter<AwaitedFromUser>))]
@@ -1434,7 +1434,7 @@ public static class Records
     /// <param name="Tool">The agent's tool the action leads to.</param>
     /// <param name="Label">What the button shows.</param>
     /// <param name="Value">The message sent on the user's behalf when the button is pressed.</param>
-    public record ReplyAction(
+    public record OfferedAction(
         [property: JsonPropertyName("tool")]
         [property: Description("The name of one of your own tools that the button leads to.")] string Tool,
         [property: JsonPropertyName("label")]
@@ -1485,16 +1485,16 @@ public static class Records
 
     /// <summary>
     /// How an agent closed its turn: the one structured decision beside its free text, recorded by the
-    /// Reply tool and read once by <c>MorganaAgent</c> at the end of the turn.
+    /// CloseTurn tool and read once by <c>MorganaAgent</c> at the end of the turn.
     /// </summary>
     /// <param name="Awaits">What the turn ends waiting for from the user.</param>
     /// <param name="UserIsLeaving">True when the user's own message was a goodbye.</param>
     /// <param name="Actions">The actions offered as buttons; empty when none.</param>
     /// <param name="Card">The card presenting the turn's structured data; null when none.</param>
-    public record TurnReply(
+    public record ClosingDeclaration(
         [property: JsonPropertyName("awaits")] AwaitedFromUser Awaits,
         [property: JsonPropertyName("userIsLeaving")] bool UserIsLeaving,
-        [property: JsonPropertyName("actions")] IReadOnlyList<ReplyAction> Actions,
+        [property: JsonPropertyName("actions")] IReadOnlyList<OfferedAction> Actions,
         [property: JsonPropertyName("card")] RichCard? Card)
     {
         /// <summary>Joins an action's tool and its number in the id of the button that offers it.</summary>
@@ -1523,24 +1523,24 @@ public static class Records
         /// The model's own action is kept for a tool of the step (the first one) and a missing tool gets a button worded from its name.
         /// </remarks>
         /// <param name="stepTools">The tools of the choice step, in the order the step declares them.</param>
-        public TurnReply WithStepActions(IReadOnlyList<string> stepTools)
+        public ClosingDeclaration WithStepActions(IReadOnlyList<string> stepTools)
         {
             // The step dictates the buttons: every tool of the step gets one so that the user can take any branch.
-            List<ReplyAction> actions = [.. stepTools.Select(tool =>
+            List<OfferedAction> actions = [.. stepTools.Select(tool =>
                 Actions.FirstOrDefault(action => string.Equals(action.Tool, tool, StringComparison.Ordinal))
-                ?? new ReplyAction(tool, LabelFromToolName(tool), LabelFromToolName(tool)))];
+                ?? new OfferedAction(tool, LabelFromToolName(tool), LabelFromToolName(tool)))];
 
             // The turn now awaits a choice among exactly those buttons; the model's other decisions are kept.
-            return new TurnReply(AwaitedFromUser.ActionChoice, UserIsLeaving, actions, Card);
+            return new ClosingDeclaration(AwaitedFromUser.ActionChoice, UserIsLeaving, actions, Card);
         }
 
         /// <summary>
         /// The turn as the agent's presentation closes it: awaiting a choice among the menu when it has entries and nothing otherwise.
         /// </summary>
         /// <param name="menu">The agent's menu, in menu order.</param>
-        public TurnReply WithMenu(IReadOnlyList<ReplyAction> menu)
+        public ClosingDeclaration WithMenu(IReadOnlyList<OfferedAction> menu)
             // The menu is the turn's only action list and the card is dropped, since a presentation carries none.
-            => new TurnReply(menu.Count > 0 ? AwaitedFromUser.ActionChoice : AwaitedFromUser.Nothing, UserIsLeaving, menu, null);
+            => new ClosingDeclaration(menu.Count > 0 ? AwaitedFromUser.ActionChoice : AwaitedFromUser.Nothing, UserIsLeaving, menu, null);
 
         /// <summary>Words a tool name as a button label: <c>ConfirmOrder</c> becomes <c>Confirm order</c>.</summary>
         private static string LabelFromToolName(string toolName)

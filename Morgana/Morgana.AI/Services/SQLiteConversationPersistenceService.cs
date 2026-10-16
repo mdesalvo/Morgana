@@ -150,7 +150,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
                         // the agent had recorded is already in it, folded or verbatim, so only what the agent said
                         // since is appended; its own context state is written as it stands. The row stays dirty,
                         // since the agent's memory is still the history the rewrite replaced.
-                        if (!rowReader.IsDBNull(2) && rowReader.GetInt32(2) is var recordedCount && recordedCount <= agentMessages.Count)
+                        if (!rowReader.IsDBNull(2) && rowReader.GetInt32(2) is int recordedCount && recordedCount <= agentMessages.Count)
                         {
                             // The rewritten history is read out of the row's own encrypted session, so its messages can be merged with the agent's.
                             IReadOnlyList<ChatMessage> rewrittenMessages = ReadRowMessages(Decrypt((byte[])rowReader[0]), agentName, conversationId, jsonSerializerOptions);

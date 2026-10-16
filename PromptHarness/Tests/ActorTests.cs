@@ -44,7 +44,7 @@ public sealed class ActorTests
     /// scenario later.
     /// </remarks>
     [Fact]
-    public async Task Actor_Presentation_introduces_Morgana_and_invites_a_request()
+    public async Task Actor_presentation_introduces_Morgana_and_invites_a_request()
     {
         (string conversationId, ChannelMessage presentation) =
             await fixture.Channel.StartConversationAsync(TimeSpan.FromSeconds(fixture.Options.TurnTimeoutSeconds));
@@ -61,9 +61,14 @@ public sealed class ActorTests
                 ],
                 (presentation.QuickReplies ?? []).Select(button => (button.Id, button.Label, button.Value)));
 
-            // The judge weighs only what the model wrote: an introduction and an invitation to ask.
+            // The judge weighs only what the model wrote: an introduction and an invitation to press a button,
+            // the one way a channel showing buttons lets the user answer it.
             IReadOnlyList<string> failures = await fixture.Judge.EvaluateAsync(
-                judge: ["The message introduces itself as Morgana and invites the user to say what they need."],
+                judge:
+                [
+                    "The message introduces itself as Morgana.",
+                    "The message invites the user to press one of the buttons beneath it."
+                ],
                 judgeNot: ["The message asks for personal or account information before the user has said anything."],
                 message: presentation);
 

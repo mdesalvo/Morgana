@@ -154,7 +154,7 @@ public sealed class ExpectSpec
     /// <summary>Assert that no context write happened at all.</summary>
     public bool? NoContextWrites { get; init; }
 
-    /// <summary>Require a non-empty response text (the <c>MandatoryTextualResponse</c> policy).</summary>
+    /// <summary>Require a non-empty response text (the <c>UserFacingText</c> policy).</summary>
     public bool? TextNotEmpty { get; init; }
 
     /// <summary>Substrings that must not occur in the response text, case-insensitively.</summary>

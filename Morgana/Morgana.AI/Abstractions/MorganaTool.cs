@@ -93,7 +93,7 @@ public class MorganaTool
         public string ConversationId { get; }
 
         /// <summary>
-        /// The agent's tools that a user action may lead to: its own and its MCP tools, never Reply nor a
+        /// The agent's tools that a user action may lead to: its own and its MCP tools, never CloseTurn nor a
         /// colleague. Null when nobody declared them, which leaves every action as the model wrote it.
         /// </summary>
         public IReadOnlyCollection<string>? ActionableToolNames { get; }

@@ -67,24 +67,24 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
 
     /// <summary>
     /// Presents the call as the session allows: the tools narrowedOptions to its state and, for a request of the turn's closure,
-    /// the answer's format taken from the Reply that the model is offered.
+    /// the answer's format taken from the CloseTurn that the model is offered.
     /// </summary>
     private ChatOptions? NarrowToSession(ChatOptions? options)
     {
-        // The tools are narrowedOptions first, so that a choice step has already shaped the Reply that the format is taken from.
+        // The tools are narrowedOptions first, so that a choice step has already shaped the CloseTurn that the format is taken from.
         ChatOptions? narrowedOptions = NarrowTools(options);
 
-        // A closure request names Reply in its format: the model is asked for what Reply would have been called with.
-        if (options?.ResponseFormat is not ChatResponseFormatJson { SchemaName: Constants.Tools.Reply })
+        // A closure request names CloseTurn in its format: the model is asked for what CloseTurn would have been called with.
+        if (options?.ResponseFormat is not ChatResponseFormatJson { SchemaName: Constants.Tools.CloseTurn })
             return narrowedOptions;
 
-        // Reply travelled only to carry its schema through the narrowing: the model is given the format and no tool.
-        AIFunction? offeredReply = narrowedOptions?.Tools?.OfType<AIFunction>().FirstOrDefault(tool => tool.Name == Constants.Tools.Reply);
+        // CloseTurn travelled only to carry its schema through the narrowing: the model is given the format and no tool.
+        AIFunction? offeredCloseTurn = narrowedOptions?.Tools?.OfType<AIFunction>().FirstOrDefault(tool => tool.Name == Constants.Tools.CloseTurn);
         ChatOptions closureOptions = (narrowedOptions ?? options).Clone();
         closureOptions.Tools = null;
         closureOptions.ToolMode = null;
-        if (offeredReply is not null)
-            closureOptions.ResponseFormat = ChatResponseFormat.ForJsonSchema(offeredReply.JsonSchema, Constants.Tools.Reply, offeredReply.Description);
+        if (offeredCloseTurn is not null)
+            closureOptions.ResponseFormat = ChatResponseFormat.ForJsonSchema(offeredCloseTurn.JsonSchema, Constants.Tools.CloseTurn, offeredCloseTurn.Description);
         return closureOptions;
     }
 
@@ -112,13 +112,13 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         Records.WorkflowPosition? position = workflows.Count == 0 ? null : contextProvider.GetWorkflowPosition(session);
         (Records.WorkflowDefinition Definition, Records.WorkflowStep Step)? runningWorkflow = position?.Resolve(workflows);
 
-        // A landing is the user's choice of this agent and nothing else: the turn holds Reply alone, so the model
+        // A landing is the user's choice of this agent and nothing else: the turn holds CloseTurn alone, so the model
         // introduces itself from the declaration that its context provider adds and closes the turn.
         if (contextProvider.GetVariable(session, Constants.ContextKeys.Landing) is not null)
         {
-            // The clone carries Reply alone, whatever else the agent holds.
+            // The clone carries CloseTurn alone, whatever else the agent holds.
             ChatOptions landingOptions = options.Clone();
-            landingOptions.Tools = [.. tools.Where(tool => tool.Name is Constants.Tools.Reply)];
+            landingOptions.Tools = [.. tools.Where(tool => tool.Name is Constants.Tools.CloseTurn)];
 
             // The landing's options go to the model with no tool mode: no provider is ever made to call a tool.
             return landingOptions;
@@ -147,8 +147,8 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
             // Each tool is offered in the form that the running workflow allows, as it is held where no workflow runs.
             switch (runningWorkflow)
             {
-                // At a choice step Reply is offered with the step's tools as the only actions it may propose.
-                case { Step.Tools.Count: > 1 } when tool.Name == Constants.Tools.Reply:
+                // At a choice step CloseTurn is offered with the step's tools as the only actions it may propose.
+                case { Step.Tools.Count: > 1 } when tool.Name == Constants.Tools.CloseTurn:
                     offeredTools.Add(WithStepActions(tool, runningWorkflow.Value.Step.Tools));
                     break;
                 // A tool of the current step is offered without what the framework binds.
@@ -209,20 +209,20 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
     }
 
     /// <summary>
-    /// Turns the actions of <c>Reply</c> into the proposal of a choice step: required, one per tool of the step and each leading to one of them.
+    /// Turns the actions of <c>CloseTurn</c> into the proposal of a choice step: required, one per tool of the step and each leading to one of them.
     /// </summary>
-    /// <param name="reply">The <c>Reply</c> tool as the agent holds it.</param>
+    /// <param name="closeTurn">The <c>CloseTurn</c> tool as the agent holds it.</param>
     /// <param name="stepTools">The tools of the choice step, in declared order.</param>
-    private static AITool WithStepActions(AITool reply, IReadOnlyList<string> stepTools)
+    private static AITool WithStepActions(AITool closeTurn, IReadOnlyList<string> stepTools)
     {
-        // A Reply that is not a function has no schema to edit.
-        if (reply is not AIFunction replyFunction)
-            return reply;
+        // A CloseTurn that is not a function has no schema to edit.
+        if (closeTurn is not AIFunction closeTurnFunction)
+            return closeTurn;
 
-        // The schema of Reply is read, so that the choices of the step can be written into its actions.
-        JsonObject schema = SchemaOf(replyFunction);
+        // The schema of CloseTurn is read, so that the choices of the step can be written into its actions.
+        JsonObject schema = SchemaOf(closeTurnFunction);
 
-        // The actions property is where Reply offers buttons; its schema becomes the proposal of the step's choices.
+        // The actions property is where CloseTurn offers buttons; its schema becomes the proposal of the step's choices.
         JsonObject actions = schema["properties"]!["actions"]!.AsObject();
 
         // A null in the place of the array would leave the step with no button, so the type is narrowedOptions to the array.
@@ -234,14 +234,14 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         actions["maxItems"] = stepTools.Count;
         actions["items"]!["properties"]!["tool"]!.AsObject()["enum"] = new JsonArray([.. stepTools.Select(JsonNode (tool) => JsonValue.Create(tool)!)]);
 
-        // Reply declares actions optional, but a choice step cannot be proposed without them.
+        // CloseTurn declares actions optional, but a choice step cannot be proposed without them.
         JsonArray required = schema["required"] as JsonArray ?? [];
         if (required.All(name => name!.GetValue<string>() != "actions"))
             required.Add("actions");
         schema["required"] = required;
 
-        // The model reads Reply with its actions fixed to the step's tools.
-        return PresentUnderSchema(replyFunction, schema);
+        // The model reads CloseTurn with its actions fixed to the step's tools.
+        return PresentUnderSchema(closeTurnFunction, schema);
     }
 
     /// <summary>The schema of a tool, parsed for editing.</summary>

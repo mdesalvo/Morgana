@@ -11,7 +11,7 @@ namespace Morgana.AI.Attributes;
 /// attributes and the server's annotations are ignored, readOnlyHint and destructiveHint included.
 /// The human in the loop that the MCP specification asks for is the curator who adds the server to the agent.
 /// Where one of its tools changes something real, the agent's Instructions have it ask the user first
-/// and Reply offers the action button that leads to the tool.
+/// and CloseTurn offers the action button that leads to the tool.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class UsesMCPServerAttribute : Attribute

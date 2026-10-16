@@ -107,7 +107,7 @@ public record OrderSummary(
     [Description("The moment the order was confirmed, as an ISO 8601 UTC timestamp; null when it never was.")] [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? ConfirmedAt,
     [Description("The moment the order was cancelled, as an ISO 8601 UTC timestamp; null when it never was.")] [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? CancelledAt);
 
-/// <summary>What <see cref="InventoryTool.GetOrders"/> returns: the orders placed during the current conversation.</summary>
+/// <summary>What <see cref="InventoryTool.GetConversationOrders"/> returns: the orders placed during the current conversation.</summary>
 [Description("The orders placed during one conversation.")]
 public record OrdersResult(
     [Description("How many orders this conversation placed.")] int TotalOrders,

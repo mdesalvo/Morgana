@@ -13,7 +13,7 @@ namespace PromptHarness.Tests;
 /// <summary>
 /// The group asserting how a tool declared <c>RequiresExecutionApproval</c> waits for the user: it never
 /// runs on the model's call, it runs once with the arguments that were approved and a turn asking for
-/// approval is never closed by a Reply that would outlive it.
+/// approval is never closed by a CloseTurn that would outlive it.
 /// </summary>
 /// <remarks>
 /// <para>Deterministic and free: a scripted client stands where the model would. The approval itself is
@@ -62,7 +62,7 @@ public sealed class ExecutionApprovalTests
     }
 
     [Fact]
-    public async Task ExecutionApproval_Reply_written_beside_a_call_awaiting_approval_never_runs()
+    public async Task ExecutionApproval_CloseTurn_written_beside_a_call_awaiting_approval_never_runs()
     {
         ApprovalUnderTest turn = new ApprovalUnderTest();
 
@@ -70,20 +70,20 @@ public sealed class ExecutionApprovalTests
         await turn.AnswerAsync("Go ahead", [.. requests.Select(request => (AIContent)request.CreateResponse(true))]);
 
         // Kept, it would have run at the start of the second turn and closed it with the first one's decision.
-        Assert.Empty(turn.Replies);
+        Assert.Empty(turn.CloseTurnCalls);
     }
 
     [Fact]
-    public async Task ExecutionApproval_Reply_of_a_turn_asking_no_approval_is_left_alone()
+    public async Task ExecutionApproval_CloseTurn_of_a_turn_asking_no_approval_is_left_alone()
     {
         ScriptedChatClient model = new ScriptedChatClient(
-            Answer(new TextContent("Here is your order."), new FunctionCallContent("r1", "Reply", new Dictionary<string, object?> { ["awaits"] = "nothing" })));
+            Answer(new TextContent("Here is your order."), new FunctionCallContent("r1", "CloseTurn", new Dictionary<string, object?> { ["awaits"] = "nothing" })));
         ApprovalTurnChatClient client = new ApprovalTurnChatClient(model, () => null, new MorganaAIContextProvider(NullLogger.Instance));
 
         ChatResponse response = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "status of ORD-1")],
             new ChatOptions { Tools = [new ApprovalRequiredAIFunction(AIFunctionFactory.Create((string orderId) => "", "ConfirmOrder"))] });
 
-        Assert.Contains(response.Messages.SelectMany(message => message.Contents), content => content is FunctionCallContent { Name: "Reply" });
+        Assert.Contains(response.Messages.SelectMany(message => message.Contents), content => content is FunctionCallContent { Name: "CloseTurn" });
     }
 
     [Theory]
@@ -159,8 +159,8 @@ public sealed class ExecutionApprovalTests
         /// <summary>Orders that ConfirmOrder actually confirmed.</summary>
         public List<string> Confirmed { get; } = [];
 
-        /// <summary>Closures that Reply actually recorded.</summary>
-        public List<string> Replies { get; } = [];
+        /// <summary>Closures that CloseTurn actually recorded.</summary>
+        public List<string> CloseTurnCalls { get; } = [];
 
         /// <summary>The agent under test.</summary>
         private readonly AIAgent agent;
@@ -172,22 +172,22 @@ public sealed class ExecutionApprovalTests
         private AgentSession? session;
 
         /// <summary>
-        /// Builds the agent: the model writes, calls ConfirmOrder and Reply together, then answers plainly.
+        /// Builds the agent: the model writes, calls ConfirmOrder and CloseTurn together, then answers plainly.
         /// </summary>
         public ApprovalUnderTest()
         {
             ScriptedChatClient model = new ScriptedChatClient(
                 Answer(new TextContent("Shall I confirm ORD-1?"),
                        new FunctionCallContent("c1", "ConfirmOrder", new Dictionary<string, object?> { ["orderId"] = "ORD-1" }),
-                       new FunctionCallContent("r1", "Reply", new Dictionary<string, object?> { ["awaits"] = "action_choice" })),
+                       new FunctionCallContent("r1", "CloseTurn", new Dictionary<string, object?> { ["awaits"] = "action_choice" })),
                 Answer(new TextContent("Done.")));
 
             AIFunction confirmOrder = new ApprovalRequiredAIFunction(
                 AIFunctionFactory.Create((string orderId) => { Confirmed.Add(orderId); return "confirmed"; }, "ConfirmOrder"));
-            AIFunction reply = AIFunctionFactory.Create((string awaits) => { Replies.Add(awaits); return "Turn closed."; }, "Reply");
+            AIFunction closeTurn = AIFunctionFactory.Create((string awaits) => { CloseTurnCalls.Add(awaits); return "Turn closed."; }, "CloseTurn");
 
             agent = new FunctionInvokingChatClient(new ApprovalTurnChatClient(model, () => null, new MorganaAIContextProvider(NullLogger.Instance)))
-                .AsAIAgent(new ChatClientAgentOptions { ChatHistoryProvider = history, ChatOptions = new ChatOptions { Tools = [confirmOrder, reply] } });
+                .AsAIAgent(new ChatClientAgentOptions { ChatHistoryProvider = history, ChatOptions = new ChatOptions { Tools = [confirmOrder, closeTurn] } });
         }
 
         /// <summary>Runs the turn asking for approval and answers the requests it raised.</summary>

@@ -54,7 +54,7 @@ public sealed class FrameworkPromptTests
         Assert.Equivalent(new[]
         {
             "TurnClosed", "ContextValueMissing", "ColleagueCouldNotAnswer", "CallNotAvailable",
-            "ReplyNotAccepted", "EarlierToolResult", "ReturnContract", "ExecutionApprovalGuidance", "WorkflowStepReached", "WorkflowEnded"
+            "TurnClosureNotAccepted", "EarlierToolResult", "ReturnContract", "ExecutionApprovalGuidance", "WorkflowStepReached", "WorkflowEnded"
         }, toolInjections);
     }
 

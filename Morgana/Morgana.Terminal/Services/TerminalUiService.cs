@@ -320,7 +320,7 @@ public sealed class TerminalUiService : ITerminalUi
                 switch (inboundEvent)
                 {
                     // A chunk feeds the typewriter
-                    case ChunkEvent { ChunkText: var chunkText }:
+                    case ChunkEvent { ChunkText: string chunkText }:
                         HandleInboundChunk(ctx, chunkText);
                         break;
 
@@ -337,7 +337,7 @@ public sealed class TerminalUiService : ITerminalUi
 
                     // Any other message is a turn of the conversation; an exit requested mid-turn is honoured
                     // only after the last frame is painted, so the user sees Morgana's final reply first
-                    case MessageEvent { Message: var message }:
+                    case MessageEvent { Message: ChannelMessage message }:
                         if (HandleInboundMessage(ctx, message))
                             return;
                         break;
