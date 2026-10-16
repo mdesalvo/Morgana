@@ -88,7 +88,7 @@ public class MorganaAgentAdapter
     protected readonly Records.Prompt morganaPrompt;
 
     /// <summary>
-    /// The framework's base tool CloseTurn, projected from <see cref="CloseTurnTool"/> and stamped <c>Reserved = true</c> exactly
+    /// The framework's base tool Reply, projected from <see cref="ReplyTool"/> and stamped <c>Reserved = true</c> exactly
     /// once here — the only place in the codebase that ever sets it true. Every other reader of a
     /// ToolDefinition's Reserved flag (domain tools included) sees false by construction, never by
     /// a check: see the Reserved remarks on Records.ToolDefinition.
@@ -143,7 +143,7 @@ public class MorganaAgentAdapter
         morganaPrompt = promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
 
         // The base tool is projected from its class and reserved here, so that no domain tool can ever be reserved.
-        morganaTools = [.. ProvidesToolForIntentRegistryService.ProjectToolDefinitions(typeof(CloseTurnTool))
+        morganaTools = [.. ProvidesToolForIntentRegistryService.ProjectToolDefinitions(typeof(ReplyTool))
             .Select(t => t with { Reserved = true })];
     }
 
@@ -213,7 +213,7 @@ public class MorganaAgentAdapter
         // The agent's own prose: instructions, personality and formatting from agents.json.
         Records.Prompt agentPrompt = await promptResolverService.ResolveAsync(intentAttribute.Intent);
 
-        // The agent offers the base tool CloseTurn and its own domain tools; a domain tool cannot shadow CloseTurn.
+        // The agent offers the base tool Reply and its own domain tools; a domain tool cannot shadow Reply.
         Records.ToolDefinition[] domainTools = [.. toolRegistryService.GetToolDefinitions(intentAttribute.Intent)];
         Records.ToolDefinition[] agentTools = [.. morganaTools.Union(domainTools)];
 
@@ -256,7 +256,7 @@ public class MorganaAgentAdapter
             landingDeclaration,
             sharedContextCallback);
 
-        // Filled once every tool is known below and read by CloseTurn at every call: the tools that a user
+        // Filled once every tool is known below and read by Reply at every call: the tools that a user
         // action may lead to, so an action naming anything else is discarded.
         List<string> actionableToolNames = [];
 
@@ -290,7 +290,7 @@ public class MorganaAgentAdapter
             // Inside a workflow a button may only lead to a tool of the step the workflow stands at.
             IReadOnlyCollection<string> actionTargetToolNames = runningWorkflow?.Step.Tools ?? actionableToolNames;
 
-            // A step naming several tools is a choice: CloseTurn holds the turn's buttons to exactly those tools.
+            // A step naming several tools is a choice: Reply holds the turn's buttons to exactly those tools.
             (string Workflow, string Step, IReadOnlyList<string> Tools)? choiceStep = runningWorkflow is { Step.Tools.Count: > 1 } choicePosition
                 ? (choicePosition.Definition.Name, choicePosition.Step.Name, choicePosition.Step.Tools)
                 : null;
@@ -309,7 +309,7 @@ public class MorganaAgentAdapter
         HashSet<string> workflowEntryToolNames = [.. workflowDefinitions.SelectMany(workflow => workflow.EntryTools)];
 
         // An action leads to something the user can start with this agent: its domain and MCP tools and its workflows through their launchers.
-        // CloseTurn closes turns and a colleague is consulted, never pressed for, so neither is listed.
+        // Reply answers turns and a colleague is consulted, never pressed for, so neither is listed.
         actionableToolNames.AddRange(agentTools.Where(tool => !tool.Reserved).Select(tool => tool.Name).Where(toolName => !workflowEntryToolNames.Contains(toolName)));
         actionableToolNames.AddRange(mcpTools.Select(tool => tool.Name).Where(toolName => !workflowEntryToolNames.Contains(toolName)));
 
@@ -342,21 +342,19 @@ public class MorganaAgentAdapter
         MorganaChatHistoryProvider chatHistoryProvider = new MorganaChatHistoryProvider(
             intentAttribute.Intent, chatReducer, logger, promptComposerService: promptComposerService);
 
-        // What the model is told when CloseTurn is dropped from an approval turn and when a turn ends without CloseTurn.
-        string approvalTextMissingRefusal = await promptComposerService.ComposeTurnClosureNotAcceptedAsync(CloseTurnTool.NoTextReason());
-        string? turnClosureRequest = await promptComposerService.ComposeTurnClosureRequestAsync();
+        // What the model is told when it asks for an approval with no Reply carrying text in the same response.
+        string approvalTextMissingRefusal = await promptComposerService.ComposeTurnClosureNotAcceptedAsync(ReplyTool.ApprovalWithoutReplyReason());
         string turnClosedResult = await promptComposerService.ComposeToolInjectionAsync(Constants.ToolInjections.TurnClosed);
 
         // The agent's client chain, outermost first: the builder wraps the first registration around all the others.
         IChatClient agentChain = new ChatClientBuilder(agentChatClient)
-            // Above the loop, where a whole turn is visible: a turn that the model wrote without CloseTurn is
-            // closed here, with the closure asked for as structured output.
+            // Above the loop, where a whole turn is visible: a turn that the model answered in free text, without
+            // Reply, is closed here on its last words.
             .Use(innerClient => new TurnClosingChatClient(
                 innerClient,
-                turnClosureRequest,
                 turnClosedResult,
                 logger))
-            // The tool loop the agent runs on. CloseTurn's argument errors go back to the model in full, so a
+            // The tool loop the agent runs on. Reply's argument errors go back to the model in full, so a
             // card breaking its schema is repaired on the next call rather than lost; every other tool
             // fails tersely, keeping a domain tool's internals out of the model's sight.
             .UseFunctionInvocation(configure: toolLoop =>
@@ -364,8 +362,8 @@ public class MorganaAgentAdapter
             // Between the loop and the approval client, the tools that the workflow state allows are what the model is offered.
             .Use(innerClient => new WorkflowToolsChatClient(
                 innerClient, sessionAccessor, morganaAIContextProvider, workflowDefinitions, MaxConsultationRoundsPerTurn))
-            // Below the loop, a response asking for the user's approval waits for the turn's text and loses its
-            // CloseTurn: that turn is the framework's to close, with the approval buttons.
+            // Below the loop, a response asking for the user's approval waits for a Reply with text, which is recorded
+            // as the turn's answer and dropped: that turn is the framework's to close, with the approval buttons.
             .Use(innerClient => new ApprovalTurnChatClient(innerClient, sessionAccessor, morganaAIContextProvider, approvalTextMissingRefusal))
             .Build();
 
@@ -402,7 +400,7 @@ public class MorganaAgentAdapter
     }
 
     /// <summary>
-    /// Creates the agent's native tools, CloseTurn among them shaped to the tools that an action of this agent may lead to.
+    /// Creates the agent's native tools, Reply among them shaped to the tools that an action of this agent may lead to.
     /// </summary>
     /// <param name="morganaToolAdapter">The adapter holding the agent's native tools.</param>
     /// <param name="actionableToolNames">The tools that an action may lead to; complete by the time the tools are created.</param>
@@ -411,15 +409,15 @@ public class MorganaAgentAdapter
         // The tools as the adapter built them.
         AIFunction[] functions = await morganaToolAdapter.CreateAllFunctionsAsync();
 
-        // CloseTurn alone is shaped: the schema it publishes must state what its own validation accepts for this agent.
-        return [.. functions.Select(function => string.Equals(function.Name, Constants.Tools.CloseTurn, StringComparison.Ordinal)
-            ? CloseTurnTool.NarrowSchemaToAgent(function, actionableToolNames)
+        // Reply alone is shaped: the schema it publishes must state what its own validation accepts for this agent.
+        return [.. functions.Select(function => string.Equals(function.Name, Constants.Tools.Reply, StringComparison.Ordinal)
+            ? ReplyTool.NarrowSchemaToAgent(function, actionableToolNames)
             : function)];
     }
 
     /// <summary>
-    /// Runs one tool call of the agent's loop, turning a refused CloseTurn — arguments breaking their
-    /// schema, a card too large, a turn not yet written — into the framework's answer for that event.
+    /// Runs one tool call of the agent's loop, turning a refused Reply — arguments breaking their
+    /// schema, a card too large, a text left empty — into the framework's answer for that event.
     /// Inside a workflow it also holds the call to the current step, binds what the step binds and
     /// feeds the result to the engine.
     /// </summary>
@@ -428,11 +426,11 @@ public class MorganaAgentAdapter
     /// <param name="cancellationToken">Cancels the call.</param>
     private async ValueTask<object?> InvokeToolAsync(FunctionInvocationContext context, AgentWorkflows? workflows, CancellationToken cancellationToken)
     {
-        // CloseTurn closes the turn and is held to its own rules, whatever workflow stands.
-        bool isCloseTurn = string.Equals(context.Function.Name, Constants.Tools.CloseTurn, StringComparison.Ordinal);
+        // Reply gives the turn's answer and is held to its own rules, whatever workflow stands.
+        bool isReply = string.Equals(context.Function.Name, Constants.Tools.Reply, StringComparison.Ordinal);
 
         // Before anything else: a tool that the workflow hides is not run, whatever the model was shown.
-        AgentSession? session = workflows is null || isCloseTurn ? null : workflows.SessionAccessor();
+        AgentSession? session = workflows is null || isReply ? null : workflows.SessionAccessor();
         Records.WorkflowPosition? position = session is null ? null : workflows!.ContextProvider.GetWorkflowPosition(session);
         (Records.WorkflowDefinition Definition, Records.WorkflowStep Step)? runningWorkflow = position?.Resolve(workflows!.Definitions);
 
@@ -472,17 +470,17 @@ public class MorganaAgentAdapter
         if (isCurrentStepTool)
             BindStepArguments(context, position!);
 
-        // The call runs here, so a failure of CloseTurn can be answered instead of aborting the turn.
+        // The call runs here, so a failure of Reply can be answered instead of aborting the turn.
         object? result;
         try
         {
             // The tool runs with the arguments the model passed, once the checks above have let the call through.
             result = await context.Function.InvokeAsync(context.Arguments, cancellationToken);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException && isCloseTurn)
+        catch (Exception ex) when (ex is not OperationCanceledException && isReply)
         {
-            // Arguments breaking their schema or the rules CloseTurn holds them to: the reason is the account of what is wrong.
-            logger.LogWarning("CloseTurn refused: {Reason}", ex.Message);
+            // Arguments breaking their schema or the rules Reply holds them to: the reason is the account of what is wrong.
+            logger.LogWarning("Reply refused: {Reason}", ex.Message);
             return await promptComposerService.ComposeTurnClosureNotAcceptedAsync(ex.Message);
         }
 
@@ -496,12 +494,12 @@ public class MorganaAgentAdapter
         // The framework's result is worded in morgana.json under the name it carries.
         string text = await promptComposerService.ComposeToolInjectionAsync(frameworkToolResult.Name, frameworkToolResult.Values);
 
-        // Only a CloseTurn that the framework refused keeps the turn open: any other result is the answer as worded.
-        if (!isCloseTurn || frameworkToolResult.Name == Constants.ToolInjections.TurnClosed)
+        // Only a Reply that the framework refused keeps the turn open: any other result is the answer as worded.
+        if (!isReply || frameworkToolResult.Name == Constants.ToolInjections.TurnClosed)
             return text;
 
-        // The turn stays open: the model reads why and closes again without narrating it to the user.
-        logger.LogWarning("CloseTurn refused: {Reason}", text);
+        // The turn stays open: the model reads why and answers again without narrating it to the user.
+        logger.LogWarning("Reply refused: {Reason}", text);
         return await promptComposerService.ComposeTurnClosureNotAcceptedAsync(text);
     }
 
@@ -727,9 +725,9 @@ public class MorganaAgentAdapter
         // because the merge may carry distinct instances of the same tool, whose identity is its name.
         Records.ToolDefinition[] agentSpecificTools = [.. agentTools.Except(morganaTools, new ToolDefinitionNameComparer())];
 
-        // Every agent registers CloseTurn, so all of them close their turns the same way, even an MCP-only one.
+        // Every agent registers Reply, so all of them answer their turns the same way, even an MCP-only one.
         // The definition binds to the instance of its own class.
-        RegisterToolsInAdapter(morganaToolAdapter, new CloseTurnTool(logger, toolContextFactory), [.. morganaTools.Where(tool => tool.Name == Constants.Tools.CloseTurn)]);
+        RegisterToolsInAdapter(morganaToolAdapter, new ReplyTool(logger, toolContextFactory), [.. morganaTools.Where(tool => tool.Name == Constants.Tools.Reply)]);
         logger.LogInformation("Registered {BaseToolsLength} base tools for intent '{Intent}'", morganaTools.Length, intent);
 
         // An agent that declares no domain tool is complete with its base tools alone.

@@ -297,11 +297,11 @@ public class DraftValidationService : IDraftValidationService
         // The tool names met so far, to catch two tools of one agent with one name.
         HashSet<string> toolNames = new(StringComparer.Ordinal);
 
-        // CloseTurn is every agent's and each workflow of this agent has a launcher: a domain tool sharing one of
+        // Reply is every agent's and each workflow of this agent has a launcher: a domain tool sharing one of
         // these names would be offered twice to the same agent.
         HashSet<string> reservedToolNames =
         [
-            Constants.Tools.CloseTurn,
+            Constants.Tools.Reply,
             .. agent.Workflows
                 .Where(workflow => !string.IsNullOrWhiteSpace(workflow.Name))
                 .Select(workflow => Constants.Workflows.LauncherPrefix + workflow.Name)
@@ -414,7 +414,7 @@ public class DraftValidationService : IDraftValidationService
         if (reservedToolNames.Contains(tool.Name))
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 $"'{tool.Name}' is a function that this agent already receives.",
-                $"Every agent receives {Constants.Tools.CloseTurn} and a function named {Constants.Workflows.LauncherPrefix} followed by the name of each of its workflows; a domain tool cannot share any of these names."));
+                $"Every agent receives {Constants.Tools.Reply} and a function named {Constants.Workflows.LauncherPrefix} followed by the name of each of its workflows; a domain tool cannot share any of these names."));
 
         // The tool name becomes the C# method name.
         ValidateIdentifier(tool.Name, where, "tool name", findings);

@@ -42,7 +42,7 @@ Activated when the user says things like:
    - Peer federation (`PeerFederationTests` — the outbound half: which cards this side accepts, what it signs, where a credential may go)
    - Conversation API (`ConversationApiTests` — who the channel API lets in, what a start must announce, how an unknown conversation is answered. The conversations it needs on record are synthesised into the run's storage; its one model call is the presentation of its single real start)
    - Context resolution (`ContextResolutionTests` — how a context-scoped parameter is passed, stored, omitted or missing, on the real adapter with no model)
-   - Turn closure (`TurnClosureTests` — what `CloseTurn` records and refuses, the framework closing a turn the model left open, with a scripted model)
+   - Turn closure (`TurnClosureTests` — what `Reply` records and refuses, the framework closing a turn the model answered in free text, with a scripted model)
    - History view (`HistoryViewTests` — what a model reads of its own history: the current episode only, earlier tool results marked)
    - Execution approval (`ExecutionApprovalTests` — a tool requiring approval is never run on the model's call alone)
    - Workflows (`WorkflowTests` — a workflow's steps, edges and launcher, including one driven by an MCP server)

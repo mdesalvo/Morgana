@@ -86,13 +86,7 @@ public interface IPromptComposerService
     Task<Records.ConsultationRequest> ComposeConsultationRequestAsync(string? callerIntent, string question);
 
     /// <summary>
-    /// Produces what the model reads after a turn that it wrote without closing it, asking for the closure alone.
-    /// </summary>
-    /// <returns>The request; <c>null</c> when no template is declared and such turns stay unclosed.</returns>
-    Task<string?> ComposeTurnClosureRequestAsync();
-
-    /// <summary>
-    /// Produces what the model reads in place of CloseTurn's result when the closure that it sent was refused.
+    /// Produces what the model reads in place of Reply's result when the closure that it sent was refused.
     /// </summary>
     /// <param name="reason">Why the closure was refused, as a fact.</param>
     /// <returns>The composed answer, falling back to the bare reason where no template is declared.</returns>

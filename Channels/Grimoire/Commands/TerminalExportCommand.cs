@@ -7,12 +7,14 @@ using Morgana.Terminal.Abstractions;
 using Morgana.Terminal.Interfaces;
 using Morgana.Terminal.Services;
 
-namespace Morgana.Terminal.Commands;
+namespace Grimoire.Commands;
 
 /// <summary>
 /// <c>/export path:… [format:…]</c>: writes the conversation as Morgana has it on record to a file on the
 /// machine the terminal runs on. The transcript on screen is not the source: what is exported is what
-/// survives, so an export taken here matches one taken after a restart.
+/// survives, so an export taken here matches one taken after a restart. It lives in Grimoire because the export
+/// writes the conversation as Morgana recorded it and only a channel that receives messages unadapted reads back
+/// what it showed: Rune's adapted messages would export as something it never displayed.
 /// </summary>
 public sealed class TerminalExportCommand : TerminalCommand
 {

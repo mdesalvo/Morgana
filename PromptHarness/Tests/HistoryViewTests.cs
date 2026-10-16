@@ -42,14 +42,14 @@ public sealed class HistoryViewTests
         ViewUnderTest agent = await ViewUnderTest.CreateAsync();
         agent.File(new ChatMessage(ChatRole.User, "We're done, thanks"));
         ChatMessage farewell = new ChatMessage(ChatRole.Assistant,
-            [new TextContent("Farewell!"), new FunctionCallContent("c1", "CloseTurn")]);
+            [new TextContent("Farewell!"), new FunctionCallContent("c1", "Reply", new Dictionary<string, object?> { ["text"] = "Farewell!" })]);
         farewell.AdditionalProperties = new AdditionalPropertiesDictionary { ["morgana:episode_end"] = true };
         agent.File(farewell);
         agent.File(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("c1", "Turn closed.")]));
 
         IReadOnlyList<ChatMessage> view = await agent.RunTurnAsync("Show my payment history");
 
-        // The farewell's own CloseTurn result belongs to the turn that ended, never to the one that opens.
+        // The farewell's own Reply result belongs to the turn that ended, never to the one that opens.
         Assert.Equal(["Show my payment history"], view.Select(message => message.Text));
         Assert.DoesNotContain(view.SelectMany(message => message.Contents), content => content is FunctionResultContent);
     }

@@ -44,7 +44,7 @@ public sealed class WorkflowEngine
         IReadOnlyList<Records.WorkflowDefinition> workflows)
     {
         // Closing the turn and consulting a colleague belong to no step: they are offered at every one.
-        if (string.Equals(toolName, Constants.Tools.CloseTurn, StringComparison.Ordinal)
+        if (string.Equals(toolName, Constants.Tools.Reply, StringComparison.Ordinal)
             || toolName.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
             return true;
 

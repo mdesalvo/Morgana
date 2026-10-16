@@ -335,7 +335,7 @@ public class MorganaAgent : MorganaActor
         // runs and dropped with the turn.
         if (req.IsLanding)
         {
-            // The landing mark is what offers the model CloseTurn alone, so this turn introduces the agent and calls none of its tools.
+            // The landing mark is what offers the model Reply alone, so this turn introduces the agent and calls none of its tools.
             await aiContextProvider.SetVariableAsync(aiAgentSession, Constants.ContextKeys.Landing, true);
 
             // The landing run carries the declaration of the agent's menu, where the deployment declares one.
@@ -376,7 +376,7 @@ public class MorganaAgent : MorganaActor
         return new Records.TurnOpening(aiAgentSession, historyBaseline, pressedActionTool);
     }
 
-    /// <summary>Runs the model over the session until the turn has text to deliver or awaits the user's approval.</summary>
+    /// <summary>Runs the model over the session until the turn has an answer recorded by Reply or awaits the user's approval.</summary>
     private async Task<Records.TurnOutcome> RunTurnAsync(AgentSession session, Records.AgentRequest req, string? pressedActionTool, IActorRef senderRef, Activity? agentSpan)
     {
         // Streaming is gated on two independent signals:
@@ -393,10 +393,10 @@ public class MorganaAgent : MorganaActor
         if (!channelSupportsStreaming)
             agentLogger.LogInformation("Agent '{AgentIntent}' bypassing LLM streaming: channel does not advertise SupportsStreaming", AgentIntent);
 
-        // The text the user will read, whichever way the model delivers it.
-        StringBuilder fullResponse = new StringBuilder();
+        // The words of the turn reach the channel once: the moment Reply is accepted, whichever pass accepts it.
+        bool textStreamed = false;
 
-        // One pass of the model over the session, its text streamed or batched into fullResponse.
+        // One pass of the model over the session: the answer is recorded by Reply, so nothing is assembled here.
         async Task RunModelAsync()
         {
             // Streaming is used only when both signals allow it and otherwise the whole answer arrives in one piece.
@@ -404,54 +404,28 @@ public class MorganaAgent : MorganaActor
             {
                 // Time to first token is what the user waits before seeing the agent answer.
                 Stopwatch firstChunkStopwatch = Stopwatch.StartNew();
-                bool firstChunkEmitted = false;
-                string? lastTextMessageId = null;
 
                 // The whole turn runs here — tool calls included, which surface as chunks carrying no text.
                 // The phrase being answered is the one already filed above, so nothing is handed in here.
                 await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(session))
                 {
-                    // Text chunks are appended to the reply, while chunks without text only keep the agent alive.
-                    if (!string.IsNullOrEmpty(chunk.Text))
+                    // The text reaches the channel the moment Reply is accepted: free text the model writes is never shown.
+                    if (!textStreamed && GetClosingDeclarationFromContext(session) is { } acceptedReply && !string.IsNullOrWhiteSpace(acceptedReply.Text))
                     {
-                        // Two text chunks with different MessageIds come from different messages and that
-                        // is where the separator belongs. Within one message the chunks are tokens and must
-                        // stay welded, so only text-carrying chunks update the id. A provider that never
-                        // sets MessageId reports no boundary and nothing is inserted.
-                        if (lastTextMessageId is not null
-                             && !string.Equals(chunk.MessageId, lastTextMessageId, StringComparison.Ordinal)
-                             && NeedsMessageSeparator(fullResponse, chunk.Text))
-                        {
-                            // The separator goes between two messages, so their texts do not run together.
-                            fullResponse.Append(Constants.Markers.MessageSeparator);
+                        // The turn's words travel as one chunk and are never streamed twice.
+                        textStreamed = true;
+                        senderRef.Tell(new Records.AgentStreamChunk(acceptedReply.Text));
 
-                            // Streamed too, so the live text matches the final one the client is about to
-                            // overwrite it with, instead of showing the weld for the rest of the turn.
-                            senderRef.Tell(new Records.AgentStreamChunk(Constants.Markers.MessageSeparator));
-                        }
-
-                        // The message id is kept, so the next chunk can tell whether it belongs to the same message.
-                        lastTextMessageId = chunk.MessageId;
-
-                        // The chunk's text joins the reply and is streamed on to the sender at once.
-                        fullResponse.Append(chunk.Text);
-                        senderRef.Tell(new Records.AgentStreamChunk(chunk.Text));
-
-                        // The first text chunk closes the wait the user experienced.
-                        if (!firstChunkEmitted)
-                        {
-                            // The first text chunk fixes the time to first token, which is measured once per turn.
-                            firstChunkEmitted = true;
-                            long ttft = firstChunkStopwatch.ElapsedMilliseconds;
-                            firstChunkStopwatch.Stop();
-                            agentSpan?.AddEvent(new ActivityEvent(Telemetry.EventFirstChunk));
-                            agentSpan?.SetTag(Telemetry.AgentTtftMs, ttft);
-                            Telemetry.AgentTtftHistogram.Record(ttft);
-                        }
+                        // The accepted Reply fixes the time to first token, which is measured once per turn.
+                        long ttft = firstChunkStopwatch.ElapsedMilliseconds;
+                        firstChunkStopwatch.Stop();
+                        agentSpan?.AddEvent(new ActivityEvent(Telemetry.EventFirstChunk));
+                        agentSpan?.SetTag(Telemetry.AgentTtftMs, ttft);
+                        Telemetry.AgentTtftHistogram.Record(ttft);
                     }
                     else
                     {
-                        // The turn is advancing on something with no text in it — a tool being called
+                        // The turn is advancing on something that is not the answer — a tool being called
                         // or a colleague being asked. The supervisor's wait counts silence and a
                         // consultation is a whole turn at another agent: unannounced, it reads as an
                         // agent that has died and the user's turn is abandoned while its answer is
@@ -466,26 +440,8 @@ public class MorganaAgent : MorganaActor
                 Stopwatch responseStopwatch = Stopwatch.StartNew();
                 // Same turn as the streaming branch, answering the same already-filed phrase: nothing
                 // reaches the channel until the model and every tool it decided to call, are done.
-                AgentResponse response = await aiAgent.RunAsync(session);
+                await aiAgent.RunAsync(session);
                 responseStopwatch.Stop();
-
-                // Assembled message by message rather than through AgentResponse.Text, which is
-                // documented to concatenate every message's text and so produces exactly the weld
-                // Markers.MessageSeparator exists to prevent. Here every element is a whole message, so the
-                // boundary needs no detecting — unlike the streaming path above.
-                foreach (ChatMessage responseMessage in response.Messages)
-                {
-                    // A message without text has nothing to add to the reply.
-                    if (string.IsNullOrEmpty(responseMessage.Text))
-                        continue;
-
-                    // A separator goes between messages whose texts would otherwise weld together.
-                    if (NeedsMessageSeparator(fullResponse, responseMessage.Text))
-                        fullResponse.Append(Constants.Markers.MessageSeparator);
-
-                    // The message's text joins the reply, in the order the model wrote it.
-                    fullResponse.Append(responseMessage.Text);
-                }
 
                 // The batched answer reaches the user as one piece, so its latency is the time to first token.
                 long ttft = responseStopwatch.ElapsedMilliseconds;
@@ -517,23 +473,27 @@ public class MorganaAgent : MorganaActor
         // again would only meet the same request still unanswered.
         bool awaitsApproval = GetPendingApprovals(session).Count > 0;
 
+        // The turn's text is the one that Reply recorded; a turn awaiting approval may hold none yet.
+        string turnText = GetClosingDeclarationFromContext(session)?.Text.Trim() ?? string.Empty;
+
         // A turn the user would receive as an empty bubble is run once more: the session already
-        // holds whatever the first pass did, so the model picks up from there and writes its text.
-        if (string.IsNullOrWhiteSpace(fullResponse.ToString()) && !awaitsApproval)
+        // holds whatever the first pass did, so the model picks up from there and gives its answer.
+        if (turnText.Length == 0 && !awaitsApproval)
         {
-            agentLogger.LogWarning("Agent '{AgentIntent}' ended its turn with no text: running it once more", AgentIntent);
+            agentLogger.LogWarning("Agent '{AgentIntent}' ended its turn with no answer: running it once more", AgentIntent);
             await RunModelAsync();
+            turnText = GetClosingDeclarationFromContext(session)?.Text.Trim() ?? string.Empty;
         }
 
         // Still nothing to say: the turn has failed and the user is told so, rather than left facing silence.
-        if (string.IsNullOrWhiteSpace(fullResponse.ToString()) && !awaitsApproval)
-            throw new InvalidOperationException($"Agent '{AgentIntent}' produced no text in two passes");
+        if (turnText.Length == 0 && !awaitsApproval)
+            throw new InvalidOperationException($"Agent '{AgentIntent}' gave no answer in two passes");
 
         // The text of the turn and whether it awaits approval are handed back for closing.
-        return new Records.TurnOutcome(fullResponse.ToString().Trim(), awaitsApproval);
+        return new Records.TurnOutcome(turnText, awaitsApproval);
     }
 
-    /// <summary>Decides the text, buttons and card that the user receives, from what the model wrote and how the CloseTurn tool closed it.</summary>
+    /// <summary>Decides the text, buttons and card that the user receives, from the answer that the Reply tool recorded.</summary>
     private Records.TurnClosure ConcludeTurn(AgentSession session, Records.TurnOutcome turnOutcome, Records.Prompt morganaPrompt, Records.FrameworkReplies frameworkReplies, bool isLanding)
     {
         // An approval asked with no word of the model's own is asked in Morgana's words.
@@ -541,10 +501,14 @@ public class MorganaAgent : MorganaActor
         if (llmResponseText.Length == 0)
             llmResponseText = morganaPrompt.GetMessage(Constants.Messages.Approval);
 
-        // How the turn closes, recorded by CloseTurn whether the model called it or the framework closed
-        // the turn on its behalf. A turn that still declares nothing is answered and ends.
+        // How the turn closes, recorded by Reply whether the model called it or the framework closed
+        // the turn on its last words. A turn that still declares nothing is answered and ends.
         Records.ClosingDeclaration closingDeclaration = GetClosingDeclarationFromContext(session)
-                                      ?? new Records.ClosingDeclaration(Records.AwaitedFromUser.Nothing, false, [], null);
+                                      ?? new Records.ClosingDeclaration(string.Empty, Records.AwaitedFromUser.Nothing, false, [], null);
+
+        // A Reply held beside an approval request never moves the workflow nor offers its buttons: in that turn only its text counts.
+        if (turnOutcome.AwaitsApproval)
+            closingDeclaration = new Records.ClosingDeclaration(turnOutcome.Text, Records.AwaitedFromUser.Nothing, false, [], null);
 
         // The closure belongs to this turn alone: left in the session it would close the next turn too.
         aiContextProvider.DropVariable(session, Constants.ContextKeys.ClosingDeclaration);
@@ -571,7 +535,7 @@ public class MorganaAgent : MorganaActor
                 aiContextProvider.DropWorkflowPosition(session);
                 break;
             // A workflow that still stands at a choice step offers its tools as the buttons, whatever the model
-            // closed with: a model that never complied, the framework's own closure and a missing CloseTurn all end here.
+            // closed with: a model that never complied, the framework's own closure and a missing Reply all end here.
             case false when !turnOutcome.AwaitsApproval:
             {
                 // A workflow standing at a choice step offers the tools of that step as buttons.
@@ -619,14 +583,25 @@ public class MorganaAgent : MorganaActor
         // the span has been tagged, so telemetry still records that the colleague was consulted.
         StripPeerConsultations(session, historyBaseline);
 
-        // The last assistant message that carries text is the one the user reads: it receives the delivery marks.
-        ChatMessage? finalAssistantMessage = aiChatHistoryProvider
-            .GetMessages(session)
-            .Skip(historyBaseline)
-            .LastOrDefault(m => m.Role == ChatRole.Assistant
-                                 && m.Contents.OfType<TextContent>().Any(t => !string.IsNullOrWhiteSpace(t.Text)));
+        // The turn's messages after the baseline: the candidates for the one the user reads.
+        List<ChatMessage> turnMessages = [.. aiChatHistoryProvider.GetMessages(session).Skip(historyBaseline)];
 
-        // Text that Morgana supplied for the model has no message of its own yet: it gets one, so the
+        // The message holding the Reply call is the one the user reads: it receives the delivery marks.
+        // Failing that the framework closed the turn on the model's last words, which are the message to mark.
+        // Failing that the Reply was dropped beside an approval request: the marks carry the delivered text, so the
+        // message that asked for approval receives them and nothing is inserted between a call and its result.
+        ChatMessage? finalAssistantMessage = turnMessages.LastOrDefault(message => message.Role == ChatRole.Assistant
+                                                  && message.Contents.OfType<FunctionCallContent>().Any(call => call.Name == Constants.Tools.Reply))
+                                              ?? turnMessages.LastOrDefault(message => message.Role == ChatRole.Assistant
+                                                  && message.Contents.OfType<TextContent>().Any(text => !string.IsNullOrWhiteSpace(text.Text)))
+                                              ?? turnMessages.LastOrDefault(message => message.Role == ChatRole.Assistant);
+
+        // A turn has one user-facing message. Approving a call makes the tool loop re-emit a copy of the message
+        // that asked for it, its delivery marks included: left there, the transcript would show that question twice.
+        foreach (ChatMessage turnMessage in turnMessages.Where(message => message != finalAssistantMessage))
+            DropDeliveryMarks(turnMessage);
+
+        // Text that Morgana supplied in place of the model's has no message of its own yet: it gets one, so the
         // transcript read back on resume shows it with its buttons.
         if (finalAssistantMessage is null && closure.Text.Length > 0)
         {
@@ -724,7 +699,7 @@ public class MorganaAgent : MorganaActor
             // user message is the only role a turn can start from; who really asked and what the text may
             // not claim travel in the run's instructions. Never streamed: the reader is an agent waiting
             // for one whole answer, not a channel.
-            AgentResponse response = await aiAgent.RunAsync(
+            await aiAgent.RunAsync(
                 new ChatMessage(ChatRole.User, consultation.Question) { CreatedAt = DateTimeOffset.UtcNow },
                 consultationSession);
 
@@ -732,6 +707,9 @@ public class MorganaAgent : MorganaActor
             // the asking agent reads the options it was offered and may come back having chosen one.
             Records.ClosingDeclaration? closingDeclaration = GetClosingDeclarationFromContext(consultationSession);
             bool awaitsReply = closingDeclaration?.AwaitsUser == true;
+
+            // The colleague's answer is the text of its Reply: whatever else it wrote never leaves the session.
+            string consultationAnswer = closingDeclaration?.Text.Trim() ?? string.Empty;
 
             // The colleague's own actions and nothing of the framework's: staying or leaving is the
             // asking agent's user's choice, never the colleague's.
@@ -743,7 +721,7 @@ public class MorganaAgent : MorganaActor
             // there is no earlier history to skip past.
             consultationSpan?.SetTag(Telemetry.ConsultationAwaitingReply, awaitsReply || quickReplies?.Count > 0);
             consultationSpan?.SetTag(Telemetry.AgentToolsInvoked, GetToolsInvoked(consultationSession, 0));
-            consultationSpan?.SetTag(Telemetry.ConsultationAnswer, response.Text);
+            consultationSpan?.SetTag(Telemetry.ConsultationAnswer, consultationAnswer);
             consultationSpan?.Dispose();
 
             // Nothing is persisted and that is the design rather than an omission: what this turn
@@ -752,7 +730,7 @@ public class MorganaAgent : MorganaActor
 
             // The answer, its buttons and its card travel back as one response for the asking agent to read.
             senderRef.Tell(new Records.PeerConsultationResponse(
-                response.Text.Trim(),
+                consultationAnswer,
                 awaitsReply || quickReplies?.Count > 0,
                 quickReplies,
                 richCard));
@@ -819,54 +797,50 @@ public class MorganaAgent : MorganaActor
         if (consultationCallIds.Count == 0)
             return;
 
-        // Backwards from the end down to the baseline: removals shift everything after them and the
-        // messages before the baseline belong to earlier turns that already cleared themselves.
-        for (int index = messages.Count - 1; index >= historyBaseline; index--)
+        // Only this turn's messages are rewritten: the earlier ones belong to turns that already cleared themselves.
+        List<ChatMessage> turnMessages = [.. messages.Skip(historyBaseline)];
+        foreach (ChatMessage message in turnMessages)
         {
-            ChatMessage message = messages[index];
+            // A thinking block belongs to the calls that followed it, so a message losing a consultation call loses
+            // its thinking too: the provider refuses a block it signed once it stands alone or altered.
+            bool losesConsultationCall = message.Contents.OfType<FunctionCallContent>().Any(call => consultationCallIds.Contains(call.CallId));
 
-            // One message can carry a consultation alongside a native tool call or the turn's own text,
-            // so it is emptied content by content instead of being dropped whole.
-            for (int contentIndex = message.Contents.Count - 1; contentIndex >= 0; contentIndex--)
+            // One message can carry a consultation beside a native call or the turn's own text: only the
+            // consultation leaves it, its call and its result recognised as a pair by their shared id.
+            message.Contents = [.. message.Contents.Where(content => content switch
             {
-                // Call and result live in different messages and are recognised by the same id, which is
-                // what removes them as the pair the provider requires them to be.
-                bool belongsToConsultation = message.Contents[contentIndex] switch
-                {
-                    // A call of a consultation is removed together with its result.
-                    FunctionCallContent call => consultationCallIds.Contains(call.CallId),
-                    // A result of a consultation is removed together with its call.
-                    FunctionResultContent result => consultationCallIds.Contains(result.CallId),
-                    // Any other content stays in the history, since it is not part of a consultation.
-                    _ => false
-                };
-
-                // Removed in place: what the provider will resend on the next turn is this very list.
-                if (belongsToConsultation)
-                    message.Contents.RemoveAt(contentIndex);
-            }
-
-            // A message whose only content was the consultation is now empty and an empty message is
-            // rejected on the next turn, so it goes with it.
-            if (message.Contents.Count == 0)
-                messages.RemoveAt(index);
+                // A call of a consultation leaves together with its result.
+                FunctionCallContent call => !consultationCallIds.Contains(call.CallId),
+                // A result of a consultation leaves together with its call.
+                FunctionResultContent result => !consultationCallIds.Contains(result.CallId),
+                // A thinking block stays only beside calls that are all still there.
+                TextReasoningContent => !losesConsultationCall,
+                // Any other content is not part of a consultation.
+                _ => true
+            })];
         }
+
+        // A message that held nothing but the consultation is now empty and the provider rejects an empty
+        // message, so the turn is written back into the session's live list without it.
+        messages.RemoveRange(historyBaseline, turnMessages.Count);
+        messages.AddRange(turnMessages.Where(message => message.Contents.Count > 0));
 
         agentLogger.LogInformation(
             "Agent '{AgentIntent}' cleared {Count} peer consultation(s) from its own history", AgentIntent, consultationCallIds.Count);
     }
 
-    /// <summary>
-    /// Whether <see cref="Constants.Markers.MessageSeparator"/> has to be inserted before appending <paramref name="incoming"/>
-    /// to the text accumulated so far.
-    /// </summary>
-    /// <param name="accumulated">Response text assembled up to this point.</param>
-    /// <param name="incoming">Text of the message about to be appended; never empty.</param>
-    /// <returns><c>true</c> when the two would otherwise weld together.</returns>
-    private static bool NeedsMessageSeparator(StringBuilder accumulated, string incoming)
-        => accumulated.Length > 0
-           && !char.IsWhiteSpace(accumulated[^1])
-           && !char.IsWhiteSpace(incoming[0]);
+    /// <summary>Removes from a message every mark that names it the user-facing message of its turn.</summary>
+    private static void DropDeliveryMarks(ChatMessage message)
+    {
+        // A message with no properties carries no mark.
+        if (message.AdditionalProperties is not { } messageProperties)
+            return;
+
+        // Every mark that the delivery writes goes, so the transcript reads the message as the turn's working.
+        foreach (string deliveryMark in (string[])[Constants.MessageProperties.UserFacing, Constants.MessageProperties.TurnText,
+                     Constants.MessageProperties.TurnQuickReplies, Constants.MessageProperties.TurnRichCard, Constants.MessageProperties.EpisodeEnd])
+            messageProperties.Remove(deliveryMark);
+    }
 
     /// <summary>
     /// Trims a text down to what a span attribute may carry: enough for a human reading a trace to
@@ -952,13 +926,13 @@ public class MorganaAgent : MorganaActor
     }
 
     /// <summary>
-    /// Reads the closure that the CloseTurn tool recorded on the current turn.
+    /// Reads the closure that the Reply tool recorded on the current turn.
     /// </summary>
     /// <param name="session">Active agent session.</param>
     /// <returns>The turn's closure; <c>null</c> when none was recorded.</returns>
     protected Records.ClosingDeclaration? GetClosingDeclarationFromContext(AgentSession session)
     {
-        // Written this process lifetime it is the string CloseTurn stored; restored from a saved session it is JSON.
+        // Written this process lifetime it is the string Reply stored; restored from a saved session it is JSON.
         string? closingDeclarationJson = aiContextProvider.GetVariable(session, Constants.ContextKeys.ClosingDeclaration) switch
         {
             string text => text,
@@ -966,13 +940,13 @@ public class MorganaAgent : MorganaActor
             _ => null
         };
 
-        // No closure was recorded, so the turn is answered as if CloseTurn had said nothing.
+        // No closure was recorded, so the turn is answered as if Reply had said nothing.
         if (string.IsNullOrEmpty(closingDeclarationJson))
             return null;
 
         try
         {
-            // The closure is the record that CloseTurn serialized.
+            // The closure is the record that Reply serialized.
             return JsonSerializer.Deserialize<Records.ClosingDeclaration>(closingDeclarationJson, Records.DefaultJsonSerializerOptions);
         }
         catch (JsonException ex)

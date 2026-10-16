@@ -17,7 +17,7 @@ public class MorganaToolAdapter
 {
     /// <summary>
     /// How tool arguments are read and their schemas written. A structured argument, such as the card
-    /// CloseTurn carries, is a contract: its schema declares what is required and an argument breaking it
+    /// Reply carries, is a contract: its schema declares what is required and an argument breaking it
     /// is refused rather than half-read. The card's component type may sit anywhere in its object.
     /// </summary>
     private static readonly JsonSerializerOptions ToolSerializerOptions =

@@ -6,38 +6,30 @@ using Microsoft.Extensions.Logging;
 namespace Morgana.AI.ChatClients;
 
 /// <summary>
-/// DelegatingChatClient closing an agent's turn the model wrote without calling CloseTurn. Sits above the
-/// tool loop, so it sees a whole turn: when that turn has text and no accepted CloseTurn, it asks the model
-/// for the closure alone and records it through CloseTurn itself.
+/// DelegatingChatClient closing an agent's turn the model answered in free text instead of calling Reply. Sits above the
+/// tool loop, so it sees a whole turn: when that turn has text and no accepted Reply, it records the model's last words
+/// through Reply itself.
 /// </summary>
 /// <remarks>
-/// The closure is asked for as structured output under the schema that CloseTurn publishes: no provider is ever
-/// made to call a tool, so the card is held to the same contract as a CloseTurn that the model called itself.
+/// Free text never reaches the user, so the words are given to Reply as its text and the turn awaits nothing: the
+/// buttons and the card that a Reply carries are the model's to choose and a turn it left open has chosen none.
 /// </remarks>
 public sealed class TurnClosingChatClient : DelegatingChatClient
 {
-    /// <summary>
-    /// What the model reads when its turn is closed on its behalf, from morgana.json. Null when the
-    /// deployment declares none, which leaves such turns unclosed.
-    /// </summary>
-    private readonly string? turnClosureRequest;
-
-    /// <summary>What an accepted CloseTurn answers, which tells a closed turn from one whose CloseTurn was refused.</summary>
+    /// <summary>What an accepted Reply answers, which tells a closed turn from one whose Reply was refused.</summary>
     private readonly string turnClosedResult;
 
-    /// <summary>Records each turn closed on the model's behalf, a sign the prose is not doing its job.</summary>
+    /// <summary>Records each turn closed on the model's last words, a sign the prose is not doing its job.</summary>
     private readonly ILogger logger;
 
     /// <summary>
     /// Wraps the agent's tool loop.
     /// </summary>
     /// <param name="innerClient">The tool loop the agent runs on.</param>
-    /// <param name="turnClosureRequest">The request for a turn's closure; null closes nothing.</param>
-    /// <param name="turnClosedResult">What an accepted CloseTurn answers.</param>
-    /// <param name="logger">Receives a line for every turn closed on the model's behalf.</param>
-    public TurnClosingChatClient(IChatClient innerClient, string? turnClosureRequest, string turnClosedResult, ILogger logger) : base(innerClient)
+    /// <param name="turnClosedResult">What an accepted Reply answers.</param>
+    /// <param name="logger">Receives a line for every turn closed on the model's last words.</param>
+    public TurnClosingChatClient(IChatClient innerClient, string turnClosedResult, ILogger logger) : base(innerClient)
     {
-        this.turnClosureRequest = turnClosureRequest;
         this.turnClosedResult = turnClosedResult;
         this.logger = logger;
     }
@@ -48,14 +40,13 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        // The input is kept because the closure request quotes the user's message that opened the turn.
-        List<ChatMessage> turnInput = [.. chatMessages];
-        ChatResponse response = await base.GetResponseAsync(turnInput, options, cancellationToken);
+        // The tool loop below runs the turn whole.
+        ChatResponse response = await base.GetResponseAsync(chatMessages, options, cancellationToken);
 
         // The turn has ended here, so it can be judged whole and closed when the model left it open.
-        await CloseIfUnclosedAsync(turnInput, options, response.Messages, cancellationToken);
+        await CloseIfUnclosedAsync(options, response.Messages, cancellationToken);
 
-        // The user gets the model's own response: the closure is recorded beside it and never replaces it.
+        // The model's own response goes back as it is: the closure is recorded beside it and never replaces it.
         return response;
     }
 
@@ -65,15 +56,11 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         ChatOptions? options = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        // The input is kept because the closure request quotes the user's message that opened the turn.
-        List<ChatMessage> turnInput = [.. chatMessages];
-
         // The updates are gathered to rebuild the turn's messages once the stream has ended.
         List<ChatResponseUpdate> updates = [];
 
-        // The text keeps streaming to the user as it is written; the closure is a question about the
-        // turn as a whole and can only be asked once the stream has ended.
-        await foreach (ChatResponseUpdate update in base.GetStreamingResponseAsync(turnInput, options, cancellationToken))
+        // The updates pass through as they come; whether the turn is closed is known only once the stream has ended.
+        await foreach (ChatResponseUpdate update in base.GetStreamingResponseAsync(chatMessages, options, cancellationToken))
         {
             // Each update is kept, so the turn can be rebuilt whole once the stream has ended.
             updates.Add(update);
@@ -81,32 +68,27 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         }
 
         // The stream has ended, so the turn can be judged whole and closed when the model left it open.
-        await CloseIfUnclosedAsync(turnInput, options, updates.ToChatResponse().Messages, cancellationToken);
+        await CloseIfUnclosedAsync(options, updates.ToChatResponse().Messages, cancellationToken);
     }
 
     /// <summary>
-    /// Asks for the closure of a turn that has text and no accepted CloseTurn, then records it through CloseTurn.
+    /// Records the last words of a turn that has text and no accepted Reply, through Reply itself.
     /// </summary>
     private async Task CloseIfUnclosedAsync(
-        List<ChatMessage> turnInput,
         ChatOptions? options,
         IList<ChatMessage> turnMessages,
         CancellationToken cancellationToken)
     {
-        // A deployment with no closure request leaves an unclosed turn as the model wrote it.
-        if (turnClosureRequest is null)
-            return;
-
-        // A tool list without CloseTurn is a call that is not an agent's turn, such as a summarization.
+        // A tool list without Reply is a call that is not an agent's turn, such as a summarization.
         List<AITool> agentTools = [.. options?.Tools ?? []];
-        if (agentTools.OfType<AIFunction>().FirstOrDefault(tool => tool.Name == Constants.Tools.CloseTurn) is not AIFunction closeTurn)
+        if (agentTools.OfType<AIFunction>().FirstOrDefault(tool => tool.Name == Constants.Tools.Reply) is not AIFunction reply)
             return;
 
         // A turn waiting for the user's approval of a tool is closed by the agent, with the approval buttons.
         if (turnMessages.SelectMany(message => message.Contents).OfType<ToolApprovalRequestContent>().Any())
             return;
 
-        // A CloseTurn refused for its card left the turn open just as much as no CloseTurn at all.
+        // A Reply refused for its card left the turn open just as much as no Reply at all.
         bool closed = turnMessages
             .SelectMany(message => message.Contents)
             .OfType<FunctionResultContent>()
@@ -116,36 +98,33 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         if (closed)
             return;
 
+        // The last assistant message with words is the model's final say of the turn: earlier ones are narration around its tool calls.
+        string lastWords = turnMessages
+            .Where(message => message.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(message.Text))
+            .Select(message => message.Text.Trim())
+            .LastOrDefault() ?? string.Empty;
+
         // A turn with no text is run again by the agent, which may close it then: nothing to close yet.
-        string turnText = string.Concat(turnMessages.Where(message => message.Role == ChatRole.Assistant).Select(message => message.Text)).Trim();
-        if (turnText.Length == 0)
+        if (lastWords.Length == 0)
             return;
 
-        // Each closure on the model's behalf is a sign that the prose leaves CloseTurn unmentioned or unheeded.
-        logger.LogWarning("Turn ended without CloseTurn: closing it on the model's behalf");
-
-        // The exchange being closed and nothing else: earlier turns are already closed and the tool
-        // traffic of this one is folded into the text that it produced.
-        List<ChatMessage> closingMessages =
-        [
-            new ChatMessage(ChatRole.User, turnInput.LastOrDefault(message => message.Role == ChatRole.User)?.Text ?? string.Empty),
-            new ChatMessage(ChatRole.Assistant, turnText),
-            new ChatMessage(ChatRole.User, turnClosureRequest)
-        ];
+        // Each closure on the model's last words is a sign that the prose leaves Reply unmentioned or unheeded.
+        logger.LogWarning("Turn ended without Reply: closing it on the model's last words");
 
         try
         {
-            // The closure is obtained as a structured answer under CloseTurn's schema, never by making the provider call a tool.
-            IDictionary<string, object?>? arguments = await RequestStructuredClosureAsync(closeTurn, options?.Instructions, closingMessages, cancellationToken);
-
-            // Recorded exactly as if the model had called CloseTurn, its refusals included.
-            if (arguments is not null)
-                await closeTurn.InvokeAsync(new AIFunctionArguments(arguments), cancellationToken);
+            // Recorded exactly as if the model had called Reply with these words, its refusals included.
+            await reply.InvokeAsync(new AIFunctionArguments
+            {
+                ["text"] = JsonSerializer.SerializeToElement(lastWords),
+                ["awaits"] = JsonSerializer.SerializeToElement("nothing"),
+                ["userIsLeaving"] = JsonSerializer.SerializeToElement(false)
+            }, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // The turn's text has reached the user already: an unclosed turn is answered and ends.
-            logger.LogError(ex, "Turn could not be closed on the model's behalf");
+            // The turn stays unclosed and the agent runs it again.
+            logger.LogError(ex, "Turn could not be closed on the model's last words");
         }
     }
 
@@ -158,50 +137,4 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
         _ => null
     };
-
-    /// <summary>
-    /// Asks the model for the closure as a JSON document under the very schema that CloseTurn publishes.
-    /// </summary>
-    /// <param name="closeTurn">CloseTurn as the agent holds it, whose schema is the one that the answer must satisfy.</param>
-    /// <param name="instructions">The agent's instructions.</param>
-    /// <param name="closingMessages">The exchange being closed and the request to close it.</param>
-    /// <param name="cancellationToken">Cancels the request.</param>
-    private async Task<IDictionary<string, object?>?> RequestStructuredClosureAsync(
-        AIFunction closeTurn,
-        string? instructions,
-        List<ChatMessage> closingMessages,
-        CancellationToken cancellationToken)
-    {
-        // CloseTurn's schema is the shape of the answer. CloseTurn travels
-        // with the request as well: the client that narrows tools to the session turns that copy into the format.
-        ChatResponse response = await InnerClient.GetResponseAsync(closingMessages, new ChatOptions
-        {
-            Instructions = instructions,
-            Tools = [closeTurn.AsDeclarationOnly()],
-            ResponseFormat = ChatResponseFormat.ForJsonSchema(closeTurn.JsonSchema, Constants.Tools.CloseTurn, closeTurn.Description)
-        }, cancellationToken);
-
-        // An empty answer leaves the turn unclosed.
-        if (string.IsNullOrWhiteSpace(response.Text))
-            return null;
-
-        try
-        {
-            // The answer is the document that CloseTurn's arguments would have formed.
-            using JsonDocument answer = JsonDocument.Parse(response.Text);
-
-            // Anything but an object cannot be handed over as arguments.
-            if (answer.RootElement.ValueKind != JsonValueKind.Object)
-                return null;
-
-            // Handed to CloseTurn as the arguments that the model would have passed it, property by property.
-            return answer.RootElement.EnumerateObject()
-                .ToDictionary(property => property.Name, property => (object?)property.Value.Clone());
-        }
-        catch (JsonException)
-        {
-            // An answer that is not JSON leaves the turn unclosed.
-            return null;
-        }
-    }
 }

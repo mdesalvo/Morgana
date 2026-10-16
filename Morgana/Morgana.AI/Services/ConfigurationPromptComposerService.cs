@@ -252,16 +252,6 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
-    public async Task<string?> ComposeTurnClosureRequestAsync()
-    {
-        // The request that follows a turn which the model wrote without closing it.
-        FrameworkLayer framework = await frameworkLayer.Value;
-        string request = Records.Injection.ResolveTemplate(framework.PromptInjections, Constants.PromptInjections.TurnClosureRequest);
-        // A deployment declaring no request has the turn closed without one.
-        return request.Length == 0 ? null : request;
-    }
-
-    /// <inheritdoc />
     public async Task<string> ComposeTurnClosureNotAcceptedAsync(string reason)
     {
         // Spliced at the one moment it is true, in place of the refused call's result, rather than

@@ -1226,7 +1226,7 @@ public static class Records
 
     /// <summary>
     /// A callable tool as the model is offered it, projected from the tool's method: on the
-    /// <see cref="Abstractions.MorganaTool"/> subclass for a native domain tool and on <c>CloseTurnTool</c> for the framework's own.
+    /// <see cref="Abstractions.MorganaTool"/> subclass for a native domain tool and on <c>ReplyTool</c> for the framework's own.
     /// </summary>
     /// <param name="Name">Tool method name (the actual method name in the MorganaTool class)</param>
     /// <param name="Description">Tool description for LLM understanding</param>
@@ -1242,7 +1242,7 @@ public static class Records
     /// Microsoft.Extensions.AI's, through <c>ApprovalRequiredAIFunction</c>.
     /// </param>
     /// <param name="Reserved">
-    /// True for the framework's base tool CloseTurn alone: the projection of a domain tool's class leaves it false.
+    /// True for the framework's base tool Reply alone: the projection of a domain tool's class leaves it false.
     /// Consumers skip a reserved tool because the framework controls its output.
     /// </param>
     /// <param name="MenuEntry">The button that offers the tool to the user, declared with <see cref="Attributes.UserToolAttribute"/>; null for a tool declared <c>[SystemTool]</c>.</param>
@@ -1412,7 +1412,7 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// What a turn ends waiting for from the user, declared through the CloseTurn tool. Anything but
+    /// What a turn ends waiting for from the user, declared through the Reply tool. Anything but
     /// <see cref="Nothing"/> keeps the agent in service for the user's next message.
     /// </summary>
     [JsonConverter(typeof(JsonStringEnumConverter<AwaitedFromUser>))]
@@ -1484,14 +1484,16 @@ public static class Records
         List<QuickReply> Replies);
 
     /// <summary>
-    /// How an agent closed its turn: the one structured decision beside its free text, recorded by the
-    /// CloseTurn tool and read once by <c>MorganaAgent</c> at the end of the turn.
+    /// How an agent answered its turn: the words that reach the user and how the turn closes, recorded by the
+    /// Reply tool and read once by <c>MorganaAgent</c> at the end of the turn.
     /// </summary>
+    /// <param name="Text">The words the turn answers with.</param>
     /// <param name="Awaits">What the turn ends waiting for from the user.</param>
     /// <param name="UserIsLeaving">True when the user's own message was a goodbye.</param>
     /// <param name="Actions">The actions offered as buttons; empty when none.</param>
     /// <param name="Card">The card presenting the turn's structured data; null when none.</param>
     public record ClosingDeclaration(
+        [property: JsonPropertyName("text")] string Text,
         [property: JsonPropertyName("awaits")] AwaitedFromUser Awaits,
         [property: JsonPropertyName("userIsLeaving")] bool UserIsLeaving,
         [property: JsonPropertyName("actions")] IReadOnlyList<OfferedAction> Actions,
@@ -1531,7 +1533,7 @@ public static class Records
                 ?? new OfferedAction(tool, LabelFromToolName(tool), LabelFromToolName(tool)))];
 
             // The turn now awaits a choice among exactly those buttons; the model's other decisions are kept.
-            return new ClosingDeclaration(AwaitedFromUser.ActionChoice, UserIsLeaving, actions, Card);
+            return new ClosingDeclaration(Text, AwaitedFromUser.ActionChoice, UserIsLeaving, actions, Card);
         }
 
         /// <summary>
@@ -1540,7 +1542,7 @@ public static class Records
         /// <param name="menu">The agent's menu, in menu order.</param>
         public ClosingDeclaration WithMenu(IReadOnlyList<OfferedAction> menu)
             // The menu is the turn's only action list and the card is dropped, since a presentation carries none.
-            => new ClosingDeclaration(menu.Count > 0 ? AwaitedFromUser.ActionChoice : AwaitedFromUser.Nothing, UserIsLeaving, menu, null);
+            => new ClosingDeclaration(Text, menu.Count > 0 ? AwaitedFromUser.ActionChoice : AwaitedFromUser.Nothing, UserIsLeaving, menu, null);
 
         /// <summary>Words a tool name as a button label: <c>ConfirmOrder</c> becomes <c>Confirm order</c>.</summary>
         private static string LabelFromToolName(string toolName)

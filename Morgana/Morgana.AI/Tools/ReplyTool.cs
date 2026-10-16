@@ -12,9 +12,9 @@ using Morgana.Contracts;
 namespace Morgana.AI.Tools;
 
 /// <summary>
-/// The framework's own tool: <c>CloseTurn</c>, which every agent holds and which closes each of its turns.
+/// The framework's own tool: <c>Reply</c>, which every agent holds and which gives the answer of each of its turns.
 /// </summary>
-public class CloseTurnTool : MorganaTool
+public class ReplyTool : MorganaTool
 {
     /// <summary>Deepest card nesting the channels lay out: card, section, nested section.</summary>
     private const int MaxCardDepth = 3;
@@ -27,16 +27,15 @@ public class CloseTurnTool : MorganaTool
     /// </summary>
     /// <param name="toolLogger">Logger for tool diagnostics.</param>
     /// <param name="getToolContext">Factory returning the <see cref="MorganaTool.ToolContext"/> for the current turn.</param>
-    public CloseTurnTool(
+    public ReplyTool(
         ILogger toolLogger,
-        Func<ToolContext> getToolContext) : base(toolLogger, getToolContext)
-    {
-    }
+        Func<ToolContext> getToolContext) : base(toolLogger, getToolContext) { }
 
     /// <summary>
-    /// Closes the agent's turn: what it ends waiting for, whether the user is leaving, the actions that it
-    /// offers and the card that it presents. Recorded for <c>MorganaAgent</c> to read at the end of the turn.
+    /// Gives the agent's turn answer: its text, what it ends waiting for, whether the user is leaving, the actions
+    /// that it offers and the card that it presents. Recorded for <c>MorganaAgent</c> to read at the end of the turn.
     /// </summary>
+    /// <param name="text">The words of the turn's answer to the user.</param>
     /// <param name="awaits">What the turn ends waiting for from the user.</param>
     /// <param name="userIsLeaving">True when the user's own message was a goodbye.</param>
     /// <param name="actions">The agent's own actions offered as buttons, if any.</param>
@@ -45,9 +44,11 @@ public class CloseTurnTool : MorganaTool
     /// The named result the tool loop turns into its authored text. A closure refused for what the model offered
     /// throws instead, with the fact that broke the rules as its message, which the tool loop hands back to the model.
     /// </returns>
-    [Description("Closes your turn. Call it exactly once, as your very last action, after your text to the user is written: nothing you write after it reaches the user. It carries everything of the turn that is not text: what it awaits from the user, whether the user is leaving, the actions offered as buttons and the card.")]
+    [Description("Gives your turn's answer. Its text is the only part of the turn that reaches your reader: anything you write outside Reply is never shown. Call it exactly once, as your last action. Beside the text it carries what the turn awaits from the user, whether the user is leaving, the actions offered as buttons and the card.")]
     [SystemTool]
-    public async Task<Records.FrameworkToolResult> CloseTurn(
+    public async Task<Records.FrameworkToolResult> Reply(
+        [Description("Your words to your reader, written against everything the tools returned.")]
+        [ToolParameter(Records.ToolScope.Request)] string text,
         [Description("What the turn ends waiting for from the user. 'nothing': the request is answered. 'typed_answer': you asked for a value the user types in their own words. 'action_choice': you offer actions to pick from. With 'nothing', buttons to stay or leave follow your text by themselves: your text never asks whether the user needs anything else. A request naming one of several items without saying which is not answered yet: ask which, as a typed_answer or as an action_choice.")]
         [ToolParameter(Records.ToolScope.Request)] Records.AwaitedFromUser awaits,
         [Description("True when the user's own message was a goodbye: thanks, we're done, declining further help, wanting to return to the main assistant.")]
@@ -60,20 +61,19 @@ public class CloseTurnTool : MorganaTool
         // The context of the turn under way holds the session where the closure is recorded.
         ToolContext ctx = getToolContext();
 
-        // A turn closes once. A second CloseTurn in the same turn is a stray duplicate: the closure already
+        // A turn is answered once. A second Reply in the same turn is a stray duplicate: the closure already
         // recorded stands and this call is only told so, which still gives it the result its call is owed.
         if (ctx.Provider.GetVariable(ctx.Session, Constants.ContextKeys.ClosingDeclaration) is not null)
         {
-            toolLogger.LogWarning("CloseTurn called again in a turn already closed: the first closure stands");
+            toolLogger.LogWarning("Reply called again in a turn already answered: the first closure stands");
             EndToolLoopOnceResponseIsAnswered();
 
             // The duplicate is answered with the turn-closed note, so the model learns that the first closure stands.
             return new Records.FrameworkToolResult(Constants.ToolInjections.TurnClosed);
         }
 
-        // Closed before a word of it was written, the turn would end mute: the call is refused and the model is sent back to
-        // write first. Absent when the framework records a closure itself, which it does only after text.
-        if (FunctionInvokingChatClient.CurrentContext is { } invocation && !HasTurnText(invocation.Messages))
+        // A Reply with no words would end the turn mute: the call is refused and the model is sent back to write them.
+        if (string.IsNullOrWhiteSpace(text))
             throw new ArgumentException(NoTextReason());
 
         // A hole in a list would fail later on the first member read, so it is refused here with its place.
@@ -81,7 +81,7 @@ public class CloseTurnTool : MorganaTool
             throw new ArgumentException(NullElementReason(nullElementPlace));
 
         // A card the channel could not lay out is refused and the turn stays open, so the model calls
-        // CloseTurn again with a card that fits.
+        // Reply again with a card that fits.
         if (card is not null)
         {
             // Nesting beyond what the channels lay out is refused with the limit stated.
@@ -100,8 +100,9 @@ public class CloseTurnTool : MorganaTool
 
         // At a choice step the buttons are the framework's proposal: one per tool of the step, each once.
         // The model words them and nothing else, so any other set is refused and the turn stays open for repair.
-        // A user who is leaving gets no button, so there is nothing to hold to the step.
-        if (ctx.ChoiceStep is { } choice && !userIsLeaving)
+        // A user who is leaving gets no button, so there is nothing to hold to the step. Only the model's own call
+        // is held to it: a Reply that the framework makes comes after MorganaAgent imposed the step's buttons.
+        if (FunctionInvokingChatClient.CurrentContext is not null && ctx.ChoiceStep is { } choice && !userIsLeaving)
         {
             // The set is exact when each tool of the step is offered once and nothing else is.
             bool isExactSet = offeredActions.Count == choice.Tools.Count
@@ -118,13 +119,13 @@ public class CloseTurnTool : MorganaTool
         // An action is a button that the user presses to have something done: one leading to no tool of this
         // agent would be a promise nothing keeps, so it is refused and the turn stays open for the model to repair.
         if (ctx.ActionableToolNames is { } actionableToolNames
-            && offeredActions.FirstOrDefault(action => !actionableToolNames.Contains(action.Tool)) is { } unknownAction)
+             && offeredActions.FirstOrDefault(action => !actionableToolNames.Contains(action.Tool)) is { } unknownAction)
             throw new ArgumentException(ActionToolUnknownReason(unknownAction, actionableToolNames));
 
-        // The closure as the channel will deliver it: the awaited input, the leaving flag and the buttons and card that survived the checks.
-        Records.ClosingDeclaration closingDeclaration = new Records.ClosingDeclaration(awaits, userIsLeaving, offeredActions, card);
+        // The answer as the channel will deliver it: the trimmed text, the awaited input, the leaving flag and the buttons and card that survived the checks.
+        Records.ClosingDeclaration closingDeclaration = new Records.ClosingDeclaration(text.Trim(), awaits, userIsLeaving, offeredActions, card);
 
-        // The agent reads the closure from the session at the end of the turn: this is how CloseTurn hands it over.
+        // The agent reads the closure from the session at the end of the turn: this is how Reply hands it over.
         await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.ClosingDeclaration,
             JsonSerializer.Serialize(closingDeclaration, Records.DefaultJsonSerializerOptions));
 
@@ -132,16 +133,20 @@ public class CloseTurnTool : MorganaTool
         EndToolLoopOnceResponseIsAnswered();
 
         toolLogger.LogInformation(
-            "LLM closed its turn via CloseTurn: awaits={Awaits}, userIsLeaving={UserIsLeaving}, actions={Actions}, card={Card}",
-            awaits, userIsLeaving, closingDeclaration.Actions.Count, card?.Title ?? "(none)");
+            "LLM answered via Reply: textLength={TextLength}, awaits={Awaits}, userIsLeaving={UserIsLeaving}, actions={Actions}, card={Card}",
+            closingDeclaration.Text.Length, awaits, userIsLeaving, closingDeclaration.Actions.Count, card?.Title ?? "(none)");
 
         // The model is told the turn is closed.
         return new Records.FrameworkToolResult(Constants.ToolInjections.TurnClosed);
     }
 
-    /// <summary>The reason of a closure that comes before any text of the turn has reached the user.</summary>
+    /// <summary>The reason of a Reply whose text is empty.</summary>
     internal static string NoTextReason()
-        => "the turn has no text for the user yet";
+        => "the text is empty";
+
+    /// <summary>The reason of a call needing approval that no Reply with text accompanies.</summary>
+    internal static string ApprovalWithoutReplyReason()
+        => "the call needs the user's approval and no Reply with text came in the same response to tell them what it will do";
 
     /// <summary>The reason of a card nesting beyond what the channels lay out.</summary>
     /// <param name="depth">The levels the refused card nests.</param>
@@ -229,15 +234,15 @@ public class CloseTurnTool : MorganaTool
     }
 
     /// <summary>
-    /// Presents CloseTurn under a schema that admits exactly what its validation accepts for one agent: the actions lead
+    /// Presents Reply under a schema that admits exactly what its validation accepts for one agent: the actions lead
     /// to the agent's own tools alone and the card nests no deeper than the channels lay out.
     /// </summary>
-    /// <param name="closeTurn">The CloseTurn function as the adapter created it.</param>
+    /// <param name="reply">The Reply function as the adapter created it.</param>
     /// <param name="actionableToolNames">The agent's tools that an action may lead to.</param>
-    public static AIFunction NarrowSchemaToAgent(AIFunction closeTurn, IReadOnlyCollection<string> actionableToolNames)
+    public static AIFunction NarrowSchemaToAgent(AIFunction reply, IReadOnlyCollection<string> actionableToolNames)
     {
         // The schema is edited as a document, then handed back to the function that the tool loop runs.
-        JsonObject schema = WorkflowToolsChatClient.SchemaOf(closeTurn);
+        JsonObject schema = WorkflowToolsChatClient.SchemaOf(reply);
         JsonObject properties = schema["properties"]!.AsObject();
 
         // An agent with no tool to lead to offers no button at all.
@@ -253,8 +258,8 @@ public class CloseTurnTool : MorganaTool
         JsonObject components = properties["card"]!["properties"]!["components"]!.AsObject();
         components["items"] = UnrollComponentLevel(components["items"]!.AsObject(), 1);
 
-        // The model reads CloseTurn under the schema as shaped for this agent.
-        return WorkflowToolsChatClient.PresentUnderSchema(closeTurn, schema);
+        // The model reads Reply under the schema as shaped for this agent.
+        return WorkflowToolsChatClient.PresentUnderSchema(reply, schema);
     }
 
     /// <summary>
@@ -295,24 +300,8 @@ public class CloseTurnTool : MorganaTool
     }
 
     /// <summary>
-    /// True when the turn under way has already written text to the user: an assistant message with
-    /// text after the message that opened the turn.
-    /// </summary>
-    internal static bool HasTurnText(IList<ChatMessage> messages)
-    {
-        // The turn opened at the last user message: text from earlier turns does not count.
-        int turnStart = messages.Count - 1;
-        while (turnStart >= 0 && messages[turnStart].Role != ChatRole.User)
-            turnStart--;
-
-        // Only an assistant message carrying words proves the user was written to.
-        return messages.Skip(turnStart + 1)
-            .Any(message => message.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(message.Text));
-    }
-
-    /// <summary>
     /// Calculates the maximum nesting depth of components in a card.
-    /// Used by CloseTurn to refuse a card nesting deeper than the channels lay out.
+    /// Used by Reply to refuse a card nesting deeper than the channels lay out.
     /// </summary>
     /// <param name="components">List of card components to analyze</param>
     /// <param name="currentDepth">Current depth level (starts at 1)</param>
@@ -340,7 +329,7 @@ public class CloseTurnTool : MorganaTool
 
     /// <summary>
     /// Counts total number of components recursively (including nested sections).
-    /// Used by CloseTurn to refuse a card larger than the channels lay out.
+    /// Used by Reply to refuse a card larger than the channels lay out.
     /// </summary>
     /// <param name="components">List of card components to count</param>
     /// <returns>Total component count including all nested components</returns>

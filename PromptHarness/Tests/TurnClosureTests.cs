@@ -1,12 +1,16 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Akka.Actor;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
+using Morgana.AI.Attributes;
 using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
@@ -19,8 +23,8 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The group asserting how a turn closes: what CloseTurn records and refuses, what the framework does
-/// when the model forgets to call it and what a transcript reads back of what the turn delivered.
+/// The group asserting how a turn is answered and closed: what Reply records and refuses, what the framework does
+/// when the model answers in free text instead of calling it and what a transcript reads back of what the turn delivered.
 /// </summary>
 /// <remarks>
 /// <para>Deterministic and free: no host turn, no model. A scripted chat client stands where the
@@ -67,7 +71,7 @@ public sealed class TurnClosureTests
     [Fact]
     public void TurnClosure_Answered_request_with_no_authored_closure_hands_the_conversation_back()
     {
-        Records.ClosingDeclaration closingDeclaration = Deserialize("""{"awaits":"nothing","userIsLeaving":false,"actions":[],"card":null}""");
+        Records.ClosingDeclaration closingDeclaration = Deserialize("""{"text":"Here you are.","awaits":"nothing","userIsLeaving":false,"actions":[],"card":null}""");
 
         (List<QuickReply>? quickReplies, bool handsBack) = closingDeclaration.ToDelivery(new Records.FrameworkReplies([], []));
 
@@ -80,7 +84,7 @@ public sealed class TurnClosureTests
     public void TurnClosure_Two_actions_on_one_tool_stay_two_buttons()
     {
         Records.ClosingDeclaration closingDeclaration = Deserialize("""
-            {"awaits":"action_choice","userIsLeaving":false,"card":null,"actions":[
+            {"text":"Here you are.","awaits":"action_choice","userIsLeaving":false,"card":null,"actions":[
               {"tool":"ConfirmOrder","label":"✅ Confirm","value":"Confirm my order"},
               {"tool":"ConfirmOrder","label":"✅ Confirm both","value":"Confirm both orders"}]}
             """);
@@ -96,7 +100,7 @@ public sealed class TurnClosureTests
     {
         // A closure that carried an action and a card, as a model might write on a landing.
         Records.ClosingDeclaration closingDeclaration = Deserialize("""
-            {"awaits":"typed_answer","userIsLeaving":false,
+            {"text":"Here you are.","awaits":"typed_answer","userIsLeaving":false,
              "actions":[{"tool":"GetBalance","label":"Balance","value":"What is my balance?"}],
              "card":{"title":"Account","subtitle":null,"components":[{"type":"divider"}]}}
             """);
@@ -119,7 +123,7 @@ public sealed class TurnClosureTests
     [Fact]
     public void TurnClosure_Empty_menu_closes_the_turn_with_the_closure_pair()
     {
-        Records.ClosingDeclaration closingDeclaration = Deserialize("""{"awaits":"typed_answer","userIsLeaving":false,"actions":[],"card":null}""");
+        Records.ClosingDeclaration closingDeclaration = Deserialize("""{"text":"Here you are.","awaits":"typed_answer","userIsLeaving":false,"actions":[],"card":null}""");
 
         Records.ClosingDeclaration presented = closingDeclaration.WithMenu([]);
         (List<QuickReply>? quickReplies, bool handsBack) = presented.ToDelivery(FrameworkReplies);
@@ -132,7 +136,7 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task TurnClosure_Landing_offers_the_model_only_CloseTurn()
+    public async Task TurnClosure_Landing_offers_the_model_only_Reply()
     {
         // The model, the session and the context store that decide which tools the model is offered.
         (ScriptedChatClient model, AgentSession session, MorganaAIContextProvider provider) = await ToolNarrowingAsync();
@@ -144,8 +148,8 @@ public sealed class TurnClosureTests
         await new WorkflowToolsChatClient(model, () => session, provider, [], 3)
             .GetResponseAsync([new ChatMessage(ChatRole.User, "What can you do with my invoices?")], AgentOptions(), TestContext.Current.CancellationToken);
 
-        // Whatever else the agent holds stays out: the turn is the agent introducing itself and closing.
-        Assert.Equal(["CloseTurn"], model.Requests.Single().Options!.Tools!.Select(tool => tool.Name).Order());
+        // Whatever else the agent holds stays out: the turn is the agent introducing itself and answering.
+        Assert.Equal(["Reply"], model.Requests.Single().Options!.Tools!.Select(tool => tool.Name).Order());
     }
 
     [Theory]
@@ -187,8 +191,8 @@ public sealed class TurnClosureTests
         await new WorkflowToolsChatClient(model, () => session, provider, [], 3)
             .GetResponseAsync([new ChatMessage(ChatRole.User, "Show my invoices")], AgentOptions(), TestContext.Current.CancellationToken);
 
-        // Narrowing to CloseTurn belongs to a landing alone: any other turn keeps the domain tools and CloseTurn.
-        Assert.Equal(["CloseTurn", "GetInvoices"], model.Requests.Single().Options!.Tools!.Select(tool => tool.Name).Order());
+        // Narrowing to Reply belongs to a landing alone: any other turn keeps the domain tools and Reply.
+        Assert.Equal(["GetInvoices", "Reply"], model.Requests.Single().Options!.Tools!.Select(tool => tool.Name).Order());
     }
 
     /// <summary>A scripted model answering once beside the session and context store that decide which tools it is offered.</summary>
@@ -203,13 +207,13 @@ public sealed class TurnClosureTests
         return (model, session, new MorganaAIContextProvider(NullLogger.Instance));
     }
 
-    /// <summary>The options of an agent holding the base tool CloseTurn beside one domain tool.</summary>
+    /// <summary>The options of an agent holding the base tool Reply beside one domain tool.</summary>
     private static ChatOptions AgentOptions()
         => new ChatOptions
         {
             Tools =
             [
-                AIFunctionFactory.Create(() => "closed", "CloseTurn"),
+                AIFunctionFactory.Create(() => "closed", "Reply"),
                 AIFunctionFactory.Create(() => "invoices", "GetInvoices")
             ]
         };
@@ -222,38 +226,38 @@ public sealed class TurnClosureTests
         => Assert.Equal(tool, Records.ClosingDeclaration.ActionTool(buttonId));
 
     [Fact]
-    public async Task TurnClosure_CloseTurn_refuses_an_action_leading_to_a_tool_the_agent_lacks()
+    public async Task TurnClosure_Reply_refuses_an_action_leading_to_a_tool_the_agent_lacks()
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
 
         // Refused with the fact stated: what the action leads to and the tools that it could have led to.
-        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => closeTurn.Function.InvokeAsync(Arguments("""
-            {"awaits":"action_choice","userIsLeaving":false,"actions":[
+        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments("""
+            {"text":"Here you are.","awaits":"action_choice","userIsLeaving":false,"actions":[
               {"tool":"GetInvoices","label":"📄 Invoices","value":"Show my invoices"},
               {"tool":"DownloadPdf","label":"⬇️ PDF","value":"Download it as PDF"}]}
             """)).AsTask());
         Assert.Equal("the action '⬇️ PDF' leads to 'DownloadPdf', which is not one of your tools: GetInvoices", refusal.Message);
-        Assert.Null(closeTurn.Recorded());
+        Assert.Null(reply.Recorded());
     }
 
     [Theory]
-    [InlineData("""{"awaits":"action_choice","userIsLeaving":false,"actions":[null]}""", "actions[0]")]
-    [InlineData("""{"awaits":"nothing","userIsLeaving":false,"card":{"title":"t","subtitle":null,"components":[{"type":"divider"},{"type":"section","title":"s","subtitle":null,"components":[null]}]}}""", "card.components[1].components[0]")]
-    public async Task TurnClosure_CloseTurn_refuses_a_null_element_in_a_list(string arguments, string place)
+    [InlineData("""{"text":"Here you are.","awaits":"action_choice","userIsLeaving":false,"actions":[null]}""", "actions[0]")]
+    [InlineData("""{"text":"Here you are.","awaits":"nothing","userIsLeaving":false,"card":{"title":"t","subtitle":null,"components":[{"type":"divider"},{"type":"section","title":"s","subtitle":null,"components":[null]}]}}""", "card.components[1].components[0]")]
+    public async Task TurnClosure_Reply_refuses_a_null_element_in_a_list(string arguments, string place)
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
 
         // Refused with the place of the hole, never as a failure of the code that reads the list.
-        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => closeTurn.Function.InvokeAsync(Arguments(arguments)).AsTask());
+        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments(arguments)).AsTask());
         Assert.Equal($"{place} is null and a list holds no null element", refusal.Message);
-        Assert.Null(closeTurn.Recorded());
+        Assert.Null(reply.Recorded());
     }
 
     [Fact]
-    public async Task TurnClosure_CloseTurn_schema_states_which_fields_may_be_null()
+    public async Task TurnClosure_Reply_schema_states_which_fields_may_be_null()
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
-        JsonElement properties = closeTurn.Function.JsonSchema.GetProperty("properties");
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
+        JsonElement properties = reply.Function.JsonSchema.GetProperty("properties");
         JsonElement card = properties.GetProperty("card");
 
         // The card itself is optional.
@@ -269,24 +273,24 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task TurnClosure_CloseTurn_schema_offers_actions_only_toward_the_tools_of_the_agent()
+    public async Task TurnClosure_Reply_schema_offers_actions_only_toward_the_tools_of_the_agent()
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync(actionableToolNames: ["GetInvoices", "DownloadPdf"]);
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices", "DownloadPdf"]);
 
-        JsonElement tool = closeTurn.Function.JsonSchema.GetProperty("properties").GetProperty("actions")
+        JsonElement tool = reply.Function.JsonSchema.GetProperty("properties").GetProperty("actions")
             .GetProperty("items").GetProperty("properties").GetProperty("tool");
         Assert.Equal(["GetInvoices", "DownloadPdf"], tool.GetProperty("enum").EnumerateArray().Select(name => name.GetString()));
 
         // An agent with nothing to lead to has no actions to offer.
-        CloseTurnUnderTest toollessCloseTurn = await CloseTurnUnderTest.CreateAsync(actionableToolNames: []);
-        Assert.False(toollessCloseTurn.Function.JsonSchema.GetProperty("properties").TryGetProperty("actions", out _));
+        ReplyUnderTest toollessReply = await ReplyUnderTest.CreateAsync(actionableToolNames: []);
+        Assert.False(toollessReply.Function.JsonSchema.GetProperty("properties").TryGetProperty("actions", out _));
     }
 
     [Fact]
-    public async Task TurnClosure_CloseTurn_schema_admits_the_card_depth_that_the_validation_accepts_and_no_deeper()
+    public async Task TurnClosure_Reply_schema_admits_the_card_depth_that_the_validation_accepts_and_no_deeper()
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
-        JsonElement components = closeTurn.Function.JsonSchema.GetProperty("properties").GetProperty("card")
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
+        JsonElement components = reply.Function.JsonSchema.GetProperty("properties").GetProperty("card")
             .GetProperty("properties").GetProperty("components");
 
         // Levels at which a section is still offered: the card's components, then the section's, then the nested section's.
@@ -305,17 +309,17 @@ public sealed class TurnClosureTests
         Assert.Equal(2, levelsOfferingSection);
 
         // The deepest card that the schema allows is accepted by the validation.
-        object? deepestCardResult = await closeTurn.Function.InvokeAsync(Arguments("""
-            {"awaits":"nothing","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
+        object? deepestCardResult = await reply.Function.InvokeAsync(Arguments("""
+            {"text":"Here you are.","awaits":"nothing","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
               {"type":"section","title":"1","subtitle":null,"components":[
                 {"type":"section","title":"2","subtitle":null,"components":[{"type":"divider"}]}]}]}}
             """));
         Assert.Equal("TurnClosed", Assert.IsType<Records.FrameworkToolResult>(deepestCardResult).Name);
 
         // One level deeper is what the validation refuses, so the schema does not offer it.
-        CloseTurnUnderTest closeTurnForDeeperCard = await CloseTurnUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
-        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => closeTurnForDeeperCard.Function.InvokeAsync(Arguments("""
-            {"awaits":"nothing","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
+        ReplyUnderTest replyForDeeperCard = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
+        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => replyForDeeperCard.Function.InvokeAsync(Arguments("""
+            {"text":"Here you are.","awaits":"nothing","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
               {"type":"section","title":"1","subtitle":null,"components":[
                 {"type":"section","title":"2","subtitle":null,"components":[
                   {"type":"section","title":"3","subtitle":null,"components":[{"type":"divider"}]}]}]}]}}
@@ -324,10 +328,10 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task TurnClosure_CloseTurn_schema_is_a_contract_for_awaits_and_card()
+    public async Task TurnClosure_Reply_schema_is_a_contract_for_awaits_and_card()
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync();
-        JsonElement properties = closeTurn.Function.JsonSchema.GetProperty("properties");
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
+        JsonElement properties = reply.Function.JsonSchema.GetProperty("properties");
 
         Assert.Equal(["nothing", "typed_answer", "action_choice"],
             properties.GetProperty("awaits").GetProperty("enum").EnumerateArray().Select(value => value.GetString()));
@@ -338,158 +342,173 @@ public sealed class TurnClosureTests
             .Select(alternative => alternative.GetProperty("properties").GetProperty("type").GetProperty("const").GetString()!)];
         Assert.Equal(["text_block", "key_value", "divider", "list", "section", "grid", "badge", "image"], componentTypes);
 
-        string[] required = [.. closeTurn.Function.JsonSchema.GetProperty("required").EnumerateArray().Select(name => name.GetString()!)];
-        Assert.Equal(["awaits", "userIsLeaving"], required);
+        string[] required = [.. reply.Function.JsonSchema.GetProperty("required").EnumerateArray().Select(name => name.GetString()!)];
+        Assert.Equal(["text", "awaits", "userIsLeaving"], required);
     }
 
     [Fact]
-    public async Task TurnClosure_CloseTurn_records_the_closure_and_closes_the_turn()
+    public async Task TurnClosure_Reply_records_the_closure_and_closes_the_turn()
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync();
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
 
-        object? result = await closeTurn.Function.InvokeAsync(Arguments("""
-            {"awaits":"action_choice","userIsLeaving":false,
+        object? result = await reply.Function.InvokeAsync(Arguments("""
+            {"text":"Here you are.","awaits":"action_choice","userIsLeaving":false,
              "actions":[{"tool":"GetInvoices","label":"📄 Invoices","value":"Show my invoices"}],
              "card":{"components":[{"content":"Overdue","type":"text_block"}],"title":"Account","subtitle":null}}
             """));
 
         Assert.Equal("TurnClosed", Assert.IsType<Records.FrameworkToolResult>(result).Name);
-        Records.ClosingDeclaration recorded = closeTurn.Recorded()!;
+        Records.ClosingDeclaration recorded = reply.Recorded()!;
         Assert.Equal(Records.AwaitedFromUser.ActionChoice, recorded.Awaits);
         Assert.Equal("GetInvoices", Assert.Single(recorded.Actions).Tool);
         Assert.IsType<TextBlockComponent>(Assert.Single(recorded.Card!.Components));
     }
 
     [Fact]
-    public async Task TurnClosure_CloseTurn_refuses_a_card_nesting_deeper_than_three_levels()
+    public async Task TurnClosure_Reply_refuses_a_card_nesting_deeper_than_three_levels()
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync();
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
 
         // Refused with the fact stated: the depth the card reaches and the limit; the tool loop hands it back to the model.
-        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => closeTurn.Function.InvokeAsync(Arguments("""
-            {"awaits":"nothing","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
+        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments("""
+            {"text":"Here you are.","awaits":"nothing","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
               {"type":"section","title":"1","subtitle":null,"components":[
                 {"type":"section","title":"2","subtitle":null,"components":[
                   {"type":"section","title":"3","subtitle":null,"components":[{"type":"divider"}]}]}]}]}}
             """)).AsTask());
         Assert.Equal("the card nests 4 levels and at most 3 are allowed", refusal.Message);
-        Assert.Null(closeTurn.Recorded());
+        Assert.Null(reply.Recorded());
     }
 
     [Fact]
-    public async Task TurnClosure_CloseTurn_refuses_a_card_holding_more_components_than_the_channels_lay_out()
+    public async Task TurnClosure_Reply_refuses_a_card_holding_more_components_than_the_channels_lay_out()
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync();
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         string dividers = string.Join(",", Enumerable.Repeat("""{"type":"divider"}""", 51));
 
-        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => closeTurn.Function.InvokeAsync(Arguments(
-            """{"awaits":"nothing","userIsLeaving":false,"card":{"title":"Long","subtitle":null,"components":[""" + dividers + "]}}")).AsTask());
+        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments(
+            """{"text":"Here you are.","awaits":"nothing","userIsLeaving":false,"card":{"title":"Long","subtitle":null,"components":[""" + dividers + "]}}")).AsTask());
         Assert.Equal("the card holds 51 components and at most 50 are allowed", refusal.Message);
-        Assert.Null(closeTurn.Recorded());
+        Assert.Null(reply.Recorded());
     }
 
     [Fact]
-    public async Task TurnClosure_CloseTurn_at_a_choice_step_refuses_actions_other_than_the_steps_tools()
+    public async Task TurnClosure_Reply_at_a_choice_step_refuses_actions_other_than_the_steps_tools()
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync(
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(
+            actionableToolNames: ["Pay", "Postpone"], choiceStep: ("Settle", "Choose", ["Pay", "Postpone"]));
+        ScriptedChatClient model = new ScriptedChatClient(
+            Call("Reply", """{"text":"Here you are.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"Pay","label":"Pay now","value":"Pay now"}]}"""),
+            Call("Reply", """{"text":"Here you are.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"Postpone","label":"Later","value":"Later"},{"tool":"Pay","label":"Pay now","value":"Pay now"}]}"""));
+
+        ChatResponse turn = await RunTurnAsync(model, reply);
+
+        // The model's own call is held to the step: refused with the fact stated and repaired on the next call.
+        FunctionResultContent refusal = turn.Messages.SelectMany(message => message.Contents).OfType<FunctionResultContent>().First();
+        Assert.Equal("the actions offered lead to [Pay] while step 'Choose' of workflow 'Settle' takes exactly one action to each of: Pay, Postpone", refusal.Exception!.Message);
+        Assert.Equal(["Pay", "Postpone"], reply.Recorded()!.Actions.Select(action => action.Tool));
+    }
+
+    [Fact]
+    public async Task TurnClosure_Reply_made_by_the_framework_at_a_choice_step_is_not_held_to_the_step()
+    {
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(
             actionableToolNames: ["Pay", "Postpone"], choiceStep: ("Settle", "Choose", ["Pay", "Postpone"]));
 
-        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => closeTurn.Function.InvokeAsync(Arguments("""
-            {"awaits":"action_choice","userIsLeaving":false,"actions":[
-              {"tool":"Pay","label":"Pay now","value":"Pay now"}]}
-            """)).AsTask());
-        Assert.Equal("the actions offered lead to [Pay] while step 'Choose' of workflow 'Settle' takes exactly one action to each of: Pay, Postpone", refusal.Message);
-        Assert.Null(closeTurn.Recorded());
+        // Called outside any tool loop, as the framework closes a turn: the agent imposes the step's buttons afterwards.
+        await reply.Function.InvokeAsync(Arguments("""{"text":"Which one?","awaits":"nothing","userIsLeaving":false}"""));
+
+        Assert.Equal("Which one?", reply.Recorded()!.Text);
     }
 
     [Fact]
-    public async Task TurnClosure_CloseTurn_before_any_text_is_refused_until_the_turn_is_written()
+    public async Task TurnClosure_Reply_with_blank_text_is_refused_and_the_turn_stays_open()
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync();
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         ScriptedChatClient model = new ScriptedChatClient(
-            Call("CloseTurn", """{"awaits":"nothing","userIsLeaving":true}"""),
-            Merge(Text("Farewell: may your garden bloom."),
-                  Call("CloseTurn", """{"awaits":"nothing","userIsLeaving":true}""")));
+            Call("Reply", """{"text":"  ","awaits":"nothing","userIsLeaving":true}"""),
+            Call("Reply", """{"text":"Farewell: may your garden bloom.","awaits":"nothing","userIsLeaving":true}"""));
 
-        await RunTurnAsync(model, closeTurn);
+        ChatResponse turn = await RunTurnAsync(model, reply);
 
-        // The first closure would have left the turn mute: refused, the model wrote and closed again.
+        // The first Reply would have left the turn mute: refused with the fact and nothing recorded. The model then answered again.
+        FunctionResultContent refusal = turn.Messages.SelectMany(message => message.Contents).OfType<FunctionResultContent>().First();
+        Assert.Equal("the text is empty", refusal.Exception!.Message);
         Assert.Equal(2, model.Requests.Count);
-        Assert.True(closeTurn.Recorded()!.UserIsLeaving);
+        Assert.Equal("Farewell: may your garden bloom.", reply.Recorded()!.Text);
+        Assert.True(reply.Recorded()!.UserIsLeaving);
     }
 
     [Theory]
     [InlineData("""{"title":"t","subtitle":null,"components":[{"type":"chart","content":"x"}]}""")]
     [InlineData("""{"subtitle":null,"components":[]}""")]
-    public async Task TurnClosure_CloseTurn_rejects_a_card_breaking_its_schema(string card)
+    public async Task TurnClosure_Reply_rejects_a_card_breaking_its_schema(string card)
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync();
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
 
         // The tool loop hands this error back to the model for repair; nothing is recorded meanwhile.
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            closeTurn.Function.InvokeAsync(Arguments($$"""{"awaits":"nothing","userIsLeaving":false,"card":{{card}}}""")).AsTask());
-        Assert.Null(closeTurn.Recorded());
+            reply.Function.InvokeAsync(Arguments($$"""{"text":"Here you are.","awaits":"nothing","userIsLeaving":false,"card":{{card}}}""")).AsTask());
+        Assert.Null(reply.Recorded());
     }
 
     [Fact]
-    public async Task TurnClosure_Turn_written_without_CloseTurn_is_closed_on_the_model_s_behalf()
+    public async Task TurnClosure_Turn_ending_in_free_text_is_closed_on_its_last_assistant_message()
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync();
-        const string closure = """{"awaits":"typed_answer","userIsLeaving":false,"actions":[],"card":null}""";
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         ScriptedChatClient model = new ScriptedChatClient(
-            Text("Which invoice do you mean?"),
-            Text(closure));
+            Merge(Text("Let me look."), Call("Lookup", """{}""")),
+            Text("Which invoice do you mean?"));
 
-        await RunTurnAsync(model, closeTurn);
+        await RunTurnAsync(model, reply);
 
-        // The closure is asked for as JSON: no provider is ever made to call a tool.
+        // The closure is recorded by the framework from the last words alone: no further model call and nothing awaited.
         Assert.Equal(2, model.Requests.Count);
-        Assert.Null(model.Requests[1].Options?.ToolMode);
-        Assert.IsType<ChatResponseFormatJson>(model.Requests[1].Options?.ResponseFormat);
-        Assert.Equal(Records.AwaitedFromUser.TypedAnswer, closeTurn.Recorded()!.Awaits);
+        Records.ClosingDeclaration recorded = reply.Recorded()!;
+        Assert.Equal("Which invoice do you mean?", recorded.Text);
+        Assert.Equal(Records.AwaitedFromUser.Nothing, recorded.Awaits);
+        Assert.False(recorded.UserIsLeaving);
+        Assert.Empty(recorded.Actions);
     }
 
     [Fact]
-    public async Task TurnClosure_Structured_closure_is_requested_under_the_schema_that_CloseTurn_publishes()
+    public async Task TurnClosure_Free_text_written_beside_an_accepted_Reply_never_becomes_the_answer()
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         ScriptedChatClient model = new ScriptedChatClient(
-            Text("Which invoice do you mean?"),
-            Text("""{"awaits":"typed_answer","userIsLeaving":false,"actions":[],"card":null}"""));
+            Merge(Text("Here are your invoices, written outside Reply."),
+                  Call("Reply", """{"text":"Your invoices are below.","awaits":"nothing","userIsLeaving":false}""")));
 
-        await RunTurnAsync(model, closeTurn);
+        await RunTurnAsync(model, reply);
 
-        // The answer is constrained to the schema of CloseTurn as the agent publishes it: its descriptions, its nullability, its actions enum and its card depth.
-        ChatResponseFormatJson format = Assert.IsType<ChatResponseFormatJson>(model.Requests[1].Options?.ResponseFormat);
-        Assert.Equal("CloseTurn", format.SchemaName);
-        Assert.Equal(closeTurn.Function.JsonSchema.GetRawText(), format.Schema!.Value.GetRawText());
-        Assert.Equal(Records.AwaitedFromUser.TypedAnswer, closeTurn.Recorded()!.Awaits);
+        // The answer is Reply's text alone and the turn costs no further call.
+        Assert.Single(model.Requests);
+        Assert.Equal("Your invoices are below.", reply.Recorded()!.Text);
     }
 
     [Fact]
     public async Task TurnClosure_Turn_closed_by_the_model_costs_no_further_call()
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync();
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         ScriptedChatClient model = new ScriptedChatClient(
-            Merge(Text("Here are your invoices."),
-                  Call("CloseTurn", """{"awaits":"nothing","userIsLeaving":false}""")));
+            Call("Reply", """{"text":"Here are your invoices.","awaits":"nothing","userIsLeaving":false}"""));
 
-        await RunTurnAsync(model, closeTurn);
+        await RunTurnAsync(model, reply);
 
         Assert.Single(model.Requests);
-        Assert.Equal(Records.AwaitedFromUser.Nothing, closeTurn.Recorded()!.Awaits);
+        Assert.Equal(Records.AwaitedFromUser.Nothing, reply.Recorded()!.Awaits);
     }
 
     [Fact]
-    public async Task TurnClosure_CloseTurn_repeated_in_the_closing_response_is_answered_and_the_first_closure_stands()
+    public async Task TurnClosure_Reply_repeated_in_the_closing_response_is_answered_and_the_first_closure_stands()
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync();
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         ScriptedChatClient model = new ScriptedChatClient(
             Merge(Merge(Text("Here are your invoices."),
-                        Call("CloseTurn", """{"awaits":"typed_answer","userIsLeaving":false,"card":{"components":[{"content":"Overdue","type":"text_block"}],"title":"Invoices","subtitle":null}}""")),
-                  Call("CloseTurn", """{"awaits":"nothing","userIsLeaving":false}""")));
+                        Call("Reply", """{"text":"Here you are.","awaits":"typed_answer","userIsLeaving":false,"card":{"components":[{"content":"Overdue","type":"text_block"}],"title":"Invoices","subtitle":null}}""")),
+                  Call("Reply", """{"text":"Here you are.","awaits":"nothing","userIsLeaving":false}""")));
 
-        ChatResponse turn = await RunTurnAsync(model, closeTurn);
+        ChatResponse turn = await RunTurnAsync(model, reply);
 
         // Every call of the response has its result: without one the next turn's history would be refused.
         List<AIContent> contents = [.. turn.Messages.SelectMany(message => message.Contents)];
@@ -497,20 +516,174 @@ public sealed class TurnClosureTests
             contents.OfType<FunctionCallContent>().Select(call => call.CallId).Order(),
             contents.OfType<FunctionResultContent>().Select(result => result.CallId).Order());
         Assert.Single(model.Requests);
-        Assert.Equal(Records.AwaitedFromUser.TypedAnswer, closeTurn.Recorded()!.Awaits);
-        Assert.Equal("Invoices", closeTurn.Recorded()!.Card!.Title);
+        Assert.Equal(Records.AwaitedFromUser.TypedAnswer, reply.Recorded()!.Awaits);
+        Assert.Equal("Invoices", reply.Recorded()!.Card!.Title);
+    }
+
+    [Fact]
+    public async Task TurnClosure_Streaming_sends_exactly_one_chunk_carrying_the_Reply_text()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Merge(Text("Free words that no one reads."),
+            Call("Reply", """{"text":"Your invoices are below.","awaits":"nothing","userIsLeaving":false}""")));
+
+        List<object> received = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Show my invoices", null));
+
+        // The text reaches the channel once and only as Reply gave it; every other update only keeps the agent alive.
+        Assert.Equal(["Your invoices are below."], received.OfType<Records.AgentStreamChunk>().Select(chunk => chunk.Text));
+        Assert.Equal("Your invoices are below.", received.OfType<Records.AgentResponse>().Single().Response);
+    }
+
+    [Fact]
+    public async Task TurnClosure_Delivered_text_is_the_Reply_text_whatever_free_text_came_beside_it()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync(streaming: false);
+        turn.Model.Enqueue(Merge(Text("Free words that no one reads."),
+            Call("Reply", """{"text":"Your invoices are below.","awaits":"nothing","userIsLeaving":false}""")));
+
+        List<object> received = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Show my invoices", null));
+
+        // Batched, the channel gets the final response alone and its text is Reply's.
+        Assert.Empty(received.OfType<Records.AgentStreamChunk>());
+        Assert.Equal("Your invoices are below.", received.OfType<Records.AgentResponse>().Single().Response);
+    }
+
+    [Fact]
+    public async Task TurnClosure_Approval_turn_delivers_the_held_Reply_text_with_the_approval_buttons()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(
+            Call("ConfirmOrder", """{"orderId":"ORD-1","sealWord":"fern"}"""),
+            Call("Reply", """{"text":"Shall I confirm ORD-1?","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Order ORD-1 is confirmed.","awaits":"nothing","userIsLeaving":false}""")));
+
+        List<object> asked = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Confirm ORD-1", null));
+
+        // The approval turn delivers the held Reply's text with the framework's approval buttons and nothing else.
+        Records.AgentResponse approval = asked.OfType<Records.AgentResponse>().Single();
+        Assert.Equal("Shall I confirm ORD-1?", approval.Response);
+        Assert.Equal(["approve_action", "reject_action"], approval.QuickReplies!.Select(button => button.Id));
+        Assert.Empty(WorkflowTests.InventoryTools.Calls);
+
+        // The message that asked for approval is the last of the history and carries what the user was shown,
+        // so no text sits between the call and the result it will receive.
+        ChatMessage lastMessage = (await turn.HistoryAsync()).Last();
+        Assert.Equal(ChatRole.Assistant, lastMessage.Role);
+        Assert.Contains(lastMessage.Contents, content => content is ToolApprovalRequestContent);
+        Assert.Equal(true, lastMessage.AdditionalProperties!["morgana:user_facing"]);
+        Assert.Equal("Shall I confirm ORD-1?", lastMessage.AdditionalProperties["morgana:turn_text"]);
+
+        // The user approves: the tool runs once and the held Reply never runs, so the answer is the one written after the result.
+        List<object> approved = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Go ahead", null));
+        Assert.Equal("Order ORD-1 is confirmed.", approved.OfType<Records.AgentResponse>().Single().Response);
+        Assert.Equal(["ConfirmOrder:ORD-1:fern"], WorkflowTests.InventoryTools.Calls);
+    }
+
+    [Fact]
+    public async Task TurnClosure_Pressed_tool_answers_with_the_Reply_written_after_its_result()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Ready when you are.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"Confirm ORD-1"}]}""")));
+        turn.Model.Enqueue(Answer(
+            Call("ConfirmOrder", """{"orderId":"ORD-1","sealWord":"fern"}"""),
+            Call("Reply", """{"text":"Confirming ORD-1.","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Order ORD-1 is confirmed.","awaits":"nothing","userIsLeaving":false}""")));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "Show my order", null));
+        List<object> pressed = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Confirm ORD-1", null));
+
+        // The press is the approval: the tool runs at once and the Reply written beside its call is not the answer.
+        Assert.Equal("Order ORD-1 is confirmed.", pressed.OfType<Records.AgentResponse>().Single().Response);
+        Assert.Equal(["ConfirmOrder:ORD-1:fern"], WorkflowTests.InventoryTools.Calls);
+    }
+
+    [Fact]
+    public async Task TurnClosure_Consultation_answers_with_the_Reply_text_and_not_the_free_text()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Merge(Text("Free words that no one reads."),
+            Call("Reply", """{"text":"ORD-1 is in stock.","awaits":"nothing","userIsLeaving":false}""")));
+
+        List<object> received = await turn.AskAsync(new Records.PeerConsultation("conv-turn", "billing", "Is ORD-1 in stock?", null));
+
+        // What travels back to the asking colleague is the answer that Reply gave.
+        Assert.Equal("ORD-1 is in stock.", received.OfType<Records.PeerConsultationResponse>().Single().Answer);
+    }
+
+    [Fact]
+    public async Task TurnClosure_Stripping_a_consultation_takes_the_reasoning_that_led_to_its_call()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        ChatMessage reasoningReply = new ChatMessage(ChatRole.Assistant,
+            [new TextReasoningContent("Now I answer."), new FunctionCallContent("r1", "Reply", new Dictionary<string, object?> { ["text"] = "Done." })]);
+
+        List<ChatMessage> left = await turn.StripAsync(
+        [
+            new ChatMessage(ChatRole.Assistant, [new TextReasoningContent("I should ask a colleague."), new FunctionCallContent("c1", "consult_inventory")]),
+            new ChatMessage(ChatRole.Tool, [new FunctionResultContent("c1", "In stock.")]),
+            reasoningReply,
+            new ChatMessage(ChatRole.Tool, [new FunctionResultContent("r1", "Turn closed.")])
+        ]);
+
+        // The consulting message and its result are gone and the Reply message keeps its reasoning untouched.
+        Assert.Equal([ChatRole.Assistant, ChatRole.Tool], left.Select(message => message.Role));
+        Assert.Same(reasoningReply, left[0]);
+        Assert.Equal(["TextReasoningContent", "FunctionCallContent"], left[0].Contents.Select(content => content.GetType().Name));
+    }
+
+    [Fact]
+    public async Task TurnClosure_Stripping_a_consultation_keeps_a_native_call_beside_it_and_drops_the_reasoning()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+
+        List<ChatMessage> left = await turn.StripAsync(
+        [
+            new ChatMessage(ChatRole.Assistant,
+                [new TextReasoningContent("Two things to check."), new FunctionCallContent("c1", "consult_inventory"), new FunctionCallContent("n1", "GetInvoices")]),
+            new ChatMessage(ChatRole.Tool, [new FunctionResultContent("c1", "In stock."), new FunctionResultContent("n1", "Two invoices.")])
+        ]);
+
+        // Only the native call and its result stay: the thinking block went with the consultation call.
+        Assert.Equal("n1", Assert.IsType<FunctionCallContent>(Assert.Single(left[0].Contents)).CallId);
+        Assert.Equal("n1", Assert.IsType<FunctionResultContent>(Assert.Single(left[1].Contents)).CallId);
+    }
+
+    [Fact]
+    public async Task TurnClosure_Approved_call_leaves_the_delivery_marks_on_the_approval_request_and_the_final_reply_only()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(
+            Call("ConfirmOrder", """{"orderId":"ORD-1","sealWord":"fern"}"""),
+            Call("Reply", """{"text":"Shall I confirm ORD-1?","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Order ORD-1 is confirmed.","awaits":"nothing","userIsLeaving":false}""")));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "Confirm ORD-1", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "Go ahead", null));
+
+        // Whatever copy of the approval request the tool loop re-emitted on approval, only two messages tell the transcript what was shown.
+        List<ChatMessage> history = await turn.HistoryAsync();
+        List<ChatMessage> userFacing = [.. history.Where(message => message.Role == ChatRole.Assistant
+                                                                    && message.AdditionalProperties?.ContainsKey("morgana:user_facing") == true)];
+        Assert.Equal(2, userFacing.Count);
+        Assert.Contains(userFacing[0].Contents, content => content is ToolApprovalRequestContent);
+        Assert.Equal("Shall I confirm ORD-1?", userFacing[0].AdditionalProperties!["morgana:turn_text"]);
+        Assert.Contains(userFacing[1].Contents, content => content is FunctionCallContent { Name: "Reply" });
+        Assert.Equal("Order ORD-1 is confirmed.", userFacing[1].AdditionalProperties!["morgana:turn_text"]);
+
+        // No other message carries a turn text, so a reload shows each answer once.
+        Assert.Equal(2, history.Count(message => message.AdditionalProperties?.ContainsKey("morgana:turn_text") == true));
     }
 
     [Fact]
     public async Task TurnClosure_Turn_with_no_text_is_left_to_the_agent_to_run_again()
     {
-        CloseTurnUnderTest closeTurn = await CloseTurnUnderTest.CreateAsync();
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         ScriptedChatClient model = new ScriptedChatClient(Text(""));
 
-        await RunTurnAsync(model, closeTurn);
+        await RunTurnAsync(model, reply);
 
         Assert.Single(model.Requests);
-        Assert.Null(closeTurn.Recorded());
+        Assert.Null(reply.Recorded());
     }
 
     [Fact]
@@ -608,7 +781,7 @@ public sealed class TurnClosureTests
         ], "welcome-conversation");
     }
 
-    /// <summary>Reads a closure as MorganaAgent reads what CloseTurn recorded.</summary>
+    /// <summary>Reads a closure as MorganaAgent reads what Reply recorded.</summary>
     private static Records.ClosingDeclaration Deserialize(string json)
         => JsonSerializer.Deserialize<Records.ClosingDeclaration>(json, new JsonSerializerOptions { AllowOutOfOrderMetadataProperties = true })!;
 
@@ -625,6 +798,10 @@ public sealed class TurnClosureTests
         => new ChatResponse(new ChatMessage(ChatRole.Assistant,
             [new FunctionCallContent(Guid.NewGuid().ToString("N"), name, Arguments(json))]));
 
+    /// <summary>One model answer made of the given calls.</summary>
+    private static ChatResponse Answer(params ChatResponse[] calls)
+        => new ChatResponse(new ChatMessage(ChatRole.Assistant, [.. calls.SelectMany(call => call.Messages[0].Contents)]));
+
     /// <summary>One model answer writing text and then calling a tool, as a closing turn does.</summary>
     private static ChatResponse Merge(ChatResponse text, ChatResponse call)
         => new ChatResponse(new ChatMessage(ChatRole.Assistant, [.. text.Messages[0].Contents, .. call.Messages[0].Contents]));
@@ -632,71 +809,242 @@ public sealed class TurnClosureTests
     /// <summary>
     /// Runs one turn through the chain that an agent runs on: the tool loop, then the turn-closing client.
     /// </summary>
-    private static async Task<ChatResponse> RunTurnAsync(ScriptedChatClient model, CloseTurnUnderTest closeTurn)
+    private static async Task<ChatResponse> RunTurnAsync(ScriptedChatClient model, ReplyUnderTest reply)
     {
         TurnClosingChatClient chain = new TurnClosingChatClient(
             new FunctionInvokingChatClient(model),
-            "[TURN CLOSURE]\nDeclare how that turn closes.",
             "Turn closed.",
             NullLogger.Instance);
 
         return await chain.GetResponseAsync(
             [new ChatMessage(ChatRole.User, "Show me an invoice")],
-            new ChatOptions { Instructions = "You are a billing assistant.", Tools = [closeTurn.Function] });
+            new ChatOptions { Instructions = "You are a billing assistant.", Tools = [reply.Function, AIFunctionFactory.Create(() => "found", "Lookup")] });
     }
 
     /// <summary>
-    /// The CloseTurn tool as an agent holds it: the base tool, registered through the adapter, over a live session.
+    /// The Reply tool as an agent holds it: the base tool, registered through the adapter, over a live session.
     /// </summary>
-    private sealed class CloseTurnUnderTest
+    private sealed class ReplyUnderTest
     {
         /// <summary>The function the model calls.</summary>
         public AIFunction Function { get; private set; } = null!;
 
-        /// <summary>The agent's context store, where CloseTurn records the closure.</summary>
+        /// <summary>The agent's context store, where Reply records the closure.</summary>
         private readonly MorganaAIContextProvider provider = new MorganaAIContextProvider(NullLogger.Instance);
 
         /// <summary>The in-flight session.</summary>
         private AgentSession session = null!;
 
         /// <summary>
-        /// Builds CloseTurn over a session of an agent that never talks to a model.
+        /// Builds Reply over a session of an agent that never talks to a model.
         /// </summary>
         /// <param name="actionableToolNames">The agent's tools that an action may lead to; null accepts any.</param>
         /// <param name="choiceStep">The choice step that the turn stands at, if any.</param>
-        public static async Task<CloseTurnUnderTest> CreateAsync(
+        public static async Task<ReplyUnderTest> CreateAsync(
             IReadOnlyCollection<string>? actionableToolNames = null,
             (string Workflow, string Step, IReadOnlyList<string> Tools)? choiceStep = null)
         {
-            CloseTurnUnderTest closeTurn = new CloseTurnUnderTest();
-            closeTurn.session = await new ChatClientAgent(new ScriptedChatClient()).CreateSessionAsync();
+            ReplyUnderTest reply = new ReplyUnderTest();
+            reply.session = await new ChatClientAgent(new ScriptedChatClient()).CreateSessionAsync();
 
-            Records.ToolDefinition definition = new Records.ToolDefinition("CloseTurn", "Closes your turn.",
+            Records.ToolDefinition definition = new Records.ToolDefinition("Reply", "Gives your turn's answer.",
             [
+                new Records.ToolParameter("text", "The words of the answer.", true, ""),
                 new Records.ToolParameter("awaits", "What the turn awaits.", true, ""),
                 new Records.ToolParameter("userIsLeaving", "Whether the user is leaving.", true, ""),
                 new Records.ToolParameter("actions", "The actions offered.", false, ""),
                 new Records.ToolParameter("card", "The card.", false, "")
             ]);
 
-            CloseTurnTool baseTool = new CloseTurnTool(NullLogger.Instance,
-                () => new MorganaTool.ToolContext(closeTurn.provider, closeTurn.session, "turn-closure", actionableToolNames, choiceStep));
+            ReplyTool baseTool = new ReplyTool(NullLogger.Instance,
+                () => new MorganaTool.ToolContext(reply.provider, reply.session, "turn-closure", actionableToolNames, choiceStep));
             MorganaToolAdapter adapter = new MorganaToolAdapter(NullLogger.Instance,
-                () => new MorganaTool.ToolContext(closeTurn.provider, closeTurn.session, "turn-closure"));
+                () => new MorganaTool.ToolContext(reply.provider, reply.session, "turn-closure"));
 
-            Func<Records.AwaitedFromUser, bool, List<Records.OfferedAction>?, RichCard?, Task<Records.FrameworkToolResult>> implementation = baseTool.CloseTurn;
+            Func<string, Records.AwaitedFromUser, bool, List<Records.OfferedAction>?, RichCard?, Task<Records.FrameworkToolResult>> implementation = baseTool.Reply;
             adapter.AddTool(definition.Name, implementation, definition);
-            AIFunction createdCloseTurn = await adapter.CreateFunctionAsync(definition.Name);
+            AIFunction createdReply = await adapter.CreateFunctionAsync(definition.Name);
 
-            // An agent that declares the tools its actions lead to publishes CloseTurn shaped to them.
-            closeTurn.Function = actionableToolNames is null ? createdCloseTurn : CloseTurnTool.NarrowSchemaToAgent(createdCloseTurn, actionableToolNames);
+            // An agent that declares the tools its actions lead to publishes Reply shaped to them.
+            reply.Function = actionableToolNames is null ? createdReply : ReplyTool.NarrowSchemaToAgent(createdReply, actionableToolNames);
 
-            return closeTurn;
+            return reply;
         }
 
         /// <summary>The closure recorded on the session; null when none was.</summary>
         public Records.ClosingDeclaration? Recorded()
             => provider.GetVariable(session, "closing_declaration") is string json ? Deserialize(json) : null;
+    }
+
+    /// <summary>The agent that the turn cases run: the sample inventory agent over the scripted model.</summary>
+    [HandlesIntent("inventory")]
+    [RequiresLLMTier(Records.LLMTier.Efficiency)]
+    private sealed class ScriptedAgent : MorganaAgent
+    {
+        /// <summary>
+        /// Builds the agent the way a plugin does: its model, context store and history come from the adapter.
+        /// </summary>
+        public ScriptedAgent(
+            string conversationId,
+            ILLMService llmService,
+            IPromptResolverService promptResolverService,
+            IConversationPersistenceService conversationPersistenceService,
+            MorganaAgentAdapter morganaAgentAdapter,
+            IConfiguration configuration) : base(conversationId, llmService, promptResolverService, conversationPersistenceService, NullLogger.Instance, configuration)
+        {
+            (aiAgent, aiContextProvider, aiChatHistoryProvider)
+                = morganaAgentAdapter.CreateAgent(GetType(), conversationId, () => CurrentSession, OnSharedContextUpdate);
+
+            // The case reads the history through the agent's own mailbox, so it sees it between turns and never during one.
+            Receive<ReadHistory>(_ => Sender.Tell(aiChatHistoryProvider.GetMessages(CurrentSession!).ToList()));
+
+            // The case files the messages of a finished turn, strips its consultations and reads back what remains.
+            Receive<StripTurn>(request =>
+            {
+                List<ChatMessage> history = aiChatHistoryProvider.GetMessages(CurrentSession!);
+                int baseline = history.Count;
+                foreach (ChatMessage message in request.Messages)
+                    aiChatHistoryProvider.AppendMessage(CurrentSession!, message);
+                StripPeerConsultations(CurrentSession!, baseline);
+                Sender.Tell(history.Skip(baseline).ToList());
+            });
+        }
+    }
+
+    /// <summary>Asks the scripted agent to file the given messages as a turn and to strip that turn's consultations.</summary>
+    private sealed record StripTurn(List<ChatMessage> Messages);
+
+    /// <summary>Asks the scripted agent for the messages of its session.</summary>
+    private sealed record ReadHistory;
+
+    /// <summary>
+    /// The sample inventory agent running as an actor over a scripted model, with a record on disk,
+    /// so a whole turn is delivered the way a channel receives it.
+    /// </summary>
+    private sealed class AgentTurnUnderTest : IAsyncDisposable
+    {
+        /// <summary>The script standing where the model would.</summary>
+        public ScriptedChatClient Model { get; }
+
+        /// <summary>The actor system that the agent lives in.</summary>
+        private readonly ActorSystem system;
+
+        /// <summary>The agent under test.</summary>
+        private readonly IActorRef agent;
+
+        /// <summary>Where the conversation's record is kept, removed with the case.</summary>
+        private readonly string storagePath;
+
+        /// <summary>
+        /// Holds the parts of a running agent.
+        /// </summary>
+        private AgentTurnUnderTest(ScriptedChatClient model, ActorSystem system, IActorRef agent, string storagePath)
+        {
+            Model = model;
+            this.system = system;
+            this.agent = agent;
+            this.storagePath = storagePath;
+        }
+
+        /// <summary>
+        /// Starts the agent over a record in a throwaway folder.
+        /// </summary>
+        /// <param name="streaming">Whether the turn streams its answer to the channel.</param>
+        public static async Task<AgentTurnUnderTest> CreateAsync(bool streaming = true)
+        {
+            WorkflowTests.InventoryTools.Calls.Clear();
+            ScriptedChatClient model = new ScriptedChatClient();
+            string storagePath = Path.Combine(Path.GetTempPath(), $"turn-agent-{Guid.NewGuid():N}");
+
+            SQLiteConversationPersistenceService persistence = new SQLiteConversationPersistenceService(
+                Options.Create(new Records.ConversationPersistenceOptions
+                {
+                    StoragePath = storagePath,
+                    EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+                }),
+                NullLogger.Instance);
+            await persistence.EnsureDatabaseInitializedAsync("conv-turn");
+
+            Records.Prompt prompt = new("inventory", "Sell plants.", "Answer plainly.", "Plain text.", null, null, "en-US", "1");
+            ConfigurationPromptResolverService resolver = new ConfigurationPromptResolverService(new ScriptedDomain(prompt));
+            IConfiguration configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Morgana:HistoryReducer:Enabled"] = "false",
+                    ["Morgana:AgentToAgent:Enabled"] = "false",
+                    ["Morgana:AdaptiveMessaging:EnableStreamingResponse"] = streaming ? "true" : "false"
+                })
+                .Build();
+            WorkflowTests.SampleLlm llm = new WorkflowTests.SampleLlm(model);
+
+            MorganaAgentAdapter adapter = new MorganaAgentAdapter(
+                llm,
+                resolver,
+                new ConfigurationPromptComposerService(resolver),
+                new WorkflowTests.SampleToolRegistry([]),
+                new MCPClientRegistryService(NullLogger.Instance),
+                new HistoryReducerService(configuration, NullLogger.Instance),
+                new WorkflowTests.NoDust(),
+                null!,
+                configuration,
+                NullLogger.Instance);
+
+            ActorSystem system = ActorSystem.Create($"turn-closure-{Guid.NewGuid():N}");
+            IActorRef agent = system.ActorOf(Props.Create(() => new ScriptedAgent("conv-turn", llm, resolver, persistence, adapter, configuration)));
+
+            return new AgentTurnUnderTest(model, system, agent, storagePath);
+        }
+
+        /// <summary>
+        /// Sends the agent one message and gathers everything it sends back up to its answer.
+        /// </summary>
+        /// <param name="message">The user's turn or a colleague's question.</param>
+        public async Task<List<object>> AskAsync(object message)
+        {
+            Inbox inbox = Inbox.Create(system);
+            inbox.Send(agent, message);
+
+            // Chunks and keep-alives arrive first; the answer ends the turn.
+            List<object> received = [];
+            while (true)
+            {
+                object update = await inbox.ReceiveAsync(TimeSpan.FromSeconds(30));
+                received.Add(update);
+                if (update is Records.AgentResponse or Records.PeerConsultationResponse)
+                    return received;
+            }
+        }
+
+        /// <summary>The messages the agent's session holds, as the next turn would hand them to the model.</summary>
+        public async Task<List<ChatMessage>> HistoryAsync()
+        {
+            Inbox inbox = Inbox.Create(system);
+            inbox.Send(agent, new ReadHistory());
+            return (List<ChatMessage>)await inbox.ReceiveAsync(TimeSpan.FromSeconds(30));
+        }
+
+        /// <summary>
+        /// Files the messages as one turn of the agent's session after a first plain turn and returns what is left of them once its consultations are stripped.
+        /// </summary>
+        public async Task<List<ChatMessage>> StripAsync(List<ChatMessage> turnMessages)
+        {
+            // A first turn gives the agent the session that the messages are filed in.
+            Model.Enqueue(Answer(Call("Reply", """{"text":"Hello.","awaits":"nothing","userIsLeaving":false}""")));
+            await AskAsync(new Records.AgentRequest("conv-turn", "Hi", null));
+
+            Inbox inbox = Inbox.Create(system);
+            inbox.Send(agent, new StripTurn(turnMessages));
+            return (List<ChatMessage>)await inbox.ReceiveAsync(TimeSpan.FromSeconds(30));
+        }
+
+        /// <summary>Stops the actors and removes the record.</summary>
+        public async ValueTask DisposeAsync()
+        {
+            await system.Terminate();
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (Directory.Exists(storagePath))
+                Directory.Delete(storagePath, recursive: true);
+        }
     }
 
     /// <summary>The framework tier's model as the presenter meets it: it answers the welcome as given or fails when it has none.</summary>

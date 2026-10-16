@@ -116,9 +116,6 @@ public static class Constants
         /// <summary>Spliced into a peer-capable agent's own instructions, naming the colleagues it holds.</summary>
         public const string ColleaguesDeclaration = "ColleaguesDeclaration";
 
-        /// <summary>Follows a turn that the model wrote without CloseTurn, asking for that turn's closure alone.</summary>
-        public const string TurnClosureRequest = "TurnClosureRequest";
-
         /// <summary>Added to a landing turn's instructions: the agent introduces itself and learns the buttons beneath its text.</summary>
         public const string LandingDeclaration = "LandingDeclaration";
     }
@@ -239,7 +236,7 @@ public static class Constants
     /// </summary>
     public static class ToolInjections
     {
-        /// <summary>CloseTurn accepted the closure.</summary>
+        /// <summary>Reply accepted the closure.</summary>
         public const string TurnClosed = "TurnClosed";
 
         /// <summary>A tool did not run because a context-scoped value is held by nobody yet.</summary>
@@ -251,7 +248,7 @@ public static class Constants
         /// <summary>A tool was called that cannot run now: the agent is answering a colleague, the turn spent its consultation rounds or the running workflow does not offer it at its step.</summary>
         public const string CallNotAvailable = "CallNotAvailable";
 
-        /// <summary>Answers a CloseTurn the framework refused, with the reason it was refused.</summary>
+        /// <summary>Answers a Reply the framework refused, with the reason it was refused.</summary>
         public const string TurnClosureNotAccepted = "TurnClosureNotAccepted";
 
         /// <summary>Follows the description of a tool that returns a record, carrying the JSON schema of that record.</summary>
@@ -271,13 +268,13 @@ public static class Constants
     }
 
     /// <summary>
-    /// The base tool name that the framework and the model agree on: it is the one call that closes a turn, so the
-    /// agent closes the turn on the model's behalf when the model forgot it and returns its argument errors for repair.
+    /// The base tool name that the framework and the model agree on: it is the one call that gives a turn's answer, so the
+    /// agent closes the turn on the model's last words when the model forgot it and returns its argument errors for repair.
     /// </summary>
     public static class Tools
     {
-        /// <summary>Closes the agent's turn: whether it awaits the user, the actions that it offers and its card.</summary>
-        public const string CloseTurn = "CloseTurn";
+        /// <summary>Gives the agent's turn answer: its text, whether it awaits the user, the actions that it offers and its card.</summary>
+        public const string Reply = "Reply";
     }
 
     /// <summary>
@@ -313,10 +310,10 @@ public static class Constants
     /// </summary>
     public static class ContextKeys
     {
-        /// <summary>Set by <see cref="Tools.CloseTurn"/>; read once, then dropped.</summary>
+        /// <summary>Set by <see cref="Tools.Reply"/>; read once, then dropped.</summary>
         public const string ClosingDeclaration = "closing_declaration";
 
-        /// <summary>Marks a turn that opens with the user choosing this agent: the model is offered CloseTurn alone and the run carries the landing declaration; dropped when the turn ends.</summary>
+        /// <summary>Marks a turn that opens with the user choosing this agent: the model is offered Reply alone and the run carries the landing declaration; dropped when the turn ends.</summary>
         public const string Landing = "landing";
 
         /// <summary>The framework's instructions for this run alone, added to the agent's own by its context provider; dropped when the turn ends.</summary>
@@ -590,21 +587,6 @@ public static class Constants
 
         /// <summary>Both, for a reader that only asks whether a setting was ever filled in.</summary>
         public static readonly string[] All = [Secure, Functional];
-    }
-
-    /// <summary>
-    /// Characters that join or separate two pieces of composed text, shared by the agent that streams it and the
-    /// one that batches it. Never prose: each one is
-    /// structure and says nothing of its own to whoever reads the text it punctuates.
-    /// </summary>
-    public static class Markers
-    {
-        /// <summary>
-        /// Inserted between the text of two consecutive assistant messages of the same turn, both
-        /// while streaming and when batching, so two messages meant to be read apart do not weld
-        /// into one paragraph.
-        /// </summary>
-        public const string MessageSeparator = "\n\n";
     }
 
     /// <summary>
