@@ -21,6 +21,7 @@ public sealed class BehaviourTests
     [InlineData("behaviour-conversation-closure")]
     [InlineData("behaviour-rich-card")]
     [InlineData("behaviour-order-confirmation-bills-invoice")]
+    [InlineData("behaviour-order-unknown-plant-creates-nothing")]
     [InlineData("behaviour-plan-enrollment-bills-invoice")]
     [InlineData("behaviour-workflow-cancel-at-choice")]
     [InlineData("behaviour-workflow-quote-corrected")]

@@ -36,23 +36,54 @@ public record StockLevelResult(
     [Description("The SKU that was asked for; present only on an error.")] string? RequestedSku = null,
     [Description("The SKUs that exist; present only on an error.")] List<string>? AvailableSkus = null);
 
-/// <summary>What <see cref="InventoryTool.CreatePurchaseOrder"/> returns: the quote just created, or the error saying why none was.</summary>
-[Description("The quote just created for a plant.")]
+/// <summary>One plant of the cart as the model passes it to <see cref="InventoryTool.CreatePurchaseOrder"/>.</summary>
+[Description("One plant of the cart with the quantity wanted.")]
+public record OrderItem(
+    [Description("Product SKU to order (e.g. 'RSE-100').")] string Sku,
+    [Description("Quantity requested. Must not exceed the product's current quantityOnHand.")] int Quantity);
+
+/// <summary>One line of a quote: a plant of the cart with its price.</summary>
+[Description("One line of a quote.")]
+public record QuotedLine(
+    [Description("The stock-keeping unit that identifies the plant.")] string Sku,
+    [Description("The name of the plant.")] string ProductName,
+    [Description("How many units are quoted.")] int Quantity,
+    [Description("The price of one unit in euros.")] double UnitPrice,
+    [Description("The price of the whole quantity of this line in euros.")] double LineTotal);
+
+/// <summary>One line of an existing order, as the status and the listings show it.</summary>
+[Description("One line of an order.")]
+public record OrderLineSummary(
+    [Description("The stock-keeping unit that identifies the plant.")] string Sku,
+    [Description("How many units the line covers.")] long Quantity);
+
+/// <summary>One line just committed by a confirmation.</summary>
+[Description("One line just committed.")]
+public record ConfirmedLine(
+    [Description("The stock-keeping unit that identifies the plant.")] string Sku,
+    [Description("How many units the line commits.")] long Quantity,
+    [Description("The units left in stock after the confirmation.")] long RemainingStock);
+
+/// <summary>One line that could not be quoted or confirmed, with the reason.</summary>
+[Description("One line that could not be quoted or confirmed.")]
+public record LineProblem(
+    [Description("The stock-keeping unit of the line, as it was asked for.")] string Sku,
+    [Description("Why the line cannot be quoted or confirmed.")] string Error,
+    [Description("The quantity that the line asks for; present only when the quantity is the problem.")] long? RequestedQuantity = null,
+    [Description("The quantity in stock; present only when the stock is the problem.")] long? AvailableQuantity = null);
+
+/// <summary>What <see cref="InventoryTool.CreatePurchaseOrder"/> returns: the quote just created for the cart, or the error saying why none was.</summary>
+[Description("The quote just created for one or more plants.")]
 public record PurchaseOrderResult(
     [Description("Why no order was created; null when one was.")] string? Error = null,
     [Description("The identifier of the new order.")] string? OrderId = null,
-    [Description("The word, shown this one time only, that confirming or cancelling the order requires with its identifier.")] string? SealWord = null,
-    [Description("The stock-keeping unit that identifies the plant.")] string? Sku = null,
-    [Description("The name of the plant.")] string? ProductName = null,
-    [Description("How many units are quoted.")] int? Quantity = null,
-    [Description("The price of one unit in euros.")] double? UnitPrice = null,
-    [Description("The price of the whole quantity in euros.")] double? TotalPrice = null,
+    [Description("The word, shown this one time only, that confirming or cancelling the order requires with its identifier. One word covers every line.")] string? SealWord = null,
+    [Description("The quoted lines, one per plant of the cart.")] List<QuotedLine>? Lines = null,
+    [Description("The price of the whole cart in euros.")] double? TotalPrice = null,
     [Description("The status of the new order, which is Pending.")] string? Status = null,
     [Description("States what this response does and does not carry.")] string? Note = null,
-    [Description("The SKU that was asked for; present only on an error.")] string? RequestedSku = null,
-    [Description("The SKUs that exist; present only on an error.")] List<string>? AvailableSkus = null,
-    [Description("The quantity that was asked for; present only on an error.")] int? RequestedQuantity = null,
-    [Description("The quantity in stock; present only on an error.")] long? AvailableQuantity = null);
+    [Description("The lines that cannot be quoted; present only when no order was created.")] List<LineProblem>? Problems = null,
+    [Description("The SKUs that exist; present only when a line named an unknown SKU.")] List<string>? AvailableSkus = null);
 
 /// <summary>What <see cref="InventoryTool.ConfirmOrder"/> returns: the order just confirmed, or the error saying why it was not.</summary>
 [Description("The order just confirmed.")]
@@ -60,23 +91,19 @@ public record ConfirmOrderResult(
     [Description("Why the order was not confirmed; null when it was.")] string? Error = null,
     [Description("The order identifier that was asked for; present only on an error.")] string? RequestedOrderId = null,
     [Description("The identifier of the order.")] string? OrderId = null,
-    [Description("The stock-keeping unit that identifies the plant.")] string? Sku = null,
-    [Description("How many units the order commits.")] long? Quantity = null,
+    [Description("The lines the order committed, with the units left in stock for each.")] List<ConfirmedLine>? Lines = null,
     [Description("The status of the order, which is Confirmed.")] string? Status = null,
     [Description("The moment the order was confirmed, as an ISO 8601 UTC timestamp.")] string? ConfirmedAt = null,
-    [Description("The units left in stock after the confirmation.")] long? RemainingStock = null,
     [Description("The invoice that the order was billed to.")] string? InvoiceId = null,
     [Description("States what this response does and does not carry.")] string? Note = null,
-    [Description("The quantity that the order asks for; present only on an error.")] long? RequestedQuantity = null,
-    [Description("The quantity in stock; present only on an error.")] long? AvailableQuantity = null);
+    [Description("The lines whose stock no longer suffices; present only when the order was not confirmed for that reason.")] List<LineProblem>? Shortfalls = null);
 
-/// <summary>What <see cref="InventoryTool.GetOrderStatus"/> returns: the status and timestamps of an order, or the error saying that none matches.</summary>
+/// <summary>What <see cref="InventoryTool.GetOrderStatus"/> returns: the status, lines and timestamps of an order, or the error saying that none matches.</summary>
 [Description("Where an order stands and when it got there.")]
 public record OrderStatusResult(
     [Description("Why no status is returned; present only when no order matches.")] string? Error = null,
     [Description("The identifier of the order.")] string? OrderId = null,
-    [Description("The stock-keeping unit that identifies the plant.")] string? Sku = null,
-    [Description("How many units the order covers.")] long? Quantity = null,
+    [Description("The lines of the order.")] List<OrderLineSummary>? Lines = null,
     [Description("The status of the order: Pending, Confirmed or Cancelled.")] string? Status = null,
     [Description("The moment the order was created, as an ISO 8601 UTC timestamp.")] string? CreatedAt = null,
     [Description("The moment the order was confirmed, as an ISO 8601 UTC timestamp; null until then.")] string? ConfirmedAt = null,
@@ -100,8 +127,7 @@ public record CancelOrderResult(
 [Description("One order in a listing.")]
 public record OrderSummary(
     [Description("The identifier of the order.")] string OrderId,
-    [Description("The stock-keeping unit that identifies the plant.")] string Sku,
-    [Description("How many units the order covers.")] long Quantity,
+    [Description("The lines of the order.")] List<OrderLineSummary> Lines,
     [Description("The status of the order: Pending, Confirmed or Cancelled.")] string Status,
     [Description("The moment the order was created, as an ISO 8601 UTC timestamp.")] string CreatedAt,
     [Description("The moment the order was confirmed, as an ISO 8601 UTC timestamp; null when it never was.")] [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? ConfirmedAt,

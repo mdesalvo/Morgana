@@ -7,11 +7,11 @@ using Morgana.AI.Attributes;
 namespace Examples.Workflows;
 
 /// <summary>
-/// The order procedure of the greenhouse: a quote is created, then the customer confirms or cancels it.
+/// The order procedure of the greenhouse: a quote for one or more plants is created, then the customer confirms or cancels it.
 /// </summary>
 [ProvidesWorkflowForIntent("inventory")]
 [UserTool(3, "🛒 Place an order")]
-[Description("Placing a new order for a plant, from its quote to its confirmation or cancellation.")]
+[Description("Placing a new order for one or more plants, from its quote to its confirmation or cancellation.")]
 public sealed class PlaceOrderWorkflow : MorganaWorkflow
 {
     public string? OrderId { get; init; }

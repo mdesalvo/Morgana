@@ -36,7 +36,12 @@ public class InventoryTool : MorganaTool
 
     private record Product(string Sku, string Name, string Category, string Description, long QuantityOnHand, long ReorderThreshold, double UnitPrice);
 
-    private record Order(string OrderId, string Sku, long Quantity, string Status, string? CustomerCode, string? ConversationId, string SealWord, string CreatedAt, string? ConfirmedAt, string? CancelledAt);
+    private record Order(string OrderId, string Status, string? CustomerCode, string? ConversationId, string SealWord, string CreatedAt, string? ConfirmedAt, string? CancelledAt, IReadOnlyList<OrderLine> Lines);
+
+    private record OrderLine(long LineNumber, string Sku, long Quantity);
+
+    /// <summary>One row of an order read together with its lines: the order's header beside one line, or beside none.</summary>
+    private record HeaderWithLine<THeader, TLine>(THeader Header, TLine? Line) where TLine : class;
 
     private static async Task<Product?> FindProductAsync(SqliteConnection connection, string sku)
     {
@@ -54,30 +59,126 @@ public class InventoryTool : MorganaTool
         return new Product(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetInt64(4), reader.GetInt64(5), reader.GetDouble(6));
     }
 
+    /// <summary>Looks up the plants of a cart in one query, keyed by SKU whatever casing the model typed.</summary>
+    private static async Task<Dictionary<string, Product>> FindProductsAsync(SqliteConnection connection, IEnumerable<string> skus)
+    {
+        // The same NOCASE tolerance as FindProductAsync, applied to every SKU of the cart at once.
+        List<string> skuList = [.. skus];
+        Dictionary<string, Product> productsBySku = new(StringComparer.OrdinalIgnoreCase);
+        if (skuList.Count == 0)
+            return productsBySku;
+
+        await using SqliteCommand command = connection.CreateCommand();
+        string placeholders = string.Join(", ", skuList.Select((_, index) => $"$sku{index}"));
+        command.CommandText = $"SELECT Sku, Name, Category, Description, QuantityOnHand, ReorderThreshold, UnitPrice FROM Products WHERE Sku COLLATE NOCASE IN ({placeholders})";
+        for (int index = 0; index < skuList.Count; index++)
+            command.Parameters.AddWithValue($"$sku{index}", skuList[index]);
+
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            Product product = new Product(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetInt64(4), reader.GetInt64(5), reader.GetDouble(6));
+            productsBySku[product.Sku] = product;
+        }
+
+        return productsBySku;
+    }
+
     private static async Task<Order?> FindOrderAsync(SqliteConnection connection, string orderId)
     {
         // Same reasoning as FindProductAsync's COLLATE NOCASE: orderId travels through a chat
         // transcript, possibly retyped by a user from memory across a session boundary — comparing
         // case-insensitively is what makes that forgiving instead of a needless "order not found".
+        // Header and lines come in one query: one row per line, the header repeated on each.
         await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT OrderId, Sku, Quantity, Status, CustomerCode, ConversationId, SealWord, CreatedAt, ConfirmedAt, CancelledAt FROM Orders WHERE OrderId = $orderId COLLATE NOCASE";
+        command.CommandText = """
+            SELECT o.OrderId, o.Status, o.CustomerCode, o.ConversationId, o.SealWord, o.CreatedAt, o.ConfirmedAt, o.CancelledAt,
+                   l.LineNumber, l.Sku, l.Quantity
+            FROM Orders o LEFT JOIN OrderLines l ON l.OrderId = o.OrderId
+            WHERE o.OrderId = $orderId COLLATE NOCASE
+            ORDER BY l.LineNumber
+            """;
         command.Parameters.AddWithValue("$orderId", orderId);
 
+        // Every row carries the order's header beside one of its lines; the outer join gives a line-less row to an order with none.
+        List<HeaderWithLine<Order, OrderLine>> rows = [];
         await using SqliteDataReader reader = await command.ExecuteReaderAsync();
-        if (!await reader.ReadAsync())
-            return null;
+        while (await reader.ReadAsync())
+            rows.Add(new HeaderWithLine<Order, OrderLine>(
+                new Order(
+                    reader.GetString(0),
+                    reader.GetString(1),
+                    reader.IsDBNull(2) ? null : reader.GetString(2),
+                    reader.IsDBNull(3) ? null : reader.GetString(3),
+                    reader.GetString(4),
+                    reader.GetString(5),
+                    reader.IsDBNull(6) ? null : reader.GetString(6),
+                    reader.IsDBNull(7) ? null : reader.GetString(7),
+                    []),
+                reader.IsDBNull(8) ? null : new OrderLine(reader.GetInt64(8), reader.GetString(9), reader.GetInt64(10))));
 
-        return new Order(
-            reader.GetString(0),
-            reader.GetString(1),
-            reader.GetInt64(2),
-            reader.GetString(3),
-            reader.IsDBNull(4) ? null : reader.GetString(4),
-            reader.IsDBNull(5) ? null : reader.GetString(5),
-            reader.GetString(6),
-            reader.GetString(7),
-            reader.IsDBNull(8) ? null : reader.GetString(8),
-            reader.IsDBNull(9) ? null : reader.GetString(9));
+        // No row means no order under that identifier; otherwise the header is the first row's, holding every line.
+        return rows.Count == 0
+            ? null
+            : rows[0].Header with { Lines = [.. rows.Select(row => row.Line).OfType<OrderLine>()] };
+    }
+
+    /// <summary>
+    /// Lists the orders of one owner with their lines, reading headers and lines in a single query.
+    /// </summary>
+    /// <param name="connection">An open connection.</param>
+    /// <param name="ownerFilter">The condition on the orders that selects the owner, written over the alias <c>o</c> and the parameter <c>$owner</c>.</param>
+    /// <param name="owner">The value of <c>$owner</c>.</param>
+    private static async Task<List<OrderSummary>> FindOrderSummariesAsync(SqliteConnection connection, string ownerFilter, string owner)
+    {
+        // The most recent order first, its lines in line order; the order id keeps the rows of one order together.
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT o.OrderId, o.Status, o.CreatedAt, o.ConfirmedAt, o.CancelledAt, l.Sku, l.Quantity
+            FROM Orders o LEFT JOIN OrderLines l ON l.OrderId = o.OrderId
+            WHERE {ownerFilter}
+            ORDER BY o.CreatedAt DESC, o.OrderId, l.LineNumber
+            """;
+        command.Parameters.AddWithValue("$owner", owner);
+
+        // Every row carries an order's header beside one of its lines; the outer join gives a line-less row to an order with none.
+        List<HeaderWithLine<OrderSummary, OrderLineSummary>> rows = [];
+        await using SqliteDataReader reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            rows.Add(new HeaderWithLine<OrderSummary, OrderLineSummary>(
+                new OrderSummary(
+                    reader.GetString(0),
+                    [],
+                    reader.GetString(1),
+                    reader.GetString(2),
+                    reader.IsDBNull(3) ? null : reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4)),
+                reader.IsDBNull(5) ? null : new OrderLineSummary(reader.GetString(5), reader.GetInt64(6))));
+
+        // The rows of one order become its summary with every line, in the order the query sorted the orders.
+        return [.. rows
+            .GroupBy(row => row.Header.OrderId, StringComparer.Ordinal)
+            .Select(orderRows => orderRows.First().Header with { Lines = [.. orderRows.Select(row => row.Line).OfType<OrderLineSummary>()] })];
+    }
+
+    /// <summary>
+    /// Reports every line of an order whose stock no longer covers it, reading the stock of all the order's SKUs in one query.
+    /// </summary>
+    /// <remarks>Read after the rollback, so each figure is the stock as it stands now.</remarks>
+    private static async Task<List<LineProblem>> FindShortfallsAsync(SqliteConnection connection, IReadOnlyList<OrderLine> lines)
+    {
+        Dictionary<string, Product> currentProducts = await FindProductsAsync(connection, lines.Select(line => line.Sku));
+
+        // A line is short when its SKU is gone or holds fewer units than the order asks for.
+        List<LineProblem> shortfalls = [];
+        foreach (OrderLine line in lines)
+        {
+            long availableQuantity = currentProducts.TryGetValue(line.Sku, out Product? current) ? current.QuantityOnHand : 0;
+            if (availableQuantity < line.Quantity)
+                shortfalls.Add(new LineProblem(line.Sku, "Insufficient stock for the requested quantity", line.Quantity, availableQuantity));
+        }
+
+        return shortfalls;
     }
 
     /// <summary>
@@ -214,97 +315,129 @@ public class InventoryTool : MorganaTool
     }
 
     /// <summary>
-    /// Creates a new purchase order in "Pending" status. This is a QUOTE, not a commitment:
-    /// stock is validated but NOT decremented here. The order only becomes binding once
-    /// ConfirmOrder is called with the returned orderId AND sealWord.
+    /// Creates one purchase order in "Pending" status, one line per plant of the cart. This is a
+    /// QUOTE, not a commitment: stock is validated but NOT decremented here. The whole order only
+    /// becomes binding once ConfirmOrder is called with the returned orderId AND its single sealWord.
     /// </summary>
-    /// <param name="sku">Product SKU to order.</param>
-    /// <param name="quantity">Quantity requested (must not exceed current stock).</param>
+    /// <param name="items">Every plant of the cart with its quantity; a plant named twice is merged into one line.</param>
     /// <param name="customerCode">Identifier of the requesting customer (retrieved from shared context).</param>
-    /// <returns>The new orderId, one-time sealWord, quote and pending status, or the error saying why no order was created.</returns>
-    [Description("Creates a new purchase order in 'Pending' status and returns its quote. This is a quote only: stock is validated but not decremented. The seal word is shown only this once and is required, together with the orderId, by ConfirmOrder and CancelOrder — including in a future session. It has dispositive potential only once ConfirmOrder is called afterwards — on its own it commits nothing.")]
+    /// <returns>The new orderId, one-time sealWord, quoted lines, total and pending status, or the lines that could not be quoted.</returns>
+    [Description("Creates one purchase order in 'Pending' status for every plant of the cart and returns its quote. The cart is quoted whole or not at all: when any line cannot be quoted, no order is created and every such line is reported. This is a quote only: stock is validated but not decremented. The seal word is shown only this once; the customer needs it, together with the orderId, only to confirm or cancel the order from another conversation. It has dispositive potential only once ConfirmOrder is called afterwards — on its own it commits nothing.")]
     [SystemTool]
     public async Task<PurchaseOrderResult> CreatePurchaseOrder(
-        [Description("Product SKU to order (e.g. 'RSE-100').")] [ToolParameter(Records.ToolScope.Request)] string sku,
-        [Description("Quantity requested. Must not exceed the product's current quantityOnHand.")] [ToolParameter(Records.ToolScope.Request)] int quantity,
+        [Description("Every plant of the order with its quantity, all in this one call: a plant named twice is merged into one line.")] [ToolParameter(Records.ToolScope.Request)] List<OrderItem> items,
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode)
     {
-        if (quantity <= 0)
-            return new PurchaseOrderResult(Error: "Quantity must be a positive number", RequestedQuantity: quantity);
+        // A cart with no plant has nothing to quote.
+        if (items is not { Count: > 0 })
+            return new PurchaseOrderResult(Error: "An order needs at least one plant");
 
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        Product? product = await FindProductAsync(connection, sku);
-        if (product == null)
+        // A plant named twice is one line: the model may split a quantity across entries.
+        List<IGrouping<string, OrderItem>> plants = [.. items.GroupBy(item => item.Sku.Trim(), StringComparer.OrdinalIgnoreCase)];
+
+        // One query finds every plant of the cart, so the lines below are judged without further reads.
+        Dictionary<string, Product> productsBySku = await FindProductsAsync(connection, plants.Select(plant => plant.Key));
+
+        // The cart is validated as a whole and either quoted whole or not at all: every problem of
+        // every line is reported in one answer, so the customer fixes the cart once instead of
+        // discovering its faults one rejected line at a time.
+        List<QuotedLine> quotedLines = [];
+        List<LineProblem> problems = [];
+        foreach (IGrouping<string, OrderItem> plant in plants)
         {
-            return new PurchaseOrderResult(
-                Error: "Product not found",
-                RequestedSku: sku,
-                AvailableSkus: await GetAllSkusAsync(connection));
+            int quantity = plant.Sum(item => item.Quantity);
+
+            // A SKU the shop does not stock cannot be quoted. The valid ones are listed below.
+            if (!productsBySku.TryGetValue(plant.Key, out Product? product))
+                problems.Add(new LineProblem(plant.Key, "Product not found"));
+            // A quantity of zero or less is not a purchase.
+            else if (quantity <= 0)
+                problems.Add(new LineProblem(product.Sku, "Quantity must be a positive number", RequestedQuantity: quantity));
+            // A courtesy at quote time, not a reservation: nothing here decrements QuantityOnHand,
+            // so another conversation is free to buy the same stock before this customer comes
+            // back to ConfirmOrder — which re-runs this exact comparison when it is the one that matters.
+            else if (quantity > product.QuantityOnHand)
+                problems.Add(new LineProblem(product.Sku, "Insufficient stock for the requested quantity", quantity, product.QuantityOnHand));
+            // Everything else is a line of the quote.
+            else
+                quotedLines.Add(new QuotedLine(product.Sku, product.Name, quantity, product.UnitPrice, Math.Round(product.UnitPrice * quantity, 2)));
         }
 
-        // This check is a courtesy at quote time, not a reservation: nothing here decrements
-        // QuantityOnHand, so another conversation is free to buy the same stock between this
-        // check and whenever (if ever) the customer comes back to actually ConfirmOrder — which
-        // re-runs this exact comparison itself, right before it is the one that matters.
-        if (quantity > product.QuantityOnHand)
+        // One line that cannot be quoted keeps the whole cart from becoming an order.
+        if (problems.Count > 0)
         {
             return new PurchaseOrderResult(
-                Error: "Insufficient stock for the requested quantity",
-                Sku: product.Sku,
-                RequestedQuantity: quantity,
-                AvailableQuantity: product.QuantityOnHand);
+                Error: "No order was created: the lines below cannot be quoted",
+                Problems: problems,
+                // The valid SKUs are listed only when a line named one the shop does not stock.
+                AvailableSkus: plants.Any(plant => !productsBySku.ContainsKey(plant.Key)) ? await GetAllSkusAsync(connection) : null);
         }
 
         // getToolContext() (not a method parameter) is the only way to reach ConversationId: it
-        // is the real Akka-assigned identifier, never exposed to or writable by the LLM, so it is
-        // trustworthy in a way a request/context parameter never could be — see ToolContext's
-        // remarks in MorganaTool.cs. orderId + sealWord together are the claim-check pair every
-        // later call to ConfirmOrder/CancelOrder must present; sealWord is returned
-        // to the caller exactly once, right below and never stored anywhere the LLM can read it
-        // back from later (no Get* tool in this class ever surfaces it again).
+        // is the real Akka-assigned identifier, never exposed to or writable by the LLM. orderId +
+        // sealWord together are the claim-check pair every later ConfirmOrder/CancelOrder must
+        // present for the whole cart; sealWord is returned exactly once, right below and no Get*
+        // tool in this class ever surfaces it again.
         ToolContext ctx = getToolContext();
         string orderId = $"ORD-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
         string sealWord = GenerateSealWord();
         string createdAt = DateTime.UtcNow.ToString("O");
 
-        await using (SqliteCommand insert = connection.CreateCommand())
+        // Header and lines are written together: a header missing any of its lines would be a cart
+        // nobody can confirm or cancel truthfully.
+        await using (SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync())
         {
-            insert.CommandText = """
-                INSERT INTO Orders (OrderId, Sku, Quantity, Status, CustomerCode, ConversationId, SealWord, CreatedAt)
-                VALUES ($orderId, $sku, $quantity, 'Pending', $customerCode, $conversationId, $sealWord, $createdAt)
-                """;
-            insert.Parameters.AddWithValue("$orderId", orderId);
-            insert.Parameters.AddWithValue("$sku", product.Sku);
-            insert.Parameters.AddWithValue("$quantity", quantity);
-            insert.Parameters.AddWithValue("$customerCode", customerCode);
-            insert.Parameters.AddWithValue("$conversationId", ctx.ConversationId);
-            insert.Parameters.AddWithValue("$sealWord", sealWord);
-            insert.Parameters.AddWithValue("$createdAt", createdAt);
-            await insert.ExecuteNonQueryAsync();
+            await using (SqliteCommand insertOrder = connection.CreateCommand())
+            {
+                insertOrder.Transaction = transaction;
+                insertOrder.CommandText = """
+                    INSERT INTO Orders (OrderId, Status, CustomerCode, ConversationId, SealWord, CreatedAt)
+                    VALUES ($orderId, 'Pending', $customerCode, $conversationId, $sealWord, $createdAt)
+                    """;
+                insertOrder.Parameters.AddWithValue("$orderId", orderId);
+                insertOrder.Parameters.AddWithValue("$customerCode", customerCode);
+                insertOrder.Parameters.AddWithValue("$conversationId", ctx.ConversationId);
+                insertOrder.Parameters.AddWithValue("$sealWord", sealWord);
+                insertOrder.Parameters.AddWithValue("$createdAt", createdAt);
+                await insertOrder.ExecuteNonQueryAsync();
+            }
+
+            // Line numbers follow the order of the quote, counted from one.
+            foreach ((int lineIndex, QuotedLine quotedLine) in quotedLines.Index())
+            {
+                await using SqliteCommand insertLine = connection.CreateCommand();
+                insertLine.Transaction = transaction;
+                insertLine.CommandText = "INSERT INTO OrderLines (OrderId, LineNumber, Sku, Quantity) VALUES ($orderId, $lineNumber, $sku, $quantity)";
+                insertLine.Parameters.AddWithValue("$orderId", orderId);
+                insertLine.Parameters.AddWithValue("$lineNumber", lineIndex + 1);
+                insertLine.Parameters.AddWithValue("$sku", quotedLine.Sku);
+                insertLine.Parameters.AddWithValue("$quantity", quotedLine.Quantity);
+                await insertLine.ExecuteNonQueryAsync();
+            }
+
+            await transaction.CommitAsync();
         }
 
-        toolLogger.LogInformation("Created purchase order {OrderId} for {Quantity}x {Sku} (user {CustomerCode})", orderId, quantity, sku, customerCode);
+        toolLogger.LogInformation("Created purchase order {OrderId} with {LineCount} line(s) (user {CustomerCode})", orderId, quotedLines.Count, customerCode);
 
         return new PurchaseOrderResult(
             OrderId: orderId,
             SealWord: sealWord,
-            Sku: product.Sku,
-            ProductName: product.Name,
-            Quantity: quantity,
-            UnitPrice: product.UnitPrice,
-            TotalPrice: Math.Round(product.UnitPrice * quantity, 2),
+            Lines: quotedLines,
+            TotalPrice: Math.Round(quotedLines.Sum(line => line.LineTotal), 2),
             Status: "Pending",
-            Note: "Order created but not committed: stock is untouched and nothing is billed until ConfirmOrder runs on this exact orderId and sealWord. The sealWord appears in this response and in no other, now or later — ConfirmOrder and CancelOrder each require the pair, in this session and in any future one.");
+            Note: "Order created but not committed: stock is untouched and nothing is billed until ConfirmOrder runs on this exact orderId and sealWord. One sealWord covers every line of this order and appears in this response and in no other; the customer needs the pair only to confirm or cancel the order from another conversation.");
     }
 
     /// <summary>
-    /// Commits a Pending order: decrements stock and bills the customer.
+    /// Commits a Pending order: decrements the stock of every line and bills the customer, all or none.
     /// </summary>
     /// <param name="orderId">Identifier of the order to confirm, as returned by CreatePurchaseOrder.</param>
     /// <param name="sealWord">One-time seal word from CreatePurchaseOrder for this exact orderId.</param>
-    /// <returns>The confirmed order with its remaining stock and invoiceId; the error instead when the order was not confirmed.</returns>
-    [Description("Commits a Pending order: the only one of your tools that decrements stock and the only one that bills the customer. Requires the exact orderId and sealWord pair returned by CreatePurchaseOrder — a mismatch on either is reported identically as 'no order matches', to avoid confirming or denying whether an orderId exists. Re-validates availability at commit time. It returns the invoice's identifier and nothing else about it. This tool has dispositive capabilities: it commits a real, persistent change to greenhouse stock and to the customer's account.")]
+    /// <returns>The confirmed lines with their remaining stock and the invoiceId; the error instead when the order was not confirmed.</returns>
+    [Description("Commits a Pending order, all its lines or none: the only one of your tools that decrements stock and the only one that bills the customer, one invoice line per order line. Requires the exact orderId and sealWord pair returned by CreatePurchaseOrder — a mismatch on either is reported identically as 'no order matches', to avoid confirming or denying whether an orderId exists. Re-validates the availability of every line at commit time. It returns the invoice's identifier and nothing else about it. This tool has dispositive capabilities: it commits a real, persistent change to greenhouse stock and to the customer's account.")]
     [SystemTool]
     [RequiresApproval]
     public async Task<ConfirmOrderResult> ConfirmOrder(
@@ -334,12 +467,12 @@ public class InventoryTool : MorganaTool
                 Status: order.Status);
         }
 
-        // Read once, outside the transaction, purely for the name/price that go on the invoice
+        // Read once, outside the transaction, purely for the name/price that go on each invoice
         // line below — the same tolerance CreatePurchaseOrder already applies to its own quote.
-        Product? product = await FindProductAsync(connection, order.Sku);
+        Dictionary<string, Product> productsBySku = await FindProductsAsync(connection, order.Lines.Select(line => line.Sku));
 
-        // Claiming the order (Pending -> Confirmed) and decrementing stock must both happen or
-        // neither: a single transaction. The transaction's FIRST statement is a write, so it takes
+        // Claiming the order (Pending -> Confirmed) and decrementing the stock of every line must
+        // all happen or none: a single transaction. Its FIRST statement is a write, so it takes
         // the write lock straight away — no SELECT-then-UPDATE lock upgrade, hence none of SQLite's
         // classic writer-upgrade deadlock — while PRAGMA busy_timeout (set by GreenhouseDatabaseHelper.OpenConnectionAsync)
         // makes a losing concurrent writer WAIT for our commit instead of throwing "database is locked".
@@ -372,62 +505,67 @@ public class InventoryTool : MorganaTool
                 Status: latest?.Status);
         }
 
-        // Decrement stock, guarded so it can NEVER go negative: WHERE QuantityOnHand >= qty means a
-        // concurrent confirmation that already took the last specimens leaves rows-affected at 0
-        // here and we roll the whole thing back (undoing the claim above too) rather than commit a
-        // sale of stock that no longer exists. This guard, not the pre-quote check, is the truthful one.
-        int stockRows;
-        await using (SqliteCommand updateStock = connection.CreateCommand())
+        // Decrement each line's stock, guarded so it can NEVER go negative: a concurrent
+        // confirmation that already took the last specimens of any one plant leaves rows-affected
+        // at 0 and the whole order rolls back (undoing the claim and every earlier line too) rather
+        // than commit a cart that is only partly in stock. This guard, not the quote, is the truthful one.
+        List<ConfirmedLine> confirmedLines = [];
+        foreach (OrderLine line in order.Lines)
         {
-            updateStock.Transaction = transaction;
-            updateStock.CommandText = "UPDATE Products SET QuantityOnHand = QuantityOnHand - $qty WHERE Sku = $sku AND QuantityOnHand >= $qty";
-            updateStock.Parameters.AddWithValue("$qty", order.Quantity);
-            updateStock.Parameters.AddWithValue("$sku", order.Sku);
-            stockRows = await updateStock.ExecuteNonQueryAsync();
-        }
+            int stockRows;
+            await using (SqliteCommand updateStock = connection.CreateCommand())
+            {
+                updateStock.Transaction = transaction;
+                updateStock.CommandText = "UPDATE Products SET QuantityOnHand = QuantityOnHand - $qty WHERE Sku = $sku AND QuantityOnHand >= $qty";
+                updateStock.Parameters.AddWithValue("$qty", line.Quantity);
+                updateStock.Parameters.AddWithValue("$sku", line.Sku);
+                stockRows = await updateStock.ExecuteNonQueryAsync();
+            }
 
-        if (stockRows == 0)
-        {
-            await transaction.RollbackAsync();
-            Product? current = await FindProductAsync(connection, order.Sku);
-            return new ConfirmOrderResult(
-                Error: "Stock is no longer sufficient to confirm this order",
-                OrderId: orderId,
-                RequestedQuantity: order.Quantity,
-                AvailableQuantity: current?.QuantityOnHand ?? 0);
-        }
+            if (stockRows == 0)
+            {
+                // One line short undoes the claim and every earlier line: all the short lines are reported, not only this one.
+                await transaction.RollbackAsync();
+                return new ConfirmOrderResult(
+                    Error: "Stock is no longer sufficient to confirm this order: nothing was confirmed",
+                    OrderId: orderId,
+                    Shortfalls: await FindShortfallsAsync(connection, order.Lines));
+            }
 
-        // Read the remaining stock back inside the SAME transaction, so the figure reported is the
-        // one we just wrote — not the possibly-stale pre-read value.
-        long remainingStock;
-        await using (SqliteCommand readStock = connection.CreateCommand())
-        {
+            // Read back inside the SAME transaction, so the figure reported is the one just
+            // written — not the possibly-stale pre-read value.
+            await using SqliteCommand readStock = connection.CreateCommand();
             readStock.Transaction = transaction;
             readStock.CommandText = "SELECT QuantityOnHand FROM Products WHERE Sku = $sku";
-            readStock.Parameters.AddWithValue("$sku", order.Sku);
-            remainingStock = Convert.ToInt64(await readStock.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+            readStock.Parameters.AddWithValue("$sku", line.Sku);
+            long remainingStock = Convert.ToInt64(await readStock.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+
+            confirmedLines.Add(new ConfirmedLine(line.Sku, line.Quantity, remainingStock));
         }
 
-        // Bill it, in the same transaction: a Confirmed order with no invoice line is exactly the
-        // half-done state this method exists to prevent for stock, so it must not exist for billing
-        // either. product may be null only if the SKU was deleted between the pre-reads and here —
-        // in that vanishingly unlikely case the order still confirms, just without a billed line.
-        string? invoiceId = product == null
-            ? null
-            : await GreenhouseDatabaseHelper.BillCustomerAsync(connection, transaction, order.CustomerCode!, product.Name,
-                order.Sku, order.OrderId, product.UnitPrice, (int)order.Quantity, confirmedAtUtc);
+        // Bill every line, in the same transaction: a Confirmed order with no invoice line is exactly
+        // the half-done state this method exists to prevent for stock. Every line lands on the same
+        // invoice, the customer's open one for this month, which the first line found or opened.
+        // A product deleted between the pre-reads and here confirms its line without billing it.
+        string? invoiceId = null;
+        foreach (OrderLine line in order.Lines)
+        {
+            if (!productsBySku.TryGetValue(line.Sku, out Product? product))
+                continue;
+
+            invoiceId = await GreenhouseDatabaseHelper.BillCustomerAsync(connection, transaction, order.CustomerCode!, product.Name,
+                product.Sku, order.OrderId, product.UnitPrice, (int)line.Quantity, confirmedAtUtc);
+        }
 
         await transaction.CommitAsync();
 
-        toolLogger.LogInformation("Confirmed order {OrderId}: stock of {Sku} decremented by {Quantity}, billed to invoice {InvoiceId}", orderId, order.Sku, order.Quantity, invoiceId);
+        toolLogger.LogInformation("Confirmed order {OrderId}: stock of {LineCount} line(s) decremented, billed to invoice {InvoiceId}", orderId, order.Lines.Count, invoiceId);
 
         return new ConfirmOrderResult(
             OrderId: orderId,
-            Sku: order.Sku,
-            Quantity: order.Quantity,
+            Lines: confirmedLines,
             Status: "Confirmed",
             ConfirmedAt: confirmedAt,
-            RemainingStock: remainingStock,
             InvoiceId: invoiceId,
             Note: invoiceId == null
                 ? null
@@ -452,8 +590,7 @@ public class InventoryTool : MorganaTool
 
         return new OrderStatusResult(
             OrderId: order.OrderId,
-            Sku: order.Sku,
-            Quantity: order.Quantity,
+            Lines: [.. order.Lines.Select(line => new OrderLineSummary(line.Sku, line.Quantity))],
             Status: order.Status,
             CreatedAt: order.CreatedAt,
             ConfirmedAt: order.ConfirmedAt,
@@ -468,7 +605,7 @@ public class InventoryTool : MorganaTool
     /// <param name="sealWord">One-time seal word returned by CreatePurchaseOrder for this exact orderId. Tracked from the conversation itself, one per order — a customer with multiple orders in flight has a different seal word for each.</param>
     /// <param name="reason">Optional free-text cancellation reason, recorded for logging only.</param>
     /// <returns>The cancellation outcome, or the error saying why the order was not cancelled.</returns>
-    [Description("Cancels a Pending or Confirmed order. Requires the exact orderId and sealWord pair returned by CreatePurchaseOrder — a mismatch on either is reported identically as 'no order matches'. If the order had been Confirmed, stock is restored; a Pending order never touched stock so none is restored. This tool has dispositive capabilities: it commits a real, persistent change to an order and possibly to greenhouse stock.")]
+    [Description("Cancels a Pending or Confirmed order. Requires the exact orderId and sealWord pair returned by CreatePurchaseOrder — a mismatch on either is reported identically as 'no order matches'. If the order had been Confirmed, the stock of every line is restored; a Pending order never touched stock so none is restored. This tool has dispositive capabilities: it commits a real, persistent change to an order and possibly to greenhouse stock.")]
     [SystemTool]
     [RequiresApproval]
     public async Task<CancelOrderResult> CancelOrder(
@@ -536,12 +673,16 @@ public class InventoryTool : MorganaTool
 
         if (stockRestored)
         {
-            await using SqliteCommand restoreStock = connection.CreateCommand();
-            restoreStock.Transaction = transaction;
-            restoreStock.CommandText = "UPDATE Products SET QuantityOnHand = QuantityOnHand + $qty WHERE Sku = $sku";
-            restoreStock.Parameters.AddWithValue("$qty", order.Quantity);
-            restoreStock.Parameters.AddWithValue("$sku", order.Sku);
-            await restoreStock.ExecuteNonQueryAsync();
+            // Every line gives its units back inside the same transaction as the status change.
+            foreach (OrderLine line in order.Lines)
+            {
+                await using SqliteCommand restoreStock = connection.CreateCommand();
+                restoreStock.Transaction = transaction;
+                restoreStock.CommandText = "UPDATE Products SET QuantityOnHand = QuantityOnHand + $qty WHERE Sku = $sku";
+                restoreStock.Parameters.AddWithValue("$qty", line.Quantity);
+                restoreStock.Parameters.AddWithValue("$sku", line.Sku);
+                await restoreStock.ExecuteNonQueryAsync();
+            }
         }
 
         await transaction.CommitAsync();
@@ -572,25 +713,7 @@ public class InventoryTool : MorganaTool
 
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT OrderId, Sku, Quantity, Status, CreatedAt, ConfirmedAt, CancelledAt FROM Orders WHERE ConversationId = $conversationId ORDER BY CreatedAt DESC";
-        command.Parameters.AddWithValue("$conversationId", ctx.ConversationId);
-
-        List<OrderSummary> orders = [];
-        await using (SqliteDataReader reader = await command.ExecuteReaderAsync())
-        {
-            while (await reader.ReadAsync())
-            {
-                orders.Add(new OrderSummary(
-                    reader.GetString(0),
-                    reader.GetString(1),
-                    reader.GetInt64(2),
-                    reader.GetString(3),
-                    reader.GetString(4),
-                    reader.IsDBNull(5) ? null : reader.GetString(5),
-                    reader.IsDBNull(6) ? null : reader.GetString(6)));
-            }
-        }
+        List<OrderSummary> orders = await FindOrderSummariesAsync(connection, "o.ConversationId = $owner", ctx.ConversationId);
 
         return new OrdersResult(orders.Count, orders);
     }
@@ -613,25 +736,7 @@ public class InventoryTool : MorganaTool
 
         string? customerName = await FindCustomerNameAsync(connection, customerCode);
 
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT OrderId, Sku, Quantity, Status, CreatedAt, ConfirmedAt, CancelledAt FROM Orders WHERE CustomerCode = $customerCode COLLATE NOCASE ORDER BY CreatedAt DESC";
-        command.Parameters.AddWithValue("$customerCode", customerCode);
-
-        List<OrderSummary> orders = [];
-        await using (SqliteDataReader reader = await command.ExecuteReaderAsync())
-        {
-            while (await reader.ReadAsync())
-            {
-                orders.Add(new OrderSummary(
-                    reader.GetString(0),
-                    reader.GetString(1),
-                    reader.GetInt64(2),
-                    reader.GetString(3),
-                    reader.GetString(4),
-                    reader.IsDBNull(5) ? null : reader.GetString(5),
-                    reader.IsDBNull(6) ? null : reader.GetString(6)));
-            }
-        }
+        List<OrderSummary> orders = await FindOrderSummariesAsync(connection, "o.CustomerCode = $owner COLLATE NOCASE", customerCode);
 
         return new OrderHistoryResult(customerCode, customerName, orders.Count, orders);
     }
