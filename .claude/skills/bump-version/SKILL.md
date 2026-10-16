@@ -27,17 +27,17 @@ For production hotfixes, activated when the user says:
 ## Procedure
 
 1. **Extract current version** from `<repo root>/Morgana/Directory.Build.props`
-   - It is split in `<VersionPrefix>X.Y.Z</VersionPrefix>` and `<VersionSuffix>preview.N</VersionSuffix>`
-   - The full version is `X.Y.Z-preview.N`. `AssemblyVersion` and `FileVersion` stay `$(VersionPrefix)`, because an assembly version cannot carry a suffix
+   - It is split in `<VersionPrefix>X.Y.Z</VersionPrefix>` and `<VersionSuffix>betaN</VersionSuffix>`
+   - The full version is `X.Y.Z-betaN`. `AssemblyVersion` and `FileVersion` stay `$(VersionPrefix)`, because an assembly version cannot carry a suffix
 
 2. **Increment the version**
-   - **Default behavior (new development cycle)**: increment the preview number (N), prefix untouched
-     - 1.0.0-preview.N → 1.0.0-preview.(N+1)
-     - Example: 1.0.0-preview.33 → 1.0.0-preview.34
+   - **Default behavior (new development cycle)**: increment the beta number (N), prefix untouched
+     - 1.0.0-betaN → 1.0.0-beta(N+1)
+     - Example: 1.0.0-beta1 → 1.0.0-beta2
    - **Hotfix behavior**: append a patch counter to the suffix
-     - 1.0.0-preview.N → 1.0.0-preview.N.1
-     - Example: 1.0.0-preview.33 → 1.0.0-preview.33.1
-   - Leaving preview (1.0.0 final) is the user's decision, never this skill's: then `VersionSuffix` is removed
+     - 1.0.0-betaN → 1.0.0-betaN.1
+     - Example: 1.0.0-beta1 → 1.0.0-beta1.1
+   - Leaving beta (1.0.0 final) is the user's decision, never this skill's: then `VersionSuffix` is removed
 
 3. **Update all version files** in the following paths:
    - `<repo root>/Morgana/Directory.Build.props`
@@ -51,7 +51,7 @@ For production hotfixes, activated when the user says:
 4. **Add new section in CHANGELOG.md**
    - Read `<repo root>/CHANGELOG.md`
    - Insert a new section right after the header and preamble
-   - **For normal version bumps** (preview number increment):
+   - **For normal version bumps** (beta number increment):
    ```
    ## [X.Y.Z] - UNDER DEVELOPMENT
    ### ✨ Added
@@ -71,14 +71,14 @@ For production hotfixes, activated when the user says:
    ### 🐛 Fixed
 
    ```
-   - Replace `X.Y.Z` with the newly calculated full version (e.g. `1.0.0-preview.34`)
+   - Replace `X.Y.Z` with the newly calculated full version (e.g. `1.0.0-beta2`)
 
 5. **Communicate the result** to the user with details of the updated version
 
 ## Notes
 
 - The skill operates idempotently: running it twice does not create duplicates
-- Morgana convention: the preview number counts development cycles, the patch counter on the suffix counts hotfixes
+- Morgana convention: the beta number counts development cycles, the patch counter on the suffix counts hotfixes
 - All solution projects are updated atomically
 - The empty CHANGELOG section is ready to be filled with change details
-- Regular development cycles always drop the hotfix counter (e.g., 1.0.0-preview.33.1 → 1.0.0-preview.34)
+- Regular development cycles always drop the hotfix counter (e.g., 1.0.0-beta1.1 → 1.0.0-beta2)

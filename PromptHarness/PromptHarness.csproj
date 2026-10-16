@@ -19,7 +19,7 @@
 
     <!-- Version Information -->
     <VersionPrefix>1.0.0</VersionPrefix>
-    <VersionSuffix>preview.33</VersionSuffix>
+    <VersionSuffix>beta1</VersionSuffix>
     <AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
     <FileVersion>$(VersionPrefix)</FileVersion>
 

@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [1.0.0-preview.33] - UNDER DEVELOPMENT
+## [1.0.0-beta1] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: Model-proof protocols
 Morgana's application protocols no longer rely on the model's interpretation: they are now **capabilities of the framework itself**.
 Quick replies, rich cards and turn closure express nothing new: they simply reach the user reliably, whichever model is behind the agent.
