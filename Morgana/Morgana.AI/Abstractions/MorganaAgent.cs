@@ -203,13 +203,13 @@ public class MorganaAgent : MorganaActor
                 morganaPrompt.GetAdditionalPropertyOrDefault<List<Records.FrameworkReplySet>>(Constants.PromptProperties.FrameworkReplies, []));
 
             // The turn is filed before the model runs, then run, then closed and recorded.
-            Records.TurnOpening opening = await OpenTurnAsync(req, frameworkReplies, agentSpan);
-            Records.TurnOutcome turnOutcome = await RunTurnAsync(opening.Session, req, opening.PressedActionTool, senderRef, agentSpan);
-            Records.TurnClosure closure = ConcludeTurn(opening.Session, turnOutcome, morganaPrompt, frameworkReplies, req.IsLanding);
-            DateTime? recordedAt = await RecordTurnAsync(opening.Session, closure, opening.HistoryBaseline, agentSpan);
+            Records.TurnOpening turnOpening = await OpenTurnAsync(req, frameworkReplies, agentSpan);
+            Records.TurnOutcome turnOutcome = await RunTurnAsync(turnOpening.Session, req, turnOpening.PressedActionTool, senderRef, agentSpan);
+            Records.TurnClosure turnClosure = ConcludeTurn(turnOpening.Session, turnOutcome, morganaPrompt, frameworkReplies, req.IsLanding);
+            DateTime? recordedAt = await RecordTurnAsync(turnOpening.Session, turnClosure, turnOpening.HistoryBaseline, agentSpan);
 
             // Dated as the history keeps it, so a client catching up recognises the reply it was pushed.
-            senderRef.Tell(new Records.AgentResponse(closure.Text, closure.IsCompleted, closure.QuickReplies, closure.Card, recordedAt));
+            senderRef.Tell(new Records.AgentResponse(turnClosure.Text, turnClosure.IsCompleted, turnClosure.QuickReplies, turnClosure.Card, recordedAt));
         }
         catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } clientResultException
                                      && clientResultException.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
@@ -316,7 +316,7 @@ public class MorganaAgent : MorganaActor
         {
             // The user's answer approves the pending calls only when it is the approve button's own text.
             bool approved = frameworkReplies.Approval is [QuickReply approveButton, ..]
-                            && string.Equals(req.Content?.Trim(), approveButton.Value, StringComparison.OrdinalIgnoreCase);
+                              && string.Equals(req.Content?.Trim(), approveButton.Value, StringComparison.OrdinalIgnoreCase);
             userContents.AddRange(pendingApprovals.Select(AIContent (request) => request.CreateResponse(approved)));
 
             agentLogger.LogInformation(
@@ -335,6 +335,7 @@ public class MorganaAgent : MorganaActor
         // runs and dropped with the turn.
         if (req.IsLanding)
         {
+            // The landing mark is what offers the model CloseTurn alone, so this turn introduces the agent and calls none of its tools.
             await aiContextProvider.SetVariableAsync(aiAgentSession, Constants.ContextKeys.Landing, true);
 
             // The landing run carries the declaration of the agent's menu, where the deployment declares one.
@@ -384,9 +385,9 @@ public class MorganaAgent : MorganaActor
         //      when the outbound channel can't deliver chunks to the user. When Capabilities
         //      is null (legacy/test paths) we assume the channel supports streaming.
         // Both signals are read once per turn: a channel cannot change its capabilities mid-turn.
-        bool streamingConfigEnabled = configuration.GetValue("Morgana:AdaptiveMessaging:EnableStreamingResponse", true);
+        bool streamingEnabled = configuration.GetValue("Morgana:AdaptiveMessaging:EnableStreamingResponse", true);
         bool channelSupportsStreaming = req.Capabilities?.SupportsStreaming ?? true;
-        bool useStreaming = streamingConfigEnabled && channelSupportsStreaming;
+        bool useStreaming = streamingEnabled && channelSupportsStreaming;
 
         // Said once per turn so that a batched answer on a streaming-capable deployment is explained.
         if (!channelSupportsStreaming)
