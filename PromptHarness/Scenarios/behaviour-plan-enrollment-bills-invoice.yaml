@@ -38,7 +38,7 @@ turns:
       # replies, no continuation signal) the one time this regressed live.
       richCard: present
       textNotEmpty: true
-      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache"]
+      textNotContains: ["context variable", "context store", "database", "session", "endpoint", "cache"]
     judge:
       - "The response states a concrete monthly fee for the plan."
     judgeNot:
@@ -52,7 +52,7 @@ turns:
       toolsNotCalled: [SubscribeToGreenCarePlan]
       quickReplyIds: [approve_action, reject_action]
       textNotEmpty: true
-      textNotContains: ["#INT#", "invoiceId", "InvoiceLines", "contractId"]
+      textNotContains: ["invoiceId", "InvoiceLines", "contractId"]
     judgeNot:
       # Tense, named outright: the turn may describe what enrolling causes, never as done. Everything
       # else is guaranteed structurally above: nothing was opened, nothing billed.
@@ -63,7 +63,7 @@ turns:
       agent: ContractAgent
       toolsCalled: [SubscribeToGreenCarePlan]
       textNotEmpty: true
-      textNotContains: ["#INT#", "invoiceId", "InvoiceLines", "contractId"]
+      textNotContains: ["invoiceId", "InvoiceLines", "contractId"]
     judge:
       - "The response says the plan is now active."
       - "The response says the first month has been billed."

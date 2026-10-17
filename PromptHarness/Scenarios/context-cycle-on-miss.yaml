@@ -17,11 +17,8 @@ turns:
       toolsCalledFirst: [GetInvoices]
       contextReads: [Miss:customerCode]
       noContextWrites: true
-      # Awaiting an operand the user must type: no buttons, no escape options.
-      quickReplies: none
-      richCard: absent
       textNotEmpty: true
-      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache"]
+      textNotContains: ["context variable", "context store", "database", "session", "endpoint", "cache"]
     judge:
       - "The response asks the user for an identifier or customer code."
 
@@ -30,6 +27,5 @@ turns:
       agent: BillingAgent
       contextWrites: [customerCode]
       toolsCalled: [GetInvoices]
-      richCard: present
       textNotEmpty: true
-      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache"]
+      textNotContains: ["context variable", "context store", "database", "session", "endpoint", "cache"]

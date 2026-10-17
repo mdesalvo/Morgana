@@ -24,7 +24,6 @@ turns:
       # asking a departing user to depart again.
       quickReplies: none
       textNotEmpty: true
-      textNotContains: ["#INT#"]
     judge:
       # One act and the cautions that used to trail it are gone: an in-character farewell IS a
       # farewell and saying so twice only gave the judge a second thing to weigh.

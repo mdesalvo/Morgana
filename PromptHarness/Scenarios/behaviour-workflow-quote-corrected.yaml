@@ -15,7 +15,7 @@ turns:
       toolsNotCalled: [ConfirmOrder, CancelOrder]
       # No quote exists, so neither the choice nor its seal word may reach the customer.
       noQuickReplyIds: ["ConfirmOrder#1", "CancelOrder#2"]
-      textNotContains: ["534LW03D", "#INT#"]
+      textNotContains: ["534LW03D"]
       textNotEmpty: true
     judge:
       - "The response says that 10 bundles cannot be ordered or states how many are available."

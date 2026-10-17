@@ -237,7 +237,7 @@ turns:
       historyExcludesAgents: [billing]  # no message in the persisted history belongs to that agent
       historyUserMessages: 2            # …and exactly one user message per turn played so far
       textNotEmpty: true
-      textNotContains: ["#INT#"]
+      textNotContains: ["context variable"]   # substrings the text must not carry
     judge:                        # propositions an LLM must find TRUE
       - "The response asks the user for an identifier."
     judgeNot:                     # …and FALSE

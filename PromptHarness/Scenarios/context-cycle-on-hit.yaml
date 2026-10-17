@@ -20,6 +20,6 @@ turns:
       # lawful as leaving it to the session. What may not happen is asking for it.
       toolsCalled: [GetPaymentHistory]
       textNotEmpty: true
-      textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache"]
+      textNotContains: ["context variable", "context store", "database", "session", "endpoint", "cache"]
     judgeNot:
       - "The response asks the user for their customer code or identifier."

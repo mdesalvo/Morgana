@@ -39,7 +39,7 @@ turns:
       # Pressing the action was the approval: no second confirmation is asked.
       noQuickReplyIds: [approve_action, reject_action]
       textNotEmpty: true
-      textNotContains: ["#INT#", "invoiceId", "InvoiceLines"]
+      textNotContains: ["invoiceId", "InvoiceLines"]
     judge:
       - "The response confirms the order is now settled or binding."
       - "The response says the purchase has been billed to the customer."

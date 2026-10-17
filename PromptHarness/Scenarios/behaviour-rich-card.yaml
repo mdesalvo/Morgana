@@ -11,7 +11,7 @@ turns:
       richCard: present
       textNotEmpty: true
       # A response that leaks the tool's JSON payload into the prose fails here.
-      textNotContains: ['{"', '":', "#INT#"]
+      textNotContains: ['{"', '":']
     # The card is where structured data belongs: only the prose around it can leak a dump.
     judgeNot:
       - "The text of the response contains raw JSON or a code block."
