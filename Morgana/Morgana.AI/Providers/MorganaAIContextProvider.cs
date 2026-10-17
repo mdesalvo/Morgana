@@ -230,6 +230,88 @@ public class MorganaAIContextProvider : AIContextProvider
         => DropVariable(session, Constants.ContextKeys.WorkflowPosition);
 
     /// <summary>
+    /// Reads the call that a pressed button committed the agent to; <c>null</c> when no press is under way.
+    /// </summary>
+    /// <remarks>Read without the per-variable access line: the model-call filter and the tool loop read it on every call.</remarks>
+    public Records.PressedCall? GetPressedCall(AgentSession session)
+        => ReadStored<Records.PressedCall>(session, Constants.ContextKeys.PressedCall);
+
+    /// <summary>
+    /// Stores the call that a pressed button commits the agent to, so that it is persisted with the agent's row.
+    /// </summary>
+    public void SetPressedCall(AgentSession session, Records.PressedCall pressedCall)
+    {
+        // The call is stored as JSON text in the variables, so that it is persisted and encrypted with the rest of the session.
+        MorganaContextState contextState = sessionState.GetOrInitializeState(session);
+        contextState.Variables[Constants.ContextKeys.PressedCall] = JsonSerializer.Serialize(pressedCall, Records.DefaultJsonSerializerOptions);
+        sessionState.SaveState(session, contextState);
+
+        logger.LogInformation(
+            "{MorganaAiContextProviderName} pressed call to '{Tool}' with [{Arguments}], awaiting the user's answer: {AwaitingAnswer}",
+            nameof(MorganaAIContextProvider), pressedCall.Tool, string.Join(", ", pressedCall.Arguments.Keys), pressedCall.AwaitingAnswer);
+    }
+
+    /// <summary>
+    /// Forgets the pressed call, which was made or abandoned.
+    /// </summary>
+    public void DropPressedCall(AgentSession session)
+        => DropVariable(session, Constants.ContextKeys.PressedCall);
+
+    /// <summary>
+    /// Whether the call that a press committed this turn to has already been made in it.
+    /// </summary>
+    /// <remarks>Read without the per-variable access line: the model-call filter reads it before every call.</remarks>
+    public bool IsPressedCallMade(AgentSession session)
+        => sessionState.GetOrInitializeState(session).Variables.ContainsKey(Constants.ContextKeys.PressedCallMade);
+
+    /// <summary>
+    /// Reads the actions that the agent's last delivered turn offered as buttons; empty when it offered none.
+    /// </summary>
+    public IReadOnlyList<Records.OfferedAction> GetOfferedActions(AgentSession session)
+        => ReadStored<List<Records.OfferedAction>>(session, Constants.ContextKeys.OfferedActions) ?? [];
+
+    /// <summary>
+    /// Stores the actions that a turn delivers as buttons, so that the next message is read against them even after a restart.
+    /// </summary>
+    public void SetOfferedActions(AgentSession session, IReadOnlyList<Records.OfferedAction> offeredActions)
+    {
+        // A turn that delivers no action leaves nothing for the next message to press.
+        if (offeredActions.Count == 0)
+        {
+            DropVariable(session, Constants.ContextKeys.OfferedActions);
+            return;
+        }
+
+        // The actions are stored as JSON text in the variables, so that they are persisted and encrypted with the rest of the session.
+        MorganaContextState contextState = sessionState.GetOrInitializeState(session);
+        contextState.Variables[Constants.ContextKeys.OfferedActions] = JsonSerializer.Serialize(offeredActions, Records.DefaultJsonSerializerOptions);
+        sessionState.SaveState(session, contextState);
+    }
+
+    /// <summary>
+    /// Reads a record that this provider stored as JSON text; <c>null</c> when the session holds none.
+    /// </summary>
+    private T? ReadStored<T>(AgentSession session, string variableName) where T : class
+    {
+        // No stored value means that the session holds nothing under this name.
+        if (!sessionState.GetOrInitializeState(session).Variables.TryGetValue(variableName, out object? storedValue))
+            return null;
+
+        // Written this process lifetime it is the string stored by its setter; restored from a saved session it is JSON.
+        string? storedJson = storedValue switch
+        {
+            string text => text,
+            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
+            _ => null
+        };
+
+        // An empty or unreadable value is the same as none.
+        return string.IsNullOrEmpty(storedJson)
+            ? null
+            : JsonSerializer.Deserialize<T>(storedJson, Records.DefaultJsonSerializerOptions);
+    }
+
+    /// <summary>
     /// Reads how many consultations the current turn has spent; zero when it has spent none.
     /// </summary>
     /// <remarks>

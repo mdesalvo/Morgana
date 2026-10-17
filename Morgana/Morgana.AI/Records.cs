@@ -1408,13 +1408,104 @@ public static class Records
     /// <param name="Tool">The agent's tool the action leads to.</param>
     /// <param name="Label">What the button shows.</param>
     /// <param name="Value">The message sent on the user's behalf when the button is pressed.</param>
+    /// <param name="Arguments">
+    /// The arguments of the call that a press makes, by the tool's parameter names; null when the button supplies none.
+    /// The framework makes that call itself, so a value missing here is one the user is asked for.
+    /// </param>
     public record OfferedAction(
         [property: JsonPropertyName("tool")]
         [property: Description("The name of one of your own tools that the button leads to.")] string Tool,
         [property: JsonPropertyName("label")]
         [property: Description("The button text; an emoji is welcome.")] string Label,
         [property: JsonPropertyName("value")]
-        [property: Description("The message sent on the user's behalf when the button is pressed, written as the user would type it.")] string Value);
+        [property: Description("The message sent on the user's behalf when the button is pressed, written as the user would type it.")] string Value,
+        [property: JsonPropertyName("arguments")]
+        [property: Description("The arguments of the call that pressing the button makes, by the tool's parameter names: what the button names, such as the invoice or the order that it opens. Omit any value the user has not chosen yet.")] IReadOnlyDictionary<string, JsonElement>? Arguments = null);
+
+    /// <summary>
+    /// The call that a pressed action button commits the agent to: made by the framework on the turn of the press,
+    /// composed by the model from the user's typed answer when the press lacked a value and the turn asked for it.
+    /// </summary>
+    /// <param name="Tool">The tool that the button leads to.</param>
+    /// <param name="Arguments">Parameter name to the JSON text of the value that the button supplies.</param>
+    /// <param name="AwaitingAnswer">True once a turn has asked the user to type a value that the call lacks: the call is then the model's to compose.</param>
+    public record PressedCall(
+        string Tool,
+        IReadOnlyDictionary<string, string> Arguments,
+        bool AwaitingAnswer = false)
+    {
+        /// <summary>The call that a press of the given action makes, with the arguments that the button carries.</summary>
+        /// <param name="action">The action whose button the user pressed.</param>
+        public static PressedCall Of(OfferedAction action)
+            // Each argument is kept as JSON text, the form in which the session stores every bound value.
+            => new PressedCall(action.Tool, (action.Arguments ?? new Dictionary<string, JsonElement>())
+                .ToDictionary(argument => argument.Key, argument => argument.Value.GetRawText(), StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// What a call of one tool may carry and must carry, as the model is offered the tool: the arguments that an action
+    /// leading to it is held to.
+    /// </summary>
+    /// <param name="Parameters">Parameter name to the JSON types that its schema accepts; an empty list accepts any value.</param>
+    /// <param name="Required">The parameters that a call cannot leave out.</param>
+    public record CallSignature(
+        IReadOnlyDictionary<string, IReadOnlyList<string>> Parameters,
+        IReadOnlyList<string> Required)
+    {
+        /// <summary>Reads the signature of a tool from the schema that the model is offered.</summary>
+        /// <param name="schema">The tool's JSON schema, as its function publishes it.</param>
+        public static CallSignature Of(JsonElement schema)
+        {
+            // A tool without properties takes no argument at all, as a workflow's launcher does.
+            Dictionary<string, IReadOnlyList<string>> parameters = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+            if (schema.TryGetProperty("properties", out JsonElement properties) && properties.ValueKind == JsonValueKind.Object)
+            {
+                // Each parameter keeps the types that its schema names, written either as one type or as a list of them.
+                foreach (JsonProperty parameter in properties.EnumerateObject())
+                    parameters[parameter.Name] = parameter.Value.TryGetProperty("type", out JsonElement type) ? type.ValueKind switch
+                    {
+                        // A single type is the only one accepted.
+                        JsonValueKind.String => [type.GetString()!],
+                        // A list of types accepts any of them, null included where the parameter is nullable.
+                        JsonValueKind.Array => [.. type.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!)],
+                        // A type of any other shape states no constraint.
+                        _ => []
+                    } : [];
+            }
+
+            // The required list names what a call must carry; a schema without one requires nothing.
+            List<string> required = schema.TryGetProperty("required", out JsonElement requiredNames) && requiredNames.ValueKind == JsonValueKind.Array
+                ? [.. requiredNames.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!)]
+                : [];
+
+            // The signature as the model is offered the tool.
+            return new CallSignature(parameters, required);
+        }
+
+        /// <summary>Whether a value has a JSON type that the parameter accepts.</summary>
+        /// <param name="parameter">A parameter that the signature declares.</param>
+        /// <param name="value">The value meant for it.</param>
+        public bool Accepts(string parameter, JsonElement value)
+        {
+            // A parameter whose schema names no type takes any value.
+            IReadOnlyList<string> types = Parameters[parameter];
+            if (types.Count == 0)
+                return true;
+
+            // The value's JSON kind is matched against the schema's names for it; an integer is a number without a fraction.
+            return types.Any(type => type switch
+            {
+                "string" => value.ValueKind == JsonValueKind.String,
+                "integer" => value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out _),
+                "number" => value.ValueKind == JsonValueKind.Number,
+                "boolean" => value.ValueKind is JsonValueKind.True or JsonValueKind.False,
+                "array" => value.ValueKind == JsonValueKind.Array,
+                "object" => value.ValueKind == JsonValueKind.Object,
+                "null" => value.ValueKind == JsonValueKind.Null,
+                _ => true
+            });
+        }
+    }
 
     /// <summary>
     /// The two pairs of buttons the framework adds to an agent's turn so the user can stay or leave,
@@ -1546,6 +1637,12 @@ public static class Records
         public bool AwaitsUser => !UserIsLeaving && (Awaits != AwaitedFromUser.Nothing || Actions.Count > 0);
 
         /// <summary>
+        /// The actions that reach the user as buttons: none for a departing user or a typed answer, which carry no button.
+        /// </summary>
+        [JsonIgnore]
+        public IReadOnlyList<OfferedAction> DeliveredActions => UserIsLeaving || Awaits == AwaitedFromUser.TypedAnswer ? [] : Actions;
+
+        /// <summary>
         /// What the channel receives beside the text and whether the agent hands the conversation back.
         /// </summary>
         /// <remarks>
@@ -1578,8 +1675,8 @@ public static class Records
     /// <summary>The turn as filed before the model runs.</summary>
     /// <param name="Session">The agent's own session that the turn is served on, loaded or created by the opening.</param>
     /// <param name="HistoryBaseline">History length before the turn, from which the turn's own messages are counted.</param>
-    /// <param name="PressedActionTool">The tool that the pressed action button leads to; null when the message is not such a press.</param>
-    public record TurnOpening(AgentSession Session, int HistoryBaseline, string? PressedActionTool);
+    /// <param name="PressedCall">The call that a pressed action button committed the turn to, on this message or on an earlier one still awaiting its answer; null for any other turn.</param>
+    public record TurnOpening(AgentSession Session, int HistoryBaseline, PressedCall? PressedCall);
 
     /// <summary>What the model's passes left of the turn.</summary>
     public record TurnOutcome(string Text, bool AwaitsApproval);

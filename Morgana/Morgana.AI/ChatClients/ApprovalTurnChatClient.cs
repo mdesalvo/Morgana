@@ -186,11 +186,9 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
         if (!AsksForApproval(responseContents, options))
             return false;
 
-        // The turn that a button press opened holds the tool that the button leads to; any other turn holds none.
+        // A turn that a button press committed to a call holds the tool that the button leads to; any other turn holds none.
         AgentSession? session = sessionAccessor();
-        string? pressedActionTool = session is null
-            ? null
-            : contextProvider.GetVariable(session, Constants.ContextKeys.PressedActionTool) as string;
+        string? pressedActionTool = session is null ? null : contextProvider.GetPressedCall(session)?.Tool;
 
         // The press already told the user what is about to run, so its tool needs no sentence before it.
         if (pressedActionTool is not null && ApprovalCallNames(responseContents, options).All(toolName => toolName == pressedActionTool))
@@ -207,9 +205,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
     {
         // The press already told the user what is about to run: the tool runs at once and the model answers after its result.
         AgentSession? session = sessionAccessor();
-        string? pressedActionTool = session is null
-            ? null
-            : contextProvider.GetVariable(session, Constants.ContextKeys.PressedActionTool) as string;
+        string? pressedActionTool = session is null ? null : contextProvider.GetPressedCall(session)?.Tool;
         if (session is null || (pressedActionTool is not null && ApprovalCallNames(responseContents, options).All(toolName => toolName == pressedActionTool)))
             return;
 

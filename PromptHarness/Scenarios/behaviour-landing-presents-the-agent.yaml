@@ -4,8 +4,8 @@ description: >-
   with its menu: two levels, like a phone menu. The first press is the choice of the agent and
   nothing else, so no classifier runs and no domain tool is called; the agent introduces itself in its
   own words and closes with the menu that its tools declare, written by code and asserted exactly. The second press
-  is a menu entry and is an ordinary request: the agent reaches for the tool behind it and, holding no
-  customer code yet, asks for one.
+  is a menu entry and a call that the framework makes: the tool behind it runs first and the agent,
+  told that the conversation holds no customer code yet, asks for one.
 
 turns:
   - press: billing
@@ -24,17 +24,15 @@ turns:
         - "✨ We're done, thanks"
       richCard: absent
       textNotEmpty: true
-      textNotContains: ["#INT#"]
     judge:
       - "The response tells the user what can be done for them about their invoices or payments."
 
   - press: GetInvoices
     expect:
       agent: BillingAgent
-      # A menu entry is the user's request: the tool comes first and the missing code is what it reports.
+      # A menu entry is a call that the framework makes: the tool comes first and the missing code is what it reports.
       toolsCalledFirst: [GetInvoices]
       contextReads: [Miss:customerCode]
       textNotEmpty: true
-      textNotContains: ["#INT#"]
     judge:
       - "The response asks the user for an identifier or customer code."

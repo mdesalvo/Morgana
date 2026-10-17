@@ -122,6 +122,12 @@ public class ReplyTool : MorganaTool
              && offeredActions.FirstOrDefault(action => !actionableToolNames.Contains(action.Tool)) is { } unknownAction)
             throw new ArgumentException(ActionToolUnknownReason(unknownAction, actionableToolNames));
 
+        // The arguments of an action are the call that its press makes: a parameter that the tool does not take or a value of
+        // a type that it refuses would make a call that cannot run, so the closure is refused and the model repairs the action.
+        if (ctx.ActionSignatures is { } actionSignatures
+             && offeredActions.Select(action => ActionArgumentsFault(action, actionSignatures)).FirstOrDefault(fault => fault is not null) is { } argumentsFault)
+            throw new ArgumentException(argumentsFault);
+
         // The answer as the channel will deliver it: the trimmed text, the awaited input, the leaving flag and the buttons and card that survived the checks.
         Records.ClosingDeclaration closingDeclaration = new Records.ClosingDeclaration(text.Trim(), awaits, userIsLeaving, offeredActions, card);
 
@@ -171,6 +177,36 @@ public class ReplyTool : MorganaTool
     /// <param name="actionableToolNames">The tools that an action may lead to.</param>
     private static string ActionToolUnknownReason(Records.OfferedAction action, IReadOnlyCollection<string> actionableToolNames)
         => $"the action '{action.Label}' leads to '{action.Tool}', which is not one of your tools: {string.Join(", ", actionableToolNames)}";
+
+    /// <summary>
+    /// The reason why the arguments of an action cannot make the call of its tool; null when they can.
+    /// </summary>
+    /// <param name="action">The action as the model offered it.</param>
+    /// <param name="actionSignatures">The signatures of the tools that an action may lead to.</param>
+    private static string? ActionArgumentsFault(Records.OfferedAction action, IReadOnlyDictionary<string, Records.CallSignature> actionSignatures)
+    {
+        // An action carrying no argument leaves every value to the user, which is always a call that can be completed.
+        // A tool without a signature is one whose arguments nobody declared, so they are taken as written.
+        if (action.Arguments is not { Count: > 0 } arguments || !actionSignatures.TryGetValue(action.Tool, out Records.CallSignature? signature))
+            return null;
+
+        // Each argument is held to the parameter that it names.
+        foreach ((string parameter, JsonElement value) in arguments)
+        {
+            // A name that the tool does not take could reach no parameter of the call.
+            if (!signature.Parameters.ContainsKey(parameter))
+                return signature.Parameters.Count == 0
+                    ? $"the action '{action.Label}' passes '{parameter}' to '{action.Tool}', which takes no argument"
+                    : $"the action '{action.Label}' passes '{parameter}' to '{action.Tool}', which takes: {string.Join(", ", signature.Parameters.Keys)}";
+
+            // A value of a type that the parameter refuses would fail the call when the press makes it.
+            if (!signature.Accepts(parameter, value))
+                return $"the action '{action.Label}' passes '{parameter}' as {value.ValueKind.ToString().ToLowerInvariant()} while '{action.Tool}' takes it as {string.Join(" or ", signature.Parameters[parameter])}";
+        }
+
+        // Every argument reaches a parameter of the call with a value that it accepts.
+        return null;
+    }
 
     /// <summary>The reason of a list holding a null element.</summary>
     /// <param name="place">Where the null element sits, as a path into the call's arguments.</param>

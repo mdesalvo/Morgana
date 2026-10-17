@@ -260,6 +260,10 @@ public class MorganaAgentAdapter
         // action may lead to, so an action naming anything else is discarded.
         List<string> actionableToolNames = [];
 
+        // Filled once every function exists below and read by Reply at every call: what the call of each tool may
+        // carry, which holds the arguments of an action to a call that its press can make.
+        Dictionary<string, Records.CallSignature> actionSignatures = new Dictionary<string, Records.CallSignature>(StringComparer.Ordinal);
+
         // The agent's workflows, whose engine is built here and whose position lives in the session. An agent
         // declaring none carries no workflow machinery at all.
         AgentWorkflows? agentWorkflows = workflowDefinitions.Count == 0
@@ -296,7 +300,7 @@ public class MorganaAgentAdapter
                 : null;
 
             // The tool runs with the session, the conversation and the buttons it may lead to, all taken from this turn.
-            return new MorganaTool.ToolContext(morganaAIContextProvider, session, conversationId, actionTargetToolNames, choiceStep);
+            return new MorganaTool.ToolContext(morganaAIContextProvider, session, conversationId, actionTargetToolNames, choiceStep, actionSignatures);
         };
 
         // The native tools: each definition is bound to the method of its tool class.
@@ -358,7 +362,7 @@ public class MorganaAgentAdapter
             // card breaking its schema is repaired on the next call rather than lost; every other tool
             // fails tersely, keeping a domain tool's internals out of the model's sight.
             .UseFunctionInvocation(configure: toolLoop =>
-                toolLoop.FunctionInvoker = (context, cancellationToken) => InvokeToolAsync(context, agentWorkflows, cancellationToken))
+                toolLoop.FunctionInvoker = (context, cancellationToken) => InvokeToolAsync(context, agentWorkflows, morganaAIContextProvider, sessionAccessor, cancellationToken))
             // Between the loop and the approval client, the tools that the workflow state allows are what the model is offered.
             .Use(innerClient => new WorkflowToolsChatClient(
                 innerClient, sessionAccessor, morganaAIContextProvider, workflowDefinitions, MaxConsultationRoundsPerTurn))
@@ -375,6 +379,16 @@ public class MorganaAgentAdapter
                 workflow.Description,
                 () => LaunchWorkflowAsync(workflow, agentWorkflows)))];
 
+        // Every tool that the model is offered, in the order it reads them.
+        List<AITool> agentFunctions = [.. await CreateNativeFunctionsAsync(morganaToolAdapter, actionableToolNames), .. mcpTools, .. peerAgents, .. launcherFunctions];
+
+        // An action may lead to any tool but Reply and a colleague: its signature is the one that the model is offered,
+        // so the arguments of a button are held to exactly what a call of the model could carry.
+        foreach (AIFunction function in agentFunctions.OfType<AIFunction>()
+                     .Where(function => function.Name != Constants.Tools.Reply
+                                        && !function.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal)))
+            actionSignatures[function.Name] = Records.CallSignature.Of(function.JsonSchema);
+
         // The agent: its providers, a stable id per intent and conversation with its composed instructions and tools.
         AIAgent aiAgent = agentChain.AsAIAgent(
             new ChatClientAgentOptions
@@ -390,7 +404,7 @@ public class MorganaAgentAdapter
                         agentPrompt,
                         PeerConsultationEnabled,
                         peerTerritories),
-                    Tools = [.. await CreateNativeFunctionsAsync(morganaToolAdapter, actionableToolNames), .. mcpTools, .. peerAgents, .. launcherFunctions]
+                    Tools = agentFunctions
                 }
             });
 
@@ -419,15 +433,35 @@ public class MorganaAgentAdapter
     /// Runs one tool call of the agent's loop, turning a refused Reply — arguments breaking their
     /// schema, a card too large, a text left empty — into the framework's answer for that event.
     /// Inside a workflow it also holds the call to the current step, binds what the step binds and
-    /// feeds the result to the engine.
+    /// feeds the result to the engine. The call that a pressed button commits the turn to is bound to the
+    /// button's arguments and kept waiting when it lacks a value that the user has to type.
     /// </summary>
     /// <param name="context">The call that the tool loop is about to run.</param>
     /// <param name="workflows">The agent's workflow machinery; <c>null</c> for an agent declaring none.</param>
+    /// <param name="contextProvider">The agent's context store, where a pressed call is kept.</param>
+    /// <param name="sessionAccessor">Returns the session of the turn in flight.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    private async ValueTask<object?> InvokeToolAsync(FunctionInvocationContext context, AgentWorkflows? workflows, CancellationToken cancellationToken)
+    private async ValueTask<object?> InvokeToolAsync(
+        FunctionInvocationContext context,
+        AgentWorkflows? workflows,
+        MorganaAIContextProvider contextProvider,
+        Func<AgentSession?> sessionAccessor,
+        CancellationToken cancellationToken)
     {
         // Reply gives the turn's answer and is held to its own rules, whatever workflow stands.
         bool isReply = string.Equals(context.Function.Name, Constants.Tools.Reply, StringComparison.Ordinal);
+
+        // The first call of the pressed tool in the turn is the pressed call: the framework's own on the turn of the
+        // press, the model's once the user has typed what it lacked. Reply is never pressed for.
+        AgentSession? callSession = isReply ? null : sessionAccessor();
+        Records.PressedCall? pressedCall = callSession is null || contextProvider.IsPressedCallMade(callSession)
+            ? null
+            : contextProvider.GetPressedCall(callSession);
+        bool isPressedCall = pressedCall is not null && string.Equals(pressedCall.Tool, context.Function.Name, StringComparison.Ordinal);
+
+        // Whatever comes of this call, the press has had it: the rest of the turn goes on to the answer.
+        if (isPressedCall)
+            await contextProvider.SetVariableAsync(callSession!, Constants.ContextKeys.PressedCallMade, true);
 
         // Before anything else: a tool that the workflow hides is not run, whatever the model was shown.
         AgentSession? session = workflows is null || isReply ? null : workflows.SessionAccessor();
@@ -458,6 +492,10 @@ public class MorganaAgentAdapter
             else
                 logger.LogWarning("Agent called '{Tool}' outside workflow '{Workflow}', which is entered through its launcher only", context.Function.Name, workflowName);
 
+            // A pressed call that the workflow does not offer now can never be made, so the press ends with this refusal.
+            if (isPressedCall)
+                contextProvider.DropPressedCall(callSession!);
+
             // The model reads a note in place of the result, so it is told the fact.
             return await promptComposerService.ComposeToolInjectionAsync(
                 Constants.ToolInjections.CallNotAvailable,
@@ -468,7 +506,33 @@ public class MorganaAgentAdapter
 
         // The values that the previous step carried are written into the call, over what the model passed.
         if (isCurrentStepTool)
-            BindStepArguments(context, position!);
+            BindArguments(context, position!.Arguments);
+
+        // The values that the pressed button supplies are written into the call too: they are the user's choice, made by the press.
+        if (isPressedCall)
+        {
+            BindArguments(context, pressedCall!.Arguments);
+
+            // A value that the call requires and that neither the button, the step nor the user's answer supplied is the user's
+            // to give: the tool is not run and the model reads which values are lacking, exactly as for a context value.
+            string[] missingValues = MissingRequiredValues(context);
+            if (missingValues.Length > 0)
+            {
+                logger.LogInformation("Pressed call to '{Tool}' lacks [{Missing}]: the user is asked for them", context.Function.Name, string.Join(", ", missingValues));
+
+                // The call waits for the user's answer, which the model composes into it on the next turn.
+                contextProvider.SetPressedCall(callSession!, pressedCall with { AwaitingAnswer = true });
+
+                // The model reads the fact of the missing values, worded like every value that the conversation does not hold.
+                return await promptComposerService.ComposeToolInjectionAsync(
+                    Constants.ToolInjections.ContextValueMissing,
+                    new Dictionary<string, string>
+                    {
+                        [Constants.Placeholders.ToolName] = context.Function.Name,
+                        [Constants.Placeholders.MissingValues] = string.Join(", ", missingValues)
+                    });
+            }
+        }
 
         // The call runs here, so a failure of Reply can be answered instead of aborting the turn.
         object? result;
@@ -482,6 +546,16 @@ public class MorganaAgentAdapter
             // Arguments breaking their schema or the rules Reply holds them to: the reason is the account of what is wrong.
             logger.LogWarning("Reply refused: {Reason}", ex.Message);
             return await promptComposerService.ComposeTurnClosureNotAcceptedAsync(ex.Message);
+        }
+
+        // A pressed call that ran ends the press. One that the session could not complete waits for the user's answer to it.
+        if (isPressedCall)
+        {
+            // The context resolution reports a value that the conversation lacks under this name, before the tool is reached.
+            if (result is Records.FrameworkToolResult { Name: Constants.ToolInjections.ContextValueMissing })
+                contextProvider.SetPressedCall(callSession!, pressedCall! with { AwaitingAnswer = true });
+            else
+                contextProvider.DropPressedCall(callSession!);
         }
 
         // Anything but a framework tool's named result reaches the model as the tool returned it, a
@@ -504,17 +578,20 @@ public class MorganaAgentAdapter
     }
 
     /// <summary>
-    /// Writes the parameters that the current step binds into the call, over whatever the model passed for them.
+    /// Writes the values that the framework binds, from the current step or from a pressed button, into the call, over
+    /// whatever the model passed for them.
     /// </summary>
-    private static void BindStepArguments(FunctionInvocationContext context, Records.WorkflowPosition position)
+    /// <param name="context">The call about to run.</param>
+    /// <param name="boundValues">Parameter name to the JSON text of the value bound.</param>
+    private static void BindArguments(FunctionInvocationContext context, IReadOnlyDictionary<string, string> boundValues)
     {
         // A step binds for all its tools and they do not all take every value, so only the tool's own parameters are written.
         JsonElement schema = context.Function.JsonSchema;
         if (!schema.TryGetProperty("properties", out JsonElement properties))
             return;
 
-        // Each value the step carries is bound to the arguments of the call.
-        foreach ((string carriedName, string valueJson) in position.Arguments)
+        // Each value bound is written into the arguments of the call.
+        foreach ((string carriedName, string valueJson) in boundValues)
         {
             // A workflow carries its property's name while a tool spells its parameter its own way,
             // so the match ignores case and the value is written under the schema's spelling.
@@ -529,6 +606,24 @@ public class MorganaAgentAdapter
                 context.Arguments[schemaProperty.Name] = carriedValue.RootElement.Clone();
             }
         }
+    }
+
+    /// <summary>
+    /// The parameters that the call's schema requires and that its arguments still leave without a value.
+    /// </summary>
+    /// <param name="context">The call about to run, with every value that the framework binds already written in.</param>
+    private static string[] MissingRequiredValues(FunctionInvocationContext context)
+    {
+        // A schema without a required list asks nothing of the call: the framework fills a context value itself and drops it from the list.
+        if (!context.Function.JsonSchema.TryGetProperty("required", out JsonElement required) || required.ValueKind != JsonValueKind.Array)
+            return [];
+
+        // A parameter is lacking when the call carries nothing under its name or carries null.
+        return [.. required.EnumerateArray()
+            .Select(name => name.GetString()!)
+            .Where(name => !context.Arguments.TryGetValue(name, out object? value)
+                           || value is null
+                           || value is JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined })];
     }
 
     /// <summary>

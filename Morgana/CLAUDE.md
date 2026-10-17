@@ -96,7 +96,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[ProvidesWorkflowForIntent]`, `[RequiresApproval]`, `[UserTool]`, `[SystemTool]`, `[ToolParameter]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
-| `ChatClients/` | `IChatClient` decorators: `DustAccountingChatClient`, `ApprovalTurnChatClient` (keeps only the text of the `Reply` beside a call asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model answered in free text without `Reply`, on its last words), `WorkflowToolsChatClient` (offers the model only the tools that a running workflow's current step allows; no colleague while one is being answered or once the turn's consultation rounds are spent) |
+| `ChatClients/` | `IChatClient` decorators: `DustAccountingChatClient`, `ApprovalTurnChatClient` (keeps only the text of the `Reply` beside a call asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model answered in free text without `Reply`, on its last words), `WorkflowToolsChatClient` (offers the model only the tools that a running workflow's current step allows; no colleague while one is being answered or once the turn's consultation rounds are spent; on the turn of a press it answers in the model's place with the pressed call) |
 | `Workflows/` | `WorkflowEngine`: an agent's workflows on Microsoft.Agents.AI.Workflows, rebuilt at every call from the checkpoint kept in the agent's session. `WorkflowLauncherFunction`: the function that starts one workflow, recognised by its type |
 | `Tools/` | `ReplyTool`: the framework's own tool, declared on its method as a domain tool is |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
@@ -171,6 +171,11 @@ card — a typed argument whose schema is derived from `Morgana.Contracts`. The 
 stay or leave are the framework's (`FrameworkReplies` in `morgana.json`), chosen from that closure by
 `ClosingDeclaration.ToDelivery`: the agent stays `activeAgent` — later messages skip classification — until the
 user leaves.
+
+**A press is a call.** An action carries the `arguments` of the call that its button makes and the
+framework makes it itself on the turn of the press. A value the call lacks is asked of the user and the
+call waits, alone on offer, for the typed answer; see `WorkflowToolsChatClient` and
+`MorganaAgentAdapter.InvokeToolAsync`.
 
 Tool parameters declared `[ToolParameter(ToolScope.Context, shared: true)]` route their values into a
 conversation-scoped `shared_context` registry (first-write-wins, `INSERT OR IGNORE`). Every agent merges it at the start of each turn, so

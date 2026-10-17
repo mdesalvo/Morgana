@@ -580,23 +580,155 @@ public sealed class TurnClosureTests
         Assert.Equal(["ConfirmOrder:ORD-1:fern"], WorkflowTests.InventoryTools.Calls);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TurnClosure_Pressed_button_makes_its_call_and_the_model_only_answers_on_its_result(bool streaming)
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync(streaming);
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"We grow roses.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"Stock","label":"🌹 Roses","value":"How many roses are there?","arguments":{"item":"rose"}}]}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"There are 12 roses.","awaits":"nothing","userIsLeaving":false}""")));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you grow?", null));
+        List<object> pressed = await turn.AskAsync(new Records.AgentRequest("conv-turn", "How many roses are there?", null));
+
+        // The press made the call with the button's arguments and no model was asked whether to make it.
+        Assert.Equal(["Stock:rose"], WorkflowTests.InventoryTools.Calls);
+        Assert.Equal(2, turn.Model.Requests.Count);
+
+        // The one model call of the pressed turn reads the result and has Reply alone to answer with.
+        Assert.Equal(["Reply"], OfferedTools(turn.Model, 1));
+        Assert.Contains(turn.Model.Requests[1].Messages.SelectMany(message => message.Contents), content => content is FunctionCallContent { Name: "Stock" });
+        Assert.Equal("There are 12 roses.", pressed.OfType<Records.AgentResponse>().Single().Response);
+    }
+
     [Fact]
-    public async Task TurnClosure_Pressed_tool_answers_with_the_Reply_written_after_its_result()
+    public async Task TurnClosure_Pressed_approval_tool_runs_at_once_and_the_model_answers_after_its_result()
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Ready when you are.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"Confirm ORD-1"}]}""")));
-        turn.Model.Enqueue(Answer(
-            Call("ConfirmOrder", """{"orderId":"ORD-1","sealWord":"fern"}"""),
-            Call("Reply", """{"text":"Confirming ORD-1.","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Ready when you are.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"Confirm ORD-1","arguments":{"orderId":"ORD-1","sealWord":"fern"}}]}""")));
         turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Order ORD-1 is confirmed.","awaits":"nothing","userIsLeaving":false}""")));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "Show my order", null));
         List<object> pressed = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Confirm ORD-1", null));
 
-        // The press is the approval: the tool runs at once and the Reply written beside its call is not the answer.
-        Assert.Equal("Order ORD-1 is confirmed.", pressed.OfType<Records.AgentResponse>().Single().Response);
+        // The press is the approval: the tool runs at once, no approval is asked and the answer is the one written after the result.
+        Records.AgentResponse answer = pressed.OfType<Records.AgentResponse>().Single();
+        Assert.Equal("Order ORD-1 is confirmed.", answer.Response);
+        Assert.DoesNotContain(answer.QuickReplies ?? [], button => button.Id == "approve_action");
         Assert.Equal(["ConfirmOrder:ORD-1:fern"], WorkflowTests.InventoryTools.Calls);
+        Assert.Equal(2, turn.Model.Requests.Count);
     }
+
+    [Fact]
+    public async Task TurnClosure_Press_lacking_a_value_asks_for_it_and_the_typed_answer_completes_the_call()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"Stock","label":"🌼 A plant","value":"A specific plant"}]}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","awaits":"typed_answer","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Stock", """{"item":"tulip"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"There are 12 tulips.","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Anything else?","awaits":"nothing","userIsLeaving":false}""")));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "A specific plant", null));
+
+        // The press carried no plant, so the tool did not run: the model read which value is lacking and had Reply alone to ask for it.
+        Assert.Empty(WorkflowTests.InventoryTools.Calls);
+        Assert.Equal(["Reply"], OfferedTools(turn.Model, 1));
+        Assert.Contains("Stock was not run: this conversation does not hold item yet.", ResultTexts(turn.Model.Requests[1]));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "tulip", null));
+
+        // The typed answer leaves the model one move, composing the pressed call; after it, the answer.
+        Assert.Equal(["Stock"], OfferedTools(turn.Model, 2));
+        Assert.Equal(["Reply"], OfferedTools(turn.Model, 3));
+        Assert.Equal(["Stock:tulip"], WorkflowTests.InventoryTools.Calls);
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "and roses?", null));
+
+        // The call was made, so the press is over: the next message is an ordinary request with every tool on offer.
+        Assert.Contains("CancelOrder", OfferedTools(turn.Model, 4));
+        Assert.Contains("Stock", OfferedTools(turn.Model, 4));
+    }
+
+    [Fact]
+    public async Task TurnClosure_Press_missing_a_context_value_waits_for_the_user_to_type_it()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the orders.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"OrderHistory","label":"📦 My orders","value":"My orders"}]}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"What is your customer code?","awaits":"typed_answer","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("OrderHistory", """{"customerCode":"P994E"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"You have 2 orders.","awaits":"nothing","userIsLeaving":false}""")));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "My orders", null));
+
+        // The framework made the call and the conversation held no customer code: the tool did not run and the model was told which value it lacks.
+        Assert.Empty(WorkflowTests.InventoryTools.Calls);
+        Assert.Contains("OrderHistory was not run: this conversation does not hold customerCode yet.", ResultTexts(turn.Model.Requests[1]));
+
+        List<object> answered = await turn.AskAsync(new Records.AgentRequest("conv-turn", "P994E", null));
+
+        // The typed code completes the pressed call, offered alone, which the model composes from it.
+        Assert.Equal(["OrderHistory"], OfferedTools(turn.Model, 2));
+        Assert.Equal(["OrderHistory:P994E"], WorkflowTests.InventoryTools.Calls);
+        Assert.Equal("You have 2 orders.", answered.OfType<Records.AgentResponse>().Single().Response);
+    }
+
+    [Fact]
+    public async Task TurnClosure_Press_waiting_for_a_value_is_let_go_by_a_turn_that_asks_for_none()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"Stock","label":"🌼 A plant","value":"A specific plant"}]}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Our catalogue is online.","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Hello again.","awaits":"nothing","userIsLeaving":false}""")));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "A specific plant", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "tulip", null));
+
+        // Nobody was asked to type the plant, so the next message is bound to no call: every tool is on offer and none ran.
+        Assert.Contains("CancelOrder", OfferedTools(turn.Model, 2));
+        Assert.Empty(WorkflowTests.InventoryTools.Calls);
+    }
+
+    [Theory]
+    [InlineData("""{"plant":"rose"}""", "the action '🌹 Roses' passes 'plant' to 'Stock', which takes: item")]
+    [InlineData("""{"item":12}""", "the action '🌹 Roses' passes 'item' as number while 'Stock' takes it as string")]
+    public async Task TurnClosure_Reply_refuses_action_arguments_that_the_tool_cannot_take(string arguments, string reason)
+    {
+        Records.CallSignature stock = Records.CallSignature.Of(JsonDocument.Parse("""{"type":"object","properties":{"item":{"type":"string"}},"required":["item"]}""").RootElement);
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["Stock"], actionSignatures: new Dictionary<string, Records.CallSignature> { ["Stock"] = stock });
+
+        // Refused with the fact stated, so the model repairs the action before any press could make a call that cannot run.
+        ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments($$"""
+            {"text":"We grow roses.","awaits":"action_choice","userIsLeaving":false,"actions":[
+              {"tool":"Stock","label":"🌹 Roses","value":"How many roses are there?","arguments":{{arguments}}}]}
+            """)).AsTask());
+        Assert.Equal(reason, refusal.Message);
+        Assert.Null(reply.Recorded());
+    }
+
+    [Fact]
+    public async Task TurnClosure_Reply_schema_offers_arguments_on_every_action()
+    {
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["Stock"]);
+
+        // The arguments of an action are where a button carries the values that its call needs.
+        JsonElement actionProperties = reply.Function.JsonSchema.GetProperty("properties").GetProperty("actions").GetProperty("items").GetProperty("properties");
+        Assert.True(actionProperties.TryGetProperty("arguments", out JsonElement argumentsSchema));
+        Assert.Contains("parameter names", argumentsSchema.GetProperty("description").GetString(), StringComparison.Ordinal);
+    }
+
+    /// <summary>The names of the tools that the model was offered on one of its requests, in alphabetical order.</summary>
+    private static string[] OfferedTools(ScriptedChatClient model, int request)
+        => [.. model.Requests[request].Options!.Tools!.Select(tool => tool.Name).Order(StringComparer.Ordinal)];
+
+    /// <summary>The texts of the tool results that one request handed the model.</summary>
+    private static string[] ResultTexts(ModelRequest request)
+        => [.. request.Messages.SelectMany(message => message.Contents).OfType<FunctionResultContent>()
+            .Select(result => result.Result is JsonElement { ValueKind: JsonValueKind.String } element ? element.GetString()! : result.Result?.ToString() ?? string.Empty)];
 
     [Fact]
     public async Task TurnClosure_Consultation_answers_with_the_Reply_text_and_not_the_free_text()
@@ -803,9 +935,11 @@ public sealed class TurnClosureTests
         /// </summary>
         /// <param name="actionableToolNames">The agent's tools that an action may lead to; null accepts any.</param>
         /// <param name="choiceStep">The choice step that the turn stands at, if any.</param>
+        /// <param name="actionSignatures">What a call of each actionable tool may carry; null takes every action's arguments as written.</param>
         public static async Task<ReplyUnderTest> CreateAsync(
             IReadOnlyCollection<string>? actionableToolNames = null,
-            (string Workflow, string Step, IReadOnlyList<string> Tools)? choiceStep = null)
+            (string Workflow, string Step, IReadOnlyList<string> Tools)? choiceStep = null,
+            IReadOnlyDictionary<string, Records.CallSignature>? actionSignatures = null)
         {
             ReplyUnderTest reply = new ReplyUnderTest();
             reply.session = await new ChatClientAgent(new ScriptedChatClient()).CreateSessionAsync();
@@ -820,7 +954,7 @@ public sealed class TurnClosureTests
             ]);
 
             ReplyTool baseTool = new ReplyTool(NullLogger.Instance,
-                () => new MorganaTool.ToolContext(reply.provider, reply.session, "turn-closure", actionableToolNames, choiceStep));
+                () => new MorganaTool.ToolContext(reply.provider, reply.session, "turn-closure", actionableToolNames, choiceStep, actionSignatures));
             MorganaToolAdapter adapter = new MorganaToolAdapter(NullLogger.Instance,
                 () => new MorganaTool.ToolContext(reply.provider, reply.session, "turn-closure"));
 
