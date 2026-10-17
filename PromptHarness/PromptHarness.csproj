@@ -202,7 +202,7 @@
     The instance under test finds its providers as Morgana does, from plugins/. They land there and not
     in domain-plugins/ because they are not a domain and every run, the federation one included, needs them.
     Only the provider assemblies are copied: their vendor SDKs already sit in this output, since the judge
-    and the tests reference the providers, and the copy loaded there is the one every assembly resolves.
+    and the tests reference the providers. The copy loaded there is the one every assembly resolves.
   -->
   <Target Name="CopyLanguageModelPluginsToHarness" AfterTargets="Build">
     <ItemGroup>

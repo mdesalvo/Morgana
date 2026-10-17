@@ -458,7 +458,7 @@
           <tr><td><strong>Cauldron</strong></td><td>Channel: HTML rich UI (SignalR delivery, full capability budget)</td><td>Blazor Server</td><td>5002</td></tr>
           <tr><td><strong>Grimoire</strong></td><td>Channel: TTY rich CLI (webhook delivery, full capability budget)</td><td>Spectre.Console on Kestrel</td><td>5004</td></tr>
           <tr><td><strong>Rune</strong></td><td>Channel: TTY CLI (webhook delivery, poor-but-honest capability budget)</td><td>Spectre.Console on Kestrel</td><td>5003</td></tr>
-          <tr><td><strong>LLM</strong></td><td>Language model provider</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>n/a</td></tr>
+          <tr><td><strong>LLM</strong></td><td>Language model provider, loaded as a plugin</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI (shipped) or any <code>Microsoft.Extensions.AI</code> client</td><td>n/a</td></tr>
           <tr><td><strong>MCP Server</strong></td><td>External tool provider (optional)</td><td>ModelContextProtocol.Core (Http/Stdio)</td><td>n/a</td></tr>
           <tr><td><strong>A2A Endpoint</strong></td><td>Every agent published for peer consultation at <code>/a2a/{intent}</code>, with its well-known agent card (optional)</td><td>Microsoft.Agents.AI.Hosting.A2A (JSON-RPC)</td><td>5001</td></tr>
         </tbody>
@@ -555,7 +555,7 @@
           <tr><td>IDustLimitService</td><td>SQLiteDustLimitService</td><td>Per-conversation token budget protection</td></tr>
           <tr><td>IGuardRailService</td><td>LLMGuardRailService</td><td>Content moderation &amp; policy enforcement</td></tr>
           <tr><td>IHostAddressService</td><td>KestrelHostAddressService</td><td>Address this instance publishes on its A2A cards</td></tr>
-          <tr><td>ILLMService</td><td>ConfigurationLLMService</td><td>The three LLM tiers, each on its own provider (Anthropic, AzureOpenAI, Ollama or OpenAI)</td></tr>
+          <tr><td>ILLMService</td><td>ConfigurationLLMService</td><td>The three LLM tiers, each on the provider plugin it names</td></tr>
           <tr><td>IMCPClientRegistryService</td><td>MCPClientRegistryService</td><td>MCP connection pool (Http / Stdio)</td></tr>
           <tr><td>IPeerAdmissionService</td><td>SQLitePeerAdmissionService</td><td>Conversations a partner may open per hour (fails closed)</td></tr>
           <tr><td>IPresenterService</td><td>LLMPresenterService</td><td>Welcome presentation &amp; first engagement</td></tr>
@@ -567,7 +567,7 @@
       </table>
     
       <div class="info-box">
-        <strong>Plugin Architecture:</strong> Build your agents as standalone .NET libraries referencing the <strong>Morgana.AI</strong> NuGet package. Drop the compiled DLL into the <code>plugins/</code> folder and Morgana discovers it at startup: zero configuration needed.
+        <strong>Plugin Architecture:</strong> Build your agents as standalone .NET libraries referencing the <strong>Morgana.AI</strong> NuGet package. Drop the compiled DLL into the <code>plugins/</code> folder and Morgana discovers it at startup: zero configuration needed. LLM providers are plugins too: the <strong>Morgana.AI.Vendors</strong> packages (Anthropic, AzureOpenAI, OpenAI, Ollama) sit in <code>plugins/</code> with their vendor SDK. A provider of your own is a <code>MorganaLanguageModel</code> subclass dropped there the same way.
       </div>
 
       <div class="page-footer">
@@ -620,7 +620,7 @@
       <table>
         <thead><tr><th>Setting</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td>Morgana:LLM:Tiers:{Tier}:*</td><td>Three tiers, <code>Economy</code>, <code>Efficiency</code> and <code>Performance</code>, from the cheapest model to the most capable. Each declares its own <code>Provider</code> (<code>Anthropic</code>, <code>AzureOpenAI</code>, <code>OpenAI</code> or <code>Ollama</code>) and <code>Connection</code> (ApiKey, Endpoint, MaxRetries, TimeoutSeconds). All three are mandatory: there is no cross-tier fallback</td></tr>
+          <tr><td>Morgana:LLM:Tiers:{Tier}:*</td><td>Three tiers, <code>Economy</code>, <code>Efficiency</code> and <code>Performance</code>, from the cheapest model to the most capable. Each names its <code>Provider</code> among those found in <code>plugins/</code>, where <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>OpenAI</code> and <code>Ollama</code> ship with Morgana. Its <code>Connection</code> carries the fields of that provider: ApiKey, Endpoint where it uses one, MaxRetries where its client retries, TimeoutSeconds. All three are mandatory: there is no cross-tier fallback</td></tr>
           <tr><td>Morgana:LLM:Tiers:{Tier}:Options:*</td><td>Narrow, JSON-bindable mirror of <code>ChatOptions</code> for this tier: <code>ModelId</code> and <code>MaxOutputTokens</code> (both required: the ceiling of a single model call, generous since reasoning counts against it)</td></tr>
           <tr><td>Morgana:LLM:Tiers:{Tier}:MagicDust:*</td><td>Per-tier token pricing: <code>InputTokensPerDustUnit</code>, <code>OutputTokensPerDustUnit</code>, <code>CachedInputWeight</code>, <code>CacheCreationWeight</code></td></tr>
           <tr><td>Morgana:Authentication:Audience</td><td>Expected JWT audience (default: <code>morgana.ai</code>)</td></tr>
@@ -799,7 +799,7 @@
         <tbody>
           <tr><td>ENCRYPTIONKEY</td><td>AES-256 encryption for SQLite</td><td><code>openssl rand -base64 32</code></td></tr>
           <tr><td>JWT_SYMMETRIC_KEY</td><td>JWT signing key shared between each channel and its <code>Issuers[]</code> entry on Morgana. Nothing to set for peer traffic between an installation's own agents: that key is coined at startup</td><td><code>openssl rand -base64 32</code></td></tr>
-          <tr><td>LLM_{TIER}_PROVIDER</td><td>Provider of a tier, where TIER is <code>ECONOMY</code>, <code>EFFICIENCY</code> or <code>PERFORMANCE</code></td><td>One of: anthropic, azureopenai, ollama, openai</td></tr>
+          <tr><td>LLM_{TIER}_PROVIDER</td><td>Provider of a tier, where TIER is <code>ECONOMY</code>, <code>EFFICIENCY</code> or <code>PERFORMANCE</code></td><td>The name of a provider in <code>plugins/</code>: anthropic, azureopenai, ollama and openai ship with Morgana</td></tr>
           <tr><td>LLM_{TIER}_APIKEY</td><td>LLM provider API key of a tier</td><td>From your provider dashboard (if cloud-based)</td></tr>
           <tr><td>LLM_{TIER}_ENDPOINT</td><td>Endpoint of a tier, where its provider uses one</td><td>From your provider dashboard (if cloud-based)</td></tr>
           <tr><td>LLM_{TIER}_MODEL</td><td>Model ID of a tier</td><td>From your provider's model list</td></tr>
@@ -874,6 +874,7 @@
         <tbody>
           <tr><td>Source code</td><td>github.com/mdesalvo/Morgana</td></tr>
           <tr><td>NuGet package</td><td>nuget.org/packages/Morgana.AI</td></tr>
+          <tr><td>NuGet packages (LLM providers)</td><td>nuget.org/packages/Morgana.AI.Vendors.Anthropic, .AzureOpenAI, .OpenAI, .Ollama</td></tr>
           <tr><td>Docker Hub (Morgana)</td><td>hub.docker.com/r/mdesalvo/morgana</td></tr>
           <tr><td>Docker Hub (Cauldron)</td><td>hub.docker.com/r/mdesalvo/cauldron</td></tr>
           <tr><td>Docker Hub (Grimoire)</td><td>hub.docker.com/r/mdesalvo/grimoire</td></tr>
