@@ -71,6 +71,23 @@ public sealed class HistoryViewTests
     }
 
     [Fact]
+    public async Task HistoryView_A_consultation_of_an_earlier_turn_stays_and_is_marked_like_any_tool_result()
+    {
+        ViewUnderTest agent = await ViewUnderTest.CreateAsync();
+        agent.File(new ChatMessage(ChatRole.User, "Is my invoice paid?"));
+        agent.File(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent("c1", "consult_billing")]));
+        agent.File(new ChatMessage(ChatRole.Tool, [new FunctionResultContent("c1", "INV-7: paid")]));
+        agent.File(new ChatMessage(ChatRole.Assistant, "Invoice INV-7 is paid."));
+
+        IReadOnlyList<ChatMessage> view = await agent.RunTurnAsync("And now?");
+
+        // The consultation call stays in the view and its result arrives marked exactly as a native tool's result is.
+        Assert.Contains(view.SelectMany(message => message.Contents).OfType<FunctionCallContent>(), call => call.Name == "consult_billing");
+        string earlierResult = view.SelectMany(message => message.Contents).OfType<FunctionResultContent>().Single().Result!.ToString()!;
+        Assert.Equal("[EARLIER TURN]\nINV-7: paid", earlierResult);
+    }
+
+    [Fact]
     public async Task HistoryView_Without_a_template_earlier_results_are_handed_back_as_returned()
     {
         ViewUnderTest agent = await ViewUnderTest.CreateAsync(markEarlierResults: false);
@@ -155,7 +172,6 @@ public sealed class HistoryViewTests
         public Task<string?> ComposeColleaguesDeclarationAsync(IReadOnlyDictionary<string, string> colleagues) => throw new NotSupportedException();
         public Task<string?> ComposeLandingDeclarationAsync(IReadOnlyList<Records.OfferedAction> menu) => throw new NotSupportedException();
         public Task<Records.ConsultationRequest> ComposeConsultationRequestAsync(string? callerIntent, string question) => throw new NotSupportedException();
-        public Task<string?> ComposeTurnClosureRequestAsync() => throw new NotSupportedException();
         public Task<string> ComposeTurnClosureNotAcceptedAsync(string reason) => throw new NotSupportedException();
         public Task<string> ComposeToolInjectionAsync(string name, IReadOnlyDictionary<string, string>? values = null) => throw new NotSupportedException();
         public Task<string?> ComposeWorkflowResultAsync(string workflow, string? step, string result) => throw new NotSupportedException();

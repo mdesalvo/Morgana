@@ -203,9 +203,9 @@ What must be known before touching it:
   conversation an exchange is served on: a partner's is namespaced under the issuer the filter
   proved, never the `contextId` the caller wrote. `MorganaHostedAgent` owns no model and `Ask`s the
   actor the router would have reached.
-- **The exchange leaves no trace.** The answering side runs on an ephemeral session nothing is
-  written to; the asking side strips the `consult_*` call and its result from its own history once
-  read, as a matched pair.
+- **The answering side leaves no trace.** It runs on an ephemeral session nothing is written to.
+  The asking side keeps the `consult_*` call and its result as tool traffic, aged like any tool's
+  result: an answer whose source is gone reads to the model as one it made up.
 - **Nothing is served on credit.** Behind this door a request reaches an agent with none of the
   guard, classifier and channel rate limit a user's path goes through, so `IPeerAdmissionService`
   bounds how many conversations a partner may **open** — the one limiter that **fails closed**.

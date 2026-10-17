@@ -579,11 +579,6 @@ public class MorganaAgent : MorganaActor
         agentSpan?.SetTag(Telemetry.AgentResponsePreview, responsePreview);
         agentSpan?.Dispose();
 
-        // The exchange with a colleague is spent once it has been read. Clearing it here keeps
-        // it out of the caller's own session (see StripPeerConsultations) and is done after
-        // the span has been tagged, so telemetry still records that the colleague was consulted.
-        StripPeerConsultations(session, historyBaseline);
-
         // The turn's messages after the baseline: the candidates for the one the user reads.
         List<ChatMessage> turnMessages = [.. aiChatHistoryProvider.GetMessages(session).Skip(historyBaseline)];
 
@@ -633,11 +628,11 @@ public class MorganaAgent : MorganaActor
                 finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.EpisodeEnd] = true;
         }
 
-        // Written last, so what lands in the database is the history already stripped of the
-        // consultations and already carrying the user-facing marks the history endpoint reads
-        // back. Before the sender is answered: a turn the caller was told about but whose state
-        // never persisted would come back missing on resume. The completion flag travels with
-        // it as the row's active state, which is what a resumed conversation restores.
+        // Written last, so what lands in the database is the history already carrying the
+        // user-facing marks the history endpoint reads back. Before the sender is answered: a turn
+        // the caller was told about but whose state never persisted would come back missing on
+        // resume. The completion flag travels with it as the row's active state, which is what a
+        // resumed conversation restores.
         await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, session, closure.IsCompleted);
         agentLogger.LogInformation("Saved conversation state for {AgentIdentifier}", AgentIdentifier);
 
@@ -772,62 +767,6 @@ public class MorganaAgent : MorganaActor
 
         // The turn is closed as completed: the user is not left in a conversation that is waiting on a dead turn.
         failure.OriginalSender.Tell(new Records.AgentResponse(morganaPrompt.GetMessage(Constants.Messages.GenericError), true, null));
-    }
-
-    /// <summary>
-    /// Removes this turn's peer-consultation calls and their results, from the agent's own history.
-    /// </summary>
-    /// <param name="session">The session whose history holds the turn just run.</param>
-    /// <param name="historyBaseline">Messages present before the turn ran; earlier turns cleared themselves.</param>
-    protected void StripPeerConsultations(AgentSession session, int historyBaseline)
-    {
-        // The session's live list, not a copy: removing from it is what actually clears the history.
-        List<ChatMessage> messages = aiChatHistoryProvider.GetMessages(session);
-
-        // Only this turn's consultations: a call id from an earlier turn was already cleared by it and
-        // matching on the id is what keeps a call and its result together across two separate messages.
-        HashSet<string> consultationCallIds =
-        [
-            .. messages.Skip(historyBaseline)
-                .SelectMany(m => m.Contents.OfType<FunctionCallContent>())
-                .Where(call => call.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
-                .Select(call => call.CallId)
-        ];
-
-        // Nothing consulted this turn: leave the history untouched rather than walk it.
-        if (consultationCallIds.Count == 0)
-            return;
-
-        // Only this turn's messages are rewritten: the earlier ones belong to turns that already cleared themselves.
-        List<ChatMessage> turnMessages = [.. messages.Skip(historyBaseline)];
-        foreach (ChatMessage message in turnMessages)
-        {
-            // A thinking block belongs to the calls that followed it, so a message losing a consultation call loses
-            // its thinking too: the provider refuses a block it signed once it stands alone or altered.
-            bool losesConsultationCall = message.Contents.OfType<FunctionCallContent>().Any(call => consultationCallIds.Contains(call.CallId));
-
-            // One message can carry a consultation beside a native call or the turn's own text: only the
-            // consultation leaves it, its call and its result recognised as a pair by their shared id.
-            message.Contents = [.. message.Contents.Where(content => content switch
-            {
-                // A call of a consultation leaves together with its result.
-                FunctionCallContent call => !consultationCallIds.Contains(call.CallId),
-                // A result of a consultation leaves together with its call.
-                FunctionResultContent result => !consultationCallIds.Contains(result.CallId),
-                // A thinking block stays only beside calls that are all still there.
-                TextReasoningContent => !losesConsultationCall,
-                // Any other content is not part of a consultation.
-                _ => true
-            })];
-        }
-
-        // A message that held nothing but the consultation is now empty and the provider rejects an empty
-        // message, so the turn is written back into the session's live list without it.
-        messages.RemoveRange(historyBaseline, turnMessages.Count);
-        messages.AddRange(turnMessages.Where(message => message.Contents.Count > 0));
-
-        agentLogger.LogInformation(
-            "Agent '{AgentIntent}' cleared {Count} peer consultation(s) from its own history", AgentIntent, consultationCallIds.Count);
     }
 
     /// <summary>Removes from a message every mark that names it the user-facing message of its turn.</summary>

@@ -612,44 +612,6 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task TurnClosure_Stripping_a_consultation_takes_the_reasoning_that_led_to_its_call()
-    {
-        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
-        ChatMessage reasoningReply = new ChatMessage(ChatRole.Assistant,
-            [new TextReasoningContent("Now I answer."), new FunctionCallContent("r1", "Reply", new Dictionary<string, object?> { ["text"] = "Done." })]);
-
-        List<ChatMessage> left = await turn.StripAsync(
-        [
-            new ChatMessage(ChatRole.Assistant, [new TextReasoningContent("I should ask a colleague."), new FunctionCallContent("c1", "consult_inventory")]),
-            new ChatMessage(ChatRole.Tool, [new FunctionResultContent("c1", "In stock.")]),
-            reasoningReply,
-            new ChatMessage(ChatRole.Tool, [new FunctionResultContent("r1", "Turn closed.")])
-        ]);
-
-        // The consulting message and its result are gone and the Reply message keeps its reasoning untouched.
-        Assert.Equal([ChatRole.Assistant, ChatRole.Tool], left.Select(message => message.Role));
-        Assert.Same(reasoningReply, left[0]);
-        Assert.Equal(["TextReasoningContent", "FunctionCallContent"], left[0].Contents.Select(content => content.GetType().Name));
-    }
-
-    [Fact]
-    public async Task TurnClosure_Stripping_a_consultation_keeps_a_native_call_beside_it_and_drops_the_reasoning()
-    {
-        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
-
-        List<ChatMessage> left = await turn.StripAsync(
-        [
-            new ChatMessage(ChatRole.Assistant,
-                [new TextReasoningContent("Two things to check."), new FunctionCallContent("c1", "consult_inventory"), new FunctionCallContent("n1", "GetInvoices")]),
-            new ChatMessage(ChatRole.Tool, [new FunctionResultContent("c1", "In stock."), new FunctionResultContent("n1", "Two invoices.")])
-        ]);
-
-        // Only the native call and its result stay: the thinking block went with the consultation call.
-        Assert.Equal("n1", Assert.IsType<FunctionCallContent>(Assert.Single(left[0].Contents)).CallId);
-        Assert.Equal("n1", Assert.IsType<FunctionResultContent>(Assert.Single(left[1].Contents)).CallId);
-    }
-
-    [Fact]
     public async Task TurnClosure_Approved_call_leaves_the_delivery_marks_on_the_approval_request_and_the_final_reply_only()
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
@@ -898,22 +860,8 @@ public sealed class TurnClosureTests
 
             // The case reads the history through the agent's own mailbox, so it sees it between turns and never during one.
             Receive<ReadHistory>(_ => Sender.Tell(aiChatHistoryProvider.GetMessages(CurrentSession!).ToList()));
-
-            // The case files the messages of a finished turn, strips its consultations and reads back what remains.
-            Receive<StripTurn>(request =>
-            {
-                List<ChatMessage> history = aiChatHistoryProvider.GetMessages(CurrentSession!);
-                int baseline = history.Count;
-                foreach (ChatMessage message in request.Messages)
-                    aiChatHistoryProvider.AppendMessage(CurrentSession!, message);
-                StripPeerConsultations(CurrentSession!, baseline);
-                Sender.Tell(history.Skip(baseline).ToList());
-            });
         }
     }
-
-    /// <summary>Asks the scripted agent to file the given messages as a turn and to strip that turn's consultations.</summary>
-    private sealed record StripTurn(List<ChatMessage> Messages);
 
     /// <summary>Asks the scripted agent for the messages of its session.</summary>
     private sealed record ReadHistory;
@@ -1021,20 +969,6 @@ public sealed class TurnClosureTests
         {
             Inbox inbox = Inbox.Create(system);
             inbox.Send(agent, new ReadHistory());
-            return (List<ChatMessage>)await inbox.ReceiveAsync(TimeSpan.FromSeconds(30));
-        }
-
-        /// <summary>
-        /// Files the messages as one turn of the agent's session after a first plain turn and returns what is left of them once its consultations are stripped.
-        /// </summary>
-        public async Task<List<ChatMessage>> StripAsync(List<ChatMessage> turnMessages)
-        {
-            // A first turn gives the agent the session that the messages are filed in.
-            Model.Enqueue(Answer(Call("Reply", """{"text":"Hello.","awaits":"nothing","userIsLeaving":false}""")));
-            await AskAsync(new Records.AgentRequest("conv-turn", "Hi", null));
-
-            Inbox inbox = Inbox.Create(system);
-            inbox.Send(agent, new StripTurn(turnMessages));
             return (List<ChatMessage>)await inbox.ReceiveAsync(TimeSpan.FromSeconds(30));
         }
 
