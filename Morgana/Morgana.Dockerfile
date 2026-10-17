@@ -76,6 +76,12 @@ RUN dotnet publish "Morgana.AI.Vendors.AzureOpenAI.csproj" -c Release -o /app/pu
 WORKDIR "/src/Morgana/Morgana.AI.Vendors/Ollama"
 RUN dotnet publish "Morgana.AI.Vendors.Ollama.csproj" -c Release -o /app/publish/plugins /p:UseAppHost=false /p:InsideDockerBuild=true
 
+# What the host already ships leaves plugins/: the host's own copy is the one loaded, so a second one
+# beside the plugins could only be an older version waiting to be picked by mistake
+RUN cd /app/publish/plugins && for assembly in *.dll; do \
+      if [ -f "/app/publish/${assembly}" ]; then rm -f "${assembly}"; fi; \
+    done
+
 # ==============================================================================
 # STAGE 3: RUNTIME (FINAL IMAGE)
 # ==============================================================================

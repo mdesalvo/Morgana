@@ -39,20 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Anthropic" Version="12.53.0" />
+    <PackageReference Include="Anthropic" Version="12.58.0" />
   </ItemGroup>
-
-  <!-- A provider carries its vendor SDK, which the host does not hold: the whole output goes to the host's plugins directory -->
-  <Target Name="CopyPluginToHost" AfterTargets="Build">
-    <PropertyGroup>
-      <PluginDestDir>$(MSBuildThisFileDirectory)..\..\Morgana.Web\$(OutputPath)plugins\</PluginDestDir>
-    </PropertyGroup>
-    <ItemGroup>
-      <PluginFiles Include="$(OutDir)*.dll" />
-    </ItemGroup>
-    <Message Text="Copying plugin to: $(PluginDestDir)" Importance="high" />
-    <MakeDir Directories="$(PluginDestDir)" Condition="!Exists('$(PluginDestDir)')" />
-    <Copy SourceFiles="@(PluginFiles)" DestinationFolder="$(PluginDestDir)" SkipUnchangedFiles="true" />
-  </Target>
 
 </Project>

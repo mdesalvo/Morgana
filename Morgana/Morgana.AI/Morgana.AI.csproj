@@ -57,16 +57,17 @@
     <PackageReference Include="Microsoft.Extensions.AI" Version="$(MicrosoftExtensionsAIVersion)" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="$(MicrosoftExtensionsAIVersion)" />
     <PackageReference Include="ModelContextProtocol.Core" Version="$(ModelContextProtocolVersion)" />
+    <!-- OpenTelemetry -->
+    <PackageReference Include="OpenTelemetry" Version="$(OpenTelemetryVersion)" />
+    <PackageReference Include="OpenTelemetry.Api" Version="$(OpenTelemetryVersion)" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="$(OpenTelemetryVersion)" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="$(OpenTelemetryVersion)" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="$(OpenTelemetryVersion)" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="$(OpenTelemetryVersion)" />
     <!-- Services -->
     <PackageReference Include="Markdig" Version="1.4.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.*" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.*" />
-    <PackageReference Include="OpenTelemetry" Version="1.20.*" />
-    <PackageReference Include="OpenTelemetry.Api" Version="1.20.*" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.*" />
-    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.20.*" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.*" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.*" />
   </ItemGroup>
 
 </Project>
