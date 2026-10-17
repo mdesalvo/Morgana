@@ -13,6 +13,7 @@ using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
+using Morgana.AI.Vendors.Ollama;
 using Morgana.AI.Providers;
 using Morgana.AI.Services;
 using Morgana.AI.Tools;
@@ -1065,6 +1066,9 @@ public sealed class TurnClosureTests
 
         /// <inheritdoc />
         public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => new();
+
+        // A provider that never reads a failure as a content refusal, so every fault of the double takes the general path.
+        public MorganaLanguageModel GetLanguageModel(Records.LLMTier tier) => new OllamaLanguageModel();
     }
 
     /// <summary>The metadata store of a conversation on one fully capable channel, so the welcome is never degraded.</summary>

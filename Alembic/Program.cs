@@ -4,8 +4,13 @@ using Alembic.Services;
 using Alembic.Components;
 using Alembic.Tools;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
+using Morgana.AI.Vendors.Anthropic;
+using Morgana.AI.Vendors.AzureOpenAI;
+using Morgana.AI.Vendors.Ollama;
+using Morgana.AI.Vendors.OpenAI;
 
 // Invariant before anything else runs, so no thread or circuit inherits the host's locale: the
 // configuration and C# Alembic emits are the same bytes whichever machine it is deployed on.
@@ -83,6 +88,12 @@ builder.Services.AddSingleton<IAssetPackageService, AssetPackageService>();
 // ==============================================================================
 // Efficiency tier, resolved on first use so a working copy without credentials still boots.
 
+// The workbench registers every provider so that a tier chooses any of them in configuration alone.
+builder.Services.AddSingleton<MorganaLanguageModel, AnthropicLanguageModel>();
+builder.Services.AddSingleton<MorganaLanguageModel, AzureOpenAILanguageModel>();
+builder.Services.AddSingleton<MorganaLanguageModel, OpenAILanguageModel>();
+builder.Services.AddSingleton<MorganaLanguageModel, OllamaLanguageModel>();
+
 // The tiers are read from the user secrets that Morgana shares.
 builder.Services.AddSingleton<ILLMService>(sp =>
 {
@@ -90,7 +101,7 @@ builder.Services.AddSingleton<ILLMService>(sp =>
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
 
     // The factory builds the chat client of a tier on the first model call.
-    return new ConfigurationLLMService(config, loggerFactory);
+    return new ConfigurationLLMService(config, sp.GetServices<MorganaLanguageModel>(), loggerFactory);
 });
 
 // ============================================================================

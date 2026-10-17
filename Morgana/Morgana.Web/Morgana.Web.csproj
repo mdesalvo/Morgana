@@ -8,13 +8,18 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Morgana.AI\Morgana.AI.csproj" />
+    <!-- Built with the host so that their plugins are deployed beside it, never referenced as assemblies, so the host knows only the providers it finds in plugins/ -->
+    <ProjectReference Include="..\Morgana.AI.Vendors\Anthropic\Morgana.AI.Vendors.Anthropic.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Morgana.AI.Vendors\OpenAI\Morgana.AI.Vendors.OpenAI.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Morgana.AI.Vendors\AzureOpenAI\Morgana.AI.Vendors.AzureOpenAI.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\Morgana.AI.Vendors\Ollama\Morgana.AI.Vendors.Ollama.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
 
   <!-- A2A hosting: publishes each Morgana agent as an A2A endpoint (server side + routes) -->
   <ItemGroup>
-    <PackageReference Include="A2A.AspNetCore" Version="1.0.0-preview3" />
-    <PackageReference Include="Microsoft.Agents.AI.Hosting.A2A" Version="1.25.0-preview.261014.1" />
-    <PackageReference Include="Microsoft.Agents.AI.Hosting.A2A.AspNetCore" Version="1.25.0-preview.261014.1" />
+    <PackageReference Include="A2A.AspNetCore" Version="$(A2AVersion)" />
+    <PackageReference Include="Microsoft.Agents.AI.Hosting.A2A" Version="$(MicrosoftAgentsAIPreviewVersion)" />
+    <PackageReference Include="Microsoft.Agents.AI.Hosting.A2A.AspNetCore" Version="$(MicrosoftAgentsAIPreviewVersion)" />
   </ItemGroup>
 
   <!-- Create plugins directory automatically after build -->

@@ -14,6 +14,17 @@
     <AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
     <FileVersion>$(VersionPrefix)</FileVersion>
 
+    <!--
+      Versions of the package families that several projects share, stated once for every project of the tree.
+      The preview packages of Microsoft.Agents.AI (A2A and Hosting) ship the same version
+      with a preview stamp, which changes at every release of the family.
+    -->
+    <A2AVersion>1.0.0-preview3</A2AVersion>
+    <MicrosoftAgentsAIVersion>1.25.0</MicrosoftAgentsAIVersion>
+    <MicrosoftAgentsAIPreviewVersion>$(MicrosoftAgentsAIVersion)-preview.261014.1</MicrosoftAgentsAIPreviewVersion>
+    <MicrosoftExtensionsAIVersion>10.11.0</MicrosoftExtensionsAIVersion>
+    <ModelContextProtocolVersion>2.2.0</ModelContextProtocolVersion>
+
     <!-- Package Metadata -->
     <Authors>Marco De Salvo</Authors>
     <Company>Marco De Salvo</Company>
@@ -43,7 +54,8 @@
   </PropertyGroup>
 
   <!--
-    NOTE: framework/runtime PackageReferences live in Morgana.AI.csproj, NOT here.
+    NOTE: framework/runtime PackageReferences live in Morgana.AI.csproj, NOT here:
+    this file only states the versions that several projects share.
     This props file is imported by every project in the tree (including the
     zero-dependency Morgana.Contracts), so it must carry only common build
     settings and package metadata. Morgana.Web and Examples obtain the

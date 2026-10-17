@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using Morgana.AI.Abstractions;
 
 namespace Morgana.AI.Interfaces;
 
@@ -49,6 +50,14 @@ public interface ILLMService
     /// <param name="tier">Power/cost tier to resolve pricing for.</param>
     /// <returns>MagicDustPricing for the requested tier's model.</returns>
     Records.MagicDustPricing GetPricing(Records.LLMTier tier);
+
+    /// <summary>
+    /// Gets the provider that serves a specific <see cref="Records.LLMTier"/>: callers ask it how to read the failures
+    /// thrown by that tier's client.
+    /// </summary>
+    /// <param name="tier">Power/cost tier to resolve the provider for.</param>
+    /// <returns>The <see cref="MorganaLanguageModel"/> that the tier names.</returns>
+    MorganaLanguageModel GetLanguageModel(Records.LLMTier tier);
 
     /// <summary>
     /// The tier that Morgana's own actors (Guard, Classifier, Presenter, ChannelAdapter) run on,

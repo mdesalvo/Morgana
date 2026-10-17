@@ -8,6 +8,7 @@ using Akka.Actor;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Attributes;
 using Morgana.Contracts;
 
@@ -257,22 +258,6 @@ public static class Records
         Performance
     }
 
-    /// <summary>The LLM providers that a tier can be served by.</summary>
-    public enum LLMProvider
-    {
-        /// <summary>Anthropic's Claude models.</summary>
-        Anthropic,
-
-        /// <summary>GPT models served by Azure OpenAI or Azure AI Foundry.</summary>
-        AzureOpenAI,
-
-        /// <summary>GPT models served by OpenAI.</summary>
-        OpenAI,
-
-        /// <summary>Local models served by Ollama.</summary>
-        Ollama
-    }
-
     /// <summary>The <c>Morgana:LLM</c> section: the three tiers, each served by its own provider.</summary>
     public record LLMConfiguration(LLMTiers Tiers);
 
@@ -296,30 +281,19 @@ public static class Records
         };
     }
 
-    /// <summary>
-    /// One tier with its own provider, connection, model and dust pricing.
-    /// Declared under Morgana:LLM:Tiers:{tier} as a JSON object keyed by name rather than an array, so that overrides of
-    /// different configuration layers merge by key.
-    /// </summary>
-    public record TierDefinition(
-        LLMProvider Provider,
-        TierConnection Connection,
-        TierConfiguration Options,
-        MagicDustPricing MagicDust);
+    /// <summary>A tier as it is served: its client, the provider that built the client and its pricing.</summary>
+    public record ServedTier(IChatClient Client, MorganaLanguageModel LanguageModel, MagicDustPricing Pricing);
 
     /// <summary>
-    /// How a tier reaches its provider. Each provider reads the fields it uses and ignores the others,
-    /// which may therefore be left out of the configuration altogether.
+    /// One tier with its own provider name, model and dust pricing.
+    /// Declared under Morgana:LLM:Tiers:{tier} as a JSON object keyed by name rather than an array, so that overrides of
+    /// different configuration layers merge by key. The Connection section is not bound here: the provider that the tier
+    /// names binds it, because only that provider knows its shape.
     /// </summary>
-    /// <param name="ApiKey">Credential of the provider account.</param>
-    /// <param name="Endpoint">Address of the provider service where it is not fixed.</param>
-    /// <param name="MaxRetries">Retries of a refused call.</param>
-    /// <param name="TimeoutSeconds">Ceiling of one attempt.</param>
-    public record TierConnection(
-        string? ApiKey = null,
-        string? Endpoint = null,
-        int MaxRetries = 2,
-        int TimeoutSeconds = 60);
+    public record TierDefinition(
+        string Provider,
+        TierConfiguration Options,
+        MagicDustPricing MagicDust);
 
     /// <summary>
     /// Where a tool parameter's value comes from, declared on the parameter with

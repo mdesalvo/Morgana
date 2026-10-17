@@ -6,7 +6,7 @@ using Microsoft.Extensions.AI;
 using Morgana.AI.Abstractions;
 using OpenAI;
 
-namespace Morgana.AI.LanguageModels;
+namespace Morgana.AI.Vendors.AzureOpenAI;
 
 /// <summary>
 /// Azure OpenAI provider.<br/>
@@ -18,17 +18,27 @@ namespace Morgana.AI.LanguageModels;
 /// and Azure AI Foundry v1 API endpoints (e.g., https://resource.services.ai.azure.com/api/projects/X/openai/v1).
 /// When you change a tier's ModelId to a different model, recalibrate InputTokensPerDustUnit and OutputTokensPerDustUnit.
 /// </remarks>
-public class AzureOpenAI : MorganaLanguageModel
+public class AzureOpenAILanguageModel : MorganaLanguageModel<AzureOpenAITierConnection>
 {
     /// <inheritdoc />
-    public override void ValidateConnection(Records.TierConnection connection)
+    // The name a tier writes in its Provider key: it must stay stable whatever the class is called.
+    public override string Provider => "AzureOpenAI";
+
+    /// <inheritdoc />
+    public override bool IsContentFilterRefusal(Exception exception) =>
+        // Azure's own content filter (Prompt Shields included) blocks the prompt before any answer and reports it as a 400 naming content_filter.
+        exception is ClientResultException { Status: 400 } clientResultException
+        && clientResultException.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase);
+
+    /// <inheritdoc />
+    protected override void ValidateConnection(AzureOpenAITierConnection connection)
     {
-        RequireField(connection.ApiKey, nameof(Records.TierConnection.ApiKey));
-        RequireField(connection.Endpoint, nameof(Records.TierConnection.Endpoint));
+        RequireField(connection.ApiKey, nameof(AzureOpenAITierConnection.ApiKey));
+        RequireField(connection.Endpoint, nameof(AzureOpenAITierConnection.Endpoint));
     }
 
     /// <inheritdoc />
-    public override IChatClient CreateChatClient(Records.TierConnection connection, Records.TierConfiguration options)
+    protected override IChatClient CreateChatClient(AzureOpenAITierConnection connection, Records.TierConfiguration options)
     {
         // The endpoint is required by ValidateConnection, so it is present when a client is built.
         Uri endpoint = new Uri(connection.Endpoint!);
@@ -68,3 +78,14 @@ public class AzureOpenAI : MorganaLanguageModel
             .AsIChatClient();
     }
 }
+
+/// <summary>How a tier reaches Azure OpenAI.</summary>
+/// <param name="ApiKey">Credential of the Azure account.</param>
+/// <param name="Endpoint">Address of the Azure OpenAI resource or of the Azure AI Foundry project.</param>
+/// <param name="MaxRetries">Retries of a refused call.</param>
+/// <param name="TimeoutSeconds">Ceiling of one attempt.</param>
+public record AzureOpenAITierConnection(
+    string? ApiKey = null,
+    string? Endpoint = null,
+    int MaxRetries = 2,
+    int TimeoutSeconds = 60);

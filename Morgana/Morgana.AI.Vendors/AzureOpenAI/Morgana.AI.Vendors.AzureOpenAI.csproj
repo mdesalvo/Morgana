@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Title>Morgana.AI.Vendors.AzureOpenAI</Title>
+    <PackageId>Morgana.AI.Vendors.AzureOpenAI</PackageId>
+    <Description>Azure OpenAI provider for Morgana: serves a tier on GPT models deployed on Azure OpenAI or Azure AI Foundry.</Description>
+    <OutputType>Library</OutputType>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'">
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DocumentationFile>bin\Debug\$(TargetFramework)\Morgana.AI.Vendors.AzureOpenAI.xml</DocumentationFile>
+    <WarningLevel>4</WarningLevel>
+    <DebugType>full</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <DefineConstants>TRACE</DefineConstants>
+    <OutputPath>bin\Release\</OutputPath>
+    <DocumentationFile>bin\Release\$(TargetFramework)\Morgana.AI.Vendors.AzureOpenAI.xml</DocumentationFile>
+    <WarningLevel>0</WarningLevel>
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Morgana.AI\Morgana.AI.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.9.0-beta.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="$(MicrosoftExtensionsAIVersion)" />
+  </ItemGroup>
+
+  <!-- A provider carries its vendor SDK, which the host does not hold: the whole output goes to the host's plugins directory -->
+  <Target Name="CopyPluginToHost" AfterTargets="Build">
+    <PropertyGroup>
+      <PluginDestDir>$(MSBuildThisFileDirectory)..\..\Morgana.Web\$(OutputPath)plugins\</PluginDestDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <PluginFiles Include="$(OutDir)*.dll" />
+    </ItemGroup>
+    <Message Text="Copying plugin to: $(PluginDestDir)" Importance="high" />
+    <MakeDir Directories="$(PluginDestDir)" Condition="!Exists('$(PluginDestDir)')" />
+    <Copy SourceFiles="@(PluginFiles)" DestinationFolder="$(PluginDestDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

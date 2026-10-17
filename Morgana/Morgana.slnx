@@ -1,9 +1,11 @@
 <Solution>
-  <Folder Name="/Solution Items/">
-    <File Path="Directory.Build.props" />
-    <File Path="CLAUDE.md" />
-  </Folder>
   <Project Path="Morgana.Contracts\Morgana.Contracts.csproj" />
   <Project Path="Morgana.AI\Morgana.AI.csproj" />
+  <Folder Name="/Morgana.AI.Vendors/">
+    <Project Path="Morgana.AI.Vendors\Anthropic\Morgana.AI.Vendors.Anthropic.csproj" />
+    <Project Path="Morgana.AI.Vendors\OpenAI\Morgana.AI.Vendors.OpenAI.csproj" />
+    <Project Path="Morgana.AI.Vendors\AzureOpenAI\Morgana.AI.Vendors.AzureOpenAI.csproj" />
+    <Project Path="Morgana.AI.Vendors\Ollama\Morgana.AI.Vendors.Ollama.csproj" />
+  </Folder>
   <Project Path="Morgana.Web\Morgana.Web.csproj" />
 </Solution>

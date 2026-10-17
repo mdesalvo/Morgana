@@ -3,8 +3,10 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Morgana.AI;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.Interfaces;
+using Morgana.AI.Vendors.Ollama;
 using Morgana.AI.Services;
 using Morgana.Contracts;
 using PromptHarness.Infrastructure;
@@ -228,6 +230,9 @@ public sealed class FrameworkPromptTests
 
         /// <inheritdoc />
         public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => new();
+
+        // A provider that never reads a failure as a content refusal, so every fault of the double takes the general path.
+        public MorganaLanguageModel GetLanguageModel(Records.LLMTier tier) => new OllamaLanguageModel();
     }
 
     /// <summary>A domain declaring the given intents and no agent prompt.</summary>

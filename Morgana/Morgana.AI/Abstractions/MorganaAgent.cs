@@ -211,8 +211,9 @@ public class MorganaAgent : MorganaActor
             // Dated as the history keeps it, so a client catching up recognises the reply it was pushed.
             senderRef.Tell(new Records.AgentResponse(turnClosure.Text, turnClosure.IsCompleted, turnClosure.QuickReplies, turnClosure.Card, recordedAt));
         }
-        catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } clientResultException
-                                     && clientResultException.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
+        // The provider of the agent's tier decides whether the failure is its own content refusal; the registry
+        // refuses at startup an agent without [RequiresLLMTier], so the tier is always declared.
+        catch (Exception ex) when (llmService.GetLanguageModel(GetType().GetCustomAttribute<RequiresLLMTierAttribute>()!.Tier).IsContentFilterRefusal(ex))
         {
             // The provider refused the content itself: the user is told so by the supervisor and no retry would pass.
             agentLogger.LogWarning(ex, "Content filter rejection in {Name} for conversation {ConversationId}", GetType().Name, conversationId);

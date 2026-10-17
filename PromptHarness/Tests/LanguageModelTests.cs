@@ -1,7 +1,12 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Morgana.AI;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
+using Morgana.AI.Vendors.Anthropic;
+using Morgana.AI.Vendors.OpenAI;
+using Morgana.AI.Vendors.AzureOpenAI;
+using Morgana.AI.Vendors.Ollama;
 using Morgana.AI.Services;
 using Xunit;
 
@@ -61,6 +66,33 @@ public sealed class LanguageModelTests
             () => Build(Configuration(), without: "Morgana:LLM:Tiers:Economy:Provider"));
 
         Assert.Contains("Morgana:LLM:Tiers:Economy:Provider", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LanguageModel_Construction_is_refused_when_the_provider_is_not_registered()
+    {
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
+            () => Build(Configuration(("Morgana:LLM:Tiers:Economy:Provider", "Gemini"))));
+
+        Assert.Contains("Morgana:LLM:Tiers:Economy:Provider", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LanguageModel_Construction_is_refused_when_a_tier_has_no_connection()
+    {
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
+            () => Build(Configuration(), without: "Morgana:LLM:Tiers:Economy:Connection"));
+
+        Assert.Contains("Morgana:LLM:Tiers:Economy:Connection", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LanguageModel_Construction_is_refused_when_two_providers_share_a_name()
+    {
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
+            () => Build(Configuration(), duplicateProvider: new OllamaLanguageModel()));
+
+        Assert.Contains("Ollama", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -154,14 +186,15 @@ public sealed class LanguageModelTests
         ?? throw new InvalidOperationException($"The {tier} client reports no metadata.");
 
     /// <summary>Builds the service over a configuration, dropping every key under <paramref name="without"/> first.</summary>
-    private static ConfigurationLLMService Build(Dictionary<string, string?> values, string? without = null)
+    private static ConfigurationLLMService Build(Dictionary<string, string?> values, string? without = null, MorganaLanguageModel? duplicateProvider = null)
     {
         if (without is not null)
             foreach (string key in values.Keys.Where(key => key.StartsWith(without, StringComparison.Ordinal)).ToList())
                 values.Remove(key);
 
         IConfiguration configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
-        return new ConfigurationLLMService(configuration);
+        MorganaLanguageModel[] providers = [new AnthropicLanguageModel(), new AzureOpenAILanguageModel(), new OpenAILanguageModel(), new OllamaLanguageModel()];
+        return new ConfigurationLLMService(configuration, duplicateProvider is null ? providers : [.. providers, duplicateProvider]);
     }
 
     /// <summary>A complete configuration with Anthropic on every tier, with the given keys replaced.</summary>

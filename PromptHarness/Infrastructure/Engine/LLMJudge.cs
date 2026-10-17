@@ -4,6 +4,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
+using Morgana.AI.Vendors.Anthropic;
+using Morgana.AI.Vendors.OpenAI;
+using Morgana.AI.Vendors.AzureOpenAI;
+using Morgana.AI.Vendors.Ollama;
 using Morgana.Contracts;
 using PromptHarness.Infrastructure.Wiring;
 
@@ -54,7 +58,10 @@ public sealed class LLMJudge
     public static LLMJudge Create(IConfiguration configuration, ILoggerFactory loggerFactory)
     {
         // The judge reuses the tiers of the deployment under test and nothing else of the host.
-        return new LLMJudge(new Morgana.AI.Services.ConfigurationLLMService(configuration, loggerFactory));
+        return new LLMJudge(new Morgana.AI.Services.ConfigurationLLMService(
+            configuration,
+            [new AnthropicLanguageModel(loggerFactory), new AzureOpenAILanguageModel(), new OpenAILanguageModel(), new OllamaLanguageModel()],
+            loggerFactory));
     }
 
     /// <summary>

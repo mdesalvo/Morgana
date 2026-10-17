@@ -114,6 +114,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The judge, LanguageModelTests and the test doubles use the provider types, so these are compile-time references. -->
+    <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\Anthropic\Morgana.AI.Vendors.Anthropic.csproj" />
+    <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\OpenAI\Morgana.AI.Vendors.OpenAI.csproj" />
+    <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\AzureOpenAI\Morgana.AI.Vendors.AzureOpenAI.csproj" />
+    <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\Ollama\Morgana.AI.Vendors.Ollama.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!--
       The deterministic MCP server, built but never referenced as an assembly: an agent under test
       reaches it over stdio exactly as it would reach a server of its own deployment.
@@ -188,6 +196,63 @@
     <Copy SourceFiles="@(MCPTestServerFile)"
           DestinationFiles="@(MCPTestServerFile->'$(OutDir)mcp-test-server\%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />
+  </Target>
+
+  <!--
+    The instance under test finds its providers as Morgana does, from plugins/. They land there and not
+    in domain-plugins/ because they are not a domain and every run, the federation one included, needs them.
+    Each provider travels with its vendor SDK, which the host does not hold.
+  -->
+  <Target Name="CopyAnthropicProviderToHarness" AfterTargets="Build">
+    <MSBuild Projects="..\Morgana\Morgana.AI.Vendors\Anthropic\Morgana.AI.Vendors.Anthropic.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="AnthropicProviderAssembly" />
+    </MSBuild>
+    <ItemGroup>
+      <AnthropicProviderFile Include="%(AnthropicProviderAssembly.RootDir)%(AnthropicProviderAssembly.Directory)*.dll" />
+    </ItemGroup>
+    <MakeDir Directories="$(OutDir)plugins" Condition="!Exists('$(OutDir)plugins')" />
+    <Copy SourceFiles="@(AnthropicProviderFile)" DestinationFolder="$(OutDir)plugins" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyOpenAIProviderToHarness" AfterTargets="Build">
+    <MSBuild Projects="..\Morgana\Morgana.AI.Vendors\OpenAI\Morgana.AI.Vendors.OpenAI.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="OpenAIProviderAssembly" />
+    </MSBuild>
+    <ItemGroup>
+      <OpenAIProviderFile Include="%(OpenAIProviderAssembly.RootDir)%(OpenAIProviderAssembly.Directory)*.dll" />
+    </ItemGroup>
+    <MakeDir Directories="$(OutDir)plugins" Condition="!Exists('$(OutDir)plugins')" />
+    <Copy SourceFiles="@(OpenAIProviderFile)" DestinationFolder="$(OutDir)plugins" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyAzureOpenAIProviderToHarness" AfterTargets="Build">
+    <MSBuild Projects="..\Morgana\Morgana.AI.Vendors\AzureOpenAI\Morgana.AI.Vendors.AzureOpenAI.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="AzureOpenAIProviderAssembly" />
+    </MSBuild>
+    <ItemGroup>
+      <AzureOpenAIProviderFile Include="%(AzureOpenAIProviderAssembly.RootDir)%(AzureOpenAIProviderAssembly.Directory)*.dll" />
+    </ItemGroup>
+    <MakeDir Directories="$(OutDir)plugins" Condition="!Exists('$(OutDir)plugins')" />
+    <Copy SourceFiles="@(AzureOpenAIProviderFile)" DestinationFolder="$(OutDir)plugins" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyOllamaProviderToHarness" AfterTargets="Build">
+    <MSBuild Projects="..\Morgana\Morgana.AI.Vendors\Ollama\Morgana.AI.Vendors.Ollama.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="OllamaProviderAssembly" />
+    </MSBuild>
+    <ItemGroup>
+      <OllamaProviderFile Include="%(OllamaProviderAssembly.RootDir)%(OllamaProviderAssembly.Directory)*.dll" />
+    </ItemGroup>
+    <MakeDir Directories="$(OutDir)plugins" Condition="!Exists('$(OutDir)plugins')" />
+    <Copy SourceFiles="@(OllamaProviderFile)" DestinationFolder="$(OutDir)plugins" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

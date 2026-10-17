@@ -6,9 +6,8 @@ using Anthropic.Core;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
-using Morgana.AI.ChatClients;
 
-namespace Morgana.AI.LanguageModels;
+namespace Morgana.AI.Vendors.Anthropic;
 
 /// <summary>
 /// Anthropic provider.<br/>
@@ -22,18 +21,27 @@ namespace Morgana.AI.LanguageModels;
 /// Optional logger factory used by <see cref="MorganaAnthropicClient"/> and the attempt log. When <c>null</c>, the guard's
 /// diagnostic channel is silent but the message-list normalization still applies.
 /// </param>
-public class Anthropic(ILoggerFactory? loggerFactory = null) : MorganaLanguageModel
+public class AnthropicLanguageModel(ILoggerFactory? loggerFactory = null) : MorganaLanguageModel<AnthropicTierConnection>
 {
     /// <inheritdoc />
-    public override void ValidateConnection(Records.TierConnection connection) =>
-        RequireField(connection.ApiKey, nameof(Records.TierConnection.ApiKey));
+    // The name a tier writes in its Provider key: it must stay stable whatever the class is called.
+    public override string Provider => "Anthropic";
+
+    /// <inheritdoc />
+    public override bool IsContentFilterRefusal(Exception exception) =>
+        // No refusal of this provider is known to reach the framework as an exception.
+        false;
+
+    /// <inheritdoc />
+    protected override void ValidateConnection(AnthropicTierConnection connection) =>
+        RequireField(connection.ApiKey, nameof(AnthropicTierConnection.ApiKey));
 
     /// <inheritdoc />
     /// <remarks>
     /// The SDK adapter is wrapped in <see cref="MorganaAnthropicClient"/>, which enforces the Claude 4.6+
     /// no-prefill constraint at the API boundary and marks the leading system message for prompt caching.
     /// </remarks>
-    public override IChatClient CreateChatClient(Records.TierConnection connection, Records.TierConfiguration options)
+    protected override IChatClient CreateChatClient(AnthropicTierConnection connection, Records.TierConfiguration options)
     {
         // Left to its defaults the SDK retries a rate-limited or overloaded call on its own, with a
         // backoff nobody sees and no ceiling anybody chose: a turn that is being throttled is
@@ -47,7 +55,7 @@ public class Anthropic(ILoggerFactory? loggerFactory = null) : MorganaLanguageMo
                 ApiKey = connection.ApiKey!,
                 MaxRetries = connection.MaxRetries,
                 Timeout = TimeSpan.FromSeconds(connection.TimeoutSeconds),
-                Handlers = [new AttemptLogger(loggerFactory?.CreateLogger<Anthropic>())]
+                Handlers = [new AttemptLogger(loggerFactory?.CreateLogger<AnthropicLanguageModel>())]
             });
 
         // The decorator is what the framework talks to: it keeps requests inside Claude's API rules and marks the system prompt for caching.
@@ -93,3 +101,12 @@ public class Anthropic(ILoggerFactory? loggerFactory = null) : MorganaLanguageMo
         }
     }
 }
+
+/// <summary>How a tier reaches Anthropic.</summary>
+/// <param name="ApiKey">Credential of the Anthropic account.</param>
+/// <param name="MaxRetries">Retries of a refused call.</param>
+/// <param name="TimeoutSeconds">Ceiling of one attempt.</param>
+public record AnthropicTierConnection(
+    string? ApiKey = null,
+    int MaxRetries = 2,
+    int TimeoutSeconds = 60);

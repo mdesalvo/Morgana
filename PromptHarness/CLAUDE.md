@@ -20,11 +20,14 @@ judge — where what is under test is a wire document or a gate's status codes.
 top of whatever configuration declares, so a domain deployed there can be added to but never left
 out — while an installation reads the **first** `agents.json` it finds and holds exactly one domain.
 The federation run needs to **swap** the domain rather than extend it, which is only possible while
-the implicit directory stays empty.
+the implicit directory holds no domain. The LLM providers do land in `plugins/`: they are no domain
+and every run, the federation one included, needs them.
 
-**Its own solution**, sibling of `../Morgana/` and `../Examples/`. Two project references reach the
-framework, one of them deliberately excluding the compiled assembly (`Examples`,
-`ReferenceOutputAssembly=false`): the plugin is copied into the output and discovered at startup
+**Its own solution**, sibling of `../Morgana/` and `../Examples/`. Morgana.Web and the four providers
+are referenced as assemblies, since the judge and the tests build tiers themselves; the providers are
+copied into `plugins/` as well, where the host under test finds them. `Examples` is referenced
+deliberately excluding the compiled assembly
+(`ReferenceOutputAssembly=false`): the plugin is copied into the output and discovered at startup
 exactly as a real deployment would discover it, never seen as a compile-time type. That is the
 black-box boundary made structural — which is also why there is no `Directory.Build.props` above this
 project: every build setting lives in the `.csproj`, so it carries unchanged across a move.
@@ -109,7 +112,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `TurnClosureTests` | none | How a turn is answered — what `Reply` records and refuses, the schema the card is held to, the framework closing a turn the model answered in free text, free text never shown, the transcript reading back what was delivered — with a scripted model |
 | `ExecutionApprovalTests` | none | A tool requiring approval: never run on the model's call, run once with the approved arguments across a saved session, its text taken from the `Reply` beside it, never run as a `Reply` that would outlive its turn |
 | `FrameworkPromptTests` | none | The morgana.json shipped in Morgana.AI carries every entry that the framework fetches by name — sections, templates, tool results, framework replies, messages |
-| `LanguageModelTests` | none | The three tiers built from configuration, each by the provider it declares; a missing tier, a placeholder in a field the provider uses and a framework tier that names no tier refused. No model is reached |
+| `LanguageModelTests` | none | The three tiers built from configuration, each by the provider it declares; a missing tier, a missing connection, an unregistered or twice-registered provider, a placeholder in a field the provider uses and a framework tier that names no tier refused. No model is reached |
 | `HistoryViewTests` | none | What a model reads of its own history: the current episode only, earlier tool results marked, the record left whole |
 | `ContextResolutionTests` | none | How the framework resolves a context-scoped parameter — passed and stored, omitted and read, missing and the tool not run — on the real adapter with no model |
 | `AgentCardTests` · `StartupValidationTests` · `PeerFederationTests` · `ConversationApiTests` | none | Wire contracts and boot refusals, asserted deterministically. **Every literal is spelled out in the test** rather than read from `Constants`: a test comparing a constant against itself asserts that a constant equals a constant, while the point is to notice a published document changing shape under whoever consumes it |
