@@ -76,10 +76,13 @@ RUN dotnet publish "Morgana.AI.Vendors.AzureOpenAI.csproj" -c Release -o /app/pu
 WORKDIR "/src/Morgana/Morgana.AI.Vendors/Ollama"
 RUN dotnet publish "Morgana.AI.Vendors.Ollama.csproj" -c Release -o /app/publish/plugins /p:UseAppHost=false /p:InsideDockerBuild=true
 
-# What the host already ships leaves plugins/: the host's own copy is the one loaded, so a second one
-# beside the plugins could only be an older version waiting to be picked by mistake
+# What the host already holds leaves plugins/, whether it ships it or the shared framework does: the host's
+# own copy is the one loaded, so a second one beside the plugins could only be an older version waiting to be
+# picked by mistake. Its symbols and docs go with it
 RUN cd /app/publish/plugins && for assembly in *.dll; do \
-      if [ -f "/app/publish/${assembly}" ]; then rm -f "${assembly}"; fi; \
+      if [ -f "/app/publish/${assembly}" ] || ls /usr/share/dotnet/shared/*/*/"${assembly}" > /dev/null 2>&1; then \
+        rm -f "${assembly}" "${assembly%.dll}.pdb" "${assembly%.dll}.xml"; \
+      fi; \
     done
 
 # ==============================================================================
