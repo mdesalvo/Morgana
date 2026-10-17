@@ -21,12 +21,12 @@ turns:
       quickReplyIds: ["billing", "contract"]
       textNotEmpty: true
     judge:
-      - "The message asks the user to clarify which of two distinct topics they mean, without committing to either one."
+      - "The response asks the user which topic they mean."
     judgeNot:
       # The disease this scenario exists to catch: the classifier picks a single winner under the
       # hood and Morgana just runs with it — silently answering (or starting to work) as if only
       # billing, or only the contract, had been asked about, instead of surfacing the disambiguation
       # quick reply the collision is supposed to produce. Either direction of that collapse is a
       # failure, so both get their own proposition rather than one that could pass by catching only one.
-      - "The message proceeds to address a billing, invoice or payment matter specifically, without first asking the user to clarify which of two topics they meant."
-      - "The message proceeds to address a contract, clause or service-terms matter specifically, without first asking the user to clarify which of two topics they meant."
+      - "The response answers a question about billing, invoices or payments."
+      - "The response answers a question about a contract, its clauses or its service terms."

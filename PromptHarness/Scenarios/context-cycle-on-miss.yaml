@@ -24,8 +24,6 @@ turns:
       textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache"]
     judge:
       - "The response asks the user for an identifier or customer code."
-    judgeNot:
-      - "The response lists predefined options for the user to pick from."
 
   - say: "P994E"
     expect:

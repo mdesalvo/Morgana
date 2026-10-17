@@ -68,4 +68,4 @@ turns:
       - "The response says the plan is now active."
       - "The response says the first month has been billed."
     judgeNot:
-      - "The response gives the invoice's own total, its tax or a line on it."
+      - "The response states how much the invoice charges."

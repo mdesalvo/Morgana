@@ -46,7 +46,7 @@ PromptHarness (test process)
   │                          REST out (JWT iss=harness) · webhook in (own ephemeral port)
   ├── TurnObserver      ──► ActivityListener on morgana.agent  → agent.tools_invoked
   │                          Console.Out tee on MorganaToolAdapter logs → context reads/writes
-  ├── LlmJudge          ──► GetChatClient(Efficiency)
+  ├── LLMJudge          ──► an AIAgent on GetChatClient(Efficiency), prose from harness.json
   └── ScenarioRunner    ──► replays a YAML scenario N times, reports passes against a threshold
 ```
 

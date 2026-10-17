@@ -29,7 +29,7 @@ turns:
       # Same wording as behaviour-conversation-closure, which tests this same behaviour.
       # One act and the cautions that used to trail it are gone: an in-character farewell IS a
       # farewell and saying so twice only gave the judge a second thing to weigh.
-      - "The response reads as a farewell or as an acknowledgement of thanks, in whatever words."
+      - "The response reads as a farewell or as an acknowledgement of thanks."
 
   - say: "Now show me the details of my contract"
     expect:

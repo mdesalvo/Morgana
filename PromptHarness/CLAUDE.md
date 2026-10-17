@@ -76,7 +76,8 @@ Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateL
 Harness__FederatedPeer=true dotnet test … --filter "FullyQualifiedName~FederationTests"
 Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~ConversationPersistenceTests"
 
-# one scenario — the id is a Theory argument, so match DisplayName, never the FQN
+# one scenario — the id is a Theory argument, so match DisplayName, never the FQN, on at most its
+# first 50 characters: xUnit truncates the argument and a longer id matches nothing
 dotnet test PromptHarness.csproj --filter "DisplayName~behaviour-rich-card"
 ```
 
@@ -118,11 +119,15 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `AgentCardTests` · `StartupValidationTests` · `PeerFederationTests` · `ConversationApiTests` | none | Wire contracts and boot refusals, asserted deterministically. **Every literal is spelled out in the test** rather than read from `Constants`: a test comparing a constant against itself asserts that a constant equals a constant, while the point is to notice a published document changing shape under whoever consumes it |
 | `FederationTests` | — | Two Morganas, one consulting the other — the only test where the card is written by a Morgana, read by a Morgana and the token one mints is proven by the other |
 
-**The judge sees exactly what a user would see** — text, buttons, the card as rendered — never the
-tool trace, so it cannot justify a verdict on evidence the user never had. Showing it less than the
-screen is the mirror error: an agent's `Formatting` routinely puts the answering figure on the card,
-so a judge reading half the screen convicts a response that answered. It is skipped once a turn
-already fails structurally.
+**The judge is an agent of Morgana**, composed the way Alembic composes its passes: Alembic's
+`MorganaPrimer` beneath its own prose, all of it in `harness.json`, answering one typed verdict
+through `RunAsync<JudgeVerdict>` and never a stream. No text it reads lives in C#.
+
+**The judge sees exactly what a user would see** — their own message, then the response's text,
+buttons and card as rendered — never the tool trace, so it cannot justify a verdict on evidence the
+user never had. Showing it less than the screen is the mirror error: an agent's `Formatting`
+routinely puts the answering figure on the card, so a judge reading half the screen convicts a
+response that answered. It is skipped once a turn already fails structurally.
 
 **One proposition, one act.** A list of synonyms for one act is fine; a conjunction of two claims is
 not — neither is a comparative. A proposition needing a carve-out to be fair was written wrong:

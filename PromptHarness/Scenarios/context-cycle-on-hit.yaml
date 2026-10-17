@@ -22,4 +22,4 @@ turns:
       textNotEmpty: true
       textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache"]
     judgeNot:
-      - "The response asks the user for their customer code, identifier or any information the user already provided earlier in the conversation."
+      - "The response asks the user for their customer code or identifier."

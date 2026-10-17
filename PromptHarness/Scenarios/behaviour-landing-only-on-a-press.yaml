@@ -22,7 +22,7 @@ turns:
       richCard: absent
       textNotEmpty: true
     judge:
-      - "The response invites the user to say what else they need."
+      - "The response asks the user what they would like."
 
   # The invitation awaits a typed answer and offers no button, so the farewell is typed.
   - say: "We're done, thanks"
