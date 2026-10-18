@@ -75,15 +75,6 @@ public class ContractTool : MorganaTool
         decimal MonthlyCost,
         bool IsOptional);
 
-    private static async Task<string?> FindCustomerNameAsync(SqliteConnection connection, string customerCode)
-    {
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT DisplayName FROM Customers WHERE CustomerCode = $customerCode COLLATE NOCASE";
-        command.Parameters.AddWithValue("$customerCode", customerCode);
-
-        return (string?)await command.ExecuteScalarAsync();
-    }
-
     private static async Task<CarePlanSchedule?> FindScheduleAsync(SqliteConnection connection, string customerCode)
     {
         await using SqliteCommand command = connection.CreateCommand();
@@ -339,11 +330,9 @@ public class ContractTool : MorganaTool
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, customerCode);
-
         CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
-            return new ContractDetailsResult(Error: NoCarePlanError, CustomerCode: customerCode, CustomerName: customerName, Note: NoCarePlanNote);
+            return new ContractDetailsResult(Error: NoCarePlanError, CustomerCode: customerCode, Note: NoCarePlanNote);
 
         PlanProduct product = await GetPlanProductAsync(connection, schedule.PlanCode);
         List<string> features = await GetFeaturesAsync(connection, schedule.PlanCode);
@@ -355,7 +344,6 @@ public class ContractTool : MorganaTool
         return new ContractDetailsResult(
             ContractId: schedule.ContractId,
             CustomerCode: schedule.CustomerCode,
-            CustomerName: customerName,
             Status: new ContractStatus(
                 schedule.Status,
                 schedule.Status switch
@@ -410,11 +398,9 @@ public class ContractTool : MorganaTool
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, customerCode);
-
         CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
-            return new ContractClauseResult(Error: NoCarePlanError, CustomerCode: customerCode, CustomerName: customerName, Note: NoCarePlanNote);
+            return new ContractClauseResult(Error: NoCarePlanError, CustomerCode: customerCode, Note: NoCarePlanNote);
 
         List<PlanClause> clauses = await GetClausesAsync(connection, schedule.PlanCode, clauseNumber);
         if (clauses.Count == 0)
@@ -456,11 +442,9 @@ public class ContractTool : MorganaTool
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, customerCode);
-
         CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
-            return new VisitScheduleResult(Error: NoCarePlanError, CustomerCode: customerCode, CustomerName: customerName, Note: NoCarePlanNote);
+            return new VisitScheduleResult(Error: NoCarePlanError, CustomerCode: customerCode, Note: NoCarePlanNote);
 
         PlanProduct product = await GetPlanProductAsync(connection, schedule.PlanCode);
         DateTime today = DateTime.UtcNow.Date;
@@ -500,7 +484,6 @@ public class ContractTool : MorganaTool
 
         return new VisitScheduleResult(
             ContractId: schedule.ContractId,
-            CustomerName: customerName,
             VisitFrequency: product.VisitFrequency,
             VisitDays: schedule.VisitDays,
             Allowance: new VisitAllowance(
@@ -566,11 +549,9 @@ public class ContractTool : MorganaTool
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, customerCode);
-
         CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
-            return new TerminationProcedureResult(Error: NoCarePlanError, CustomerCode: customerCode, CustomerName: customerName, Note: NoCarePlanNote);
+            return new TerminationProcedureResult(Error: NoCarePlanError, CustomerCode: customerCode, Note: NoCarePlanNote);
 
         PlanProduct product = await GetPlanProductAsync(connection, schedule.PlanCode);
         List<string> steps = await GetTerminationStepsAsync(connection, schedule.PlanCode);
@@ -581,7 +562,6 @@ public class ContractTool : MorganaTool
 
         return new TerminationProcedureResult(
             ContractId: schedule.ContractId,
-            CustomerName: customerName,
             Reason: reason ?? "Not specified",
             NoticePeriod: new NoticePeriod(
                 product.NoticePeriodDays,

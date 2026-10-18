@@ -79,26 +79,6 @@ public class BillingTool : MorganaTool
         ? null
         : DateTime.Parse(reader.GetString(ordinal), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
 
-    /// <summary>
-    /// Resolves the name behind a customer code, when the shop happens to know it.
-    /// </summary>
-    /// <remarks>
-    /// Deliberately NOT a gate. A code the books have never seen is served exactly like one they
-    /// have and simply comes back empty: the nursery takes anyone at the counter and an accounts
-    /// agent that refuses to look before it has recognised you is a worse demo and a worse shop.
-    /// The name is a courtesy on the answer, never a permission to answer.
-    /// </remarks>
-    private static async Task<string?> FindCustomerNameAsync(SqliteConnection connection, string customerCode)
-    {
-        // COLLATE NOCASE, like everywhere else in this plugin: the code travels through a chat
-        // transcript, typed from memory and 'p994e' is the same customer as 'P994E'.
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT DisplayName FROM Customers WHERE CustomerCode = $customerCode COLLATE NOCASE";
-        command.Parameters.AddWithValue("$customerCode", customerCode);
-
-        return (string?)await command.ExecuteScalarAsync();
-    }
-
     private static async Task<List<InvoiceLine>> GetInvoiceLinesAsync(SqliteConnection connection, string invoiceId)
     {
         await using SqliteCommand command = connection.CreateCommand();
@@ -187,8 +167,6 @@ public class BillingTool : MorganaTool
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, customerCode);
-
         count = Math.Clamp(count, 1, 10);
 
         await using SqliteCommand command = connection.CreateCommand();
@@ -204,11 +182,10 @@ public class BillingTool : MorganaTool
         }
 
         if (invoices.Count == 0)
-            return new InvoicesResult(customerCode, customerName, 0, [], NothingUnderThisCode);
+            return new InvoicesResult(customerCode, 0, [], NothingUnderThisCode);
 
         return new InvoicesResult(
             customerCode,
-            customerName,
             invoices.Count,
             [.. invoices.Select(invoice => new InvoiceSummary(
                 invoice.InvoiceId,
@@ -237,8 +214,6 @@ public class BillingTool : MorganaTool
         [Description("Unique alphanumeric identifier of the invoice to retrieve (e.g., 'INV-0512'). Which invoice is the user's choice: never guess it.")] [ToolParameter(Records.ToolScope.Request)] string invoiceId)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
-
-        string? customerName = await FindCustomerNameAsync(connection, customerCode);
 
         // Scoped to the customer, not merely looked up by id: one customer's invoice is never
         // readable by quoting its number in another customer's conversation and an invoice that
@@ -281,7 +256,6 @@ public class BillingTool : MorganaTool
         return new InvoiceDetailsResult(
             InvoiceId: invoice.InvoiceId,
             CustomerCode: invoice.CustomerCode,
-            CustomerName: customerName,
             Period: PeriodLabel(invoice.PeriodStart, invoice.PeriodEnd),
             Dates: new InvoiceDates(
                 invoice.IssueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
@@ -330,8 +304,6 @@ public class BillingTool : MorganaTool
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, customerCode);
-
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = $"SELECT {InvoiceColumns} FROM Invoices WHERE CustomerCode = $customerCode COLLATE NOCASE AND Status <> 'Paid' AND Status <> 'Cancelled' ORDER BY DueDate";
         command.Parameters.AddWithValue("$customerCode", customerCode);
@@ -347,7 +319,6 @@ public class BillingTool : MorganaTool
         {
             return new OutstandingBalanceResult(
                 customerCode,
-                customerName,
                 HasOutstanding: false,
                 TotalDue: 0m,
                 Message: "Nothing is outstanding under this customer code: either every invoice has been settled, or the books hold none.");
@@ -361,7 +332,6 @@ public class BillingTool : MorganaTool
 
         return new OutstandingBalanceResult(
             customerCode,
-            customerName,
             HasOutstanding: true,
             TotalDue: totalDue,
             InvoiceCount: unpaid.Count,
@@ -391,8 +361,6 @@ public class BillingTool : MorganaTool
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, customerCode);
-
         months = Math.Clamp(months, 1, 12);
         DateTime cutoffDate = DateTime.UtcNow.AddMonths(-months);
 
@@ -412,7 +380,6 @@ public class BillingTool : MorganaTool
         {
             return new PaymentHistoryResult(
                 customerCode,
-                customerName,
                 months,
                 HasData: false,
                 Message: $"No payment received in the last {months} months under this customer code.");
@@ -422,7 +389,6 @@ public class BillingTool : MorganaTool
 
         return new PaymentHistoryResult(
             customerCode,
-            customerName,
             months,
             HasData: true,
             Summary: new PaymentSummary(

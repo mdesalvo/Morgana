@@ -144,6 +144,5 @@ public record OrdersResult(
 [Description("Every order that a customer ever placed.")]
 public record OrderHistoryResult(
     [Description("The customer code the books were asked about.")] string CustomerCode,
-    [Description("The customer's name; null when the shop does not know the code.")] [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? CustomerName,
     [Description("How many orders the customer ever placed.")] int TotalOrders,
     [Description("The orders, most recent first.")] List<OrderSummary> Orders);

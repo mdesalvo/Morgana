@@ -8,7 +8,6 @@ namespace Examples.Tools;
 [Description("The recent invoices of a customer.")]
 public record InvoicesResult(
     [Description("The customer code the books were asked about.")] string CustomerCode,
-    [Description("The customer's name; null when the shop does not know the code.")] [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? CustomerName,
     [Description("How many invoices are listed.")] int TotalCount,
     [Description("The invoices, most recent first.")] List<InvoiceSummary> Invoices,
     [Description("States that the books hold nothing under the code; null otherwise.")] string? Note = null);
@@ -33,7 +32,6 @@ public record InvoiceDetailsResult(
     [Description("Why no invoice is returned; null when the invoice was found.")] string? Error = null,
     [Description("The invoice identifier.")] string? InvoiceId = null,
     [Description("The customer the invoice was issued to.")] string? CustomerCode = null,
-    [Description("The customer's name; null when the shop does not know the code.")] string? CustomerName = null,
     [Description("The months that the invoice covers.")] string? Period = null,
     [Description("The dates of the invoice.")] InvoiceDates? Dates = null,
     [Description("Where the invoice stands.")] InvoiceStatus? Status = null,
@@ -95,7 +93,6 @@ public record PaymentMethodInfo(
 [Description("What a customer still owes.")]
 public record OutstandingBalanceResult(
     [Description("The customer code the books were asked about.")] string CustomerCode,
-    [Description("The customer's name; null when the shop does not know the code.")] [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? CustomerName,
     [Description("False when every invoice has been settled.")] bool HasOutstanding,
     [Description("What the customer owes in total, already summed by the tool: never a sum to redo from the invoices.")] decimal TotalDue,
     [Description("How many invoices are unpaid; null when none is.")] int? InvoiceCount = null,
@@ -120,7 +117,6 @@ public record OutstandingInvoice(
 [Description("The payments that a customer made over a window of months.")]
 public record PaymentHistoryResult(
     [Description("The customer code the books were asked about.")] string CustomerCode,
-    [Description("The customer's name; null when the shop does not know the code.")] [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? CustomerName,
     [Description("The number of months of history that was read.")] int Months,
     [Description("True when at least one payment was received in that window.")] bool HasData,
     [Description("The totals of the payments; null when there were none.")] PaymentSummary? Summary = null,

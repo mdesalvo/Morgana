@@ -206,15 +206,6 @@ public class InventoryTool : MorganaTool
             ? deterministic
             : Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
 
-    private static async Task<string?> FindCustomerNameAsync(SqliteConnection connection, string customerCode)
-    {
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT DisplayName FROM Customers WHERE CustomerCode = $customerCode COLLATE NOCASE";
-        command.Parameters.AddWithValue("$customerCode", customerCode);
-
-        return (string?)await command.ExecuteScalarAsync();
-    }
-
     private static async Task<List<string>> GetAllSkusAsync(SqliteConnection connection)
     {
         await using SqliteCommand command = connection.CreateCommand();
@@ -734,10 +725,8 @@ public class InventoryTool : MorganaTool
         // of these orders) rather than granting the same access ConfirmOrder/CancelOrder do.
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, customerCode);
-
         List<OrderSummary> orders = await FindOrderSummariesAsync(connection, "o.CustomerCode = $owner COLLATE NOCASE", customerCode);
 
-        return new OrderHistoryResult(customerCode, customerName, orders.Count, orders);
+        return new OrderHistoryResult(customerCode, orders.Count, orders);
     }
 }
