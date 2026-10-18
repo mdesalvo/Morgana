@@ -111,10 +111,11 @@ public sealed class SummarizationTests
         Assert.True(await record.SaveParticipantMessagesAsync(conversationId, "billing", [fold], recordedInTurn.Count));
         await reply;
 
-        // The fold opens the row and the turn's answer follows it; the agent reads it back at its next turn
+        // The fold opens the row and the turn's answer, the agent's call of Reply, follows it; the agent reads it back at its next turn
         IReadOnlyList<ChatMessage> afterTurn = await record.LoadParticipantMessagesAsync(conversationId, "billing");
         Assert.Equal(fold.Text, afterTurn[0].Text);
-        Assert.Contains(afterTurn.Skip(1), message => message.Role == ChatRole.Assistant && !string.IsNullOrWhiteSpace(message.Text));
+        Assert.Contains(afterTurn.Skip(1), message => message.Role == ChatRole.Assistant
+                                                        && message.Contents.OfType<FunctionCallContent>().Any(call => call.Name == "Reply"));
         Assert.Equal(1L, await new ChannelApiClient(fixture).QueryRecordAsync(conversationId, "SELECT is_dirty FROM morgana WHERE agent_name = 'billing';"));
 
         await fixture.Channel.SendAsync(conversationId, "Grazie, per ora è tutto", TimeSpan.FromSeconds(180));
