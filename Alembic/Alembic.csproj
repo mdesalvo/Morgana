@@ -20,6 +20,10 @@
 
     <ItemGroup>
        <ProjectReference Include="..\Morgana\Morgana.AI\Morgana.AI.csproj" />
+       <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\Anthropic\Morgana.AI.Vendors.Anthropic.csproj" />
+       <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\OpenAI\Morgana.AI.Vendors.OpenAI.csproj" />
+       <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\AzureOpenAI\Morgana.AI.Vendors.AzureOpenAI.csproj" />
+       <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\Ollama\Morgana.AI.Vendors.Ollama.csproj" />
     </ItemGroup>
 
 </Project>

@@ -4,7 +4,7 @@ using Microsoft.Extensions.AI;
 using Morgana.AI.Abstractions;
 using OpenAI;
 
-namespace Morgana.AI.LanguageModels;
+namespace Morgana.AI.Vendors.OpenAI;
 
 /// <summary>
 /// OpenAI provider.<br/>
@@ -14,14 +14,23 @@ namespace Morgana.AI.LanguageModels;
 /// Requires ApiKey on the tier's connection. When you change a tier's ModelId, recalibrate
 /// InputTokensPerDustUnit and OutputTokensPerDustUnit for that model's actual pricing.
 /// </remarks>
-public class OpenAI : MorganaLanguageModel
+public class OpenAILanguageModel : MorganaLanguageModel<OpenAITierConnection>
 {
     /// <inheritdoc />
-    public override void ValidateConnection(Records.TierConnection connection) =>
-        RequireField(connection.ApiKey, nameof(Records.TierConnection.ApiKey));
+    // The name a tier writes in its Provider key: it must stay stable whatever the class is called.
+    public override string Provider => "OpenAI";
 
     /// <inheritdoc />
-    public override IChatClient CreateChatClient(Records.TierConnection connection, Records.TierConfiguration options)
+    public override bool IsContentFilterRefusal(Exception exception) =>
+        // No refusal of this provider is known to reach the framework as an exception.
+        false;
+
+    /// <inheritdoc />
+    protected override void ValidateConnection(OpenAITierConnection connection) =>
+        RequireField(connection.ApiKey, nameof(OpenAITierConnection.ApiKey));
+
+    /// <inheritdoc />
+    protected override IChatClient CreateChatClient(OpenAITierConnection connection, Records.TierConfiguration options)
     {
         // A throttled call is retried a bounded number of times and one attempt is bounded in time,
         // so the ceiling of a call is the timeout times the retries.
@@ -37,3 +46,12 @@ public class OpenAI : MorganaLanguageModel
             .AsIChatClient();
     }
 }
+
+/// <summary>How a tier reaches OpenAI.</summary>
+/// <param name="ApiKey">Credential of the OpenAI account.</param>
+/// <param name="MaxRetries">Retries of a refused call.</param>
+/// <param name="TimeoutSeconds">Ceiling of one attempt.</param>
+public record OpenAITierConnection(
+    string? ApiKey = null,
+    int MaxRetries = 2,
+    int TimeoutSeconds = 60);

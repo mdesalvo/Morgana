@@ -105,6 +105,12 @@ public class MorganaTool
         public (string Workflow, string Step, IReadOnlyList<string> Tools)? ChoiceStep { get; }
 
         /// <summary>
+        /// What a call of each tool that an action may lead to may carry and must carry, which holds the arguments of an action.
+        /// Null when nobody declared them, which leaves the arguments of every action as the model wrote them.
+        /// </summary>
+        public IReadOnlyDictionary<string, Records.CallSignature>? ActionSignatures { get; }
+
+        /// <summary>
         /// Initializes a new <see cref="ToolContext"/> pairing the agent's context provider
         /// with the session and conversationId for the in-flight turn.
         /// </summary>
@@ -113,12 +119,14 @@ public class MorganaTool
         /// <param name="conversationId">The Akka conversation identifier this agent instance is scoped to.</param>
         /// <param name="actionableToolNames">The agent's tools that a user action may lead to, if known.</param>
         /// <param name="choiceStep">The running workflow's choice step, if it stands at one.</param>
+        /// <param name="actionSignatures">The signatures of the tools that an action may lead to, if known.</param>
         public ToolContext(
             MorganaAIContextProvider provider,
             AgentSession session,
             string conversationId,
             IReadOnlyCollection<string>? actionableToolNames = null,
-            (string Workflow, string Step, IReadOnlyList<string> Tools)? choiceStep = null)
+            (string Workflow, string Step, IReadOnlyList<string> Tools)? choiceStep = null,
+            IReadOnlyDictionary<string, Records.CallSignature>? actionSignatures = null)
         {
             // The pair is fixed for the turn that built it, so a tool never sees the session of another turn.
             Provider = provider;
@@ -126,6 +134,7 @@ public class MorganaTool
             ConversationId = conversationId;
             ActionableToolNames = actionableToolNames;
             ChoiceStep = choiceStep;
+            ActionSignatures = actionSignatures;
         }
     }
 }

@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using System.Globalization;
 using System.Text;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.AI;
 using Morgana.Contracts;
@@ -74,6 +76,7 @@ public sealed record ConsultationObservation(
 /// without pinning to a turn index that variance can invalidate. See <c>ExpectationChecker.CheckDust</c>.
 /// </param>
 /// <param name="ModelCalls">Every LLM call of the turn as the model saw it, classification included; the forensic record of a failing run.</param>
+/// <param name="JudgeModelCalls">The judge's own calls on this turn, kept apart so that the turn's cost stays Morgana's alone.</param>
 public sealed record TurnResult(
     string ConversationId,
     string UserMessage,
@@ -89,7 +92,8 @@ public sealed record TurnResult(
     double? ClassifierConfidence = null,
     IReadOnlyList<ConsultationObservation>? Consultations = null,
     IReadOnlyList<string>? CumulativeLogLines = null,
-    IReadOnlyList<ModelCall>? ModelCalls = null)
+    IReadOnlyList<ModelCall>? ModelCalls = null,
+    IReadOnlyList<ModelCall>? JudgeModelCalls = null)
 {
     /// <summary>Consultations served during the turn, never null.</summary>
     public IReadOnlyList<ConsultationObservation> Consulted => Consultations ?? [];
@@ -99,6 +103,9 @@ public sealed record TurnResult(
 
     /// <summary>The turn's LLM calls as the model saw them, never null.</summary>
     public IReadOnlyList<ModelCall> Calls => ModelCalls ?? [];
+
+    /// <summary>The judge's calls on the turn, never null; empty where the turn was not judged.</summary>
+    public IReadOnlyList<ModelCall> JudgeCalls => JudgeModelCalls ?? [];
 
     /// <summary>The host's error and critical entries during the turn, each with its message and exception lines.</summary>
     public IReadOnlyList<string> HostErrors
@@ -313,10 +320,13 @@ public sealed record ScenarioOutcome(ScenarioDefinition Scenario, int Required, 
     }
 }
 
-/// <summary>Outcome of one judged proposition.</summary>
-/// <param name="Holds">Whether the judge found the proposition true of the response.</param>
-/// <param name="Reason">The judge's one-line justification, surfaced in failure messages.</param>
-public sealed record JudgeVerdict(bool Holds, string Reason);
+/// <summary>Outcome of one judged proposition: the schema the judge's provider is held to, its descriptions included.</summary>
+[Description("The verdict on the proposition.")]
+public sealed record JudgeVerdict(
+    [property: JsonPropertyName("holds")]
+    [property: Description("True when the response performs the act or states the fact that the proposition names.")] bool Holds,
+    [property: JsonPropertyName("reason")]
+    [property: Description("One short sentence on what in the response decided the verdict.")] string Reason);
 
 /// <summary>A <c>contextReads</c> entry split into its optional outcome prefix and its variable name.</summary>
 /// <param name="Operation">The <c>Hit</c> or <c>Miss</c> prefix; null when the entry names the variable alone.</param>

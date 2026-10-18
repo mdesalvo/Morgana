@@ -149,6 +149,22 @@ public sealed class TurnObserver : IDisposable
     /// </summary>
     public int Mark() => output.Mark();
 
+    /// <summary>How many LLM calls have closed so far: the start of a window that is not a turn's, such as the judge's.</summary>
+    public int ModelCallMark()
+    {
+        // Read under the gate, since calls close on the provider's threads.
+        lock (llmGate)
+            return llmSpans.Count;
+    }
+
+    /// <summary>Every LLM call closed since <paramref name="mark"/>, in completion order.</summary>
+    public IReadOnlyList<ModelCall> ModelCallsSince(int mark)
+    {
+        // The calls past the mark are the window's own, sound for the same serial-suite reason as a turn's.
+        lock (llmGate)
+            return [.. llmSpans.Skip(mark)];
+    }
+
     /// <summary>Closes the window and assembles what was observed alongside the delivered message.</summary>
     /// <param name="conversationLogMark">
     /// When given, <see cref="TurnResult.CumulativeLogLines"/> is populated with every log line

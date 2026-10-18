@@ -242,7 +242,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // the channel to drive conversations, the observer to read signals and a judge built
         // over the same LLM configuration the instance under test uses.
         judgeLoggerFactory = LoggerFactory.Create(logging => logging.ClearProviders());
-        Judge = LLMJudge.Create(Configuration, judgeLoggerFactory);
+        Judge = await LLMJudge.CreateAsync(Configuration, judgeLoggerFactory);
         Runner = new ScenarioRunner(Channel, Observer, Judge, Options, DescribeLlm());
     }
 

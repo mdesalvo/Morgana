@@ -114,6 +114,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The judge, LanguageModelTests and the test doubles use the provider types, so these are compile-time references. -->
+    <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\Anthropic\Morgana.AI.Vendors.Anthropic.csproj" />
+    <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\OpenAI\Morgana.AI.Vendors.OpenAI.csproj" />
+    <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\AzureOpenAI\Morgana.AI.Vendors.AzureOpenAI.csproj" />
+    <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\Ollama\Morgana.AI.Vendors.Ollama.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!--
       The deterministic MCP server, built but never referenced as an assembly: an agent under test
       reaches it over stdio exactly as it would reach a server of its own deployment.
@@ -130,6 +138,10 @@
     -->
     <AssemblyMetadata Include="MorganaWebEntryPoint"
                       Value="$(MSBuildThisFileDirectory)..\Morgana\Morgana.Web\bin\$(Configuration)\net10.0\Morgana.Web.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="harness.json" />
   </ItemGroup>
 
   <ItemGroup>
@@ -188,6 +200,20 @@
     <Copy SourceFiles="@(MCPTestServerFile)"
           DestinationFiles="@(MCPTestServerFile->'$(OutDir)mcp-test-server\%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />
+  </Target>
+
+  <!--
+    The instance under test finds its providers as Morgana does, from plugins/. They land there and not
+    in domain-plugins/ because they are not a domain and every run, the federation one included, needs them.
+    Only the provider assemblies are copied: their vendor SDKs already sit in this output, since the judge
+    and the tests reference the providers. The copy loaded there is the one every assembly resolves.
+  -->
+  <Target Name="CopyLanguageModelPluginsToHarness" AfterTargets="Build">
+    <ItemGroup>
+      <LanguageModelPluginAssembly Include="$(OutDir)Morgana.AI.Vendors.*.dll" />
+    </ItemGroup>
+    <MakeDir Directories="$(OutDir)plugins" Condition="!Exists('$(OutDir)plugins')" />
+    <Copy SourceFiles="@(LanguageModelPluginAssembly)" DestinationFolder="$(OutDir)plugins" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

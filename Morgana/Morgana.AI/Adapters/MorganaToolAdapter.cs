@@ -478,8 +478,9 @@ public class MorganaToolAdapter
                 _ => Convert.ToString(value, CultureInfo.InvariantCulture)
             };
 
-            // A blank argument is the model naming the parameter without a value, never a value.
-            return string.IsNullOrWhiteSpace(text) ? null : text;
+            // A blank argument, quotes included, is the model naming the parameter without a value, never
+            // a value: stored, a pair of quotes would be shared as a code naming nobody.
+            return string.IsNullOrWhiteSpace(text?.Trim('"')) ? null : text;
         }
     }
 }

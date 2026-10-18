@@ -8,13 +8,18 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Morgana.AI\Morgana.AI.csproj" />
+    <!-- Built with the host and deployed by it into plugins/, never referenced as assemblies: the host knows only the providers it finds there -->
+    <ProjectReference Include="..\Morgana.AI.Vendors\Anthropic\Morgana.AI.Vendors.Anthropic.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
+    <ProjectReference Include="..\Morgana.AI.Vendors\OpenAI\Morgana.AI.Vendors.OpenAI.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
+    <ProjectReference Include="..\Morgana.AI.Vendors\AzureOpenAI\Morgana.AI.Vendors.AzureOpenAI.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
+    <ProjectReference Include="..\Morgana.AI.Vendors\Ollama\Morgana.AI.Vendors.Ollama.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
   </ItemGroup>
 
   <!-- A2A hosting: publishes each Morgana agent as an A2A endpoint (server side + routes) -->
   <ItemGroup>
-    <PackageReference Include="A2A.AspNetCore" Version="1.0.0-preview3" />
-    <PackageReference Include="Microsoft.Agents.AI.Hosting.A2A" Version="1.25.0-preview.261014.1" />
-    <PackageReference Include="Microsoft.Agents.AI.Hosting.A2A.AspNetCore" Version="1.25.0-preview.261014.1" />
+    <PackageReference Include="A2A.AspNetCore" Version="$(A2AVersion)" />
+    <PackageReference Include="Microsoft.Agents.AI.Hosting.A2A" Version="$(MicrosoftAgentsAIPreviewVersion)" />
+    <PackageReference Include="Microsoft.Agents.AI.Hosting.A2A.AspNetCore" Version="$(MicrosoftAgentsAIPreviewVersion)" />
   </ItemGroup>
 
   <!-- Create plugins directory automatically after build -->
@@ -24,6 +29,27 @@
     </PropertyGroup>
     <Message Text="Ensuring plugins directory exists: $(PluginsDir)" Importance="high" />
     <MakeDir Directories="$(PluginsDir)" Condition="!Exists('$(PluginsDir)')" />
+  </Target>
+
+  <!--
+    The providers are deployed by the host because only the host knows which assemblies it already
+    holds: a provider brings its vendor SDK into plugins/, while every assembly the host references
+    (Morgana.AI, its packages and the shared framework) stays out, since the host's own copy is the one loaded.
+  -->
+  <Target Name="DeployLanguageModelPlugins" AfterTargets="Build">
+    <MSBuild Projects="@(ProjectReference)"
+             Condition="'%(ProjectReference.LanguageModelPlugin)' == 'true'"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="LanguageModelPluginAssembly" />
+    </MSBuild>
+    <ItemGroup>
+      <LanguageModelPluginOutput Include="%(LanguageModelPluginAssembly.RootDir)%(LanguageModelPluginAssembly.Directory)*.dll" />
+      <LanguageModelPluginFile Include="@(LanguageModelPluginOutput)" />
+      <LanguageModelPluginFile Remove="@(ReferencePath)" MatchOnMetadata="Filename" />
+    </ItemGroup>
+    <MakeDir Directories="$(OutDir)plugins" Condition="!Exists('$(OutDir)plugins')" />
+    <Copy SourceFiles="@(LanguageModelPluginFile)" DestinationFolder="$(OutDir)plugins" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

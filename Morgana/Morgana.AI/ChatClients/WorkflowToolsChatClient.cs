@@ -11,6 +11,8 @@ namespace Morgana.AI.ChatClients;
 /// DelegatingChatClient sitting between the model and the tool loop. On every model call it presents the
 /// tools that the session's state allows: it keeps a workflow's entry behind its launcher, its steps in order and
 /// the colleagues out of reach where a consultation may not happen, by the absence of the tools that do not belong there.
+/// A pressed button is a call: on the turn of the press it answers in the model's place with that call, so the tool loop
+/// runs it whatever the model would have done. The turn then goes on to its answer.
 /// </summary>
 /// <remarks>
 /// Below the tool loop because the tools that a single run is given add to the agent's own instead of
@@ -56,14 +58,52 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         IEnumerable<ChatMessage> chatMessages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
-        => base.GetResponseAsync(chatMessages, NarrowTools(options), cancellationToken);
+        // A press whose call is due is answered with that call and no model is asked: the call is the press's own.
+        => DuePressedCall(options) is { } pressedCall
+            ? Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, [pressedCall])) { FinishReason = ChatFinishReason.ToolCalls })
+            : base.GetResponseAsync(chatMessages, NarrowTools(options), cancellationToken);
 
     /// <inheritdoc/>
     public override IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
         IEnumerable<ChatMessage> chatMessages,
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
-        => base.GetStreamingResponseAsync(chatMessages, NarrowTools(options), cancellationToken);
+        // The streaming turn receives the same call, as the one update of a response that no model wrote.
+        => DuePressedCall(options) is { } pressedCall
+            ? new[] { new ChatResponseUpdate(ChatRole.Assistant, [pressedCall]) { FinishReason = ChatFinishReason.ToolCalls } }.ToAsyncEnumerable()
+            : base.GetStreamingResponseAsync(chatMessages, NarrowTools(options), cancellationToken);
+
+    /// <summary>
+    /// The call that a button pressed on this turn makes, when the turn has not made it yet; null on any other call.
+    /// </summary>
+    /// <remarks>
+    /// A press is the user's own choice of the call, so the model is not asked whether to make it: the tool loop receives it
+    /// as a response, runs it through the agent's invoker like any other call and hands the model its result.
+    /// </remarks>
+    private FunctionCallContent? DuePressedCall(ChatOptions? options)
+    {
+        // Only a session that holds a press not yet made on this turn has a call due.
+        AgentSession? session = sessionAccessor();
+        if (session is null || contextProvider.IsPressedCallMade(session) || contextProvider.GetPressedCall(session) is not { } pressedCall)
+            return null;
+
+        // A call waiting for the user's typed answer is the model's to compose from it, so nothing is due here.
+        if (pressedCall.AwaitingAnswer)
+            return null;
+
+        // A button can only lead to a tool that the agent holds; one it no longer holds makes no call and the turn runs as typed.
+        if (options?.Tools?.Any(tool => string.Equals(tool.Name, pressedCall.Tool, StringComparison.Ordinal)) != true)
+            return null;
+
+        // The call carries the button's arguments as the values that a model would have passed.
+        Dictionary<string, object?> arguments = pressedCall.Arguments.ToDictionary(
+            argument => argument.Key,
+            argument => (object?)JsonDocument.Parse(argument.Value).RootElement.Clone(),
+            StringComparer.Ordinal);
+
+        // Each press is a call of its own, told from every other call of the history by its id.
+        return new FunctionCallContent($"press_{Guid.NewGuid():N}", pressedCall.Tool, arguments);
+    }
 
     /// <summary>
     /// Rewrites the options' tools for the state of the session; the caller's options are never mutated.
@@ -99,6 +139,38 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
 
             // The landing's options go to the model with no tool mode: no provider is ever made to call a tool.
             return landingOptions;
+        }
+
+        // A press whose call waits for the user's typed answer leaves the model one move: composing that call from what the user typed.
+        // The values that the button or the step already supply are the framework's, so the model is shown only what the user answers.
+        bool pressedCallMade = contextProvider.IsPressedCallMade(session);
+        if (!pressedCallMade
+            && contextProvider.GetPressedCall(session) is { AwaitingAnswer: true } pressedCall
+            && tools.FirstOrDefault(tool => string.Equals(tool.Name, pressedCall.Tool, StringComparison.Ordinal)) is { } pressedTool)
+        {
+            // The step binds its own values for a tool of the step, the button supplies the rest of what it named.
+            IEnumerable<string> boundValueNames = runningWorkflow?.Step.Tools.Contains(pressedCall.Tool) == true
+                ? [.. pressedCall.Arguments.Keys, .. position!.Arguments.Keys]
+                : pressedCall.Arguments.Keys;
+
+            // The clone carries the pressed tool alone, with what the framework binds out of its schema.
+            ChatOptions pressedCallOptions = options.Clone();
+            pressedCallOptions.Tools = [WithoutBoundParameters(pressedTool, boundValueNames)];
+
+            // The model reads the pressed tool alone and composes its call.
+            return pressedCallOptions;
+        }
+
+        // Once the pressed call is made the turn has done what the press asked: outside a workflow, what remains is the answer.
+        // A workflow that the call started or moved on still offers its step, which is how the procedure goes on.
+        if (pressedCallMade && runningWorkflow is null)
+        {
+            // The clone carries Reply alone, as a landing's does.
+            ChatOptions answerOptions = options.Clone();
+            answerOptions.Tools = [.. tools.Where(tool => tool.Name is Constants.Tools.Reply)];
+
+            // The model reads Reply alone and answers on the result of the call.
+            return answerOptions;
         }
 
         // With no workflow declared and every colleague within reach the agent is offered exactly the tools it was given.

@@ -11,6 +11,7 @@ using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
+using Morgana.AI.Vendors.Ollama;
 using Morgana.AI.Providers;
 using Morgana.AI.Services;
 using Morgana.AI.Tools;
@@ -211,7 +212,7 @@ public sealed class WorkflowTests
 
         // The first step's tool is entered through the launcher; the later steps' tools still act on orders from elsewhere.
         Assert.Equal(
-            ["CancelOrder", "ConfirmOrder", "Refund", "Reply", "StartPlaceOrder", "Stock"],
+            ["CancelOrder", "ConfirmOrder", "OrderHistory", "Refund", "Reply", "StartPlaceOrder", "Stock"],
             Names(ToolsOfferedAt(agent.Model, 0)));
 
         // A button leads to the launcher and never to the entry tool, which is reached through the launcher alone.
@@ -276,14 +277,67 @@ public sealed class WorkflowTests
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
         await agent.RunQuoteTurnAsync();
 
-        // Launch call: everything. Quote step: its tool, the private Stock and Reply. Decide step: its two tools.
+        // Launch call: everything. Quote step: its tool, the private Stock and OrderHistory with Reply. Decide step: its two tools.
         string[] atLaunch = Names(ToolsOfferedAt(agent.Model, 0));
         string[] atQuote = Names(ToolsOfferedAt(agent.Model, 1));
         string[] atDecide = Names(ToolsOfferedAt(agent.Model, 2));
 
         Assert.Contains("StartPlaceOrder", atLaunch);
-        Assert.Equal(["CreatePurchaseOrder", "Reply", "Stock"], atQuote);
-        Assert.Equal(["CancelOrder", "ConfirmOrder", "Reply", "Stock"], atDecide);
+        Assert.Equal(["CreatePurchaseOrder", "OrderHistory", "Reply", "Stock"], atQuote);
+        Assert.Equal(["CancelOrder", "ConfirmOrder", "OrderHistory", "Reply", "Stock"], atDecide);
+    }
+
+    [Fact]
+    public async Task Workflow_A_pressed_choice_makes_the_step_call_with_the_values_that_the_step_carries()
+    {
+        AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
+        await agent.RunQuoteTurnAsync();
+
+        // The user presses the Cancel button of the Decide step, which carries no argument of its own.
+        agent.Provider.SetPressedCall(agent.Session, new Records.PressedCall("CancelOrder", new Dictionary<string, string>()));
+        agent.Model.Enqueue(Answer(Closing("ORD-1 is cancelled.")));
+        await agent.TurnAsync("cancel");
+
+        // The framework made the call on the order that the step carries, which ended the workflow: the model only answered.
+        Assert.Contains("CancelOrder:ORD-1", InventoryTools.Calls);
+        Assert.Null(agent.Provider.GetWorkflowPosition(agent.Session));
+        Assert.Equal(["Reply"], Names(ToolsOfferedAt(agent.Model, 3)));
+        Assert.Null(agent.Provider.GetPressedCall(agent.Session));
+    }
+
+    [Fact]
+    public async Task Workflow_A_pressed_launcher_starts_the_workflow_and_the_turn_goes_on_at_its_first_step()
+    {
+        AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
+
+        // The user presses the menu entry of the workflow, which leads to its launcher.
+        agent.Provider.SetPressedCall(agent.Session, new Records.PressedCall("StartPlaceOrder", new Dictionary<string, string>()));
+        agent.Model.Enqueue(Answer(Closing("Which plant would you like?")));
+        await agent.TurnAsync("🛒 Place an order");
+
+        // The press started the workflow without the model; its one call stands at the first step, whose tool is on offer.
+        Assert.Equal("Quote", agent.Provider.GetWorkflowPosition(agent.Session)?.Step);
+        Assert.Contains("CreatePurchaseOrder", Names(ToolsOfferedAt(agent.Model, 0)));
+        Assert.Single(agent.Model.Requests);
+    }
+
+    [Fact]
+    public async Task Workflow_A_press_and_the_buttons_it_is_read_against_survive_a_restart()
+    {
+        AgentUnderTest first = await AgentUnderTest.CreateAsync(PlaceOrder());
+        first.Provider.SetOfferedActions(first.Session,
+            [new Records.OfferedAction("Stock", "🌹 Roses", "How many roses are there?", new Dictionary<string, JsonElement> { ["item"] = JsonDocument.Parse("\"rose\"").RootElement.Clone() })]);
+        first.Provider.SetPressedCall(first.Session, new Records.PressedCall("Stock", new Dictionary<string, string> { ["item"] = "\"rose\"" }, AwaitingAnswer: true));
+
+        AgentUnderTest second = await AgentUnderTest.CreateAsync(PlaceOrder());
+        await second.RestoreAsync(first);
+
+        // The next message is read against the same buttons with their arguments and the call waiting for an answer still waits.
+        Assert.Equal("rose", Assert.Single(second.Provider.GetOfferedActions(second.Session)).Arguments!["item"].GetString());
+        Records.PressedCall restored = second.Provider.GetPressedCall(second.Session)!;
+        Assert.Equal("Stock", restored.Tool);
+        Assert.True(restored.AwaitingAnswer);
+        Assert.Equal("\"rose\"", restored.Arguments["item"]);
     }
 
     [Fact]
@@ -528,7 +582,7 @@ public sealed class WorkflowTests
         await second.TurnAsync("cancel it");
 
         // Offered the step it stood at and bound from the quote of the earlier agent.
-        Assert.Equal(["CancelOrder", "ConfirmOrder", "Reply", "Stock"], Names(ToolsOfferedAt(second.Model, 0)));
+        Assert.Equal(["CancelOrder", "ConfirmOrder", "OrderHistory", "Reply", "Stock"], Names(ToolsOfferedAt(second.Model, 0)));
         Assert.Contains("CancelOrder:ORD-1", InventoryTools.Calls);
         Assert.Null(second.Provider.GetWorkflowPosition(second.Session));
     }
@@ -993,7 +1047,9 @@ public sealed class WorkflowTests
         new("Stock", "Reads a stock level.", [new("item", "The plant.", true, Constants.Scopes.Request)],
             Returns: [new("quantity", "How many.")]),
         new("Refund", "Refunds an order.", [new("orderId", "The order.", true, Constants.Scopes.Request), new("total", "The amount.", true, Constants.Scopes.Request)],
-            RequiresExecutionApproval: true, Returns: [new("status", "The status.")])
+            RequiresExecutionApproval: true, Returns: [new("status", "The status.")]),
+        new("OrderHistory", "Lists a customer's orders.", [new("customerCode", "The customer.", true, Constants.Scopes.Context)],
+            Returns: [new("count", "How many orders.")])
     ];
 
     /// <summary>Runs the startup check on the sample agent's tools.</summary>
@@ -1155,6 +1211,9 @@ public sealed class WorkflowTests
     /// <summary>What a refund returns.</summary>
     public sealed record RefundResult(string? Status = null);
 
+    /// <summary>What the sample order history returns.</summary>
+    public sealed record OrderHistoryResult(int Count);
+
     /// <summary>
     /// The sample agent's tools; every call is written to <see cref="Calls"/>, which each test starts empty.
     /// </summary>
@@ -1191,6 +1250,12 @@ public sealed class WorkflowTests
         {
             Calls.Add($"Refund:{orderId}:{total}");
             return Task.FromResult(new RefundResult("refunded"));
+        }
+
+        public Task<OrderHistoryResult> OrderHistory(string customerCode)
+        {
+            Calls.Add($"OrderHistory:{customerCode}");
+            return Task.FromResult(new OrderHistoryResult(2));
         }
     }
 
@@ -1347,6 +1412,9 @@ public sealed class WorkflowTests
         public IChatClient GetChatClient(Records.LLMTier tier) => model;
 
         public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => new();
+
+        // A provider that never reads a failure as a content refusal, so every fault of the double takes the general path.
+        public MorganaLanguageModel GetLanguageModel(Records.LLMTier tier) => new OllamaLanguageModel();
 
         public Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null)
             => throw new InvalidOperationException("No model is reached by this group");

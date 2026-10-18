@@ -21,17 +21,18 @@ Examples/                   the example plugin (Examples.slnx)
 PromptHarness/              this harness (PromptHarness.slnx)
 ```
 
-Everything it needs from the framework arrives by project reference and there are exactly two:
+Everything it needs from the framework arrives by project reference:
 
 | Reference | Why | Assembly referenced |
 |---|---|---|
 | `..\Morgana\Morgana.Web` | the fixture boots its entry point in-process | yes |
-| `..\Examples` | the specimens under test, built into `plugins/` | **no** (`ReferenceOutputAssembly=false`) |
+| `..\Morgana\Morgana.AI.Vendors\*` | the LLM providers: the judge builds its tiers on them and they are copied into `plugins/` for the host | yes |
+| `..\Examples` | the specimens under test, built into `domain-plugins/` | **no** (`ReferenceOutputAssembly=false`) |
 
-The second is the black-box boundary made structural: the harness compiles without ever seeing an
+The `Examples` reference is the black-box boundary made structural: the harness compiles without ever seeing an
 agent type, exactly as Morgana sees them — discovered from `plugins/` at startup.
 
-To point the suite at a **different** Morgana, redirect those two references (or drop the second and
+To point the suite at a **different** Morgana, redirect those references (or drop `Examples` and
 copy your own plugin into the output's `plugins/`) and give it scenarios that name your agents. There
 is no `Directory.Build.props` above this project: every build setting is stated in the `.csproj`, so
 it carries across a move.
@@ -45,7 +46,7 @@ PromptHarness (test process)
   │                          REST out (JWT iss=harness) · webhook in (own ephemeral port)
   ├── TurnObserver      ──► ActivityListener on morgana.agent  → agent.tools_invoked
   │                          Console.Out tee on MorganaToolAdapter logs → context reads/writes
-  ├── LlmJudge          ──► GetChatClient(Efficiency)
+  ├── LLMJudge          ──► an AIAgent on GetChatClient(Efficiency), prose from harness.json
   └── ScenarioRunner    ──► replays a YAML scenario N times, reports passes against a threshold
 ```
 
@@ -236,7 +237,7 @@ turns:
       historyExcludesAgents: [billing]  # no message in the persisted history belongs to that agent
       historyUserMessages: 2            # …and exactly one user message per turn played so far
       textNotEmpty: true
-      textNotContains: ["#INT#"]
+      textNotContains: ["context variable"]   # substrings the text must not carry
     judge:                        # propositions an LLM must find TRUE
       - "The response asks the user for an identifier."
     judgeNot:                     # …and FALSE

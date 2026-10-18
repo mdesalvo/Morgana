@@ -42,6 +42,7 @@ public class CoherenceApplyTools
     /// </summary>
     /// <remarks>The pass knows only the finding's words when it opens: a write made before this read can discard what a sibling section depended on.</remarks>
     [Description("Returns one agent's prose and toolkit as they stand, by its ID. Call it for every agent the finding names before changing anything.")]
+    [SystemTool]
     public ToolReply GetAgent(
         [Description("The agent's ID, exactly as the finding's Where names it.")] [ToolParameter(Records.ToolScope.Request)] string agentId)
     {
@@ -76,6 +77,7 @@ public class CoherenceApplyTools
     /// Records an agent's Target section.
     /// </summary>
     [Description("Replaces the named agent's whole Target section.")]
+    [SystemTool]
     public ToolReply SetAgentTarget(
         [Description("The agent's ID.")] [ToolParameter(Records.ToolScope.Request)] string agentId,
         [Description("The complete revised Target, addressed to the agent as 'you'. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string target)
@@ -98,6 +100,7 @@ public class CoherenceApplyTools
     /// Records an agent's Instructions section.
     /// </summary>
     [Description("Replaces the named agent's whole Instructions section.")]
+    [SystemTool]
     public ToolReply SetAgentInstructions(
         [Description("The agent's ID.")] [ToolParameter(Records.ToolScope.Request)] string agentId,
         [Description("The complete revised Instructions, addressed to the agent as 'you'. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string instructions)
@@ -120,6 +123,7 @@ public class CoherenceApplyTools
     /// Records an agent's Formatting section.
     /// </summary>
     [Description("Replaces the named agent's whole Formatting section.")]
+    [SystemTool]
     public ToolReply SetAgentFormatting(
         [Description("The agent's ID.")] [ToolParameter(Records.ToolScope.Request)] string agentId,
         [Description("The complete revised Formatting, addressed to the agent as 'you'. No section label; that is added for you.")] [ToolParameter(Records.ToolScope.Request)] string formatting)
@@ -143,6 +147,7 @@ public class CoherenceApplyTools
     /// </summary>
     /// <remarks>An overlapping-intents finding is resolved by telling two descriptions apart: no entry is added, dropped or renamed.</remarks>
     [Description("Sharpens one intent's description — the only edit a coherence fix ever makes to the map itself.")]
+    [SystemTool]
     public ToolReply SetIntentDescription(
         [Description("The intent's name, exactly as it appears in the domain.")] [ToolParameter(Records.ToolScope.Request)] string intentName,
         [Description("The complete revised description, the classifier's whole basis for routing here.")] [ToolParameter(Records.ToolScope.Request)] string description)
@@ -171,6 +176,7 @@ public class CoherenceApplyTools
     /// </summary>
     /// <remarks>The parameters already on the tool are left as they stand: they change only through <see cref="SetToolParameter"/>.</remarks>
     [Description("Opens a tool on the named agent, or revises one already open.")]
+    [SystemTool]
     public ToolReply DeclareTool(
         [Description("The agent's ID.")] [ToolParameter(Records.ToolScope.Request)] string agentId,
         [Description("PascalCase, a verb the agent performs.")] [ToolParameter(Records.ToolScope.Request)] string name,
@@ -216,6 +222,7 @@ public class CoherenceApplyTools
     /// </summary>
     /// <remarks>The tool must already exist: a coherence finding names a tool it has read.</remarks>
     [Description("Adds a parameter to a declared tool on the named agent, or revises one already there by name and in place.")]
+    [SystemTool]
     public ToolReply SetToolParameter(
         [Description("The agent's ID.")] [ToolParameter(Records.ToolScope.Request)] string agentId,
         [Description("The exact name of a tool already declared on that agent.")] [ToolParameter(Records.ToolScope.Request)] string toolName,
@@ -275,6 +282,7 @@ public class CoherenceApplyTools
     /// Removes a parameter from a tool of the named agent.
     /// </summary>
     [Description("Removes a parameter from a tool on the named agent.")]
+    [SystemTool]
     public ToolReply DropToolParameter(
         [Description("The agent's ID.")] [ToolParameter(Records.ToolScope.Request)] string agentId,
         [Description("The exact name of the tool.")] [ToolParameter(Records.ToolScope.Request)] string toolName,
@@ -302,6 +310,7 @@ public class CoherenceApplyTools
     /// Removes a tool and everything on it from the named agent.
     /// </summary>
     [Description("Removes a tool and every parameter on it from the named agent — for when a duplicated reach is resolved by keeping only one shape.")]
+    [SystemTool]
     public ToolReply DropTool(
         [Description("The agent's ID.")] [ToolParameter(Records.ToolScope.Request)] string agentId,
         [Description("The exact name of the tool to remove.")] [ToolParameter(Records.ToolScope.Request)] string toolName)
@@ -328,6 +337,7 @@ public class CoherenceApplyTools
     /// Declares the fix applied.
     /// </summary>
     [Description("Declares the fix applied. Call exactly once, last.")]
+    [SystemTool]
     public ToolReply ApplyCompleted(
         [Description("One sentence, in the domain's own words, naming the field and the agent changed.")] [ToolParameter(Records.ToolScope.Request)] string summary)
     {

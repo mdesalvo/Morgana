@@ -92,11 +92,10 @@ public class LLMGuardRailService : IGuardRailService
                 ? new Records.GuardRailResult(llmResult.Compliant, llmResult.Violation)
                 : new Records.GuardRailResult(Compliant: true, Violation: null);
         }
-        catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } cre
-                                     && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
+        catch (Exception ex) when (llmService.GetLanguageModel(llmService.FrameworkTier).IsContentFilterRefusal(ex))
         {
-            // The provider's own content filter (e.g. Azure Prompt Shields) blocked the prompt before
-            // any judgment could run — a genuine violation signal, never fail-open.
+            // The provider's own content filter blocked the prompt before any judgment could run:
+            // a genuine violation signal, never fail-open.
             // Records the block, since the provider's refusal is the only evidence of what was rejected.
             logger.LogWarning(ex,
                 "LLMGuardRailService: provider-level content filter rejected the prompt for conversation {ConversationId} — treating as a compliance violation",

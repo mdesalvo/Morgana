@@ -57,6 +57,7 @@ Morgana/
   Morgana/                 # working directory
     Morgana.Contracts/     # zero-dependency wire contracts (NuGet)
     Morgana.AI/            # core framework library (NuGet)
+    Morgana.AI.Vendors/    # LLM providers, one plugin each (NuGet): Anthropic, OpenAI, AzureOpenAI, Ollama
     Morgana.Web/           # ASP.NET Core host
     Directory.Build.props  # shared build settings, version, dependencies
   Channels/                # Cauldron (Blazor), Grimoire (rich TTY), Rune (poor TTY)
@@ -92,11 +93,10 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | Folder | Purpose |
 |---|---|
 | `Abstractions/` | `MorganaActor`, `MorganaAgent`, `MorganaLanguageModel`, `MorganaTool`, `MorganaWorkflow`, `MorganaHostedAgent` (the `AIAgent` publishing an intent over A2A, with its session and the session store that decides which conversation an inbound A2A request is served on) |
-| `LanguageModels/` | `Anthropic`, `AzureOpenAI`, `OpenAI`, `Ollama`: the implementations of `MorganaLanguageModel`, each building the client of one tier |
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[ProvidesWorkflowForIntent]`, `[RequiresApproval]`, `[UserTool]`, `[SystemTool]`, `[ToolParameter]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
-| `ChatClients/` | `IChatClient` decorators: `DustAccountingChatClient`, `MorganaAnthropicClient`, `ApprovalTurnChatClient` (keeps only the text of the `Reply` beside a call asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model answered in free text without `Reply`, on its last words), `WorkflowToolsChatClient` (offers the model only the tools that a running workflow's current step allows; no colleague while one is being answered or once the turn's consultation rounds are spent) |
+| `ChatClients/` | `IChatClient` decorators: `DustAccountingChatClient`, `ApprovalTurnChatClient` (keeps only the text of the `Reply` beside a call asking for approval: that turn is the framework's to close), `TurnClosingChatClient` (closes a turn the model answered in free text without `Reply`, on its last words), `WorkflowToolsChatClient` (offers the model only the tools that a running workflow's current step allows; no colleague while one is being answered or once the turn's consultation rounds are spent; on the turn of a press it answers in the model's place with the pressed call) |
 | `Workflows/` | `WorkflowEngine`: an agent's workflows on Microsoft.Agents.AI.Workflows, rebuilt at every call from the checkpoint kept in the agent's session. `WorkflowLauncherFunction`: the function that starts one workflow, recognised by its type |
 | `Tools/` | `ReplyTool`: the framework's own tool, declared on its method as a domain tool is |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
@@ -117,7 +117,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Filters/ChannelAuthenticationFilter.cs` · `KnownConversationFilter.cs` · `CommandAdmissionFilter.cs` · `ConversationLimitsFilter.cs` | The REST gates as MVC filters. Their `Order` on each action is the gate order |
 | `Hubs/MorganaHub.cs` | SignalR at `/morganaHub` |
 | `Filters/PartnerAuthenticationFilter.cs` | The partners' auth gate on the A2A JSON-RPC endpoints: the channels' token validation, narrowed to the partners admitted to each agent, fail-closed. The card endpoint stays open by design |
-| `Services/PluginLoaderService.cs` | Scans `plugins/` for `MorganaAgent` subclasses |
+| `Services/PluginLoaderService.cs` | Two passes over the plugin directories: `LoadAgents` loads every assembly and reports the agents, `LoadLanguageModels` returns the providers that `Program.cs` registers |
 | `Services/KestrelHostAddressService.cs` | Reports the address Kestrel actually bound, so a card names a callable endpoint with nothing configured |
 | `Services/SignalRChannelService.cs` | Pushes messages and stream chunks over SignalR |
 
@@ -172,6 +172,11 @@ stay or leave are the framework's (`FrameworkReplies` in `morgana.json`), chosen
 `ClosingDeclaration.ToDelivery`: the agent stays `activeAgent` — later messages skip classification — until the
 user leaves.
 
+**A press is a call.** An action carries the `arguments` of the call that its button makes and the
+framework makes it itself on the turn of the press. A value the call lacks is asked of the user and the
+call waits, alone on offer, for the typed answer; see `WorkflowToolsChatClient` and
+`MorganaAgentAdapter.InvokeToolAsync`.
+
 Tool parameters declared `[ToolParameter(ToolScope.Context, shared: true)]` route their values into a
 conversation-scoped `shared_context` registry (first-write-wins, `INSERT OR IGNORE`). Every agent merges it at the start of each turn, so
 a `customerCode` given to Billing reaches Contract without re-asking.
@@ -203,9 +208,9 @@ What must be known before touching it:
   conversation an exchange is served on: a partner's is namespaced under the issuer the filter
   proved, never the `contextId` the caller wrote. `MorganaHostedAgent` owns no model and `Ask`s the
   actor the router would have reached.
-- **The exchange leaves no trace.** The answering side runs on an ephemeral session nothing is
-  written to; the asking side strips the `consult_*` call and its result from its own history once
-  read, as a matched pair.
+- **The answering side leaves no trace.** It runs on an ephemeral session nothing is written to.
+  The asking side keeps the `consult_*` call and its result as tool traffic, aged like any tool's
+  result: an answer whose source is gone reads to the model as one it made up.
 - **Nothing is served on credit.** Behind this door a request reaches an agent with none of the
   guard, classifier and channel rate limit a user's path goes through, so `IPeerAdmissionService`
   bounds how many conversations a partner may **open** — the one limiter that **fails closed**.
@@ -228,7 +233,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `LLMPresenterService` | `IPresenterService` | Welcome message and quick replies. Never throws |
 | `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
 | `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
-| `ConfigurationLLMService` | `ILLMService` | Builds the three tiers, each on the provider it declares; the framework actors run on `ActorSystem:Tier` |
+| `ConfigurationLLMService` | `ILLMService` | Builds the three tiers, each on the registered provider it names; the framework actors run on `ActorSystem:Tier` |
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json`, domain from `agents.json`. Throws if one ID is declared in both |
 | `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads: the fenced two-layer prompt, tool descriptions, the per-turn held-context declaration, the colleagues declaration, a colleague's question |
 | `ConfigurationAgentDirectoryService` | `IAgentDirectoryService` | Both halves of A2A discovery, plus `ValidateTrustConfiguration` and `ValidatePublishedAddress` |
@@ -248,14 +253,23 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 
 ## LLM providers and tiers
 
-`ConfigurationLLMService` is the one `ILLMService`. **Three tiers, each with its own provider**
-(`Anthropic`, `AzureOpenAI`, `OpenAI`, `Ollama`): `Economy`, `Efficiency`, `Performance`, from the
-cheapest model to the most capable. All three are always declared and filled, whether or not an agent
-uses them. **There is no cross-tier fallback**. Validation never asks which agents use which tier.
+`ConfigurationLLMService` is the one `ILLMService`. **Three tiers, each with its own provider**:
+`Economy`, `Efficiency`, `Performance`, from the cheapest model to the most capable. All three are
+always declared and filled, whether or not an agent uses them. **There is no cross-tier fallback**.
+Validation never asks which agents use which tier.
+
+**Morgana.AI knows no vendor.** A provider is a `MorganaLanguageModel<TConnection>` in its own
+plugin under `Morgana.AI.Vendors/`, carrying its SDK beside it in `plugins/`. Morgana.Web references
+none of them: it registers what `LoadLanguageModels` finds, so the providers an installation can name
+are the ones deployed. A host without the loader (Alembic, the harness) registers them by hand. What
+only a vendor knows stays in its plugin: the connection record it binds from the tier's `Connection`
+section and `IsContentFilterRefusal`, the one place where a provider's own refusal of the content is
+told apart from a failure.
 
 `Morgana:LLM:Tiers` is a JSON **object keyed by tier name**, so env-var overrides merge per tier. Each
-entry carries `Provider`, `Connection` (each provider reads only the fields it uses), `Options` — a
-deliberately narrow mirror of `ChatOptions` (`MaxOutputTokens` mandatory), see `Records.TierConfiguration` — plus its own `MagicDust`.
+entry carries `Provider` (a registered provider's name, any casing), `Connection` (bound by that
+provider alone), `Options` — a deliberately narrow mirror of `ChatOptions` (`MaxOutputTokens`
+mandatory), see `Records.TierConfiguration` — plus its own `MagicDust`.
 
 Two consumption modes: `CompleteStructuredAsync` (stateless, answered under a JSON schema, on `Morgana:ActorSystem:Tier`) and
 `GetChatClient(tier)` / `GetPricing(tier)` (an agent's own `[RequiresLLMTier]`).
@@ -444,7 +458,7 @@ fails or opens, silently.**
 4. Tools: warn on orphans, error on duplicates for one intent; every tool method and parameter carries its attributes, every scope combination is one the framework can honour, the record returned is typed with a nullable `error`, no tool is overloaded and no agents.json prompt still declares `Tools` or `Workflows`
 5. Plugin `agents.json` files merge with no duplicated intent or prompt id and none declares `other`
    or `Morgana`
-6. All three tiers declared, none with a provider, model or used connection field left on its placeholder, `ActorSystem:Tier` naming a tier
+6. All three tiers declared, each naming a registered provider and carrying a `Connection`, none with a provider, model or used connection field left on its placeholder, no provider registered twice, `ActorSystem:Tier` naming a tier
 7. Every admitted issuer — channel, partner and the ring alike — carries a name and a key of at least 256 bits and no name is admitted twice
 8. `ValidateTrustConfiguration`: each `Partners[]` entry names somebody once, does something, is coherent per open direction and carries a key that can sign
 9. `ValidatePublishedAddress`: `PublicUrl`, where declared, is absolute, on a bearer-carrying scheme and names one interface

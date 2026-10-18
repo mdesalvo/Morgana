@@ -306,7 +306,7 @@ public static class Constants
     /// The framework's own context keys: machinery rather than knowledge about the user, so no tool
     /// parameter is ever resolved from them: a contract between the base tools and guards that write them and
     /// the agent that reads and drops them. Written by a base tool or by the consultation guards and
-    /// dropped by the agent at end of turn; <see cref="WorkflowPosition"/> alone outlives the turn.
+    /// dropped by the agent at end of turn; <see cref="WorkflowPosition"/>, <see cref="PressedCall"/> and <see cref="OfferedActions"/> outlive it.
     /// </summary>
     public static class ContextKeys
     {
@@ -319,8 +319,17 @@ public static class Constants
         /// <summary>The framework's instructions for this run alone, added to the agent's own by its context provider; dropped when the turn ends.</summary>
         public const string RunInstructions = "run_instructions";
 
-        /// <summary>Holds the name of the tool that the pressed action button leads to, whose press is already the user's approval of it; dropped when the turn ends.</summary>
-        public const string PressedActionTool = "pressed_action_tool";
+        /// <summary>
+        /// The call that a pressed action button commits the agent to, whose press is already the user's approval of it.
+        /// It lasts past its turn only while that turn asks the user to type a value the call lacks.
+        /// </summary>
+        public const string PressedCall = "pressed_call";
+
+        /// <summary>Marks the turn in which the pressed call has been made, so the turn goes on to its answer; dropped when the turn ends.</summary>
+        public const string PressedCallMade = "pressed_call_made";
+
+        /// <summary>The actions that the agent's last delivered turn offered as buttons, which a press of the next message is read against.</summary>
+        public const string OfferedActions = "offered_actions";
 
         /// <summary>Marks the turn as serving a colleague, which is what refuses a second hop.</summary>
         public const string ServingConsultation = "peer_consultation";

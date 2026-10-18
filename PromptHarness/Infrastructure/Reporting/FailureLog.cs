@@ -120,6 +120,20 @@ public static class FailureLog
                     report.AppendLine("output:");
                     report.AppendLine(call.OutputMessages ?? "(none recorded)");
                 }
+
+                // The judge's calls follow the turn's: what it was shown and what it decided, so a red
+                // verdict is read on its own evidence and never bought again with another run.
+                for (int callIndex = 0; callIndex < turn.JudgeCalls.Count; callIndex++)
+                {
+                    ModelCall call = turn.JudgeCalls[callIndex];
+                    report.AppendLine();
+                    report.AppendLine(CultureInfo.InvariantCulture, $"[judge call {callIndex + 1}] {call.Usage}");
+                    AppendNumbered(report, "instructions", call.Instructions, instructionTexts);
+                    report.AppendLine("input:");
+                    report.AppendLine(call.InputMessages ?? "(none recorded)");
+                    report.AppendLine("output:");
+                    report.AppendLine(call.OutputMessages ?? "(none recorded)");
+                }
             }
 
             report.AppendLine();

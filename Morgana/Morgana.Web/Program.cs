@@ -3,6 +3,7 @@ using Akka.Actor;
 using Akka.Actor.Setup;
 using Akka.DependencyInjection;
 using Morgana.AI;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.Commands;
 using Morgana.AI.Extensions;
@@ -125,12 +126,12 @@ builder.Services.AddSingleton<ILogger>(sp =>
     sp.GetRequiredService<ILoggerFactory>().CreateLogger(Constants.Morgana));
 
 // ==============================================================================
-// SECTION 5: Plugin System - Dynamic Agent Loading
+// SECTION 5: Plugin System - Dynamic Agent and Language Model Loading
 // ==============================================================================
-// Loads external assemblies containing custom Morgana agents at startup
+// Loads external assemblies containing custom Morgana agents or language models at startup
 // Configuration: appsettings.json -> Morgana:Plugins:Directories
 // 
-// This enables domain-specific agents to be developed separately and loaded
+// This enables domain-specific agents and LLM providers to be developed separately and loaded
 // without modifying the core Morgana framework.
 
 // Plugins are loaded before the container is built because the registry's startup checks scan the loaded assemblies.
@@ -141,7 +142,15 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
     PluginLoaderService pluginLoaderService = new PluginLoaderService(
         builder.Configuration,
         bootstrapLoggerFactory.CreateLogger<PluginLoaderService>());
-    pluginLoaderService.LoadPluginAssemblies();
+    pluginLoaderService.LoadAgents();
+
+    // The providers come from the plugin directories alone: the host knows only those it finds there.
+    // The configuration then picks among them per tier.
+    foreach (Type languageModelType in pluginLoaderService.LoadLanguageModels())
+    {
+        // Each provider joins the container under the common base, so the LLM service receives them all and indexes them by name.
+        builder.Services.AddSingleton(typeof(MorganaLanguageModel), languageModelType);
+    }
 }
 
 // ==============================================================================
@@ -161,7 +170,8 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
 // - ICommandRegistryService: Publishes the commands channels may run on a conversation (every ICommand registered here)
-// - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI, Ollama, OpenAI), three tiers Economy/Efficiency/Performance each served by its own provider (Morgana:LLM:Tiers)
+// - ILLMService: Abstraction over LLM providers, three tiers Economy/Efficiency/Performance each served by the registered provider it names (Morgana:LLM:Tiers)
+// - MorganaLanguageModel: One per LLM provider that a tier may name
 // - ICommand: One per command a channel may run on a conversation
 
 // Every registration below is a singleton: the services hold configuration and caches shared by all conversations.
@@ -178,13 +188,13 @@ builder.Services.AddSingleton<IClassifierService, LLMClassifierService>();
 builder.Services.AddSingleton<IPresenterService, LLMPresenterService>();
 builder.Services.AddSingleton<ICommandRegistryService, CommandRegistryService>();
 builder.Services.AddSingleton<ICommand, CompactHistoryCommand>();
-// A factory because the service needs the configuration and the logger factory to build its tiers.
+// A factory because the service needs the configuration, the registered providers and the logger factory to build its tiers.
 builder.Services.AddSingleton<ILLMService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
 
     // The tiers are built here, from the configuration, so a tier left unconfigured refuses the boot.
-    ConfigurationLLMService llm = new ConfigurationLLMService(config, loggerFactory);
+    ConfigurationLLMService llm = new ConfigurationLLMService(config, sp.GetServices<MorganaLanguageModel>(), loggerFactory);
 
     // Wire dust accounting for the framework-actor path (CompleteStructuredAsync).
     // Done post-construction because the dust limiter depends on conversation persistence,

@@ -66,10 +66,10 @@ public sealed class ActorTests
             IReadOnlyList<string> failures = await fixture.Judge.EvaluateAsync(
                 judge:
                 [
-                    "The message introduces itself as Morgana.",
-                    "The message invites the user to press one of the buttons beneath it."
+                    "The response introduces itself as Morgana.",
+                    "The response invites the user to press one of the buttons beneath it."
                 ],
-                judgeNot: ["The message asks for personal or account information before the user has said anything."],
+                judgeNot: ["The response asks for personal or account information."],
                 message: presentation);
 
             Assert.True(failures.Count == 0, string.Join("\n", failures));

@@ -204,15 +204,16 @@ public class MorganaAgent : MorganaActor
 
             // The turn is filed before the model runs, then run, then closed and recorded.
             Records.TurnOpening turnOpening = await OpenTurnAsync(req, frameworkReplies, agentSpan);
-            Records.TurnOutcome turnOutcome = await RunTurnAsync(turnOpening.Session, req, turnOpening.PressedActionTool, senderRef, agentSpan);
+            Records.TurnOutcome turnOutcome = await RunTurnAsync(turnOpening.Session, req, turnOpening.PressedCall?.Tool, senderRef, agentSpan);
             Records.TurnClosure turnClosure = ConcludeTurn(turnOpening.Session, turnOutcome, morganaPrompt, frameworkReplies, req.IsLanding);
             DateTime? recordedAt = await RecordTurnAsync(turnOpening.Session, turnClosure, turnOpening.HistoryBaseline, agentSpan);
 
             // Dated as the history keeps it, so a client catching up recognises the reply it was pushed.
             senderRef.Tell(new Records.AgentResponse(turnClosure.Text, turnClosure.IsCompleted, turnClosure.QuickReplies, turnClosure.Card, recordedAt));
         }
-        catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } clientResultException
-                                     && clientResultException.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
+        // The provider of the agent's tier decides whether the failure is its own content refusal; the registry
+        // refuses at startup an agent without [RequiresLLMTier], so the tier is always declared.
+        catch (Exception ex) when (llmService.GetLanguageModel(GetType().GetCustomAttribute<RequiresLLMTierAttribute>()!.Tier).IsContentFilterRefusal(ex))
         {
             // The provider refused the content itself: the user is told so by the supervisor and no retry would pass.
             agentLogger.LogWarning(ex, "Content filter rejection in {Name} for conversation {ConversationId}", GetType().Name, conversationId);
@@ -243,7 +244,7 @@ public class MorganaAgent : MorganaActor
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ClosingDeclaration);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.Landing);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.RunInstructions);
-                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.PressedActionTool);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.PressedCallMade);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ConsultationRounds);
             }
         }
@@ -327,9 +328,10 @@ public class MorganaAgent : MorganaActor
         // Dated here because the history is merged chronologically across agents.
         ChatMessage userMessage = new ChatMessage(ChatRole.User, userContents) { CreatedAt = DateTimeOffset.UtcNow };
 
-        // A press on a button leading to one of the agent's tools is already the user's consent to it,
-        // read before this message joins the history it is compared against.
-        string? pressedActionTool = PressedActionTool(aiAgentSession, req.Content);
+        // The call that this message commits the turn to: the press of an action that the last turn delivered or, failing
+        // that, an earlier press still waiting for the user's typed answer. A landing opens a stay with the agent and commits
+        // it to nothing. The press is already the user's consent to the call.
+        Records.PressedCall? pressedCall = req.IsLanding ? null : PressedCallOf(aiAgentSession, req.Content);
 
         // A landing is the one turn in which the agent can present itself: the flag is set before the model
         // runs and dropped with the turn.
@@ -343,10 +345,12 @@ public class MorganaAgent : MorganaActor
                 await aiContextProvider.SetVariableAsync(aiAgentSession, Constants.ContextKeys.RunInstructions, aiContextProvider.LandingDeclaration);
         }
 
-        // The model client reads the pressed tool to let that tool's approval request through without text:
-        // it is set before the model runs and dropped with the turn.
-        if (pressedActionTool is not null)
-            await aiContextProvider.SetVariableAsync(aiAgentSession, Constants.ContextKeys.PressedActionTool, pressedActionTool);
+        // The model clients read the pressed call before the model runs: the framework makes it or the model composes it alone.
+        // Saved with the phrase below, a press survives a restart; any earlier press that this message does not carry is let go.
+        if (pressedCall is null)
+            aiContextProvider.DropPressedCall(aiAgentSession);
+        else
+            aiContextProvider.SetPressedCall(aiAgentSession, pressedCall);
 
         // A phrase that arrived while no agent was active is already saved as Morgana's own.
         // This agent keeps it because its model has to read it, marked as somebody else's so a
@@ -372,8 +376,8 @@ public class MorganaAgent : MorganaActor
         aiChatHistoryProvider.AppendMessage(aiAgentSession, userMessage);
         await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted: false);
 
-        // The opened turn hands back its session, the history baseline and any pressed tool.
-        return new Records.TurnOpening(aiAgentSession, historyBaseline, pressedActionTool);
+        // The opened turn hands back its session, the history baseline and any pressed call.
+        return new Records.TurnOpening(aiAgentSession, historyBaseline, pressedCall);
     }
 
     /// <summary>Runs the model over the session until the turn has an answer recorded by Reply or awaits the user's approval.</summary>
@@ -454,7 +458,7 @@ public class MorganaAgent : MorganaActor
         // The first pass answers the user's phrase.
         await RunModelAsync();
 
-        // A call that needs approval, to the very tool whose button opened this turn, was approved by
+        // A call that needs approval, to the very tool that a pressed button committed this turn to, was approved by
         // that press: it runs now and the user is never asked to confirm the same thing twice.
         List<ToolApprovalRequestContent> approvedByPress = [.. GetPendingApprovals(session)
             .Where(request => request.ToolCall is FunctionCallContent call && call.Name == pressedActionTool)];
@@ -519,8 +523,8 @@ public class MorganaAgent : MorganaActor
         // The run's instructions end with the turn too, before the session is saved: a restart must not find them set.
         aiContextProvider.DropVariable(session, Constants.ContextKeys.RunInstructions);
 
-        // The pressed tool ends with the turn too, before the session is saved: a restart must not find it set.
-        aiContextProvider.DropVariable(session, Constants.ContextKeys.PressedActionTool);
+        // The mark of the pressed call made ends with the turn too, before the session is saved: a restart must not find it set.
+        aiContextProvider.DropVariable(session, Constants.ContextKeys.PressedCallMade);
 
         // The consultation budget is spent per turn, before the session is saved: a restart must not start the next turn with it already spent.
         aiContextProvider.DropVariable(session, Constants.ContextKeys.ConsultationRounds);
@@ -558,6 +562,16 @@ public class MorganaAgent : MorganaActor
         // An approval question carries no card: the user is asked one thing.
         RichCard? richCard = turnOutcome.AwaitsApproval ? null : closingDeclaration.Card;
 
+        // The actions delivered as buttons are what the next message is read against for a press; an approval turn delivers none.
+        aiContextProvider.SetOfferedActions(session, turnOutcome.AwaitsApproval ? [] : closingDeclaration.DeliveredActions);
+
+        // A pressed call outlives its turn only while the turn asks the user to type what it lacks. Any other closure lets it go,
+        // so a later message is never bound to a call that nobody is waiting to complete.
+        if (aiContextProvider.GetPressedCall(session) is { } pressedCall
+            && !(pressedCall.AwaitingAnswer && !turnOutcome.AwaitsApproval
+                 && closingDeclaration is { Awaits: Records.AwaitedFromUser.TypedAnswer, UserIsLeaving: false }))
+            aiContextProvider.DropPressedCall(session);
+
         // The line the harness and the operator read to see how the turn closed.
         agentLogger.LogInformation(
             "Agent response analysis: Awaits={Awaits}, UserIsLeaving={UserIsLeaving}, QuickReplies={QuickReplies}, HasRichCard={HasRichCard}, IsCompleted={IsCompleted}",
@@ -577,11 +591,6 @@ public class MorganaAgent : MorganaActor
         agentSpan?.SetTag(Telemetry.AgentToolsInvoked, GetToolsInvoked(session, historyBaseline));
         agentSpan?.SetTag(Telemetry.AgentResponsePreview, responsePreview);
         agentSpan?.Dispose();
-
-        // The exchange with a colleague is spent once it has been read. Clearing it here keeps
-        // it out of the caller's own session (see StripPeerConsultations) and is done after
-        // the span has been tagged, so telemetry still records that the colleague was consulted.
-        StripPeerConsultations(session, historyBaseline);
 
         // The turn's messages after the baseline: the candidates for the one the user reads.
         List<ChatMessage> turnMessages = [.. aiChatHistoryProvider.GetMessages(session).Skip(historyBaseline)];
@@ -632,11 +641,11 @@ public class MorganaAgent : MorganaActor
                 finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.EpisodeEnd] = true;
         }
 
-        // Written last, so what lands in the database is the history already stripped of the
-        // consultations and already carrying the user-facing marks the history endpoint reads
-        // back. Before the sender is answered: a turn the caller was told about but whose state
-        // never persisted would come back missing on resume. The completion flag travels with
-        // it as the row's active state, which is what a resumed conversation restores.
+        // Written last, so what lands in the database is the history already carrying the
+        // user-facing marks the history endpoint reads back. Before the sender is answered: a turn
+        // the caller was told about but whose state never persisted would come back missing on
+        // resume. The completion flag travels with it as the row's active state, which is what a
+        // resumed conversation restores.
         await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, session, closure.IsCompleted);
         agentLogger.LogInformation("Saved conversation state for {AgentIdentifier}", AgentIdentifier);
 
@@ -773,62 +782,6 @@ public class MorganaAgent : MorganaActor
         failure.OriginalSender.Tell(new Records.AgentResponse(morganaPrompt.GetMessage(Constants.Messages.GenericError), true, null));
     }
 
-    /// <summary>
-    /// Removes this turn's peer-consultation calls and their results, from the agent's own history.
-    /// </summary>
-    /// <param name="session">The session whose history holds the turn just run.</param>
-    /// <param name="historyBaseline">Messages present before the turn ran; earlier turns cleared themselves.</param>
-    protected void StripPeerConsultations(AgentSession session, int historyBaseline)
-    {
-        // The session's live list, not a copy: removing from it is what actually clears the history.
-        List<ChatMessage> messages = aiChatHistoryProvider.GetMessages(session);
-
-        // Only this turn's consultations: a call id from an earlier turn was already cleared by it and
-        // matching on the id is what keeps a call and its result together across two separate messages.
-        HashSet<string> consultationCallIds =
-        [
-            .. messages.Skip(historyBaseline)
-                .SelectMany(m => m.Contents.OfType<FunctionCallContent>())
-                .Where(call => call.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal))
-                .Select(call => call.CallId)
-        ];
-
-        // Nothing consulted this turn: leave the history untouched rather than walk it.
-        if (consultationCallIds.Count == 0)
-            return;
-
-        // Only this turn's messages are rewritten: the earlier ones belong to turns that already cleared themselves.
-        List<ChatMessage> turnMessages = [.. messages.Skip(historyBaseline)];
-        foreach (ChatMessage message in turnMessages)
-        {
-            // A thinking block belongs to the calls that followed it, so a message losing a consultation call loses
-            // its thinking too: the provider refuses a block it signed once it stands alone or altered.
-            bool losesConsultationCall = message.Contents.OfType<FunctionCallContent>().Any(call => consultationCallIds.Contains(call.CallId));
-
-            // One message can carry a consultation beside a native call or the turn's own text: only the
-            // consultation leaves it, its call and its result recognised as a pair by their shared id.
-            message.Contents = [.. message.Contents.Where(content => content switch
-            {
-                // A call of a consultation leaves together with its result.
-                FunctionCallContent call => !consultationCallIds.Contains(call.CallId),
-                // A result of a consultation leaves together with its call.
-                FunctionResultContent result => !consultationCallIds.Contains(result.CallId),
-                // A thinking block stays only beside calls that are all still there.
-                TextReasoningContent => !losesConsultationCall,
-                // Any other content is not part of a consultation.
-                _ => true
-            })];
-        }
-
-        // A message that held nothing but the consultation is now empty and the provider rejects an empty
-        // message, so the turn is written back into the session's live list without it.
-        messages.RemoveRange(historyBaseline, turnMessages.Count);
-        messages.AddRange(turnMessages.Where(message => message.Contents.Count > 0));
-
-        agentLogger.LogInformation(
-            "Agent '{AgentIntent}' cleared {Count} peer consultation(s) from its own history", AgentIntent, consultationCallIds.Count);
-    }
-
     /// <summary>Removes from a message every mark that names it the user-facing message of its turn.</summary>
     private static void DropDeliveryMarks(ChatMessage message)
     {
@@ -879,36 +832,26 @@ public class MorganaAgent : MorganaActor
     }
 
     /// <summary>
-    /// The tool that the user's message leads to when it is the press of an action button that the
-    /// agent's last turn offered; null for anything else, typed text included.
+    /// The call that the user's message commits the turn to: the press of an action button that the agent's last turn
+    /// delivered or, for any other message, the call of an earlier press still waiting for the user's typed answer.
+    /// Null when the message is neither, typed text with no press waiting included.
     /// </summary>
     /// <param name="session">Active agent session, read before the user's message joins it.</param>
     /// <param name="userText">What the user sent: a pressed button sends its own value.</param>
-    protected string? PressedActionTool(AgentSession session, string? userText)
+    protected Records.PressedCall? PressedCallOf(AgentSession session, string? userText)
     {
-        // The buttons that the last turn delivered, as it recorded them on its user-facing message.
-        object? recorded = aiChatHistoryProvider.GetMessages(session)
-            .LastOrDefault(message => message.AdditionalProperties?.ContainsKey(Constants.MessageProperties.UserFacing) == true)?
-            .AdditionalProperties?.GetValueOrDefault(Constants.MessageProperties.TurnQuickReplies);
+        // A press sends the button's own value, so the text that matches the value of a delivered action is that action's press.
+        Records.OfferedAction? pressedAction = string.IsNullOrWhiteSpace(userText)
+            ? null
+            : aiContextProvider.GetOfferedActions(session)
+                .FirstOrDefault(action => string.Equals(action.Value, userText.Trim(), StringComparison.OrdinalIgnoreCase));
 
-        // A saved session hands the recorded buttons back as JSON, a live one as the string that was stored.
-        string? offered = recorded switch
-        {
-            string text => text,
-            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
-            _ => null
-        };
-        // No buttons were offered or nothing was typed: the message cannot be a press.
-        if (string.IsNullOrEmpty(offered) || string.IsNullOrWhiteSpace(userText))
-            return null;
+        // A press commits the turn to its call, with the arguments that the button carries.
+        if (pressedAction is not null)
+            return Records.PressedCall.Of(pressedAction);
 
-        // A press sends the button's own value, so the text that matches an offered value is that button.
-        List<QuickReply>? buttons = JsonSerializer.Deserialize<List<QuickReply>>(offered, Records.DefaultJsonSerializerOptions);
-        QuickReply? pressed = buttons?.FirstOrDefault(button =>
-            string.Equals(button.Value, userText.Trim(), StringComparison.OrdinalIgnoreCase));
-
-        // Only an action button leads to a tool: with any other button or with none the message stays an ordinary request.
-        return pressed is null ? null : Records.ClosingDeclaration.ActionTool(pressed.Id);
+        // Any other message is the answer to a press waiting for a typed value, where one waits; a press never made does not carry over.
+        return aiContextProvider.GetPressedCall(session) is { AwaitingAnswer: true } awaitingCall ? awaitingCall : null;
     }
 
     /// <summary>

@@ -177,13 +177,13 @@ public class BillingTool : MorganaTool
     /// Retrieves the most recent invoices issued to a customer.
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
-    /// <param name="count">Number of recent invoices to retrieve (1-10)</param>
+    /// <param name="count">Number of recent invoices to retrieve (1-10), three when the user names none</param>
     /// <returns>The invoice summaries, or a note when the books hold none</returns>
     [Description("Retrieves the customer's recent nursery invoices. A code the books hold nothing under comes back with an empty list and says so — that is an answer, not a failure. This tool has only informative capabilities: you will not find dispositive actions here (e.g: 'Pay invoice', 'Dispute payment', ...).")]
     [UserTool(1, "🧾 My recent invoices")]
     public async Task<InvoicesResult> GetInvoices(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode,
-        [Description("Number of recent invoices to retrieve (1-10). Defaults to 3-4 if user doesn't specify. Use higher numbers (6-10) when user explicitly asks for 'all' or 'complete history'.")] [ToolParameter(Records.ToolScope.Request)] int count)
+        [Description("Number of recent invoices to retrieve (1-10). Use higher numbers (6-10) when user explicitly asks for 'all' or 'complete history'.")] [ToolParameter(Records.ToolScope.Request)] int count = 3)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 

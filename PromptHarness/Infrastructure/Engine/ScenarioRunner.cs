@@ -166,7 +166,11 @@ public sealed class ScenarioRunner
                 // either way and judging costs a live LLM call.
                 if (structural.Count == 0)
                 {
+                    // The judge's calls are windowed apart from the turn's, so a verdict is read on its evidence
+                    // in the failure log without ever entering the turn's cost.
+                    int judgeMark = observer.ModelCallMark();
                     IReadOnlyList<string> judged = await judge.EvaluateAsync(turnDefinition, turn);
+                    turns[^1] = turn with { JudgeModelCalls = observer.ModelCallsSince(judgeMark) };
                     failures.AddRange(judged.Select(failure => $"turn {transcript.Count}: {failure}"));
                 }
             }

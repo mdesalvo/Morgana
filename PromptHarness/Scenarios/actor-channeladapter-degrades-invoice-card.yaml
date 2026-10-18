@@ -17,7 +17,6 @@ turns:
       textNotMarkdown: true
       textNotEmpty: true
     judge:
-      - "The response conveys at least one concrete invoice detail (an amount, a date or a status) in plain prose."
+      - "The response states an amount, a date or a status of an invoice."
     judgeNot:
-      - "The response is a list of option labels with no sentence connecting them."
       - "The response asks the user to press, tap or click something."

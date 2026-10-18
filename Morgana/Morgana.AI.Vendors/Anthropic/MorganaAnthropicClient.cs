@@ -4,7 +4,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Morgana.AI.ChatClients;
+namespace Morgana.AI.Vendors.Anthropic;
 
 /// <summary>
 /// Defensive decorator over the AnthropicClient <see cref="IChatClient"/> that diagnoses and, when

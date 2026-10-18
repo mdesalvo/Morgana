@@ -5,207 +5,88 @@ description: Runs PromptHarness on demand against the currently configured LLM t
 
 # HarnessExecution
 
-Runs the PromptHarness (`PromptHarness/PromptHarness.csproj`) on demand against whichever LLM
-tiers are currently configured in User Secrets (`Morgana:LLM:Tiers`), against a user-chosen
-scope and a user-chosen global run/pass threshold. Live LLM calls, real cost — never runs without
-the two questions below being answered first.
-
-## Trigger
-
-Activated when the user says things like:
-- "run the harness"
-- "execute the prompt harness"
-- "launch the harness"
-- Any request to run PromptHarness scenarios against the current tiers
+Runs `PromptHarness/PromptHarness.csproj` against the tiers configured in User Secrets. Every
+billed run needs two answers first, scope and threshold, never assumed from a previous run.
+`PromptHarness/CLAUDE.md` describes the groups and what a failure in each means: read it first.
 
 ## Procedure
 
-1. **Confirm the configured tiers** before anything else: read `Morgana:LLM:Tiers` from the shared
-   User Secrets store (`UserSecretsId 374228be-4f26-4382-a3ef-7500a0b829dd`, same as `Morgana.Web`)
-   without printing the ApiKey/Endpoint values. Tell the user, for each of `Economy`, `Efficiency`
-   and `Performance`, its `Provider` and `Options:ModelId`, plus `Morgana:ActorSystem:Tier` (from
-   `Morgana.Web/appsettings.json` or the same store), this run will hit. This
-   is the harness's own design (`PromptHarness/README.md`): it never has its own `Morgana:` config,
-   it inherits the host's. The same file is where `Harness:HarnessDirectory` lives when the user has
-   overridden it (see step 7), so read both in one pass. Note the store is written with a UTF-8 BOM:
-   parse it as `utf-8-sig`, or a plain JSON read fails on the first character.
-
-2. **Ask the target scope** with `AskUserQuestion`, multi-select. **Enumerate `PromptHarness/Tests/`
-   first and offer what is actually there** — the class list below is a description of a moving
-   directory, not a contract, and a `--filter` naming a class that no longer exists runs zero tests
-   and exits 0: a green nobody asked for. Twenty-four classes at the time of writing:
-
-   *Deterministic — no model, no cost. Run them first: they are the cheapest way to learn the
-   topology under test is sane before any billed turn.*
-   - Startup validation (`StartupValidationTests` — an incoherent partner declaration must stop the boot)
-   - Agent card (`AgentCardTests` — the published card and how far the gate behind it reaches)
-   - Peer federation (`PeerFederationTests` — the outbound half: which cards this side accepts, what it signs, where a credential may go)
-   - Conversation API (`ConversationApiTests` — who the channel API lets in, what a start must announce, how an unknown conversation is answered. The conversations it needs on record are synthesised into the run's storage; its one model call is the presentation of its single real start)
-   - Context resolution (`ContextResolutionTests` — how a context-scoped parameter is passed, stored, omitted or missing, on the real adapter with no model)
-   - Turn closure (`TurnClosureTests` — what `Reply` records and refuses, the framework closing a turn the model answered in free text, with a scripted model)
-   - History view (`HistoryViewTests` — what a model reads of its own history: the current episode only, earlier tool results marked)
-   - Execution approval (`ExecutionApprovalTests` — a tool requiring approval is never run on the model's call alone)
-   - Workflows (`WorkflowTests` — a workflow's steps, edges and launcher, including one driven by an MCP server)
-   - Tool contract (`ToolContractTests` — the attributes and the schema each tool is declared with, refused where they break the contract)
-   - Framework prompts (`FrameworkPromptTests` — every framework prompt entry the framework fetches by name is present in `morgana.json`)
-   - Language models (`LanguageModelTests` — the three tiers built from configuration, each by the provider it declares; a missing tier refused. No model is reached)
-
-   *Blocking — a silent failure mode, which is why these two are the ones a revision stops on.*
-   - Context (`ContextHandlingTests` — the context cycle, the closed vocabulary, cross-agent)
-   - Consulting (`ConsultingTests` — a colleague reached on demand and the conversation left as it was found)
-
-   *Behavioural — billed, judged.*
-   - Behavior (`BehaviourTests` — turn continuation, closure, rich cards)
-   - Actors (`ActorTests` — classifier, channel adapter, presentation)
-   - Served consultation (`ServedConsultationTests` — this installation answering a partner: which conversation, what it cost, how many exchanges are admitted. Its refusals are decided before an agent is troubled and cost nothing; the rest runs a real model)
-
-   *Boot-flagged — each needs a process-wide knob the other groups must NOT carry, so each is its own
-   invocation. This is the whole reason filters are never combined.*
-   - Guard (`GuardTests` — `Harness__EnableGuardrail=true`)
-   - Conversation persistence (`ConversationPersistenceTests` — `Harness__EnableGuardrail=true`, the same knob as the guard group but its own invocation: it stages one refused turn among the five it drives and follows the database after each one)
-   - Summarizer (`SummarizationTests` — `Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4`)
-   - Dust (`DustTests` — `Harness__DustBudgetPerConversation=1.5`; 0.3 and 0.8 both let one turn jump past 90% straight into exhaustion, which reads as "90% never appeared")
-   - Rate limit (`RateLimitTests` — `Harness__RateLimitPerMinute=3`; deterministic, skipped without the knob)
-   - Federation (`FederationTests` — `Harness__FederatedPeer=true`, which stands a **second Morgana** up and **replaces the whole domain** of the instance under test with one toolless agent. Every other group would find its own agents missing, so this one never shares an invocation with anything)
-
-   Plus `HarnessSmokeTests`, which is not a choice: step 4 runs it regardless.
-
-   `AskUserQuestion` takes at most four options, so fourteen checkboxes do not fit: ask by **family**
-   — the four above, multi-select — and let a user wanting a single class say so through "Other".
-   A user who has already said "everything" has answered this question; do not ask it again.
-
-   Do not default to any pre-checked selection — the user picks the perimeter explicitly every time.
-
-   **Consulting takes no flag of its own** and the absence is worth stating because it is the natural
-   thing to go looking for: `Morgana:AgentToAgent:Enabled` defaults to true and the host signs the
-   traffic between its own agents under a key it coins at startup, so there is nothing for the fixture
-   to mint or override. What this group does depend on instead is a **topology** — the scenarios name
-   agents that must still declare `[ConsultsAgent]` of one another — so a failure here has a second
-   thing it can mean and `Examples/Agents/*.cs` is the first place to look before the prose.
-
-3. **Ask the global run/pass threshold** with `AskUserQuestion` (single-select with the following
-   presets, "Other" covers any custom pair):
-   - "5 runs / 4 pass (framework default)"
-   - "3 runs / 2 pass (cheap diagnostic)"
-   - "5 runs / 5 pass (strict, matches the blocking group's own floor)"
-   - Other → ask for `N runs / M pass` as free text
-
-   This threshold is passed as `Harness__DefaultRuns=N Harness__DefaultMinPasses=M` and is a
-   **fallback only**: any scenario YAML under `PromptHarness/Scenarios/` that hardcodes its own
-   `runs`/`minPasses` keeps its own value regardless of what is chosen here — the env var never
-   overrides a scenario-level setting. Tell the user this before running, so a "3/2 selected" answer
-   is not mistaken for "everything now runs 3/2."
-
-4. **Run `HarnessSmokeTests` first, always**, before any selected group, with no env var overrides:
+1. **Confirm the tiers.** The harness shares `Morgana.Web`'s User Secrets store: read it through
+   the tool, which knows where the platform keeps it, filtering to the keys below so that no key or
+   endpoint is printed:
    ```
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.HarnessSmokeTests"
+   dotnet user-secrets list --project Morgana/Morgana.Web | grep -E "Tiers:[^:]+:(Provider|Options:ModelId) |ActorSystem:Tier |HarnessDirectory "
    ```
-   If it fails, stop and report — do not spend a single live LLM call on the selected groups until
-   the wiring itself is healthy (see `PromptHarness/README.md`: "a broken observer reads exactly like a
-   prompt regression"). A `wwwroot`/static-web-assets `DirectoryNotFoundException` pointing at a
-   stale absolute path is a build-cache issue, not a prompt issue: `dotnet clean
-   PromptHarness/PromptHarness.csproj && dotnet build PromptHarness/PromptHarness.csproj` fixes it.
+   Tell the user the `Provider` and
+   `Options:ModelId` of `Economy`, `Efficiency` and `Performance`, plus `Morgana:ActorSystem:Tier`
+   (store or `Morgana.Web/appsettings.json`). Read `Harness:HarnessDirectory` in the same pass: where
+   the store has none, the default is `PromptHarness/Harness/`. That directory is **the one place a
+   run is read from**, by the user and by you alike: rows, failure logs and the console output. Never
+   the scratchpad, or the two of you are reading different evidence.
 
-5. **Run each selected group** with `Harness__DefaultRuns=N Harness__DefaultMinPasses=M` plus its
-   own extra flags, **one `dotnet test` invocation per group, strictly one at a time**. Filters are
-   never combined, because four groups carry a boot-time knob the others must not see. And the
-   invocations are never parallelised either, for a second reason: they share one csproj, so two
-   concurrent runs fight over the same `bin`/`obj`.
+2. **Ask the scope**, in the message text and not with `AskUserQuestion`. Offer what
+   `PromptHarness/Tests/` actually holds, by family as `PromptHarness/CLAUDE.md` groups it
+   (deterministic, blocking, behavioural, boot-flagged). A filter naming a class that no longer exists
+   runs zero tests and exits 0. A user who said "everything" has answered.
+
+3. **Ask the threshold**: 5/4 (default), 3/2 (cheap diagnostic), 5/5 (strict) or a custom N/M. It is
+   passed as `Harness__DefaultRuns=N Harness__DefaultMinPasses=M` and is a fallback only: a scenario
+   YAML declaring its own `runs`/`minPasses` keeps it. Say so before running.
+
+4. **Run `HarnessSmokeTests` first**, with no overrides. If it fails, stop: a broken observer reads
+   exactly like a prompt regression. A `DirectoryNotFoundException` on a stale `wwwroot` path is a
+   build cache: `dotnet clean` then `dotnet build` the project.
+
+5. **Run each group as its own invocation, one at a time**, never combining filters (the boot knobs
+   below must not leak into other groups) and never in parallel (one shared `bin`/`obj`):
    ```
-   # Deterministic — no model, no cost
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.StartupValidationTests"
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.AgentCardTests"
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.PeerFederationTests"
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ConversationApiTests"
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ContextResolutionTests"
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.TurnClosureTests"
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.HistoryViewTests"
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ExecutionApprovalTests"
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.WorkflowTests"
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ToolContractTests"
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.FrameworkPromptTests"
-   dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.LanguageModelTests"
-
-   # Blocking
-   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ContextHandlingTests"
-
-   # Consulting — no extra flag: A2A is on by default and the host coins its own ring key
-   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ConsultingTests"
-
-   # Behavioural
-   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.BehaviourTests"
-   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ActorTests"
-   Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ServedConsultationTests"
-
-   # Boot-flagged — one knob each, never together
-   Harness__EnableGuardrail=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.GuardTests"
-   Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.SummarizationTests"
-   Harness__DustBudgetPerConversation=1.5 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.DustTests"
-   Harness__FederatedPeer=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.FederationTests"
-   Harness__EnableGuardrail=true dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.ConversationPersistenceTests"
-   Harness__RateLimitPerMinute=3 dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.RateLimitTests"
+   <knobs> Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.<Class>" > <HarnessDirectory>/console/<Class>.log 2>&1
    ```
+   | Class | Knobs |
+   |---|---|
+   | `GuardTests` · `ConversationPersistenceTests` | `Harness__EnableGuardrail=true` |
+   | `SummarizationTests` | `Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4` |
+   | `DustTests` | `Harness__DustBudgetPerConversation=1.5` |
+   | `RateLimitTests` | `Harness__RateLimitPerMinute=3` |
+   | `FederationTests` | `Harness__FederatedPeer=true` (replaces the whole domain) |
 
-   **Read the test count in every summary line, not only the pass/fail verdict.** A filter matching
-   no class is not an error: the run exits 0 having executed nothing. A group reported green having
-   run zero tests is the one failure mode of this procedure that looks exactly like success.
+   A single scenario is filtered with `--filter "DisplayName~<id>"`, but xUnit cuts the id to its
+   first 50 characters in the display name: filter on those 50, or a longer id matches nothing.
+   Create `<HarnessDirectory>/console/` first. Deterministic groups need no threshold. Always redirect to a file, never pipe through `tail`: it
+   truncates the saved output too. **Read the test count in the summary**: zero tests is not green.
 
-6. **Always redirect full output to a log file** in the scratchpad directory (`> file 2>&1`, never
-   pipe through `tail` on the live command) — grep the file afterward for the summary line and any
-   `[FAIL]`/`✗` detail. A truncated `tail` loses the per-run transcript needed to diagnose a failure
-   without re-running (and re-paying for) the scenario. This is not a style preference: piping a
-   backgrounded `dotnet test` through `tail -N` truncates the *saved* output file too (the pipeline's
-   tail process is what actually writes it), so a multi-scenario run that fails early in the log can
-   silently lose the one failure you needed, while later passing scenarios survive. Redirect first,
-   read/grep second — never combine the two in one command.
+6. **Watch the run.** Launch it with `run_in_background: true`, note the time just before, then arm a
+   `Monitor` (`timeout_ms: 1800000`, re-armed while the run lives) that only wakes you:
+   ```
+   while pgrep -f "[d]otnet test PromptHarness" >/dev/null; do sleep 120; echo tick; done; echo done
+   ```
+   It watches `dotnet test`, alive from the first second: the test host appears only after the build.
+   Each scenario writes `{HarnessDirectory}/{id}.md` the moment it ends; a run that failed inside it
+   also writes `failures/{id}.log`. At every tick classify each scenario landed since the launch:
+   - **GREEN**: every run passed, no fresh failure log.
+   - **ORANGE**: the log's `verdict:` says "passed at threshold". Reported, not acted on.
+   - **RED**: the log's `verdict:` says "FAILED". KO, blocking.
 
-   Launch the run with `run_in_background: true` (or accept the harness's own auto-backgrounding on
-   timeout) and then **wait on it properly** — `TaskOutput` with `block: true`, or a `Monitor` — rather
-   than babysitting it with manual `sleep` + `ls`/`wc -l` polling loops. The run is 5-10+ minutes of
-   live LLM calls; do not spend turns re-checking a file that isn't done yet.
+   Report one line per tick: how many landed, which are new, each with its colour. On a RED kill the
+   run, stop the monitor, read `failures/{id}.log` and `failures/{id}.model.log` and give the diagnosis
+   from that evidence. Never relaunch or move on without the user's word; what had not landed is
+   reported as not run. On `done` go to step 7.
 
-7. **Watch the configured output folder for live, per-scenario results instead of waiting for the
-   whole run to finish.** `HarnessWriter` (journey row, `{HarnessDirectory}/{scenarioId}.md`) and
-   `FailureLog` (failing-run transcript, `{HarnessDirectory}/failures/{scenarioId}.log`, deleted again
-   once a scenario is clean) are both written the instant *that scenario's* `RunAsync` returns — not
-   at the end of the whole `dotnet test` invocation. A `[Theory]` class with several `[InlineData]`
-   scenario ids therefore drops files into that folder one at a time as the suite progresses, so it
-   can be tailed/opened mid-run to see which scenarios have already landed and how, well before the
-   process exits.
-   - Default location: `Harness:HarnessDirectory` in `PromptHarness/appsettings.Harness.json`
-     (currently the relative value `"Harness"`, resolved against the PromptHarness project root, i.e.
-     `PromptHarness/Harness/` — gitignored, never expect it in `git status`).
-   - The user running the suite may have their own `Harness:HarnessDirectory` override pointing
-     somewhere else entirely (a personal results folder, a shared drive) — it lives in the same User
-     Secrets store read in step 1, so look there rather than asking and only ask when the store has
-     none. Do not assume two different configured paths are the same run's output.
-   - If neither location has fresh files after a run that should have produced them, do not silently
-     shrug — a scenario ID and phase both funnel into the file name, so an empty/missing folder is
-     itself worth flagging rather than only relying on the `dotnet test` console summary.
+   **Killing a run, for a RED or on request, is `pkill -KILL -f`** on `[v]stest.console.dll.*PromptHarness`,
+   `[P]romptHarness/bin/.*/PromptHarness` and `[d]otnet test PromptHarness`. Never SIGTERM, never
+   `TaskStop` alone: a terminated run records every pending scenario as 0/5, overwriting its last real
+   row. The bracket keeps a pattern from matching the shell that carries it. A row with 0.0 LLM calls
+   whose failure log says "run aborted: … Connection refused" is such an artefact, never a measure:
+   report it as not run.
 
-8. **Leave `Harness:Phase` alone unless the user raises it.** It was the row key of the harness's
-   own development phases and re-running a phase replaces its row rather than appending one. It no
-   longer tracks anything the user asks about, so do not invent a new phase name for a run and do not
-   edit `appsettings.Harness.json` to bump one.
+7. **Report a table**, one row per scenario actually run: `Scenario | Group | Result`, with one line
+   under each failure naming the assertion or judge proposition. Judgment goes in prose below.
 
-9. **Report a results table**: one row per scenario actually exercised (not per test class — a
-   `[Theory]` class covers several scenario IDs), columns `Scenario | Group | Result`, plus a short
-   note under any row that failed (which assertion or judge proposition, one line). Do not editorialize
-   pass/fail severity in the table itself — keep judgment calls in prose below it.
+## Rules
 
-## Notes
-
-- Every run is billed — live LLM calls, no mocking. Never run without both questions (scope,
-  threshold) answered first and never assume a repeat of a previous scope/threshold.
-- The judge (`LLMJudge`) always runs on the `Efficiency` tier of the deployment under test, whatever `ActorSystem:Tier` names, with a
-  deliberately strict system prompt ("do not be charitable"). A judge-proposition failure is not
-  automatically a prompt defect — check whether the proposition itself is well-calibrated before
-  concluding the agent is wrong (see the `behaviour-conversation-closure` / `context-cross-agent`
-  precedent: the fix was reformulating the judge proposition to judge function over literal wording,
-  not touching the agent's persona).
-- A scenario failing at a loosened threshold (e.g. 3/2) that would have passed at 5/4 is not the same
-  finding as a scenario failing at its own hardcoded blocking threshold (5/5) — say which one occurred.
-- Never edit `morgana.json`, `agents.json`, or any scenario YAML as part of *running* this skill.
-  Diagnosing and fixing a discovered defect is separate follow-up work the user drives turn by turn,
-  the same way the AzureOpenAI diagnostic session that produced this skill did.
-- Committing any resulting change is the user's call, never automatic.
+- A judge failure is not automatically a prompt defect: check the proposition is well calibrated
+  first. The judge runs on `Efficiency` and reads a proposition as an act, never as a wording.
+- Say whether a failure happened at a loosened threshold or at the scenario's own.
+- Leave `Harness:Phase` alone unless the user raises it.
+- Never edit `morgana.json`, `agents.json` or a scenario YAML while running this skill; fixing is
+  separate work the user drives. Never commit.

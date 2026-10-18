@@ -112,6 +112,24 @@ public sealed class ContextResolutionTests
     }
 
     [Fact]
+    public async Task ContextResolution_Pair_of_quotes_is_missing_and_stores_nothing()
+    {
+        ToolUnderTest tool = await ToolUnderTest.CreateAsync();
+
+        // The argument arrives as the model wrote it, a JSON string holding nothing but a pair of quotes.
+        object? result = await tool.Function.InvokeAsync(new AIFunctionArguments
+        {
+            [CustomerCode] = JsonSerializer.SerializeToElement("\"\""),
+            [InvoiceId] = "INV-0247"
+        });
+
+        Assert.Null(tool.ReceivedCall);
+        Assert.Equal("ContextValueMissing", Assert.IsType<Records.FrameworkToolResult>(result).Name);
+        Assert.Null(tool.Provider.GetVariable(tool.Session, CustomerCode));
+        Assert.Empty(tool.SharedWrites);
+    }
+
+    [Fact]
     public async Task ContextResolution_Colleague_answering_a_consultation_uses_the_value_and_stores_nothing()
     {
         ToolUnderTest tool = await ToolUnderTest.CreateAsync();

@@ -182,8 +182,9 @@ public sealed class ExecutionApprovalTests
 
         // The session belongs to an agent that never talks to a model: it only carries the context variables.
         AgentSession session = await new ChatClientAgent(new ScriptedChatClient()).CreateSessionAsync(TestContext.Current.CancellationToken);
+        // The model composes a pressed call itself once the user has typed what it lacked, so that is the press the client meets.
         if (pressedTool is not null)
-            await provider.SetVariableAsync(session, Constants.ContextKeys.PressedActionTool, pressedTool);
+            provider.SetPressedCall(session, new Records.PressedCall(pressedTool, new Dictionary<string, string>(), AwaitingAnswer: true));
 
         return (new ApprovalTurnChatClient(model, () => session, provider, Refusal), provider, session);
     }

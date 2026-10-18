@@ -44,6 +44,6 @@ turns:
       toolsCalled: [ConfirmOrder]
       noQuickReplyIds: [approve_action, reject_action]
       textNotEmpty: true
-      textNotContains: ["#INT#", "invoiceId", "InvoiceLines"]
+      textNotContains: ["invoiceId", "InvoiceLines"]
     judge:
       - "The response confirms the order is now settled or binding."

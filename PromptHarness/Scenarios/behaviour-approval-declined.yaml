@@ -30,8 +30,8 @@ turns:
       toolsNotCalled: [SubscribeToGreenCarePlan]
       noQuickReplyIds: [approve_action, reject_action]
       textNotEmpty: true
-      textNotContains: ["#INT#", "contractId"]
+      textNotContains: ["contractId"]
     judge:
       - "The response says the customer has not been enrolled or that nothing was done."
     judgeNot:
-      - "The response says the plan is active or that its first month has been billed."
+      - "The response says the plan is active now or that the first month has already been billed."

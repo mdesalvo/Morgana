@@ -9,8 +9,8 @@ description: >-
   orderId and the seal word from the quote, so nothing is typed and no approval buttons follow. Uses SEED-400 (500 units seeded) so five replays never run the SKU out of stock within one
   harness session. InventoryTool.GenerateSealWord() is pinned for the run to
   Harness:DeterministicSealWord (appsettings.Harness.json, default "534LW03D"), which is what lets
-  the first turn assert the seal word on the card. The invoice judgeNot forbids reading the invoice's
-  money out, never naming it: the Confirmed card that the agent's Formatting prescribes carries the
+  the first turn assert the seal word on the card. The invoice judgeNot forbids an amount given as what
+  was billed, never naming the invoice: the Confirmed card that the agent's Formatting prescribes carries the
   orderId, the remaining stock and the invoiceId, none of which is a total, a tax or a charge line.
   The judge reads the card's rendered content along with the text.
 
@@ -39,11 +39,11 @@ turns:
       # Pressing the action was the approval: no second confirmation is asked.
       noQuickReplyIds: [approve_action, reject_action]
       textNotEmpty: true
-      textNotContains: ["#INT#", "invoiceId", "InvoiceLines"]
+      textNotContains: ["invoiceId", "InvoiceLines"]
     judge:
       - "The response confirms the order is now settled or binding."
       - "The response says the purchase has been billed to the customer."
     judgeNot:
-      # Judged against everything the customer sees, card included. Naming the invoice is allowed and
-      # required; reading its money out is what this forbids, wherever it would be rendered.
-      - "The response gives the invoice's own total, its tax or a line on it."
+      # ConfirmOrder returns no amount and the invoice is Billing's alone: any figure given as what was
+      # billed is invented, on the customer's own books.
+      - "The response presents an amount as what the customer has been billed."

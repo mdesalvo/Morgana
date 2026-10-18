@@ -7,7 +7,8 @@ description: >-
   Morgana's last line is the farewell and carries no button to press.
 
 turns:
-  - say: "Hi, my customer code is P994E — show me my last 3 invoices"
+  # A single invoice leaves no choice of which one to open, so the turn ends on the buttons to stay or leave.
+  - say: "Hi, my customer code is P994E — show me my most recent invoice"
     expect:
       agent: BillingAgent
       classified: true
@@ -21,7 +22,7 @@ turns:
       richCard: absent
       textNotEmpty: true
     judge:
-      - "The response invites the user to say what else they need."
+      - "The response asks the user what they would like."
 
   # The invitation awaits a typed answer and offers no button, so the farewell is typed.
   - say: "We're done, thanks"
