@@ -726,7 +726,7 @@ public class MorganaAgentAdapter
 
         // The stored position is read, since a workflow already running decides whether this launch may start.
         Records.WorkflowPosition? storedPosition = workflows.ContextProvider.GetWorkflowPosition(session);
-        bool isServingConsultation = workflows.ContextProvider.GetVariable(session, Constants.ContextKeys.ServingConsultation) is not null;
+        bool isServingConsultation = workflows.ContextProvider.HoldsFrameworkKey(session, Constants.ContextKeys.ServingConsultation);
 
         // One workflow at a time and never for a colleague: the call changes nothing and is told so.
         // A stored position that no declaration serves any more does not count as a workflow running.
@@ -1139,7 +1139,7 @@ public class MorganaAgentAdapter
         // A colleague may not consult a colleague of its own: the chain stops at one hop, so the call
         // graph cannot contain a cycle and no caller chain has to travel with the request. The colleagues
         // are not offered while a consultation is served, so this refusal answers only a call made all the same.
-        if (contextProvider.GetVariable(callerSession, Constants.ContextKeys.ServingConsultation) is not null)
+        if (contextProvider.HoldsFrameworkKey(callerSession, Constants.ContextKeys.ServingConsultation))
         {
             logger.LogWarning("Agent '{CallerIntent}' attempted to consult '{PeerIntent}' while itself answering a colleague", callerIntent, peerIntent);
             return RefusalEnvelope(await promptComposerService.ComposeToolInjectionAsync(

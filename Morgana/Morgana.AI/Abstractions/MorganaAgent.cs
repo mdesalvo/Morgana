@@ -875,22 +875,10 @@ public class MorganaAgent : MorganaActor
     /// <returns>The turn's closure; <c>null</c> when none was recorded.</returns>
     protected Records.ClosingDeclaration? GetClosingDeclarationFromContext(AgentSession session)
     {
-        // Written this process lifetime it is the string Reply stored; restored from a saved session it is JSON.
-        string? closingDeclarationJson = aiContextProvider.GetVariable(session, Constants.ContextKeys.ClosingDeclaration) switch
-        {
-            string text => text,
-            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
-            _ => null
-        };
-
-        // No closure was recorded, so the turn is answered as if Reply had said nothing.
-        if (string.IsNullOrEmpty(closingDeclarationJson))
-            return null;
-
         try
         {
-            // The closure is the record that Reply serialized.
-            return JsonSerializer.Deserialize<Records.ClosingDeclaration>(closingDeclarationJson, Records.DefaultJsonSerializerOptions);
+            // The closure is the record that Reply serialized; with none recorded the turn is answered as if Reply had said nothing.
+            return aiContextProvider.GetClosingDeclaration(session);
         }
         catch (JsonException ex)
         {

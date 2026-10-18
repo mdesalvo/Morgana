@@ -182,6 +182,20 @@ public class MorganaAIContextProvider : AIContextProvider
     }
 
     /// <summary>
+    /// Whether the session holds one of the framework's own context keys.
+    /// </summary>
+    /// <remarks>Read without the per-variable access line: the model-call filter and the base tools ask it on every call.</remarks>
+    public bool HoldsFrameworkKey(AgentSession session, string frameworkKey)
+        => sessionState.GetOrInitializeState(session).Variables.ContainsKey(frameworkKey);
+
+    /// <summary>
+    /// Reads the closure that the Reply tool recorded on the current turn; <c>null</c> when none was recorded.
+    /// </summary>
+    /// <remarks>Read without the per-variable access line: the agent reads it several times at the end of every turn.</remarks>
+    public Records.ClosingDeclaration? GetClosingDeclaration(AgentSession session)
+        => ReadStored<Records.ClosingDeclaration>(session, Constants.ContextKeys.ClosingDeclaration);
+
+    /// <summary>
     /// Reads where the running workflow stands; <c>null</c> when none runs.
     /// </summary>
     /// <remarks>

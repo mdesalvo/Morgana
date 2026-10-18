@@ -118,7 +118,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
             return options;
 
         // An agent answering a colleague carries the consultation mark in its session.
-        bool isServingConsultation = contextProvider.GetVariable(session, Constants.ContextKeys.ServingConsultation) is not null;
+        bool isServingConsultation = contextProvider.HoldsFrameworkKey(session, Constants.ContextKeys.ServingConsultation);
 
         // A colleague is not consulted by an agent that is answering one, since the chain stops at one hop,
         // nor by a turn that has spent its rounds.
@@ -131,7 +131,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
 
         // A landing is the user's choice of this agent and nothing else: the turn holds Reply alone, so the model
         // introduces itself from the declaration that its context provider adds and answers through Reply.
-        if (contextProvider.GetVariable(session, Constants.ContextKeys.Landing) is not null)
+        if (contextProvider.HoldsFrameworkKey(session, Constants.ContextKeys.Landing))
         {
             // The clone carries Reply alone, whatever else the agent holds.
             ChatOptions landingOptions = options.Clone();

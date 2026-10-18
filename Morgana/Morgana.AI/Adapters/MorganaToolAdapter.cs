@@ -387,7 +387,7 @@ public class MorganaToolAdapter
             // A colleague's answer must leave the conversation as it found it, so a value it was
             // handed is used and never stored where the shared registry would keep it.
             bool servingConsultation =
-                toolContext.Provider.GetVariable(toolContext.Session, Constants.ContextKeys.ServingConsultation) is not null;
+                toolContext.Provider.HoldsFrameworkKey(toolContext.Session, Constants.ContextKeys.ServingConsultation);
 
             // Each context parameter is resolved in turn, from what the call and the session hold.
             foreach (string parameter in contextParameters)

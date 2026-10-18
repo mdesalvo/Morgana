@@ -63,7 +63,7 @@ public class ReplyTool : MorganaTool
 
         // A turn is answered once. A second Reply in the same turn is a stray duplicate: the closure already
         // recorded stands and this call is only told so, which still gives it the result its call is owed.
-        if (ctx.Provider.GetVariable(ctx.Session, Constants.ContextKeys.ClosingDeclaration) is not null)
+        if (ctx.Provider.HoldsFrameworkKey(ctx.Session, Constants.ContextKeys.ClosingDeclaration))
         {
             toolLogger.LogWarning("Reply called again in a turn already answered: the first closure stands");
             EndToolLoopOnceResponseIsAnswered();
