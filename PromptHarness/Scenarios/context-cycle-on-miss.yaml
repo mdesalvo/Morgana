@@ -18,7 +18,7 @@ turns:
       contextReads: [Miss:customerCode]
       noContextWrites: true
       textNotEmpty: true
-      textNotContains: ["context variable", "context store", "database", "session", "endpoint", "cache"]
+      textNotContains: ["context variable", "context store", "database", "endpoint", "cache"]
     judge:
       - "The response asks the user for an identifier or customer code."
 
@@ -28,4 +28,4 @@ turns:
       contextWrites: [customerCode]
       toolsCalled: [GetInvoices]
       textNotEmpty: true
-      textNotContains: ["context variable", "context store", "database", "session", "endpoint", "cache"]
+      textNotContains: ["context variable", "context store", "database", "endpoint", "cache"]

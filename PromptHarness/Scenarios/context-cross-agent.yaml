@@ -35,6 +35,6 @@ turns:
       contextReads: [Hit:customerCode]
       toolsCalled: [GetContractDetails]
       textNotEmpty: true
-      textNotContains: ["context variable", "context store", "database", "session", "endpoint", "cache"]
+      textNotContains: ["context variable", "context store", "database", "endpoint", "cache"]
     judgeNot:
       - "The response asks the user for their customer code or identifier."

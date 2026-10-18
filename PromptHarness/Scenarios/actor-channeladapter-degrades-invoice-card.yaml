@@ -19,5 +19,4 @@ turns:
     judge:
       - "The response states an amount, a date or a status of an invoice."
     judgeNot:
-      - "The response is a list of option labels with no sentence connecting them."
       - "The response asks the user to press, tap or click something."

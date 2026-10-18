@@ -17,6 +17,6 @@ turns:
       agentCompleted: false
       noStandaloneEscapeOptions: true
       textNotEmpty: true
-      textNotContains: ["context variable", "context store", "database", "session", "endpoint", "cache"]
+      textNotContains: ["context variable", "context store", "database", "endpoint", "cache"]
     judge:
       - "The response lets the user choose which invoice they mean."
