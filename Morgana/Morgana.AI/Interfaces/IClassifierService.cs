@@ -20,7 +20,7 @@ public interface IClassifierService
     /// A <see cref="Records.ClassificationResult"/> containing the top-ranked intent name and a
     /// metadata dictionary (at minimum a <c>"confidence"</c> key). On failure, implementations
     /// must return a fallback result with intent <see cref="Constants.Intents.Other"/> rather than throwing — see the
-    /// fail-safe contract above. Callers that need to detect a genuine collision between two or
+    /// fail-safe contract above; that fallback result carries the <see cref="Constants.ClassificationMetadata.Error"/> key. Callers that need to detect a genuine collision between two or
     /// more close-scoring candidates read the metadata's <c>"ambiguousIntents"</c> key, present
     /// only when the implementation actually flags one.
     /// </returns>

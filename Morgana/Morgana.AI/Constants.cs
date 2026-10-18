@@ -207,8 +207,8 @@ public static class Constants
         /// <summary>What the user is asked when two intents collide too closely to route between (Classifier).</summary>
         public const string Disambiguation = "Disambiguation";
 
-        /// <summary>What the user is told when classification lands on an intent that no agent handles (Classifier).</summary>
-        public const string UnrecognizedIntent = "UnrecognizedIntent";
+        /// <summary>What the user is told when the classifier fails and its classification is only a fallback (Classifier).</summary>
+        public const string ClassificationError = "ClassificationError";
 
         /// <summary>What the user is told when the provider's own content filter refuses a message before the guard can judge it (Guard).</summary>
         public const string ContentFiltered = "ContentFiltered";
@@ -471,8 +471,8 @@ public static class Constants
         /// <summary>
         /// The complement of whatever domain is deployed: what a request matching no modelled agent
         /// is. No agent handles it, it is never offered as a quick reply and never counts as a
-        /// collision candidate. Routed all the same, so the router answers with its
-        /// unrecognized-intent message rather than the pipeline stalling.
+        /// collision candidate. Routed all the same: the router answers a genuine complement with
+        /// Morgana's presentation and a classification failure with the classification-error message.
         /// </summary>
         /// <remarks>
         /// The classifier's own and no domain's: the name is here because three parties compare it,
@@ -480,6 +480,15 @@ public static class Constants
         /// of that actor's prose. A plugin declaring it is ignored at the door.
         /// </remarks>
         public const string Other = "other";
+    }
+
+    /// <summary>
+    /// Keys of a classification's metadata that the classifier, the supervisor and the router agree on.
+    /// </summary>
+    public static class ClassificationMetadata
+    {
+        /// <summary>The key that marks a classification as a technical fallback rather than the classifier's own answer: written by the classifier and the supervisor and read by the router.</summary>
+        public const string Error = "error";
     }
 
     /// <summary>

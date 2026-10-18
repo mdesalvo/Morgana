@@ -54,7 +54,7 @@ public class LLMClassifierService : IClassifierService
             new Dictionary<string, string>
             {
                 ["confidence"] = "0.00",
-                ["error"] = "classification_failed"
+                [Constants.ClassificationMetadata.Error] = "classification_failed"
             });
 
     /// <summary>Loads intent definitions and builds the classifier system prompt eagerly.</summary>
@@ -166,12 +166,18 @@ public class LLMClassifierService : IClassifierService
                 .OrderByDescending(candidate => candidate.Confidence)
             ];
 
-            // An empty list (null response, null/empty Intents array) means the LLM gave us
-            // nothing usable. The contract is fail-safe rather than throwing: the turn proceeds on
-            // Intents.Other at middling confidence, which routes to no agent and is answered by the
-            // router's unrecognized-intent fallback.
+            // An empty list (null/empty Intents array) means the model gave nothing usable: that is a
+            // technical failure and not a genuine complement, so it takes the marked fail-safe route
+            // and the router does not push a menu at a user whose request may have been legitimate.
             if (rankedIntentScores.Count == 0)
-                rankedIntentScores.Add(new Records.IntentScore(Constants.Intents.Other, 0.5));
+                return FallbackResult with
+                {
+                    Metadata = new Dictionary<string, string>
+                    {
+                        ["confidence"] = "0.00",
+                        [Constants.ClassificationMetadata.Error] = "classification_empty"
+                    }
+                };
 
             // The top of the ranked list is our "official" pick — the one that goes into
             // ClassificationResult.Intent and is used for normal (non-ambiguous) routing regardless
@@ -234,7 +240,7 @@ public class LLMClassifierService : IClassifierService
                 Metadata = new Dictionary<string, string>
                 {
                     ["confidence"] = "0.00",
-                    ["error"] = $"classification_failed: {ex.Message}"
+                    [Constants.ClassificationMetadata.Error] = $"classification_failed: {ex.Message}"
                 }
             };
         }

@@ -2,6 +2,7 @@ namespace Morgana.AI.Interfaces;
 
 /// <summary>
 /// Produces the welcome message and the intent buttons shown to the user when a conversation starts.
+/// It also carries the same presentation without greeting, served when a request lands on the complement intent.
 /// Reliability contract: Implementations must never throw. They are expected to handle all errors internally
 /// and always return a valid <see cref="Records.PresentationResult"/> — at minimum a sensible
 /// fallback message with quick replies derived directly from the provided intent definitions.
@@ -20,8 +21,8 @@ public interface IPresenterService
     /// Identifier of the conversation. An implementation may use it to tailor the presentation to the conversation's channel.
     /// </param>
     /// <returns>
-    /// A <see cref="Records.PresentationResult"/> containing the welcome message and the
-    /// quick reply buttons to render in the UI. Never null; never throws.
+    /// A <see cref="Records.PresentationResult"/> containing the welcome message, the
+    /// reintroduction served on a complement classification and the quick reply buttons to render in the UI. Never null; never throws.
     /// </returns>
     Task<Records.PresentationResult> GenerateAsync(IReadOnlyList<Records.IntentDefinition> displayableIntents, string conversationId);
 }

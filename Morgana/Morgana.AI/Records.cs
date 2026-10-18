@@ -831,10 +831,13 @@ public static class Records
     /// The welcome message as the presentation prompt returns it; the buttons are the configured intents and the model never writes them.
     /// </summary>
     /// <param name="Message">Welcome/presentation message text (2-4 sentences)</param>
+    /// <param name="Reintroduction">The same presentation without greeting, for a user who asks again what Morgana can do.</param>
     [Description("Morgana's introduction.")]
     public record PresentationResponse(
         [property: JsonPropertyName("message")]
-        [property: Description("The introduction message.")] string Message);
+        [property: Description("The introduction message.")] string Message,
+        [property: JsonPropertyName("reintroduction")]
+        [property: Description("The same introduction for a user who asks again what you can do: it holds no greeting.")] string Reintroduction);
 
     /// <summary>
     /// LLM-generated rewrite produced by the ChannelAdapter prompt. Contains the degraded
@@ -867,10 +870,14 @@ public static class Records
 
     /// <summary>
     /// Result returned by <see cref="Interfaces.IPresenterService.GenerateAsync"/> containing
-    /// the welcome message and quick reply buttons for the start of a conversation.
+    /// the welcome message and quick reply buttons for the start of a conversation, plus the same
+    /// presentation without greeting for a request that lands on the complement intent.
     /// </summary>
     /// <param name="Message">
     /// Welcome/presentation message text to display to the user (2-4 sentences).
+    /// </param>
+    /// <param name="Reintroduction">
+    /// The same presentation without greeting, served when a request lands on the complement intent.
     /// </param>
     /// <param name="QuickReplies">
     /// List of quick reply buttons derived from displayable intents.
@@ -883,6 +890,7 @@ public static class Records
     /// </remarks>
     public record PresentationResult(
         string Message,
+        string Reintroduction,
         List<QuickReply> QuickReplies);
 
     // ==========================================================================

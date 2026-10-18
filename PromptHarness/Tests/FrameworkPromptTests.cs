@@ -110,7 +110,7 @@ public sealed class FrameworkPromptTests
     [InlineData("Presentation", "Fallback")]
     [InlineData("Presentation", "NoAgents")]
     [InlineData("Classifier", "Disambiguation")]
-    [InlineData("Classifier", "UnrecognizedIntent")]
+    [InlineData("Classifier", "ClassificationError")]
     [InlineData("Guard", "ContentFiltered")]
     public async Task FrameworkPrompt_Every_message_morgana_says_in_her_own_voice_is_authored(string promptId, string message)
         => Assert.False(string.IsNullOrWhiteSpace((await resolver.ResolveAsync(promptId)).GetMessage(message)));

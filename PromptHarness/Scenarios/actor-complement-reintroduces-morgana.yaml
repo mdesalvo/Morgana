@@ -1,0 +1,22 @@
+id: actor-complement-reintroduces-morgana
+description: >-
+  A user asking what Morgana can do lands the classifier on the complement intent "other", which no
+  agent declares: the router reaches nobody and answers with Morgana's presentation written to be
+  read again, followed by one button per intent. The buttons are written by code and asserted
+  exactly; the judge weighs only the text, which must present the domain without greeting a user
+  who is already in the conversation. The text is cached per channel, so every run after the first
+  replays the same words and the repetition measures the classifier and the judge.
+runs: 5
+minPasses: 4
+
+turns:
+  - say: "How can you help me?"
+    expect:
+      agent: none
+      classifierIntent: other
+      quickReplyLabels: ["🧾 Invoices", "📜 Care Plan", "🐒 Primate Almanac", "🌿 Greenhouse"]
+      textNotEmpty: true
+    judge:
+      - "The response tells the user what Morgana can help with."
+    judgeNot:
+      - "The response says hello or welcome to the user."

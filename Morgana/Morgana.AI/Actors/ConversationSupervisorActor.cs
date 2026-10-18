@@ -556,19 +556,19 @@ public class ConversationSupervisorActor : MorganaActor
             classifierSpan = null;
 
             // Shaped like a real result, with the same "confidence" key and string type, so that nothing
-            // downstream needs a special case; "error" is the one extra key, kept for diagnostics.
+            // downstream needs a special case; the classification-error key is the one extra key, kept for diagnostics.
             Records.ClassificationResult fallbackClassification = new Records.ClassificationResult(
                 Constants.Intents.Other,
                 new Dictionary<string, string>
                 {
                     ["confidence"] = "0.00",
-                    ["error"] = $"classification_failed: {description}"
+                    [Constants.ClassificationMetadata.Error] = $"classification_failed: {description}"
                 });
 
-            // The router has no agent for "other" by design and answers with its unrecognized-intent text.
+            // The router has no agent for "other" by design and answers a marked failure with the classification-error message.
             actorLogger.Info("Falling back to 'other' intent");
 
-            // The turn goes to the router under the other intent, which answers with its fallback text.
+            // The turn goes to the router under the other intent, which answers with the classification-error message.
             DispatchToRouter(ctx, fallbackClassification);
         }
         #endregion

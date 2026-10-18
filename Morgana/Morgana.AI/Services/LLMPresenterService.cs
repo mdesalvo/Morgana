@@ -120,7 +120,11 @@ public class LLMPresenterService : IPresenterService
         // Morgana must always present herself: with no agent the prompt's own message stands in for the model's.
         Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Presentation);
         Records.PresentationResult presentationResult = displayableIntents.Count == 0
-            ? new Records.PresentationResult(presentationPrompt.GetMessage(Constants.Messages.NoAgents), [])
+            // The authored text reads right on arrival and when served again on a complement classification, so one text is both.
+            ? new Records.PresentationResult(
+                presentationPrompt.GetMessage(Constants.Messages.NoAgents),
+                presentationPrompt.GetMessage(Constants.Messages.NoAgents),
+                [])
             : await GenerateMessageAsync(presentationPrompt, displayableIntents);
 
         // Capability-driven degradation with caching of the outcome: subsequent conversations on this channel pay zero LLM cost.
@@ -135,8 +139,20 @@ public class LLMPresenterService : IPresenterService
                 AgentCompleted = false
             }, channelCapabilities);
 
+        // The reintroduction is degraded for the same channel with the same buttons: it is served on a complement classification and must fit the channel as the welcome does.
+        ChannelMessage reintroductionMessage = await channelAdapter.AdaptAsync(
+            new ChannelMessage
+            {
+                ConversationId = $"{channelName}-{PresentationLabel}-reintroduction-cache",
+                Text = presentationResult.Reintroduction,
+                MessageType = ChannelMessageTypes.Presentation,
+                QuickReplies = presentationResult.QuickReplies,
+                AgentName = Constants.Morgana,
+                AgentCompleted = false
+            }, channelCapabilities);
+
         // The presentation never carries a rich card and the supervisor's send path does not read one from it.
-        return new Records.PresentationResult(channelMessage.Text, channelMessage.QuickReplies ?? []);
+        return new Records.PresentationResult(channelMessage.Text, reintroductionMessage.Text, channelMessage.QuickReplies ?? []);
     }
 
     /// <summary>
@@ -171,6 +187,10 @@ public class LLMPresenterService : IPresenterService
                     PresentationLabel, presentationSystemPrompt, formattedIntents)
                  ?? throw new InvalidOperationException("LLM returned null presentation");
 
+            // Either text left empty would reach the user as a turn with no words, so the fallback answers instead.
+            if (string.IsNullOrWhiteSpace(presentation.Message) || string.IsNullOrWhiteSpace(presentation.Reintroduction))
+                throw new InvalidOperationException("LLM returned an empty presentation text");
+
             // The model wrote the welcome alone: the buttons are the configured intents, never the model's.
             List<QuickReply> quickReplies = BuildIntentButtons(displayableIntents);
 
@@ -179,7 +199,7 @@ public class LLMPresenterService : IPresenterService
                 "LLMPresenterService: LLM generated presentation with {Count} quick replies", quickReplies.Count);
 
             // The welcome the model wrote and the buttons that lead to the agents.
-            return new Records.PresentationResult(presentation.Message, quickReplies);
+            return new Records.PresentationResult(presentation.Message, presentation.Reintroduction, quickReplies);
         }
         catch (Exception ex)
         {
@@ -221,7 +241,8 @@ public class LLMPresenterService : IPresenterService
         logger.LogInformation(
             "LLMPresenterService: fallback presentation with {Count} quick replies", fallbackReplies.Count);
 
-        // The authored greeting with one button per intent: what a user sees when no model wrote one.
-        return new Records.PresentationResult(fallbackMessage, fallbackReplies);
+        // The authored text with one button per intent: what a user sees when no model wrote one. It reads
+        // right on arrival and when served again on a complement classification, so one text is both.
+        return new Records.PresentationResult(fallbackMessage, fallbackMessage, fallbackReplies);
     }
 }
