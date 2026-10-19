@@ -46,16 +46,16 @@ namespace PromptHarness.Infrastructure.Wiring;
 public sealed class MorganaHostFixture : IAsyncLifetime
 {
     /// <summary>Configuration resolved by the harness: the host's own appsettings plus the shared secrets store.</summary>
-    public IConfiguration Configuration { get; private set; } = null!;
+    public IConfiguration Configuration { get; }
 
     /// <summary>Harness knobs from <c>appsettings.Harness.json</c>.</summary>
-    public HarnessOptions Options { get; private set; } = null!;
+    public HarnessOptions Options { get; }
 
     /// <summary>Base address of the host under test, e.g. <c>http://127.0.0.1:43117</c>.</summary>
-    public string BaseAddress { get; private set; } = string.Empty;
+    public string BaseAddress { get; }
 
     /// <summary>Symmetric key minted for this run and shared with the host as the <c>harness</c> issuer key.</summary>
-    public string IssuerKey { get; private set; } = string.Empty;
+    public string IssuerKey { get; }
 
     /// <summary>
     /// Partner this run declares, admitted to <see cref="ScopedPartnerAgent"/> and to no other agent,
@@ -71,7 +71,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     public const string ScopedPartnerAgent = "inventory";
 
     /// <summary>Symmetric key minted for this run under <see cref="ScopedPartnerName"/>.</summary>
-    public string ScopedPartnerKey { get; private set; } = string.Empty;
+    public string ScopedPartnerKey { get; }
 
     /// <summary>
     /// Conversations <see cref="ScopedPartnerName"/> may open in an hour. Declared because the
@@ -108,7 +108,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     public const string MeteredPartnerRefusal = "The nursery cannot take on further exchanges with you this hour.";
 
     /// <summary>Symmetric key minted for this run under <see cref="MeteredPartnerName"/>.</summary>
-    public string MeteredPartnerKey { get; private set; } = string.Empty;
+    public string MeteredPartnerKey { get; }
 
     /// <summary>Position <see cref="MeteredPartnerName"/> takes in <c>Morgana:AgentToAgent:Partners</c>.</summary>
     public int MeteredPartnerIndex { get; private set; }
@@ -138,13 +138,13 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     public FederatedPeerHost? Peer { get; private set; }
 
     /// <summary>Where the other installation answers, claimed before either host starts.</summary>
-    public string FederatedPeerAddress { get; private set; } = string.Empty;
+    public string FederatedPeerAddress { get; } = string.Empty;
 
     /// <summary>The one secret the two installations of a federation run share.</summary>
-    public string FederationKey { get; private set; } = string.Empty;
+    public string FederationKey { get; } = string.Empty;
 
     /// <summary>Port the other installation binds, reserved beside this instance's own.</summary>
-    private int federatedPeerPort;
+    private readonly int federatedPeerPort;
 
     /// <summary>Slot the federated relationship occupies, read from both ends of it.</summary>
     private int FederatedPartnerIndex { get; set; }
@@ -156,37 +156,40 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     public string StoragePath => storagePath;
 
     /// <summary>Tee on the host's stdout; the turn observer reads tool log lines from it.</summary>
-    public HostOutputCapture Output { get; private set; } = null!;
+    public HostOutputCapture Output { get; }
 
     /// <summary>The harness's own channel, already handshaken and listening for callbacks.</summary>
-    public HarnessChannel Channel { get; private set; } = null!;
+    public HarnessChannel Channel { get; }
 
     /// <summary>Reader of the per-turn structural signals.</summary>
-    public TurnObserver Observer { get; private set; } = null!;
+    public TurnObserver Observer { get; }
 
     /// <summary>Scenario engine bound to this host.</summary>
-    public ScenarioRunner Runner { get; private set; } = null!;
+    public ScenarioRunner Runner { get; }
 
     /// <summary>
     /// The judge <see cref="Runner"/> was built over, exposed for the one caller that judges a bare
     /// <see cref="Morgana.Contracts.ChannelMessage"/> outside any scripted turn (Presentation).
     /// </summary>
-    public LLMJudge Judge { get; private set; } = null!;
+    public LLMJudge Judge { get; }
 
     /// <summary>The raw REST client over the host under test, for the groups that assert status codes and bodies.</summary>
-    public ChannelApiClient Api { get; private set; } = null!;
+    public ChannelApiClient Api { get; }
 
     /// <summary>The generic host that owns the harness components and disposes them with the run.</summary>
-    private IHost? harnessHost;
+    private readonly IHost harnessHost;
 
     /// <summary>Directory holding the per-conversation SQLite databases created during the run.</summary>
-    private string storagePath = string.Empty;
+    private readonly string storagePath;
 
     /// <summary>Fatal exception thrown by the host's entry point, republished to the first test that observes it.</summary>
     private Exception? hostFailure;
 
-    /// <inheritdoc />
-    public async ValueTask InitializeAsync()
+    /// <summary>
+    /// Composes everything that needs no waiting: configuration, per-run identity, ports, the host's
+    /// environment, the output tee and the harness components.
+    /// </summary>
+    public MorganaHostFixture()
     {
         // Step 1: resolve configuration and harness knobs before anything else needs them. The
         // builder that will later compose the harness components owns the configuration from here on.
@@ -223,26 +226,15 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // environment variables, which is how the child host process picks it up.
         ApplyHostEnvironment();
 
-        // Step 4b: on a federation run, the other installation goes up first. It inherits everything
-        // just published (provider, keys, tiers) and is told only what makes it somebody else: its
-        // own address and storage, the shipped domain instead of the one agent above and the partner
-        // declaration admitting this instance to the agent it publishes.
-        if (Options.FederatedPeer)
-            Peer = await FederatedPeerHost.StartAsync(federatedPeerPort, BuildFederatedPeerEnvironment(), Options.StartupTimeoutSeconds);
-
         // The tee must be in place before the host constructs its logging stack, because the
-        // console logger latches Console.Out once, when its provider is created.
+        // console logger latches Console.Out once, when its provider is created. Installing it
+        // before the federated peer starts is safe: that process has its stdout and stderr redirected
+        // and never writes to Console.
         Output = HostOutputCapture.Install(Options.EchoHostOutput);
 
-        // Step 5: launch the real Morgana.Web entry point on a background thread and block here
-        // until it answers its health endpoint (or fails fast — see WaitForHealthyAsync).
-        StartHost();
-
-        await WaitForHealthyAsync();
-
-        // Step 6: now that the host is up, the harness components are registered against it:
-        // the observers (spans + log tee) and the harness's own channel (a live webhook receiver +
-        // REST client) with the scenario engine and the judge built over the same LLM configuration.
+        // Step 6: the harness components are registered: the observers (spans + log tee) and the
+        // harness's own channel (a live webhook receiver + REST client) with the scenario engine and
+        // the judge built over the same LLM configuration.
         harnessBuilder.Logging.ClearProviders();
         harnessBuilder.Services.AddSingleton(Configuration);
         harnessBuilder.Services.AddSingleton(Options);
@@ -270,10 +262,9 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         harnessBuilder.Services.AddSingleton<ChannelApiClient>();
         harnessHost = harnessBuilder.Build();
 
-        // Starting the harness host opens the channel's receiver, which Morgana's webhooks are pushed to.
-        await harnessHost.StartAsync();
-
         // Step 7: the root services are resolved once and exposed; nothing else asks the container.
+        // The observer is built before the host under test starts: it reads only what lands after a
+        // turn begins, so the spans recorded during boot are never read.
         Observer = harnessHost.Services.GetRequiredService<TurnObserver>();
         Channel = harnessHost.Services.GetRequiredService<HarnessChannel>();
         Judge = harnessHost.Services.GetRequiredService<LLMJudge>();
@@ -282,15 +273,32 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     }
 
     /// <inheritdoc />
+    public async ValueTask InitializeAsync()
+    {
+        // Step 4b: on a federation run, the other installation goes up first. It inherits everything
+        // just published (provider, keys, tiers) and is told only what makes it somebody else: its
+        // own address and storage, the shipped domain instead of the one agent above and the partner
+        // declaration admitting this instance to the agent it publishes.
+        if (Options.FederatedPeer)
+            Peer = await FederatedPeerHost.StartAsync(federatedPeerPort, BuildFederatedPeerEnvironment(), Options.StartupTimeoutSeconds);
+
+        // Step 5: launch the real Morgana.Web entry point on a background thread and block here
+        // until it answers its health endpoint (or fails fast — see WaitForHealthyAsync).
+        StartHost();
+
+        await WaitForHealthyAsync();
+
+        // Starting the harness host opens the channel's receiver, which Morgana's webhooks are pushed to.
+        await harnessHost.StartAsync();
+    }
+
+    /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
         // Stopping the harness host closes the channel's receiver; disposing it releases what it built,
         // the span/log listeners among them.
-        if (harnessHost is not null)
-        {
-            await harnessHost.StopAsync();
-            harnessHost.Dispose();
-        }
+        await harnessHost.StopAsync();
+        harnessHost.Dispose();
 
         // The other installation is a process of its own, so unlike the host under test it really can
         // be stopped from here. It has to be, along with the conversations it was asked to open.
