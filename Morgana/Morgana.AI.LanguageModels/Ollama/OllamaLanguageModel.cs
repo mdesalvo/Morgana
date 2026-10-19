@@ -2,7 +2,7 @@ using Microsoft.Extensions.AI;
 using Morgana.AI.Abstractions;
 using OllamaSharp;
 
-namespace Morgana.AI.Vendors.Ollama;
+namespace Morgana.AI.LanguageModels.Ollama;
 
 /// <summary>
 /// Ollama provider.<br/>

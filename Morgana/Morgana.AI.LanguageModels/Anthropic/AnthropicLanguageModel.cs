@@ -7,7 +7,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 
-namespace Morgana.AI.Vendors.Anthropic;
+namespace Morgana.AI.LanguageModels.Anthropic;
 
 /// <summary>
 /// Anthropic provider.<br/>

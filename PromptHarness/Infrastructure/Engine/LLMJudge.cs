@@ -1,14 +1,7 @@
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Services;
-using Morgana.AI.Vendors.Anthropic;
-using Morgana.AI.Vendors.OpenAI;
-using Morgana.AI.Vendors.AzureOpenAI;
-using Morgana.AI.Vendors.Ollama;
 using Morgana.Contracts;
 using PromptHarness.Infrastructure.Wiring;
 
@@ -35,55 +28,35 @@ public sealed class LLMJudge
     private static readonly JsonSerializerOptions VerdictSerializerOptions = new() { PropertyNameCaseInsensitive = true };
 
     /// <summary>The judge itself, an agent composed like Morgana's, on the Efficiency tier.</summary>
-    private readonly AIAgent judgeAgent;
+    private readonly Lazy<Task<AIAgent>> judgeAgent;
 
     /// <summary>Where the judge's prose and the template of the judged turn come from.</summary>
     private readonly HarnessPromptService harnessPromptService;
 
-    /// <summary>Holds the composed judge beside the prose it reads each judged turn from.</summary>
-    private LLMJudge(AIAgent judgeAgent, HarnessPromptService harnessPromptService)
+    /// <summary>Holds the judge to be composed over the tiers of the deployment under test beside the prose it reads each judged turn from.</summary>
+    /// <exception cref="InvalidOperationException">Thrown, on the first judgement, when the Efficiency tier is not configured.</exception>
+    public LLMJudge(ILLMService llmService, HarnessPromptService harnessPromptService)
     {
-        this.judgeAgent = judgeAgent;
         this.harnessPromptService = harnessPromptService;
+
+        // The instructions are read from morgana.json asynchronously, so the agent is composed at the first judgement.
+        judgeAgent = new Lazy<Task<AIAgent>>(() => ComposeJudgeAgentAsync(llmService));
     }
 
-    /// <summary>
-    /// Builds a judge over the same tiers and credentials the instance under test uses.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown when a tier is not configured.</exception>
-    public static async Task<LLMJudge> CreateAsync(IConfiguration configuration, ILoggerFactory loggerFactory)
+    /// <summary>Composes the judge agent on the Efficiency client with the primer and the judge's own prose as instructions.</summary>
+    private async Task<AIAgent> ComposeJudgeAgentAsync(ILLMService llmService)
     {
-        // The judge's spans carry what it was shown and what it answered, as the host's do: the
-        // configuration it is handed was read before the fixture switched that on for the host.
-        IConfiguration judgeConfiguration = new ConfigurationBuilder()
-            .AddConfiguration(configuration)
-            .AddInMemoryCollection([new KeyValuePair<string, string?>("Morgana:OpenTelemetry:EnableSensitiveData", "true")])
-            .Build();
-
-        // The judge reuses the tiers of the deployment under test and nothing else of the host.
-        ILLMService llmService = new Morgana.AI.Services.ConfigurationLLMService(
-            judgeConfiguration,
-            [new AnthropicLanguageModel(loggerFactory), new AzureOpenAILanguageModel(), new OpenAILanguageModel(), new OllamaLanguageModel()],
-            loggerFactory);
-
-        // The judge resolves morgana.json's own prompts with no domain loaded.
-        HarnessPromptService harnessPromptService = new HarnessPromptService(
-            new ConfigurationPromptResolverService(new AgentlessConfigurationService()));
-
         // Resolved by tier rather than through CompleteStructuredAsync, which follows
         // Morgana:ActorSystem:Tier: the judge's model must not move with the deployment under test.
         IChatClient chatClient = llmService.GetChatClient(Morgana.AI.Records.LLMTier.Efficiency);
 
         // The judge is an agent whose instructions are the composed primer and its own prose.
-        AIAgent judgeAgent = chatClient.AsAIAgent(new ChatClientAgentOptions
+        return chatClient.AsAIAgent(new ChatClientAgentOptions
         {
             Id = "harness-judge",
             Name = "Judge",
             ChatOptions = new ChatOptions { Instructions = await harnessPromptService.ComposeJudgeInstructionsAsync() }
         });
-
-        // The judge and the service that holds the template of every judged turn.
-        return new LLMJudge(judgeAgent, harnessPromptService);
     }
 
     /// <summary>
@@ -191,10 +164,11 @@ public sealed class LLMJudge
             try
             {
                 // Each proposition is judged on its own session: no verdict may lean on another.
-                AgentSession session = await judgeAgent.CreateSessionAsync();
+                AIAgent agent = await judgeAgent.Value;
+                AgentSession session = await agent.CreateSessionAsync();
 
                 // One synchronous answer under the verdict's schema: the judge is an oracle, never a stream.
-                AgentResponse<JudgeVerdict> response = await judgeAgent.RunAsync<JudgeVerdict>(judgedTurn, session, VerdictSerializerOptions);
+                AgentResponse<JudgeVerdict> response = await agent.RunAsync<JudgeVerdict>(judgedTurn, session, VerdictSerializerOptions);
 
                 // An answer that still carries no verdict is an unusable one, retried like any other.
                 return response.Result ?? throw new JsonException("Judge returned no verdict");

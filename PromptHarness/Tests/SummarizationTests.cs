@@ -47,7 +47,7 @@ public sealed class SummarizationTests
     [Fact]
     public async Task Summarization_Compact_the_channel_gave_up_on_writes_and_tells_nothing()
     {
-        ChannelApiClient api = new ChannelApiClient(fixture);
+        ChannelApiClient api = fixture.Api;
         (string conversationId, ChannelMessage _) = await fixture.Channel.StartConversationAsync(TimeSpan.FromSeconds(180));
         await fixture.Channel.SendAsync(conversationId, "Vorrei vedere le mie fatture, il mio codice cliente è P994E", TimeSpan.FromSeconds(180));
         await fixture.Channel.SendAsync(conversationId, "Quali risultano ancora da pagare?", TimeSpan.FromSeconds(180));
@@ -91,7 +91,7 @@ public sealed class SummarizationTests
     [Fact]
     public async Task Summarization_Fold_written_during_a_turn_survives_the_turn()
     {
-        SQLiteConversationPersistenceService record = new ChannelApiClient(fixture).HostPersistenceService();
+        SQLiteConversationPersistenceService record = fixture.Api.HostPersistenceService();
         (string conversationId, ChannelMessage _) = await fixture.Channel.StartConversationAsync(TimeSpan.FromSeconds(180));
         await fixture.Channel.SendAsync(conversationId, "Vorrei vedere le mie fatture, il mio codice cliente è P994E", TimeSpan.FromSeconds(180));
         int recordedBeforeTurn = (await record.LoadParticipantMessagesAsync(conversationId, "billing")).Count;
@@ -116,10 +116,10 @@ public sealed class SummarizationTests
         Assert.Equal(fold.Text, afterTurn[0].Text);
         Assert.Contains(afterTurn.Skip(1), message => message.Role == ChatRole.Assistant
                                                         && message.Contents.OfType<FunctionCallContent>().Any(call => call.Name == "Reply"));
-        Assert.Equal(1L, await new ChannelApiClient(fixture).QueryRecordAsync(conversationId, "SELECT is_dirty FROM morgana WHERE agent_name = 'billing';"));
+        Assert.Equal(1L, await fixture.Api.QueryRecordAsync(conversationId, "SELECT is_dirty FROM morgana WHERE agent_name = 'billing';"));
 
         await fixture.Channel.SendAsync(conversationId, "Grazie, per ora è tutto", TimeSpan.FromSeconds(180));
         Assert.Equal(fold.Text, (await record.LoadParticipantMessagesAsync(conversationId, "billing"))[0].Text);
-        Assert.Equal(0L, await new ChannelApiClient(fixture).QueryRecordAsync(conversationId, "SELECT is_dirty FROM morgana WHERE agent_name = 'billing';"));
+        Assert.Equal(0L, await fixture.Api.QueryRecordAsync(conversationId, "SELECT is_dirty FROM morgana WHERE agent_name = 'billing';"));
     }
 }

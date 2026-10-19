@@ -100,10 +100,12 @@ public sealed class TurnObserver : IDisposable
     private readonly int logDrainMilliseconds;
 
     /// <summary>Starts listening. Must be constructed before the first turn, not before the host.</summary>
-    public TurnObserver(HostOutputCapture output, int logDrainMilliseconds)
+    public TurnObserver(HostOutputCapture output, HarnessOptions options)
     {
         this.output = output;
-        this.logDrainMilliseconds = logDrainMilliseconds;
+
+        // The drain wait is a knob of the run, read from the options the whole harness shares.
+        logDrainMilliseconds = options.LogDrainMilliseconds;
 
         listener = new ActivityListener
         {

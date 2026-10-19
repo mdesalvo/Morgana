@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Title>Morgana.AI.Vendors.Ollama</Title>
-    <PackageId>Morgana.AI.Vendors.Ollama</PackageId>
+    <Title>Morgana.AI.LanguageModels.Ollama</Title>
+    <PackageId>Morgana.AI.LanguageModels.Ollama</PackageId>
     <Description>Ollama provider for Morgana: serves a tier on local models.</Description>
     <OutputType>Library</OutputType>
     <EnableDynamicLoading>true</EnableDynamicLoading>
@@ -14,7 +14,7 @@
   <PropertyGroup Condition="'$(Configuration)'=='Debug'">
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <OutputPath>bin\Debug\</OutputPath>
-    <DocumentationFile>bin\Debug\$(TargetFramework)\Morgana.AI.Vendors.Ollama.xml</DocumentationFile>
+    <DocumentationFile>bin\Debug\$(TargetFramework)\Morgana.AI.LanguageModels.Ollama.xml</DocumentationFile>
     <WarningLevel>4</WarningLevel>
     <DebugType>full</DebugType>
     <DebugSymbols>true</DebugSymbols>
@@ -24,7 +24,7 @@
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
     <DefineConstants>TRACE</DefineConstants>
     <OutputPath>bin\Release\</OutputPath>
-    <DocumentationFile>bin\Release\$(TargetFramework)\Morgana.AI.Vendors.Ollama.xml</DocumentationFile>
+    <DocumentationFile>bin\Release\$(TargetFramework)\Morgana.AI.LanguageModels.Ollama.xml</DocumentationFile>
     <WarningLevel>0</WarningLevel>
     <DebugType>portable</DebugType>
     <DebugSymbols>true</DebugSymbols>

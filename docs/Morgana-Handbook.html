@@ -567,7 +567,7 @@
       </table>
     
       <div class="info-box">
-        <strong>Plugin Architecture:</strong> Build your agents as standalone .NET libraries referencing the <strong>Morgana.AI</strong> NuGet package. Drop the compiled DLL into the <code>plugins/</code> folder and Morgana discovers it at startup: zero configuration needed. LLM providers are plugins too: the <strong>Morgana.AI.Vendors</strong> packages (Anthropic, AzureOpenAI, OpenAI, Ollama) sit in <code>plugins/</code> with their vendor SDK. A provider of your own is a <code>MorganaLanguageModel</code> subclass dropped there the same way.
+        <strong>Plugin Architecture:</strong> Build your agents as standalone .NET libraries referencing the <strong>Morgana.AI</strong> NuGet package. Drop the compiled DLL into the <code>plugins/</code> folder and Morgana discovers it at startup: zero configuration needed. LLM providers are plugins too: the <strong>Morgana.AI.LanguageModels</strong> packages (Anthropic, AzureOpenAI, OpenAI, Ollama) sit in <code>plugins/</code> with their vendor SDK. A provider of your own is a <code>MorganaLanguageModel</code> subclass dropped there the same way.
       </div>
 
       <div class="page-footer">
@@ -874,7 +874,7 @@
         <tbody>
           <tr><td>Source code</td><td>github.com/mdesalvo/Morgana</td></tr>
           <tr><td>NuGet package</td><td>nuget.org/packages/Morgana.AI</td></tr>
-          <tr><td>NuGet packages (LLM providers)</td><td>nuget.org/packages/Morgana.AI.Vendors.Anthropic, .AzureOpenAI, .OpenAI, .Ollama</td></tr>
+          <tr><td>NuGet packages (LLM providers)</td><td>nuget.org/packages/Morgana.AI.LanguageModels.Anthropic, .AzureOpenAI, .OpenAI, .Ollama</td></tr>
           <tr><td>Docker Hub (Morgana)</td><td>hub.docker.com/r/mdesalvo/morgana</td></tr>
           <tr><td>Docker Hub (Cauldron)</td><td>hub.docker.com/r/mdesalvo/cauldron</td></tr>
           <tr><td>Docker Hub (Grimoire)</td><td>hub.docker.com/r/mdesalvo/grimoire</td></tr>

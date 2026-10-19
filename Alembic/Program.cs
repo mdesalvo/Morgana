@@ -7,10 +7,10 @@ using Microsoft.FluentUI.AspNetCore.Components;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
-using Morgana.AI.Vendors.Anthropic;
-using Morgana.AI.Vendors.AzureOpenAI;
-using Morgana.AI.Vendors.Ollama;
-using Morgana.AI.Vendors.OpenAI;
+using Morgana.AI.LanguageModels.Anthropic;
+using Morgana.AI.LanguageModels.AzureOpenAI;
+using Morgana.AI.LanguageModels.Ollama;
+using Morgana.AI.LanguageModels.OpenAI;
 
 // Invariant before anything else runs, so no thread or circuit inherits the host's locale: the
 // configuration and C# Alembic emits are the same bytes whichever machine it is deployed on.

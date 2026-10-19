@@ -26,7 +26,7 @@ Everything it needs from the framework arrives by project reference:
 | Reference | Why | Assembly referenced |
 |---|---|---|
 | `..\Morgana\Morgana.Web` | the fixture boots its entry point in-process | yes |
-| `..\Morgana\Morgana.AI.Vendors\*` | the LLM providers: the judge builds its tiers on them and they are copied into `plugins/` for the host | yes |
+| `..\Morgana\Morgana.AI.LanguageModels\*` | the LLM providers: the tests build tiers on them and they are copied into `plugins/`, where the host and the judge find them | yes |
 | `..\Examples` | the specimens under test, built into `domain-plugins/` | **no** (`ReferenceOutputAssembly=false`) |
 
 The `Examples` reference is the black-box boundary made structural: the harness compiles without ever seeing an

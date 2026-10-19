@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -16,21 +17,22 @@ namespace PromptHarness.Infrastructure.Wiring;
 /// The REST API as a channel calls it, raw: status codes and bodies come back unread, so the deterministic
 /// groups assert exactly what a channel would receive. Conversations are seeded on record, never run.
 /// </summary>
-/// <param name="fixture">The live host, whose storage, keys and address every call targets.</param>
-public sealed class ChannelApiClient(MorganaHostFixture fixture)
+/// <param name="harnessRun">The live host's address, harness key and storage that every call targets.</param>
+/// <param name="configuration">The configuration the host runs with, which holds the audience and the encryption key.</param>
+public sealed class ChannelApiClient(HarnessRun harnessRun, IConfiguration configuration)
 {
     /// <summary>A conversation id no other test has used, in the form channels mint them.</summary>
     public static string NewConversationId() => Guid.NewGuid().ToString("N");
 
     /// <summary>A current token of the harness channel, the credential every admitted call carries.</summary>
-    public string HarnessToken() => MintToken(HarnessChannel.IssuerName, fixture.IssuerKey);
+    public string HarnessToken() => MintToken(HarnessChannel.IssuerName, harnessRun.IssuerKey);
 
     /// <summary>Mints a five-minute token the way any channel mints one, signed under the given issuer and key.</summary>
     public string MintToken(string issuer, string symmetricKey) =>
         new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
         {
             Issuer = issuer,
-            Audience = fixture.Configuration["Morgana:Authentication:Audience"],
+            Audience = configuration["Morgana:Authentication:Audience"],
             Subject = new ClaimsIdentity([new Claim(JwtRegisteredClaimNames.Sub, issuer)]),
             Expires = DateTime.UtcNow.AddMinutes(5),
             SigningCredentials = new SigningCredentials(
@@ -47,7 +49,7 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
         if (token is not null)
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        string address = $"{fixture.BaseAddress}{path.Replace("{id}", conversationId)}";
+        string address = $"{harnessRun.BaseAddress}{path.Replace("{id}", conversationId)}";
         if (method == "GET")
             return await httpClient.GetAsync(address);
 
@@ -82,7 +84,7 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
         using HttpClient httpClient = new HttpClient();
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", HarnessToken());
 
-        return await httpClient.PostAsync($"{fixture.BaseAddress}{path}", new StringContent(json, Encoding.UTF8, "application/json"), cancellationToken);
+        return await httpClient.PostAsync($"{harnessRun.BaseAddress}{path}", new StringContent(json, Encoding.UTF8, "application/json"), cancellationToken);
     }
 
     /// <summary>Asks for a command on the conversation the route names, with the body written as given.</summary>
@@ -160,8 +162,8 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
         new SQLiteConversationPersistenceService(
             Microsoft.Extensions.Options.Options.Create(new Records.ConversationPersistenceOptions
             {
-                StoragePath = fixture.StoragePath,
-                EncryptionKey = fixture.Configuration["Morgana:ConversationPersistence:EncryptionKey"]!
+                StoragePath = harnessRun.StoragePath,
+                EncryptionKey = configuration["Morgana:ConversationPersistence:EncryptionKey"]!
             }),
             NullLogger.Instance);
 
@@ -171,5 +173,5 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
 
     /// <summary>The file the host keeps one conversation's record in, inside the run's storage path.</summary>
     private string DatabasePath(string conversationId) =>
-        Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.db");
+        Path.Combine(harnessRun.StoragePath, $"morgana-{conversationId}.db");
 }

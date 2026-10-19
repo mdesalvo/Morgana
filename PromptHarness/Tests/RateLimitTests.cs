@@ -30,7 +30,7 @@ public sealed class RateLimitTests
     public RateLimitTests(MorganaHostFixture fixture)
     {
         this.fixture = fixture;
-        api = new ChannelApiClient(fixture);
+        api = fixture.Api;
     }
 
     /// <summary>Calls per minute the host admits; skips the test on a host booted without the limit.</summary>

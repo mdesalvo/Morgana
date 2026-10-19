@@ -121,7 +121,7 @@ public sealed class DustTests
         Assert.SkipWhen(fixture.Options.DustBudgetPerConversation is null,
             "Dust limiting is off: run with Harness__DustBudgetPerConversation set, in this class's own invocation.");
 
-        ChannelApiClient api = new ChannelApiClient(fixture);
+        ChannelApiClient api = fixture.Api;
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing", fixture.Channel.CallbackUrl);
         await api.QueryRecordAsync(conversationId,

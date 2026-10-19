@@ -4,7 +4,7 @@ using Microsoft.Extensions.AI;
 using Morgana.AI.Abstractions;
 using OpenAI;
 
-namespace Morgana.AI.Vendors.OpenAI;
+namespace Morgana.AI.LanguageModels.OpenAI;
 
 /// <summary>
 /// OpenAI provider.<br/>

@@ -6,7 +6,7 @@ using Microsoft.Extensions.AI;
 using Morgana.AI.Abstractions;
 using OpenAI;
 
-namespace Morgana.AI.Vendors.AzureOpenAI;
+namespace Morgana.AI.LanguageModels.AzureOpenAI;
 
 /// <summary>
 /// Azure OpenAI provider.<br/>

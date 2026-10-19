@@ -4,7 +4,14 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Morgana.AI.Abstractions;
+using Morgana.AI.Interfaces;
+using Morgana.AI.Services;
+using Morgana.Web.Services;
 using PromptHarness.Infrastructure.Engine;
 using Xunit;
 
@@ -166,8 +173,11 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// </summary>
     public LLMJudge Judge { get; private set; } = null!;
 
-    /// <summary>Logger factory handed to the judge's LLM client; deliberately silent.</summary>
-    private ILoggerFactory? judgeLoggerFactory;
+    /// <summary>The raw REST client over the host under test, for the groups that assert status codes and bodies.</summary>
+    public ChannelApiClient Api { get; private set; } = null!;
+
+    /// <summary>The generic host that owns the harness components and disposes them with the run.</summary>
+    private IHost? harnessHost;
 
     /// <summary>Directory holding the per-conversation SQLite databases created during the run.</summary>
     private string storagePath = string.Empty;
@@ -178,8 +188,11 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <inheritdoc />
     public async ValueTask InitializeAsync()
     {
-        // Step 1: resolve configuration and harness knobs before anything else needs them.
-        Configuration = BuildHarnessConfiguration();
+        // Step 1: resolve configuration and harness knobs before anything else needs them. The
+        // builder that will later compose the harness components owns the configuration from here on.
+        HostApplicationBuilder harnessBuilder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings { DisableDefaults = true });
+        AddHarnessConfiguration(harnessBuilder.Configuration);
+        Configuration = harnessBuilder.Configuration;
         Options = HarnessOptions.Load(Configuration);
 
         // Step 2: mint per-run, disposable identity — a fresh JWT signing key (never written to
@@ -227,35 +240,57 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
         await WaitForHealthyAsync();
 
-        // Step 6: now that the host is up, wire the read-only observers (spans + log tee) and the
-        // harness's own channel (a live webhook receiver + REST client) against it.
-        Observer = new TurnObserver(Output, Options.LogDrainMilliseconds);
+        // Step 6: now that the host is up, the harness components are registered against it:
+        // the observers (spans + log tee) and the harness's own channel (a live webhook receiver +
+        // REST client) with the scenario engine and the judge built over the same LLM configuration.
+        harnessBuilder.Logging.ClearProviders();
+        harnessBuilder.Services.AddSingleton(Configuration);
+        harnessBuilder.Services.AddSingleton(Options);
+        harnessBuilder.Services.AddSingleton(Output);
+        harnessBuilder.Services.AddSingleton(new HarnessRun(BaseAddress, IssuerKey, storagePath));
 
-        Channel = new HarnessChannel(
-            BaseAddress,
-            IssuerKey,
-            Configuration["Morgana:Authentication:Audience"] ?? "morgana.ai",
-            drainTrailingSideMessages: Options.DustBudgetPerConversation is not null);
-        await Channel.StartAsync();
+        // The judge sees the very providers the host under test finds in plugins/ and no domain.
+        foreach (Type languageModelType in new PluginLoaderService(Configuration, NullLogger<PluginLoaderService>.Instance).LoadLanguageModels())
+        {
+            // Each provider joins under the common base, as in the host, so the LLM service indexes them by name.
+            harnessBuilder.Services.AddSingleton(typeof(MorganaLanguageModel), languageModelType);
+        }
 
-        // Step 7: assemble the scenario engine last, since it depends on everything above —
-        // the channel to drive conversations, the observer to read signals and a judge built
-        // over the same LLM configuration the instance under test uses.
-        judgeLoggerFactory = LoggerFactory.Create(logging => logging.ClearProviders());
-        Judge = await LLMJudge.CreateAsync(Configuration, judgeLoggerFactory);
-        Runner = new ScenarioRunner(Channel, Observer, Judge, Options, DescribeLlm());
+        harnessBuilder.Services.AddSingleton<ILLMService, ConfigurationLLMService>();
+        harnessBuilder.Services.AddSingleton<IAgentConfigurationService, AgentlessConfigurationService>();
+        harnessBuilder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
+        harnessBuilder.Services.AddSingleton<HarnessPromptService>();
+        harnessBuilder.Services.AddSingleton<LLMJudge>();
+        harnessBuilder.Services.AddSingleton<TurnObserver>();
+        harnessBuilder.Services.AddSingleton<HarnessChannel>();
+
+        // The channel's webhook receiver lives as long as the harness host: started and stopped with it.
+        harnessBuilder.Services.AddHostedService(services => services.GetRequiredService<HarnessChannel>());
+        harnessBuilder.Services.AddSingleton<ScenarioRunner>();
+        harnessBuilder.Services.AddSingleton<ChannelApiClient>();
+        harnessHost = harnessBuilder.Build();
+
+        // Starting the harness host opens the channel's receiver, which Morgana's webhooks are pushed to.
+        await harnessHost.StartAsync();
+
+        // Step 7: the root services are resolved once and exposed; nothing else asks the container.
+        Observer = harnessHost.Services.GetRequiredService<TurnObserver>();
+        Channel = harnessHost.Services.GetRequiredService<HarnessChannel>();
+        Judge = harnessHost.Services.GetRequiredService<LLMJudge>();
+        Runner = harnessHost.Services.GetRequiredService<ScenarioRunner>();
+        Api = harnessHost.Services.GetRequiredService<ChannelApiClient>();
     }
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        // Tear down in reverse order of acquisition: stop accepting webhook callbacks first, then
-        // release the span/log listeners, then the judge's (otherwise silent) logger factory.
-        if (Channel is not null)
-            await Channel.DisposeAsync();
-
-        Observer?.Dispose();
-        judgeLoggerFactory?.Dispose();
+        // Stopping the harness host closes the channel's receiver; disposing it releases what it built,
+        // the span/log listeners among them.
+        if (harnessHost is not null)
+        {
+            await harnessHost.StopAsync();
+            harnessHost.Dispose();
+        }
 
         // The other installation is a process of its own, so unlike the host under test it really can
         // be stopped from here. It has to be, along with the conversations it was asked to open.
@@ -276,38 +311,25 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// Renders the provider and the model bound to each tier, e.g.
-    /// <c>Economy=Anthropic/claude-haiku-5-5, Efficiency=Anthropic/claude-sonnet-5-5, Performance=Anthropic/claude-opus-5-5</c>. Recorded in
-    /// every harness file: a token count is only comparable against the same models.
-    /// </summary>
-    private string DescribeLlm()
-    {
-        // Walk the three tiers and read the provider and model id bound to each — the same shape
-        // ScenarioRunner reports per-scenario cost against, so a harness row is always legible
-        // without cross-referencing appsettings.
-        IEnumerable<string> tiers = Enum.GetValues<Morgana.AI.Records.LLMTier>()
-            .Select(tier => $"{tier}={Configuration[$"Morgana:LLM:Tiers:{tier}:Provider"] ?? "(unknown)"}/{Configuration[$"Morgana:LLM:Tiers:{tier}:Options:ModelId"] ?? "(unset)"}");
-
-        return string.Join(", ", tiers);
-    }
-
-    /// <summary>
     /// Resolves the same configuration stack the host resolves: its <c>appsettings.json</c> (linked
     /// into this project's output), the harness knobs, the shared user-secrets store and the
     /// environment.
     /// </summary>
-    private static IConfiguration BuildHarnessConfiguration()
+    private static void AddHarnessConfiguration(IConfigurationBuilder configurationBuilder)
         // Layered in precedence order, each provider overriding the previous: the host's own
         // appsettings.json (linked into this project's output by the .csproj), then the harness's
         // own knobs, then the shared user-secrets store (the actual provider/keys/tiers), then
         // whatever the environment already carries — so a CI runner's env vars still win last.
-        => new ConfigurationBuilder()
+        => configurationBuilder
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.json", optional: false)
             .AddJsonFile("appsettings.Harness.json", optional: false)
             .AddUserSecrets(Assembly.GetExecutingAssembly(), optional: true)
             .AddEnvironmentVariables()
-            .Build();
+
+            // The judge's spans carry what it was shown and what it answered, as the host's do: the
+            // host is given the same value through ApplyHostEnvironment.
+            .AddInMemoryCollection([new KeyValuePair<string, string?>("Morgana:OpenTelemetry:EnableSensitiveData", "true")]);
 
     /// <summary>
     /// Publishes the resolved configuration to the host process-wide, then layers the harness

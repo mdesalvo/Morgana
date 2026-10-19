@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Microsoft.Extensions.Configuration;
 using Morgana.AI;
 using Morgana.Contracts;
 using PromptHarness.Infrastructure.Reporting;
@@ -38,13 +39,31 @@ public sealed class ScenarioRunner
     /// <summary>Provider and models under test, recorded in the harness — a token count without them means nothing.</summary>
     private readonly string llmDescriptor;
 
-    public ScenarioRunner(HarnessChannel channel, TurnObserver observer, LLMJudge judge, HarnessOptions options, string llmDescriptor)
+    /// <summary>Binds the engine to the channel and the observer and the judge it drives a run with.</summary>
+    public ScenarioRunner(HarnessChannel channel, TurnObserver observer, LLMJudge judge, HarnessOptions options, IConfiguration configuration)
     {
         this.channel = channel;
         this.observer = observer;
         this.judge = judge;
         this.options = options;
-        this.llmDescriptor = llmDescriptor;
+
+        // Every harness file records the models its token counts were measured on.
+        llmDescriptor = DescribeLlm(configuration);
+    }
+
+    /// <summary>
+    /// Renders the provider and the model bound to each tier, e.g.
+    /// <c>Economy=Anthropic/claude-haiku-5-5, Efficiency=Anthropic/claude-sonnet-5-5, Performance=Anthropic/claude-opus-5-5</c>. Recorded in
+    /// every harness file: a token count is only comparable against the same models.
+    /// </summary>
+    private static string DescribeLlm(IConfiguration configuration)
+    {
+        // Walk the three tiers and read the provider and model id bound to each, so a harness row is
+        // always legible without cross-referencing appsettings.
+        IEnumerable<string> tiers = Enum.GetValues<Morgana.AI.Records.LLMTier>()
+            .Select(tier => $"{tier}={configuration[$"Morgana:LLM:Tiers:{tier}:Provider"] ?? "(unknown)"}/{configuration[$"Morgana:LLM:Tiers:{tier}:Options:ModelId"] ?? "(unset)"}");
+
+        return string.Join(", ", tiers);
     }
 
     /// <summary>Loads a scenario by id and runs it.</summary>

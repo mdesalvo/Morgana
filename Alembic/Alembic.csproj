@@ -15,15 +15,15 @@
     </ItemGroup>
 
     <ItemGroup>
-       <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" Version="5.0.0" />
+       <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" Version="5.0.*" />
     </ItemGroup>
 
     <ItemGroup>
        <ProjectReference Include="..\Morgana\Morgana.AI\Morgana.AI.csproj" />
-       <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\Anthropic\Morgana.AI.Vendors.Anthropic.csproj" />
-       <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\OpenAI\Morgana.AI.Vendors.OpenAI.csproj" />
-       <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\AzureOpenAI\Morgana.AI.Vendors.AzureOpenAI.csproj" />
-       <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\Ollama\Morgana.AI.Vendors.Ollama.csproj" />
+       <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\Anthropic\Morgana.AI.LanguageModels.Anthropic.csproj" />
+       <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\OpenAI\Morgana.AI.LanguageModels.OpenAI.csproj" />
+       <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\AzureOpenAI\Morgana.AI.LanguageModels.AzureOpenAI.csproj" />
+       <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\Ollama\Morgana.AI.LanguageModels.Ollama.csproj" />
     </ItemGroup>
 
 </Project>

@@ -41,7 +41,7 @@ public sealed class ConversationApiTests
     public ConversationApiTests(MorganaHostFixture fixture)
     {
         this.fixture = fixture;
-        api = new ChannelApiClient(fixture);
+        api = fixture.Api;
     }
 
     /// <summary>

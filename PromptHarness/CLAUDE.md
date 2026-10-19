@@ -24,8 +24,8 @@ the implicit directory holds no domain. The LLM providers do land in `plugins/`:
 and every run, the federation one included, needs them.
 
 **Its own solution**, sibling of `../Morgana/` and `../Examples/`. Morgana.Web and the four providers
-are referenced as assemblies, since the judge and the tests build tiers themselves; the providers are
-copied into `plugins/` as well, where the host under test finds them. `Examples` is referenced
+are referenced as assemblies, since the tests build tiers themselves; the providers are
+copied into `plugins/` as well, where the host under test and the judge find them. `Examples` is referenced
 deliberately excluding the compiled assembly
 (`ReferenceOutputAssembly=false`): the plugin is copied into the output and discovered at startup
 exactly as a real deployment would discover it, never seen as a compile-time type. That is the

@@ -115,10 +115,10 @@
 
   <ItemGroup>
     <!-- The judge, LanguageModelTests and the test doubles use the provider types, so these are compile-time references. -->
-    <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\Anthropic\Morgana.AI.Vendors.Anthropic.csproj" />
-    <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\OpenAI\Morgana.AI.Vendors.OpenAI.csproj" />
-    <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\AzureOpenAI\Morgana.AI.Vendors.AzureOpenAI.csproj" />
-    <ProjectReference Include="..\Morgana\Morgana.AI.Vendors\Ollama\Morgana.AI.Vendors.Ollama.csproj" />
+    <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\Anthropic\Morgana.AI.LanguageModels.Anthropic.csproj" />
+    <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\OpenAI\Morgana.AI.LanguageModels.OpenAI.csproj" />
+    <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\AzureOpenAI\Morgana.AI.LanguageModels.AzureOpenAI.csproj" />
+    <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\Ollama\Morgana.AI.LanguageModels.Ollama.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -210,7 +210,7 @@
   -->
   <Target Name="CopyLanguageModelPluginsToHarness" AfterTargets="Build">
     <ItemGroup>
-      <LanguageModelPluginAssembly Include="$(OutDir)Morgana.AI.Vendors.*.dll" />
+      <LanguageModelPluginAssembly Include="$(OutDir)Morgana.AI.LanguageModels.*.dll" />
     </ItemGroup>
     <MakeDir Directories="$(OutDir)plugins" Condition="!Exists('$(OutDir)plugins')" />
     <Copy SourceFiles="@(LanguageModelPluginAssembly)" DestinationFolder="$(OutDir)plugins" SkipUnchangedFiles="true" />

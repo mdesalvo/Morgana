@@ -57,7 +57,7 @@ Morgana/
   Morgana/                 # working directory
     Morgana.Contracts/     # zero-dependency wire contracts (NuGet)
     Morgana.AI/            # core framework library (NuGet)
-    Morgana.AI.Vendors/    # LLM providers, one plugin each (NuGet): Anthropic, OpenAI, AzureOpenAI, Ollama
+    Morgana.AI.LanguageModels/  # LLM providers, one plugin each (NuGet): Anthropic, OpenAI, AzureOpenAI, Ollama
     Morgana.Web/           # ASP.NET Core host
     Directory.Build.props  # shared build settings, version, dependencies
   Channels/                # Cauldron (Blazor), Grimoire (rich TTY), Rune (poor TTY)
@@ -259,9 +259,9 @@ always declared and filled, whether or not an agent uses them. **There is no cro
 Validation never asks which agents use which tier.
 
 **Morgana.AI knows no vendor.** A provider is a `MorganaLanguageModel<TConnection>` in its own
-plugin under `Morgana.AI.Vendors/`, carrying its SDK beside it in `plugins/`. Morgana.Web references
-none of them: it registers what `LoadLanguageModels` finds, so the providers an installation can name
-are the ones deployed. A host without the loader (Alembic, the harness) registers them by hand. What
+plugin under `Morgana.AI.LanguageModels/`, carrying its SDK beside it in `plugins/`. Morgana.Web
+references none of them: it registers what `LoadLanguageModels` finds, so the providers an
+installation can name are the ones deployed. A host without the loader (Alembic, the harness) registers them by hand. What
 only a vendor knows stays in its plugin: the connection record it binds from the tier's `Connection`
 section and `IsContentFilterRefusal`, the one place where a provider's own refusal of the content is
 told apart from a failure.

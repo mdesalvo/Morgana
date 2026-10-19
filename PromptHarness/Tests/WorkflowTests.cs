@@ -11,7 +11,7 @@ using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Vendors.Ollama;
+using Morgana.AI.LanguageModels.Ollama;
 using Morgana.AI.Providers;
 using Morgana.AI.Services;
 using Morgana.AI.Tools;

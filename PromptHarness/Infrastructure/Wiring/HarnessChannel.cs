@@ -9,7 +9,9 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -33,7 +35,7 @@ namespace PromptHarness.Infrastructure.Wiring;
 /// use it: it needs no hub client and the callback is an ordinary HTTP endpoint the harness can
 /// host and correlate on.</para>
 /// </remarks>
-public sealed class HarnessChannel : IAsyncDisposable
+public sealed class HarnessChannel : IHostedService, IDisposable
 {
     /// <summary>Channel name announced at the handshake and the issuer name the JWTs carry.</summary>
     public const string ChannelName = "harness";
@@ -107,27 +109,30 @@ public sealed class HarnessChannel : IAsyncDisposable
     /// <summary>
     /// Wires the channel against a running host.
     /// </summary>
-    /// <param name="morganaBaseAddress">Base address of the instance under test.</param>
-    /// <param name="issuerKey">Symmetric key the host accepts for the <c>harness</c> issuer.</param>
-    /// <param name="audience">Audience claim Morgana validates.</param>
-    /// <param name="drainTrailingSideMessages">See the field's own remarks.</param>
-    public HarnessChannel(string morganaBaseAddress, string issuerKey, string audience, bool drainTrailingSideMessages = false)
+    /// <param name="harnessRun">Carries the base address of the instance under test and the symmetric key the host accepts for the <c>harness</c> issuer.</param>
+    /// <param name="configuration">Supplies the audience claim Morgana validates.</param>
+    /// <param name="options">Decides whether trailing side messages are drained, as a dust-budgeted run needs.</param>
+    public HarnessChannel(HarnessRun harnessRun, IConfiguration configuration, HarnessOptions options)
     {
-        this.morganaBaseAddress = morganaBaseAddress;
-        this.audience = audience;
-        this.drainTrailingSideMessages = drainTrailingSideMessages;
+        morganaBaseAddress = harnessRun.BaseAddress;
+
+        // The audience the host validates, defaulting to the one every channel is issued under.
+        audience = configuration["Morgana:Authentication:Audience"] ?? "morgana.ai";
+
+        // Only a run with a dust budget can receive a trailing warning worth draining.
+        drainTrailingSideMessages = options.DustBudgetPerConversation is not null;
 
         // The signing key here must be byte-identical to the one MorganaHostFixture pushed into
         // the host's Morgana:Authentication:Issuers:*:SymmetricKey — the two are minted from the
         // same value, this class just wraps it as HMAC-SHA256 credentials for token generation.
         credentials = new SigningCredentials(
-            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(issuerKey)), SecurityAlgorithms.HmacSha256);
+            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(harnessRun.IssuerKey)), SecurityAlgorithms.HmacSha256);
 
-        httpClient = new HttpClient { BaseAddress = new Uri(morganaBaseAddress), Timeout = TimeSpan.FromSeconds(30) };
+        httpClient = new HttpClient { BaseAddress = new Uri(harnessRun.BaseAddress), Timeout = TimeSpan.FromSeconds(30) };
     }
 
-    /// <summary>Starts the callback receiver on an ephemeral port.</summary>
-    public async Task StartAsync()
+    /// <summary>Starts the callback receiver on an ephemeral port, as the harness host starts.</summary>
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
         // A second, tiny Kestrel instance, separate from the Morgana host itself — this is the
         // "webhook" side of the channel: Morgana pushes messages here rather than the harness
@@ -166,7 +171,7 @@ public sealed class HarnessChannel : IAsyncDisposable
             return Results.Ok();
         });
 
-        await receiver.StartAsync();
+        await receiver.StartAsync(cancellationToken);
 
         // Now that Kestrel has actually bound the ephemeral port, read back the concrete address —
         // this is the URL handed to Morgana at conversation-start time as the webhook callback.
@@ -319,14 +324,20 @@ public sealed class HarnessChannel : IAsyncDisposable
     public IReadOnlyList<string> ChunksFor(string conversationId)
         => chunks.TryGetValue(conversationId, out List<string>? received) ? received : [];
 
-    /// <inheritdoc />
-    public async ValueTask DisposeAsync()
+    /// <summary>Stops the callback receiver as the harness host stops, so Morgana's later pushes find nobody listening.</summary>
+    public async Task StopAsync(CancellationToken cancellationToken)
     {
-        httpClient.Dispose();
+        // A channel that never started has no receiver to release.
+        if (receiver is null)
+            return;
 
-        if (receiver is not null)
-            await receiver.DisposeAsync();
+        // The receiver's Kestrel releases its port only once stopped and disposed.
+        await receiver.StopAsync(cancellationToken);
+        await receiver.DisposeAsync();
     }
+
+    /// <inheritdoc />
+    public void Dispose() => httpClient.Dispose();
 
     /// <summary>Dequeues the next inbound message for a conversation, or throws on timeout.</summary>
     public async Task<ChannelMessage> ReceiveAsync(string conversationId, TimeSpan timeout)

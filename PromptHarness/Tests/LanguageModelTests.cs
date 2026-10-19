@@ -3,10 +3,10 @@ using Microsoft.Extensions.Configuration;
 using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Vendors.Anthropic;
-using Morgana.AI.Vendors.OpenAI;
-using Morgana.AI.Vendors.AzureOpenAI;
-using Morgana.AI.Vendors.Ollama;
+using Morgana.AI.LanguageModels.Anthropic;
+using Morgana.AI.LanguageModels.OpenAI;
+using Morgana.AI.LanguageModels.AzureOpenAI;
+using Morgana.AI.LanguageModels.Ollama;
 using Morgana.AI.Services;
 using Xunit;
 

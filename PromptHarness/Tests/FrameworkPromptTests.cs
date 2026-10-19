@@ -6,7 +6,7 @@ using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Vendors.Ollama;
+using Morgana.AI.LanguageModels.Ollama;
 using Morgana.AI.Services;
 using Morgana.Contracts;
 using PromptHarness.Infrastructure;
