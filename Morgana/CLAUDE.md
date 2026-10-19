@@ -165,9 +165,10 @@ Every endpoint but `health` authenticates through `ChannelAuthenticationFilter` 
 
 ### Multi-turn and shared context
 
-Every turn answers with one `Reply` call carrying its text, what it awaits from the user (`nothing`,
-`typed_answer`, `action_choice`), whether the user is leaving, the actions offered as buttons and the
-card — a typed argument whose schema is derived from `Morgana.Contracts`. The buttons that let the user
+Every turn answers with one `Reply` call carrying its text, what it awaits from the user (`nothing` or
+`typed_answer`), whether the user is leaving and the card — a typed argument whose schema is derived from
+`Morgana.Contracts` — plus the actions of a workflow's choice step. **Every button is code's**: outside a
+workflow the agent's menu, a turn awaiting a typed answer none (see `MorganaAgent.ConcludeTurn`). The buttons that let the user
 stay or leave are the framework's (`FrameworkReplies` in `morgana.json`), chosen from that closure by
 `ClosingDeclaration.ToDelivery`: the agent stays `activeAgent` — later messages skip classification — until the
 user leaves.

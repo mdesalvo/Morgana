@@ -47,7 +47,7 @@ public sealed class TurnClosureTests
     // A departing user is let go: no button and the conversation returns to Morgana, whatever else was declared.
     [InlineData("nothing", true, false, "", true)]
     [InlineData("action_choice", true, true, "", true)]
-    // A typed answer is asked with nothing gating it.
+    // A typed answer is asked with no button at all, the way out included: buttons would lock the field the user types in.
     [InlineData("typed_answer", false, false, "", false)]
     [InlineData("typed_answer", false, true, "", false)]
     // Offered actions carry the escape pair after them.
@@ -97,9 +97,9 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public void TurnClosure_Menu_replaces_the_closure_actions_and_drops_the_card()
+    public void TurnClosure_Menu_replaces_the_closure_actions_and_keeps_the_card()
     {
-        // A closure that carried an action and a card, as a model might write on a landing.
+        // A closure that carried an action and a card, as a model might write one.
         Records.ClosingDeclaration closingDeclaration = Deserialize("""
             {"text":"Here you are.","awaits":"typed_answer","userIsLeaving":false,
              "actions":[{"tool":"GetBalance","label":"Balance","value":"What is my balance?"}],
@@ -114,10 +114,10 @@ public sealed class TurnClosureTests
         Records.ClosingDeclaration presented = closingDeclaration.WithMenu(menu);
         List<QuickReply> buttons = presented.ToDelivery(FrameworkReplies).QuickReplies!;
 
-        // The two menu buttons come first and the framework's escape pair follows; the card is gone.
+        // The two menu buttons come first and the framework's escape pair follows; the card that presents the turn stays.
         Assert.Equal(["GetInvoices#1", "OpenAccount#2", "continue_agent", "exit_agent"], buttons.Select(button => button.Id));
         Assert.Equal(["Invoices", "Open an account", "💬 Ask me something else", "✨ We're done, thanks"], buttons.Select(button => button.Label));
-        Assert.Null(presented.Card);
+        Assert.NotNull(presented.Card);
         Assert.Equal(Records.AwaitedFromUser.ActionChoice, presented.Awaits);
     }
 
@@ -257,7 +257,7 @@ public sealed class TurnClosureTests
     [Fact]
     public async Task TurnClosure_Reply_schema_states_which_fields_may_be_null()
     {
-        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(holdsChoiceStep: true);
         JsonElement properties = reply.Function.JsonSchema.GetProperty("properties");
         JsonElement card = properties.GetProperty("card");
 
@@ -274,23 +274,21 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task TurnClosure_Reply_schema_offers_actions_only_toward_the_tools_of_the_agent()
+    public async Task TurnClosure_Reply_schema_offers_actions_only_to_an_agent_with_a_choice_step()
     {
-        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices", "DownloadPdf"]);
+        // A choice step is where the model words the buttons that the step proposes.
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(holdsChoiceStep: true);
+        Assert.True(reply.Function.JsonSchema.GetProperty("properties").TryGetProperty("actions", out _));
 
-        JsonElement tool = reply.Function.JsonSchema.GetProperty("properties").GetProperty("actions")
-            .GetProperty("items").GetProperty("properties").GetProperty("tool");
-        Assert.Equal(["GetInvoices", "DownloadPdf"], tool.GetProperty("enum").EnumerateArray().Select(name => name.GetString()));
-
-        // An agent with nothing to lead to has no actions to offer.
-        ReplyUnderTest toollessReply = await ReplyUnderTest.CreateAsync(actionableToolNames: []);
-        Assert.False(toollessReply.Function.JsonSchema.GetProperty("properties").TryGetProperty("actions", out _));
+        // Anywhere else the buttons are the agent's menu, written by code, so the model is never asked for them.
+        ReplyUnderTest menuReply = await ReplyUnderTest.CreateAsync(holdsChoiceStep: false);
+        Assert.False(menuReply.Function.JsonSchema.GetProperty("properties").TryGetProperty("actions", out _));
     }
 
     [Fact]
     public async Task TurnClosure_Reply_schema_admits_the_card_depth_that_the_validation_accepts_and_no_deeper()
     {
-        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(holdsChoiceStep: false);
         JsonElement components = reply.Function.JsonSchema.GetProperty("properties").GetProperty("card")
             .GetProperty("properties").GetProperty("components");
 
@@ -563,7 +561,7 @@ public sealed class TurnClosureTests
         // The approval turn delivers the held Reply's text with the framework's approval buttons and nothing else.
         Records.AgentResponse approval = asked.OfType<Records.AgentResponse>().Single();
         Assert.Equal("Shall I confirm ORD-1?", approval.Response);
-        Assert.Equal(["approve_action", "reject_action"], approval.QuickReplies!.Select(button => button.Id));
+        Assert.Equal(["approve_action", "reject_action", "continue_agent", "exit_agent"], approval.QuickReplies!.Select(button => button.Id));
         Assert.Empty(WorkflowTests.InventoryTools.Calls);
 
         // The message that asked for approval is the last of the history and carries what the user was shown,
@@ -580,58 +578,116 @@ public sealed class TurnClosureTests
         Assert.Equal(["ConfirmOrder:ORD-1:fern"], WorkflowTests.InventoryTools.Calls);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task TurnClosure_Pressed_button_makes_its_call_and_the_model_only_answers_on_its_result(bool streaming)
+    [Fact]
+    public async Task TurnClosure_Every_turn_outside_a_workflow_closes_on_the_menu_whatever_the_model_offered()
     {
-        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync(streaming);
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"We grow roses.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"Stock","label":"🌹 Roses","value":"How many roses are there?","arguments":{"item":"rose"}}]}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"There are 12 roses.","awaits":"nothing","userIsLeaving":false}""")));
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","awaits":"typed_answer","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Try again later.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"Stock","label":"🔁 Retry","value":"Retry"}]}""")));
 
-        await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you grow?", null));
-        List<object> pressed = await turn.AskAsync(new Records.AgentRequest("conv-turn", "How many roses are there?", null));
+        List<object> answered = await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
+        List<object> asking = await turn.AskAsync(new Records.AgentRequest("conv-turn", "I want a plant", null));
+        List<object> offering = await turn.AskAsync(new Records.AgentRequest("conv-turn", "tulip", null));
 
-        // The press made the call with the button's arguments and no model was asked whether to make it.
-        Assert.Equal(["Stock:rose"], WorkflowTests.InventoryTools.Calls);
-        Assert.Equal(2, turn.Model.Requests.Count);
+        // An answered turn and a turn whose model wrote buttons of its own close alike: the menu in menu order, then the escape pair.
+        string[] menuButtons = ["🌼 A plant", "📦 My orders", "💬 Ask me something else", "✨ We're done, thanks"];
+        Assert.Equal(menuButtons, answered.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
+        Assert.Equal(menuButtons, offering.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
 
-        // The one model call of the pressed turn reads the result and has Reply alone to answer with.
-        Assert.Equal(["Reply"], OfferedTools(turn.Model, 1));
-        Assert.Contains(turn.Model.Requests[1].Messages.SelectMany(message => message.Contents), content => content is FunctionCallContent { Name: "Stock" });
-        Assert.Equal("There are 12 roses.", pressed.OfType<Records.AgentResponse>().Single().Response);
+        // A turn that asks the user to type offers no button at all, since buttons would lock the field the user types in.
+        Assert.Null(asking.OfType<Records.AgentResponse>().Single().QuickReplies);
+
+        // The model is never asked for buttons: Reply reaches it with no actions.
+        AIFunction reply = Assert.IsAssignableFrom<AIFunction>(Assert.Single(turn.Model.Requests[0].Options!.Tools!, tool => tool.Name == "Reply"));
+        Assert.False(reply.JsonSchema.GetProperty("properties").TryGetProperty("actions", out _));
     }
 
     [Fact]
-    public async Task TurnClosure_Pressed_approval_tool_runs_at_once_and_the_model_answers_after_its_result()
+    public async Task TurnClosure_Press_of_the_button_to_stay_hands_the_user_the_floor_and_lets_go_of_a_waiting_call()
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Ready when you are.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"Confirm ORD-1","arguments":{"orderId":"ORD-1","sealWord":"fern"}}]}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Order ORD-1 is confirmed.","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","awaits":"typed_answer","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Of course, what is it?","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Our catalogue is online.","awaits":"nothing","userIsLeaving":false}""")));
 
-        await turn.AskAsync(new Records.AgentRequest("conv-turn", "Show my order", null));
-        List<object> pressed = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Confirm ORD-1", null));
+        // The press of the plant entry waits for the plant, which the user never types: they press the button to stay instead.
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "🌼 A plant", null));
+        List<object> staying = await turn.AskAsync(new Records.AgentRequest("conv-turn", "I want to ask you something else", null));
 
-        // The press is the approval: the tool runs at once, no approval is asked and the answer is the one written after the result.
-        Records.AgentResponse answer = pressed.OfType<Records.AgentResponse>().Single();
-        Assert.Equal("Order ORD-1 is confirmed.", answer.Response);
-        Assert.DoesNotContain(answer.QuickReplies ?? [], button => button.Id == "approve_action");
-        Assert.Equal(["ConfirmOrder:ORD-1:fern"], WorkflowTests.InventoryTools.Calls);
-        Assert.Equal(2, turn.Model.Requests.Count);
+        // The turn answering the press offers nothing to press, so the way out is never offered twice in a row.
+        Records.AgentResponse floor = staying.OfType<Records.AgentResponse>().Single();
+        Assert.Null(floor.QuickReplies);
+        Assert.False(floor.IsCompleted);
+
+        // The press was no plant: the waiting call was let go, so the model read every tool and nothing ran.
+        Assert.Contains("Stock", OfferedTools(turn.Model, 2));
+        Assert.Empty(WorkflowTests.InventoryTools.Calls);
+
+        // What the user writes next is an ordinary request, answered with the menu and the way out.
+        List<object> asked = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Do you sell seeds?", null));
+        Assert.Equal(["🌼 A plant", "📦 My orders", "💬 Ask me something else", "✨ We're done, thanks"],
+            asked.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
+    }
+
+    [Fact]
+    public async Task TurnClosure_Press_of_the_button_to_leave_ends_the_stay_whatever_the_model_answered()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","awaits":"typed_answer","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Goodbye, come back soon.","awaits":"typed_answer","userIsLeaving":false}""")));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "I want a plant", null));
+        List<object> leaving = await turn.AskAsync(new Records.AgentRequest("conv-turn", "We're done, thanks", null));
+
+        // The model missed the goodbye, yet the press is the user leaving: no button and the conversation goes back to Morgana.
+        Records.AgentResponse farewell = leaving.OfType<Records.AgentResponse>().Single();
+        Assert.Null(farewell.QuickReplies);
+        Assert.True(farewell.IsCompleted);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TurnClosure_Pressed_menu_button_makes_its_call_and_the_model_only_answers_on_its_result(bool streaming)
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync(streaming);
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the orders.","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"What is your customer code?","awaits":"typed_answer","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("OrderHistory", """{"customerCode":"P994E"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"You have 2 orders.","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Still 2 orders.","awaits":"nothing","userIsLeaving":false}""")));
+
+        // The first press finds no customer code and the typed one completes the call, which the conversation then holds.
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "📦 My orders", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "P994E", null));
+        List<object> pressed = await turn.AskAsync(new Records.AgentRequest("conv-turn", "📦 My orders", null));
+
+        // The second press made the call at once with the code the conversation holds and no model was asked whether to make it.
+        Assert.Equal(["OrderHistory:P994E", "OrderHistory:P994E"], WorkflowTests.InventoryTools.Calls);
+        Assert.Equal(5, turn.Model.Requests.Count);
+
+        // The one model call of the pressed turn reads the result and has Reply alone to answer with.
+        Assert.Equal(["Reply"], OfferedTools(turn.Model, 4));
+        Assert.Contains(turn.Model.Requests[4].Messages.SelectMany(message => message.Contents), content => content is FunctionCallContent { Name: "OrderHistory" });
+        Assert.Equal("Still 2 orders.", pressed.OfType<Records.AgentResponse>().Single().Response);
     }
 
     [Fact]
     public async Task TurnClosure_Press_lacking_a_value_asks_for_it_and_the_typed_answer_completes_the_call()
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"Stock","label":"🌼 A plant","value":"A specific plant"}]}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","awaits":"nothing","userIsLeaving":false}""")));
         turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","awaits":"typed_answer","userIsLeaving":false}""")));
         turn.Model.Enqueue(Answer(Call("Stock", """{"item":"tulip"}""")));
         turn.Model.Enqueue(Answer(Call("Reply", """{"text":"There are 12 tulips.","awaits":"nothing","userIsLeaving":false}""")));
         turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Anything else?","awaits":"nothing","userIsLeaving":false}""")));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
-        await turn.AskAsync(new Records.AgentRequest("conv-turn", "A specific plant", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "🌼 A plant", null));
 
         // The press carried no plant, so the tool did not run: the model read which value is lacking and had Reply alone to ask for it.
         Assert.Empty(WorkflowTests.InventoryTools.Calls);
@@ -656,13 +712,13 @@ public sealed class TurnClosureTests
     public async Task TurnClosure_Press_missing_a_context_value_waits_for_the_user_to_type_it()
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the orders.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"OrderHistory","label":"📦 My orders","value":"My orders"}]}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the orders.","awaits":"nothing","userIsLeaving":false}""")));
         turn.Model.Enqueue(Answer(Call("Reply", """{"text":"What is your customer code?","awaits":"typed_answer","userIsLeaving":false}""")));
         turn.Model.Enqueue(Answer(Call("OrderHistory", """{"customerCode":"P994E"}""")));
         turn.Model.Enqueue(Answer(Call("Reply", """{"text":"You have 2 orders.","awaits":"nothing","userIsLeaving":false}""")));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
-        await turn.AskAsync(new Records.AgentRequest("conv-turn", "My orders", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "📦 My orders", null));
 
         // The framework made the call and the conversation held no customer code: the tool did not run and the model was told which value it lacks.
         Assert.Empty(WorkflowTests.InventoryTools.Calls);
@@ -680,12 +736,12 @@ public sealed class TurnClosureTests
     public async Task TurnClosure_Press_waiting_for_a_value_is_let_go_by_a_turn_that_asks_for_none()
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"Stock","label":"🌼 A plant","value":"A specific plant"}]}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","awaits":"nothing","userIsLeaving":false}""")));
         turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Our catalogue is online.","awaits":"nothing","userIsLeaving":false}""")));
         turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Hello again.","awaits":"nothing","userIsLeaving":false}""")));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
-        await turn.AskAsync(new Records.AgentRequest("conv-turn", "A specific plant", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "🌼 A plant", null));
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "tulip", null));
 
         // Nobody was asked to type the plant, so the next message is bound to no call: every tool is on offer and none ran.
@@ -713,13 +769,24 @@ public sealed class TurnClosureTests
     [Fact]
     public async Task TurnClosure_Reply_schema_offers_arguments_on_every_action()
     {
-        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["Stock"]);
+        ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(holdsChoiceStep: true);
 
         // The arguments of an action are where a button carries the values that its call needs.
         JsonElement actionProperties = reply.Function.JsonSchema.GetProperty("properties").GetProperty("actions").GetProperty("items").GetProperty("properties");
         Assert.True(actionProperties.TryGetProperty("arguments", out JsonElement argumentsSchema));
         Assert.Contains("parameter names", argumentsSchema.GetProperty("description").GetString(), StringComparison.Ordinal);
     }
+
+    /// <summary>The sample tools with a menu of two entries: a plant's stock, which the user types, and the orders, which the conversation holds.</summary>
+    private static Records.ToolDefinition[] MenuTools() =>
+    [
+        .. WorkflowTests.DeclaredTools().Select(tool => tool.Name switch
+        {
+            "Stock" => tool with { MenuEntry = new Records.MenuEntry(1, "🌼 A plant") },
+            "OrderHistory" => tool with { MenuEntry = new Records.MenuEntry(2, "📦 My orders") },
+            _ => tool
+        })
+    ];
 
     /// <summary>The names of the tools that the model was offered on one of its requests, in alphabetical order.</summary>
     private static string[] OfferedTools(ScriptedChatClient model, int request)
@@ -831,10 +898,13 @@ public sealed class TurnClosureTests
     public async Task TurnClosure_Welcome_buttons_are_the_configured_intents_whatever_the_model_wrote()
     {
         // The model wrote the welcome text alone: nothing in its answer names a button.
-        Records.PresentationResult welcome = await PresentAsync("welcome-written", """{"message":"Welcome to the greenhouse."}""");
+        Records.PresentationResult welcome = await PresentAsync("welcome-written", """{"message":"Welcome to the greenhouse.","reintroduction":"This is the greenhouse."}""");
+
+        // Both texts are the model's, the second one served to a request that no agent claims.
+        Assert.Equal("Welcome to the greenhouse.", welcome.Message);
+        Assert.Equal("This is the greenhouse.", welcome.Reintroduction);
 
         // One button per intent in configuration order: the id is the intent, the value is what a press sends.
-        Assert.Equal("Welcome to the greenhouse.", welcome.Message);
         Assert.Equal(["billing", "contract", "monkeys", "inventory"], welcome.QuickReplies.Select(button => button.Id));
         Assert.Equal(["🧾 Invoices", "📜 Care Plan", "🐒 Primate Almanac", "🌿 Greenhouse"], welcome.QuickReplies.Select(button => button.Label));
         Assert.Equal(
@@ -936,10 +1006,12 @@ public sealed class TurnClosureTests
         /// <param name="actionableToolNames">The agent's tools that an action may lead to; null accepts any.</param>
         /// <param name="choiceStep">The choice step that the turn stands at, if any.</param>
         /// <param name="actionSignatures">What a call of each actionable tool may carry; null takes every action's arguments as written.</param>
+        /// <param name="holdsChoiceStep">Whether the agent's workflows hold a choice step; null publishes Reply unshaped.</param>
         public static async Task<ReplyUnderTest> CreateAsync(
             IReadOnlyCollection<string>? actionableToolNames = null,
             (string Workflow, string Step, IReadOnlyList<string> Tools)? choiceStep = null,
-            IReadOnlyDictionary<string, Records.CallSignature>? actionSignatures = null)
+            IReadOnlyDictionary<string, Records.CallSignature>? actionSignatures = null,
+            bool? holdsChoiceStep = null)
         {
             ReplyUnderTest reply = new ReplyUnderTest();
             reply.session = await new ChatClientAgent(new ScriptedChatClient()).CreateSessionAsync();
@@ -962,8 +1034,8 @@ public sealed class TurnClosureTests
             adapter.AddTool(definition.Name, implementation, definition);
             AIFunction createdReply = await adapter.CreateFunctionAsync(definition.Name);
 
-            // An agent that declares the tools its actions lead to publishes Reply shaped to them.
-            reply.Function = actionableToolNames is null ? createdReply : ReplyTool.NarrowSchemaToAgent(createdReply, actionableToolNames);
+            // An agent publishes Reply shaped to its workflows: actions exist only where a choice step proposes them.
+            reply.Function = holdsChoiceStep is { } choiceStepHeld ? ReplyTool.NarrowSchemaToAgent(createdReply, choiceStepHeld) : createdReply;
 
             return reply;
         }
@@ -1064,7 +1136,7 @@ public sealed class TurnClosureTests
                 llm,
                 resolver,
                 new ConfigurationPromptComposerService(resolver),
-                new WorkflowTests.SampleToolRegistry([]),
+                new WorkflowTests.SampleToolRegistry([], MenuTools()),
                 new MCPClientRegistryService(NullLogger.Instance),
                 new HistoryReducerService(configuration, NullLogger.Instance),
                 new WorkflowTests.NoDust(),

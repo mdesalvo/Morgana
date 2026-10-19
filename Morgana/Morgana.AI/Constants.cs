@@ -273,8 +273,30 @@ public static class Constants
     /// </summary>
     public static class Tools
     {
-        /// <summary>Gives the agent's turn answer: its text, whether it awaits the user, the actions that it offers and its card.</summary>
+        /// <summary>Gives the agent's turn answer: its text, whether it awaits the user, the actions of a choice step and its card.</summary>
         public const string Reply = "Reply";
+
+        /// <summary>
+        /// The parameters of <see cref="Reply"/> as its method declares them, which the code shaping its schema, the code calling it
+        /// in the model's place and the closure it records all name.
+        /// </summary>
+        public static class ReplyParameters
+        {
+            /// <summary>The words of the turn's answer.</summary>
+            public const string Text = "text";
+
+            /// <summary>What the turn ends waiting for from the user.</summary>
+            public const string Awaits = "awaits";
+
+            /// <summary>Whether the user's own message was a goodbye.</summary>
+            public const string UserIsLeaving = "userIsLeaving";
+
+            /// <summary>The actions of a workflow's choice step.</summary>
+            public const string Actions = "actions";
+
+            /// <summary>The card presenting the turn's structured data.</summary>
+            public const string Card = "card";
+        }
     }
 
     /// <summary>

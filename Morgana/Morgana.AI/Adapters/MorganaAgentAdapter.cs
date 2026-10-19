@@ -231,16 +231,24 @@ public class MorganaAgentAdapter
             ? KeepSoundWorkflows(intentAttribute.Intent, agentType, toolRegistryService.GetWorkflowDefinitions(intentAttribute.Intent), [.. domainTools, .. mcpToolDefinitions])
             : toolRegistryService.GetWorkflowDefinitions(intentAttribute.Intent);
 
-        // The menu is written by code from the declared menu entries: a workflow withdrawn above is no button.
-        // An MCP tool carries no menu entry. A tool leads to itself and a workflow to its launcher.
+        // A workflow's first step is reached through its launcher alone, so the tool that opens one is no button.
+        HashSet<string> workflowEntryToolNames = [.. workflowDefinitions.SelectMany(workflow => workflow.EntryTools)];
+
+        // The menu is written by code: first what the author numbered, a workflow withdrawn above being no button,
+        // then every MCP tool in the order its server lists it, since a server's tools are always the user's.
+        // A tool leads to itself and a workflow to its launcher.
         IReadOnlyList<Records.OfferedAction> menu =
         [
+            // Native tools
             .. domainTools.Where(tool => tool.MenuEntry is not null)
                 .Select(tool => (tool.MenuEntry!.Ordinal, Action: new Records.OfferedAction(tool.Name, tool.MenuEntry.Label, tool.MenuEntry.Label)))
                 .Concat(workflowDefinitions.Where(workflow => workflow.MenuEntry is not null)
-                    .Select(workflow => (workflow.MenuEntry!.Ordinal, Action: new Records.OfferedAction(Constants.Workflows.LauncherPrefix + workflow.Name, workflow.MenuEntry.Label, workflow.MenuEntry.Label))))
+                                           .Select(workflow => (workflow.MenuEntry!.Ordinal, Action: new Records.OfferedAction(Constants.Workflows.LauncherPrefix + workflow.Name, workflow.MenuEntry.Label, workflow.MenuEntry.Label))))
                 .OrderBy(entry => entry.Ordinal)
-                .Select(entry => entry.Action)
+                .Select(entry => entry.Action),
+            // MCP tools
+            .. mcpToolDefinitions.Where(tool => !workflowEntryToolNames.Contains(tool.Name))
+                .Select(tool => new Records.OfferedAction(tool.Name, tool.Description, tool.Description))
         ];
 
         // The menu is fixed at the agent's birth, so the declaration of it that a landing turn adds is composed once.
@@ -309,9 +317,6 @@ public class MorganaAgentAdapter
             agentTools,
             toolContextFactory);
 
-        // The tools that open a workflow are never offered outside it, so no action may lead to them directly.
-        HashSet<string> workflowEntryToolNames = [.. workflowDefinitions.SelectMany(workflow => workflow.EntryTools)];
-
         // An action leads to something the user can start with this agent: its domain and MCP tools and its workflows through their launchers.
         // Reply answers turns and a colleague is consulted, never pressed for, so neither is listed.
         actionableToolNames.AddRange(agentTools.Where(tool => !tool.Reserved).Select(tool => tool.Name).Where(toolName => !workflowEntryToolNames.Contains(toolName)));
@@ -379,8 +384,21 @@ public class MorganaAgentAdapter
                 workflow.Description,
                 () => LaunchWorkflowAsync(workflow, agentWorkflows)))];
 
+        // The MCP tools as the model reads them, in the order their servers list them.
+        List<AIFunction> mcpFunctions = [];
+        foreach (AIFunction mcpTool in mcpTools)
+        {
+            // The server's output schema reaches the model through the description, since no provider transmits a return schema.
+            string contractDescription = await promptComposerService.ComposeReturnContractAsync(mcpTool.Description, mcpTool.ReturnJsonSchema);
+            mcpFunctions.Add(new MorganaToolAdapter.DescribedFunction(mcpTool, contractDescription));
+        }
+
         // Every tool that the model is offered, in the order it reads them.
-        List<AITool> agentFunctions = [.. await CreateNativeFunctionsAsync(morganaToolAdapter, actionableToolNames), .. mcpTools, .. peerAgents, .. launcherFunctions];
+        List<AITool> agentFunctions = [
+            .. await CreateNativeFunctionsAsync(morganaToolAdapter, workflowDefinitions),
+            .. mcpFunctions,
+            .. peerAgents,
+            .. launcherFunctions ];
 
         // An action may lead to any tool but Reply and a colleague: its signature is the one that the model is offered,
         // so the arguments of a button are held to exactly what a call of the model could carry.
@@ -414,18 +432,21 @@ public class MorganaAgentAdapter
     }
 
     /// <summary>
-    /// Creates the agent's native tools, Reply among them shaped to the tools that an action of this agent may lead to.
+    /// Creates the agent's native tools, Reply among them shaped to the workflows of this agent.
     /// </summary>
     /// <param name="morganaToolAdapter">The adapter holding the agent's native tools.</param>
-    /// <param name="actionableToolNames">The tools that an action may lead to; complete by the time the tools are created.</param>
-    private static async Task<AIFunction[]> CreateNativeFunctionsAsync(MorganaToolAdapter morganaToolAdapter, IReadOnlyCollection<string> actionableToolNames)
+    /// <param name="workflowDefinitions">The workflows that the agent keeps.</param>
+    private static async Task<AIFunction[]> CreateNativeFunctionsAsync(MorganaToolAdapter morganaToolAdapter, IReadOnlyList<Records.WorkflowDefinition> workflowDefinitions)
     {
         // The tools as the adapter built them.
         AIFunction[] functions = await morganaToolAdapter.CreateAllFunctionsAsync();
 
+        // A step offering several tools is the one place where the model words buttons.
+        bool holdsChoiceStep = workflowDefinitions.Any(workflow => workflow.Steps.Any(step => step.Tools.Count > 1));
+
         // Reply alone is shaped: the schema it publishes must state what its own validation accepts for this agent.
         return [.. functions.Select(function => string.Equals(function.Name, Constants.Tools.Reply, StringComparison.Ordinal)
-            ? ReplyTool.NarrowSchemaToAgent(function, actionableToolNames)
+            ? ReplyTool.NarrowSchemaToAgent(function, holdsChoiceStep)
             : function)];
     }
 
@@ -1305,9 +1326,9 @@ public class MorganaAgentAdapter
                     // The name is taken from here on, so a later server cannot repeat it.
                     heldNames.Add(discoveredTool.Name);
 
-                    // The server's output schema reaches the model through the description, since no provider transmits a return schema.
-                    string contractDescription = await promptComposerService.ComposeReturnContractAsync(discoveredTool.Description, discoveredTool.ReturnJsonSchema);
-                    mcpTools.Add(new MorganaToolAdapter.DescribedFunction(discoveredTool, contractDescription));
+                    // The tool is kept as its server declared it: its description labels the user's button, while the
+                    // one that the model reads is composed with the return contract where the agent's tools are created.
+                    mcpTools.Add(discoveredTool);
                 }
             }
             catch (Exception ex)
@@ -1321,7 +1342,7 @@ public class MorganaAgentAdapter
     }
 
     /// <summary>
-    /// Projects a discovered MCP tool into the definition that workflow validation and the engine read.
+    /// Projects a discovered MCP tool into the definition that workflow validation, the engine and the menu read.
     /// </summary>
     /// <remarks>
     /// The MCP layer never asks the user for approval, so the definition never requires it.
@@ -1358,8 +1379,11 @@ public class MorganaAgentAdapter
                 string.Equals(property.Name, Constants.Workflows.FailureField, StringComparison.OrdinalIgnoreCase)))];
         }
 
-        // The definition stands for the tool wherever a workflow is weighed against the tools held.
-        return new Records.ToolDefinition(mcpTool.Name, mcpTool.Description, parameters, Returns: returns);
+        // The server's description labels the tool's button, so a server that wrote none leaves the tool known by its name.
+        string description = string.IsNullOrWhiteSpace(mcpTool.Description) ? mcpTool.Name : mcpTool.Description;
+
+        // The definition stands for the tool wherever a workflow is weighed against the tools held and in the agent's menu.
+        return new Records.ToolDefinition(mcpTool.Name, description, parameters, Returns: returns);
     }
 
     /// <summary>The description that a JSON schema property carries; empty when it has none.</summary>

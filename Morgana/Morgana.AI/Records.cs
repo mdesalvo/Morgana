@@ -1566,11 +1566,11 @@ public static class Records
     /// <param name="Actions">The actions offered as buttons; empty when none.</param>
     /// <param name="Card">The card presenting the turn's structured data; null when none.</param>
     public record ClosingDeclaration(
-        [property: JsonPropertyName("text")] string Text,
-        [property: JsonPropertyName("awaits")] AwaitedFromUser Awaits,
-        [property: JsonPropertyName("userIsLeaving")] bool UserIsLeaving,
-        [property: JsonPropertyName("actions")] IReadOnlyList<OfferedAction> Actions,
-        [property: JsonPropertyName("card")] RichCard? Card)
+        [property: JsonPropertyName(Constants.Tools.ReplyParameters.Text)] string Text,
+        [property: JsonPropertyName(Constants.Tools.ReplyParameters.Awaits)] AwaitedFromUser Awaits,
+        [property: JsonPropertyName(Constants.Tools.ReplyParameters.UserIsLeaving)] bool UserIsLeaving,
+        [property: JsonPropertyName(Constants.Tools.ReplyParameters.Actions)] IReadOnlyList<OfferedAction> Actions,
+        [property: JsonPropertyName(Constants.Tools.ReplyParameters.Card)] RichCard? Card)
     {
         /// <summary>Joins an action's tool and its number in the id of the button that offers it.</summary>
         private const char ActionIdSeparator = '#';
@@ -1610,12 +1610,12 @@ public static class Records
         }
 
         /// <summary>
-        /// The turn as the agent's presentation closes it: awaiting a choice among the menu when it has entries and nothing otherwise.
+        /// The turn as the agent's menu closes it: awaiting a choice among the menu when it has entries and nothing otherwise.
         /// </summary>
         /// <param name="menu">The agent's menu, in menu order.</param>
         public ClosingDeclaration WithMenu(IReadOnlyList<OfferedAction> menu)
-            // The menu is the turn's only action list and the card is dropped, since a presentation carries none.
-            => new ClosingDeclaration(Text, menu.Count > 0 ? AwaitedFromUser.ActionChoice : AwaitedFromUser.Nothing, UserIsLeaving, menu, null);
+            // The menu is the turn's only action list, while the card that presents the turn's data stays.
+            => new ClosingDeclaration(Text, menu.Count > 0 ? AwaitedFromUser.ActionChoice : AwaitedFromUser.Nothing, UserIsLeaving, menu, Card);
 
         /// <summary>Words a tool name as a button label: <c>ConfirmOrder</c> becomes <c>Confirm order</c>.</summary>
         private static string LabelFromToolName(string toolName)
@@ -1666,7 +1666,8 @@ public static class Records
             if (UserIsLeaving)
                 return (null, true);
 
-            // The user is asked to type, so a button would only offer a way around the question; the agent stays active.
+            // The user is asked to type and a channel showing buttons locks its text field, so no button is offered, the way out
+            // included: the user leaves by writing so. The agent stays active.
             if (Awaits == AwaitedFromUser.TypedAnswer)
                 return (null, false);
 

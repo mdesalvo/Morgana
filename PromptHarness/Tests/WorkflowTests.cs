@@ -215,12 +215,9 @@ public sealed class WorkflowTests
             ["CancelOrder", "ConfirmOrder", "OrderHistory", "Refund", "Reply", "StartPlaceOrder", "Stock"],
             Names(ToolsOfferedAt(agent.Model, 0)));
 
-        // A button leads to the launcher and never to the entry tool, which is reached through the launcher alone.
+        // Outside a workflow the buttons are the agent's menu, written by code, so Reply asks the model for no action.
         AIFunction reply = Assert.IsAssignableFrom<AIFunction>(Assert.Single(ToolsOfferedAt(agent.Model, 0), tool => tool.Name == "Reply"));
-        string?[] actionableTools = [.. reply.JsonSchema.GetProperty("properties").GetProperty("actions")
-            .GetProperty("items").GetProperty("properties").GetProperty("tool").GetProperty("enum").EnumerateArray().Select(name => name.GetString()).Order(StringComparer.Ordinal)];
-        Assert.Contains("StartPlaceOrder", actionableTools);
-        Assert.DoesNotContain("CreatePurchaseOrder", actionableTools);
+        Assert.False(reply.JsonSchema.GetProperty("properties").TryGetProperty("actions", out _));
 
         AgentUnderTest servingAgent = await AgentUnderTest.CreateAsync(PlaceOrder());
         await servingAgent.Provider.SetVariableAsync(servingAgent.Session, Constants.ContextKeys.ServingConsultation, true);
@@ -405,10 +402,9 @@ public sealed class WorkflowTests
         JsonElement atQuote = ReplySchema(ToolsOfferedAt(agent.Model, 1));
         JsonElement atDecide = ReplySchema(ToolsOfferedAt(agent.Model, 2));
 
-        // Outside a choice step the schema is the one Reply was built with: the actions stay optional and free.
+        // Outside a choice step the buttons are the agent's menu, so Reply carries no actions at all.
         Assert.Equal(atLaunch.GetRawText(), atQuote.GetRawText());
-        Assert.DoesNotContain("actions", atQuote.GetProperty("required").EnumerateArray().Select(name => name.GetString()));
-        Assert.False(atQuote.GetProperty("properties").GetProperty("actions").TryGetProperty("minItems", out _));
+        Assert.False(atQuote.GetProperty("properties").TryGetProperty("actions", out _));
 
         JsonElement actions = atDecide.GetProperty("properties").GetProperty("actions");
         Assert.Contains("actions", atDecide.GetProperty("required").EnumerateArray().Select(name => name.GetString()));
@@ -1420,14 +1416,14 @@ public sealed class WorkflowTests
             => throw new InvalidOperationException("No model is reached by this group");
     }
 
-    /// <summary>Finds the sample tools for the sample intent and declares them as the catalog would project them.</summary>
-    internal sealed class SampleToolRegistry(IReadOnlyList<Records.WorkflowDefinition> workflows) : IToolRegistryService
+    /// <summary>Finds the sample tools for the sample intent and declares them as the catalog would project them, or as given.</summary>
+    internal sealed class SampleToolRegistry(IReadOnlyList<Records.WorkflowDefinition> workflows, IReadOnlyList<Records.ToolDefinition>? tools = null) : IToolRegistryService
     {
         public Type? FindToolTypeForIntent(string intent) => intent == "inventory" ? typeof(InventoryTools) : null;
 
         public IReadOnlyDictionary<string, Type> GetAllRegisteredTools() => new Dictionary<string, Type> { ["inventory"] = typeof(InventoryTools) };
 
-        public IReadOnlyList<Records.ToolDefinition> GetToolDefinitions(string intent) => intent == "inventory" ? DeclaredTools() : [];
+        public IReadOnlyList<Records.ToolDefinition> GetToolDefinitions(string intent) => intent == "inventory" ? tools ?? DeclaredTools() : [];
 
         public IReadOnlyList<Records.WorkflowDefinition> GetWorkflowDefinitions(string intent) => intent == "inventory" ? workflows : [];
 

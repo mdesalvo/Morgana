@@ -33,27 +33,27 @@ public class ReplyTool : MorganaTool
 
     /// <summary>
     /// Gives the agent's turn answer: its text, what it ends waiting for, whether the user is leaving, the actions
-    /// that it offers and the card that it presents. Recorded for <c>MorganaAgent</c> to read at the end of the turn.
+    /// of a choice step and the card that it presents. Recorded for <c>MorganaAgent</c> to read at the end of the turn.
     /// </summary>
     /// <param name="text">The words of the turn's answer to the user.</param>
     /// <param name="awaits">What the turn ends waiting for from the user.</param>
     /// <param name="userIsLeaving">True when the user's own message was a goodbye.</param>
-    /// <param name="actions">The agent's own actions offered as buttons, if any.</param>
+    /// <param name="actions">The actions of a workflow's choice step, worded by the model; no other turn asks for them.</param>
     /// <param name="card">The card presenting the turn's structured data, if any.</param>
     /// <returns>
     /// The named result the tool loop turns into its authored text. A closure refused for what the model offered
     /// throws instead, with the fact that broke the rules as its message, which the tool loop hands back to the model.
     /// </returns>
-    [Description("Gives your turn's answer. Its text is the only part of the turn that reaches your reader: anything you write outside Reply is never shown. Call it exactly once, as your last action. Beside the text it carries what the turn awaits from the user, whether the user is leaving, the actions offered as buttons and the card.")]
+    [Description("Gives your turn's answer. Its text is the only part of the turn that reaches your reader: anything you write outside Reply is never shown. Call it exactly once, as your last action. Beside the text it carries what the turn awaits from the user, whether the user is leaving and the card.")]
     [SystemTool]
     public async Task<Records.FrameworkToolResult> Reply(
         [Description("Your words to your reader, written against everything the tools returned.")]
         [ToolParameter(Records.ToolScope.Request)] string text,
-        [Description("What the turn ends waiting for from the user. 'nothing': the request is answered. 'typed_answer': you asked for a value the user types in their own words. 'action_choice': you offer actions to pick from. With 'nothing', buttons to stay or leave follow your text by themselves: your text never asks whether the user needs anything else. A request naming one of several items without saying which is not answered yet: ask which, as a typed_answer or as an action_choice.")]
+        [Description("What the turn ends waiting for from the user. 'nothing': the request is answered. 'typed_answer': you asked for a value the user types in their own words. With 'nothing', buttons to stay or leave follow your text by themselves: your text never asks whether the user needs anything else. A request naming one of several items without saying which is not answered yet: ask which, as a typed_answer.")]
         [ToolParameter(Records.ToolScope.Request)] Records.AwaitedFromUser awaits,
         [Description("True when the user's own message was a goodbye: thanks, we're done, declining further help, wanting to return to the main assistant.")]
         [ToolParameter(Records.ToolScope.Request)] bool userIsLeaving,
-        [Description("The actions offered as buttons; omit when none.")]
+        [Description("The step's actions as buttons, worded by you.")]
         [ToolParameter(Records.ToolScope.Request)] List<Records.OfferedAction>? actions = null,
         [Description("A card presenting the turn's structured data; omit when none. At most 50 components.")]
         [ToolParameter(Records.ToolScope.Request)] RichCard? card = null)
@@ -270,28 +270,30 @@ public class ReplyTool : MorganaTool
     }
 
     /// <summary>
-    /// Presents Reply under a schema that admits exactly what its validation accepts for one agent: the actions lead
-    /// to the agent's own tools alone and the card nests no deeper than the channels lay out.
+    /// Presents Reply under a schema that admits exactly what its validation accepts for one agent: actions only for
+    /// an agent whose workflows hold a choice step, an awaited input that is either nothing or a typed answer and a
+    /// card nesting no deeper than the channels lay out.
     /// </summary>
     /// <param name="reply">The Reply function as the adapter created it.</param>
-    /// <param name="actionableToolNames">The agent's tools that an action may lead to.</param>
-    public static AIFunction NarrowSchemaToAgent(AIFunction reply, IReadOnlyCollection<string> actionableToolNames)
+    /// <param name="holdsChoiceStep">True when one of the agent's workflows has a step offering several tools.</param>
+    public static AIFunction NarrowSchemaToAgent(AIFunction reply, bool holdsChoiceStep)
     {
         // The schema is edited as a document, then handed back to the function that the tool loop runs.
         JsonObject schema = WorkflowToolsChatClient.SchemaOf(reply);
         JsonObject properties = schema["properties"]!.AsObject();
 
-        // An agent with no tool to lead to offers no button at all.
-        if (actionableToolNames.Count == 0)
-            properties.Remove("actions");
+        // Outside a choice step the buttons are the agent's menu, written by code, so the model words actions only
+        // where a step proposes its tools: an agent with no such step never sees them.
+        if (!holdsChoiceStep)
+            properties.Remove(Constants.Tools.ReplyParameters.Actions);
 
-        // Otherwise an action can only name one of the agent's tools, as the validation requires.
-        else
-            properties["actions"]!["items"]!["properties"]!["tool"]!.AsObject()["enum"] =
-                new JsonArray([.. actionableToolNames.Select(JsonNode (tool) => JsonValue.Create(tool)!)]);
+        // The model only says whether its text asks the user to write: a choice among buttons is the menu's or the step's,
+        // which closes on its actions whatever the model declared, so the schema never offers it one.
+        properties[Constants.Tools.ReplyParameters.Awaits]!.AsObject()["enum"] = new JsonArray([.. new[] { Records.AwaitedFromUser.Nothing, Records.AwaitedFromUser.TypedAnswer }
+            .Select(JsonNode (awaited) => JsonSerializer.SerializeToNode(awaited)!)]);
 
         // The card's recursive section is written out level by level, so that the schema stops at the depth the validation accepts.
-        JsonObject components = properties["card"]!["properties"]!["components"]!.AsObject();
+        JsonObject components = properties[Constants.Tools.ReplyParameters.Card]!["properties"]!["components"]!.AsObject();
         components["items"] = UnrollComponentLevel(components["items"]!.AsObject(), 1);
 
         // The model reads Reply under the schema as shaped for this agent.

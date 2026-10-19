@@ -133,9 +133,9 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         // introduces itself from the declaration that its context provider adds and answers through Reply.
         if (contextProvider.HoldsFrameworkKey(session, Constants.ContextKeys.Landing))
         {
-            // The clone carries Reply alone, whatever else the agent holds.
+            // The clone carries Reply alone, whatever else the agent holds, without actions: the landing closes on the menu.
             ChatOptions landingOptions = options.Clone();
-            landingOptions.Tools = [.. tools.Where(tool => tool.Name is Constants.Tools.Reply)];
+            landingOptions.Tools = [.. tools.Where(tool => tool.Name is Constants.Tools.Reply).Select(WithoutActions)];
 
             // The landing's options go to the model with no tool mode: no provider is ever made to call a tool.
             return landingOptions;
@@ -165,9 +165,9 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         // A workflow that the call started or moved on still offers its step, which is how the procedure goes on.
         if (pressedCallMade && runningWorkflow is null)
         {
-            // The clone carries Reply alone, as a landing's does.
+            // The clone carries Reply alone, as a landing's does: no workflow runs, so the turn closes on the menu.
             ChatOptions answerOptions = options.Clone();
-            answerOptions.Tools = [.. tools.Where(tool => tool.Name is Constants.Tools.Reply)];
+            answerOptions.Tools = [.. tools.Where(tool => tool.Name is Constants.Tools.Reply).Select(WithoutActions)];
 
             // The model reads Reply alone and answers on the result of the call.
             return answerOptions;
@@ -203,6 +203,10 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
                 // A tool of the current step is offered without what the framework binds.
                 case { } workflowAndStep when workflowAndStep.Step.Tools.Contains(tool.Name):
                     offeredTools.Add(WithoutBoundParameters(tool, position!.Arguments.Keys));
+                    break;
+                // Anywhere but a choice step the buttons are the framework's, so Reply is offered without actions.
+                case var _ when tool.Name == Constants.Tools.Reply:
+                    offeredTools.Add(WithoutActions(tool));
                     break;
                 // Any other tool that the workflows let through is offered as the agent holds it.
                 default:
@@ -257,6 +261,12 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         return PresentUnderSchema(function, schema);
     }
 
+    /// <summary>Offers <c>Reply</c> with no actions, for a turn whose buttons the framework writes.</summary>
+    /// <param name="reply">The <c>Reply</c> tool as the agent holds it.</param>
+    private static AITool WithoutActions(AITool reply)
+        // The buttons of such a turn are bound by the framework as a step's values are, so the model is never asked for them.
+        => WithoutBoundParameters(reply, [Constants.Tools.ReplyParameters.Actions]);
+
     /// <summary>
     /// Turns the actions of <c>Reply</c> into the proposal of a choice step: required, one per tool of the step and each leading to one of them.
     /// </summary>
@@ -272,7 +282,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         JsonObject schema = SchemaOf(replyFunction);
 
         // The actions property is where Reply offers buttons; its schema becomes the proposal of the step's choices.
-        JsonObject actions = schema["properties"]!["actions"]!.AsObject();
+        JsonObject actions = schema["properties"]![Constants.Tools.ReplyParameters.Actions]!.AsObject();
 
         // A null in the place of the array would leave the step with no button, so the type is narrowedOptions to the array.
         actions["type"] = "array";
@@ -285,8 +295,8 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
 
         // Reply declares actions optional, but a choice step cannot be proposed without them.
         JsonArray required = schema["required"] as JsonArray ?? [];
-        if (required.All(name => name!.GetValue<string>() != "actions"))
-            required.Add("actions");
+        if (required.All(name => name!.GetValue<string>() != Constants.Tools.ReplyParameters.Actions))
+            required.Add(Constants.Tools.ReplyParameters.Actions);
         schema["required"] = required;
 
         // The model reads Reply with its actions fixed to the step's tools.

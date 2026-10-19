@@ -116,9 +116,9 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
             // Recorded exactly as if the model had called Reply with these words, its refusals included.
             await reply.InvokeAsync(new AIFunctionArguments
             {
-                ["text"] = JsonSerializer.SerializeToElement(lastWords),
-                ["awaits"] = JsonSerializer.SerializeToElement("nothing"),
-                ["userIsLeaving"] = JsonSerializer.SerializeToElement(false)
+                [Constants.Tools.ReplyParameters.Text] = JsonSerializer.SerializeToElement(lastWords),
+                [Constants.Tools.ReplyParameters.Awaits] = JsonSerializer.SerializeToElement(Records.AwaitedFromUser.Nothing),
+                [Constants.Tools.ReplyParameters.UserIsLeaving] = JsonSerializer.SerializeToElement(false)
             }, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
