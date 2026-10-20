@@ -72,6 +72,11 @@ public class MorganaAgentAdapter
     protected readonly IAgentDirectoryService agentDirectoryService;
 
     /// <summary>
+    /// Holds every call that the model makes to the schema it was offered, before the call reaches its tool.
+    /// </summary>
+    protected readonly ICallSignatureService callSignatureService;
+
+    /// <summary>
     /// Application configuration, read for the peer-consultation budget and timeout.
     /// </summary>
     protected readonly IConfiguration configuration;
@@ -113,6 +118,7 @@ public class MorganaAgentAdapter
     /// <param name="chatReducerService">Service for reducing context window sent to LLM</param>
     /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
     /// <param name="agentDirectoryService">Supplies the card of each declared colleague and resolves it into a callable agent</param>
+    /// <param name="callSignatureService">Holds every call that the model makes to the schema of its tool</param>
     /// <param name="configuration">Application configuration, read for the peer-consultation budget and timeout</param>
     /// <param name="logger">Logger instance for diagnostics</param>
     public MorganaAgentAdapter(
@@ -124,6 +130,7 @@ public class MorganaAgentAdapter
         HistoryReducerService chatReducerService,
         IDustLimitService dustLimitService,
         IAgentDirectoryService agentDirectoryService,
+        ICallSignatureService callSignatureService,
         IConfiguration configuration,
         ILogger logger)
     {
@@ -136,6 +143,7 @@ public class MorganaAgentAdapter
         this.chatReducerService = chatReducerService;
         this.dustLimitService = dustLimitService;
         this.agentDirectoryService = agentDirectoryService;
+        this.callSignatureService = callSignatureService;
         this.configuration = configuration;
         this.logger = logger;
 
@@ -543,8 +551,8 @@ public class MorganaAgentAdapter
 
             // A value that the call requires and that neither the button, the step nor the user's answer supplied is the user's
             // to give: the tool is not run and the model reads which values are lacking, exactly as for a context value.
-            string[] missingValues = MissingRequiredValues(context);
-            if (missingValues.Length > 0)
+            IReadOnlyList<string> missingValues = callSignatureService.MissingValues(context);
+            if (missingValues.Count > 0)
             {
                 logger.LogInformation("Pressed call to '{Tool}' lacks [{Missing}]: the user is asked for them", context.Function.Name, string.Join(", ", missingValues));
 
@@ -560,6 +568,20 @@ public class MorganaAgentAdapter
                         [Constants.Placeholders.MissingValues] = string.Join(", ", missingValues)
                     });
             }
+        }
+
+        // A value that the model wrote in another form of its parameter's elementary type is read as that type, so a slip of
+        // form never costs the turn a round with the model.
+        IReadOnlyList<string> normalizedParameters = callSignatureService.NormalizeArguments(context);
+        if (normalizedParameters.Count > 0)
+            logger.LogInformation("Call to '{Tool}' carried [{Parameters}] in another form of their type: read as declared", context.Function.Name, string.Join(", ", normalizedParameters));
+
+        // Every call has its signature checked before it reaches its tool, whichever tool it is: one that breaks the
+        // schema that the model was offered is not run, the turn stays open and the model reads the argument at fault.
+        if (callSignatureService.Fault(context) is { } signatureFault)
+        {
+            logger.LogWarning("Call to '{Tool}' refused: {Reason}", context.Function.Name, signatureFault);
+            return await promptComposerService.ComposeTurnClosureNotAcceptedAsync(signatureFault);
         }
 
         // The call runs here, so a failure of Reply can be answered instead of aborting the turn.
@@ -634,24 +656,6 @@ public class MorganaAgentAdapter
                 context.Arguments[schemaProperty.Name] = carriedValue.RootElement.Clone();
             }
         }
-    }
-
-    /// <summary>
-    /// The parameters that the call's schema requires and that its arguments still leave without a value.
-    /// </summary>
-    /// <param name="context">The call about to run, with every value that the framework binds already written in.</param>
-    private static string[] MissingRequiredValues(FunctionInvocationContext context)
-    {
-        // A schema without a required list asks nothing of the call: the framework fills a context value itself and drops it from the list.
-        if (!context.Function.JsonSchema.TryGetProperty("required", out JsonElement required) || required.ValueKind != JsonValueKind.Array)
-            return [];
-
-        // A parameter is lacking when the call carries nothing under its name or carries null.
-        return [.. required.EnumerateArray()
-            .Select(name => name.GetString()!)
-            .Where(name => !context.Arguments.TryGetValue(name, out object? value)
-                           || value is null
-                           || value is JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined })];
     }
 
     /// <summary>

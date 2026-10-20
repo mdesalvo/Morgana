@@ -1466,14 +1466,16 @@ public static class Records
     }
 
     /// <summary>
-    /// What a call of one tool may carry and must carry, as the model is offered the tool: the arguments that an action
-    /// leading to it is held to.
+    /// What a call of one tool may carry and must carry, as the model is offered the tool: what every call that the model
+    /// makes and every action leading to the tool are held to.
     /// </summary>
     /// <param name="Parameters">Parameter name to the JSON types that its schema accepts; an empty list accepts any value.</param>
     /// <param name="Required">The parameters that a call cannot leave out.</param>
+    /// <param name="Choices">Parameter name to the only values that its schema allows; a parameter absent here allows any value of its types.</param>
     public record CallSignature(
         IReadOnlyDictionary<string, IReadOnlyList<string>> Parameters,
-        IReadOnlyList<string> Required)
+        IReadOnlyList<string> Required,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> Choices)
     {
         /// <summary>Reads the signature of a tool from the schema that the model is offered.</summary>
         /// <param name="schema">The tool's JSON schema, as its function publishes it.</param>
@@ -1481,10 +1483,12 @@ public static class Records
         {
             // A tool without properties takes no argument at all, as a workflow's launcher does.
             Dictionary<string, IReadOnlyList<string>> parameters = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+            Dictionary<string, IReadOnlyList<string>> choices = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
             if (schema.TryGetProperty("properties", out JsonElement properties) && properties.ValueKind == JsonValueKind.Object)
             {
-                // Each parameter keeps the types that its schema names, written either as one type or as a list of them.
                 foreach (JsonProperty parameter in properties.EnumerateObject())
+                {
+                    // Each parameter keeps the types that its schema names, written either as one type or as a list of them.
                     parameters[parameter.Name] = parameter.Value.TryGetProperty("type", out JsonElement type) ? type.ValueKind switch
                     {
                         // A single type is the only one accepted.
@@ -1494,6 +1498,11 @@ public static class Records
                         // A type of any other shape states no constraint.
                         _ => []
                     } : [];
+
+                    // A parameter whose schema lists its values, as a closed set of words does, allows those alone.
+                    if (parameter.Value.TryGetProperty("enum", out JsonElement allowedValues) && allowedValues.ValueKind == JsonValueKind.Array)
+                        choices[parameter.Name] = [.. allowedValues.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()!)];
+                }
             }
 
             // The required list names what a call must carry; a schema without one requires nothing.
@@ -1502,7 +1511,7 @@ public static class Records
                 : [];
 
             // The signature as the model is offered the tool.
-            return new CallSignature(parameters, required);
+            return new CallSignature(parameters, required, choices);
         }
 
         /// <summary>Whether a value has a JSON type that the parameter accepts.</summary>
@@ -1527,6 +1536,37 @@ public static class Records
                 "null" => value.ValueKind == JsonValueKind.Null,
                 _ => true
             });
+        }
+
+        /// <summary>Whether a value is one that the parameter allows, for a parameter whose schema lists its values.</summary>
+        /// <param name="parameter">A parameter that the signature declares.</param>
+        /// <param name="value">The value meant for it, already of a type that the parameter accepts.</param>
+        public bool Allows(string parameter, JsonElement value)
+            // A parameter that lists no values allows any value of its types; one that lists them allows a listed word alone.
+            => !Choices.TryGetValue(parameter, out IReadOnlyList<string>? allowedValues)
+               || (value.ValueKind == JsonValueKind.String && allowedValues.Contains(value.GetString(), StringComparer.Ordinal));
+
+        /// <summary>The fact that a value is not one of those that its parameter lists, as a refusal names it to the model.</summary>
+        /// <param name="subject">Who passes the value: the call itself or the action whose press makes it.</param>
+        /// <param name="toolName">The tool that the value is meant for.</param>
+        /// <param name="parameter">A parameter that lists its values.</param>
+        /// <param name="value">The value that the parameter does not allow.</param>
+        public string ChoiceReason(string subject, string toolName, string parameter, JsonElement value)
+            // The fact names the value passed and every value that the parameter allows, so the repair is a choice among them.
+            => $"{subject} passes '{parameter}' as '{value}' while '{toolName}' takes one of: {string.Join(", ", Choices[parameter])}";
+
+        /// <summary>The fact that a value is meant for a parameter that refuses its JSON type, as a refusal names it to the model.</summary>
+        /// <param name="subject">Who passes the value: the call itself or the action whose press makes it.</param>
+        /// <param name="toolName">The tool that the value is meant for.</param>
+        /// <param name="parameter">A parameter that the signature declares.</param>
+        /// <param name="value">The value that the parameter refuses.</param>
+        public string MismatchReason(string subject, string toolName, string parameter, JsonElement value)
+        {
+            // The value's kind is named as a schema names types, so both sides of the fact read in one vocabulary.
+            string passedType = value.ValueKind is JsonValueKind.True or JsonValueKind.False ? "boolean" : value.ValueKind.ToString().ToLowerInvariant();
+
+            // The fact names the parameter, the type passed and the types that the parameter takes, which is all a repair needs.
+            return $"{subject} passes '{parameter}' as {passedType} while '{toolName}' takes it as {string.Join(" or ", Parameters[parameter])}";
         }
     }
 

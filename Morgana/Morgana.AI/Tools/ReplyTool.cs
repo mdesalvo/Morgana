@@ -201,7 +201,7 @@ public class ReplyTool : MorganaTool
 
             // A value of a type that the parameter refuses would fail the call when the press makes it.
             if (!signature.Accepts(parameter, value))
-                return $"the action '{action.Label}' passes '{parameter}' as {value.ValueKind.ToString().ToLowerInvariant()} while '{action.Tool}' takes it as {string.Join(" or ", signature.Parameters[parameter])}";
+                return signature.MismatchReason($"the action '{action.Label}'", action.Tool, parameter, value);
         }
 
         // Every argument reaches a parameter of the call with a value that it accepts.

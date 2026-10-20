@@ -52,6 +52,7 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PeerFederationTest
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ConversationApiTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ContextResolutionTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~TurnClosureTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~CallSignatureTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~HistoryViewTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ExecutionApprovalTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~WorkflowTests"
@@ -111,6 +112,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `RateLimitTests` | none | The REST gate's rate limit: the 429 past the window, refused commands left uncounted, one window shared by messages and commands. No model is reached |
 | `ConversationPersistenceTests` | — | Who owns each line of a conversation, how it is dated and in what order it is read back. The record is photographed after every exchange rather than at the end, because a transcript that reads correctly can still have been written by the wrong participant. Asserts nothing about wording: the oracle is what the channel was pushed and what the channel said. Shares the guard's knob, since a refused turn is one of the five it stages |
 | `TurnClosureTests` | none | How a turn is answered — what `Reply` records and refuses, the schema the card is held to, the framework closing a turn the model answered in free text, free text never shown, the transcript reading back what was delivered — with a scripted model |
+| `CallSignatureTests` | none | The signature service between the model and every tool, for a careless model: a value in another form of its elementary type read as meant, every other break of a schema refused naming the argument at fault |
 | `ExecutionApprovalTests` | none | A tool requiring approval: never run on the model's call, run once with the approved arguments across a saved session, its text taken from the `Reply` beside it, never run as a `Reply` that would outlive its turn |
 | `FrameworkPromptTests` | none | The morgana.json shipped in Morgana.AI carries every entry that the framework fetches by name — sections, templates, tool results, framework replies, messages |
 | `LanguageModelTests` | none | The three tiers built from configuration, each by the provider it declares; a missing tier, a missing connection, an unregistered or twice-registered provider, a placeholder in a field the provider uses and a framework tier that names no tier refused. No model is reached |

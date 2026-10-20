@@ -584,7 +584,7 @@ public sealed class TurnClosureTests
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
         turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","awaits":"nothing","userIsLeaving":false}""")));
         turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","awaits":"typed_answer","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Try again later.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"Stock","label":"🔁 Retry","value":"Retry"}]}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Try again later.","awaits":"nothing","userIsLeaving":false,"actions":[{"tool":"Stock","label":"🔁 Retry","value":"Retry"}]}""")));
 
         List<object> answered = await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
         List<object> asking = await turn.AskAsync(new Records.AgentRequest("conv-turn", "I want a plant", null));
@@ -1090,7 +1090,7 @@ public sealed class TurnClosureTests
     /// The sample inventory agent running as an actor over a scripted model, with a record on disk,
     /// so a whole turn is delivered the way a channel receives it.
     /// </summary>
-    private sealed class AgentTurnUnderTest : IAsyncDisposable
+    internal sealed class AgentTurnUnderTest : IAsyncDisposable
     {
         /// <summary>The script standing where the model would.</summary>
         public ScriptedChatClient Model { get; }
@@ -1155,6 +1155,7 @@ public sealed class TurnClosureTests
                 new HistoryReducerService(configuration, NullLogger.Instance),
                 new WorkflowTests.NoDust(),
                 null!,
+                new SchemaCallSignatureService(),
                 configuration,
                 NullLogger.Instance);
 

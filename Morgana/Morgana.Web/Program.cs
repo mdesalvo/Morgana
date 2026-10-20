@@ -170,6 +170,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
 // - ICommandRegistryService: Publishes the commands channels may run on a conversation (every MorganaCommand registered here)
+// - ICallSignatureService: Holds every call that the model makes to the schema of its tool, before the tool runs
 // - ILanguageModelService: Abstraction over LLM providers, three tiers Economy/Efficiency/Performance each served by the registered provider it names (Morgana:LLM:Tiers)
 // - MorganaLanguageModel: One per LLM provider that a tier may name
 // - MorganaCommand: One per command a channel may run on a conversation
@@ -187,6 +188,7 @@ builder.Services.AddSingleton<IGuardRailService, LLMGuardRailService>();
 builder.Services.AddSingleton<IClassifierService, LLMClassifierService>();
 builder.Services.AddSingleton<IPresenterService, LLMPresenterService>();
 builder.Services.AddSingleton<ICommandRegistryService, CommandRegistryService>();
+builder.Services.AddSingleton<ICallSignatureService, SchemaCallSignatureService>();
 builder.Services.AddSingleton<MorganaCommand, CompactHistoryCommand>();
 // A factory because the service needs the configuration, the registered providers and the logger factory to build its tiers.
 builder.Services.AddSingleton<ILanguageModelService>(sp => {
