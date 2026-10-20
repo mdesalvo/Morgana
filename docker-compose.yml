@@ -65,21 +65,21 @@ services:
       # Morgana's fail-fast placeholder check at startup. A provider ignores a field it does not
       # read, so the placeholder left there is harmless.
       # ActorSystem:Tier is the tier on which Morgana's own framework actors run.
-      - Morgana__LLM__Tiers__Economy__Provider=${LLM_ECONOMY_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Economy__Connection__ApiKey=${LLM_ECONOMY_APIKEY:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Tiers__Economy__Connection__Endpoint=${LLM_ECONOMY_ENDPOINT:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Tiers__Economy__Options__ModelId=${LLM_ECONOMY_MODEL:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Economy__Options__MaxOutputTokens=${LLM_ECONOMY_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Efficiency__Provider=${LLM_EFFICIENCY_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Efficiency__Connection__ApiKey=${LLM_EFFICIENCY_APIKEY:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Tiers__Efficiency__Connection__Endpoint=${LLM_EFFICIENCY_ENDPOINT:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Tiers__Efficiency__Options__ModelId=${LLM_EFFICIENCY_MODEL:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Efficiency__Options__MaxOutputTokens=${LLM_EFFICIENCY_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Performance__Provider=${LLM_PERFORMANCE_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Performance__Connection__ApiKey=${LLM_PERFORMANCE_APIKEY:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Tiers__Performance__Connection__Endpoint=${LLM_PERFORMANCE_ENDPOINT:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Tiers__Performance__Options__ModelId=${LLM_PERFORMANCE_MODEL:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Performance__Options__MaxOutputTokens=${LLM_PERFORMANCE_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Economy__Provider=${LLM_ECONOMY_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Economy__Connection__ApiKey=${LLM_ECONOMY_APIKEY:-_SECURE_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Economy__Connection__Endpoint=${LLM_ECONOMY_ENDPOINT:-_SECURE_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Economy__Options__ModelId=${LLM_ECONOMY_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Economy__Options__MaxOutputTokens=${LLM_ECONOMY_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Efficiency__Provider=${LLM_EFFICIENCY_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Efficiency__Connection__ApiKey=${LLM_EFFICIENCY_APIKEY:-_SECURE_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Efficiency__Connection__Endpoint=${LLM_EFFICIENCY_ENDPOINT:-_SECURE_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Efficiency__Options__ModelId=${LLM_EFFICIENCY_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Efficiency__Options__MaxOutputTokens=${LLM_EFFICIENCY_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Performance__Provider=${LLM_PERFORMANCE_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Performance__Connection__ApiKey=${LLM_PERFORMANCE_APIKEY:-_SECURE_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Performance__Connection__Endpoint=${LLM_PERFORMANCE_ENDPOINT:-_SECURE_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Performance__Options__ModelId=${LLM_PERFORMANCE_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Performance__Options__MaxOutputTokens=${LLM_PERFORMANCE_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
       - Morgana__ActorSystem__Tier=${ACTORSYSTEM_TIER:-Economy}
     volumes:
       # Persistent volume for SQLite databases
@@ -242,26 +242,26 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5005
 
-      # LLM tiers, same section name as Morgana's (Morgana:LLM), because Alembic consumes
+      # LLM tiers, same section name as Morgana's (Morgana:LanguageModels), because Alembic consumes
       # the framework's own provider abstraction rather than reimplementing it. The same
       # unset-variable caveat as the morgana service applies: every value falls back to its
       # appsettings.json sentinel placeholder so a missing override fails fast instead of
       # injecting an empty string.
-      - Morgana__LLM__Tiers__Economy__Provider=${LLM_ECONOMY_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Economy__Connection__ApiKey=${LLM_ECONOMY_APIKEY:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Tiers__Economy__Connection__Endpoint=${LLM_ECONOMY_ENDPOINT:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Tiers__Economy__Options__ModelId=${LLM_ECONOMY_MODEL:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Economy__Options__MaxOutputTokens=${LLM_ECONOMY_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Efficiency__Provider=${LLM_EFFICIENCY_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Efficiency__Connection__ApiKey=${LLM_EFFICIENCY_APIKEY:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Tiers__Efficiency__Connection__Endpoint=${LLM_EFFICIENCY_ENDPOINT:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Tiers__Efficiency__Options__ModelId=${LLM_EFFICIENCY_MODEL:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Efficiency__Options__MaxOutputTokens=${LLM_EFFICIENCY_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Performance__Provider=${LLM_PERFORMANCE_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Performance__Connection__ApiKey=${LLM_PERFORMANCE_APIKEY:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Tiers__Performance__Connection__Endpoint=${LLM_PERFORMANCE_ENDPOINT:-_SECURE_OVERRIDE_}
-      - Morgana__LLM__Tiers__Performance__Options__ModelId=${LLM_PERFORMANCE_MODEL:-_FUNCTIONAL_OVERRIDE_}
-      - Morgana__LLM__Tiers__Performance__Options__MaxOutputTokens=${LLM_PERFORMANCE_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Economy__Provider=${LLM_ECONOMY_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Economy__Connection__ApiKey=${LLM_ECONOMY_APIKEY:-_SECURE_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Economy__Connection__Endpoint=${LLM_ECONOMY_ENDPOINT:-_SECURE_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Economy__Options__ModelId=${LLM_ECONOMY_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Economy__Options__MaxOutputTokens=${LLM_ECONOMY_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Efficiency__Provider=${LLM_EFFICIENCY_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Efficiency__Connection__ApiKey=${LLM_EFFICIENCY_APIKEY:-_SECURE_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Efficiency__Connection__Endpoint=${LLM_EFFICIENCY_ENDPOINT:-_SECURE_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Efficiency__Options__ModelId=${LLM_EFFICIENCY_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Efficiency__Options__MaxOutputTokens=${LLM_EFFICIENCY_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Performance__Provider=${LLM_PERFORMANCE_PROVIDER:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Performance__Connection__ApiKey=${LLM_PERFORMANCE_APIKEY:-_SECURE_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Performance__Connection__Endpoint=${LLM_PERFORMANCE_ENDPOINT:-_SECURE_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Performance__Options__ModelId=${LLM_PERFORMANCE_MODEL:-_FUNCTIONAL_OVERRIDE_}
+      - Morgana__LanguageModels__Tiers__Performance__Options__MaxOutputTokens=${LLM_PERFORMANCE_MAXOUTPUTTOKENS:-_FUNCTIONAL_OVERRIDE_}
 
 # ==============================================================================
 # VOLUMES

@@ -8,7 +8,7 @@ namespace Morgana.AI.Abstractions;
 /// </summary>
 public abstract class MorganaLanguageModel
 {
-    /// <summary>The name that a tier writes in <c>Morgana:LLM:Tiers:{tier}:Provider</c> to be served by this provider.</summary>
+    /// <summary>The name that a tier writes in <c>Morgana:LanguageModels:Tiers:{tier}:Provider</c> to be served by this provider.</summary>
     public abstract string Provider { get; }
 
     /// <summary>
@@ -70,6 +70,6 @@ public abstract class MorganaLanguageModel<TConnection> : MorganaLanguageModel
 
     /// <summary>Reads the connection section into the shape that this provider declares.</summary>
     private static TConnection Bind(IConfigurationSection connectionSection) =>
-        // ConfigurationLLMService refuses a tier without a Connection section before any provider is asked, so the binder finds one.
+        // ConfigurationLanguageModelService refuses a tier without a Connection section before any provider is asked, so the binder finds one.
         connectionSection.Get<TConnection>()!;
 }

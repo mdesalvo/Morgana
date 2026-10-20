@@ -10,12 +10,12 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Default <see cref="ILanguageModelService"/>: builds the three tiers of <c>Morgana:LLM:Tiers</c>, each on the provider that it declares.
+/// Default <see cref="ILanguageModelService"/>: builds the three tiers of <c>Morgana:LanguageModels:Tiers</c>, each on the provider that it declares.
 /// </summary>
-public class ConfigurationLLMService : ILanguageModelService
+public class ConfigurationLanguageModelService : ILanguageModelService
 {
     /// <summary>
-    /// Application configuration, read for the tiers under <c>Morgana:LLM</c>, the framework tier
+    /// Application configuration, read for the tiers under <c>Morgana:LanguageModels</c>, the framework tier
     /// and the telemetry switches.
     /// </summary>
     private readonly IConfiguration configuration;
@@ -68,7 +68,7 @@ public class ConfigurationLLMService : ILanguageModelService
     /// <summary>
     /// Builds the client of each of the three tiers.
     /// </summary>
-    /// <param name="configuration">Application configuration holding <c>Morgana:LLM:Tiers</c> and <c>Morgana:ActorSystem:Tier</c></param>
+    /// <param name="configuration">Application configuration holding <c>Morgana:LanguageModels:Tiers</c> and <c>Morgana:ActorSystem:Tier</c></param>
     /// <param name="languageModels">The providers that the host registers: a tier is served by the one whose name it declares.</param>
     /// <param name="loggerFactory">
     /// Optional logger factory used to instrument the chat client with the MEAI OpenTelemetry
@@ -79,7 +79,7 @@ public class ConfigurationLLMService : ILanguageModelService
     /// Thrown as well when a tier names a provider that is not registered or when two registered providers share a name.
     /// Thrown as well when the framework tier names no tier.
     /// </exception>
-    public ConfigurationLLMService(
+    public ConfigurationLanguageModelService(
         IConfiguration configuration,
         IEnumerable<MorganaLanguageModel> languageModels,
         ILoggerFactory? loggerFactory = null)
@@ -101,44 +101,44 @@ public class ConfigurationLLMService : ILanguageModelService
         foreach (Records.LLMTier tier in Enum.GetValues<Records.LLMTier>())
         {
             // The section of this tier is located by its key, so that a missing one can be named in the refusal.
-            IConfigurationSection tierSection = configuration.GetSection($"Morgana:LLM:Tiers:{tier}");
+            IConfigurationSection tierSection = configuration.GetSection($"Morgana:LanguageModels:Tiers:{tier}");
 
             // The three tiers are all mandatory: an agent or a framework actor may be served by any of them.
             if (!tierSection.Exists())
-                throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier} is missing. All three tiers (Economy, Efficiency, Performance) must be declared.");
+                throw new InvalidOperationException($"Morgana:LanguageModels:Tiers:{tier} is missing. All three tiers (Economy, Efficiency, Performance) must be declared.");
 
             // The provider decides which client the tier is built on, so a tier without one cannot be served.
             if (string.IsNullOrWhiteSpace(tierSection["Provider"]))
-                throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier}:Provider is missing.");
+                throw new InvalidOperationException($"Morgana:LanguageModels:Tiers:{tier}:Provider is missing.");
 
             // Left on its placeholder the lookup would refuse it as an unknown provider, without saying it was never filled in.
             if (Constants.SecretOverrides.All.Contains(tierSection["Provider"]!))
                 throw new InvalidOperationException(
-                    $"Morgana:LLM:Tiers:{tier}:Provider is still the placeholder '{tierSection["Provider"]}'. " +
+                    $"Morgana:LanguageModels:Tiers:{tier}:Provider is still the placeholder '{tierSection["Provider"]}'. " +
                     $"Override it via User Secrets or environment variables before starting.");
 
             // The connection is bound by the provider, so a tier without the section cannot be handed to one.
             if (!tierSection.GetSection("Connection").Exists())
-                throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier}:Connection is missing.");
+                throw new InvalidOperationException($"Morgana:LanguageModels:Tiers:{tier}:Connection is missing.");
 
             // Checked here because a placeholder in an int field would otherwise fail inside the binder with a message that names no key.
             string? maxOutputTokens = tierSection["Options:MaxOutputTokens"];
             if (string.IsNullOrWhiteSpace(maxOutputTokens))
-                throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier}:Options:MaxOutputTokens is missing.");
+                throw new InvalidOperationException($"Morgana:LanguageModels:Tiers:{tier}:Options:MaxOutputTokens is missing.");
 
             // A placeholder left in the ceiling would bind as nothing and let the tier run unbounded.
             if (Constants.SecretOverrides.All.Contains(maxOutputTokens))
                 throw new InvalidOperationException(
-                    $"Morgana:LLM:Tiers:{tier}:Options:MaxOutputTokens is still the placeholder '{maxOutputTokens}'. " +
+                    $"Morgana:LanguageModels:Tiers:{tier}:Options:MaxOutputTokens is still the placeholder '{maxOutputTokens}'. " +
                     $"Override it via User Secrets or environment variables before starting.");
 
             // The ceiling bounds what one answer may cost: zero or a sign would remove or invert the bound.
             if (!int.TryParse(maxOutputTokens, NumberStyles.None, CultureInfo.InvariantCulture, out int ceiling) || ceiling <= 0)
-                throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier}:Options:MaxOutputTokens must be a positive integer but is '{maxOutputTokens}'.");
+                throw new InvalidOperationException($"Morgana:LanguageModels:Tiers:{tier}:Options:MaxOutputTokens must be a positive integer but is '{maxOutputTokens}'.");
         }
 
         // Every key is now known to be present and well formed, so the binder cannot fail on a missing one.
-        Records.LLMTiers tiers = configuration.GetSection("Morgana:LLM").Get<Records.LLMConfiguration>()!.Tiers;
+        Records.LLMTiers tiers = configuration.GetSection("Morgana:LanguageModels").Get<Records.LLMConfiguration>()!.Tiers;
 
         // Each tier is built from its own declaration, on the provider that it names.
         foreach (Records.LLMTier tier in Enum.GetValues<Records.LLMTier>())
@@ -151,18 +151,18 @@ public class ConfigurationLLMService : ILanguageModelService
             // that nobody has requested yet cannot ship broken.
             if (Constants.SecretOverrides.All.Contains(definition.Options.ModelId))
                 throw new InvalidOperationException(
-                    $"Morgana:LLM:Tiers:{tier}:Options:ModelId is still the placeholder '{definition.Options.ModelId}'. " +
+                    $"Morgana:LanguageModels:Tiers:{tier}:Options:ModelId is still the placeholder '{definition.Options.ModelId}'. " +
                     $"Override it via User Secrets or environment variables before starting.");
 
             // Each tier is served by the provider it names, so a deployment may mix providers across tiers.
             // An unknown name stops startup and the refusal names the tier that declared it and the names that exist.
             if (!languageModelsByProvider.TryGetValue(definition.Provider, out MorganaLanguageModel? languageModel))
                 throw new InvalidOperationException(
-                    $"Morgana:LLM:Tiers:{tier}:Provider '{definition.Provider}' is not a registered provider. " +
+                    $"Morgana:LanguageModels:Tiers:{tier}:Provider '{definition.Provider}' is not a registered provider. " +
                     $"Registered: {string.Join(", ", languageModelsByProvider.Keys.Order(StringComparer.Ordinal))}.");
 
             // The connection belongs to the provider that the tier names: the section is handed over unbound.
-            IConfigurationSection connectionSection = configuration.GetSection($"Morgana:LLM:Tiers:{tier}:Connection");
+            IConfigurationSection connectionSection = configuration.GetSection($"Morgana:LanguageModels:Tiers:{tier}:Connection");
 
             // A connection that cannot work is refused at startup rather than at the first user turn.
             try
@@ -173,7 +173,7 @@ public class ConfigurationLLMService : ILanguageModelService
             catch (InvalidOperationException ex)
             {
                 // The provider names the field and this class knows which tier it belongs to.
-                throw new InvalidOperationException($"Morgana:LLM:Tiers:{tier}:Connection:{ex.Message}", ex);
+                throw new InvalidOperationException($"Morgana:LanguageModels:Tiers:{tier}:Connection:{ex.Message}", ex);
             }
 
             // The tier's chain, outermost first: the defaults layer sees (and only fills in, never overrides) the

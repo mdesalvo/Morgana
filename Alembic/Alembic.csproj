@@ -5,7 +5,7 @@
        <RootNamespace>Alembic</RootNamespace>
        <AssemblyName>Alembic</AssemblyName>
        <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
-       <!-- Same UserSecretsId as Morgana.Web and PromptHarness: it reads the same Morgana:LLM section. -->
+       <!-- Same UserSecretsId as Morgana.Web and PromptHarness: it reads the same Morgana:LanguageModels section. -->
        <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
     </PropertyGroup>
 

@@ -101,7 +101,7 @@ builder.Services.AddSingleton<ILanguageModelService>(sp =>
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
 
     // The factory builds the chat client of a tier on the first model call.
-    return new ConfigurationLLMService(config, sp.GetServices<MorganaLanguageModel>(), loggerFactory);
+    return new ConfigurationLanguageModelService(config, sp.GetServices<MorganaLanguageModel>(), loggerFactory);
 });
 
 // ============================================================================

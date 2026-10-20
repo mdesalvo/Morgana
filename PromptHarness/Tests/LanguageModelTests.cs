@@ -17,7 +17,7 @@ namespace PromptHarness.Tests;
 /// declares and a deployment that leaves one unusable refused before any turn.
 /// </summary>
 /// <remarks>
-/// Deterministic and free: <see cref="ConfigurationLLMService"/> is built directly over an in-memory configuration, so
+/// Deterministic and free: <see cref="ConfigurationLanguageModelService"/> is built directly over an in-memory configuration, so
 /// no host starts and no model is reached. Every configuration key is spelled out here rather than read
 /// from <c>Constants</c>, because the point is to notice a published shape changing under a deployer.
 /// </remarks>
@@ -33,9 +33,9 @@ public sealed class LanguageModelTests
         // Three different providers, so the metadata that each client reports can only differ if each
         // tier was built by its own.
         ILanguageModelService llm = Build(Configuration(
-            ("Morgana:LLM:Tiers:Efficiency:Provider", "Ollama"),
-            ("Morgana:LLM:Tiers:Efficiency:Connection:Endpoint", "http://localhost:11434"),
-            ("Morgana:LLM:Tiers:Performance:Provider", "OpenAI")));
+            ("Morgana:LanguageModels:Tiers:Efficiency:Provider", "Ollama"),
+            ("Morgana:LanguageModels:Tiers:Efficiency:Connection:Endpoint", "http://localhost:11434"),
+            ("Morgana:LanguageModels:Tiers:Performance:Provider", "OpenAI")));
 
         ChatClientMetadata economy = MetadataOf(llm, Records.LLMTier.Economy);
         ChatClientMetadata efficiency = MetadataOf(llm, Records.LLMTier.Efficiency);
@@ -54,36 +54,36 @@ public sealed class LanguageModelTests
     public void LanguageModel_Construction_is_refused_when_a_tier_is_missing(string tier)
     {
         InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
-            () => Build(Configuration(), without: $"Morgana:LLM:Tiers:{tier}"));
+            () => Build(Configuration(), without: $"Morgana:LanguageModels:Tiers:{tier}"));
 
-        Assert.Contains($"Morgana:LLM:Tiers:{tier}", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains($"Morgana:LanguageModels:Tiers:{tier}", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void LanguageModel_Construction_is_refused_when_a_tier_names_no_provider()
     {
         InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
-            () => Build(Configuration(), without: "Morgana:LLM:Tiers:Economy:Provider"));
+            () => Build(Configuration(), without: "Morgana:LanguageModels:Tiers:Economy:Provider"));
 
-        Assert.Contains("Morgana:LLM:Tiers:Economy:Provider", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Morgana:LanguageModels:Tiers:Economy:Provider", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void LanguageModel_Construction_is_refused_when_the_provider_is_not_registered()
     {
         InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
-            () => Build(Configuration(("Morgana:LLM:Tiers:Economy:Provider", "Gemini"))));
+            () => Build(Configuration(("Morgana:LanguageModels:Tiers:Economy:Provider", "Gemini"))));
 
-        Assert.Contains("Morgana:LLM:Tiers:Economy:Provider", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Morgana:LanguageModels:Tiers:Economy:Provider", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void LanguageModel_Construction_is_refused_when_a_tier_has_no_connection()
     {
         InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
-            () => Build(Configuration(), without: "Morgana:LLM:Tiers:Economy:Connection"));
+            () => Build(Configuration(), without: "Morgana:LanguageModels:Tiers:Economy:Connection"));
 
-        Assert.Contains("Morgana:LLM:Tiers:Economy:Connection", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Morgana:LanguageModels:Tiers:Economy:Connection", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -99,36 +99,36 @@ public sealed class LanguageModelTests
     public void LanguageModel_Construction_is_refused_when_the_provider_is_a_placeholder()
     {
         InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
-            () => Build(Configuration(("Morgana:LLM:Tiers:Economy:Provider", FunctionalPlaceholder))));
+            () => Build(Configuration(("Morgana:LanguageModels:Tiers:Economy:Provider", FunctionalPlaceholder))));
 
-        Assert.Contains("Morgana:LLM:Tiers:Economy:Provider", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Morgana:LanguageModels:Tiers:Economy:Provider", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void LanguageModel_Construction_is_refused_when_a_field_the_provider_uses_is_a_placeholder()
     {
         InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
-            () => Build(Configuration(("Morgana:LLM:Tiers:Efficiency:Connection:ApiKey", SecurePlaceholder))));
+            () => Build(Configuration(("Morgana:LanguageModels:Tiers:Efficiency:Connection:ApiKey", SecurePlaceholder))));
 
-        Assert.Contains("Morgana:LLM:Tiers:Efficiency:Connection:ApiKey", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Morgana:LanguageModels:Tiers:Efficiency:Connection:ApiKey", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void LanguageModel_Construction_is_refused_when_the_model_is_a_placeholder()
     {
         InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
-            () => Build(Configuration(("Morgana:LLM:Tiers:Performance:Options:ModelId", FunctionalPlaceholder))));
+            () => Build(Configuration(("Morgana:LanguageModels:Tiers:Performance:Options:ModelId", FunctionalPlaceholder))));
 
-        Assert.Contains("Morgana:LLM:Tiers:Performance:Options:ModelId", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Morgana:LanguageModels:Tiers:Performance:Options:ModelId", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void LanguageModel_Construction_is_refused_when_the_output_ceiling_is_missing()
     {
         InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
-            () => Build(Configuration(), without: "Morgana:LLM:Tiers:Efficiency:Options:MaxOutputTokens"));
+            () => Build(Configuration(), without: "Morgana:LanguageModels:Tiers:Efficiency:Options:MaxOutputTokens"));
 
-        Assert.Contains("Morgana:LLM:Tiers:Efficiency:Options:MaxOutputTokens", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Morgana:LanguageModels:Tiers:Efficiency:Options:MaxOutputTokens", refusal.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -138,9 +138,9 @@ public sealed class LanguageModelTests
     public void LanguageModel_Construction_is_refused_when_the_output_ceiling_is_not_a_positive_integer(string configured)
     {
         InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
-            () => Build(Configuration(("Morgana:LLM:Tiers:Performance:Options:MaxOutputTokens", configured))));
+            () => Build(Configuration(("Morgana:LanguageModels:Tiers:Performance:Options:MaxOutputTokens", configured))));
 
-        Assert.Contains("Morgana:LLM:Tiers:Performance:Options:MaxOutputTokens", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Morgana:LanguageModels:Tiers:Performance:Options:MaxOutputTokens", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -149,9 +149,9 @@ public sealed class LanguageModelTests
         // Ollama reaches a local server: it has an endpoint and no key, so the key left on its
         // placeholder is nobody's concern.
         ILanguageModelService llm = Build(Configuration(
-            ("Morgana:LLM:Tiers:Economy:Provider", "Ollama"),
-            ("Morgana:LLM:Tiers:Economy:Connection:Endpoint", "http://localhost:11434"),
-            ("Morgana:LLM:Tiers:Economy:Connection:ApiKey", SecurePlaceholder)));
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "http://localhost:11434"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:ApiKey", SecurePlaceholder)));
 
         Assert.Equal("economy-model", MetadataOf(llm, Records.LLMTier.Economy).DefaultModelId);
     }
@@ -186,7 +186,7 @@ public sealed class LanguageModelTests
         ?? throw new InvalidOperationException($"The {tier} client reports no metadata.");
 
     /// <summary>Builds the service over a configuration, dropping every key under <paramref name="without"/> first.</summary>
-    private static ConfigurationLLMService Build(Dictionary<string, string?> values, string? without = null, MorganaLanguageModel? duplicateProvider = null)
+    private static ConfigurationLanguageModelService Build(Dictionary<string, string?> values, string? without = null, MorganaLanguageModel? duplicateProvider = null)
     {
         if (without is not null)
             foreach (string key in values.Keys.Where(key => key.StartsWith(without, StringComparison.Ordinal)).ToList())
@@ -194,7 +194,7 @@ public sealed class LanguageModelTests
 
         IConfiguration configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         MorganaLanguageModel[] providers = [new AnthropicLanguageModel(), new AzureOpenAILanguageModel(), new OpenAILanguageModel(), new OllamaLanguageModel()];
-        return new ConfigurationLLMService(configuration, duplicateProvider is null ? providers : [.. providers, duplicateProvider]);
+        return new ConfigurationLanguageModelService(configuration, duplicateProvider is null ? providers : [.. providers, duplicateProvider]);
     }
 
     /// <summary>A complete configuration with Anthropic on every tier, with the given keys replaced.</summary>
@@ -204,12 +204,12 @@ public sealed class LanguageModelTests
 
         foreach (string tier in new[] { "Economy", "Efficiency", "Performance" })
         {
-            values[$"Morgana:LLM:Tiers:{tier}:Provider"] = "Anthropic";
-            values[$"Morgana:LLM:Tiers:{tier}:Connection:ApiKey"] = "test-key";
-            values[$"Morgana:LLM:Tiers:{tier}:Options:ModelId"] = $"{tier.ToLowerInvariant()}-model";
-            values[$"Morgana:LLM:Tiers:{tier}:Options:MaxOutputTokens"] = "8192";
-            values[$"Morgana:LLM:Tiers:{tier}:MagicDust:InputTokensPerDustUnit"] = "1000";
-            values[$"Morgana:LLM:Tiers:{tier}:MagicDust:OutputTokensPerDustUnit"] = "200";
+            values[$"Morgana:LanguageModels:Tiers:{tier}:Provider"] = "Anthropic";
+            values[$"Morgana:LanguageModels:Tiers:{tier}:Connection:ApiKey"] = "test-key";
+            values[$"Morgana:LanguageModels:Tiers:{tier}:Options:ModelId"] = $"{tier.ToLowerInvariant()}-model";
+            values[$"Morgana:LanguageModels:Tiers:{tier}:Options:MaxOutputTokens"] = "8192";
+            values[$"Morgana:LanguageModels:Tiers:{tier}:MagicDust:InputTokensPerDustUnit"] = "1000";
+            values[$"Morgana:LanguageModels:Tiers:{tier}:MagicDust:OutputTokensPerDustUnit"] = "200";
         }
 
         foreach ((string key, string value) in replaced)

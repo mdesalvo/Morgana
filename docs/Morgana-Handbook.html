@@ -555,7 +555,7 @@
           <tr><td>IDustLimitService</td><td>SQLiteDustLimitService</td><td>Per-conversation token budget protection</td></tr>
           <tr><td>IGuardRailService</td><td>LLMGuardRailService</td><td>Content moderation &amp; policy enforcement</td></tr>
           <tr><td>IHostAddressService</td><td>KestrelHostAddressService</td><td>Address this instance publishes on its A2A cards</td></tr>
-          <tr><td>ILanguageModelService</td><td>ConfigurationLLMService</td><td>The three LLM tiers, each on the provider plugin it names</td></tr>
+          <tr><td>ILanguageModelService</td><td>ConfigurationLanguageModelService</td><td>The three LLM tiers, each on the provider plugin it names</td></tr>
           <tr><td>IMCPClientRegistryService</td><td>MCPClientRegistryService</td><td>MCP connection pool (Http / Stdio)</td></tr>
           <tr><td>IPeerAdmissionService</td><td>SQLitePeerAdmissionService</td><td>Conversations a partner may open per hour (fails closed)</td></tr>
           <tr><td>IPresenterService</td><td>LLMPresenterService</td><td>Welcome presentation &amp; first engagement</td></tr>
@@ -620,9 +620,9 @@
       <table>
         <thead><tr><th>Setting</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td>Morgana:LLM:Tiers:{Tier}:*</td><td>Three tiers, <code>Economy</code>, <code>Efficiency</code> and <code>Performance</code>, from the cheapest model to the most capable. Each names its <code>Provider</code> among those found in <code>plugins/</code>, where <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>OpenAI</code> and <code>Ollama</code> ship with Morgana. Its <code>Connection</code> carries the fields of that provider: ApiKey, Endpoint where it uses one, MaxRetries where its client retries, TimeoutSeconds. All three are mandatory: there is no cross-tier fallback</td></tr>
-          <tr><td>Morgana:LLM:Tiers:{Tier}:Options:*</td><td>Narrow, JSON-bindable mirror of <code>ChatOptions</code> for this tier: <code>ModelId</code> and <code>MaxOutputTokens</code> (both required: the ceiling of a single model call, generous since reasoning counts against it)</td></tr>
-          <tr><td>Morgana:LLM:Tiers:{Tier}:MagicDust:*</td><td>Per-tier token pricing: <code>InputTokensPerDustUnit</code>, <code>OutputTokensPerDustUnit</code>, <code>CachedInputWeight</code>, <code>CacheCreationWeight</code></td></tr>
+          <tr><td>Morgana:LanguageModels:Tiers:{Tier}:*</td><td>Three tiers, <code>Economy</code>, <code>Efficiency</code> and <code>Performance</code>, from the cheapest model to the most capable. Each names its <code>Provider</code> among those found in <code>plugins/</code>, where <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>OpenAI</code> and <code>Ollama</code> ship with Morgana. Its <code>Connection</code> carries the fields of that provider: ApiKey, Endpoint where it uses one, MaxRetries where its client retries, TimeoutSeconds. All three are mandatory: there is no cross-tier fallback</td></tr>
+          <tr><td>Morgana:LanguageModels:Tiers:{Tier}:Options:*</td><td>Narrow, JSON-bindable mirror of <code>ChatOptions</code> for this tier: <code>ModelId</code> and <code>MaxOutputTokens</code> (both required: the ceiling of a single model call, generous since reasoning counts against it)</td></tr>
+          <tr><td>Morgana:LanguageModels:Tiers:{Tier}:MagicDust:*</td><td>Per-tier token pricing: <code>InputTokensPerDustUnit</code>, <code>OutputTokensPerDustUnit</code>, <code>CachedInputWeight</code>, <code>CacheCreationWeight</code></td></tr>
           <tr><td>Morgana:Authentication:Audience</td><td>Expected JWT audience (default: <code>morgana.ai</code>)</td></tr>
           <tr><td>Morgana:Authentication:Issuers[]</td><td><strong>Channels only</strong>: array of <code>{ Name, SymmetricKey }</code> entries, one per channel (e.g. <code>cauldron</code>, <code>grimoire</code>, <code>rune</code>, <code>harness</code>). Partners live in <code>Morgana:AgentToAgent:Partners[]</code> and a name declared in both lists is startup-fatal. Nothing is authored for <code>morgana</code>, the reserved name this installation's own agents consult each other under: that key is coined at every start</td></tr>
           <tr><td>Morgana:ConversationPersistence:EncryptionKey</td><td>AES-256 key for SQLite encryption (base64)</td></tr>

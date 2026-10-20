@@ -61,7 +61,7 @@ public sealed class ScenarioRunner
         // Walk the three tiers and read the provider and model id bound to each, so a harness row is
         // always legible without cross-referencing appsettings.
         IEnumerable<string> tiers = Enum.GetValues<Morgana.AI.Records.LLMTier>()
-            .Select(tier => $"{tier}={configuration[$"Morgana:LLM:Tiers:{tier}:Provider"] ?? "(unknown)"}/{configuration[$"Morgana:LLM:Tiers:{tier}:Options:ModelId"] ?? "(unset)"}");
+            .Select(tier => $"{tier}={configuration[$"Morgana:LanguageModels:Tiers:{tier}:Provider"] ?? "(unknown)"}/{configuration[$"Morgana:LanguageModels:Tiers:{tier}:Options:ModelId"] ?? "(unset)"}");
 
         return string.Join(", ", tiers);
     }

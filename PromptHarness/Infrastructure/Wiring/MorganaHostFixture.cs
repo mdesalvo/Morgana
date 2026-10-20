@@ -248,7 +248,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             harnessBuilder.Services.AddSingleton(typeof(MorganaLanguageModel), languageModelType);
         }
 
-        harnessBuilder.Services.AddSingleton<ILanguageModelService, ConfigurationLLMService>();
+        harnessBuilder.Services.AddSingleton<ILanguageModelService, ConfigurationLanguageModelService>();
         harnessBuilder.Services.AddSingleton<IAgentConfigurationService, AgentlessConfigurationService>();
         harnessBuilder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
         harnessBuilder.Services.AddSingleton<HarnessPromptService>();
@@ -597,7 +597,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             // immediately rather than waiting out the rest of the timeout for nothing.
             if (hostFailure is not null)
                 throw new InvalidOperationException(
-                    "Morgana failed to start. Startup validation is fail-fast: check the three tiers under Morgana:LLM:Tiers and " +
+                    "Morgana failed to start. Startup validation is fail-fast: check the three tiers under Morgana:LanguageModels:Tiers and " +
                     $"the agent/intent registry against the shared user-secrets store.{FormatHostOutput()}", hostFailure);
 
             try

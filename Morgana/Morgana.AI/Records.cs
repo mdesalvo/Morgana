@@ -273,7 +273,7 @@ public static class Records
         Performance
     }
 
-    /// <summary>The <c>Morgana:LLM</c> section: the three tiers, each served by its own provider.</summary>
+    /// <summary>The <c>Morgana:LanguageModels</c> section: the three tiers, each served by its own provider.</summary>
     public record LLMConfiguration(LLMTiers Tiers);
 
     /// <summary>The definitions of the three tiers, all of them mandatory.</summary>
@@ -301,7 +301,7 @@ public static class Records
 
     /// <summary>
     /// One tier with its own provider name, model and dust pricing.
-    /// Declared under Morgana:LLM:Tiers:{tier} as a JSON object keyed by name rather than an array, so that overrides of
+    /// Declared under Morgana:LanguageModels:Tiers:{tier} as a JSON object keyed by name rather than an array, so that overrides of
     /// different configuration layers merge by key. The Connection section is not bound here: the provider that the tier
     /// names binds it, because only that provider knows its shape.
     /// </summary>

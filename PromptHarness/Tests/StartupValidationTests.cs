@@ -297,9 +297,9 @@ public sealed class StartupValidationTests
         // Nothing else resolves the LLM service before a turn does, so a tier left unusable would reach
         // a user as a conversation that never answers instead of stopping the boot.
         Exception refusal = AssertRefusesToBoot(
-            ("Morgana__LLM__Tiers__Performance__Provider", string.Empty));
+            ("Morgana__LanguageModels__Tiers__Performance__Provider", string.Empty));
 
-        Assert.Contains("Morgana:LLM:Tiers:Performance:Provider", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Morgana:LanguageModels:Tiers:Performance:Provider", refusal.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

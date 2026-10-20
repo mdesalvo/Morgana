@@ -171,7 +171,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
 // - ICommandRegistryService: Publishes the commands channels may run on a conversation (every MorganaCommand registered here)
 // - ICallSignatureService: Holds every call that the model makes to the schema of its tool, before the tool runs
-// - ILanguageModelService: Abstraction over LLM providers, three tiers Economy/Efficiency/Performance each served by the registered provider it names (Morgana:LLM:Tiers)
+// - ILanguageModelService: Abstraction over LLM providers, three tiers Economy/Efficiency/Performance each served by the registered provider it names (Morgana:LanguageModels:Tiers)
 // - MorganaLanguageModel: One per LLM provider that a tier may name
 // - MorganaCommand: One per command a channel may run on a conversation
 
@@ -196,7 +196,7 @@ builder.Services.AddSingleton<ILanguageModelService>(sp => {
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
 
     // The tiers are built here, from the configuration, so a tier left unconfigured refuses the boot.
-    ConfigurationLLMService llm = new ConfigurationLLMService(config, sp.GetServices<MorganaLanguageModel>(), loggerFactory);
+    ConfigurationLanguageModelService llm = new ConfigurationLanguageModelService(config, sp.GetServices<MorganaLanguageModel>(), loggerFactory);
 
     // Wire dust accounting for the framework-actor path (CompleteStructuredAsync).
     // Done post-construction because the dust limiter depends on conversation persistence,
@@ -259,10 +259,10 @@ builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
 // conversation's lifetime. Shares the per-conversation SQLite database.
 //
 // - DustLimitingOptions: policy (budget + warning/error message templates)
-// - Per-model pricing lives inline on each tier (Morgana:LLM:Tiers:{tier}:MagicDust)
+// - Per-model pricing lives inline on each tier (Morgana:LanguageModels:Tiers:{tier}:MagicDust)
 //   and is resolved per-tier by ILanguageModelService.GetPricing(tier) — no single process-wide pricing singleton.
 //
-// Configuration: Morgana:DustLimiting + Morgana:LLM:Tiers:{tier}:MagicDust in appsettings.json
+// Configuration: Morgana:DustLimiting + Morgana:LanguageModels:Tiers:{tier}:MagicDust in appsettings.json
 
 // The lifetime budget with the warning and lockout texts.
 builder.Services.Configure<Records.DustLimitingOptions>(

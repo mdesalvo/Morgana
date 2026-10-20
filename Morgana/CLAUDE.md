@@ -235,7 +235,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `CommandRegistryService` | `ICommandRegistryService` | Publishes every `MorganaCommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
 | `SchemaCallSignatureService` | `ICallSignatureService` | Stands between the model and every tool: a call that breaks the schema of its tool never runs and the refusal names the argument at fault |
 | `CompactHistoryCommand` | `MorganaCommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
-| `ConfigurationLLMService` | `ILanguageModelService` | Builds the three tiers, each on the registered provider it names; the framework actors run on `ActorSystem:Tier` |
+| `ConfigurationLanguageModelService` | `ILanguageModelService` | Builds the three tiers, each on the registered provider it names; the framework actors run on `ActorSystem:Tier` |
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json`, domain from `agents.json`. Throws if one ID is declared in both |
 | `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads: the fenced two-layer prompt, tool descriptions, the per-turn held-context declaration, the colleagues declaration, a colleague's question |
 | `ConfigurationAgentDirectoryService` | `IAgentDirectoryService` | Both halves of A2A discovery, plus `ValidateTrustConfiguration` and `ValidatePublishedAddress` |
@@ -255,7 +255,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 
 ## LLM providers and tiers
 
-`ConfigurationLLMService` is the one `ILanguageModelService`. **Three tiers, each with its own provider**:
+`ConfigurationLanguageModelService` is the one `ILanguageModelService`. **Three tiers, each with its own provider**:
 `Economy`, `Efficiency`, `Performance`, from the cheapest model to the most capable. All three are
 always declared and filled, whether or not an agent uses them. **There is no cross-tier fallback**.
 Validation never asks which agents use which tier.
@@ -268,7 +268,7 @@ only a vendor knows stays in its plugin: the connection record it binds from the
 section and `IsContentFilterRefusal`, the one place where a provider's own refusal of the content is
 told apart from a failure.
 
-`Morgana:LLM:Tiers` is a JSON **object keyed by tier name**, so env-var overrides merge per tier. Each
+`Morgana:LanguageModels:Tiers` is a JSON **object keyed by tier name**, so env-var overrides merge per tier. Each
 entry carries `Provider` (a registered provider's name, any casing), `Connection` (bound by that
 provider alone), `Options` — a deliberately narrow mirror of `ChatOptions` (`MaxOutputTokens`
 mandatory), see `Records.TierConfiguration` — plus its own `MagicDust`.
@@ -474,7 +474,7 @@ fault reaches a user as a conversation that never answers, on a host that passed
 
 | Section | Purpose |
 |---|---|
-| `Morgana:LLM:Tiers` | The three tiers: provider, connection, model and `MagicDust` of each |
+| `Morgana:LanguageModels:Tiers` | The three tiers: provider, connection, model and `MagicDust` of each |
 | `Morgana:AgentToAgent` | `Enabled`, `MaxRoundsPerTurn`, `PublicUrl` (declared only where a binding cannot answer for the address), `Partners[]`. Consultation waits are one **ladder** derived from `ActorSystem:TimeoutSeconds`, stated once in `Records.PeerConsultationWaits` |
 | `Morgana:ActorSystem` | `TimeoutSeconds`, `EnableGuardrail`, `IntentCollisionThreshold`, `Tier` (the framework actors') |
 | `Morgana:AdaptiveMessaging` | `EnableStreamingResponse`, `RichFeaturesMinLength` |

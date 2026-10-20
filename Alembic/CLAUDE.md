@@ -39,7 +39,7 @@ model. A wizard emitting a subtly self-contradictory prompt is worse than no wiz
 has no instrument to notice. Alembic runs all its model work on `Efficiency`, never on `Economy` and
 runs once at onboarding, not per turn: the wrong place to save.
 
-Alembic declares the three tiers like Morgana, the same `Morgana:LLM:Tiers` section read from the same
+Alembic declares the three tiers like Morgana, the same `Morgana:LanguageModels:Tiers` section read from the same
 shared user secrets. The service is resolved at the first model call, so a deployment missing a tier
 boots and is refused there.
 
@@ -438,8 +438,8 @@ maintain.
   builds, boots and serves the shell; the failure surfaces on the first call.
 - `MagicDust` of a tier cannot be shortened to `{}` — the JSON provider reads an empty object as `null`,
   the binder drops an element it cannot construct **without raising anything** and the whole tier
-  disappears, which is then refused as `Morgana:LLM:Tiers:{tier} is missing`.
-- The LLM section is named `Morgana:` because `ConfigurationLLMService` reads that path. In-repo, Alembic declares the
+  disappears, which is then refused as `Morgana:LanguageModels:Tiers:{tier} is missing`.
+- The LLM section is named `Morgana:` because `ConfigurationLanguageModelService` reads that path. In-repo, Alembic declares the
   **same `UserSecretsId` as Morgana.Web**, so it runs against whatever this working copy is wired to.
 
 ## Build and Run
