@@ -209,7 +209,7 @@ public class MorganaAgent : MorganaActor
             // The turn is filed before the model runs, then run, then closed and recorded.
             Records.TurnOpening turnOpening = await OpenTurnAsync(req, frameworkReplies, pressedFrameworkReply, agentSpan);
             Records.TurnOutcome turnOutcome = await RunTurnAsync(turnOpening.Session, req, turnOpening.PressedCall?.Tool, senderRef, agentSpan);
-            Records.TurnClosure turnClosure = ConcludeTurn(turnOpening.Session, turnOutcome, morganaPrompt, frameworkReplies, pressedFrameworkReply, req.IsLanding);
+            Records.TurnClosure turnClosure = ConcludeTurn(turnOpening.Session, turnOutcome, morganaPrompt, frameworkReplies, pressedFrameworkReply, turnOpening.PressedCall?.Tool, req.IsLanding);
             DateTime? recordedAt = await RecordTurnAsync(turnOpening.Session, turnClosure, turnOpening.HistoryBaseline, agentSpan);
 
             // Dated as the history keeps it, so a client catching up recognises the reply it was pushed.
@@ -503,7 +503,7 @@ public class MorganaAgent : MorganaActor
     }
 
     /// <summary>Decides the text, buttons and card that the user receives, from the answer that the Reply tool recorded.</summary>
-    private Records.TurnClosure ConcludeTurn(AgentSession session, Records.TurnOutcome turnOutcome, Records.Prompt morganaPrompt, Records.FrameworkReplies frameworkReplies, QuickReply? pressedFrameworkReply, bool isLanding)
+    private Records.TurnClosure ConcludeTurn(AgentSession session, Records.TurnOutcome turnOutcome, Records.Prompt morganaPrompt, Records.FrameworkReplies frameworkReplies, QuickReply? pressedFrameworkReply, string? pressedTool, bool isLanding)
     {
         // An approval asked with no word of the model's own is asked in Morgana's words.
         string llmResponseText = turnOutcome.Text;
@@ -568,8 +568,12 @@ public class MorganaAgent : MorganaActor
         // the landing, which is the agent presenting itself. A running workflow offers what its step allows instead.
         bool closesOnMenu = isLanding
                             || (closingDeclaration.Awaits != Records.AwaitedFromUser.TypedAnswer && aiContextProvider.GetWorkflowPosition(session) is null);
+        // The turn that answers a press leaves that button off its menu: the user is looking at what it shows,
+        // so offering it again would only show the same thing once more. A tool that takes a value from the user
+        // stays, since it can serve another one. The next turn offers every button again.
         if (closesOnMenu && !closingDeclaration.UserIsLeaving && !turnOutcome.AwaitsApproval)
-            closingDeclaration = closingDeclaration.WithMenu(aiContextProvider.Menu);
+            closingDeclaration = closingDeclaration.WithMenu([.. aiContextProvider.Menu.Where(action =>
+                aiContextProvider.ParametricTools.Contains(action.Tool) || !string.Equals(action.Tool, pressedTool, StringComparison.Ordinal))]);
 
         // Every turn gets the buttons its closure calls for, the way out included, but two.
         (List<QuickReply>? quickReplies, bool isCompleted) = (turnOutcome.AwaitsApproval, pressedFrameworkReply) switch

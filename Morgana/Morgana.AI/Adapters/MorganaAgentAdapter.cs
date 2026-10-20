@@ -251,6 +251,12 @@ public class MorganaAgentAdapter
                 .Select(tool => new Records.OfferedAction(tool.Name, tool.Description, tool.Description))
         ];
 
+        // A tool with a required parameter that the user gives serves a different value at every call, so a turn
+        // answering its press still offers it. Every other press is served whole by its turn.
+        HashSet<string> parametricTools = [.. domainTools.Concat(mcpToolDefinitions)
+            .Where(tool => tool.Parameters.Any(parameter => parameter.Required && string.Equals(parameter.Scope, Constants.Scopes.Request, StringComparison.OrdinalIgnoreCase)))
+            .Select(tool => tool.Name)];
+
         // The menu is fixed at the agent's birth, so the declaration of it that a landing turn adds is composed once.
         string? landingDeclaration = await promptComposerService.ComposeLandingDeclarationAsync(menu);
 
@@ -262,6 +268,7 @@ public class MorganaAgentAdapter
             workflowDefinitions,
             menu,
             landingDeclaration,
+            parametricTools,
             sharedContextCallback);
 
         // Filled once every tool is known below and read by Reply at every call: the tools that a user
@@ -780,6 +787,7 @@ public class MorganaAgentAdapter
     /// <param name="workflows">The agent's workflows, which the provider hands to whoever resolves a stored position.</param>
     /// <param name="menu">The agent's menu, which the provider hands to whoever closes a presenting turn.</param>
     /// <param name="landingDeclaration">The declaration of the menu that the provider adds to a landing turn's instructions; <c>null</c> when the deployment declares none.</param>
+    /// <param name="parametricTools">The tools whose call needs a value that only the user gives, which the provider hands to whoever closes a turn.</param>
     /// <param name="sharedContextCallback">
     /// Optional callback invoked when a shared variable is set. Wired to agent's
     /// OnSharedContextUpdate which persists the value via IConversationPersistenceService.
@@ -791,6 +799,7 @@ public class MorganaAgentAdapter
         IReadOnlyList<Records.WorkflowDefinition> workflows,
         IReadOnlyList<Records.OfferedAction> menu,
         string? landingDeclaration,
+        IReadOnlySet<string> parametricTools,
         Func<string, object, Task>? sharedContextCallback = null)
     {
         // A parameter is shared across agents only when it is both flagged shared and context-scoped: a
@@ -809,7 +818,7 @@ public class MorganaAgentAdapter
                 : $"Agent '{agentName}' has NO shared variables");
 
         // Only a write to a name in this set reaches the registry: every other variable stays with the agent.
-        MorganaAIContextProvider aiContextProvider = new MorganaAIContextProvider(logger, sharedVariables, workflows: workflows, menu: menu, landingDeclaration: landingDeclaration);
+        MorganaAIContextProvider aiContextProvider = new MorganaAIContextProvider(logger, sharedVariables, workflows: workflows, menu: menu, landingDeclaration: landingDeclaration, parametricTools: parametricTools);
 
         // An agent created outside the actor path has no callback: its shared writes stay local.
         if (sharedContextCallback != null)

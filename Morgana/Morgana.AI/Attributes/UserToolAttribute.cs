@@ -4,7 +4,9 @@ namespace Morgana.AI.Attributes;
 /// Declares a tool method or a workflow class as the user's: a button of its agent's menu.
 /// </summary>
 /// <remarks>
-/// Every tool method and workflow class carries this or <see cref="SystemToolAttribute"/>, never both, checked at startup; the menu is written by code and the model only gives it a voice.
+/// <para>Every tool method and workflow class carries this or <see cref="SystemToolAttribute"/>, never both, checked at startup; the menu is written by code and the model only gives it a voice.</para>
+/// <para>The turn that answers a press leaves the pressed button off its menu, since the user is looking at what it shows.
+/// A tool with a required <c>Request</c> parameter stays on offer: each press asks the user for a value, so it can serve another one.</para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 public sealed class UserToolAttribute : Attribute

@@ -658,21 +658,31 @@ public sealed class TurnClosureTests
         turn.Model.Enqueue(Answer(Call("Reply", """{"text":"What is your customer code?","awaits":"typed_answer","userIsLeaving":false}""")));
         turn.Model.Enqueue(Answer(Call("OrderHistory", """{"customerCode":"P994E"}""")));
         turn.Model.Enqueue(Answer(Call("Reply", """{"text":"You have 2 orders.","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock too.","awaits":"nothing","userIsLeaving":false}""")));
         turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Still 2 orders.","awaits":"nothing","userIsLeaving":false}""")));
 
         // The first press finds no customer code and the typed one completes the call, which the conversation then holds.
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "📦 My orders", null));
-        await turn.AskAsync(new Records.AgentRequest("conv-turn", "P994E", null));
+        List<object> pressAnswer = await turn.AskAsync(new Records.AgentRequest("conv-turn", "P994E", null));
+
+        // The orders are the conversation's customer's alone, so the turn that answers the press leaves its button off the menu.
+        Assert.Equal(["🌼 A plant", "💬 Ask me something else", "✨ We're done, thanks"],
+            pressAnswer.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
+
+        // An ordinary request answers no press, so it offers the button again.
+        List<object> nextAnswer = await turn.AskAsync(new Records.AgentRequest("conv-turn", "What else do you keep?", null));
+        Assert.Equal(["🌼 A plant", "📦 My orders", "💬 Ask me something else", "✨ We're done, thanks"],
+            nextAnswer.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
         List<object> pressed = await turn.AskAsync(new Records.AgentRequest("conv-turn", "📦 My orders", null));
 
         // The second press made the call at once with the code the conversation holds and no model was asked whether to make it.
         Assert.Equal(["OrderHistory:P994E", "OrderHistory:P994E"], WorkflowTests.InventoryTools.Calls);
-        Assert.Equal(5, turn.Model.Requests.Count);
+        Assert.Equal(6, turn.Model.Requests.Count);
 
         // The one model call of the pressed turn reads the result and has Reply alone to answer with.
-        Assert.Equal(["Reply"], OfferedTools(turn.Model, 4));
-        Assert.Contains(turn.Model.Requests[4].Messages.SelectMany(message => message.Contents), content => content is FunctionCallContent { Name: "OrderHistory" });
+        Assert.Equal(["Reply"], OfferedTools(turn.Model, 5));
+        Assert.Contains(turn.Model.Requests[5].Messages.SelectMany(message => message.Contents), content => content is FunctionCallContent { Name: "OrderHistory" });
         Assert.Equal("Still 2 orders.", pressed.OfType<Records.AgentResponse>().Single().Response);
     }
 
@@ -694,12 +704,16 @@ public sealed class TurnClosureTests
         Assert.Equal(["Reply"], OfferedTools(turn.Model, 1));
         Assert.Contains("Stock was not run: this conversation does not hold item yet.", ResultTexts(turn.Model.Requests[1]));
 
-        await turn.AskAsync(new Records.AgentRequest("conv-turn", "tulip", null));
+        List<object> pressAnswer = await turn.AskAsync(new Records.AgentRequest("conv-turn", "tulip", null));
 
         // The typed answer leaves the model one move, composing the pressed call; after it, the answer.
         Assert.Equal(["Stock"], OfferedTools(turn.Model, 2));
         Assert.Equal(["Reply"], OfferedTools(turn.Model, 3));
         Assert.Equal(["Stock:tulip"], WorkflowTests.InventoryTools.Calls);
+
+        // The plant is the user's to give, so the turn that answers the press still offers it for another plant.
+        Assert.Equal(["🌼 A plant", "📦 My orders", "💬 Ask me something else", "✨ We're done, thanks"],
+            pressAnswer.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "and roses?", null));
 

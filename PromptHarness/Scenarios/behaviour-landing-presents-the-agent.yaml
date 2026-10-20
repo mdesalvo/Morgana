@@ -6,8 +6,9 @@ description: >-
   own words and closes with the menu that its tools declare, written by code and asserted exactly. The second press
   is a menu entry and a call that the framework makes: the tool behind it runs first and the agent,
   told that the conversation holds no customer code yet, asks for one. From then on every answer closes
-  on that same menu, whatever the model would have offered: once the code is typed and once more after
-  a second entry is pressed, which runs at once on the code the conversation now holds.
+  on that same menu less the entry whose press it answers, whatever the model would have offered: once
+  the code is typed and once more after a second entry is pressed, which runs at once on the code the
+  conversation now holds.
 
 turns:
   - press: billing
@@ -43,9 +44,8 @@ turns:
     expect:
       agent: BillingAgent
       toolsCalled: [GetInvoices]
-      # The answer closes on the menu written by code, exactly as the landing did.
+      # The answer completes the press, so it closes on the menu written by code less the pressed entry.
       quickReplyLabels:
-        - "🧾 My recent invoices"
         - "🔎 A specific invoice"
         - "💰 What I still owe"
         - "💳 Payments I made"
@@ -58,10 +58,10 @@ turns:
       agent: BillingAgent
       # The conversation holds the code, so the press runs at once.
       toolsCalledFirst: [GetOutstandingBalance]
+      # The turn that answers the press leaves its button off the menu.
       quickReplyLabels:
         - "🧾 My recent invoices"
         - "🔎 A specific invoice"
-        - "💰 What I still owe"
         - "💳 Payments I made"
         - "💬 Ask me something else"
         - "✨ We're done, thanks"
