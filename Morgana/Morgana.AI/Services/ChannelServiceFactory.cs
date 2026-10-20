@@ -1,4 +1,5 @@
 using Morgana.AI.Interfaces;
+using static Morgana.AI.Records;
 
 namespace Morgana.AI.Services;
 

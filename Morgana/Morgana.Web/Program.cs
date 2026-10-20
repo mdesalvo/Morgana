@@ -60,14 +60,14 @@ builder.Services.AddSingleton<IChannelMetadataStore, ChannelMetadataStore>();
 // SignalR transport: the hub clients join and the service pushing to its groups, registered under "signalr".
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<SignalRChannelService>();
-builder.Services.AddSingleton<ChannelServiceRegistration>(sp =>
-    new ChannelServiceRegistration(Constants.DeliveryModes.SignalR, sp.GetRequiredService<SignalRChannelService>()));
+builder.Services.AddSingleton<Records.ChannelServiceRegistration>(sp =>
+    new Records.ChannelServiceRegistration(Constants.DeliveryModes.SignalR, sp.GetRequiredService<SignalRChannelService>()));
 
 // Webhook transport: a named HTTP client so its handlers rotate and the service posting to the callback, registered under "webhook".
 builder.Services.AddHttpClient(WebhookChannelService.HttpClientName);
 builder.Services.AddSingleton<WebhookChannelService>();
-builder.Services.AddSingleton<ChannelServiceRegistration>(sp =>
-    new ChannelServiceRegistration(Constants.DeliveryModes.Webhook, sp.GetRequiredService<WebhookChannelService>()));
+builder.Services.AddSingleton<Records.ChannelServiceRegistration>(sp =>
+    new Records.ChannelServiceRegistration(Constants.DeliveryModes.Webhook, sp.GetRequiredService<WebhookChannelService>()));
 
 // Collects the registrations above: it answers which delivery modes this installation serves and hands a conversation its transport.
 builder.Services.AddSingleton<IChannelServiceFactory, ChannelServiceFactory>();
@@ -169,10 +169,10 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IGuardRailService: Checks user messages for content safety and compliance
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
-// - ICommandRegistryService: Publishes the commands channels may run on a conversation (every ICommand registered here)
+// - ICommandRegistryService: Publishes the commands channels may run on a conversation (every MorganaCommand registered here)
 // - ILanguageModelService: Abstraction over LLM providers, three tiers Economy/Efficiency/Performance each served by the registered provider it names (Morgana:LLM:Tiers)
 // - MorganaLanguageModel: One per LLM provider that a tier may name
-// - ICommand: One per command a channel may run on a conversation
+// - MorganaCommand: One per command a channel may run on a conversation
 
 // Every registration below is a singleton: the services hold configuration and caches shared by all conversations.
 builder.Services.AddSingleton<IMCPClientRegistryService, MCPClientRegistryService>();
@@ -187,7 +187,7 @@ builder.Services.AddSingleton<IGuardRailService, LLMGuardRailService>();
 builder.Services.AddSingleton<IClassifierService, LLMClassifierService>();
 builder.Services.AddSingleton<IPresenterService, LLMPresenterService>();
 builder.Services.AddSingleton<ICommandRegistryService, CommandRegistryService>();
-builder.Services.AddSingleton<ICommand, CompactHistoryCommand>();
+builder.Services.AddSingleton<MorganaCommand, CompactHistoryCommand>();
 // A factory because the service needs the configuration, the registered providers and the logger factory to build its tiers.
 builder.Services.AddSingleton<ILanguageModelService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();

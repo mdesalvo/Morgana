@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using Morgana.Contracts;
 using Morgana.Web.Filters;
@@ -47,7 +48,7 @@ public class CommandController(
         CancellationToken cancellationToken)
     {
         // Admitted by CommandAdmissionFilter, which resolved this same name
-        ICommand command = commandRegistryService.ResolveCommand(request.Name)!;
+        MorganaCommand command = commandRegistryService.ResolveCommand(request.Name)!;
 
         // The command answers the user itself over the channel, so the HTTP reply only acknowledges it ran
         logger.LogInformation(

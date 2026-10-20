@@ -1,5 +1,6 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Attributes;
 using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
@@ -15,7 +16,7 @@ namespace Morgana.AI.Commands;
 /// record — a fold moves where an agent's window opens, it does not delete messages — which is why it asks
 /// for no confirmation.
 /// </summary>
-public sealed class CompactHistoryCommand : ICommand
+public sealed class CompactHistoryCommand : MorganaCommand
 {
     /// <summary>The steps the command reports: reading the conversation on record, then the fold itself.</summary>
     private const int ProgressSteps = 2;
@@ -61,7 +62,7 @@ public sealed class CompactHistoryCommand : ICommand
     }
 
     /// <inheritdoc />
-    public CommandDescriptor Descriptor { get; } = new(
+    public override CommandDescriptor Descriptor { get; } = new(
         "compact",
         "Summarize the agent's LLM context; your transcript is unchanged",
 
@@ -70,7 +71,7 @@ public sealed class CompactHistoryCommand : ICommand
         RequiresActiveAgent: true);
 
     /// <inheritdoc />
-    public async Task ExecuteAsync(string conversationId, string? invocationId, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken)
+    public override async Task ExecuteAsync(string conversationId, string? invocationId, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken)
     {
         // The first frame goes up before anything is looked up: from the user's side the prompt is already
         // held, so a silent wait here would be indistinguishable from a command that did not start

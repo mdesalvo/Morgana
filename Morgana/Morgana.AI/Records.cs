@@ -105,6 +105,21 @@ public static class Records
     public record RestoreAgentResponse(string AgentIntent, IActorRef? AgentRef);
 
     // ==========================================================================
+    // CHANNEL DISPATCH
+    // ==========================================================================
+
+    /// <summary>
+    /// Binding of a concrete <see cref="Interfaces.IChannelService"/> to the <c>deliveryMode</c> key it serves.
+    /// Each concrete channel implementation is registered in DI as one of these; the factory
+    /// collects them all via <c>IEnumerable&lt;ChannelServiceRegistration&gt;</c> and builds its
+    /// dispatch table.
+    /// </summary>
+    /// <param name="DeliveryMode">The delivery-mode key this service serves (e.g. <c>"signalr"</c>,
+    /// <c>"webhook"</c>). Normalised (trimmed + lowercased) by the factory.</param>
+    /// <param name="Service">The concrete channel service instance.</param>
+    public record ChannelServiceRegistration(string DeliveryMode, Interfaces.IChannelService Service);
+
+    // ==========================================================================
     // RATE LIMITING
     // ==========================================================================
 

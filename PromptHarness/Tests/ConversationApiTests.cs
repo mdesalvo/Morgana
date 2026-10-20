@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using Morgana.Contracts;
@@ -430,13 +431,13 @@ public sealed class ConversationApiTests
     }
 
     /// <summary>A command that cannot be taken back, which is all the gate reads of it: it is never run.</summary>
-    private sealed class IrreversibleCommand : ICommand
+    private sealed class IrreversibleCommand : MorganaCommand
     {
         /// <inheritdoc />
-        public CommandDescriptor Descriptor { get; } = new("wipe", "Forget this conversation", RequiresConfirmation: true);
+        public override CommandDescriptor Descriptor { get; } = new("wipe", "Forget this conversation", RequiresConfirmation: true);
 
         /// <inheritdoc />
-        public Task ExecuteAsync(string conversationId, string? invocationId, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken) =>
+        public override Task ExecuteAsync(string conversationId, string? invocationId, IReadOnlyDictionary<string, string> options, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("The admission gate never runs a command.");
     }
 }

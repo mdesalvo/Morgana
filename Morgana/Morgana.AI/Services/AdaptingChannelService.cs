@@ -14,7 +14,7 @@ public class AdaptingChannelService : IChannelService
     /// <summary>
     /// Factory that maps a conversation's <c>deliveryMode</c> to the concrete
     /// <see cref="IChannelService"/> that carries its bytes. Populated at DI registration with
-    /// one <see cref="ChannelServiceRegistration"/> per transport.
+    /// one <see cref="Records.ChannelServiceRegistration"/> per transport.
     /// </summary>
     private readonly IChannelServiceFactory channelServiceFactory;
 

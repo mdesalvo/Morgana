@@ -92,7 +92,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 
 | Folder | Purpose |
 |---|---|
-| `Abstractions/` | `MorganaActor`, `MorganaAgent`, `MorganaLanguageModel`, `MorganaTool`, `MorganaWorkflow`, `MorganaHostedAgent` (the `AIAgent` publishing an intent over A2A, with its session and the session store that decides which conversation an inbound A2A request is served on) |
+| `Abstractions/` | `MorganaActor`, `MorganaAgent`, `MorganaLanguageModel`, `MorganaTool`, `MorganaWorkflow`, `MorganaCommand`, `MorganaHostedAgent` (the `AIAgent` publishing an intent over A2A, with its session and the session store that decides which conversation an inbound A2A request is served on) |
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[ProvidesWorkflowForIntent]`, `[RequiresApproval]`, `[UserTool]`, `[SystemTool]`, `[ToolParameter]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
@@ -158,7 +158,7 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
 | `conversation/{id}/message` | POST | Auth, 404 if unknown, then rate limit, then dust budget, then `UserMessage` |
 | `conversation/{id}/history` | GET | 404 if unknown; `ConversationHistoryResponse`, empty while nobody has spoken |
 | `conversation/{id}/command` | POST | Auth, 404 if unknown, 400 for an unknown name or a missing confirmation, rate limit, dust budget, then runs it; the outcome arrives over the channel |
-| `commands` | GET | `CommandCatalogResponse`: every `ICommand` registered in DI. The framework publishes `/compact` |
+| `commands` | GET | `CommandCatalogResponse`: every `MorganaCommand` registered in DI. The framework publishes `/compact` |
 | `health` | GET | Actor system liveness |
 
 Every endpoint but `health` authenticates through `ChannelAuthenticationFilter` (Bearer JWT, fail-closed).
@@ -232,8 +232,8 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `LLMClassifierService` | `IClassifierService` | LLM intent classification; falls back to `"other"` at confidence 0 |
 | `LLMGuardRailService` | `IGuardRailService` | LLM policy check. **Fails open** |
 | `LLMPresenterService` | `IPresenterService` | Welcome message and quick replies. Never throws |
-| `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
-| `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
+| `CommandRegistryService` | `ICommandRegistryService` | Publishes every `MorganaCommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
+| `CompactHistoryCommand` | `MorganaCommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
 | `ConfigurationLLMService` | `ILanguageModelService` | Builds the three tiers, each on the registered provider it names; the framework actors run on `ActorSystem:Tier` |
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json`, domain from `agents.json`. Throws if one ID is declared in both |
 | `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads: the fenced two-layer prompt, tool descriptions, the per-turn held-context declaration, the colleagues declaration, a colleague's question |
