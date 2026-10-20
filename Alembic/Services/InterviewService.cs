@@ -41,7 +41,7 @@ public class InterviewService : IInterviewService
     /// <summary>
     /// Resolves the chat client every pass runs on, always at <see cref="Records.LLMTier.Efficiency"/>.
     /// </summary>
-    private readonly ILLMService llmService;
+    private readonly ILanguageModelService llmService;
 
     /// <summary>
     /// The Draft under construction for this circuit, which <see cref="Keep"/> updates every turn so the save file matches the screen.
@@ -98,7 +98,7 @@ public class InterviewService : IInterviewService
         IAlembicPromptService alembicPromptService,
         IDraftValidationService draftValidationService,
         IRecapService recapService,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IDraftStateService draftStateService,
         IConfiguration configuration,
         ILogger logger)

@@ -14,7 +14,7 @@ public class InventoryAgent : MorganaAgent
 {
     public InventoryAgent(
         string conversationId,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IConversationPersistenceService conversationPersistenceService,
         ILogger logger,

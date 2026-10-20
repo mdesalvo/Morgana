@@ -248,7 +248,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             harnessBuilder.Services.AddSingleton(typeof(MorganaLanguageModel), languageModelType);
         }
 
-        harnessBuilder.Services.AddSingleton<ILLMService, ConfigurationLLMService>();
+        harnessBuilder.Services.AddSingleton<ILanguageModelService, ConfigurationLLMService>();
         harnessBuilder.Services.AddSingleton<IAgentConfigurationService, AgentlessConfigurationService>();
         harnessBuilder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
         harnessBuilder.Services.AddSingleton<HarnessPromptService>();

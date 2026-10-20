@@ -28,7 +28,7 @@ public class ToolMockService : IToolMockService
     private readonly ICodeEmitService codeEmitService;
 
     /// <summary>Supplies the Efficiency-tier chat client that writes the mock.</summary>
-    private readonly ILLMService llmService;
+    private readonly ILanguageModelService llmService;
 
     /// <summary>Records a mock that was resumed or went silent.</summary>
     private readonly ILogger logger;
@@ -39,7 +39,7 @@ public class ToolMockService : IToolMockService
     public ToolMockService(
         IAlembicPromptService alembicPromptService,
         ICodeEmitService codeEmitService,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         ILogger logger)
     {
         this.alembicPromptService = alembicPromptService;

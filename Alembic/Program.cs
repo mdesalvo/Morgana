@@ -95,7 +95,7 @@ builder.Services.AddSingleton<MorganaLanguageModel, OpenAILanguageModel>();
 builder.Services.AddSingleton<MorganaLanguageModel, OllamaLanguageModel>();
 
 // The tiers are read from the user secrets that Morgana shares.
-builder.Services.AddSingleton<ILLMService>(sp =>
+builder.Services.AddSingleton<ILanguageModelService>(sp =>
 {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();

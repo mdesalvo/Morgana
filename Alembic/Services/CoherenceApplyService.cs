@@ -38,7 +38,7 @@ public class CoherenceApplyService : ICoherenceApplyService
     private readonly IAlembicPromptService alembicPromptService;
 
     /// <summary>Supplies the Efficiency-tier chat client that runs the applier.</summary>
-    private readonly ILLMService llmService;
+    private readonly ILanguageModelService llmService;
 
     /// <summary>Records an apply that failed.</summary>
     private readonly ILogger logger;
@@ -48,7 +48,7 @@ public class CoherenceApplyService : ICoherenceApplyService
     /// </summary>
     public CoherenceApplyService(
         IAlembicPromptService alembicPromptService,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         ILogger logger)
     {
         this.alembicPromptService = alembicPromptService;

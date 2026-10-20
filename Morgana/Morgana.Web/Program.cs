@@ -170,7 +170,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
 // - ICommandRegistryService: Publishes the commands channels may run on a conversation (every ICommand registered here)
-// - ILLMService: Abstraction over LLM providers, three tiers Economy/Efficiency/Performance each served by the registered provider it names (Morgana:LLM:Tiers)
+// - ILanguageModelService: Abstraction over LLM providers, three tiers Economy/Efficiency/Performance each served by the registered provider it names (Morgana:LLM:Tiers)
 // - MorganaLanguageModel: One per LLM provider that a tier may name
 // - ICommand: One per command a channel may run on a conversation
 
@@ -189,7 +189,7 @@ builder.Services.AddSingleton<IPresenterService, LLMPresenterService>();
 builder.Services.AddSingleton<ICommandRegistryService, CommandRegistryService>();
 builder.Services.AddSingleton<ICommand, CompactHistoryCommand>();
 // A factory because the service needs the configuration, the registered providers and the logger factory to build its tiers.
-builder.Services.AddSingleton<ILLMService>(sp => {
+builder.Services.AddSingleton<ILanguageModelService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
 
@@ -258,7 +258,7 @@ builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
 //
 // - DustLimitingOptions: policy (budget + warning/error message templates)
 // - Per-model pricing lives inline on each tier (Morgana:LLM:Tiers:{tier}:MagicDust)
-//   and is resolved per-tier by ILLMService.GetPricing(tier) — no single process-wide pricing singleton.
+//   and is resolved per-tier by ILanguageModelService.GetPricing(tier) — no single process-wide pricing singleton.
 //
 // Configuration: Morgana:DustLimiting + Morgana:LLM:Tiers:{tier}:MagicDust in appsettings.json
 
@@ -398,7 +398,7 @@ await app.Services.GetRequiredService<IAgentConfigurationService>().GetIntentsAs
 _ = app.Services.GetRequiredService<IAgentRegistryService>().GetAllIntents();
 app.Services.GetRequiredService<ICommandRegistryService>();
 // Builds the three tiers at startup, so that a tier left unconfigured refuses the boot rather than the first turn.
-app.Services.GetRequiredService<ILLMService>();
+app.Services.GetRequiredService<ILanguageModelService>();
 
 // The middleware order is the request's path: CORS answers the browsers' preflight first, then HTTPS
 // redirection and static files, then routing so that authorization sees the matched endpoint.

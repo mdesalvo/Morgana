@@ -31,7 +31,7 @@ public class ClassifierActor : MorganaActor
     /// <param name="configuration">Morgana configuration (layered by ASP.NET).</param>
     public ClassifierActor(
         string conversationId,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IClassifierService classifierService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)

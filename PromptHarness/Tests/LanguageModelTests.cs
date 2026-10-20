@@ -32,7 +32,7 @@ public sealed class LanguageModelTests
     {
         // Three different providers, so the metadata that each client reports can only differ if each
         // tier was built by its own.
-        ILLMService llm = Build(Configuration(
+        ILanguageModelService llm = Build(Configuration(
             ("Morgana:LLM:Tiers:Efficiency:Provider", "Ollama"),
             ("Morgana:LLM:Tiers:Efficiency:Connection:Endpoint", "http://localhost:11434"),
             ("Morgana:LLM:Tiers:Performance:Provider", "OpenAI")));
@@ -148,7 +148,7 @@ public sealed class LanguageModelTests
     {
         // Ollama reaches a local server: it has an endpoint and no key, so the key left on its
         // placeholder is nobody's concern.
-        ILLMService llm = Build(Configuration(
+        ILanguageModelService llm = Build(Configuration(
             ("Morgana:LLM:Tiers:Economy:Provider", "Ollama"),
             ("Morgana:LLM:Tiers:Economy:Connection:Endpoint", "http://localhost:11434"),
             ("Morgana:LLM:Tiers:Economy:Connection:ApiKey", SecurePlaceholder)));
@@ -162,7 +162,7 @@ public sealed class LanguageModelTests
     [InlineData("performance", Records.LLMTier.Performance)]
     public void LanguageModel_Framework_tier_follows_the_actor_system_and_defaults_to_efficiency(string? configured, Records.LLMTier expected)
     {
-        ILLMService llm = Build(configured is null
+        ILanguageModelService llm = Build(configured is null
             ? Configuration()
             : Configuration(("Morgana:ActorSystem:Tier", configured)));
 
@@ -181,7 +181,7 @@ public sealed class LanguageModelTests
     }
 
     /// <summary>The metadata that the client of a tier reports about the model that it runs.</summary>
-    private static ChatClientMetadata MetadataOf(ILLMService llm, Records.LLMTier tier) =>
+    private static ChatClientMetadata MetadataOf(ILanguageModelService llm, Records.LLMTier tier) =>
         llm.GetChatClient(tier).GetService<ChatClientMetadata>()
         ?? throw new InvalidOperationException($"The {tier} client reports no metadata.");
 

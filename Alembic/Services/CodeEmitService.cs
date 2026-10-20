@@ -99,7 +99,7 @@ public class CodeEmitService : ICodeEmitService
         sb.AppendLine("{");
         sb.AppendLine(CultureInfo.InvariantCulture, $"    public {agentClass}(");
         sb.AppendLine("        string conversationId,");
-        sb.AppendLine("        ILLMService llmService,");
+        sb.AppendLine("        ILanguageModelService llmService,");
         sb.AppendLine("        IPromptResolverService promptResolverService,");
         sb.AppendLine("        IConversationPersistenceService conversationPersistenceService,");
         sb.AppendLine("        ILogger logger,");

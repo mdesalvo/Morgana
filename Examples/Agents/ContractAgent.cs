@@ -15,7 +15,7 @@ public class ContractAgent : MorganaAgent
 {
     public ContractAgent(
         string conversationId,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IConversationPersistenceService conversationPersistenceService,
         ILogger logger,

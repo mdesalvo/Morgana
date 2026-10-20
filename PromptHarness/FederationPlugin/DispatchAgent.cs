@@ -27,7 +27,7 @@ public class DispatchAgent : MorganaAgent
 {
     /// <summary>Builds the agent, with its colleague at the annex already in its tool list.</summary>
     public DispatchAgent(string conversationId,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IConversationPersistenceService persistenceService,
         ILogger logger,

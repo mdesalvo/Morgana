@@ -98,7 +98,7 @@ public class MorganaAgent : MorganaActor
     /// <param name="configuration">Application configuration (streaming flags, etc.).</param>
     public MorganaAgent(
         string conversationId,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IConversationPersistenceService persistenceService,
         ILogger agentLogger,

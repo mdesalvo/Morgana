@@ -19,7 +19,7 @@ public class MonkeyAgent : MorganaAgent
 {
     public MonkeyAgent(
         string conversationId,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IConversationPersistenceService conversationPersistenceService,
         ILogger logger,

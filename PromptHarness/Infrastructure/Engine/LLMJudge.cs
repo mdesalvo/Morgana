@@ -35,7 +35,7 @@ public sealed class LLMJudge
 
     /// <summary>Holds the judge to be composed over the tiers of the deployment under test beside the prose it reads each judged turn from.</summary>
     /// <exception cref="InvalidOperationException">Thrown, on the first judgement, when the Efficiency tier is not configured.</exception>
-    public LLMJudge(ILLMService llmService, HarnessPromptService harnessPromptService)
+    public LLMJudge(ILanguageModelService llmService, HarnessPromptService harnessPromptService)
     {
         this.harnessPromptService = harnessPromptService;
 
@@ -44,7 +44,7 @@ public sealed class LLMJudge
     }
 
     /// <summary>Composes the judge agent on the Efficiency client with the primer and the judge's own prose as instructions.</summary>
-    private async Task<AIAgent> ComposeJudgeAgentAsync(ILLMService llmService)
+    private async Task<AIAgent> ComposeJudgeAgentAsync(ILanguageModelService llmService)
     {
         // Resolved by tier rather than through CompleteStructuredAsync, which follows
         // Morgana:ActorSystem:Tier: the judge's model must not move with the deployment under test.

@@ -10,9 +10,9 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Default <see cref="ILLMService"/>: builds the three tiers of <c>Morgana:LLM:Tiers</c>, each on the provider that it declares.
+/// Default <see cref="ILanguageModelService"/>: builds the three tiers of <c>Morgana:LLM:Tiers</c>, each on the provider that it declares.
 /// </summary>
-public class ConfigurationLLMService : ILLMService
+public class ConfigurationLLMService : ILanguageModelService
 {
     /// <summary>
     /// Application configuration, read for the tiers under <c>Morgana:LLM</c>, the framework tier

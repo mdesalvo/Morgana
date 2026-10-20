@@ -39,7 +39,7 @@ public class CoherenceService : ICoherenceService
     private readonly IAlembicPromptService alembicPromptService;
 
     /// <summary>Supplies the Efficiency-tier chat client that runs the pass.</summary>
-    private readonly ILLMService llmService;
+    private readonly ILanguageModelService llmService;
 
     /// <summary>Records a pass that failed or answered out of shape.</summary>
     private readonly ILogger logger;
@@ -49,7 +49,7 @@ public class CoherenceService : ICoherenceService
     /// </summary>
     public CoherenceService(
         IAlembicPromptService alembicPromptService,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         ILogger logger)
     {
         this.alembicPromptService = alembicPromptService;

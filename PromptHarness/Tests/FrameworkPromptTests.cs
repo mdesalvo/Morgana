@@ -206,7 +206,7 @@ public sealed class FrameworkPromptTests
     }
 
     /// <summary>The framework tier's model as the actors meet it: it answers nothing and keeps what it was asked.</summary>
-    private sealed class CapturingModel : ILLMService
+    private sealed class CapturingModel : ILanguageModelService
     {
         /// <summary>The system prompt of the last call.</summary>
         public string SystemPrompt { get; private set; } = string.Empty;

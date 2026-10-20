@@ -1401,7 +1401,7 @@ public sealed class WorkflowTests
     }
 
     /// <summary>Hands the adapter the scripted model on whichever tier it asks.</summary>
-    internal sealed class SampleLlm(IChatClient model) : ILLMService
+    internal sealed class SampleLlm(IChatClient model) : ILanguageModelService
     {
         public Records.LLMTier FrameworkTier => Records.LLMTier.Efficiency;
 

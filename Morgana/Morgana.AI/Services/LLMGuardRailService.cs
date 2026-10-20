@@ -4,7 +4,7 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Default <see cref="IGuardRailService"/> implementation. Delegates to <see cref="ILLMService"/>
+/// Default <see cref="IGuardRailService"/> implementation. Delegates to <see cref="ILanguageModelService"/>
 /// with the Guard system prompt for detection of spam, phishing, violence, profanity and other
 /// policy violations.
 /// </summary>
@@ -14,7 +14,7 @@ public class LLMGuardRailService : IGuardRailService
     /// LLM used for the policy check. Consumed through the stateless completion path — each
     /// message is judged on its own text, on the framework tier.
     /// </summary>
-    private readonly ILLMService llmService;
+    private readonly ILanguageModelService llmService;
 
     /// <summary>
     /// Logger for compliance verdicts and for the fail-open path, which admits a message the
@@ -40,7 +40,7 @@ public class LLMGuardRailService : IGuardRailService
     /// <param name="promptResolverService">Prompt resolver used to load Guard configuration.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
     public LLMGuardRailService(
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         ILogger logger)
     {

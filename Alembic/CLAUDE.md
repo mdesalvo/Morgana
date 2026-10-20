@@ -434,7 +434,7 @@ maintain.
   one Draft per circuit.
 - `IAgentConfigurationService` is `AgentlessConfigurationService`, empty **by construction**: the domain
   Alembic works on is the one in the **draft**, never one compiled into this process.
-- `ILLMService` is a factory **never resolved during startup**, so a working copy without credentials still
+- `ILanguageModelService` is a factory **never resolved during startup**, so a working copy without credentials still
   builds, boots and serves the shell; the failure surfaces on the first call.
 - `MagicDust` of a tier cannot be shortened to `{}` — the JSON provider reads an empty object as `null`,
   the binder drops an element it cannot construct **without raising anything** and the whole tier

@@ -234,7 +234,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `LLMPresenterService` | `IPresenterService` | Welcome message and quick replies. Never throws |
 | `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
 | `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
-| `ConfigurationLLMService` | `ILLMService` | Builds the three tiers, each on the registered provider it names; the framework actors run on `ActorSystem:Tier` |
+| `ConfigurationLLMService` | `ILanguageModelService` | Builds the three tiers, each on the registered provider it names; the framework actors run on `ActorSystem:Tier` |
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json`, domain from `agents.json`. Throws if one ID is declared in both |
 | `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads: the fenced two-layer prompt, tool descriptions, the per-turn held-context declaration, the colleagues declaration, a colleague's question |
 | `ConfigurationAgentDirectoryService` | `IAgentDirectoryService` | Both halves of A2A discovery, plus `ValidateTrustConfiguration` and `ValidatePublishedAddress` |
@@ -254,7 +254,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 
 ## LLM providers and tiers
 
-`ConfigurationLLMService` is the one `ILLMService`. **Three tiers, each with its own provider**:
+`ConfigurationLLMService` is the one `ILanguageModelService`. **Three tiers, each with its own provider**:
 `Economy`, `Efficiency`, `Performance`, from the cheapest model to the most capable. All three are
 always declared and filled, whether or not an agent uses them. **There is no cross-tier fallback**.
 Validation never asks which agents use which tier.

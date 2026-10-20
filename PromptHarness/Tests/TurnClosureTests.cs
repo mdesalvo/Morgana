@@ -1055,7 +1055,7 @@ public sealed class TurnClosureTests
         /// </summary>
         public ScriptedAgent(
             string conversationId,
-            ILLMService llmService,
+            ILanguageModelService llmService,
             IPromptResolverService promptResolverService,
             IConversationPersistenceService conversationPersistenceService,
             MorganaAgentAdapter morganaAgentAdapter,
@@ -1190,7 +1190,7 @@ public sealed class TurnClosureTests
 
     /// <summary>The framework tier's model as the presenter meets it: it answers the welcome as given or fails when it has none.</summary>
     /// <param name="welcomeAnswer">The JSON that the model returns; null makes the call fail.</param>
-    private sealed class WelcomeModel(string? welcomeAnswer) : ILLMService
+    private sealed class WelcomeModel(string? welcomeAnswer) : ILanguageModelService
     {
         /// <inheritdoc />
         public Records.LLMTier FrameworkTier => Records.LLMTier.Economy;

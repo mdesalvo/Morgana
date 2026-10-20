@@ -19,7 +19,7 @@ namespace Morgana.AI.Interfaces;
 /// <item><term>Agents</term><description>MorganaAgent uses the IChatClient of its declared tier (via GetChatClient(tier)) for stateful conversations with tool calling</description></item>
 /// </list>
 /// </remarks>
-public interface ILLMService
+public interface ILanguageModelService
 {
     /// <summary>
     /// Asks the <see cref="FrameworkTier"/> one stateless question and reads the answer as a <typeparamref name="T"/>, whose shape the provider is held to by a JSON schema.
