@@ -1,4 +1,7 @@
 using System.ComponentModel;
+using System.Diagnostics;
+using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -799,6 +802,113 @@ public sealed class WorkflowTests
     }
 
     // =========================================================================
+    // MCP OVER HTTP
+    // =========================================================================
+
+    [Fact]
+    public async Task Workflow_Over_HTTP_an_MCP_step_binds_the_field_of_its_structured_content_into_the_next_step()
+    {
+        await using HttpMCPServer server = await HttpMCPServer.StartAsync();
+        await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(HttpMCPAgentMarker), NullLogger.Instance, Reserve());
+        agent.Model.Enqueue(Answer([Call("StartReserve", "{}")]));
+        agent.Model.Enqueue(Answer([Call("ReserveStock", """{"item":"rose"}""")]));
+        agent.Model.Enqueue(Answer([Call("ShipOrder", "{}")]));
+        agent.Model.Enqueue(Answer(Closing("Shipped.")));
+
+        await agent.TurnAsync("reserve a rose and ship it");
+
+        Assert.Contains(agent.FunctionResults(), result => result.Contains("TRK-RSV-rose", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Workflow_Over_HTTP_an_MCP_step_that_the_server_reports_as_an_error_follows_the_failure_edge()
+    {
+        await using HttpMCPServer server = await HttpMCPServer.StartAsync();
+        await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(HttpMCPAgentMarker), NullLogger.Instance, Fragile());
+        agent.Model.Enqueue(Answer([Call("StartFragile", "{}")]));
+        agent.Model.Enqueue(Answer([Call("FailHard", "{}")]));
+        agent.Model.Enqueue(Answer([Call("ReadNote", "{}")]));
+        agent.Model.Enqueue(Answer(Closing("Done.")));
+
+        await agent.TurnAsync("try it");
+
+        // FailHard led to Note, where ReadNote ran: a failure that no edge followed would have ended the workflow before it.
+        string[] results = agent.FunctionResults();
+        Assert.Contains(results, result => result.Contains("noted", StringComparison.Ordinal));
+        Assert.DoesNotContain(results, result => result.Contains("$type", StringComparison.Ordinal));
+        Assert.Null(agent.Provider.GetWorkflowPosition(agent.Session));
+    }
+
+    [Fact]
+    public async Task Workflow_Over_HTTP_the_tools_of_an_MCP_server_are_offered_in_the_order_it_declares_them()
+    {
+        await using HttpMCPServer server = await HttpMCPServer.StartAsync();
+        await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(HttpMCPAgentMarker), NullLogger.Instance);
+        agent.Model.Enqueue(Answer(Closing("Hello.")));
+
+        await agent.TurnAsync("hi");
+
+        // Read straight off the offer, since Names sorts what it lists.
+        string[] declaredToolNames = ["ReserveStock", "ShipOrder", "ReadNote", "FailHard", "WipeCatalog"];
+        Assert.Equal(declaredToolNames, ToolsOfferedAt(agent.Model, 0).Select(tool => tool.Name).Where(name => declaredToolNames.Contains(name, StringComparer.Ordinal)));
+    }
+
+    [Fact]
+    public async Task Workflow_Over_HTTP_a_tool_discovered_before_the_server_restarts_answers_after_it()
+    {
+        CapturingLogger logger = new CapturingLogger();
+        await using HttpMCPServer firstServer = await HttpMCPServer.StartAsync();
+        await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(HttpMCPAgentMarker), logger);
+        await firstServer.StopAsync();
+        await using HttpMCPServer restartedServer = await HttpMCPServer.StartAsync();
+        agent.Model.Enqueue(Answer([Call("ReserveStock", """{"item":"rose"}""")]));
+        agent.Model.Enqueue(Answer(Closing("Reserved.")));
+
+        await agent.TurnAsync("reserve a rose");
+
+        Assert.Contains(agent.FunctionResults(), result => result.Contains("RSV-rose", StringComparison.Ordinal));
+        Assert.Empty(logger.Errors);
+    }
+
+    [Fact]
+    public async Task Workflow_Over_HTTP_a_call_made_while_the_server_is_down_fails_and_the_first_one_after_it_returns_answers()
+    {
+        await using HttpMCPServer firstServer = await HttpMCPServer.StartAsync();
+        await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(HttpMCPAgentMarker), NullLogger.Instance);
+        await firstServer.StopAsync();
+        agent.Model.Enqueue(Answer([Call("ReserveStock", """{"item":"rose"}""")]));
+        agent.Model.Enqueue(Answer(Closing("The stock is unreachable.")));
+
+        await agent.TurnAsync("reserve a rose");
+
+        Assert.DoesNotContain(agent.FunctionResults(), result => result.Contains("RSV-rose", StringComparison.Ordinal));
+
+        await using HttpMCPServer restartedServer = await HttpMCPServer.StartAsync();
+        agent.Model.Enqueue(Answer([Call("ReserveStock", """{"item":"tulip"}""")]));
+        agent.Model.Enqueue(Answer(Closing("Reserved.")));
+
+        await agent.TurnAsync("reserve a tulip");
+
+        Assert.Contains(agent.FunctionResults(), result => result.Contains("RSV-tulip", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Workflow_Over_HTTP_an_agent_whose_server_is_down_lives_on_with_its_native_tools_and_without_the_workflows_that_cite_the_server()
+    {
+        CapturingLogger logger = new CapturingLogger();
+        await using AgentUnderTest agent = await AgentUnderTest.CreateAsync(typeof(HttpMCPAgentMarker), logger, Mixed());
+        agent.Model.Enqueue(Answer(Closing("Hello.")));
+
+        await agent.TurnAsync("hi");
+
+        string[] offered = Names(ToolsOfferedAt(agent.Model, 0));
+        Assert.Contains("CreatePurchaseOrder", offered);
+        Assert.DoesNotContain("StartMixed", offered);
+        Assert.DoesNotContain("ShipOrder", offered);
+        Assert.Contains(logger.Errors, error => error.Contains("the agent has no tool 'ShipOrder'", StringComparison.Ordinal));
+    }
+
+    // =========================================================================
     // THE CLASS
     // =========================================================================
 
@@ -958,6 +1068,9 @@ public sealed class WorkflowTests
     /// <summary>The names of the tools that a model call was offered, in a stable order.</summary>
     private static string[] Names(IEnumerable<AITool> tools)
         => [.. tools.Select(tool => tool.Name).Order(StringComparer.Ordinal)];
+
+    /// <summary>The address that the HTTP test server listens on, fixed because the marker attribute names it.</summary>
+    private const string HttpMCPServerUrl = "http://127.0.0.1:5188/";
 
     /// <summary>A Reply offering exactly the decision step's two tools.</summary>
     private const string ExactReply = """{"text":"Here is the quote.","awaits":"nothing","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"CancelOrder","label":"Cancel","value":"cancel"}]}""";
@@ -1272,6 +1385,12 @@ public sealed class WorkflowTests
     [UsesMCPServer(Records.MCPTransport.Stdio, "mcp-test-server/MCPTestServer", "--clash")]
     private sealed class ClashingServerAgentMarker;
 
+    /// <summary>The sample agent that acquires tools from the deterministic MCP server over HTTP.</summary>
+    [HandlesIntent("inventory")]
+    [RequiresLLMTier(Records.LLMTier.Efficiency)]
+    [UsesMCPServer(Records.MCPTransport.Http, HttpMCPServerUrl)]
+    private sealed class HttpMCPAgentMarker;
+
     /// <summary>The sample agent whose server does not exist.</summary>
     [HandlesIntent("inventory")]
     [RequiresLLMTier(Records.LLMTier.Efficiency)]
@@ -1382,6 +1501,97 @@ public sealed class WorkflowTests
         public string[] FunctionResults()
             => [.. History.GetMessages(Session).SelectMany(message => message.Contents).OfType<FunctionResultContent>()
                 .Select(result => result.Result is JsonElement { ValueKind: JsonValueKind.String } element ? element.GetString()! : result.Result?.ToString() ?? string.Empty)];
+    }
+
+    /// <summary>The deterministic MCP server as a child process serving HTTP on the fixed local port.</summary>
+    private sealed class HttpMCPServer : IAsyncDisposable
+    {
+        /// <summary>The address that the server listens on, the one the HTTP marker declares.</summary>
+        private static readonly Uri ServerAddress = new Uri(HttpMCPServerUrl);
+
+        /// <summary>The server process.</summary>
+        private readonly Process process;
+
+        /// <summary>The text that the process wrote to its error stream, kept for the failure message.</summary>
+        private readonly StringBuilder errorText = new StringBuilder();
+
+        /// <summary>Takes over a server process that was just started.</summary>
+        private HttpMCPServer(Process process) => this.process = process;
+
+        /// <summary>Starts the server and returns once its port accepts connections.</summary>
+        public static async Task<HttpMCPServer> StartAsync()
+        {
+            // The relative path is the one the stdio marker names, so the working directory has to be the output directory.
+            ProcessStartInfo startInfo = new ProcessStartInfo("mcp-test-server/MCPTestServer")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+            startInfo.ArgumentList.Add("--http");
+            startInfo.ArgumentList.Add(HttpMCPServerUrl);
+
+            // A process that cannot even be launched leaves the test nothing to reach.
+            Process serverProcess = Process.Start(startInfo) ?? throw new InvalidOperationException("The MCP test server did not start.");
+            HttpMCPServer server = new HttpMCPServer(serverProcess);
+
+            // An undrained pipe would block the server once its buffer fills.
+            serverProcess.OutputDataReceived += (_, _) => { };
+            serverProcess.ErrorDataReceived += (_, received) =>
+            {
+                lock (server.errorText)
+                    server.errorText.AppendLine(received.Data);
+            };
+            serverProcess.BeginOutputReadLine();
+            serverProcess.BeginErrorReadLine();
+
+            // The port is the only sign that the server is ready: the process is alive well before it listens.
+            DateTime deadline = DateTime.UtcNow.AddSeconds(20);
+            while (DateTime.UtcNow < deadline)
+            {
+                try
+                {
+                    // A connection accepted on the declared address is a server ready for the agent.
+                    using TcpClient portProbe = new TcpClient();
+                    await portProbe.ConnectAsync(ServerAddress.Host, ServerAddress.Port);
+                    return server;
+                }
+                catch (SocketException)
+                {
+                    // Not listening yet.
+                    await Task.Delay(100);
+                }
+            }
+
+            // A server that never listened is killed so that it cannot hold the port for the next test.
+            await server.StopAsync();
+
+            // The failure carries what the server said about itself, which is the only account of why it did not listen.
+            string errorOutput;
+            lock (server.errorText)
+                errorOutput = server.errorText.ToString();
+            throw new InvalidOperationException("The MCP test server did not listen within 20 seconds. " + errorOutput);
+        }
+
+        /// <summary>Kills the server with its whole tree and waits for its exit; calling it again does nothing.</summary>
+        public async Task StopAsync()
+        {
+            // A process already gone has nothing to kill.
+            if (process.HasExited)
+                return;
+
+            // The port is free again only once the process is gone, so a restart waits for the exit.
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+        }
+
+        /// <summary>Stops the server, so that no test leaves the port held for the next one.</summary>
+        public async ValueTask DisposeAsync()
+        {
+            // A server still running is stopped first: the port is the next test's.
+            await StopAsync();
+            process.Dispose();
+        }
     }
 
     /// <summary>A logger that keeps the text of every error it is given.</summary>

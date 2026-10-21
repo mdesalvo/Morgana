@@ -32,9 +32,10 @@ exactly as a real deployment would discover it, never seen as a compile-time typ
 black-box boundary made structural — which is also why there is no `Directory.Build.props` above this
 project: every build setting lives in the `.csproj`, so it carries unchanged across a move.
 
-**`MCPTestServer/` is a deterministic stdio MCP server**, built beside the harness and copied whole into
-`mcp-test-server/`: `WorkflowTests` starts it as a child process by that relative path, so the test
-process's working directory has to stay the output directory.
+**`MCPTestServer/` is a deterministic MCP server**, over stdio or, given `--http <url>`, over HTTP, built beside
+the harness and copied whole into `mcp-test-server/`: `WorkflowTests` starts it as a child process by that
+relative path either way (the HTTP tests on the fixed local port 5188), so the test process's working
+directory has to stay the output directory.
 
 ## Commands
 

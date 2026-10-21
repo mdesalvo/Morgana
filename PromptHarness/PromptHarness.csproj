@@ -77,7 +77,7 @@
   <ItemGroup>
     <!--
       The MCP test server is an executable the workflow group starts as a child process, as it would
-      start any stdio server. It belongs to the project below it: compiled in here its sources would
+      start any stdio or HTTP server. It belongs to the project below it: compiled in here its sources would
       become part of the harness, which is the one thing a server under test must never be.
     -->
     <Compile Remove="MCPTestServer\**" />
@@ -124,7 +124,7 @@
   <ItemGroup>
     <!--
       The deterministic MCP server, built but never referenced as an assembly: an agent under test
-      reaches it over stdio exactly as it would reach a server of its own deployment.
+      reaches it over stdio or HTTP exactly as it would reach a server of its own deployment.
     -->
     <ProjectReference Include="MCPTestServer\MCPTestServer.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>

@@ -12,16 +12,20 @@
     <IsPackable>false</IsPackable>
 
     <Description>
-    A deterministic MCP server over stdio, with tools whose results never vary. It exists for the
+    A deterministic MCP server over stdio or, on request, over HTTP, with tools whose results never vary. It exists for the
     harness's workflow group: an MCP tool inside a workflow is asserted against answers that the test
-    knows beforehand, with no network and no model.
+    knows beforehand, with no model and nothing beyond the local machine.
     </Description>
 
   </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="ModelContextProtocol" Version="2.3.0" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
   </ItemGroup>
 
 </Project>
