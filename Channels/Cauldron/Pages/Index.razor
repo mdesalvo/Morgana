@@ -286,6 +286,9 @@
         inputText = string.Empty;
         ChatStateService.IsSending = true;
 
+        // The turn answers whatever buttons were still on offer, so none of them can be pressed after it
+        ChatStateService.RetireActiveQuickReplies();
+
         // Echoed at once as the visitor's own turn
         ChatStateService.AddUserMessage(messageText);
 
@@ -477,8 +480,8 @@
     /// <param name="message">Message containing the quick replies</param>
     private async Task SelectQuickReplyAsync(QuickReply reply, ChatMessage message)
     {
-        // A row answers once: a second click on it would send a second turn
-        if (message.SelectedQuickReplyId != null)
+        // A row answers once: a second click on it would send a second turn, and a row a typed message retired is answered already
+        if (message.SelectedQuickReplyId != null || message.QuickRepliesRetired)
             return;
 
         // Recorded on the message itself, which is what freezes the whole row and marks
@@ -587,8 +590,6 @@
         ChatStateService.IsSending ||
         // The start or resume has not finished: there is no conversation to write into yet
         !ChatStateService.IsInitialized ||
-        // Quick replies are waiting: the visitor answers with a button
-        ChatStateService.HasActiveQuickReplies() ||
         // Morgana is still answering, including a turn resumed after a reload
         ChatStateService.HasTypingIndicator() ||
         // The loader is up: a turn typed now would race the presentation

@@ -142,8 +142,8 @@ collide with the widget's CSS or inherit into its shadow root.
 
 - **Agent theming**: borders, CSS classes and header animations follow `CurrentAgentName` — base
   Morgana against a specialised agent
-- **Quick reply gating**: textarea and send button are disabled while unselected quick replies or a
-  typing indicator are active
+- **Composer gating**: textarea and send button are disabled while a typing indicator is active.
+  Quick replies never gate them: a typed message retires the buttons still on offer
 - **Nothing is invented**: the line closing a specialist's engagement is a message Morgana sends, so
   it arrives and resumes like any other. A history ending on a user turn means that turn is still
   running: the composer stays shut and the wait resumes

@@ -133,9 +133,9 @@ public interface IChatStateService
     string GetAgentClass(string? agentName);
 
     /// <summary>
-    /// True if any message has unselected quick replies from a history restore.
+    /// Disables the quick replies still on offer, because a typed message answered them in their place.
     /// </summary>
-    bool HasActiveQuickReplies();
+    void RetireActiveQuickReplies();
 
     /// <summary>
     /// True if any message is currently showing a typing indicator.

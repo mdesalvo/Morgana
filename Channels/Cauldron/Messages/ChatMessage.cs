@@ -69,6 +69,12 @@ public class ChatMessage
     /// </summary>
     public string? SelectedQuickReplyId { get; set; }
 
+    /// <summary>
+    /// Set when the user typed a message while this one's quick replies were still on offer: the typed turn
+    /// answered them, so every button is disabled and none shows a checkmark.
+    /// </summary>
+    public bool QuickRepliesRetired { get; set; }
+
     /// <summary>Stylesheet class for a row the visitor wrote, matching <c>.message.user</c>.</summary>
     private const string UserRoleClass = "user";
 

@@ -96,6 +96,17 @@ public class ChatStateService : IChatStateService
     }
 
     /// <summary>
+    /// Disables the quick replies still on offer, because a typed message answered them in their place.
+    /// </summary>
+    public void RetireActiveQuickReplies()
+    {
+        // On offer are the unanswered buttons of a live message or of the last message of a resumed history:
+        // left enabled they would send a press that answers a turn the user has already moved past.
+        foreach (ChatMessage offeringMessage in ChatMessages.Where(message => message is { QuickReplies.Count: > 0, SelectedQuickReplyId: null, QuickRepliesRetired: false, IsLastHistoryMessage: not false }))
+            offeringMessage.QuickRepliesRetired = true;
+    }
+
+    /// <summary>
     /// Adds a typing indicator for the current agent.
     /// </summary>
     public void AddTypingIndicator()
@@ -258,13 +269,6 @@ public class ChatStateService : IChatStateService
     // =========================================================================
     // UI STATE QUERIES
     // =========================================================================
-
-    /// <summary>
-    /// True if any message has unselected quick replies that are still actionable
-    /// (live messages with IsLastHistoryMessage == null, or the last message of a resumed history).
-    /// </summary>
-    public bool HasActiveQuickReplies() =>
-        ChatMessages.Any(m => m is { QuickReplies.Count: > 0, SelectedQuickReplyId: null, IsLastHistoryMessage: not false });
 
     /// <summary>
     /// True if any message is currently showing a typing indicator.

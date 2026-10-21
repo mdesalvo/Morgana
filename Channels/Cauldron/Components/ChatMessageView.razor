@@ -47,7 +47,7 @@
             {
                 <QuickReplyButton Replies="@Message.QuickReplies"
                                   OnSelect="@OnQuickReplySelected"
-                                  IsDisabled="@(Message.SelectedQuickReplyId != null || Message.IsLastHistoryMessage == false)"
+                                  IsDisabled="@(Message.SelectedQuickReplyId != null || Message.QuickRepliesRetired || Message.IsLastHistoryMessage == false)"
                                   SelectedReplyId="@Message.SelectedQuickReplyId"/>
             }
 
@@ -81,6 +81,7 @@
         bool IsTyping,
         bool IsStreaming,
         string? SelectedQuickReplyId,
+        bool QuickRepliesRetired,
         List<QuickReply>? QuickReplies,
         Morgana.Contracts.RichCard? RichCard);
 
@@ -136,6 +137,7 @@
         Message.IsTyping,
         Message.IsStreaming,
         Message.SelectedQuickReplyId,
+        Message.QuickRepliesRetired,
         Message.QuickReplies,
         Message.RichCard);
 }

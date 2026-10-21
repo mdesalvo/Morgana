@@ -523,15 +523,37 @@ public sealed class TerminalUiService : ITerminalUi
                 continue;
 
             // Quick replies own the keyboard: the options are the prompt, so the arrows move the highlight and Enter sends
-            // the pick. Esc falls through to exit. A slash is the one exception since commands are not prose: it opens a
-            // command line over the options, which come back once that line is dismissed or emptied
+            // the pick. Esc falls through to exit. The free-text line lives among them as the compose entry: once it is
+            // highlighted every other key edits the line below, as the prompt does. A slash on an empty line opens a
+            // command line over the options instead, which come back once that line is dismissed or emptied
             if (quickReplyPrompt.IsOffering && key.Key != ConsoleKey.Escape && !IsCommandLineOpen())
             {
-                if (key.KeyChar == '/')
+                // Commands are not prose: a slash typed before anything else opens the command line
+                if (key.KeyChar == '/' && currentInput.Length == 0)
+                {
                     OpenCommandLine(ctx);
-                else
+                    continue;
+                }
+
+                // Up and Down walk every entry, the compose entry included, wherever the highlight stands
+                if (key.Key is ConsoleKey.UpArrow or ConsoleKey.DownArrow)
+                {
                     await HandleQuickReplyKeyAsync(ctx, key.Key);
-                continue;
+                    continue;
+                }
+
+                // On an option of the reply a printable key starts writing, so the user who simply types writes in the
+                // compose entry and the key falls through to the line; any other key is the option's to answer
+                if (!quickReplyPrompt.IsComposing)
+                {
+                    if (char.IsControl(key.KeyChar))
+                    {
+                        await HandleQuickReplyKeyAsync(ctx, key.Key);
+                        continue;
+                    }
+                    lock (renderLock)
+                        quickReplyPrompt.FocusCompose();
+                }
             }
 
             // The keys the prompt does not own fall to the default case
@@ -661,17 +683,14 @@ public sealed class TerminalUiService : ITerminalUi
             return;
         }
 
-        // Prose on a spent conversation would only be refused by Morgana and pending quick replies take none:
-        // a line edited out of command mode is dropped with a notice saying why
-        if (conversationDead || quickReplyPrompt.IsOffering)
+        // Prose on a spent conversation would only be refused by Morgana: a line edited out of command mode is dropped with a notice saying why
+        if (conversationDead)
         {
-            ShowSystemNotice(ctx, conversationDead
-                ? "The conversation is spent: type /new to start a fresh one"
-                : "Choose one of the quick replies or type / for commands", TerminalTheme.WarningColor);
+            ShowSystemNotice(ctx, "The conversation is spent: type /new to start a fresh one", TerminalTheme.WarningColor);
             return;
         }
 
-        // Anything else is a turn of the conversation
+        // Anything else is a turn of the conversation, a line written in the compose entry included: it answers the options on offer
         await SubmitTurnAsync(ctx, line.Text, () => Session.SendUserTurnAsync(line.Text));
     }
 
@@ -1759,7 +1778,7 @@ public sealed class TerminalUiService : ITerminalUi
 
         // Quick replies own the prompt for this turn, framed like the free-text prompt since picking one is still the user's turn to act
         if (quickReplyPrompt.IsOffering && !IsCommandLineOpen())
-            return FramePromptRows([.. outcomeRows, .. quickReplyPrompt.RenderPrompt(termWidth)], termWidth);
+            return FramePromptRows([.. outcomeRows, .. quickReplyPrompt.RenderPrompt(termWidth, currentInput, cursorPosition)], termWidth);
 
         // A turn in flight shows a hint instead of a prompt
         if (awaitingResponse)
