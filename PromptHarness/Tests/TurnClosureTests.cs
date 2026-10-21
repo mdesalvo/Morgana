@@ -233,7 +233,7 @@ public sealed class TurnClosureTests
 
         // Refused with the fact stated: what the action leads to and the tools that it could have led to.
         ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments("""
-            {"text":"Here you are.","awaits":"action_choice","userIsLeaving":false,"actions":[
+            {"text":"Here you are.","userIsLeaving":false,"actions":[
               {"tool":"GetInvoices","label":"📄 Invoices","value":"Show my invoices"},
               {"tool":"DownloadPdf","label":"⬇️ PDF","value":"Download it as PDF"}]}
             """)).AsTask());
@@ -242,8 +242,8 @@ public sealed class TurnClosureTests
     }
 
     [Theory]
-    [InlineData("""{"text":"Here you are.","awaits":"action_choice","userIsLeaving":false,"actions":[null]}""", "actions[0]")]
-    [InlineData("""{"text":"Here you are.","awaits":"nothing","userIsLeaving":false,"card":{"title":"t","subtitle":null,"components":[{"type":"divider"},{"type":"section","title":"s","subtitle":null,"components":[null]}]}}""", "card.components[1].components[0]")]
+    [InlineData("""{"text":"Here you are.","userIsLeaving":false,"actions":[null]}""", "actions[0]")]
+    [InlineData("""{"text":"Here you are.","userIsLeaving":false,"card":{"title":"t","subtitle":null,"components":[{"type":"divider"},{"type":"section","title":"s","subtitle":null,"components":[null]}]}}""", "card.components[1].components[0]")]
     public async Task TurnClosure_Reply_refuses_a_null_element_in_a_list(string arguments, string place)
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
@@ -309,7 +309,7 @@ public sealed class TurnClosureTests
 
         // The deepest card that the schema allows is accepted by the validation.
         object? deepestCardResult = await reply.Function.InvokeAsync(Arguments("""
-            {"text":"Here you are.","awaits":"nothing","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
+            {"text":"Here you are.","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
               {"type":"section","title":"1","subtitle":null,"components":[
                 {"type":"section","title":"2","subtitle":null,"components":[{"type":"divider"}]}]}]}}
             """));
@@ -318,7 +318,7 @@ public sealed class TurnClosureTests
         // One level deeper is what the validation refuses, so the schema does not offer it.
         ReplyUnderTest replyForDeeperCard = await ReplyUnderTest.CreateAsync(actionableToolNames: ["GetInvoices"]);
         ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => replyForDeeperCard.Function.InvokeAsync(Arguments("""
-            {"text":"Here you are.","awaits":"nothing","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
+            {"text":"Here you are.","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
               {"type":"section","title":"1","subtitle":null,"components":[
                 {"type":"section","title":"2","subtitle":null,"components":[
                   {"type":"section","title":"3","subtitle":null,"components":[{"type":"divider"}]}]}]}]}}
@@ -327,13 +327,13 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task TurnClosure_Reply_schema_is_a_contract_for_awaits_and_card()
+    public async Task TurnClosure_Reply_schema_is_a_contract_for_card()
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         JsonElement properties = reply.Function.JsonSchema.GetProperty("properties");
 
-        Assert.Equal(["nothing", "typed_answer", "action_choice"],
-            properties.GetProperty("awaits").GetProperty("enum").EnumerateArray().Select(value => value.GetString()));
+        // The model never says what the turn awaits: the framework derives it.
+        Assert.False(properties.TryGetProperty("awaits", out _));
 
         // Every component is one closed alternative, told apart by its type.
         string[] componentTypes = [.. properties.GetProperty("card").GetProperty("properties").GetProperty("components")
@@ -342,7 +342,7 @@ public sealed class TurnClosureTests
         Assert.Equal(["text_block", "key_value", "divider", "list", "section", "grid", "badge", "image"], componentTypes);
 
         string[] required = [.. reply.Function.JsonSchema.GetProperty("required").EnumerateArray().Select(name => name.GetString()!)];
-        Assert.Equal(["text", "awaits", "userIsLeaving"], required);
+        Assert.Equal(["text", "userIsLeaving"], required);
     }
 
     [Fact]
@@ -351,14 +351,16 @@ public sealed class TurnClosureTests
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
 
         object? result = await reply.Function.InvokeAsync(Arguments("""
-            {"text":"Here you are.","awaits":"action_choice","userIsLeaving":false,
+            {"text":"Here you are.","userIsLeaving":false,
              "actions":[{"tool":"GetInvoices","label":"📄 Invoices","value":"Show my invoices"}],
              "card":{"components":[{"content":"Overdue","type":"text_block"}],"title":"Account","subtitle":null}}
             """));
 
         Assert.Equal("TurnClosed", Assert.IsType<Records.FrameworkToolResult>(result).Name);
         Records.ClosingDeclaration recorded = reply.Recorded()!;
-        Assert.Equal(Records.AwaitedFromUser.ActionChoice, recorded.Awaits);
+
+        // Outside a choice step Reply records that nothing is awaited, whatever the actions it carries.
+        Assert.Equal(Records.AwaitedFromUser.Nothing, recorded.Awaits);
         Assert.Equal("GetInvoices", Assert.Single(recorded.Actions).Tool);
         Assert.IsType<TextBlockComponent>(Assert.Single(recorded.Card!.Components));
     }
@@ -370,7 +372,7 @@ public sealed class TurnClosureTests
 
         // Refused with the fact stated: the depth the card reaches and the limit; the tool loop hands it back to the model.
         ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments("""
-            {"text":"Here you are.","awaits":"nothing","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
+            {"text":"Here you are.","userIsLeaving":false,"card":{"title":"Deep","subtitle":null,"components":[
               {"type":"section","title":"1","subtitle":null,"components":[
                 {"type":"section","title":"2","subtitle":null,"components":[
                   {"type":"section","title":"3","subtitle":null,"components":[{"type":"divider"}]}]}]}]}}
@@ -386,7 +388,7 @@ public sealed class TurnClosureTests
         string dividers = string.Join(",", Enumerable.Repeat("""{"type":"divider"}""", 51));
 
         ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments(
-            """{"text":"Here you are.","awaits":"nothing","userIsLeaving":false,"card":{"title":"Long","subtitle":null,"components":[""" + dividers + "]}}")).AsTask());
+            """{"text":"Here you are.","userIsLeaving":false,"card":{"title":"Long","subtitle":null,"components":[""" + dividers + "]}}")).AsTask());
         Assert.Equal("the card holds 51 components and at most 50 are allowed", refusal.Message);
         Assert.Null(reply.Recorded());
     }
@@ -397,8 +399,8 @@ public sealed class TurnClosureTests
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync(
             actionableToolNames: ["Pay", "Postpone"], choiceStep: ("Settle", "Choose", ["Pay", "Postpone"]));
         ScriptedChatClient model = new ScriptedChatClient(
-            Call("Reply", """{"text":"Here you are.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"Pay","label":"Pay now","value":"Pay now"}]}"""),
-            Call("Reply", """{"text":"Here you are.","awaits":"action_choice","userIsLeaving":false,"actions":[{"tool":"Postpone","label":"Later","value":"Later"},{"tool":"Pay","label":"Pay now","value":"Pay now"}]}"""));
+            Call("Reply", """{"text":"Here you are.","userIsLeaving":false,"actions":[{"tool":"Pay","label":"Pay now","value":"Pay now"}]}"""),
+            Call("Reply", """{"text":"Here you are.","userIsLeaving":false,"actions":[{"tool":"Postpone","label":"Later","value":"Later"},{"tool":"Pay","label":"Pay now","value":"Pay now"}]}"""));
 
         ChatResponse turn = await RunTurnAsync(model, reply);
 
@@ -415,7 +417,7 @@ public sealed class TurnClosureTests
             actionableToolNames: ["Pay", "Postpone"], choiceStep: ("Settle", "Choose", ["Pay", "Postpone"]));
 
         // Called outside any tool loop, as the framework closes a turn: the agent imposes the step's buttons afterwards.
-        await reply.Function.InvokeAsync(Arguments("""{"text":"Which one?","awaits":"nothing","userIsLeaving":false}"""));
+        await reply.Function.InvokeAsync(Arguments("""{"text":"Which one?","userIsLeaving":false}"""));
 
         Assert.Equal("Which one?", reply.Recorded()!.Text);
     }
@@ -425,8 +427,8 @@ public sealed class TurnClosureTests
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         ScriptedChatClient model = new ScriptedChatClient(
-            Call("Reply", """{"text":"  ","awaits":"nothing","userIsLeaving":true}"""),
-            Call("Reply", """{"text":"Farewell: may your garden bloom.","awaits":"nothing","userIsLeaving":true}"""));
+            Call("Reply", """{"text":"  ","userIsLeaving":true}"""),
+            Call("Reply", """{"text":"Farewell: may your garden bloom.","userIsLeaving":true}"""));
 
         ChatResponse turn = await RunTurnAsync(model, reply);
 
@@ -447,7 +449,7 @@ public sealed class TurnClosureTests
 
         // The tool loop hands this error back to the model for repair; nothing is recorded meanwhile.
         await Assert.ThrowsAnyAsync<Exception>(() =>
-            reply.Function.InvokeAsync(Arguments($$"""{"text":"Here you are.","awaits":"nothing","userIsLeaving":false,"card":{{card}}}""")).AsTask());
+            reply.Function.InvokeAsync(Arguments($$"""{"text":"Here you are.","userIsLeaving":false,"card":{{card}}}""")).AsTask());
         Assert.Null(reply.Recorded());
     }
 
@@ -476,7 +478,7 @@ public sealed class TurnClosureTests
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         ScriptedChatClient model = new ScriptedChatClient(
             Merge(Text("Here are your invoices, written outside Reply."),
-                  Call("Reply", """{"text":"Your invoices are below.","awaits":"nothing","userIsLeaving":false}""")));
+                  Call("Reply", """{"text":"Your invoices are below.","userIsLeaving":false}""")));
 
         await RunTurnAsync(model, reply);
 
@@ -490,7 +492,7 @@ public sealed class TurnClosureTests
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         ScriptedChatClient model = new ScriptedChatClient(
-            Call("Reply", """{"text":"Here are your invoices.","awaits":"nothing","userIsLeaving":false}"""));
+            Call("Reply", """{"text":"Here are your invoices.","userIsLeaving":false}"""));
 
         await RunTurnAsync(model, reply);
 
@@ -504,8 +506,8 @@ public sealed class TurnClosureTests
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
         ScriptedChatClient model = new ScriptedChatClient(
             Merge(Merge(Text("Here are your invoices."),
-                        Call("Reply", """{"text":"Here you are.","awaits":"typed_answer","userIsLeaving":false,"card":{"components":[{"content":"Overdue","type":"text_block"}],"title":"Invoices","subtitle":null}}""")),
-                  Call("Reply", """{"text":"Here you are.","awaits":"nothing","userIsLeaving":false}""")));
+                        Call("Reply", """{"text":"First answer.","userIsLeaving":false,"card":{"components":[{"content":"Overdue","type":"text_block"}],"title":"Invoices","subtitle":null}}""")),
+                  Call("Reply", """{"text":"Here you are.","userIsLeaving":false}""")));
 
         ChatResponse turn = await RunTurnAsync(model, reply);
 
@@ -515,7 +517,7 @@ public sealed class TurnClosureTests
             contents.OfType<FunctionCallContent>().Select(call => call.CallId).Order(),
             contents.OfType<FunctionResultContent>().Select(result => result.CallId).Order());
         Assert.Single(model.Requests);
-        Assert.Equal(Records.AwaitedFromUser.TypedAnswer, reply.Recorded()!.Awaits);
+        Assert.Equal("First answer.", reply.Recorded()!.Text);
         Assert.Equal("Invoices", reply.Recorded()!.Card!.Title);
     }
 
@@ -524,7 +526,7 @@ public sealed class TurnClosureTests
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
         turn.Model.Enqueue(Merge(Text("Free words that no one reads."),
-            Call("Reply", """{"text":"Your invoices are below.","awaits":"nothing","userIsLeaving":false}""")));
+            Call("Reply", """{"text":"Your invoices are below.","userIsLeaving":false}""")));
 
         List<object> received = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Show my invoices", null));
 
@@ -538,7 +540,7 @@ public sealed class TurnClosureTests
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync(streaming: false);
         turn.Model.Enqueue(Merge(Text("Free words that no one reads."),
-            Call("Reply", """{"text":"Your invoices are below.","awaits":"nothing","userIsLeaving":false}""")));
+            Call("Reply", """{"text":"Your invoices are below.","userIsLeaving":false}""")));
 
         List<object> received = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Show my invoices", null));
 
@@ -553,8 +555,8 @@ public sealed class TurnClosureTests
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
         turn.Model.Enqueue(Answer(
             Call("ConfirmOrder", """{"orderId":"ORD-1","sealWord":"fern"}"""),
-            Call("Reply", """{"text":"Shall I confirm ORD-1?","awaits":"nothing","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Order ORD-1 is confirmed.","awaits":"nothing","userIsLeaving":false}""")));
+            Call("Reply", """{"text":"Shall I confirm ORD-1?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Order ORD-1 is confirmed.","userIsLeaving":false}""")));
 
         List<object> asked = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Confirm ORD-1", null));
 
@@ -582,21 +584,28 @@ public sealed class TurnClosureTests
     public async Task TurnClosure_Every_turn_outside_a_workflow_closes_on_the_menu_whatever_the_model_offered()
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","awaits":"nothing","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","awaits":"typed_answer","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Try again later.","awaits":"nothing","userIsLeaving":false,"actions":[{"tool":"Stock","label":"🔁 Retry","value":"Retry"}]}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Stock", "{}")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Stock", """{"item":"tulip"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Try again later.","userIsLeaving":false,"actions":[{"tool":"Stock","label":"🔁 Retry","value":"Retry"}]}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which colour?","userIsLeaving":false}""")));
 
         List<object> answered = await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
         List<object> asking = await turn.AskAsync(new Records.AgentRequest("conv-turn", "I want a plant", null));
         List<object> offering = await turn.AskAsync(new Records.AgentRequest("conv-turn", "tulip", null));
+        List<object> questioning = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Do you have it in colours?", null));
 
         // An answered turn and a turn whose model wrote buttons of its own close alike: the menu in menu order, then the escape pair.
         string[] menuButtons = ["🌼 A plant", "📦 My orders", "💬 Ask me something else", "✨ We're done, thanks"];
         Assert.Equal(menuButtons, answered.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
         Assert.Equal(menuButtons, offering.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
 
-        // A turn that asks the user to type offers no button at all, since buttons would lock the field the user types in.
+        // A turn that leaves a call waiting for the user to type offers no button at all, since buttons would lock the field the user types in.
         Assert.Null(asking.OfType<Records.AgentResponse>().Single().QuickReplies);
+
+        // A model that asks a question with no call behind it has left nothing waiting, so its turn closes on the menu like any answered one.
+        Assert.Equal(menuButtons, questioning.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
 
         // The model is never asked for buttons: Reply reaches it with no actions.
         AIFunction reply = Assert.IsAssignableFrom<AIFunction>(Assert.Single(turn.Model.Requests[0].Options!.Tools!, tool => tool.Name == "Reply"));
@@ -607,10 +616,10 @@ public sealed class TurnClosureTests
     public async Task TurnClosure_Press_of_the_button_to_stay_hands_the_user_the_floor_and_lets_go_of_a_waiting_call()
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","awaits":"nothing","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","awaits":"typed_answer","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Of course, what is it?","awaits":"nothing","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Our catalogue is online.","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Of course, what is it?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Our catalogue is online.","userIsLeaving":false}""")));
 
         // The press of the plant entry waits for the plant, which the user never types: they press the button to stay instead.
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
@@ -636,8 +645,8 @@ public sealed class TurnClosureTests
     public async Task TurnClosure_Press_of_the_button_to_leave_ends_the_stay_whatever_the_model_answered()
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","awaits":"typed_answer","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Goodbye, come back soon.","awaits":"typed_answer","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Goodbye, come back soon.","userIsLeaving":false}""")));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "I want a plant", null));
         List<object> leaving = await turn.AskAsync(new Records.AgentRequest("conv-turn", "We're done, thanks", null));
@@ -654,12 +663,12 @@ public sealed class TurnClosureTests
     public async Task TurnClosure_Pressed_menu_button_makes_its_call_and_the_model_only_answers_on_its_result(bool streaming)
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync(streaming);
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the orders.","awaits":"nothing","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"What is your customer code?","awaits":"typed_answer","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the orders.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"What is your customer code?","userIsLeaving":false}""")));
         turn.Model.Enqueue(Answer(Call("OrderHistory", """{"customerCode":"P994E"}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"You have 2 orders.","awaits":"nothing","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock too.","awaits":"nothing","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Still 2 orders.","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"You have 2 orders.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock too.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Still 2 orders.","userIsLeaving":false}""")));
 
         // The first press finds no customer code and the typed one completes the call, which the conversation then holds.
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
@@ -690,11 +699,11 @@ public sealed class TurnClosureTests
     public async Task TurnClosure_Press_lacking_a_value_asks_for_it_and_the_typed_answer_completes_the_call()
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","awaits":"nothing","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","awaits":"typed_answer","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","userIsLeaving":false}""")));
         turn.Model.Enqueue(Answer(Call("Stock", """{"item":"tulip"}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"There are 12 tulips.","awaits":"nothing","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Anything else?","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"There are 12 tulips.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Anything else?","userIsLeaving":false}""")));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "🌼 A plant", null));
@@ -726,10 +735,10 @@ public sealed class TurnClosureTests
     public async Task TurnClosure_Press_missing_a_context_value_waits_for_the_user_to_type_it()
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the orders.","awaits":"nothing","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"What is your customer code?","awaits":"typed_answer","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the orders.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"What is your customer code?","userIsLeaving":false}""")));
         turn.Model.Enqueue(Answer(Call("OrderHistory", """{"customerCode":"P994E"}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"You have 2 orders.","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"You have 2 orders.","userIsLeaving":false}""")));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "📦 My orders", null));
@@ -747,20 +756,90 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task TurnClosure_Press_waiting_for_a_value_is_let_go_by_a_turn_that_asks_for_none()
+    public async Task TurnClosure_Press_waiting_for_a_value_is_let_go_by_a_turn_that_does_not_make_it()
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","awaits":"nothing","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Our catalogue is online.","awaits":"nothing","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Hello again.","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Our catalogue is online.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Text("Seeds are in the nursery."));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Hello again.","userIsLeaving":false}""")));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
-        await turn.AskAsync(new Records.AgentRequest("conv-turn", "🌼 A plant", null));
-        await turn.AskAsync(new Records.AgentRequest("conv-turn", "tulip", null));
+        List<object> pressAnswer = await turn.AskAsync(new Records.AgentRequest("conv-turn", "🌼 A plant", null));
 
-        // Nobody was asked to type the plant, so the next message is bound to no call: every tool is on offer and none ran.
-        Assert.Contains("CancelOrder", OfferedTools(turn.Model, 2));
+        // The press lacks the plant, so the framework waits for it though the model closed the turn as answered.
+        Assert.Null(pressAnswer.OfType<Records.AgentResponse>().Single().QuickReplies);
+
+        List<object> otherAnswer = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Do you sell seeds?", null));
+
+        // The user wrote no plant and the model made no call, so the waiting call is let go and the turn closes on the menu.
+        Assert.Equal(["🌼 A plant", "📦 My orders", "💬 Ask me something else", "✨ We're done, thanks"],
+            otherAnswer.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "Hello", null));
+
+        // Nothing waits any longer, so the next message is bound to no call: every tool is on offer and none ran.
+        Assert.Contains("CancelOrder", OfferedTools(turn.Model, 3));
+        Assert.Contains("Stock", OfferedTools(turn.Model, 3));
         Assert.Empty(WorkflowTests.InventoryTools.Calls);
+    }
+
+    [Fact]
+    public async Task TurnClosure_Own_call_lacking_a_value_waits_for_the_typed_answer()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Stock", "{}")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Stock", """{"item":"tulip"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"There are 12 tulips.","userIsLeaving":false}""")));
+
+        List<object> asking = await turn.AskAsync(new Records.AgentRequest("conv-turn", "How many do you have?", null));
+
+        // The model's own call lacked the plant, so the tool did not run and the model read which value is lacking.
+        Assert.Empty(WorkflowTests.InventoryTools.Calls);
+        Assert.Contains("Stock was not run: this conversation does not hold item yet.", ResultTexts(turn.Model.Requests[1]));
+
+        // The call is left waiting, so the rest of the turn offers Reply alone and the answer carries no button.
+        Assert.Equal(["Reply"], OfferedTools(turn.Model, 1));
+        Assert.Null(asking.OfType<Records.AgentResponse>().Single().QuickReplies);
+
+        List<object> answered = await turn.AskAsync(new Records.AgentRequest("conv-turn", "tulip", null));
+
+        // The typed answer leaves the model one move, composing the waiting call; after it, the answer.
+        Assert.Equal(["Stock"], OfferedTools(turn.Model, 2));
+        Assert.Equal(["Reply"], OfferedTools(turn.Model, 3));
+        Assert.Equal(["Stock:tulip"], WorkflowTests.InventoryTools.Calls);
+
+        // The call was made, so the turn closes on the menu.
+        Assert.Equal(["🌼 A plant", "📦 My orders", "💬 Ask me something else", "✨ We're done, thanks"],
+            answered.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
+    }
+
+    [Fact]
+    public async Task TurnClosure_Own_call_missing_a_context_value_waits_for_the_typed_answer()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("OrderHistory", "{}")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"What is your customer code?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("OrderHistory", """{"customerCode":"P994E"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"You have 2 orders.","userIsLeaving":false}""")));
+
+        List<object> asking = await turn.AskAsync(new Records.AgentRequest("conv-turn", "What are my orders?", null));
+
+        // Nobody holds the customer code, so the tool did not run and the model read which value is lacking.
+        Assert.Empty(WorkflowTests.InventoryTools.Calls);
+        Assert.Contains("OrderHistory was not run: this conversation does not hold customerCode yet.", ResultTexts(turn.Model.Requests[1]));
+
+        // The call is left waiting, so the rest of the turn offers Reply alone and the answer carries no button.
+        Assert.Equal(["Reply"], OfferedTools(turn.Model, 1));
+        Assert.Null(asking.OfType<Records.AgentResponse>().Single().QuickReplies);
+
+        List<object> answered = await turn.AskAsync(new Records.AgentRequest("conv-turn", "P994E", null));
+
+        // The typed code completes the waiting call, offered alone, which the model composes from it.
+        Assert.Equal(["OrderHistory"], OfferedTools(turn.Model, 2));
+        Assert.Equal(["OrderHistory:P994E"], WorkflowTests.InventoryTools.Calls);
+        Assert.Equal("You have 2 orders.", answered.OfType<Records.AgentResponse>().Single().Response);
     }
 
     [Theory]
@@ -773,7 +852,7 @@ public sealed class TurnClosureTests
 
         // Refused with the fact stated, so the model repairs the action before any press could make a call that cannot run.
         ArgumentException refusal = await Assert.ThrowsAsync<ArgumentException>(() => reply.Function.InvokeAsync(Arguments($$"""
-            {"text":"We grow roses.","awaits":"action_choice","userIsLeaving":false,"actions":[
+            {"text":"We grow roses.","userIsLeaving":false,"actions":[
               {"tool":"Stock","label":"🌹 Roses","value":"How many roses are there?","arguments":{{arguments}}}]}
             """)).AsTask());
         Assert.Equal(reason, refusal.Message);
@@ -816,7 +895,7 @@ public sealed class TurnClosureTests
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
         turn.Model.Enqueue(Merge(Text("Free words that no one reads."),
-            Call("Reply", """{"text":"ORD-1 is in stock.","awaits":"nothing","userIsLeaving":false}""")));
+            Call("Reply", """{"text":"ORD-1 is in stock.","userIsLeaving":false}""")));
 
         List<object> received = await turn.AskAsync(new Records.PeerConsultation("conv-turn", "billing", "Is ORD-1 in stock?", null));
 
@@ -830,8 +909,8 @@ public sealed class TurnClosureTests
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
         turn.Model.Enqueue(Answer(
             Call("ConfirmOrder", """{"orderId":"ORD-1","sealWord":"fern"}"""),
-            Call("Reply", """{"text":"Shall I confirm ORD-1?","awaits":"nothing","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Order ORD-1 is confirmed.","awaits":"nothing","userIsLeaving":false}""")));
+            Call("Reply", """{"text":"Shall I confirm ORD-1?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Order ORD-1 is confirmed.","userIsLeaving":false}""")));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "Confirm ORD-1", null));
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "Go ahead", null));
@@ -1033,7 +1112,6 @@ public sealed class TurnClosureTests
             Records.ToolDefinition definition = new Records.ToolDefinition("Reply", "Gives your turn's answer.",
             [
                 new Records.ToolParameter("text", "The words of the answer.", true, ""),
-                new Records.ToolParameter("awaits", "What the turn awaits.", true, ""),
                 new Records.ToolParameter("userIsLeaving", "Whether the user is leaving.", true, ""),
                 new Records.ToolParameter("actions", "The actions offered.", false, ""),
                 new Records.ToolParameter("card", "The card.", false, "")
@@ -1044,7 +1122,7 @@ public sealed class TurnClosureTests
             MorganaToolAdapter adapter = new MorganaToolAdapter(NullLogger.Instance,
                 () => new MorganaTool.ToolContext(reply.provider, reply.session, "turn-closure"));
 
-            Func<string, Records.AwaitedFromUser, bool, List<Records.OfferedAction>?, RichCard?, Task<Records.FrameworkToolResult>> implementation = baseTool.Reply;
+            Func<string, bool, List<Records.OfferedAction>?, RichCard?, Task<Records.FrameworkToolResult>> implementation = baseTool.Reply;
             adapter.AddTool(definition.Name, implementation, definition);
             AIFunction createdReply = await adapter.CreateFunctionAsync(definition.Name);
 

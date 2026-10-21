@@ -195,9 +195,9 @@ public sealed class ExecutionApprovalTests
             ? JsonSerializer.Deserialize<Records.ClosingDeclaration>(json, new JsonSerializerOptions { AllowOutOfOrderMetadataProperties = true })
             : null;
 
-    /// <summary>A call of Reply carrying the given words and awaiting nothing.</summary>
+    /// <summary>A call of Reply carrying the given words.</summary>
     private static FunctionCallContent Reply(string callId, string text)
-        => new FunctionCallContent(callId, "Reply", new Dictionary<string, object?> { ["text"] = text, ["awaits"] = "nothing" });
+        => new FunctionCallContent(callId, "Reply", new Dictionary<string, object?> { ["text"] = text });
 
     /// <summary>One model answer made of the given contents.</summary>
     private static ChatResponse Answer(params AIContent[] contents) => new ChatResponse(new ChatMessage(ChatRole.Assistant, contents));
@@ -231,12 +231,12 @@ public sealed class ExecutionApprovalTests
         {
             ScriptedChatClient model = new ScriptedChatClient(
                 Answer(new FunctionCallContent("c1", "ConfirmOrder", new Dictionary<string, object?> { ["orderId"] = "ORD-1" }),
-                       new FunctionCallContent("r1", "Reply", new Dictionary<string, object?> { ["text"] = "Shall I confirm ORD-1?", ["awaits"] = "action_choice" })),
+                       new FunctionCallContent("r1", "Reply", new Dictionary<string, object?> { ["text"] = "Shall I confirm ORD-1?" })),
                 Answer(new TextContent("Done.")));
 
             AIFunction confirmOrder = new ApprovalRequiredAIFunction(
                 AIFunctionFactory.Create((string orderId) => { Confirmed.Add(orderId); return "confirmed"; }, "ConfirmOrder"));
-            AIFunction reply = AIFunctionFactory.Create((string text, string awaits) => { ReplyCalls.Add(text); return "Turn closed."; }, "Reply");
+            AIFunction reply = AIFunctionFactory.Create((string text) => { ReplyCalls.Add(text); return "Turn closed."; }, "Reply");
 
             agent = new FunctionInvokingChatClient(new ApprovalTurnChatClient(model, () => null, new MorganaAIContextProvider(NullLogger.Instance)))
                 .AsAIAgent(new ChatClientAgentOptions { ChatHistoryProvider = history, ChatOptions = new ChatOptions { Tools = [confirmOrder, reply] } });

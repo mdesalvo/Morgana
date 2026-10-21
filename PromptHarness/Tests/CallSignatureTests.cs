@@ -24,6 +24,20 @@ public sealed class CallSignatureTests
     /// <summary>A tool taking one value of each elementary type, every one of them required.</summary>
     private static readonly AIFunction Water = AIFunctionFactory.Create((int liters, bool urgent, double ratio) => "watered", "Water");
 
+    /// <summary>A tool whose only parameter lists the words that it takes, as a closed set does.</summary>
+    private static readonly AIFunction Sow = AIFunctionFactory.Create(
+        (Season season) => "sown", "Sow", serializerOptions: new JsonSerializerOptions { TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver(), Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) } });
+
+    /// <summary>The seasons that Sow takes.</summary>
+    private enum Season
+    {
+        /// <summary>The first sowing.</summary>
+        Spring,
+
+        /// <summary>The second sowing.</summary>
+        Autumn
+    }
+
     // =========================================================================
     // THE SERVICE: VALUES READ AS MEANT, FAULTS NAMED
     // =========================================================================
@@ -65,6 +79,15 @@ public sealed class CallSignatureTests
         Assert.Equal(fault, CallSignatureService.Fault(context));
     }
 
+    [Fact]
+    public void CallSignature_Value_outside_those_that_its_parameter_lists_is_refused_naming_the_values_it_takes()
+    {
+        FunctionInvocationContext context = ContextOf(Sow, """{"season":"winter"}""");
+
+        // A word outside the closed set that the parameter lists is refused naming the words that it takes.
+        Assert.Equal("the call passes 'season' as 'winter' while 'Sow' takes one of: spring, autumn", CallSignatureService.Fault(context));
+    }
+
     // =========================================================================
     // A CARELESS MODEL IN A WHOLE TURN
     // =========================================================================
@@ -73,7 +96,7 @@ public sealed class CallSignatureTests
     public async Task CallSignature_Careless_Reply_carrying_its_values_in_another_form_closes_the_turn_at_once()
     {
         await using TurnClosureTests.AgentTurnUnderTest turn = await TurnClosureTests.AgentTurnUnderTest.CreateAsync(streaming: false);
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"The plan has seven clauses.","awaits":"typed_answer","userIsLeaving":"False"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"The plan has seven clauses.","userIsLeaving":"False"}""")));
 
         List<object> received = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Which clauses are there?", null));
 
@@ -86,25 +109,21 @@ public sealed class CallSignatureTests
     public async Task CallSignature_Careless_Reply_breaking_its_schema_is_refused_naming_the_argument_at_fault()
     {
         await using TurnClosureTests.AgentTurnUnderTest turn = await TurnClosureTests.AgentTurnUnderTest.CreateAsync(streaming: false);
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"The plan has seven clauses.","awaits":"typed_answer","userIsLeaving":"no"}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"The plan has seven clauses.","awaits":"later","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"The plan has seven clauses.","awaits":"typed_answer"}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"The plan has seven clauses.","awaits":"typed_answer","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"The plan has seven clauses.","userIsLeaving":"no"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"The plan has seven clauses."}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"The plan has seven clauses.","userIsLeaving":false}""")));
 
         List<object> received = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Which clauses are there?", null));
 
         // Text that is no boolean is refused with the argument, the type passed and the type that Reply takes.
         Assert.Equal("[CALL NOT ACCEPTED] the call passes 'userIsLeaving' as string while 'Reply' takes it as boolean", FirstLine(LastResultText(turn.Model.Requests[1])));
 
-        // A word outside those that a parameter lists is refused naming the words that it takes.
-        Assert.Equal("[CALL NOT ACCEPTED] the call passes 'awaits' as 'later' while 'Reply' takes one of: nothing, typed_answer", FirstLine(LastResultText(turn.Model.Requests[2])));
-
         // A required argument left out is refused naming it.
-        Assert.Equal("[CALL NOT ACCEPTED] the call leaves out 'userIsLeaving', which 'Reply' requires", FirstLine(LastResultText(turn.Model.Requests[3])));
+        Assert.Equal("[CALL NOT ACCEPTED] the call leaves out 'userIsLeaving', which 'Reply' requires", FirstLine(LastResultText(turn.Model.Requests[2])));
 
         // The repaired call closes the turn with the model's own declaration.
         Assert.Equal("The plan has seven clauses.", received.OfType<Records.AgentResponse>().Single().Response);
-        Assert.Equal(4, turn.Model.Requests.Count);
+        Assert.Equal(3, turn.Model.Requests.Count);
     }
 
     [Fact]
@@ -113,7 +132,7 @@ public sealed class CallSignatureTests
         await using TurnClosureTests.AgentTurnUnderTest turn = await TurnClosureTests.AgentTurnUnderTest.CreateAsync(streaming: false);
         turn.Model.Enqueue(Answer(Call("Stock", """{"item":12}""")));
         turn.Model.Enqueue(Answer(Call("Stock", """{"item":"tulip"}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"There are 12 tulips.","awaits":"nothing","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"There are 12 tulips.","userIsLeaving":false}""")));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "How many tulips?", null));
 

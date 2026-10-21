@@ -209,7 +209,7 @@ public class MorganaAgent : MorganaActor
             // The turn is filed before the model runs, then run, then closed and recorded.
             Records.TurnOpening turnOpening = await OpenTurnAsync(req, frameworkReplies, pressedFrameworkReply, agentSpan);
             Records.TurnOutcome turnOutcome = await RunTurnAsync(turnOpening.Session, req, turnOpening.PressedCall?.Tool, senderRef, agentSpan);
-            Records.TurnClosure turnClosure = ConcludeTurn(turnOpening.Session, turnOutcome, morganaPrompt, frameworkReplies, pressedFrameworkReply, turnOpening.PressedCall?.Tool, req.IsLanding);
+            Records.TurnClosure turnClosure = ConcludeTurn(turnOpening.Session, turnOutcome, morganaPrompt, frameworkReplies, pressedFrameworkReply, turnOpening.PressedCall, req.IsLanding);
             DateTime? recordedAt = await RecordTurnAsync(turnOpening.Session, turnClosure, turnOpening.HistoryBaseline, agentSpan);
 
             // Dated as the history keeps it, so a client catching up recognises the reply it was pushed.
@@ -503,7 +503,7 @@ public class MorganaAgent : MorganaActor
     }
 
     /// <summary>Decides the text, buttons and card that the user receives, from the answer that the Reply tool recorded.</summary>
-    private Records.TurnClosure ConcludeTurn(AgentSession session, Records.TurnOutcome turnOutcome, Records.Prompt morganaPrompt, Records.FrameworkReplies frameworkReplies, QuickReply? pressedFrameworkReply, string? pressedTool, bool isLanding)
+    private Records.TurnClosure ConcludeTurn(AgentSession session, Records.TurnOutcome turnOutcome, Records.Prompt morganaPrompt, Records.FrameworkReplies frameworkReplies, QuickReply? pressedFrameworkReply, Records.PressedCall? pressedCall, bool isLanding)
     {
         // An approval asked with no word of the model's own is asked in Morgana's words.
         string llmResponseText = turnOutcome.Text;
@@ -527,6 +527,17 @@ public class MorganaAgent : MorganaActor
             { } => closingDeclaration with { Awaits = Records.AwaitedFromUser.TypedAnswer, Actions = [] },
             null => closingDeclaration
         };
+
+        // A call made in this turn still lacks a value that only the user can give and the turn asked for it: the turn awaits the
+        // typed answer whatever the model closed with. A call left waiting by an earlier turn and not made on this one (the user wrote
+        // something else and the model answered without it) does not hold the turn: the drop below lets it go.
+        if (aiContextProvider.IsPressedCallMade(session)
+             && aiContextProvider.GetPressedCall(session) is { AwaitingAnswer: true }
+             && !turnOutcome.AwaitsApproval
+             && !closingDeclaration.UserIsLeaving)
+        {
+            closingDeclaration = closingDeclaration with { Awaits = Records.AwaitedFromUser.TypedAnswer, Actions = [] };
+        }
 
         // The closure belongs to this turn alone: left in the session it would close the next turn too.
         aiContextProvider.DropVariable(session, Constants.ContextKeys.ClosingDeclaration);
@@ -573,7 +584,7 @@ public class MorganaAgent : MorganaActor
         // stays, since it can serve another one. The next turn offers every button again.
         if (closesOnMenu && !closingDeclaration.UserIsLeaving && !turnOutcome.AwaitsApproval)
             closingDeclaration = closingDeclaration.WithMenu([.. aiContextProvider.Menu.Where(action =>
-                aiContextProvider.ParametricTools.Contains(action.Tool) || !string.Equals(action.Tool, pressedTool, StringComparison.Ordinal))]);
+                aiContextProvider.ParametricTools.Contains(action.Tool) || !string.Equals(action.Tool, pressedCall?.Tool, StringComparison.Ordinal))]);
 
         // Every turn gets the buttons its closure calls for, the way out included, but two.
         (List<QuickReply>? quickReplies, bool isCompleted) = (turnOutcome.AwaitsApproval, pressedFrameworkReply) switch
@@ -593,8 +604,8 @@ public class MorganaAgent : MorganaActor
 
         // A pressed call outlives its turn only while the turn asks the user to type what it lacks. Any other closure lets it go,
         // so a later message is never bound to a call that nobody is waiting to complete.
-        if (aiContextProvider.GetPressedCall(session) is { } pressedCall
-            && !(pressedCall.AwaitingAnswer && !turnOutcome.AwaitsApproval
+        if (aiContextProvider.GetPressedCall(session) is { } sessionPressedCall
+            && !(sessionPressedCall.AwaitingAnswer && !turnOutcome.AwaitsApproval
                  && closingDeclaration is { Awaits: Records.AwaitedFromUser.TypedAnswer, UserIsLeaving: false }))
             aiContextProvider.DropPressedCall(session);
 

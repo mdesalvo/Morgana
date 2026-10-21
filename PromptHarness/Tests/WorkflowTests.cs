@@ -417,10 +417,10 @@ public sealed class WorkflowTests
     }
 
     [Theory]
-    [InlineData("""{"text":"Here is the quote.","awaits":"nothing","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"}]}""", "ConfirmOrder")]
-    [InlineData("""{"text":"Here is the quote.","awaits":"nothing","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"CancelOrder","label":"Cancel","value":"cancel"},{"tool":"Stock","label":"Stock","value":"stock"}]}""", "ConfirmOrder, CancelOrder, Stock")]
-    [InlineData("""{"text":"Here is the quote.","awaits":"nothing","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"ConfirmOrder","label":"Again","value":"again"}]}""", "ConfirmOrder, ConfirmOrder")]
-    [InlineData("""{"text":"Here is the quote.","awaits":"nothing","userIsLeaving":false}""", "")]
+    [InlineData("""{"text":"Here is the quote.","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"}]}""", "ConfirmOrder")]
+    [InlineData("""{"text":"Here is the quote.","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"CancelOrder","label":"Cancel","value":"cancel"},{"tool":"Stock","label":"Stock","value":"stock"}]}""", "ConfirmOrder, CancelOrder, Stock")]
+    [InlineData("""{"text":"Here is the quote.","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"ConfirmOrder","label":"Again","value":"again"}]}""", "ConfirmOrder, ConfirmOrder")]
+    [InlineData("""{"text":"Here is the quote.","userIsLeaving":false}""", "")]
     public async Task Workflow_Reply_at_a_choice_step_is_refused_unless_it_offers_each_step_tool_once(string refusedReply, string offeredTools)
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
@@ -435,7 +435,7 @@ public sealed class WorkflowTests
     public async Task Workflow_Reply_at_a_choice_step_records_the_actions_in_the_step_order_awaiting_an_action_choice()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
-        await agent.RunQuoteTurnAsync("""{"text":"Here is the quote.","awaits":"typed_answer","userIsLeaving":false,"actions":[{"tool":"CancelOrder","label":"Drop it","value":"drop"},{"tool":"ConfirmOrder","label":"Take it","value":"take"}]}""");
+        await agent.RunQuoteTurnAsync("""{"text":"Here is the quote.","userIsLeaving":false,"actions":[{"tool":"CancelOrder","label":"Drop it","value":"drop"},{"tool":"ConfirmOrder","label":"Take it","value":"take"}]}""");
 
         Records.ClosingDeclaration closure = ClosureOf(agent);
 
@@ -448,7 +448,7 @@ public sealed class WorkflowTests
     public async Task Workflow_A_user_who_is_leaving_is_not_held_to_the_step_actions()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
-        await agent.RunQuoteTurnAsync("""{"text":"Here is the quote.","awaits":"nothing","userIsLeaving":true}""");
+        await agent.RunQuoteTurnAsync("""{"text":"Here is the quote.","userIsLeaving":true}""");
 
         Assert.True(ClosureOf(agent).UserIsLeaving);
         Assert.DoesNotContain(agent.FunctionResults(), result => result.Contains("takes exactly one action", StringComparison.Ordinal));
@@ -551,7 +551,7 @@ public sealed class WorkflowTests
         await first.RunQuoteTurnAsync();
 
         // The model asks to confirm without passing a single value: the framework holds them.
-        first.Model.Enqueue(Answer([Call("ConfirmOrder", "{}"), Call("Reply", """{"text":"Shall I confirm?","awaits":"nothing","userIsLeaving":false}""")]));
+        first.Model.Enqueue(Answer([Call("ConfirmOrder", "{}"), Call("Reply", """{"text":"Shall I confirm?","userIsLeaving":false}""")]));
         await first.TurnAsync("confirm");
         List<ToolApprovalRequestContent> requests = [.. first.History.GetMessages(first.Session).SelectMany(message => message.Contents).OfType<ToolApprovalRequestContent>()];
         Assert.Single(requests);
@@ -591,7 +591,7 @@ public sealed class WorkflowTests
     {
         AgentUnderTest first = await AgentUnderTest.CreateAsync(PlaceOrder());
         await first.RunQuoteTurnAsync();
-        first.Model.Enqueue(Answer([Call("ConfirmOrder", "{}"), Call("Reply", """{"text":"Shall I confirm?","awaits":"nothing","userIsLeaving":false}""")]));
+        first.Model.Enqueue(Answer([Call("ConfirmOrder", "{}"), Call("Reply", """{"text":"Shall I confirm?","userIsLeaving":false}""")]));
         await first.TurnAsync("confirm");
         List<ToolApprovalRequestContent> requests = [.. first.History.GetMessages(first.Session).SelectMany(message => message.Contents).OfType<ToolApprovalRequestContent>()];
 
@@ -610,7 +610,7 @@ public sealed class WorkflowTests
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync();
         agent.Model.Enqueue(Answer([new TextContent("Shall I confirm?"), Call("ConfirmOrder", """{"orderId":"ORD-1","sealWord":"fern"}""")]));
-        agent.Model.Enqueue(Answer([Call("ConfirmOrder", """{"orderId":"ORD-1","sealWord":"fern"}"""), Call("Reply", """{"text":"Shall I confirm ORD-1?","awaits":"nothing","userIsLeaving":false}""")]));
+        agent.Model.Enqueue(Answer([Call("ConfirmOrder", """{"orderId":"ORD-1","sealWord":"fern"}"""), Call("Reply", """{"text":"Shall I confirm ORD-1?","userIsLeaving":false}""")]));
 
         await agent.TurnAsync("confirm ORD-1");
 
@@ -1073,7 +1073,7 @@ public sealed class WorkflowTests
     private const string HttpMCPServerUrl = "http://127.0.0.1:5188/";
 
     /// <summary>A Reply offering exactly the decision step's two tools.</summary>
-    private const string ExactReply = """{"text":"Here is the quote.","awaits":"nothing","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"CancelOrder","label":"Cancel","value":"cancel"}]}""";
+    private const string ExactReply = """{"text":"Here is the quote.","userIsLeaving":false,"actions":[{"tool":"ConfirmOrder","label":"Confirm","value":"confirm"},{"tool":"CancelOrder","label":"Cancel","value":"cancel"}]}""";
 
     /// <summary>The schema of Reply among the tools of a call.</summary>
     private static JsonElement ReplySchema(IEnumerable<AITool> tools)
@@ -1094,7 +1094,7 @@ public sealed class WorkflowTests
 
     /// <summary>One model answer giving the turn's answer through Reply.</summary>
     private static List<AIContent> Closing(string text)
-        => [Call("Reply", $$"""{"text":"{{text}}","awaits":"nothing","userIsLeaving":false}""")];
+        => [Call("Reply", $$"""{"text":"{{text}}","userIsLeaving":false}""")];
 
     /// <summary>One call of a tool, with its arguments as a model sends them.</summary>
     private static FunctionCallContent Call(string name, string json)

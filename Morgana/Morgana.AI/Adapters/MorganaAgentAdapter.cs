@@ -465,12 +465,46 @@ public class MorganaAgentAdapter
             : function)];
     }
 
+    /// <summary>Words the fact that a call lacks values that the user has to give, like every value that the conversation does not hold.</summary>
+    /// <param name="toolName">The tool whose call lacks the values.</param>
+    /// <param name="missingValues">The parameters that the call leaves without a value.</param>
+    private async Task<string> ComposeMissingValuesAsync(string toolName, IReadOnlyList<string> missingValues)
+        => await promptComposerService.ComposeToolInjectionAsync(
+            Constants.ToolInjections.ContextValueMissing,
+            new Dictionary<string, string>
+            {
+                [Constants.Placeholders.ToolName] = toolName,
+                [Constants.Placeholders.MissingValues] = string.Join(", ", missingValues)
+            });
+
+    /// <summary>Keeps the model's own call waiting for the user's answer and marks the turn's call as made.</summary>
+    /// <param name="context">The call that lacks a value.</param>
+    /// <param name="contextProvider">The agent's context store, where the waiting call is kept.</param>
+    /// <param name="callSession">The session of the turn in flight.</param>
+    private static async Task KeepOwnCallWaitingAsync(FunctionInvocationContext context, MorganaAIContextProvider contextProvider, AgentSession callSession)
+    {
+        // Each argument that the model passed is kept as JSON text, the form in which the session stores every bound value.
+        Dictionary<string, string> passedArguments = context.Arguments
+            .Where(argument => argument.Value is not null and not JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined })
+            .ToDictionary(
+                argument => argument.Key,
+                argument => argument.Value is JsonElement element ? element.GetRawText() : JsonSerializer.Serialize(argument.Value, Records.DefaultJsonSerializerOptions),
+                StringComparer.Ordinal);
+
+        // The call waits for the typed answer, which the model composes into it on the next turn.
+        contextProvider.SetPressedCall(callSession, new Records.PressedCall(context.Function.Name, passedArguments, AwaitingAnswer: true));
+
+        // The call has had its turn: without the mark the tool would be offered alone for the rest of this turn and the model could not Reply.
+        await contextProvider.SetVariableAsync(callSession, Constants.ContextKeys.PressedCallMade, true);
+    }
+
     /// <summary>
     /// Runs one tool call of the agent's loop, turning a refused Reply — arguments breaking their
     /// schema, a card too large, a text left empty — into the framework's answer for that event.
     /// Inside a workflow it also holds the call to the current step, binds what the step binds and
     /// feeds the result to the engine. The call that a pressed button commits the turn to is bound to the
-    /// button's arguments and kept waiting when it lacks a value that the user has to type.
+    /// button's arguments and kept waiting when it lacks a value that the user has to type; so is a call
+    /// of the model's own that lacks such a value.
     /// </summary>
     /// <param name="context">The call that the tool loop is about to run.</param>
     /// <param name="workflows">The agent's workflow machinery; <c>null</c> for an agent declaring none.</param>
@@ -494,6 +528,19 @@ public class MorganaAgentAdapter
             ? null
             : contextProvider.GetPressedCall(callSession);
         bool isPressedCall = pressedCall is not null && string.Equals(pressedCall.Tool, context.Function.Name, StringComparison.Ordinal);
+
+        // A call of the model's own can lack a value that only the user gives. A launcher or a colleague's consultation
+        // is no such call: the first starts a workflow whose steps ask for their values and the second is answered by the colleague.
+        bool isOwnCall = callSession is not null
+            && !isPressedCall
+            && context.Function is not WorkflowLauncherFunction
+            && !context.Function.Name.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.Ordinal);
+
+        // The call that a turn has left waiting for the user's answer, when the model makes it again in this turn with the value.
+        bool isRetryOfWaitingCall = isOwnCall
+            && contextProvider.IsPressedCallMade(callSession!)
+            && contextProvider.GetPressedCall(callSession!) is { AwaitingAnswer: true } waitingCall
+            && string.Equals(waitingCall.Tool, context.Function.Name, StringComparison.Ordinal);
 
         // Whatever comes of this call, the press has had it: the rest of the turn goes on to the answer.
         if (isPressedCall)
@@ -559,14 +606,8 @@ public class MorganaAgentAdapter
                 // The call waits for the user's answer, which the model composes into it on the next turn.
                 contextProvider.SetPressedCall(callSession!, pressedCall with { AwaitingAnswer = true });
 
-                // The model reads the fact of the missing values, worded like every value that the conversation does not hold.
-                return await promptComposerService.ComposeToolInjectionAsync(
-                    Constants.ToolInjections.ContextValueMissing,
-                    new Dictionary<string, string>
-                    {
-                        [Constants.Placeholders.ToolName] = context.Function.Name,
-                        [Constants.Placeholders.MissingValues] = string.Join(", ", missingValues)
-                    });
+                // The model reads the fact of the missing values.
+                return await ComposeMissingValuesAsync(context.Function.Name, missingValues);
             }
         }
 
@@ -575,6 +616,23 @@ public class MorganaAgentAdapter
         IReadOnlyList<string> normalizedParameters = callSignatureService.NormalizeArguments(context);
         if (normalizedParameters.Count > 0)
             logger.LogInformation("Call to '{Tool}' carried [{Parameters}] in another form of their type: read as declared", context.Function.Name, string.Join(", ", normalizedParameters));
+
+        // A value that the model's own call requires and that nobody supplied is the user's to give: the tool is not run and the
+        // call waits for the typed answer, exactly as a pressed call does.
+        if (isOwnCall)
+        {
+            IReadOnlyList<string> ownMissingValues = callSignatureService.MissingValues(context);
+            if (ownMissingValues.Count > 0)
+            {
+                logger.LogInformation("Call to '{Tool}' lacks [{Missing}]: the user is asked for them", context.Function.Name, string.Join(", ", ownMissingValues));
+
+                // The call is kept waiting, with the arguments that the model passed.
+                await KeepOwnCallWaitingAsync(context, contextProvider, callSession!);
+
+                // The model reads the fact of the missing values.
+                return await ComposeMissingValuesAsync(context.Function.Name, ownMissingValues);
+            }
+        }
 
         // Every call has its signature checked before it reaches its tool, whichever tool it is: one that breaks the
         // schema that the model was offered is not run, the turn stays open and the model reads the argument at fault.
@@ -605,6 +663,18 @@ public class MorganaAgentAdapter
             if (result is Records.FrameworkToolResult { Name: Constants.ToolInjections.ContextValueMissing })
                 contextProvider.SetPressedCall(callSession!, pressedCall! with { AwaitingAnswer = true });
             else
+                contextProvider.DropPressedCall(callSession!);
+        }
+
+        // A model's own call that ran waits when a context value nobody holds stopped it. One that ran with the value ends the waiting.
+        if (isOwnCall)
+        {
+            // The context resolution reports a value that the conversation lacks under this name, before the tool is reached.
+            if (result is Records.FrameworkToolResult { Name: Constants.ToolInjections.ContextValueMissing })
+                await KeepOwnCallWaitingAsync(context, contextProvider, callSession!);
+
+            // The model made the call again with the value, so no question about it is left to the user.
+            else if (isRetryOfWaitingCall)
                 contextProvider.DropPressedCall(callSession!);
         }
 

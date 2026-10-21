@@ -32,6 +32,8 @@ turns:
       # The press is the call, which lacks the plant: that is the user's to name and the catalogue never stands in for it.
       toolsCalledFirst: [CheckStockLevel]
       toolsNotCalled: [GetProductCatalog]
+      # The turn awaits the typed plant, so no button stands in front of the text box.
+      quickReplyLabels: []
       richCard: absent
       textNotEmpty: true
     judge:

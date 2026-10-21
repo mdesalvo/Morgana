@@ -1446,12 +1446,12 @@ public static class Records
         [property: Description("The arguments of the call that pressing the button makes, by the tool's parameter names: what the button names, such as the invoice or the order that it opens. Omit any value the user has not chosen yet.")] IReadOnlyDictionary<string, JsonElement>? Arguments = null);
 
     /// <summary>
-    /// The call that a pressed action button commits the agent to: made by the framework on the turn of the press,
-    /// composed by the model from the user's typed answer when the press lacked a value and the turn asked for it.
+    /// The call that waits for a value that only the user can give: the one that a pressed action button makes on the turn of the
+    /// press or one of the model's own that lacked such a value. The model composes it from the user's typed answer.
     /// </summary>
     /// <param name="Tool">The tool that the button leads to.</param>
     /// <param name="Arguments">Parameter name to the JSON text of the value that the button supplies.</param>
-    /// <param name="AwaitingAnswer">True once a turn has asked the user to type a value that the call lacks: the call is then the model's to compose.</param>
+    /// <param name="AwaitingAnswer">True once a turn has asked the user to type a value that the call lacks (a pressed button's or the model's own): the call is then the model's to compose.</param>
     public record PressedCall(
         string Tool,
         IReadOnlyDictionary<string, string> Arguments,

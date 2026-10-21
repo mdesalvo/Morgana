@@ -117,7 +117,6 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
             await reply.InvokeAsync(new AIFunctionArguments
             {
                 [Constants.Tools.ReplyParameters.Text] = JsonSerializer.SerializeToElement(lastWords),
-                [Constants.Tools.ReplyParameters.Awaits] = JsonSerializer.SerializeToElement(Records.AwaitedFromUser.Nothing),
                 [Constants.Tools.ReplyParameters.UserIsLeaving] = JsonSerializer.SerializeToElement(false)
             }, cancellationToken);
         }

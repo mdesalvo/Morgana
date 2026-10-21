@@ -32,11 +32,10 @@ public class ReplyTool : MorganaTool
         Func<ToolContext> getToolContext) : base(toolLogger, getToolContext) { }
 
     /// <summary>
-    /// Gives the agent's turn answer: its text, what it ends waiting for, whether the user is leaving, the actions
-    /// of a choice step and the card that it presents. Recorded for <c>MorganaAgent</c> to read at the end of the turn.
+    /// Gives the agent's turn answer: its text, whether the user is leaving, the actions of a choice step and the card
+    /// that it presents. Recorded for <c>MorganaAgent</c> to read at the end of the turn.
     /// </summary>
     /// <param name="text">The words of the turn's answer to the user.</param>
-    /// <param name="awaits">What the turn ends waiting for from the user.</param>
     /// <param name="userIsLeaving">True when the user's own message was a goodbye.</param>
     /// <param name="actions">The actions of a workflow's choice step, worded by the model; no other turn asks for them.</param>
     /// <param name="card">The card presenting the turn's structured data, if any.</param>
@@ -44,13 +43,11 @@ public class ReplyTool : MorganaTool
     /// The named result the tool loop turns into its authored text. A closure refused for what the model offered
     /// throws instead, with the fact that broke the rules as its message, which the tool loop hands back to the model.
     /// </returns>
-    [Description("Gives your turn's answer. Its text is the only part of the turn that reaches your reader: anything you write outside Reply is never shown. Call it exactly once, as your last action. Beside the text it carries what the turn awaits from the user, whether the user is leaving and the card.")]
+    [Description("Gives your turn's answer. Its text is the only part of the turn that reaches your reader: anything you write outside Reply is never shown. Call it exactly once, as your last action. Beside the text it carries whether the user is leaving and the card.")]
     [SystemTool]
     public async Task<Records.FrameworkToolResult> Reply(
-        [Description("Your words to your reader, written against everything the tools returned.")]
+        [Description("Your words to your reader, written against everything the tools returned. Buttons to stay or leave follow them by themselves once the request is answered, so they never ask whether the user needs anything else.")]
         [ToolParameter(Records.ToolScope.Request)] string text,
-        [Description("What the turn ends waiting for from the user. 'nothing': the request is answered. 'typed_answer': you asked for a value the user types in their own words. With 'nothing', buttons to stay or leave follow your text by themselves: your text never asks whether the user needs anything else. A request naming one of several items without saying which is not answered yet: ask which, as a typed_answer.")]
-        [ToolParameter(Records.ToolScope.Request)] Records.AwaitedFromUser awaits,
         [Description("True when the user's own message was a goodbye: thanks, we're done, declining further help, wanting to return to the main assistant.")]
         [ToolParameter(Records.ToolScope.Request)] bool userIsLeaving,
         [Description("The step's actions as buttons, worded by you.")]
@@ -98,6 +95,9 @@ public class ReplyTool : MorganaTool
         // An omitted list means the turn offers no button.
         List<Records.OfferedAction> offeredActions = actions ?? [];
 
+        // Whether the closure stands at a choice step, whose buttons are the step's own.
+        bool choiceStepOffered = false;
+
         // At a choice step the buttons are the framework's proposal: one per tool of the step, each once.
         // The model words them and nothing else, so any other set is refused and the turn stays open for repair.
         // A user who is leaving gets no button, so there is nothing to hold to the step. Only the model's own call
@@ -113,7 +113,7 @@ public class ReplyTool : MorganaTool
             // Recorded in the order the step declares, whatever order the model wrote them in.
             List<Records.OfferedAction> actionsInModelOrder = offeredActions;
             offeredActions = [.. choice.Tools.Select(tool => actionsInModelOrder.First(action => string.Equals(action.Tool, tool, StringComparison.Ordinal)))];
-            awaits = Records.AwaitedFromUser.ActionChoice;
+            choiceStepOffered = true;
         }
 
         // An action is a button that the user presses to have something done: one leading to no tool of this
@@ -127,6 +127,9 @@ public class ReplyTool : MorganaTool
         if (ctx.ActionSignatures is { } actionSignatures
              && offeredActions.Select(action => ActionArgumentsFault(action, actionSignatures)).FirstOrDefault(fault => fault is not null) is { } argumentsFault)
             throw new ArgumentException(argumentsFault);
+
+        // Nothing is awaited unless the step is a choice: a typed answer is the framework's to derive from a call that still lacks a value.
+        Records.AwaitedFromUser awaits = choiceStepOffered ? Records.AwaitedFromUser.ActionChoice : Records.AwaitedFromUser.Nothing;
 
         // The answer as the channel will deliver it: the trimmed text, the awaited input, the leaving flag and the buttons and card that survived the checks.
         Records.ClosingDeclaration closingDeclaration = new Records.ClosingDeclaration(text.Trim(), awaits, userIsLeaving, offeredActions, card);
@@ -271,8 +274,7 @@ public class ReplyTool : MorganaTool
 
     /// <summary>
     /// Presents Reply under a schema that admits exactly what its validation accepts for one agent: actions only for
-    /// an agent whose workflows hold a choice step, an awaited input that is either nothing or a typed answer and a
-    /// card nesting no deeper than the channels lay out.
+    /// an agent whose workflows hold a choice step and a card nesting no deeper than the channels lay out.
     /// </summary>
     /// <param name="reply">The Reply function as the adapter created it.</param>
     /// <param name="holdsChoiceStep">True when one of the agent's workflows has a step offering several tools.</param>
@@ -286,11 +288,6 @@ public class ReplyTool : MorganaTool
         // where a step proposes its tools: an agent with no such step never sees them.
         if (!holdsChoiceStep)
             properties.Remove(Constants.Tools.ReplyParameters.Actions);
-
-        // The model only says whether its text asks the user to write: a choice among buttons is the menu's or the step's,
-        // which closes on its actions whatever the model declared, so the schema never offers it one.
-        properties[Constants.Tools.ReplyParameters.Awaits]!.AsObject()["enum"] = new JsonArray([.. new[] { Records.AwaitedFromUser.Nothing, Records.AwaitedFromUser.TypedAnswer }
-            .Select(JsonNode (awaited) => JsonSerializer.SerializeToNode(awaited)!)]);
 
         // The card's recursive section is written out level by level, so that the schema stops at the depth the validation accepts.
         JsonObject components = properties[Constants.Tools.ReplyParameters.Card]!["properties"]!["components"]!.AsObject();
