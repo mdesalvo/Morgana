@@ -28,6 +28,7 @@ public class LLMPresenterService : IPresenterService
     /// <summary>
     /// Source of the <c>Presentation</c> prompt: the sections that ask the model for the welcome,
     /// plus the <c>Fallback</c> and <c>NoAgents</c> messages that the two non-LLM paths return verbatim.
+    /// It also yields the <c>Morgana</c> prompt, whose personality gives the welcome its voice.
     /// </summary>
     private readonly IPromptResolverService promptResolverService;
 
@@ -173,10 +174,15 @@ public class LLMPresenterService : IPresenterService
             string formattedIntents = string.Join("\n",
                 displayableIntents.Select(i => $"- {i.Name}: {i.Description}"));
 
-            // The three authored sections say how to welcome; what there is to offer arrives as the input.
+            // The welcome is the first thing Morgana says, so it speaks in the voice her agents speak in.
+            // Guard, classifier and channel adapter never borrow it: they answer the framework, not the user.
+            Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
+
+            // The authored sections say how to welcome and Morgana's personality how it sounds; what there is to offer arrives as the input.
             string presentationSystemPrompt =
                 string.Join("\n\n",
                     Records.Prompt.Labeled(Constants.SectionLabels.Target, presentationPrompt.Target),
+                    Records.Prompt.Labeled(Constants.SectionLabels.Personality, morganaPrompt.Personality),
                     Records.Prompt.Labeled(Constants.SectionLabels.Instructions, presentationPrompt.Instructions),
                     Records.Prompt.Labeled(Constants.SectionLabels.Formatting, presentationPrompt.Formatting));
 
