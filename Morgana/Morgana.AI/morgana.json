@@ -58,7 +58,7 @@
             },
             {
               "Name": "LandingDeclaration",
-              "Content": "[THE USER HAS JUST CHOSEN YOU]\nYour text this turn is your introduction: a few sentences of your own on what the user can get from you here. The buttons the user receives beneath your text, in order: ((actions))."
+              "Content": "[THE USER HAS JUST CHOSEN YOU]\nYour text this turn opens your part of the conversation. The user has already been greeted and knows who you are, so your text goes straight to what the user can get from you here, in a few sentences of your own. The buttons the user receives beneath your text, in order: ((actions))."
             }
           ]
         },
