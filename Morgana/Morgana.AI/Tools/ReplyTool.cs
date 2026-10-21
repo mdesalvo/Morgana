@@ -46,7 +46,7 @@ public class ReplyTool : MorganaTool
     [Description("Gives your turn's answer. Its text is the only part of the turn that reaches your reader: anything you write outside Reply is never shown. Call it exactly once, as your last action. Beside the text it carries whether the user is leaving and the card.")]
     [SystemTool]
     public async Task<Records.FrameworkToolResult> Reply(
-        [Description("Your words to your reader, written against everything the tools returned. Buttons to stay or leave follow them by themselves once the request is answered, so they never ask whether the user needs anything else.")]
+        [Description("Your words to your reader, written against everything the tools returned. A button to leave follows them by themselves once the request is answered, so they never ask whether the user needs anything else.")]
         [ToolParameter(Records.ToolScope.Request)] string text,
         [Description("True when the user's own message was a goodbye: thanks, we're done, declining further help, wanting to return to the main assistant.")]
         [ToolParameter(Records.ToolScope.Request)] bool userIsLeaving,

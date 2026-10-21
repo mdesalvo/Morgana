@@ -91,19 +91,19 @@ public sealed class ExpectSpec
     public List<string>? NoQuickReplyIds { get; init; }
 
     /// <summary>
-    /// Assert that the escape options are not the entire emission: the framework appends them to
+    /// Assert that the way out is not the entire emission: the framework appends it to
     /// offered actions and never sends them alone on a turn that awaits the user.
     /// </summary>
     /// <remarks>
-    /// Opt-in and deliberately so: a turn that has genuinely concluded carries exactly the closure
-    /// pair (whose ids are the same two) and nothing else. The
-    /// assertion belongs on turns that declare continuation, where a standalone escape pair would
+    /// Opt-in and deliberately so: a turn that has genuinely concluded carries exactly the way out
+    /// and nothing else. The
+    /// assertion belongs on turns that declare continuation, where a standalone way out would
     /// gate a lawful in-progress step behind an exit button.
     /// </remarks>
     public bool? NoStandaloneEscapeOptions { get; init; }
 
     /// <summary>
-    /// The other half of the same rule: whenever the turn emits primary options, the escape pair
+    /// The other half of the same rule: whenever the turn emits primary options, the way out
     /// must be appended to them, so the user is never trapped inside a list of choices.
     /// </summary>
     public bool? EscapeOptionsWithPrimary { get; init; }

@@ -158,7 +158,7 @@ public static class Constants
         /// <summary>The texts that the model reads as part of a tool, authored rather than hard-coded (see <see cref="Constants.ToolInjections"/>).</summary>
         public const string ToolInjections = "ToolInjections";
 
-        /// <summary>The buttons the framework adds to let the user stay with an agent or leave it, authored as data.</summary>
+        /// <summary>The buttons the framework adds beside an agent's turn (the way out and the approval pair), authored as data.</summary>
         public const string FrameworkReplies = "FrameworkReplies";
 
         /// <summary>The texts that the framework says to the user in its own voice, each fetched by name (see <see cref="Constants.Messages"/>).</summary>
@@ -182,11 +182,8 @@ public static class Constants
     /// </summary>
     public static class FrameworkReplySets
     {
-        /// <summary>Offered when the turn answered the request and awaits nothing.</summary>
-        public const string Closure = "Closure";
-
-        /// <summary>Appended to the actions that a turn offers, so the user is never trapped in them.</summary>
-        public const string Escape = "Escape";
+        /// <summary>The button that ends the user's stay with an agent and hands the conversation back to Morgana.</summary>
+        public const string BackToMorgana = "BackToMorgana";
 
         /// <summary>Offered when the turn asks to run a tool that needs the user's approval.</summary>
         public const string Approval = "Approval";

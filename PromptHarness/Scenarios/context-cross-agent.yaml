@@ -17,7 +17,7 @@ turns:
       toolsCalled: [GetInvoices]
       textNotEmpty: true
 
-  # What the exit_agent quick reply sends. It releases the active agent so the next message goes
+  # What the back_to_morgana quick reply sends. It releases the active agent so the next message goes
   # back through classification.
   - say: "We're done, thanks"
     expect:

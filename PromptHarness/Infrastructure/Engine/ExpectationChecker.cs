@@ -16,9 +16,8 @@ namespace PromptHarness.Infrastructure.Engine;
 /// </summary>
 public static partial class ExpectationChecker
 {
-    /// <summary>The two ids the framework reserves for escaping a flow, declared once in <c>morgana.json</c>.</summary>
-    private static readonly HashSet<string> EscapeOptionIds =
-        new HashSet<string>(["continue_agent", "exit_agent"], StringComparer.OrdinalIgnoreCase);
+    /// <summary>The id of the one button the framework adds to leave an agent, declared once in <c>morgana.json</c>.</summary>
+    private const string BackToMorganaId = "back_to_morgana";
 
     /// <summary>
     /// Matches the reducer's line for a history folded into its summary, written only on the turn a fold
@@ -199,26 +198,25 @@ public static partial class ExpectationChecker
                 failures.Add($"noQuickReplyIds: '{id}' present but must not be");
         }
 
-        // The two escape-pair rules are complementary halves of one rule the framework applies to an
-        // agent's closure: this one fails when the escape pair is emitted alone, with
+        // The two way-out rules are complementary halves of one rule the framework applies to an
+        // agent's closure: this one fails when the way out is emitted alone, with
         // no primary option beside it — "must not stand alone" — see the property's own <remarks>
         // for why it's opt-in rather than always checked.
         if (expect.NoStandaloneEscapeOptions is true
             && quickReplies.Count > 0
-            && quickReplies.All(reply => EscapeOptionIds.Contains(reply.Id)))
+            && quickReplies.All(reply => string.Equals(reply.Id, BackToMorganaId, StringComparison.OrdinalIgnoreCase)))
             failures.Add(
-                $"noStandaloneEscapeOptions: the turn emitted only the escape pair ({FormatIds(quickReplies)}) "
+                $"noStandaloneEscapeOptions: the turn emitted only the way out ({FormatIds(quickReplies)}) "
               + "with no primary option beside it");
 
-        // The other half: whenever there's at least one non-escape (primary) option, both escape
-        // ids must also be present — "must always be appended to a choice list" — checked by
-        // negating EscapeOptionIds.All, i.e. failing when the pair is *not* complete.
+        // The other half: whenever there's at least one primary option, the way out must also be
+        // present — "must always be appended to a choice list" — so the user is never trapped in it.
         if (expect.EscapeOptionsWithPrimary is true
-            && quickReplies.Any(reply => !EscapeOptionIds.Contains(reply.Id))
-            && !EscapeOptionIds.All(id => quickReplies.Any(reply => string.Equals(reply.Id, id, StringComparison.OrdinalIgnoreCase))))
+            && quickReplies.Any(reply => !string.Equals(reply.Id, BackToMorganaId, StringComparison.OrdinalIgnoreCase))
+            && !quickReplies.Any(reply => string.Equals(reply.Id, BackToMorganaId, StringComparison.OrdinalIgnoreCase)))
             failures.Add(
                 $"escapeOptionsWithPrimary: the turn offered primary options ({FormatIds(quickReplies)}) "
-              + "without appending the escape pair, trapping the user in the list");
+              + "without appending the way out, trapping the user in the list");
     }
 
     /// <summary>Presence or absence of a rich card.</summary>

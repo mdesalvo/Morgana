@@ -23,7 +23,6 @@ turns:
         - "🔎 A specific invoice"
         - "💰 What I still owe"
         - "💳 Payments I made"
-        - "💬 Ask me something else"
         - "✨ We're done, thanks"
       richCard: absent
       textNotEmpty: true
@@ -49,7 +48,6 @@ turns:
         - "🔎 A specific invoice"
         - "💰 What I still owe"
         - "💳 Payments I made"
-        - "💬 Ask me something else"
         - "✨ We're done, thanks"
       textNotEmpty: true
 
@@ -63,6 +61,5 @@ turns:
         - "🧾 My recent invoices"
         - "🔎 A specific invoice"
         - "💳 Payments I made"
-        - "💬 Ask me something else"
         - "✨ We're done, thanks"
       textNotEmpty: true

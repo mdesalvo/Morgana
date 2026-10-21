@@ -38,10 +38,7 @@ public sealed class TurnClosureTests
 {
     /// <summary>The framework replies as morgana.json authors them, ids being what the channels act on.</summary>
     private static readonly Records.FrameworkReplies FrameworkReplies = new Records.FrameworkReplies(
-        [new QuickReply("continue_agent", "🔮 I still need you", "I have another question for you"),
-         new QuickReply("exit_agent", "✨ We're done, thanks", "We're done, thanks", true)],
-        [new QuickReply("continue_agent", "💬 Ask me something else", "I want to ask you something else"),
-         new QuickReply("exit_agent", "✨ We're done, thanks", "We're done, thanks", true)]);
+        [new QuickReply("back_to_morgana", "✨ We're done, thanks", "We're done, thanks", true)]);
 
     [Theory]
     // A departing user is let go: no button and the conversation returns to Morgana, whatever else was declared.
@@ -50,12 +47,12 @@ public sealed class TurnClosureTests
     // A typed answer is asked with no button at all, the way out included: buttons would lock the field the user types in.
     [InlineData("typed_answer", false, false, "", false)]
     [InlineData("typed_answer", false, true, "", false)]
-    // Offered actions carry the escape pair after them.
-    [InlineData("action_choice", false, true, "GetInvoices#1,continue_agent,exit_agent", false)]
-    [InlineData("nothing", false, true, "GetInvoices#1,continue_agent,exit_agent", false)]
-    // An answered request carries the closure pair and the agent stays until the user leaves.
-    [InlineData("nothing", false, false, "continue_agent,exit_agent", false)]
-    [InlineData("action_choice", false, false, "continue_agent,exit_agent", false)]
+    // Offered actions carry the way out after them.
+    [InlineData("action_choice", false, true, "GetInvoices#1,back_to_morgana", false)]
+    [InlineData("nothing", false, true, "GetInvoices#1,back_to_morgana", false)]
+    // An answered request carries the way out and the agent stays until the user leaves.
+    [InlineData("nothing", false, false, "back_to_morgana", false)]
+    [InlineData("action_choice", false, false, "back_to_morgana", false)]
     public void TurnClosure_Framework_decides_the_framework_replies_from_the_closure(
         string awaits, bool userIsLeaving, bool withAction, string buttonIds, bool handsBack)
     {
@@ -74,7 +71,7 @@ public sealed class TurnClosureTests
     {
         Records.ClosingDeclaration closingDeclaration = Deserialize("""{"text":"Here you are.","awaits":"nothing","userIsLeaving":false,"actions":[],"card":null}""");
 
-        (List<QuickReply>? quickReplies, bool handsBack) = closingDeclaration.ToDelivery(new Records.FrameworkReplies([], []));
+        (List<QuickReply>? quickReplies, bool handsBack) = closingDeclaration.ToDelivery(new Records.FrameworkReplies([]));
 
         // With no button to leave by, staying in service would trap the user with this agent.
         Assert.Null(quickReplies);
@@ -92,7 +89,7 @@ public sealed class TurnClosureTests
 
         List<QuickReply> buttons = closingDeclaration.ToDelivery(FrameworkReplies).QuickReplies!;
 
-        Assert.Equal(["ConfirmOrder#1", "ConfirmOrder#2", "continue_agent", "exit_agent"], buttons.Select(button => button.Id));
+        Assert.Equal(["ConfirmOrder#1", "ConfirmOrder#2", "back_to_morgana"], buttons.Select(button => button.Id));
         Assert.Equal("Confirm my order", buttons[0].Value);
     }
 
@@ -114,25 +111,25 @@ public sealed class TurnClosureTests
         Records.ClosingDeclaration presented = closingDeclaration.WithMenu(menu);
         List<QuickReply> buttons = presented.ToDelivery(FrameworkReplies).QuickReplies!;
 
-        // The two menu buttons come first and the framework's escape pair follows; the card that presents the turn stays.
-        Assert.Equal(["GetInvoices#1", "OpenAccount#2", "continue_agent", "exit_agent"], buttons.Select(button => button.Id));
-        Assert.Equal(["Invoices", "Open an account", "💬 Ask me something else", "✨ We're done, thanks"], buttons.Select(button => button.Label));
+        // The two menu buttons come first and the framework's way out follows; the card that presents the turn stays.
+        Assert.Equal(["GetInvoices#1", "OpenAccount#2", "back_to_morgana"], buttons.Select(button => button.Id));
+        Assert.Equal(["Invoices", "Open an account", "✨ We're done, thanks"], buttons.Select(button => button.Label));
         Assert.NotNull(presented.Card);
         Assert.Equal(Records.AwaitedFromUser.ActionChoice, presented.Awaits);
     }
 
     [Fact]
-    public void TurnClosure_Empty_menu_closes_the_turn_with_the_closure_pair()
+    public void TurnClosure_Empty_menu_closes_the_turn_with_the_way_out()
     {
         Records.ClosingDeclaration closingDeclaration = Deserialize("""{"text":"Here you are.","awaits":"typed_answer","userIsLeaving":false,"actions":[],"card":null}""");
 
         Records.ClosingDeclaration presented = closingDeclaration.WithMenu([]);
         (List<QuickReply>? quickReplies, bool handsBack) = presented.ToDelivery(FrameworkReplies);
 
-        // An agent with nothing to offer awaits nothing and keeps the conversation behind the closure buttons.
+        // An agent with nothing to offer awaits nothing and keeps the conversation behind the way out.
         Assert.Equal(Records.AwaitedFromUser.Nothing, presented.Awaits);
-        Assert.Equal(["continue_agent", "exit_agent"], quickReplies!.Select(button => button.Id));
-        Assert.Equal(["🔮 I still need you", "✨ We're done, thanks"], quickReplies!.Select(button => button.Label));
+        Assert.Equal(["back_to_morgana"], quickReplies!.Select(button => button.Id));
+        Assert.Equal(["✨ We're done, thanks"], quickReplies!.Select(button => button.Label));
         Assert.False(handsBack);
     }
 
@@ -221,7 +218,6 @@ public sealed class TurnClosureTests
 
     [Theory]
     [InlineData("ConfirmOrder#1", "ConfirmOrder")]
-    [InlineData("continue_agent", null)]
     [InlineData("approve_action", null)]
     public void TurnClosure_Pressed_button_names_the_tool_its_action_leads_to(string buttonId, string? tool)
         => Assert.Equal(tool, Records.ClosingDeclaration.ActionTool(buttonId));
@@ -563,7 +559,7 @@ public sealed class TurnClosureTests
         // The approval turn delivers the held Reply's text with the framework's approval buttons and nothing else.
         Records.AgentResponse approval = asked.OfType<Records.AgentResponse>().Single();
         Assert.Equal("Shall I confirm ORD-1?", approval.Response);
-        Assert.Equal(["approve_action", "reject_action", "continue_agent", "exit_agent"], approval.QuickReplies!.Select(button => button.Id));
+        Assert.Equal(["approve_action", "reject_action", "back_to_morgana"], approval.QuickReplies!.Select(button => button.Id));
         Assert.Empty(WorkflowTests.InventoryTools.Calls);
 
         // The message that asked for approval is the last of the history and carries what the user was shown,
@@ -596,8 +592,8 @@ public sealed class TurnClosureTests
         List<object> offering = await turn.AskAsync(new Records.AgentRequest("conv-turn", "tulip", null));
         List<object> questioning = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Do you have it in colours?", null));
 
-        // An answered turn and a turn whose model wrote buttons of its own close alike: the menu in menu order, then the escape pair.
-        string[] menuButtons = ["🌼 A plant", "📦 My orders", "💬 Ask me something else", "✨ We're done, thanks"];
+        // An answered turn and a turn whose model wrote buttons of its own close alike: the menu in menu order, then the way out.
+        string[] menuButtons = ["🌼 A plant", "📦 My orders", "✨ We're done, thanks"];
         Assert.Equal(menuButtons, answered.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
         Assert.Equal(menuButtons, offering.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
 
@@ -610,35 +606,6 @@ public sealed class TurnClosureTests
         // The model is never asked for buttons: Reply reaches it with no actions.
         AIFunction reply = Assert.IsAssignableFrom<AIFunction>(Assert.Single(turn.Model.Requests[0].Options!.Tools!, tool => tool.Name == "Reply"));
         Assert.False(reply.JsonSchema.GetProperty("properties").TryGetProperty("actions", out _));
-    }
-
-    [Fact]
-    public async Task TurnClosure_Press_of_the_button_to_stay_hands_the_user_the_floor_and_lets_go_of_a_waiting_call()
-    {
-        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Of course, what is it?","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Our catalogue is online.","userIsLeaving":false}""")));
-
-        // The press of the plant entry waits for the plant, which the user never types: they press the button to stay instead.
-        await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
-        await turn.AskAsync(new Records.AgentRequest("conv-turn", "🌼 A plant", null));
-        List<object> staying = await turn.AskAsync(new Records.AgentRequest("conv-turn", "I want to ask you something else", null));
-
-        // The turn answering the press offers nothing to press, so the way out is never offered twice in a row.
-        Records.AgentResponse floor = staying.OfType<Records.AgentResponse>().Single();
-        Assert.Null(floor.QuickReplies);
-        Assert.False(floor.IsCompleted);
-
-        // The press was no plant: the waiting call was let go, so the model read every tool and nothing ran.
-        Assert.Contains("Stock", OfferedTools(turn.Model, 2));
-        Assert.Empty(WorkflowTests.InventoryTools.Calls);
-
-        // What the user writes next is an ordinary request, answered with the menu and the way out.
-        List<object> asked = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Do you sell seeds?", null));
-        Assert.Equal(["🌼 A plant", "📦 My orders", "💬 Ask me something else", "✨ We're done, thanks"],
-            asked.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
     }
 
     [Fact]
@@ -676,12 +643,12 @@ public sealed class TurnClosureTests
         List<object> pressAnswer = await turn.AskAsync(new Records.AgentRequest("conv-turn", "P994E", null));
 
         // The orders are the conversation's customer's alone, so the turn that answers the press leaves its button off the menu.
-        Assert.Equal(["🌼 A plant", "💬 Ask me something else", "✨ We're done, thanks"],
+        Assert.Equal(["🌼 A plant", "✨ We're done, thanks"],
             pressAnswer.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
 
         // An ordinary request answers no press, so it offers the button again.
         List<object> nextAnswer = await turn.AskAsync(new Records.AgentRequest("conv-turn", "What else do you keep?", null));
-        Assert.Equal(["🌼 A plant", "📦 My orders", "💬 Ask me something else", "✨ We're done, thanks"],
+        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
             nextAnswer.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
         List<object> pressed = await turn.AskAsync(new Records.AgentRequest("conv-turn", "📦 My orders", null));
 
@@ -721,7 +688,7 @@ public sealed class TurnClosureTests
         Assert.Equal(["Stock:tulip"], WorkflowTests.InventoryTools.Calls);
 
         // The plant is the user's to give, so the turn that answers the press still offers it for another plant.
-        Assert.Equal(["🌼 A plant", "📦 My orders", "💬 Ask me something else", "✨ We're done, thanks"],
+        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
             pressAnswer.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "and roses?", null));
@@ -773,7 +740,7 @@ public sealed class TurnClosureTests
         List<object> otherAnswer = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Do you sell seeds?", null));
 
         // The user wrote no plant and the model made no call, so the waiting call is let go and the turn closes on the menu.
-        Assert.Equal(["🌼 A plant", "📦 My orders", "💬 Ask me something else", "✨ We're done, thanks"],
+        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
             otherAnswer.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "Hello", null));
@@ -811,7 +778,7 @@ public sealed class TurnClosureTests
         Assert.Equal(["Stock:tulip"], WorkflowTests.InventoryTools.Calls);
 
         // The call was made, so the turn closes on the menu.
-        Assert.Equal(["🌼 A plant", "📦 My orders", "💬 Ask me something else", "✨ We're done, thanks"],
+        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
             answered.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
     }
 

@@ -65,31 +65,10 @@
         {
           "FrameworkReplies": [
             {
-              "Name": "Closure",
+              "Name": "BackToMorgana",
               "Replies": [
                 {
-                  "id": "continue_agent",
-                  "label": "🔮 I still need you",
-                  "value": "I have another question for you"
-                },
-                {
-                  "id": "exit_agent",
-                  "label": "✨ We're done, thanks",
-                  "value": "We're done, thanks",
-                  "termination": true
-                }
-              ]
-            },
-            {
-              "Name": "Escape",
-              "Replies": [
-                {
-                  "id": "continue_agent",
-                  "label": "💬 Ask me something else",
-                  "value": "I want to ask you something else"
-                },
-                {
-                  "id": "exit_agent",
+                  "id": "back_to_morgana",
                   "label": "✨ We're done, thanks",
                   "value": "We're done, thanks",
                   "termination": true

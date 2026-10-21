@@ -224,9 +224,9 @@ turns:
       agentCompleted: false
       classified: false               # whether a morgana.classifier span was seen in the turn
       quickReplies: none          # none | any | count:N | min:N
-      quickReplyIds: [continue_agent]
-      quickReplyLabels: [Invoices, Stay]   # the delivered labels, exactly and in order
-      noQuickReplyIds: [exit_agent]
+      quickReplyIds: [back_to_morgana]
+      quickReplyLabels: [Invoices, Leave]   # the delivered labels, exactly and in order
+      noQuickReplyIds: [approve_action]
       richCard: absent            # absent | present
       toolsCalled: [GetInvoices]
       toolsNotCalled: [GetPaymentHistory]

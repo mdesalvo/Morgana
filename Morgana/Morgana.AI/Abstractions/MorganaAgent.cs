@@ -197,13 +197,13 @@ public class MorganaAgent : MorganaActor
 
         try
         {
-            // The buttons that let the user stay, leave or approve are the framework's, worded in morgana.json.
+            // The buttons that let the user leave or approve are the framework's, worded in morgana.json.
             Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
             Records.FrameworkReplies frameworkReplies = Records.FrameworkReplies.From(
                 morganaPrompt.GetAdditionalPropertyOrDefault<List<Records.FrameworkReplySet>>(Constants.PromptProperties.FrameworkReplies, []));
 
-            // A press of the button to stay or of the one to leave settles how the turn closes, whatever the model answers.
-            QuickReply? pressedFrameworkReply = frameworkReplies.Closure.Concat(frameworkReplies.Escape)
+            // A press of the button to leave settles how the turn closes, whatever the model answers.
+            QuickReply? pressedFrameworkReply = frameworkReplies.BackToMorgana
                 .FirstOrDefault(button => string.Equals(button.Value, req.Content?.Trim(), StringComparison.OrdinalIgnoreCase));
 
             // The turn is filed before the model runs, then run, then closed and recorded.
@@ -334,7 +334,7 @@ public class MorganaAgent : MorganaActor
 
         // The call that this message commits the turn to: the press of an action that the last turn delivered or, failing
         // that, an earlier press still waiting for the user's typed answer. A landing opens a stay with the agent and commits
-        // it to nothing, as the press of a button to stay or leave does: offered beside a question, it lets go of the call
+        // it to nothing, as the press of the button to leave does: offered beside a question, it lets go of the call
         // still waiting for a typed value. The press is already the user's consent to the call.
         Records.PressedCall? pressedCall = req.IsLanding || pressedFrameworkReply is not null ? null : PressedCallOf(aiAgentSession, req.Content);
 
@@ -520,13 +520,8 @@ public class MorganaAgent : MorganaActor
             closingDeclaration = new Records.ClosingDeclaration(turnOutcome.Text, Records.AwaitedFromUser.Nothing, false, [], null);
 
         // A press of the button to leave ends the stay whatever the model answered, so the user is back with Morgana.
-        // A press of the button to stay hands the user the floor: the turn awaits free text and offers nothing to press.
-        closingDeclaration = pressedFrameworkReply switch
-        {
-            { Termination: true } => closingDeclaration with { UserIsLeaving = true },
-            { } => closingDeclaration with { Awaits = Records.AwaitedFromUser.TypedAnswer, Actions = [] },
-            null => closingDeclaration
-        };
+        if (pressedFrameworkReply is { Termination: true })
+            closingDeclaration = closingDeclaration with { UserIsLeaving = true };
 
         // A call made in this turn still lacks a value that only the user can give and the turn asked for it: the turn awaits the
         // typed answer whatever the model closed with. A call left waiting by an earlier turn and not made on this one (the user wrote
@@ -586,15 +581,13 @@ public class MorganaAgent : MorganaActor
             closingDeclaration = closingDeclaration.WithMenu([.. aiContextProvider.Menu.Where(action =>
                 aiContextProvider.ParametricTools.Contains(action.Tool) || !string.Equals(action.Tool, pressedCall?.Tool, StringComparison.Ordinal))]);
 
-        // Every turn gets the buttons its closure calls for, the way out included, but two.
-        (List<QuickReply>? quickReplies, bool isCompleted) = (turnOutcome.AwaitsApproval, pressedFrameworkReply) switch
+        // Every turn gets the buttons its closure calls for, the way out included.
+        (List<QuickReply>? quickReplies, bool isCompleted) = turnOutcome.AwaitsApproval switch
         {
             // A turn waiting for an approval offers the two answers to it, then the way out, whose press declines it as anything else does.
-            (true, _) => ([.. frameworkReplies.Approval ?? [], .. frameworkReplies.Escape], false),
-            // The turn answering a press of the button to stay offers no button: offering the way out again would only loop it.
-            (false, { Termination: not true }) => (null, false),
+            true => ([.. frameworkReplies.Approval ?? [], .. frameworkReplies.BackToMorgana], false),
             // Any other turn is delivered as its closure says.
-            _ => closingDeclaration.ToDelivery(frameworkReplies)
+            false => closingDeclaration.ToDelivery(frameworkReplies)
         };
         // An approval question carries no card: the user is asked one thing.
         RichCard? richCard = turnOutcome.AwaitsApproval ? null : closingDeclaration.Card;
@@ -757,9 +750,9 @@ public class MorganaAgent : MorganaActor
             // The colleague's answer is the text of its Reply: whatever else it wrote never leaves the session.
             string consultationAnswer = closingDeclaration?.Text.Trim() ?? string.Empty;
 
-            // The colleague's own actions and nothing of the framework's: staying or leaving is the
+            // The colleague's own actions and nothing of the framework's: leaving is the
             // asking agent's user's choice, never the colleague's.
-            List<QuickReply>? quickReplies = closingDeclaration?.ToDelivery(new Records.FrameworkReplies([], [])).QuickReplies;
+            List<QuickReply>? quickReplies = closingDeclaration?.ToDelivery(new Records.FrameworkReplies([])).QuickReplies;
             RichCard? richCard = closingDeclaration?.Card;
 
             // A baseline of 0 where a user turn passes its own: this session was created for the

@@ -1571,18 +1571,16 @@ public static class Records
     }
 
     /// <summary>
-    /// The two pairs of buttons the framework adds to an agent's turn so the user can stay or leave,
-    /// authored in morgana.json. Never chosen by the model: which pair a turn gets follows from its closure.
+    /// The buttons the framework adds to an agent's turn, authored in morgana.json: the way out and the approval pair.
+    /// Never chosen by the model: which of them a turn gets follows from its closure.
     /// </summary>
-    /// <param name="Closure">Offered when the turn answered the request and awaits nothing.</param>
-    /// <param name="Escape">Appended to the actions that a turn offers, so the user is never trapped in them.</param>
+    /// <param name="BackToMorgana">The button that ends the stay with the agent, appended to the actions that a turn offers and alone on an answered request.</param>
     /// <param name="Approval">
     /// Offered when the turn asks to run a tool that needs the user's approval: the first approves it,
     /// the second declines it. Pressing anything else or typing declines it too.
     /// </param>
     public record FrameworkReplies(
-        List<QuickReply> Closure,
-        List<QuickReply> Escape,
+        List<QuickReply> BackToMorgana,
         List<QuickReply>? Approval = null)
     {
         /// <summary>Gathers the authored sets by name; a set that the prompt does not declare is empty (null for the approval pair).</summary>
@@ -1596,10 +1594,9 @@ public static class Records
             List<QuickReply>? Find(string name)
                 => declaredSets.FirstOrDefault(set => string.Equals(set.Name, name, StringComparison.OrdinalIgnoreCase))?.Replies;
 
-            // Closure and escape default to empty so that a delivery never meets a null; the approval pair stays null, which means that no approval is offered.
+            // The way out defaults to empty so that a delivery never meets a null; the approval pair stays null, which means that no approval is offered.
             return new FrameworkReplies(
-                Find(Constants.FrameworkReplySets.Closure) ?? [],
-                Find(Constants.FrameworkReplySets.Escape) ?? [],
+                Find(Constants.FrameworkReplySets.BackToMorgana) ?? [],
                 Find(Constants.FrameworkReplySets.Approval));
         }
     }
@@ -1710,11 +1707,11 @@ public static class Records
         /// </summary>
         /// <remarks>
         /// A departing user gets no button and the conversation returns to Morgana. A typed answer is
-        /// asked with no button, so nothing gates it. Offered actions carry the escape pair; an answered
-        /// request carries the closure pair, through which the user stays or leaves. Without authored
-        /// closure buttons an answered request has no way to be left, so it hands the conversation back.
+        /// asked with no button, so nothing gates it. Offered actions carry the way out beside them; an answered
+        /// request carries it alone. Without an authored way out an answered request has no way to be left,
+        /// so it hands the conversation back.
         /// </remarks>
-        /// <param name="frameworkReplies">The authored closure and escape pairs.</param>
+        /// <param name="frameworkReplies">The authored way out.</param>
         public (List<QuickReply>? QuickReplies, bool HandsBack) ToDelivery(FrameworkReplies frameworkReplies)
         {
             // A user who says goodbye gets no button and the agent hands the conversation back.
@@ -1729,10 +1726,10 @@ public static class Records
             // Numbered per turn, so two actions leading to one tool stay two distinct buttons.
             if (Actions.Count > 0)
                 return ([.. Actions.Select((action, index) => new QuickReply($"{action.Tool}{ActionIdSeparator}{index + 1}", action.Label, action.Value)),
-                         .. frameworkReplies.Escape], false);
+                         .. frameworkReplies.BackToMorgana], false);
 
-            // An answered request lets the user stay or leave through the closure pair; without authored buttons nothing could end the stay, so the agent hands back.
-            return frameworkReplies.Closure.Count > 0 ? ([.. frameworkReplies.Closure], false) : (null, true);
+            // An answered request offers the way out alone; without an authored one nothing could end the stay, so the agent hands back.
+            return frameworkReplies.BackToMorgana.Count > 0 ? ([.. frameworkReplies.BackToMorgana], false) : (null, true);
         }
     }
 

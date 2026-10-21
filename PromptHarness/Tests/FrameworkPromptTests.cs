@@ -92,14 +92,13 @@ public sealed class FrameworkPromptTests
         List<Records.FrameworkReplySet> sets = (await resolver.ResolveAsync("Morgana"))
             .GetAdditionalProperty<List<Records.FrameworkReplySet>>(Constants.PromptProperties.FrameworkReplies);
         Assert.Equal(
-            [Constants.FrameworkReplySets.Closure, Constants.FrameworkReplySets.Escape, Constants.FrameworkReplySets.Approval],
+            [Constants.FrameworkReplySets.BackToMorgana, Constants.FrameworkReplySets.Approval],
             sets.Select(set => set.Name));
         Records.FrameworkReplies buttons = Records.FrameworkReplies.From(sets);
 
-        Assert.Equal(["continue_agent", "exit_agent"], buttons.Closure.Select(button => button.Id));
-        Assert.Equal(["continue_agent", "exit_agent"], buttons.Escape.Select(button => button.Id));
+        Assert.Equal(["back_to_morgana"], buttons.BackToMorgana.Select(button => button.Id));
         Assert.Equal(["approve_action", "reject_action"], buttons.Approval!.Select(button => button.Id));
-        Assert.True(buttons.Closure[1].Termination);
+        Assert.True(buttons.BackToMorgana[0].Termination);
     }
 
     [Theory]

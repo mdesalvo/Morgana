@@ -169,8 +169,8 @@ Every turn answers with one `Reply` call carrying its text, whether the user is 
 typed argument whose schema is derived from `Morgana.Contracts` — plus the actions of a workflow's choice
 step. **What the turn awaits is code's too**: a typed answer exactly when a call made in the turn still lacks a
 value only the user can give, whether a press made it or the model did. **Every button is code's**: outside a
-workflow the agent's menu, a turn awaiting a typed answer none (see `MorganaAgent.ConcludeTurn`). The buttons that let the user
-stay or leave are the framework's (`FrameworkReplies` in `morgana.json`), chosen from that closure by
+workflow the agent's menu, a turn awaiting a typed answer none (see `MorganaAgent.ConcludeTurn`). The one button the framework adds, the way
+out, is `BackToMorgana` in `FrameworkReplies` (`morgana.json`), chosen from that closure by
 `ClosingDeclaration.ToDelivery`: the agent stays `activeAgent` — later messages skip classification — until the
 user leaves.
 

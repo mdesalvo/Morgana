@@ -19,7 +19,6 @@ turns:
         - "🛒 Place an order"
         - "📦 My orders"
         - "📍 An order's status"
-        - "💬 Ask me something else"
         - "✨ We're done, thanks"
       richCard: absent
       textNotEmpty: true
