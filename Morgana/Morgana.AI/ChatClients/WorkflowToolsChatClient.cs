@@ -141,9 +141,13 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
             return landingOptions;
         }
 
-        // A press whose call waits for the user's typed answer leaves the model one move: composing that call from what the user typed.
-        // The values that the button or the step already supply are the framework's, so the model is shown only what the user answers.
+        // A press whose call waits for the user's typed answer keeps that call on offer beside every other tool of the agent.
+        // The values that the button or the step already supply are left out of it, so the model composes the call from the answer
+        // or answers whatever else the user wrote.
         bool pressedCallMade = contextProvider.IsPressedCallMade(session);
+
+        // Null unless a call awaits the user's answer on this turn: then it holds the form in which that call is offered.
+        AITool? awaitingToolOffer = null;
         if (!pressedCallMade
             && contextProvider.GetPressedCall(session) is { AwaitingAnswer: true } pressedCall
             && tools.FirstOrDefault(tool => string.Equals(tool.Name, pressedCall.Tool, StringComparison.Ordinal)) is { } pressedTool)
@@ -153,12 +157,8 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
                 ? [.. pressedCall.Arguments.Keys, .. position!.Arguments.Keys]
                 : pressedCall.Arguments.Keys;
 
-            // The clone carries the pressed tool alone, with what the framework binds out of its schema.
-            ChatOptions pressedCallOptions = options.Clone();
-            pressedCallOptions.Tools = [WithoutBoundParameters(pressedTool, boundValueNames)];
-
-            // The model reads the pressed tool alone and composes its call.
-            return pressedCallOptions;
+            // The awaiting call is offered with what the framework binds out of its schema, in place of the tool as the agent holds it.
+            awaitingToolOffer = WithoutBoundParameters(pressedTool, boundValueNames);
         }
 
         // Once the pressed call is made the turn has done what the press asked: outside a workflow, what remains is the answer.
@@ -173,14 +173,22 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
             return answerOptions;
         }
 
-        // With no workflow declared and every colleague within reach the agent is offered exactly the tools it was given.
-        if (workflows.Count == 0 && !colleaguesOutOfReach)
+        // With no workflow declared and every colleague within reach the agent is offered exactly the tools it was given,
+        // unless a call awaits the user's answer: its own form must still be put on offer.
+        if (workflows.Count == 0 && !colleaguesOutOfReach && awaitingToolOffer is null)
             return options;
 
         // The tools the model is offered on this call, each one weighed against the state of the session.
         List<AITool> offeredTools = [];
         foreach (AITool tool in tools)
         {
+            // The awaiting call is offered in the form that leaves the model only the values the user answers, whatever the step would otherwise allow.
+            if (awaitingToolOffer is not null && string.Equals(tool.Name, awaitingToolOffer.Name, StringComparison.Ordinal))
+            {
+                offeredTools.Add(awaitingToolOffer);
+                continue;
+            }
+
             // The workflows decide whether the tool belongs to the step that stands: entry tools, launchers, other steps' tools and approval tools stay out.
             if (!WorkflowEngine.IsOffered(tool.Name, tool is WorkflowLauncherFunction, tool is ApprovalRequiredAIFunction, runningWorkflow, workflows))
                 continue;
