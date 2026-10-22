@@ -1256,7 +1256,7 @@ public sealed class TurnClosureTests
         public Records.LLMTier FrameworkTier => Records.LLMTier.Economy;
 
         /// <inheritdoc />
-        public Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null)
+        public Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null, IReadOnlyList<ChatMessage>? precedingMessages = null)
             => welcomeAnswer is null
                 ? throw new InvalidOperationException("The model is unreachable")
                 : Task.FromResult(JsonSerializer.Deserialize<T>(welcomeAnswer, new JsonSerializerOptions(JsonSerializerDefaults.Web)));

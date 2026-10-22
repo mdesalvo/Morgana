@@ -1,18 +1,21 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using System.Text.Json;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
+using Morgana.Contracts;
 
 namespace Morgana.AI.Services;
 
 /// <summary>
 /// Default <see cref="IGuardRailService"/> implementation. Delegates to <see cref="ILanguageModelService"/>
 /// with the Guard system prompt for detection of spam, phishing, violence, profanity and other
-/// policy violations.
+/// policy violations. A message is judged against the assistant turn it answers, which is never judged itself.
 /// </summary>
 public class LLMGuardRailService : IGuardRailService
 {
     /// <summary>
     /// LLM used for the policy check. Consumed through the stateless completion path — each
-    /// message is judged on its own text, on the framework tier.
+    /// message is judged against the assistant turn it answers, on the framework tier.
     /// </summary>
     private readonly ILanguageModelService llmService;
 
@@ -33,18 +36,26 @@ public class LLMGuardRailService : IGuardRailService
     private readonly string contentFilteredRefusal;
 
     /// <summary>
+    /// The record of the conversation, from which the last turn the user saw is read.
+    /// </summary>
+    private readonly IConversationPersistenceService conversationPersistenceService;
+
+    /// <summary>
     /// Initialises a new instance of <see cref="LLMGuardRailService"/>.
     /// Loads and builds the Guard system prompt eagerly.
     /// </summary>
     /// <param name="llmService">LLM service used for the async policy check.</param>
     /// <param name="promptResolverService">Prompt resolver used to load Guard configuration.</param>
+    /// <param name="conversationPersistenceService">Record of the conversation, read for the last turn the user saw.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
     public LLMGuardRailService(
         ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
+        IConversationPersistenceService conversationPersistenceService,
         ILogger logger)
     {
         this.llmService = llmService;
+        this.conversationPersistenceService = conversationPersistenceService;
         this.logger = logger;
 
         // The guard gates every user message, so its prompt is needed from the first turn and is
@@ -68,11 +79,58 @@ public class LLMGuardRailService : IGuardRailService
         contentFilteredRefusal = guardPrompt.GetMessage(Constants.Messages.ContentFiltered);
     }
 
+    /// <summary>
+    /// The assistant's last turn as the user saw it, its text followed by its card and its buttons; null when nobody has answered yet or the record cannot be read.
+    /// </summary>
+    private async Task<ChatMessage?> GetPrecedingAssistantMessageAsync(string conversationId)
+    {
+        MorganaChatMessage[] history;
+        try
+        {
+            // The whole record, from which the last assistant turn is picked below.
+            history = await conversationPersistenceService.GetConversationHistoryAsync(conversationId);
+        }
+        catch (Exception ex)
+        {
+            // A record that cannot be read must not cost the user their turn, so the message is judged without context.
+            logger.LogWarning(ex,
+                "LLMGuardRailService: the preceding turn could not be read for conversation {ConversationId}; the message is judged alone",
+                conversationId);
+
+            // No context is handed to the judgment.
+            return null;
+        }
+
+        // The user's own phrase may already be on record when the guard runs, which is why the last assistant message is searched rather than the last message.
+        MorganaChatMessage? lastAssistantMessage = history.LastOrDefault(message => message.Type == ChatMessageType.Assistant);
+
+        // Nobody has answered yet: the message opens the conversation and has nothing to refer to.
+        if (lastAssistantMessage is null)
+            return null;
+
+        // The text comes first because it is what the user read before anything else.
+        List<AIContent> contents = [new TextContent(lastAssistantMessage.Text)];
+
+        // The card travels as JSON, the form in which the channel received it.
+        if (lastAssistantMessage.RichCard is not null)
+            contents.Add(new TextContent(JsonSerializer.Serialize(lastAssistantMessage.RichCard, Records.DefaultJsonSerializerOptions)));
+
+        // The buttons travel as the JSON list of their labels, which is all the user saw of them.
+        if (lastAssistantMessage.QuickReplies?.Any() == true)
+            contents.Add(new TextContent(JsonSerializer.Serialize(lastAssistantMessage.QuickReplies.Select(quickReply => quickReply.Label).ToList(), Records.DefaultJsonSerializerOptions)));
+
+        // The turn as one assistant message, placed before the user's own.
+        return new ChatMessage(ChatRole.Assistant, contents);
+    }
+
     /// <inheritdoc/>
     public async Task<Records.GuardRailResult> CheckAsync(string conversationId, string message)
     {
         try
         {
+            // The turn the user is answering, so that a reply such as "list them" is read against what it refers to.
+            ChatMessage? precedingAssistantMessage = await GetPrecedingAssistantMessageAsync(conversationId);
+
             // The first call of every turn, on the framework tier: it stands between the user
             // and the whole pipeline, so nothing downstream runs until it has answered.
             // The verdict arrives in the shape of its record, which the provider is held to by schema.
@@ -80,7 +138,8 @@ public class LLMGuardRailService : IGuardRailService
             Records.GuardCheckResponse? llmResult = await llmService.CompleteStructuredAsync<Records.GuardCheckResponse>(
                 conversationId,
                 guardSystemPrompt,
-                message);
+                message,
+                precedingMessages: precedingAssistantMessage is null ? null : [precedingAssistantMessage]);
 
             // For the log line alone. The answer below is decided on the verdict itself.
             bool compliant = llmResult?.Compliant ?? true;

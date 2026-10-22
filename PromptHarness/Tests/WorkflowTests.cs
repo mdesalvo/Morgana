@@ -1623,7 +1623,7 @@ public sealed class WorkflowTests
         // A provider that never reads a failure as a content refusal, so every fault of the double takes the general path.
         public MorganaLanguageModel GetLanguageModel(Records.LLMTier tier) => new OllamaLanguageModel();
 
-        public Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null)
+        public Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null, IReadOnlyList<ChatMessage>? precedingMessages = null)
             => throw new InvalidOperationException("No model is reached by this group");
     }
 

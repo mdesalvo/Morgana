@@ -217,7 +217,7 @@ public sealed class FrameworkPromptTests
         public Records.LLMTier FrameworkTier => Records.LLMTier.Economy;
 
         /// <inheritdoc />
-        public Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null)
+        public Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null, IReadOnlyList<ChatMessage>? precedingMessages = null)
         {
             SystemPrompt = systemPrompt;
             ResponseSchema = responseSchema;

@@ -28,11 +28,12 @@ public interface ILanguageModelService
     /// <param name="systemPrompt">System prompt defining LLM behavior and role</param>
     /// <param name="userPrompt">User message to process</param>
     /// <param name="responseSchema">The schema that the answer must satisfy; the one derived from <typeparamref name="T"/> where null. Passed to narrow what the type alone allows.</param>
+    /// <param name="precedingMessages">The turns that the model reads between the system prompt and the user prompt, as context for it; none where null.</param>
     /// <returns>The answer, or null when it does not deserialize into <typeparamref name="T"/>.</returns>
     /// <remarks>
     /// A provider-level content filter rejection and any other failure of the call are thrown, so that each caller applies its own fallback.
     /// </remarks>
-    Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null);
+    Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null, IReadOnlyList<ChatMessage>? precedingMessages = null);
 
     /// <summary>
     /// Gets the Microsoft.Extensions.AI IChatClient configured for a specific <see cref="Records.LLMTier"/>.

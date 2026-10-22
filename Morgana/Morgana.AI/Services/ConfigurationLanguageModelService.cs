@@ -238,7 +238,7 @@ public class ConfigurationLanguageModelService : ILanguageModelService
     }
 
     /// <inheritdoc/>
-    public async Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null)
+    public async Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null, IReadOnlyList<ChatMessage>? precedingMessages = null)
     {
         // This is how Morgana's own framework actors get an LLM, as opposed to how a
         // domain agent gets one: Guard, Classifier, Presenter and ChannelAdapter all call
@@ -260,16 +260,17 @@ public class ConfigurationLanguageModelService : ILanguageModelService
             ? ChatResponseFormat.ForJsonSchema(narrowedSchema, typeof(T).Name)
             : ChatResponseFormat.ForJsonSchema<T>(Records.DefaultJsonSerializerOptions);
 
-        // These two messages are the entire request: no history, no session, no tools and nothing
-        // carried over from the caller's previous call. That is what makes this method the
+        // The system prompt, the turns that the caller hands as context and the user prompt are the
+        // entire request: no history, no session, no tools and nothing carried over from the caller's
+        // previous call. That is what makes this method the
         // stateless half of the LLM surface — a framework actor asks one question and is answered
         // once, where an agent's turn accumulates in a session. The conversation id travels on the
         // options so the call is attributable to the conversation that provoked it.
+        List<ChatMessage> requestMessages = [new ChatMessage(ChatRole.System, systemPrompt)];
+        requestMessages.AddRange(precedingMessages ?? []);
+        requestMessages.Add(new ChatMessage(ChatRole.User, userPrompt));
         ChatResponse response = await client.GetResponseAsync(
-            [
-                new ChatMessage(ChatRole.System, systemPrompt),
-                new ChatMessage(ChatRole.User, userPrompt)
-            ],
+            requestMessages,
             new ChatOptions
             {
                 ConversationId = conversationId,
