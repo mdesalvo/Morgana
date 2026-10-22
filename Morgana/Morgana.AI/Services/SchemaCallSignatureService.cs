@@ -25,11 +25,11 @@ public class SchemaCallSignatureService : ICallSignatureService
                 continue;
 
             // A value with no lossless reading as a type that the parameter takes is left for the fault to name.
-            if (ElementaryReading(value, signature.Parameters[parameter]) is not { } elementaryValue)
+            if (LosslessReading(value, signature.Parameters[parameter]) is not { } losslessValue)
                 continue;
 
             // The value is now in the form that the parameter takes, so the call goes on as if the model had written it so.
-            context.Arguments[parameter] = elementaryValue;
+            context.Arguments[parameter] = losslessValue;
             normalizedParameters.Add(parameter);
         }
 
@@ -72,12 +72,12 @@ public class SchemaCallSignatureService : ICallSignatureService
         => MissingValues(context, Records.CallSignature.Of(context.Function.JsonSchema));
 
     /// <summary>
-    /// Reads a value as a boolean, an integer or a number that the parameter takes, when the value holds exactly one of
-    /// them in another form; null when no such reading exists or one would lose part of the value.
+    /// Reads a value as a boolean, an integer, a number, an object or a list that the parameter takes, when the value holds
+    /// exactly one of them in another form; null when no such reading exists or one would lose part of the value.
     /// </summary>
     /// <param name="value">The value as the model wrote it.</param>
     /// <param name="acceptedTypes">The JSON types that the parameter takes.</param>
-    private static JsonElement? ElementaryReading(JsonElement value, IReadOnlyList<string> acceptedTypes)
+    private static JsonElement? LosslessReading(JsonElement value, IReadOnlyList<string> acceptedTypes)
     {
         // A number written with a zero fraction, as 2.0, is the integer that an integer parameter takes.
         if (value.ValueKind == JsonValueKind.Number)
@@ -85,10 +85,31 @@ public class SchemaCallSignatureService : ICallSignatureService
                 ? JsonSerializer.SerializeToElement((long)writtenNumber)
                 : null;
 
-        // Every other reading starts from text: an object, a list or a boolean meant for another type has none.
+        // Every other reading starts from text: a value that is not text and is meant for another type has none.
         if (value.ValueKind != JsonValueKind.String)
             return null;
         string text = value.GetString()!.Trim();
+
+        // An object or a list written as JSON text is the object or the list that its parameter takes, once it parses as that kind.
+        bool readsAsObject = acceptedTypes.Contains("object") && text.StartsWith('{');
+        bool readsAsList = acceptedTypes.Contains("array") && text.StartsWith('[');
+        if (readsAsObject || readsAsList)
+        {
+            try
+            {
+                // The text is read as the JSON that the model meant to pass, such as a whole card.
+                using JsonDocument document = JsonDocument.Parse(text);
+
+                // Only the kind that the text announced is accepted, so the value reaches the tool exactly as the model wrote it.
+                JsonValueKind expectedKind = readsAsObject ? JsonValueKind.Object : JsonValueKind.Array;
+                return document.RootElement.ValueKind == expectedKind ? document.RootElement.Clone() : null;
+            }
+            catch (JsonException)
+            {
+                // Text that is not valid JSON has no reading, so the fault names the argument.
+                return null;
+            }
+        }
 
         // The two words of a boolean, in any case, are the boolean that a boolean parameter takes.
         if (acceptedTypes.Contains("boolean") && bool.TryParse(text, out bool writtenBoolean))
