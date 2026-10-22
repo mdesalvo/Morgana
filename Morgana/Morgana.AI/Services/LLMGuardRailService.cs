@@ -52,10 +52,15 @@ public class LLMGuardRailService : IGuardRailService
         Records.Prompt guardPrompt =
             promptResolverService.ResolveAsync(Constants.Prompts.Guard).GetAwaiter().GetResult();
 
+        // A refusal is Morgana speaking to the user, so it is worded in the voice her agents speak in.
+        Records.Prompt morganaPrompt =
+            promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
+
         // What the Guard reads before every user message. No placeholder to splice, unlike the
         // classifier's: what is admissible is a policy of the framework, not of a domain.
         guardSystemPrompt = string.Join("\n",
             Records.Prompt.Labeled(Constants.SectionLabels.Target, guardPrompt.Target),
+            Records.Prompt.Labeled(Constants.SectionLabels.Personality, morganaPrompt.Personality),
             Records.Prompt.Labeled(Constants.SectionLabels.Instructions, guardPrompt.Instructions),
             Records.Prompt.Labeled(Constants.SectionLabels.Formatting, guardPrompt.Formatting));
 
