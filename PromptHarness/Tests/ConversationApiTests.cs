@@ -179,6 +179,23 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
+    public async Task ConversationApi_Record_takes_a_departed_agent_off_active_duty_and_keeps_its_session()
+    {
+        string conversationId = ChannelApiClient.NewConversationId();
+        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
+        object? sessionBefore = await api.QueryRecordAsync(conversationId, "SELECT hex(agent_session) FROM morgana WHERE agent_name = 'billing';");
+
+        await api.HostPersistenceService().DeactivateAgentAsync(conversationId, "billing");
+
+        // A second call finds the row already off duty and leaves it as it is
+        await api.HostPersistenceService().DeactivateAgentAsync(conversationId, "billing");
+
+        // The record names no agent any more while the session the agent wrote stays byte for byte as it was
+        Assert.Null(await api.HostPersistenceService().GetMostRecentActiveAgentAsync(conversationId));
+        Assert.Equal(sessionBefore, await api.QueryRecordAsync(conversationId, "SELECT hex(agent_session) FROM morgana WHERE agent_name = 'billing';"));
+    }
+
+    [Fact]
     public async Task ConversationApi_Resume_reports_the_state_to_redraw()
     {
         string conversationId = ChannelApiClient.NewConversationId();

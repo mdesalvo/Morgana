@@ -366,6 +366,43 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
     }
 
     /// <inheritdoc/>
+    public async Task DeactivateAgentAsync(string conversationId, string agentName)
+    {
+        try
+        {
+            // Both paths are derived from the conversation id: the connection string opens the database and the path tells whether it was ever created.
+            string sqliteConnectionString = GetConnectionString(conversationId);
+            string sqliteDbPath = GetDatabasePath(conversationId);
+
+            // A conversation never saved has no row to switch off. The call must not create its database.
+            if (!File.Exists(sqliteDbPath))
+            {
+                logger.LogInformation("SQLite database for conversation {ConversationId} not found", conversationId);
+                return;
+            }
+
+            // The row is switched off in this conversation's database, which exists by now.
+            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
+            await sqliteConnection.OpenAsync();
+
+            await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+            // Only is_active changes: the session and the messages are the agent's own and stay as it wrote them.
+            sqliteCommand.CommandText = "UPDATE morgana SET is_active = 0 WHERE agent_name = @agent_name COLLATE NOCASE AND is_active = 1;";
+            sqliteCommand.Parameters.AddWithValue("@agent_name", agentName);
+
+            // The count tells whether the row was still on active duty.
+            int changedRows = await sqliteCommand.ExecuteNonQueryAsync();
+
+            logger.LogInformation("Deactivated {Count} row(s) of agent {AgentName} for conversation {ConversationId}", changedRows, agentName, conversationId);
+        }
+        catch (Exception ex)
+        {
+            // The turn this follows has been answered already: a failed switch-off is recorded and never surfaces to the user.
+            logger.LogError(ex, "Failed to deactivate agent {AgentName} for conversation {ConversationId}", agentName, conversationId);
+        }
+    }
+
+    /// <inheritdoc/>
     public async Task<MorganaChatMessage[]> GetConversationHistoryAsync(
         string conversationId,
         JsonSerializerOptions? jsonSerializerOptions = null)
@@ -991,7 +1028,7 @@ WHERE id = 1;
             return;
 
         // The script is safe on a database at an earlier version: tables that exist are left intact and
-        // only the missing ones are created (shared_context in v4; dust_budget and dust_usage_log in v5).
+        // only the missing ones are created.
         await using SqliteCommand schemaCommand = connection.CreateCommand();
         schemaCommand.CommandText =
 """
@@ -1275,15 +1312,13 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 
             // The agent holds this phrase only so its model could read it: no agent was active when it
             // arrived, so Morgana saved it on her own side and the user reads it once, from there.
-            if (chatMessage.Role == ChatRole.User
-                && chatMessage.AdditionalProperties?.ContainsKey(Constants.MessageProperties.ContextOnly) == true)
+            if (chatMessage.Role == ChatRole.User && chatMessage.AdditionalProperties?.ContainsKey(Constants.MessageProperties.ContextOnly) == true)
                 continue;
 
             // Decide whether this assistant message is the user-facing one for its turn. The
             // marker is set by MorganaAgent at end-of-turn on the last assistant message that
             // actually carries text — see MorganaAgent.ExecuteAgentAsync.
-            bool isUserFacing = chatMessage.Role == ChatRole.Assistant
-                             && chatMessage.AdditionalProperties?.ContainsKey(Constants.MessageProperties.UserFacing) == true;
+            bool isUserFacing = chatMessage.Role == ChatRole.Assistant && chatMessage.AdditionalProperties?.ContainsKey(Constants.MessageProperties.UserFacing) == true;
 
             // An unmarked assistant message of a marking agent is the tool-use scratchpad of a turn.
             if (chatMessage.Role == ChatRole.Assistant && markedAgents.Contains(agentName) && !isUserFacing)

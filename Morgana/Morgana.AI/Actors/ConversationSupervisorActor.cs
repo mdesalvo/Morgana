@@ -658,7 +658,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         // An agent that ran answers with ActiveAgentResponse; the router's own fallback for an intent that
         // no agent handles is the plain AgentResponse below.
-        Receive<Records.ActiveAgentResponse>(response =>
+        ReceiveAsync<Records.ActiveAgentResponse>(async response =>
         {
             // The agent answered and Idle arms no window of its own.
             Context.SetReceiveTimeout(null);
@@ -701,7 +701,14 @@ public class ConversationSupervisorActor : MorganaActor
                 // The agent has finished: Morgana takes the conversation back and says so, behind
                 // the answer above rather than in place of it.
                 if (response.IsCompleted)
+                {
                     TellAgentFarewell(ctx.OriginalSender, agentName);
+
+                    // The farewell hands the conversation back to Morgana, so the departed agent's row leaves active duty in the same step.
+                    // Awaited before the next message is read: a user returning at once to the same agent cannot have the new turn's active row switched off behind it.
+                    if (ctx.Classification?.Intent is { Length: > 0 } departedIntent)
+                        await conversationPersistenceService.DeactivateAgentAsync(conversationId, departedIntent);
+                }
 
                 // The turn is closed with its completion, so the count splits on whether the agent finished.
                 CloseTurnSpan(intent: ctx.Classification?.Intent, completed: response.IsCompleted);
@@ -843,7 +850,7 @@ public class ConversationSupervisorActor : MorganaActor
             Context.SetReceiveTimeout(PhaseBudget));
 
         // The active agent's reply to this follow-up.
-        Receive<Records.AgentResponse>(response =>
+        ReceiveAsync<Records.AgentResponse>(async response =>
         {
             // The agent answered. The FSM returns to Idle whether or not it completed, because
             // the exchange continues through activeAgent and not through this state.
@@ -878,7 +885,14 @@ public class ConversationSupervisorActor : MorganaActor
                 // The agent has finished: Morgana takes the conversation back and says so, behind
                 // the answer above rather than in place of it.
                 if (response.IsCompleted)
+                {
                     TellAgentFarewell(originalSender, agentName);
+
+                    // The farewell hands the conversation back to Morgana, so the departed agent's row leaves active duty in the same step.
+                    // Awaited before the next message is read: a user returning at once to the same agent cannot have the new turn's active row switched off behind it.
+                    if (currentIntent is { Length: > 0 })
+                        await conversationPersistenceService.DeactivateAgentAsync(conversationId, currentIntent);
+                }
 
                 // The follow-up turn is closed with its completion, which is what the count splits on.
                 CloseTurnSpan(intent: currentIntent, completed: response.IsCompleted);

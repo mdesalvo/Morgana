@@ -38,6 +38,7 @@ A tool performing a dispositive action (e.g: placing an order, signing a contrac
 - On Claude 5.5 models the answer that an agent wrote before closing its turn never reached the user, hidden by the provider as reasoning
 - Ending an unknown conversation brought its actors to life just to stop them and to answer OK
 - The history of a conversation where nobody had spoken yet was answered with 404, as if the conversation did not exist
+- After an agent's turn failed, a restart of Morgana handed the conversation back to that agent, although its farewell had already told the user that Morgana was taking over again
 - **Grimoire (1)**
   - Backspace, Delete and the arrow keys split an emoji typed at the prompt in half, leaving a broken character behind
 
