@@ -1,5 +1,9 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Net;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Morgana.AI.Abstractions;
 
@@ -72,4 +76,56 @@ public abstract class MorganaLanguageModel<TConnection> : MorganaLanguageModel
     private static TConnection Bind(IConfigurationSection connectionSection) =>
         // ConfigurationLanguageModelService refuses a tier without a Connection section before any provider is asked, so the binder finds one.
         connectionSection.Get<TConnection>()!;
+}
+
+/// <summary>Writes down every attempt that a provider's SDK puts on the wire.</summary>
+/// <remarks>It sits under the SDK's own retry loop so that a throttled or cut attempt is told apart from a slow model.
+/// It observes an attempt up to its response headers and never alters it: the SDK alone decides whether to try again.</remarks>
+/// <param name="logger">Receives one line per attempt; <c>null</c> writes nothing.</param>
+/// <param name="providerName">The provider's name as the lines show it.</param>
+public sealed class AttemptLoggingHandler(ILogger? logger, string providerName) : DelegatingHandler
+{
+    /// <summary>The HTTP client that a provider hands its SDK when the SDK takes a client rather than handlers; <paramref name="timeout"/> is <see cref="Timeout.InfiniteTimeSpan"/> when the SDK bounds each attempt itself.</summary>
+    public static HttpClient CreateHttpClient(ILogger? logger, string providerName, TimeSpan timeout) =>
+        // The handler wraps the socket layer so that it sees each attempt that the SDK sends.
+        new(new AttemptLoggingHandler(logger, providerName) { InnerHandler = new SocketsHttpHandler() }) { Timeout = timeout };
+
+    /// <summary>Sends the attempt and writes the line that tells how it went.</summary>
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        // The attempt's clock starts before the wire is touched so that every elapsed time includes the wait for the headers.
+        long startedAt = Stopwatch.GetTimestamp();
+        HttpResponseMessage response;
+        try
+        {
+            // The attempt goes out untouched.
+            response = await base.SendAsync(request, cancellationToken);
+        }
+        catch (Exception exception) when (exception is OperationCanceledException or HttpRequestException)
+        {
+            logger?.LogWarning("{Provider} gave no answer after {Elapsed:0.0}s ({Reason}); the client retries it if it has attempts left",
+                providerName, Stopwatch.GetElapsedTime(startedAt).TotalSeconds, exception.GetType().Name);
+            // The SDK must see the failure as it was: only it decides whether to try again.
+            throw;
+        }
+
+        // The wait for the headers is what every line reports: the body that follows is read by the SDK, past this handler.
+        double elapsed = Stopwatch.GetElapsedTime(startedAt).TotalSeconds;
+
+        // A throttled or overloaded answer is a warning because the SDK is about to wait and try again; any other answer is routine.
+        if (response.StatusCode is HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError)
+        {
+            // The wait that the provider asks for is what the SDK honours before its next attempt.
+            string retryAfter = response.Headers.RetryAfter?.Delta is TimeSpan delta
+                ? $"{delta.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)}s"
+                : "an unstated time";
+            logger?.LogWarning("{Provider} refused a call with {Status} after {Elapsed:0.0}s and asks to wait {RetryAfter}; the client retries it if it has attempts left",
+                providerName, (int)response.StatusCode, elapsed, retryAfter);
+        }
+        else
+            logger?.LogInformation("{Provider} answered {Status} after {Elapsed:0.0}s", providerName, (int)response.StatusCode, elapsed);
+
+        // The response travels on untouched: the handler only observes the attempt.
+        return response;
+    }
 }

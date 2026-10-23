@@ -3,6 +3,7 @@ using System.ClientModel.Primitives;
 using Azure;
 using Azure.AI.OpenAI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 using OpenAI;
 
@@ -18,7 +19,8 @@ namespace Morgana.AI.LanguageModels.AzureOpenAI;
 /// and Azure AI Foundry v1 API endpoints (e.g., https://resource.services.ai.azure.com/api/projects/X/openai/v1).
 /// When you change a tier's ModelId to a different model, recalibrate InputTokensPerDustUnit and OutputTokensPerDustUnit.
 /// </remarks>
-public class AzureOpenAILanguageModel : MorganaLanguageModel<AzureOpenAITierConnection>
+/// <param name="loggerFactory">Optional logger factory for the <see cref="AttemptLoggingHandler"/> that writes one line per attempt on the wire; <c>null</c> writes nothing.</param>
+public class AzureOpenAILanguageModel(ILoggerFactory? loggerFactory = null) : MorganaLanguageModel<AzureOpenAITierConnection>
 {
     /// <inheritdoc />
     // The name a tier writes in its Provider key: it must stay stable whatever the class is called.
@@ -49,8 +51,14 @@ public class AzureOpenAILanguageModel : MorganaLanguageModel<AzureOpenAITierConn
         // (pointed at the Foundry endpoint) must be used instead.
         bool isFoundryV1 = endpoint.AbsolutePath.Contains("/openai/v1", StringComparison.OrdinalIgnoreCase);
 
-        // A throttled call is retried a bounded number of times and one attempt is bounded in time,
-        // so the ceiling of a call is the timeout times the retries.
+        // A throttled call is retried a bounded number of times. NetworkTimeout bounds the wait for the
+        // headers and each wait between two reads of the body; a streamed body that it cuts is not retried.
+        // The pipeline's NetworkTimeout still bounds each attempt, so the HTTP client sets none of its own (its default 100 s would cut first).
+        HttpClientPipelineTransport transport = new HttpClientPipelineTransport(
+            AttemptLoggingHandler.CreateHttpClient(loggerFactory?.CreateLogger<AzureOpenAILanguageModel>(), Provider, Timeout.InfiniteTimeSpan));
+
+        // Both endpoint styles end in an OpenAIClient (the Azure client is one) so that a single chat client is derived below.
+        OpenAIClient openAIClient;
         if (isFoundryV1)
         {
             // The Foundry endpoint is given the same retry policy and timeout as the classic resource.
@@ -58,24 +66,27 @@ public class AzureOpenAILanguageModel : MorganaLanguageModel<AzureOpenAITierConn
             {
                 Endpoint = endpoint,
                 RetryPolicy = new ClientRetryPolicy(connection.MaxRetries),
-                NetworkTimeout = TimeSpan.FromSeconds(connection.TimeoutSeconds)
+                NetworkTimeout = TimeSpan.FromSeconds(connection.TimeoutSeconds),
+                Transport = transport
             };
             // The Foundry client carries the same ceiling as the classic one but speaks the plain OpenAI protocol.
-            return new OpenAIClient(new ApiKeyCredential(connection.ApiKey!), foundryOptions)
-                .GetChatClient(options.ModelId)
-                .AsIChatClient();
+            openAIClient = new OpenAIClient(new ApiKeyCredential(connection.ApiKey!), foundryOptions);
+        }
+        else
+        {
+            // A classic Azure OpenAI resource is served by the Azure client, which adds the api-version it requires.
+            AzureOpenAIClientOptions azureOptions = new AzureOpenAIClientOptions
+            {
+                RetryPolicy = new ClientRetryPolicy(connection.MaxRetries),
+                NetworkTimeout = TimeSpan.FromSeconds(connection.TimeoutSeconds),
+                Transport = transport
+            };
+            // The classic Azure resource is reached through its own client, with the same retry policy and timeout.
+            openAIClient = new AzureOpenAIClient(endpoint, new AzureKeyCredential(connection.ApiKey!), azureOptions);
         }
 
-        // A classic Azure OpenAI resource is served by the Azure client, which adds the api-version it requires.
-        AzureOpenAIClientOptions azureOptions = new AzureOpenAIClientOptions
-        {
-            RetryPolicy = new ClientRetryPolicy(connection.MaxRetries),
-            NetworkTimeout = TimeSpan.FromSeconds(connection.TimeoutSeconds)
-        };
-        // The classic Azure resource is reached through its own client, with the same retry policy and timeout.
-        return new AzureOpenAIClient(endpoint, new AzureKeyCredential(connection.ApiKey!), azureOptions)
-            .GetChatClient(options.ModelId)
-            .AsIChatClient();
+        // The chat client of the tier's model is what the framework talks to, whichever endpoint style served it.
+        return openAIClient.GetChatClient(options.ModelId).AsIChatClient();
     }
 }
 
@@ -83,7 +94,7 @@ public class AzureOpenAILanguageModel : MorganaLanguageModel<AzureOpenAITierConn
 /// <param name="ApiKey">Credential of the Azure account.</param>
 /// <param name="Endpoint">Address of the Azure OpenAI resource or of the Azure AI Foundry project.</param>
 /// <param name="MaxRetries">Retries of a refused call.</param>
-/// <param name="TimeoutSeconds">Ceiling of one attempt.</param>
+/// <param name="TimeoutSeconds">Ceiling of one attempt's wait for the response headers and of each wait between two reads of its body; a streamed body cut by it is not retried.</param>
 public record AzureOpenAITierConnection(
     string? ApiKey = null,
     string? Endpoint = null,
