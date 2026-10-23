@@ -682,8 +682,9 @@ public sealed class TurnClosureTests
 
         List<object> pressAnswer = await turn.AskAsync(new Records.AgentRequest("conv-turn", "tulip", null));
 
-        // The typed answer leaves the model one move, composing the pressed call; after it, the answer.
-        Assert.Equal(["Stock"], OfferedTools(turn.Model, 2));
+        // The typed answer finds the pressed call on offer beside the agent's other tools; after the call, the answer.
+        Assert.Contains("Stock", OfferedTools(turn.Model, 2));
+        Assert.Contains("CancelOrder", OfferedTools(turn.Model, 2));
         Assert.Equal(["Reply"], OfferedTools(turn.Model, 3));
         Assert.Equal(["Stock:tulip"], WorkflowTests.InventoryTools.Calls);
 
@@ -716,8 +717,9 @@ public sealed class TurnClosureTests
 
         List<object> answered = await turn.AskAsync(new Records.AgentRequest("conv-turn", "P994E", null));
 
-        // The typed code completes the pressed call, offered alone, which the model composes from it.
-        Assert.Equal(["OrderHistory"], OfferedTools(turn.Model, 2));
+        // The typed code completes the pressed call, on offer beside the agent's other tools, which the model composes from it.
+        Assert.Contains("OrderHistory", OfferedTools(turn.Model, 2));
+        Assert.Contains("CancelOrder", OfferedTools(turn.Model, 2));
         Assert.Equal(["OrderHistory:P994E"], WorkflowTests.InventoryTools.Calls);
         Assert.Equal("You have 2 orders.", answered.OfType<Records.AgentResponse>().Single().Response);
     }
@@ -772,8 +774,9 @@ public sealed class TurnClosureTests
 
         List<object> answered = await turn.AskAsync(new Records.AgentRequest("conv-turn", "tulip", null));
 
-        // The typed answer leaves the model one move, composing the waiting call; after it, the answer.
-        Assert.Equal(["Stock"], OfferedTools(turn.Model, 2));
+        // The typed answer finds the waiting call on offer beside the agent's other tools; after the call, the answer.
+        Assert.Contains("Stock", OfferedTools(turn.Model, 2));
+        Assert.Contains("CancelOrder", OfferedTools(turn.Model, 2));
         Assert.Equal(["Reply"], OfferedTools(turn.Model, 3));
         Assert.Equal(["Stock:tulip"], WorkflowTests.InventoryTools.Calls);
 
@@ -803,8 +806,9 @@ public sealed class TurnClosureTests
 
         List<object> answered = await turn.AskAsync(new Records.AgentRequest("conv-turn", "P994E", null));
 
-        // The typed code completes the waiting call, offered alone, which the model composes from it.
-        Assert.Equal(["OrderHistory"], OfferedTools(turn.Model, 2));
+        // The typed code completes the waiting call, on offer beside the agent's other tools, which the model composes from it.
+        Assert.Contains("OrderHistory", OfferedTools(turn.Model, 2));
+        Assert.Contains("CancelOrder", OfferedTools(turn.Model, 2));
         Assert.Equal(["OrderHistory:P994E"], WorkflowTests.InventoryTools.Calls);
         Assert.Equal("You have 2 orders.", answered.OfType<Records.AgentResponse>().Single().Response);
     }
