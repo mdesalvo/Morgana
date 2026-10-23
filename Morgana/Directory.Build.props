@@ -20,11 +20,11 @@
       with a preview stamp, which changes at every release of the family.
     -->
     <A2AVersion>1.0.0-preview3</A2AVersion>
-    <MicrosoftAgentsAIVersion>1.25.0</MicrosoftAgentsAIVersion>
-    <MicrosoftAgentsAIPreviewVersion>$(MicrosoftAgentsAIVersion)-preview.261014.1</MicrosoftAgentsAIPreviewVersion>
+    <MicrosoftAgentsAIVersion>1.26.0</MicrosoftAgentsAIVersion>
+    <MicrosoftAgentsAIPreviewVersion>$(MicrosoftAgentsAIVersion)-preview.261023.1</MicrosoftAgentsAIPreviewVersion>
     <MicrosoftExtensionsAIVersion>10.11.0</MicrosoftExtensionsAIVersion>
     <ModelContextProtocolVersion>2.3.0</ModelContextProtocolVersion>
-    <OpenTelemetryVersion>1.20.0</OpenTelemetryVersion>
+    <OpenTelemetryVersion>1.20.1</OpenTelemetryVersion>
 
     <!-- Package Metadata -->
     <Authors>Marco De Salvo</Authors>
