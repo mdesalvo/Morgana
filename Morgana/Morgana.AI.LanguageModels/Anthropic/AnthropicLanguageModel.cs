@@ -38,8 +38,8 @@ public class AnthropicLanguageModel(ILoggerFactory? loggerFactory = null) : Morg
 
     /// <inheritdoc />
     /// <remarks>
-    /// The SDK adapter is wrapped in <see cref="MorganaAnthropicClient"/>, which enforces the Claude 4.6+
-    /// no-prefill constraint at the API boundary and marks the leading system message for prompt caching.
+    /// The SDK adapter is wrapped in <see cref="MorganaAnthropicClient"/>, which ends every request on a role
+    /// that Claude accepts and marks the leading system message for prompt caching.
     /// </remarks>
     protected override IChatClient CreateChatClient(AnthropicTierConnection connection, Records.TierConfiguration options)
     {

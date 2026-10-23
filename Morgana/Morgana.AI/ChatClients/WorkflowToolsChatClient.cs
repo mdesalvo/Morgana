@@ -223,7 +223,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
             }
         }
 
-        // The caller's options are shared across turns, so the narrowedOptions tool list goes on a clone.
+        // The caller's options are shared across turns, so the tool list that this call offers goes on a clone.
         ChatOptions offeredOptions = options.Clone();
         offeredOptions.Tools = offeredTools;
 
@@ -292,7 +292,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         // The actions property is where Reply offers buttons; its schema becomes the proposal of the step's choices.
         JsonObject actions = schema["properties"]![Constants.Tools.ReplyParameters.Actions]!.AsObject();
 
-        // A null in the place of the array would leave the step with no button, so the type is narrowedOptions to the array.
+        // A null in the place of the array would leave the step with no button, so the type is narrowed to the array.
         actions["type"] = "array";
         actions.Remove("default");
 

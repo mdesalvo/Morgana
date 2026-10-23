@@ -837,7 +837,7 @@ public sealed class TurnClosureTests
         Assert.Contains("parameter names", argumentsSchema.GetProperty("description").GetString(), StringComparison.Ordinal);
     }
 
-    /// <summary>The sample tools with a menu of two entries: a plant's stock, which the user types, and the orders, which the conversation holds.</summary>
+    /// <summary>The sample tools with a menu of two entries: a plant's stock that the user types and the orders that the conversation holds.</summary>
     private static Records.ToolDefinition[] MenuTools() =>
     [
         .. WorkflowTests.DeclaredTools().Select(tool => tool.Name switch

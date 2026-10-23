@@ -11,9 +11,9 @@ namespace Morgana.AI.LanguageModels.Anthropic;
 /// strictly necessary, normalizes the message list immediately before the HTTP call.
 /// </summary>
 /// <remarks>
-/// Claude 4.6+ enforces constraint: requests must end with user message, not assistant (no "prefill").
+/// Claude refuses a request that ends on an assistant message (a prefill) or on a system message that follows one.
 /// This guard normalizes message sequences: User/Tool roles→forward unchanged; System→rewrite to User
-/// (preserves summarization prompts appended as trailing system messages); Assistant with TextContent→rewrite
+/// (preserves the summarization prompt, which follows the transcript it summarizes); Assistant with TextContent→rewrite
 /// to User (preserves model's own prior text); Assistant without TextContent→strip (no semantic payload).
 /// Mirrors the strategy Anthropic SDK already uses for Tool messages (translates to user role with tool_result).
 /// </remarks>
@@ -94,17 +94,17 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
                 "Anthropic.MorganaAnthropicClient: outbound message count={Count}, last-8 role trail: {Trail}", chatMessagesList.Count, lastEightRoles);
         }
 
-        // A request ending on a user or a tool message is valid for Claude 4.6+ and goes out unchanged.
+        // A request ending on a user or a tool message is valid for Claude and goes out unchanged.
         if (IsAcceptableTrailingRole(chatMessagesList[^1].Role))
             return chatMessagesList;
 
-        // A trailing system or assistant message is rejected by Claude 4.6+. The summarization prompt
-        // is a trailing system message that would be lost and a trailing assistant is a prefill:
-        // the loop below turns each into a user message when it holds text and drops it otherwise.
+        // A trailing assistant message is a prefill, which Claude refuses. A trailing system message, such as
+        // the summarization prompt, is refused when an assistant message precedes it. The loop below turns
+        // each into a user message when it holds text and drops it otherwise.
         string fullListOfRoles = string.Join(" → ", chatMessagesList.Select(m => m.Role.Value));
         logger.LogWarning(
             "Anthropic.MorganaAnthropicClient: trailing message has role={Role}, " +
-            "which Claude 4.6+ rejects in trailing position (no-prefill constraint). " +
+            "which Claude refuses in trailing position (a prefill or a system message after an assistant one). " +
             "Full role trail: {FullTrail}", chatMessagesList[^1].Role.Value, fullListOfRoles);
 
         // The original size lets the log say how much of the request the normalization removed.
@@ -126,8 +126,8 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
                 logger.LogWarning(
                     "Anthropic.MorganaAnthropicClient: rewrote trailing system message to user " +
                     "[content-types=[{ContentTypes}], text-preview=\"{TextPreview}\"] — " +
-                    "trailing system is the SummarizingChatReducer pattern; " +
-                    "MEAI's Anthropic adapter only hoists leading system chatMessages",
+                    "a trailing system message is where the summarization prompt goes; " +
+                    "the Anthropic adapter hoists only leading system messages",
                     contentTypes, textPreview);
                 break;
             }
