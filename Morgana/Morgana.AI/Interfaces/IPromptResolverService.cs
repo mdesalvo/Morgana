@@ -7,13 +7,9 @@
 public interface IPromptResolverService
 {
     /// <summary>
-    /// Returns every available prompt, framework and domain alike, for startup diagnostics and validation.
-    /// </summary>
-    Task<Records.Prompt[]> GetAllPromptsAsync();
-
-    /// <summary>
     /// Resolves a prompt by exact id: a framework prompt name or a domain intent name.
-    /// Throws InvalidOperationException when the id is unknown, since a prompt that cannot be found is a configuration fault.
+    /// Throws KeyNotFoundException when the id is unknown, since a prompt that cannot be found is a configuration fault.
+    /// Throws InvalidOperationException when the id is declared both by the framework and by the domain, because the two vocabularies are disjoint and neither layer may hide the other.
     /// </summary>
     Task<Records.Prompt> ResolveAsync(string promptID);
 }

@@ -240,7 +240,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json`, domain from `agents.json`. Throws if one ID is declared in both |
 | `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads: the fenced two-layer prompt, tool descriptions, the per-turn held-context declaration, the colleagues declaration, a colleague's question |
 | `ConfigurationAgentDirectoryService` | `IAgentDirectoryService` | Both halves of A2A discovery, plus `ValidateTrustConfiguration` and `ValidatePublishedAddress` |
-| `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Merges every plugin's `agents.json`. Refuses a duplicated intent or prompt id and the reserved names `other` and `Morgana`. Its refusals are fatal |
+| `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Merges every plugin's `agents.json`. Refuses a duplicated intent or prompt id, `other` and the five framework prompt ids. Its refusals are fatal |
 | `HandlesIntentAgentRegistryService` | `IAgentRegistryService` | Discovers agents by attribute; bidirectional intent validation; requires `[RequiresLLMTier]`; validates `[ConsultsAgent]` |
 | `ProvidesToolForIntentRegistryService` | `IToolRegistryService` | Discovers tool classes and projects each into its tool definitions; warns on orphans; errors on duplicates |
 | `MCPClientRegistryService` | `IMCPClientRegistryService` | MCP connection pool keyed by URI or `stdio:{command}`. A client the library reports ended is replaced; only discovery is retried, never a tool call |
@@ -460,7 +460,7 @@ fails or opens, silently.**
 3. Every `[ConsultsAgent]` names a reachable colleague and no two fold to one function name
 4. Tools: warn on orphans, error on duplicates for one intent; every tool method and parameter carries its attributes, every scope combination is one the framework can honour, the record returned is typed with a nullable `error`, no tool is overloaded and no agents.json prompt still declares `Tools` or `Workflows`
 5. Plugin `agents.json` files merge with no duplicated intent or prompt id and none declares `other`
-   or `Morgana`
+   or a framework prompt id
 6. All three tiers declared, each naming a registered provider and carrying a `Connection`, none with a provider, model or used connection field left on its placeholder, no provider registered twice, `ActorSystem:Tier` naming a tier
 7. Every admitted issuer — channel, partner and the ring alike — carries a name and a key of at least 256 bits and no name is admitted twice
 8. `ValidateTrustConfiguration`: each `Partners[]` entry names somebody once, does something, is coherent per open direction and carries a key that can sign

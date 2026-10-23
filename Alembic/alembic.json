@@ -161,6 +161,10 @@
               "Content": "Nothing recorded: '((name))' is reserved. It is the intent the classifier falls back to when it cannot place a message and no agent may claim it. Call this again with a name from the domain."
             },
             {
+              "Name": "IntentFrameworkName",
+              "Content": "Nothing recorded: '((name))' is the name of one of Morgana's own prompts and an agent's prompt is found by its intent's name, so Morgana would refuse to start. Call this again with a name from the domain."
+            },
+            {
               "Name": "IntentTaken",
               "Content": "Nothing recorded: '((name))' is already an intent of this domain, written before today. Two agents answering the same intent is a startup failure. Name what is different about this one."
             },

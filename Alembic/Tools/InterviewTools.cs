@@ -79,7 +79,7 @@ public class InterviewTools
     [Description("Puts one process the client is handing to Morgana on the domain map, or revises one already there. It writes the whole intent — what it is called, what routes to it and the button a user presses to start it — because all three are read against the other entries and not on their own. One entry becomes one intent and one agent. Call it as soon as an entry is clear and again to add the button or sharpen the description.")]
     [SystemTool]
     public ToolReply DeclareIntent(
-        [Description("A single bare lowercase word, no spaces or punctuation (e.g. 'billing', 'appointments'). It becomes a C# attribute argument and a prompt ID. 'other' is reserved for the classifier's fallback and will be refused.")] [ToolParameter(Records.ToolScope.Request)] string name,
+        [Description("A single bare lowercase word, no spaces or punctuation (e.g. 'billing', 'appointments'). It becomes a C# attribute argument and a prompt ID. 'other' is reserved for the classifier's fallback and the names of Morgana's own prompts (morgana, classifier, guard, presentation, channeladapter) are hers: both will be refused.")] [ToolParameter(Records.ToolScope.Request)] string name,
         [Description("The kinds of request that belong here — 'requests to check an order's status, place a new order or cancel one' — never what an agent does about them. The classifier reads this and nothing else, weighed against every other entry's description.")] [ToolParameter(Records.ToolScope.Request)] string description,
         [Description("A leading emoji then one to three words (e.g. '📄 Billing'). It is read on a button beside every other intent's button, so it names what is got, not what the system does. Omit it on a first pass and add it when the set is written together.")] [ToolParameter(Records.ToolScope.Request)] string? label = null,
         [Description("The sentence that button sends, which opens this agent's presentation of itself and its menu: a first-person question about what it can do, never a request it would act on (e.g. 'What can you do about my dog's appointments?'). Omit it on a first pass and add it with the label.")] [ToolParameter(Records.ToolScope.Request)] string? defaultValue = null)
@@ -93,6 +93,10 @@ public class InterviewTools
         // The fallback intent belongs to the classifier and never to an authored agent.
         if (string.Equals(cleanName, ReservedFallbackIntent, StringComparison.OrdinalIgnoreCase))
             return ToolReply.Refused(Said("IntentReserved", ("name", ReservedFallbackIntent)));
+
+        // An intent named after a framework prompt is refused by Morgana at startup, so it is refused here while it costs nothing.
+        if (Constants.Prompts.All.Contains(cleanName, StringComparer.OrdinalIgnoreCase))
+            return ToolReply.Refused(Said("IntentFrameworkName", ("name", cleanName)));
 
         // An intent already committed to the domain cannot be declared again by this interview.
         if (draftStateService.Current?.Intents.Any(i =>

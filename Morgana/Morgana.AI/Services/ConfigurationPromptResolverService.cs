@@ -6,8 +6,8 @@ namespace Morgana.AI.Services;
 
 /// <summary>
 /// Resolves prompts from two sources: morgana.json (framework) + IAgentConfigurationService (domain).
-/// Two-tier architecture: framework prompts provide base system behavior; domain prompts override/specialize.
-/// Domain prompts take precedence if same ID exists in both sources (case-insensitive lookup).
+/// Two-tier architecture: framework prompts provide base system behavior; domain prompts specialize it.
+/// The two vocabularies are disjoint: an id declared in both layers is refused rather than resolved, so neither layer hides the other.
 /// </summary>
 public class ConfigurationPromptResolverService : IPromptResolverService
 {
@@ -18,18 +18,19 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     private readonly Lazy<Records.Prompt[]> morganaPrompts;
 
     /// <summary>
-    /// Service for loading domain-specific agent prompts from agents.json or other sources.
+    /// Domain prompts, read once on first resolution whatever caching the <see cref="IAgentConfigurationService"/> implementation does or does not do.
     /// </summary>
-    private readonly IAgentConfigurationService agentConfigService;
+    private readonly Lazy<Task<List<Records.Prompt>>> agentPrompts;
 
     /// <summary>
     /// Initializes a new instance of ConfigurationPromptResolverService.
-    /// Loads framework prompts from morgana.json embedded resource.
+    /// Defers the reads of both layers until the first prompt is resolved.
     /// </summary>
     /// <param name="agentConfigService">Service for loading domain agent prompts</param>
     public ConfigurationPromptResolverService(IAgentConfigurationService agentConfigService)
     {
-        this.agentConfigService = agentConfigService;
+        // The domain layer is read at the first resolution and never again on later lookups.
+        agentPrompts = new Lazy<Task<List<Records.Prompt>>>(agentConfigService.GetAgentPromptsAsync);
 
         // Lazy<> rather than loading eagerly in the constructor: morgana.json never changes after
         // deployment, so the embedded-resource read + JSON parse in LoadMorganaPrompts only ever
@@ -38,24 +39,15 @@ public class ConfigurationPromptResolverService : IPromptResolverService
         morganaPrompts = new Lazy<Records.Prompt[]>(LoadMorganaPrompts);
     }
 
-    /// <summary>Gets all prompts merged from framework + domain sources (last-wins if ID duplication).</summary>
-    /// <returns>Array of framework prompts + domain prompts</returns>
-    public async Task<Records.Prompt[]> GetAllPromptsAsync()
-    {
-        // The domain layer is read at every call because the plugins may have been merged since the last one.
-        List<Records.Prompt> agentPrompts = await agentConfigService.GetAgentPromptsAsync();
-        // Framework prompts first: an id declared in both layers is not resolved by order but refused by ResolveAsync.
-        return [..morganaPrompts.Value, ..agentPrompts];
-    }
-
     /// <summary>Resolves a prompt by ID (case-insensitive) from merged framework + domain sources.</summary>
-    /// <param name="promptID">Framework ID (Morgana, Classifier, Guard, Presentation) or a domain intent name.</param>
+    /// <param name="promptID">Framework ID (Morgana, Classifier, Guard, Presentation, ChannelAdapter) or a domain intent name.</param>
     /// <exception cref="KeyNotFoundException">ID not found in morgana.json or agents.json.</exception>
+    /// <exception cref="InvalidOperationException">ID declared in both morgana.json and agents.json.</exception>
     public async Task<Records.Prompt> ResolveAsync(string promptID)
     {
-        // Both layers already merged: a framework id and a domain intent are looked up the same way,
+        // One lookup for both layers: a framework id and a domain intent are found the same way,
         // which is what lets an agent's prompt be reached by its intent name alone.
-        Records.Prompt[] allPrompts = await GetAllPromptsAsync();
+        Records.Prompt[] allPrompts = [..morganaPrompts.Value, ..await agentPrompts.Value];
 
         // A framework id and a domain intent name are meant to be disjoint vocabularies. An intent
         // named "guard" or "classifier" collides with a framework prompt: that has to fail loudly
@@ -71,7 +63,7 @@ public class ConfigurationPromptResolverService : IPromptResolverService
     /// Loads framework prompts from morgana.json, embedded as a resource in this very assembly.
     /// Called once (via the Lazy&lt;&gt; above), the first time any prompt is resolved.
     /// </summary>
-    /// <returns>Array of framework prompts (Morgana, Classifier, Guard, Presentation)</returns>
+    /// <returns>Array of framework prompts (Morgana, Classifier, Guard, Presentation, ChannelAdapter)</returns>
     /// <exception cref="FileNotFoundException">morgana.json is not embedded in this assembly.</exception>
     private static Records.Prompt[] LoadMorganaPrompts()
     {
