@@ -34,8 +34,8 @@ public interface IChannelMetadataStore
     Task<ChannelMetadata> RegisterChannelMetadataAsync(string conversationId, ChannelMetadata declaredChannelMetadata);
 
     /// <summary>
-    /// Drops the in-memory copy of a conversation's handshake. The persisted record stays, so a
-    /// later lookup for the same conversation still finds it.
+    /// Drops the in-memory copy of a conversation's handshake and its last answer. The persisted record
+    /// stays, so a later lookup for the same conversation still finds the handshake.
     /// </summary>
     void EvictChannelMetadata(string conversationId);
 
@@ -47,4 +47,16 @@ public interface IChannelMetadataStore
     /// the start-conversation gate refuses to open one without it, so this is a fault to surface
     /// and never a case to serve.</exception>
     ValueTask<ChannelMetadata> GetChannelMetadataAsync(string conversationId);
+
+    /// <summary>
+    /// Keeps a message the channel delivered as its conversation's last answer when it is part of the conversation
+    /// (<see cref="ChannelMessageTypes.Assistant"/> or <see cref="ChannelMessageTypes.Presentation"/>); notices are ignored.
+    /// </summary>
+    void RecordDeliveredMessage(ChannelMessage deliveredMessage);
+
+    /// <summary>
+    /// The last answer this process delivered to a conversation, as the user saw it; null when none was delivered
+    /// since the process started or the conversation was evicted. Held in memory only, with no record behind it.
+    /// </summary>
+    ChannelMessage? GetLastAnswer(string conversationId);
 }

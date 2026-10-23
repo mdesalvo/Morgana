@@ -36,9 +36,9 @@ public class LLMGuardRailService : IGuardRailService
     private readonly string contentFilteredRefusal;
 
     /// <summary>
-    /// The record of the conversation, from which the last turn the user saw is read.
+    /// The channel store, which keeps the last answer the user saw in each conversation.
     /// </summary>
-    private readonly IConversationPersistenceService conversationPersistenceService;
+    private readonly IChannelMetadataStore channelMetadataStore;
 
     /// <summary>
     /// Initialises a new instance of <see cref="LLMGuardRailService"/>.
@@ -46,16 +46,16 @@ public class LLMGuardRailService : IGuardRailService
     /// </summary>
     /// <param name="llmService">LLM service used for the async policy check.</param>
     /// <param name="promptResolverService">Prompt resolver used to load Guard configuration.</param>
-    /// <param name="conversationPersistenceService">Record of the conversation, read for the last turn the user saw.</param>
+    /// <param name="channelMetadataStore">Channel store, read for the last answer the user saw.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
     public LLMGuardRailService(
         ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
-        IConversationPersistenceService conversationPersistenceService,
+        IChannelMetadataStore channelMetadataStore,
         ILogger logger)
     {
         this.llmService = llmService;
-        this.conversationPersistenceService = conversationPersistenceService;
+        this.channelMetadataStore = channelMetadataStore;
         this.logger = logger;
 
         // The guard gates every user message, so its prompt is needed from the first turn and is
@@ -80,44 +80,27 @@ public class LLMGuardRailService : IGuardRailService
     }
 
     /// <summary>
-    /// The assistant's last turn as the user saw it, its text followed by its card and its buttons; null when nobody has answered yet or the record cannot be read.
+    /// The assistant's last answer as the user saw it, its text followed by its card and its buttons; null when none was delivered yet in this process.
     /// </summary>
-    private async Task<ChatMessage?> GetPrecedingAssistantMessageAsync(string conversationId)
+    private ChatMessage? GetPrecedingAssistantMessage(string conversationId)
     {
-        MorganaChatMessage[] history;
-        try
-        {
-            // The whole record, from which the last assistant turn is picked below.
-            history = await conversationPersistenceService.GetConversationHistoryAsync(conversationId);
-        }
-        catch (Exception ex)
-        {
-            // A record that cannot be read must not cost the user their turn, so the message is judged without context.
-            logger.LogWarning(ex,
-                "LLMGuardRailService: the preceding turn could not be read for conversation {ConversationId}; the message is judged alone",
-                conversationId);
+        // The answer the channel last delivered, kept in memory as it reached the user.
+        ChannelMessage? lastAnswer = channelMetadataStore.GetLastAnswer(conversationId);
 
-            // No context is handed to the judgment.
-            return null;
-        }
-
-        // The user's own phrase may already be on record when the guard runs, which is why the last assistant message is searched rather than the last message.
-        MorganaChatMessage? lastAssistantMessage = history.LastOrDefault(message => message.Type == ChatMessageType.Assistant);
-
-        // Nobody has answered yet: the message opens the conversation and has nothing to refer to.
-        if (lastAssistantMessage is null)
+        // Nothing delivered yet in this process (a new conversation before its welcome, or the first message after a restart): judged alone.
+        if (lastAnswer is null)
             return null;
 
         // The text comes first because it is what the user read before anything else.
-        List<AIContent> contents = [new TextContent(lastAssistantMessage.Text)];
+        List<AIContent> contents = [new TextContent(lastAnswer.Text)];
 
         // The card travels as JSON, the form in which the channel received it.
-        if (lastAssistantMessage.RichCard is not null)
-            contents.Add(new TextContent(JsonSerializer.Serialize(lastAssistantMessage.RichCard, Records.DefaultJsonSerializerOptions)));
+        if (lastAnswer.RichCard is not null)
+            contents.Add(new TextContent(JsonSerializer.Serialize(lastAnswer.RichCard, Records.DefaultJsonSerializerOptions)));
 
         // The buttons travel as the JSON list of their labels, which is all the user saw of them.
-        if (lastAssistantMessage.QuickReplies?.Any() == true)
-            contents.Add(new TextContent(JsonSerializer.Serialize(lastAssistantMessage.QuickReplies.Select(quickReply => quickReply.Label).ToList(), Records.DefaultJsonSerializerOptions)));
+        if (lastAnswer.QuickReplies?.Any() == true)
+            contents.Add(new TextContent(JsonSerializer.Serialize(lastAnswer.QuickReplies.Select(quickReply => quickReply.Label).ToList(), Records.DefaultJsonSerializerOptions)));
 
         // The turn as one assistant message, placed before the user's own.
         return new ChatMessage(ChatRole.Assistant, contents);
@@ -129,7 +112,7 @@ public class LLMGuardRailService : IGuardRailService
         try
         {
             // The turn the user is answering, so that a reply such as "list them" is read against what it refers to.
-            ChatMessage? precedingAssistantMessage = await GetPrecedingAssistantMessageAsync(conversationId);
+            ChatMessage? precedingAssistantMessage = GetPrecedingAssistantMessage(conversationId);
 
             // The first call of every turn, on the framework tier: it stands between the user
             // and the whole pipeline, so nothing downstream runs until it has answered.

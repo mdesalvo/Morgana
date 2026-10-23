@@ -24,7 +24,7 @@ public static class Records
     /// <summary>
     /// JSON options for every deserialization of model output and prompt configuration: tolerant of casing and property order, enums as camel-case names.
     /// </summary>
-    internal static readonly JsonSerializerOptions DefaultJsonSerializerOptions =
+    public static readonly JsonSerializerOptions DefaultJsonSerializerOptions =
         new JsonSerializerOptions
         {
             AllowOutOfOrderMetadataProperties = true,

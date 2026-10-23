@@ -991,6 +991,50 @@ public sealed class TurnClosureTests
             welcome.QuickReplies.Select(button => button.Value));
     }
 
+    [Fact]
+    public async Task TurnClosure_Guard_judges_against_the_last_answer_the_channel_delivered()
+    {
+        ChannelMetadataStore store = new ChannelMetadataStore(
+            new SQLiteConversationPersistenceService(
+                Options.Create(new Records.ConversationPersistenceOptions
+                {
+                    StoragePath = Path.Combine(Path.GetTempPath(), $"guard-context-{Guid.NewGuid():N}"),
+                    EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+                }),
+                NullLogger.Instance),
+            new ConfigurationBuilder().Build(),
+            NullLogger.Instance);
+        WelcomeModel model = new WelcomeModel("""{"compliant":true,"violation":null}""");
+        LLMGuardRailService guard = new LLMGuardRailService(model, new ConfigurationPromptResolverService(new ScriptedDomain()), store, NullLogger.Instance);
+
+        // Nothing delivered yet: the message is judged alone.
+        await guard.CheckAsync("conv-guard", "list them");
+        Assert.Null(model.LastPrecedingMessages);
+
+        // An answer with its buttons reaches the user, then a notice that is not part of the conversation.
+        store.RecordDeliveredMessage(new ChannelMessage
+        {
+            ConversationId = "conv-guard",
+            Text = "You have 3 invoices.",
+            MessageType = ChannelMessageTypes.Assistant,
+            QuickReplies = [new QuickReply("details", "📄 Details", "Show the details", false)]
+        });
+        store.RecordDeliveredMessage(new ChannelMessage { ConversationId = "conv-guard", Text = "Your budget is running low.", MessageType = ChannelMessageTypes.SystemWarning });
+        await guard.CheckAsync("conv-guard", "list them");
+
+        // The judgment reads the answer the user saw, its text and then its button labels; the notice is not it.
+        ChatMessage precedingMessage = Assert.Single(model.LastPrecedingMessages!);
+        Assert.Equal(ChatRole.Assistant, precedingMessage.Role);
+        Assert.Equal(
+            ["You have 3 invoices.", JsonSerializer.Serialize(new List<string> { "📄 Details" }, Records.DefaultJsonSerializerOptions)],
+            precedingMessage.Contents.OfType<TextContent>().Select(content => content.Text));
+
+        // A conversation that ended leaves nothing behind: its next message would be judged alone.
+        store.EvictChannelMetadata("conv-guard");
+        await guard.CheckAsync("conv-guard", "list them");
+        Assert.Null(model.LastPrecedingMessages);
+    }
+
     /// <summary>Presents the example plugin's four intents on a channel of the given name, over a model that answers as given.</summary>
     private static async Task<Records.PresentationResult> PresentAsync(string channelName, string? welcomeAnswer)
     {
@@ -1259,11 +1303,20 @@ public sealed class TurnClosureTests
         /// <inheritdoc />
         public Records.LLMTier FrameworkTier => Records.LLMTier.Economy;
 
+        /// <summary>The turn context that the last call handed the model; null when it handed none.</summary>
+        public IReadOnlyList<ChatMessage>? LastPrecedingMessages { get; private set; }
+
         /// <inheritdoc />
         public Task<T?> CompleteStructuredAsync<T>(string conversationId, string systemPrompt, string userPrompt, JsonElement? responseSchema = null, IReadOnlyList<ChatMessage>? precedingMessages = null)
-            => welcomeAnswer is null
+        {
+            // Kept for the guard's case, which checks what the judgment was given beside the message.
+            LastPrecedingMessages = precedingMessages;
+
+            // The answer as given, or a failure when the case scripts none.
+            return welcomeAnswer is null
                 ? throw new InvalidOperationException("The model is unreachable")
                 : Task.FromResult(JsonSerializer.Deserialize<T>(welcomeAnswer, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        }
 
         /// <inheritdoc />
         public IChatClient GetChatClient(Records.LLMTier tier) => throw new InvalidOperationException("The presenter asks for text, never a chat client");
@@ -1285,6 +1338,12 @@ public sealed class TurnClosureTests
 
         /// <inheritdoc />
         public void EvictChannelMetadata(string conversationId) { }
+
+        /// <inheritdoc />
+        public void RecordDeliveredMessage(ChannelMessage deliveredMessage) { }
+
+        /// <inheritdoc />
+        public ChannelMessage? GetLastAnswer(string conversationId) => null;
 
         /// <inheritdoc />
         public ValueTask<ChannelMetadata> GetChannelMetadataAsync(string conversationId)
