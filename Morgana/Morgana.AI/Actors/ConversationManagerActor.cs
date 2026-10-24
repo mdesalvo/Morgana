@@ -290,8 +290,7 @@ public class ConversationManagerActor : MorganaActor
             // Morgana's line is filed dated like the push it accompanies.
             ChatMessage morganaMessage = new ChatMessage(ChatRole.Assistant, response.Response) { CreatedAt = answerTimestamp };
 
-            // The buttons she offered are recorded beside the line, so that a press of one is recognised as the
-            // choice of an agent at the next turn: this is what records the disambiguation buttons.
+            // The buttons she offered are recorded beside her line, so that the history shows them after a reload.
             if (response.QuickReplies is { Count: > 0 })
             {
                 morganaMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();

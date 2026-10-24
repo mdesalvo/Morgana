@@ -64,8 +64,9 @@ public class AdaptingChannelService : IChannelService
         // callback — already within the budget that channel declared.
         await concreteChannelService.SendMessageAsync(adaptedChannelMessage);
 
-        // The message as the user received it becomes the conversation's last answer, against which the guard judges
-        // the next message. Kept only once the transport accepted it, so an undelivered message is never that context.
+        // The message as the user received it becomes the conversation's last answer: the guard judges the next message
+        // against it and a press of one of its buttons lands on the agent it names. Kept only once the transport
+        // accepted it, so an undelivered message is never that context.
         channelMetadataStore.RecordDeliveredMessage(adaptedChannelMessage);
     }
 

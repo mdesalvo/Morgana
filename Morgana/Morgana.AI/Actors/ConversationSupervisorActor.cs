@@ -233,32 +233,25 @@ public class ConversationSupervisorActor : MorganaActor
     }
 
     /// <summary>
-    /// Finds the intent that the user's message chooses when it is the press of a button on Morgana's last line.
+    /// Finds the intent that the user's message chooses when it is the press of a button on the last answer delivered to the user.
     /// </summary>
     /// <param name="userText">What the user sent: a pressed button sends its own value.</param>
     /// <returns>The configured intent that the pressed button names; <c>null</c> when the message is not such a press.</returns>
     private async Task<string?> FindLandingIntentAsync(string userText)
     {
-        // Morgana's own line is the one that offered the button, whoever spoke after it.
-        IReadOnlyList<ChatMessage> morganaMessages = await conversationPersistenceService.LoadParticipantMessagesAsync(conversationId, Constants.Morgana);
-        ChatMessage? lastMorganaLine = morganaMessages.LastOrDefault(message => message.Role == ChatRole.Assistant);
+        // The buttons on screen are those of the last answer the channel delivered, as the user received it;
+        // after a restart none is held, so a press reaches the classifier as an ordinary request.
+        List<QuickReply>? offeredButtons = channelMetadataStore.GetLastAnswer(conversationId)?.QuickReplies;
 
-        // A saved row hands the recorded buttons back as JSON and a live one as the string that was stored.
-        string? recordedButtons = lastMorganaLine?.AdditionalProperties?.GetValueOrDefault(Constants.MessageProperties.TurnQuickReplies) switch
-        {
-            string text => text,
-            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
-            _ => null
-        };
-
-        // A last line without buttons (a farewell for one) leaves the message an ordinary request.
-        if (string.IsNullOrEmpty(recordedButtons))
+        // A last answer with no buttons leaves the message an ordinary request: a farewell offers none
+        // and a channel that shows none receives none.
+        if (offeredButtons is null || offeredButtons.Count == 0)
             return null;
 
         // A press sends the button's own value, so the text that matches an offered value is that button.
-        List<QuickReply>? buttons = JsonSerializer.Deserialize<List<QuickReply>>(recordedButtons, Records.DefaultJsonSerializerOptions);
-        QuickReply? pressedButton = buttons?.FirstOrDefault(button =>
+        QuickReply? pressedButton = offeredButtons.FirstOrDefault(button =>
             string.Equals(button.Value, userText.Trim(), StringComparison.OrdinalIgnoreCase));
+
         // Typed text that matches no offered button is an ordinary request.
         if (pressedButton is null)
             return null;
