@@ -65,7 +65,7 @@
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="$(OpenTelemetryVersion)" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="$(OpenTelemetryVersion)" />
     <!-- Services -->
-    <PackageReference Include="Markdig" Version="1.4.*" />
+    <PackageReference Include="Markdig" Version="1.5.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.*" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.*" />
   </ItemGroup>
