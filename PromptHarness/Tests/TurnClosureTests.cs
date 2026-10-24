@@ -294,7 +294,7 @@ public sealed class TurnClosureTests
         while (true)
         {
             JsonElement? section = level.GetProperty("anyOf").EnumerateArray()
-                .Where(alternative => alternative.GetProperty("properties").GetProperty("type").GetProperty("const").GetString() == "section")
+                .Where(alternative => alternative.GetProperty("properties").GetProperty("type").GetProperty("enum")[0].GetString() == "section")
                 .Select(alternative => (JsonElement?)alternative).FirstOrDefault();
             if (section is null)
                 break;
@@ -332,10 +332,13 @@ public sealed class TurnClosureTests
         Assert.False(properties.TryGetProperty("awaits", out _));
 
         // Every component is one closed alternative, told apart by its type.
-        string[] componentTypes = [.. properties.GetProperty("card").GetProperty("properties").GetProperty("components")
-            .GetProperty("items").GetProperty("anyOf").EnumerateArray()
-            .Select(alternative => alternative.GetProperty("properties").GetProperty("type").GetProperty("const").GetString()!)];
+        JsonElement[] alternatives = [.. properties.GetProperty("card").GetProperty("properties").GetProperty("components")
+            .GetProperty("items").GetProperty("anyOf").EnumerateArray()];
+        string[] componentTypes = [.. alternatives.Select(alternative => alternative.GetProperty("properties").GetProperty("type").GetProperty("enum")[0].GetString()!)];
         Assert.Equal(["text_block", "key_value", "divider", "list", "section", "grid", "badge", "image"], componentTypes);
+
+        // Each alternative requires its own type, so no provider reads a component requiring a property it does not declare.
+        Assert.All(alternatives, alternative => Assert.Contains("type", alternative.GetProperty("required").EnumerateArray().Select(name => name.GetString())));
 
         string[] required = [.. reply.Function.JsonSchema.GetProperty("required").EnumerateArray().Select(name => name.GetString()!)];
         Assert.Equal(["text", "userIsLeaving"], required);

@@ -307,7 +307,9 @@ public class ReplyTool : MorganaTool
         // Each level is a copy: the section of one level must not be the section of the next.
         JsonObject level = recursiveItem.DeepClone().AsObject();
         JsonArray alternatives = level["anyOf"]!.AsArray();
-        JsonNode section = alternatives.First(alternative => alternative!["properties"]!["type"]!["const"]!.GetValue<string>() == "section")!;
+
+        // Each kind spells its discriminator as a one-value enum, which is how the section is told from the others.
+        JsonNode section = alternatives.First(alternative => alternative!["properties"]!["type"]!["enum"]![0]!.GetValue<string>() == "section")!;
 
         // The deepest level the channels lay out holds no section, so none is offered there.
         if (depth >= MaxCardDepth)

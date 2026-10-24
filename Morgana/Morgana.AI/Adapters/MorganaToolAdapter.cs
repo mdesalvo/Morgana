@@ -170,7 +170,8 @@ public class MorganaToolAdapter
                         && parameterDescriptions.TryGetValue(parameter.Name, out string? parameterDescription)
                             ? parameterDescription
                             : null,
-                    TransformSchemaNode = (context, node) => DeclareNullabilityAsAnnotated(context, node, implementation.Method.GetParameters())
+                    TransformSchemaNode = (context, node) => RequireDiscriminatorInEveryBranch(
+                        DeclareNullabilityAsAnnotated(context, node, implementation.Method.GetParameters()))
                 }
             });
 
@@ -232,6 +233,53 @@ public class MorganaToolAdapter
             RemoveNullFromType(items);
 
         // The corrected node replaces the one that the library wrote.
+        return schema;
+    }
+
+    /// <summary>
+    /// Makes each branch of a polymorphic node require the discriminator that the node requires and spell it as a
+    /// one-value enum, so that no provider reads a node requiring a property it does not declare.
+    /// </summary>
+    /// <remarks>A one-value enum accepts exactly what the constant accepted, so the schema accepts exactly the same arguments.</remarks>
+    /// <param name="node">The node as the nullability correction left it.</param>
+    private static JsonNode RequireDiscriminatorInEveryBranch(JsonNode node)
+    {
+        // Only a polymorphic node lists its kinds as branches and requires a property that it leaves to them to declare.
+        if (node is not JsonObject schema
+            || schema["anyOf"] is not JsonArray branches
+            || schema["properties"] is not null
+            || schema["required"] is not JsonArray discriminators)
+            return node;
+
+        // The names that the node requires, which every kind must therefore carry.
+        string[] discriminatorNames = [.. discriminators.Select(discriminator => discriminator!.GetValue<string>())];
+
+        // Each kind requires the discriminator first and then its own properties, so none can be written without it.
+        foreach (JsonObject branch in branches.OfType<JsonObject>())
+        {
+            string[] branchRequiredNames = branch["required"] is JsonArray branchRequired
+                ? [.. branchRequired.Select(requiredName => requiredName!.GetValue<string>())]
+                : [];
+            branch["required"] = new JsonArray([.. discriminatorNames.Union(branchRequiredNames).Select(JsonNode (requiredName) => JsonValue.Create(requiredName)!)]);
+
+            // A kind's discriminator is offered as the one value of an enum: Gemini writes a constant it only reads as a hint
+            // and invents kinds of its own, while it keeps to an enum.
+            foreach (string discriminatorName in discriminatorNames)
+            {
+                // A branch that spells its kind as a constant is the one rewritten; any other is left as it is.
+                if (branch["properties"]?[discriminatorName] is JsonObject discriminatorSchema
+                    && discriminatorSchema["const"] is JsonNode kind)
+                {
+                    // The kind leaves the constant before it becomes the enum's only value.
+                    discriminatorSchema.Remove("const");
+                    discriminatorSchema["type"] = "string";
+                    discriminatorSchema["enum"] = new JsonArray(kind);
+                }
+            }
+        }
+
+        // The node stops requiring what only its branches declare: Gemini refuses the whole tool otherwise.
+        schema.Remove("required");
         return schema;
     }
 
