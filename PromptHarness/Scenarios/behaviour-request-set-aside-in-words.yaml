@@ -1,0 +1,35 @@
+id: behaviour-request-set-aside-in-words
+description: >-
+  A request in hand is put down only when the user says so. After the press of "A plan clause",
+  which waits for the clause, the user says in words that they no longer want one: the request is let
+  go and the turn closes on the agent's own menu, while the user stays with the agent.
+
+turns:
+  - press: contract
+    expect:
+      agent: ContractAgent
+      classified: false
+      quickReplies: "min:2"
+      textNotEmpty: true
+
+  - press: GetContractClause
+    expect:
+      agent: ContractAgent
+      toolsCalledFirst: [GetContractClause]
+      quickReplyLabels: []
+      textNotEmpty: true
+
+  - say: "Actually, never mind the clauses, I don't need one anymore."
+    expect:
+      agent: ContractAgent
+      # The user stays with the agent: setting a request aside is not a goodbye.
+      agentCompleted: false
+      toolsNotCalled: [GetContractClause]
+      quickReplyLabels:
+        - "🌱 What the plan offers"
+        - "📜 My care plan"
+        - "📑 A plan clause"
+        - "🗓️ My tending visits"
+        - "✂️ How to end my plan"
+        - "✨ We're done, thanks"
+      textNotEmpty: true

@@ -1,0 +1,31 @@
+id: behaviour-request-left-for-another-tool
+description: >-
+  A user who asks for something else while a request waits goes where they asked. After the press of
+  "A plan clause", which waits for the clause, the user asks for their next tending visit: that
+  call is made, the clause is let go and the turn closes on the agent's menu.
+
+turns:
+  - press: contract
+    expect:
+      agent: ContractAgent
+      classified: false
+      quickReplies: "min:2"
+      textNotEmpty: true
+
+  - press: GetContractClause
+    expect:
+      agent: ContractAgent
+      toolsCalledFirst: [GetContractClause]
+      quickReplyLabels: []
+      textNotEmpty: true
+
+  - say: "Actually, when is my next tending visit? My customer code is K312B."
+    expect:
+      agent: ContractAgent
+      agentCompleted: false
+      toolsCalled: [GetVisitSchedule]
+      toolsNotCalled: [GetContractClause]
+      quickReplies: "min:2"
+      textNotEmpty: true
+    judge:
+      - "The response gives the date of the next tending visit."

@@ -1,0 +1,28 @@
+id: behaviour-request-left-by-leaving
+description: >-
+  A goodbye ends everything, a request in hand included. After the press of "A plan clause", which
+  waits for the clause, the user says goodbye: the agent lets them go back to Morgana and the farewell
+  carries no button.
+
+turns:
+  - press: contract
+    expect:
+      agent: ContractAgent
+      classified: false
+      quickReplies: "min:2"
+      textNotEmpty: true
+
+  - press: GetContractClause
+    expect:
+      agent: ContractAgent
+      toolsCalledFirst: [GetContractClause]
+      quickReplyLabels: []
+      textNotEmpty: true
+
+  - say: "That's all for today, thank you. Goodbye!"
+    expect:
+      agent: ContractAgent
+      agentCompleted: true
+      toolsNotCalled: [GetContractClause]
+      quickReplies: none
+      textNotEmpty: true

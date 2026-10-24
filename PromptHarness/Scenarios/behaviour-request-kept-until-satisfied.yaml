@@ -1,0 +1,52 @@
+id: behaviour-request-kept-until-satisfied
+description: >-
+  A request in hand stays in hand until it is satisfied. The press of "A plan clause" is the call of
+  GetContractClause, which lacks the clause: the user asks for the list, gives a number that the plan
+  does not have and finally one that it has. Every turn before the clause is read awaits the typed
+  answer, so no button stands in front of the text box; the menu returns only with the clause.
+
+turns:
+  - press: contract
+    expect:
+      agent: ContractAgent
+      classified: false
+      quickReplies: "min:2"
+      textNotEmpty: true
+
+  - press: GetContractClause
+    expect:
+      agent: ContractAgent
+      toolsCalledFirst: [GetContractClause]
+      quickReplyLabels: []
+      textNotEmpty: true
+
+  - say: "I don't know the number, can you list them?"
+    expect:
+      agent: ContractAgent
+      # A clarification within the request keeps it: nothing else is called and no button appears.
+      toolsNotCalled: [GetContractDetails, GetPlanOverview, GetVisitSchedule, GetTerminationProcedure]
+      quickReplyLabels: []
+      textNotEmpty: true
+    judge:
+      - "The response lists the clauses of the plan."
+
+  - say: "9"
+    expect:
+      agent: ContractAgent
+      # No clause 9 exists, whether the call runs and fails or the model knows it from the tool: either way
+      # the request is not satisfied, so it still waits for the user and no button appears.
+      toolsNotCalled: [GetContractDetails, GetPlanOverview, GetVisitSchedule, GetTerminationProcedure]
+      quickReplyLabels: []
+      textNotEmpty: true
+    judge:
+      - "The response says that the plan has no clause 9."
+
+  - say: "Sorry, I meant 5"
+    expect:
+      agent: ContractAgent
+      agentCompleted: false
+      toolsCalled: [GetContractClause]
+      quickReplies: "min:2"
+      textNotEmpty: true
+    judge:
+      - "The response gives the content of clause 5, about auto-renewal."
