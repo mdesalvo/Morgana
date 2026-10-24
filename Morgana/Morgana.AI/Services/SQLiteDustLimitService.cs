@@ -9,7 +9,7 @@ namespace Morgana.AI.Services;
 
 /// <summary>
 /// SQLite-backed dust limiter: a per-conversation LIFETIME budget (no sliding window, no reset)
-/// in the single-row <c>dust_budget</c> table, sharing the same per-conversation database as
+/// in the single-row <c>dust_budget</c> table of the conversation's own database, opened through
 /// <see cref="SQLiteConversationPersistenceService"/>. "Let-it-finish": a turn already running
 /// completes even if it pushes the total over budget — only the NEXT turn gets blocked, by
 /// <see cref="IsOverBudgetAsync"/>. Every operation fails open on a storage fault.
@@ -29,29 +29,22 @@ public class SQLiteDustLimitService : IDustLimitService
     private readonly DustLimitingOptions options;
 
     /// <summary>
-    /// Persistence configuration, read only for <c>StoragePath</c>: the budget tables live in the
-    /// conversation's own database, not in one of their own.
-    /// </summary>
-    private readonly ConversationPersistenceOptions persistenceOptions;
-
-    /// <summary>
-    /// Owner of the database file. Delegated to for schema creation, since a dust charge can land
+    /// Owner of the database file. Opens it at the current schema, since a dust charge can land
     /// before anything else has had reason to create the conversation's database.
     /// </summary>
-    private readonly IConversationPersistenceService persistenceService;
+    private readonly SQLiteConversationPersistenceService persistenceService;
 
     /// <summary>
     /// Initializes the dust limiter with its policy and the persistence service that owns
-    /// the per-conversation SQLite database lifecycle.
+    /// the per-conversation SQLite database lifecycle: the budget tables live in the conversation's own
+    /// database, which this service opens through it.
     /// </summary>
     public SQLiteDustLimitService(
         IOptions<DustLimitingOptions> options,
-        IOptions<ConversationPersistenceOptions> persistenceOptions,
-        IConversationPersistenceService persistenceService,
+        SQLiteConversationPersistenceService persistenceService,
         ILogger<SQLiteDustLimitService> logger)
     {
         this.options = options.Value;
-        this.persistenceOptions = persistenceOptions.Value;
         this.persistenceService = persistenceService;
         this.logger = logger;
 
@@ -78,12 +71,9 @@ public class SQLiteDustLimitService : IDustLimitService
 
         try
         {
-            // The budget row is seeded with the schema, so it exists before the first charge.
-            await persistenceService.EnsureDatabaseInitializedAsync(conversationId);
-
-            // The budget lives in the conversation's own database, which is opened for the charge.
-            await using SqliteConnection connection = new SqliteConnection(GetConnectionString(conversationId));
-            await connection.OpenAsync();
+            // The budget lives in the conversation's own database, opened at a schema that seeds the budget row
+            // before the first charge.
+            await using SqliteConnection connection = await persistenceService.OpenDatabaseAsync(conversationId);
 
             // The running total and the line accounting for it are written together: a total nobody can
             // break down is a bill without its items.
@@ -272,12 +262,8 @@ public class SQLiteDustLimitService : IDustLimitService
 
         try
         {
-            // The warning flags live on the budget row, which the schema seeds.
-            await persistenceService.EnsureDatabaseInitializedAsync(conversationId);
-
-            // The budget row lives in the conversation's own database, which is opened for the read and for the marks.
-            await using SqliteConnection connection = new SqliteConnection(GetConnectionString(conversationId));
-            await connection.OpenAsync();
+            // The warning flags live on the budget row, which the schema seeds in the conversation's own database.
+            await using SqliteConnection connection = await persistenceService.OpenDatabaseAsync(conversationId);
 
             // Reading the flags and setting them are one step, so that no two turns warn the same user twice.
             await using SqliteTransaction transaction = connection.BeginTransaction();
@@ -357,12 +343,9 @@ public class SQLiteDustLimitService : IDustLimitService
     /// <returns>Dust consumed so far; zero when the row does not exist yet.</returns>
     private async Task<double> ReadConsumedAsync(string conversationId)
     {
-        // The first read of a conversation may precede any other use of its database.
-        await persistenceService.EnsureDatabaseInitializedAsync(conversationId);
-
-        // The spent total is read from the budget row of the conversation's own database.
-        await using SqliteConnection connection = new SqliteConnection(GetConnectionString(conversationId));
-        await connection.OpenAsync();
+        // The spent total is read from the budget row of the conversation's own database,
+        // whose first read may precede any other use of it.
+        await using SqliteConnection connection = await persistenceService.OpenDatabaseAsync(conversationId);
 
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT dust_consumed FROM dust_budget WHERE id = 1;";
@@ -370,17 +353,5 @@ public class SQLiteDustLimitService : IDustLimitService
 
         // A missing or null total is a conversation that has spent nothing.
         return result is null || result == DBNull.Value ? 0.0 : Convert.ToDouble(result, CultureInfo.InvariantCulture);
-    }
-
-    /// <summary>
-    /// Points at the conversation's own database. The identifier is sanitized here as it is in the
-    /// persistence service: it reaches this layer from a channel and it becomes a file name.
-    /// </summary>
-    /// <param name="conversationId">Conversation whose database is addressed.</param>
-    private string GetConnectionString(string conversationId)
-    {
-        // The same file name that persistence derives for this id.
-        string sanitized = string.Join("_", conversationId.Split(Path.GetInvalidFileNameChars()));
-        return $"Data Source={Path.Combine(persistenceOptions.StoragePath, $"morgana-{sanitized}.db")}";
     }
 }

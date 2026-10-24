@@ -229,8 +229,10 @@ if (!string.IsNullOrWhiteSpace(conversationStoragePath))
 // The options the persistence service binds, read from the section that holds the storage path and the encryption key.
 builder.Services.Configure<Records.ConversationPersistenceOptions>(
     builder.Configuration.GetSection("Morgana:ConversationPersistence"));
+// The rate and dust limiters keep their tables in the same database files and open them through this one instance.
+builder.Services.AddSingleton<SQLiteConversationPersistenceService>();
 // The record every other service reads or writes a conversation through.
-builder.Services.AddSingleton<IConversationPersistenceService, SQLiteConversationPersistenceService>();
+builder.Services.AddSingleton<IConversationPersistenceService>(serviceProvider => serviceProvider.GetRequiredService<SQLiteConversationPersistenceService>());
 
 // ==============================================================================
 // SECTION 7.2: Rate Limiting
@@ -239,8 +241,8 @@ builder.Services.AddSingleton<IConversationPersistenceService, SQLiteConversatio
 // Stores request logs in the same SQLite database as conversation persistence
 //
 // Architecture:
-// - SQLiteRateLimitService depends on IConversationPersistenceService
-// - Delegates database initialization to persistence service (single source of truth)
+// - SQLiteRateLimitService depends on SQLiteConversationPersistenceService
+// - Opens the conversation's database through it, which names the file and migrates the schema
 //
 // Configuration: Morgana:RateLimiting in appsettings.json
 // Storage: Reuses conversation SQLite databases (morgana-{conversationId}.db)
