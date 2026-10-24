@@ -308,9 +308,21 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
 
             _logger.LogInformation("Message sent, response status: {StatusCode}", response.StatusCode);
 
-            // Morgana refused the turn: no reply will come, so the composer is freed with the error
+            // Morgana refused the turn: no reply will come, so the composer is freed
             if (!response.IsSuccessStatusCode)
             {
+                // A limit was hit and Morgana has already told the user why over the channel: Cauldron adds nothing of its own
+                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    _logger.LogWarning("SendMessage refused on a limit: {StatusCode}", response.StatusCode);
+
+                    // Nothing is coming to retire the indicator or reopen the composer, so the turn ends here
+                    _chatStateService.RemoveTypingIndicator();
+                    _chatStateService.IsSending = false;
+                    return false;
+                }
+
+                // Any other refusal is unexplained, so the composer is freed with the error
                 _logger.LogError("SendMessage failed: {StatusCode}", response.StatusCode);
                 FailTurn($"Message not sent: {response.StatusCode}. Please try again.", "send_message_http_error");
                 return false;
