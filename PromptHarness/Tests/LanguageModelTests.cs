@@ -6,6 +6,7 @@ using Morgana.AI.Interfaces;
 using Morgana.AI.LanguageModels.Anthropic;
 using Morgana.AI.LanguageModels.OpenAI;
 using Morgana.AI.LanguageModels.AzureOpenAI;
+using Morgana.AI.LanguageModels.Google;
 using Morgana.AI.LanguageModels.Ollama;
 using Morgana.AI.Services;
 using Xunit;
@@ -156,6 +157,16 @@ public sealed class LanguageModelTests
         Assert.Equal("economy-model", MetadataOf(llm, Records.LLMTier.Economy).DefaultModelId);
     }
 
+    [Fact]
+    public void LanguageModel_A_Google_tier_is_built_on_the_model_it_declares()
+    {
+        // Google needs only its key, which the base configuration already supplies on every tier.
+        ILanguageModelService llm = Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Google")));
+
+        Assert.Equal("economy-model", MetadataOf(llm, Records.LLMTier.Economy).DefaultModelId);
+    }
+
     [Theory]
     [InlineData(null, Records.LLMTier.Efficiency)]
     [InlineData("Economy", Records.LLMTier.Economy)]
@@ -193,7 +204,7 @@ public sealed class LanguageModelTests
                 values.Remove(key);
 
         IConfiguration configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
-        MorganaLanguageModel[] providers = [new AnthropicLanguageModel(), new AzureOpenAILanguageModel(), new OpenAILanguageModel(), new OllamaLanguageModel()];
+        MorganaLanguageModel[] providers = [new AnthropicLanguageModel(), new AzureOpenAILanguageModel(), new OpenAILanguageModel(), new OllamaLanguageModel(), new GoogleLanguageModel()];
         return new ConfigurationLanguageModelService(configuration, duplicateProvider is null ? providers : [.. providers, duplicateProvider]);
     }
 

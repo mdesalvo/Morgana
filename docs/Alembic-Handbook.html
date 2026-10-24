@@ -456,7 +456,7 @@
         <thead><tr><th>Component</th><th>Role</th><th>Technology</th><th>Default Port</th></tr></thead>
         <tbody>
           <tr><td><strong>Alembic</strong></td><td>The workbench itself: the interview, the colleagues, validation, emit</td><td>ASP.NET 10, Blazor Server, Microsoft Fluent UI Blazor 5</td><td>5005</td></tr>
-          <tr><td><strong>LLM</strong></td><td>Language model tiers, all its work on <code>Efficiency</code></td><td>Anthropic, Azure OpenAI, Ollama, OpenAI</td><td>n/a</td></tr>        </tbody>
+          <tr><td><strong>LLM</strong></td><td>Language model tiers, all its work on <code>Efficiency</code></td><td>Anthropic, Azure OpenAI, Google, Ollama, OpenAI</td><td>n/a</td></tr>        </tbody>
       </table>
 
       <div class="info-box">
@@ -651,7 +651,7 @@
       <table>
         <thead><tr><th>Setting</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td>Morgana:LanguageModels:Tiers:{Tier}:*</td><td>The three tiers (<code>Economy</code>, <code>Efficiency</code>, <code>Performance</code>), each with its <code>Provider</code> (one of the four that Alembic registers: <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>Ollama</code>, <code>OpenAI</code>), its <code>Connection</code>, <code>Options</code> and <code>MagicDust</code>. All three are declared, as in Morgana. <code>MagicDust</code> carries both axes at zero: pricing is never read, since Alembic calls <code>GetChatClient(Efficiency)</code> directly rather than going through the metered agent adapter</td></tr>
+          <tr><td>Morgana:LanguageModels:Tiers:{Tier}:*</td><td>The three tiers (<code>Economy</code>, <code>Efficiency</code>, <code>Performance</code>), each with its <code>Provider</code> (one of the five that Alembic registers: <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>Google</code>, <code>Ollama</code>, <code>OpenAI</code>), its <code>Connection</code>, <code>Options</code> and <code>MagicDust</code>. All three are declared, as in Morgana. <code>MagicDust</code> carries both axes at zero: pricing is never read, since Alembic calls <code>GetChatClient(Efficiency)</code> directly rather than going through the metered agent adapter</td></tr>
           <tr><td>Alembic:Work:AutosaveSeconds</td><td>How often the Draft in the circuit is snapshotted as a fallback for &ldquo;Save my work&rdquo;: never a resumption path on its own, only a floor under that one button (default: 30)</td></tr>
         </tbody>
       </table>

@@ -13,6 +13,7 @@
     <ProjectReference Include="..\Morgana.AI.LanguageModels\OpenAI\Morgana.AI.LanguageModels.OpenAI.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
     <ProjectReference Include="..\Morgana.AI.LanguageModels\AzureOpenAI\Morgana.AI.LanguageModels.AzureOpenAI.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
     <ProjectReference Include="..\Morgana.AI.LanguageModels\Ollama\Morgana.AI.LanguageModels.Ollama.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
+    <ProjectReference Include="..\Morgana.AI.LanguageModels\Google\Morgana.AI.LanguageModels.Google.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
   </ItemGroup>
 
   <!-- A2A hosting: publishes each Morgana agent as an A2A endpoint (server side + routes) -->

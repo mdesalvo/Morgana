@@ -10,6 +10,7 @@ using Morgana.AI.Services;
 using Morgana.AI.LanguageModels.Anthropic;
 using Morgana.AI.LanguageModels.AzureOpenAI;
 using Morgana.AI.LanguageModels.Ollama;
+using Morgana.AI.LanguageModels.Google;
 using Morgana.AI.LanguageModels.OpenAI;
 
 // Invariant before anything else runs, so no thread or circuit inherits the host's locale: the
@@ -93,6 +94,7 @@ builder.Services.AddSingleton<MorganaLanguageModel, AnthropicLanguageModel>();
 builder.Services.AddSingleton<MorganaLanguageModel, AzureOpenAILanguageModel>();
 builder.Services.AddSingleton<MorganaLanguageModel, OpenAILanguageModel>();
 builder.Services.AddSingleton<MorganaLanguageModel, OllamaLanguageModel>();
+builder.Services.AddSingleton<MorganaLanguageModel, GoogleLanguageModel>();
 
 // The tiers are read from the user secrets that Morgana shares.
 builder.Services.AddSingleton<ILanguageModelService>(sp =>

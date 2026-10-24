@@ -10,7 +10,7 @@ namespace Morgana.AI.Interfaces;
 /// </summary>
 /// <remarks>
 /// <para><strong>Purpose:</strong></para>
-/// <para>This service abstracts LLM provider specifics (Anthropic, Azure OpenAI, Ollama, OpenAI, ...) and provides
+/// <para>This service abstracts LLM provider specifics (Anthropic, Azure OpenAI, Google, Ollama, OpenAI, ...) and provides
 /// a unified interface for all LLM interactions in the Morgana framework. Each tier is served by its own
 /// provider, so one installation can mix them.</para>
 /// <para><strong>Usage Patterns:</strong></para>

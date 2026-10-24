@@ -24,6 +24,7 @@
        <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\OpenAI\Morgana.AI.LanguageModels.OpenAI.csproj" />
        <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\AzureOpenAI\Morgana.AI.LanguageModels.AzureOpenAI.csproj" />
        <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\Ollama\Morgana.AI.LanguageModels.Ollama.csproj" />
+       <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\Google\Morgana.AI.LanguageModels.Google.csproj" />
     </ItemGroup>
 
 </Project>

@@ -458,7 +458,7 @@
           <tr><td><strong>Cauldron</strong></td><td>Channel: HTML rich UI (SignalR delivery, full capability budget)</td><td>Blazor Server</td><td>5002</td></tr>
           <tr><td><strong>Grimoire</strong></td><td>Channel: TTY rich CLI (webhook delivery, full capability budget)</td><td>Spectre.Console on Kestrel</td><td>5004</td></tr>
           <tr><td><strong>Rune</strong></td><td>Channel: TTY CLI (webhook delivery, poor-but-honest capability budget)</td><td>Spectre.Console on Kestrel</td><td>5003</td></tr>
-          <tr><td><strong>LLM</strong></td><td>Language model provider, loaded as a plugin</td><td>Anthropic, Azure OpenAI, Ollama, OpenAI (shipped) or any <code>Microsoft.Extensions.AI</code> client</td><td>n/a</td></tr>
+          <tr><td><strong>LLM</strong></td><td>Language model provider, loaded as a plugin</td><td>Anthropic, Azure OpenAI, Google, Ollama, OpenAI (shipped) or any <code>Microsoft.Extensions.AI</code> client</td><td>n/a</td></tr>
           <tr><td><strong>MCP Server</strong></td><td>External tool provider (optional)</td><td>ModelContextProtocol.Core (Http/Stdio)</td><td>n/a</td></tr>
           <tr><td><strong>A2A Endpoint</strong></td><td>Every agent published for peer consultation at <code>/a2a/{intent}</code>, with its well-known agent card (optional)</td><td>Microsoft.Agents.AI.Hosting.A2A (JSON-RPC)</td><td>5001</td></tr>
         </tbody>
@@ -567,7 +567,7 @@
       </table>
     
       <div class="info-box">
-        <strong>Plugin Architecture:</strong> Build your agents as standalone .NET libraries referencing the <strong>Morgana.AI</strong> NuGet package. Drop the compiled DLL into the <code>plugins/</code> folder and Morgana discovers it at startup: zero configuration needed. LLM providers are plugins too: the <strong>Morgana.AI.LanguageModels</strong> packages (Anthropic, AzureOpenAI, OpenAI, Ollama) sit in <code>plugins/</code> with their vendor SDK. A provider of your own is a <code>MorganaLanguageModel</code> subclass dropped there the same way.
+        <strong>Plugin Architecture:</strong> Build your agents as standalone .NET libraries referencing the <strong>Morgana.AI</strong> NuGet package. Drop the compiled DLL into the <code>plugins/</code> folder and Morgana discovers it at startup: zero configuration needed. LLM providers are plugins too: the <strong>Morgana.AI.LanguageModels</strong> packages (Anthropic, AzureOpenAI, OpenAI, Ollama, Google) sit in <code>plugins/</code> with their vendor SDK. A provider of your own is a <code>MorganaLanguageModel</code> subclass dropped there the same way.
       </div>
 
       <div class="page-footer">
@@ -620,7 +620,7 @@
       <table>
         <thead><tr><th>Setting</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td>Morgana:LanguageModels:Tiers:{Tier}:*</td><td>Three tiers, <code>Economy</code>, <code>Efficiency</code> and <code>Performance</code>, from the cheapest model to the most capable. Each names its <code>Provider</code> among those found in <code>plugins/</code>, where <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>OpenAI</code> and <code>Ollama</code> ship with Morgana. Its <code>Connection</code> carries the fields of that provider: ApiKey, Endpoint where it uses one, MaxRetries where its client retries, TimeoutSeconds. All three are mandatory: there is no cross-tier fallback</td></tr>
+          <tr><td>Morgana:LanguageModels:Tiers:{Tier}:*</td><td>Three tiers, <code>Economy</code>, <code>Efficiency</code> and <code>Performance</code>, from the cheapest model to the most capable. Each names its <code>Provider</code> among those found in <code>plugins/</code>, where <code>Anthropic</code>, <code>AzureOpenAI</code>, <code>OpenAI</code>, <code>Ollama</code> and <code>Google</code> ship with Morgana. Its <code>Connection</code> carries the fields of that provider: ApiKey, Endpoint where it uses one, MaxRetries where its client retries, TimeoutSeconds. All three are mandatory: there is no cross-tier fallback</td></tr>
           <tr><td>Morgana:LanguageModels:Tiers:{Tier}:Options:*</td><td>Narrow, JSON-bindable mirror of <code>ChatOptions</code> for this tier: <code>ModelId</code> and <code>MaxOutputTokens</code> (both required: the ceiling of a single model call, generous since reasoning counts against it)</td></tr>
           <tr><td>Morgana:LanguageModels:Tiers:{Tier}:MagicDust:*</td><td>Per-tier token pricing: <code>InputTokensPerDustUnit</code>, <code>OutputTokensPerDustUnit</code>, <code>CachedInputWeight</code>, <code>CacheCreationWeight</code></td></tr>
           <tr><td>Morgana:Authentication:Audience</td><td>Expected JWT audience (default: <code>morgana.ai</code>)</td></tr>
@@ -874,7 +874,7 @@
         <tbody>
           <tr><td>Source code</td><td>github.com/mdesalvo/Morgana</td></tr>
           <tr><td>NuGet package</td><td>nuget.org/packages/Morgana.AI</td></tr>
-          <tr><td>NuGet packages (LLM providers)</td><td>nuget.org/packages/Morgana.AI.LanguageModels.Anthropic, .AzureOpenAI, .OpenAI, .Ollama</td></tr>
+          <tr><td>NuGet packages (LLM providers)</td><td>nuget.org/packages/Morgana.AI.LanguageModels.Anthropic, .AzureOpenAI, .OpenAI, .Ollama, .Google</td></tr>
           <tr><td>Docker Hub (Morgana)</td><td>hub.docker.com/r/mdesalvo/morgana</td></tr>
           <tr><td>Docker Hub (Cauldron)</td><td>hub.docker.com/r/mdesalvo/cauldron</td></tr>
           <tr><td>Docker Hub (Grimoire)</td><td>hub.docker.com/r/mdesalvo/grimoire</td></tr>
