@@ -135,7 +135,7 @@ public class MorganaController : ControllerBase
 
         // Start opens and never reopens: accepting a known id would rewrite its handshake, handing its
         // replies to whoever named it. A genuine channel mints a fresh id per attempt and never meets this
-        if (conversationPersistenceService.ConversationExists(request.ConversationId))
+        if (await conversationPersistenceService.ConversationExistsAsync(request.ConversationId))
         {
             logger.LogWarning("Start requested for conversation {ConversationId} already on record; returning 409", request.ConversationId);
             return Conflict(new

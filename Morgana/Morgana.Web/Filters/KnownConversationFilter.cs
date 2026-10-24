@@ -21,7 +21,7 @@ public sealed class KnownConversationFilter(
         // So is an id that start could never have accepted, which is refused before it names a file on disk.
         string conversationId = context.RouteData.Values[ConversationIdRouteKey]?.ToString() ?? string.Empty;
         if (!Guid.TryParseExact(conversationId, "N", out _)
-            || !conversationPersistenceService.ConversationExists(conversationId))
+            || !await conversationPersistenceService.ConversationExistsAsync(conversationId))
         {
             logger.LogWarning("{Action} for unknown conversation {ConversationId}; returning 404",
                 context.ActionDescriptor.DisplayName, conversationId);

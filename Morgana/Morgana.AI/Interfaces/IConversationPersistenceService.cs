@@ -197,10 +197,11 @@ public interface IConversationPersistenceService
     /// <summary>
     /// Reports whether the conversation has a record. The restore path uses this to tell a genuine conversation
     /// from an identifier that never materialized.
+    /// It is asynchronous because a store may answer it over the network.
     /// </summary>
     /// <param name="conversationId">Conversation identifier.</param>
     /// <returns><c>true</c> if the conversation is present in the store, <c>false</c> otherwise.</returns>
-    bool ConversationExists(string conversationId);
+    Task<bool> ConversationExistsAsync(string conversationId);
 
     /// <summary>
     /// Whether the agent's row was rewritten by <see cref="SaveParticipantMessagesAsync"/> since the agent

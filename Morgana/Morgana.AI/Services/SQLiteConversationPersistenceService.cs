@@ -567,7 +567,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
     public async Task<IReadOnlyList<ChatMessage>> LoadParticipantMessagesAsync(string conversationId, string agentName)
     {
         // A conversation nobody has spoken in has no database, which is not a failure to report
-        if (!ConversationExists(conversationId))
+        if (!await ConversationExistsAsync(conversationId))
             return [];
 
         // The participant's row lives in the conversation's own database.
@@ -974,7 +974,7 @@ WHERE id = 1;
             throw new ArgumentException($"Invalid agent_identifier format: '{agentIdentifier}'. Expected format: '{{agent_name}}-{{conversation_id}}'");
 
         // An agent whose conversation has no database has no row that anybody could have rewritten
-        if (!ConversationExists(agentIdentifierParts[1]))
+        if (!await ConversationExistsAsync(agentIdentifierParts[1]))
             return false;
 
         // The connection is opened on the conversation's database, which the check above confirmed exists.
@@ -994,8 +994,9 @@ WHERE id = 1;
     }
 
     /// <inheritdoc/>
-    public bool ConversationExists(string conversationId)
-        => File.Exists(GetDatabasePath(conversationId));
+    public Task<bool> ConversationExistsAsync(string conversationId)
+        // On SQLite the conversation is its database file, which a lookup on the local disk answers.
+        => Task.FromResult(File.Exists(GetDatabasePath(conversationId)));
 
     /// <summary>
     /// Constructs the full file path for a conversation database.

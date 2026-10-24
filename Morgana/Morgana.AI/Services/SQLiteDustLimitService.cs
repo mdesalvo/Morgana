@@ -73,7 +73,7 @@ public class SQLiteDustLimitService : IDustLimitService
         // Framework actors also call the model under labels that are not conversations (the presenter
         // passes "presentation"): charging one would create a database for nothing. A real conversation
         // has its database from the start handshake, so every legitimate charge still lands.
-        if (!persistenceService.ConversationExists(conversationId))
+        if (!await persistenceService.ConversationExistsAsync(conversationId))
             return;
 
         try
@@ -162,7 +162,7 @@ public class SQLiteDustLimitService : IDustLimitService
             return true;
 
         // A conversation with no database has consumed nothing, so it is not over budget.
-        if (!persistenceService.ConversationExists(conversationId))
+        if (!await persistenceService.ConversationExistsAsync(conversationId))
             return false;
 
         try
@@ -186,7 +186,7 @@ public class SQLiteDustLimitService : IDustLimitService
     {
         // Nothing was metered with the limiter off and a conversation with no database has burned
         // nothing yet — both answer zero rather than reaching for a table that may not exist.
-        if (!options.Enabled || !persistenceService.ConversationExists(conversationId))
+        if (!options.Enabled || !await persistenceService.ConversationExistsAsync(conversationId))
             return 0.0;
 
         try
@@ -227,7 +227,7 @@ public class SQLiteDustLimitService : IDustLimitService
             return 1.0;
 
         // A conversation with no database has consumed nothing, so its ratio is zero.
-        if (!persistenceService.ConversationExists(conversationId))
+        if (!await persistenceService.ConversationExistsAsync(conversationId))
             return 0.0;
 
         try
@@ -267,7 +267,7 @@ public class SQLiteDustLimitService : IDustLimitService
             return (false, false);
 
         // A conversation with no database has no usage, so there is nothing to warn about.
-        if (!persistenceService.ConversationExists(conversationId))
+        if (!await persistenceService.ConversationExistsAsync(conversationId))
             return (false, false);
 
         try

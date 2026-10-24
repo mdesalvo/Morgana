@@ -178,7 +178,7 @@ public sealed class MorganaHostedAgent : AIAgent
             // the name of the conversation it is served on — so a partner free to keep writing new
             // ones would draw a fresh budget with every one of them. What a turned-away partner reads
             // is written on its own entry, so the refusal speaks in this deployment's voice.
-            if (!persistenceService.ConversationExists(hostedAgentSession.ConversationId)
+            if (!await persistenceService.ConversationExistsAsync(hostedAgentSession.ConversationId)
                 && hostedAgentSession.CallerIssuer is { } openingIssuer
                 && await peerAdmissionService.TryAdmitNewConversationAsync(openingIssuer) is { IsAdmitted: false } refusal)
             {
