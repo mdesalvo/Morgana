@@ -51,8 +51,8 @@ public class GoogleLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
         // The key is required by ValidateConnection, so it is present when a client is built.
         Client googleClient = new Client(enterprise: false, vertexAI: false, apiKey: connection.ApiKey!, httpOptions: httpOptions, clientOptions: clientOptions);
 
-        // The chat client of the tier's model is what the framework talks to.
-        return googleClient.AsIChatClient(options.ModelId);
+        // The decorator is what the framework talks to: it reports the model's thinking as output, which Gemini bills it as.
+        return new MorganaGoogleClient(googleClient.AsIChatClient(options.ModelId));
     }
 }
 
