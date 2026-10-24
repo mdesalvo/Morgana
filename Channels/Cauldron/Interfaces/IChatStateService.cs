@@ -71,9 +71,19 @@ public interface IChatStateService
     void NoteDelivered(DateTime morganaTimestamp);
 
     /// <summary>
-    /// Adds a user message to the chat.
+    /// The words in the composer, held as chat state so that a withdrawn turn can give them back.
     /// </summary>
-    void AddUserMessage(string text);
+    string ComposerText { get; set; }
+
+    /// <summary>
+    /// Opens a turn on the screen: raises the send flag, retires the buttons on offer and adds the user's message and the typing indicator.
+    /// </summary>
+    void BeginTurn(string text);
+
+    /// <summary>
+    /// Undoes the turn that <see cref="BeginTurn"/> opened, leaving the screen as it was before the send. Does nothing when no turn is open.
+    /// </summary>
+    void WithdrawTurn();
 
     /// <summary>
     /// Adds a typing indicator for the current agent.
@@ -131,11 +141,6 @@ public interface IChatStateService
     /// Returns the CSS class string for the agent type: "agent" for specialized, "morgana" for base.
     /// </summary>
     string GetAgentClass(string? agentName);
-
-    /// <summary>
-    /// Disables the quick replies still on offer, because a typed message answered them in their place.
-    /// </summary>
-    void RetireActiveQuickReplies();
 
     /// <summary>
     /// True if any message is currently showing a typing indicator.

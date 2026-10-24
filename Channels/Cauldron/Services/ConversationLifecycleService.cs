@@ -316,9 +316,9 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
                 {
                     _logger.LogWarning("SendMessage refused on a limit: {StatusCode}", response.StatusCode);
 
-                    // Nothing is coming to retire the indicator or reopen the composer, so the turn ends here
-                    _chatStateService.RemoveTypingIndicator();
-                    _chatStateService.IsSending = false;
+                    // Morgana refused the turn on a limit and recorded nothing: the screen goes back to how it
+                    // was before the send, with the user's words in the composer.
+                    _chatStateService.WithdrawTurn();
                     return false;
                 }
 

@@ -103,6 +103,7 @@
             {
                 <ChatMessageView @key="chatMessage"
                                  Message="@chatMessage"
+                                 CanSendTurn="@CanSendTurn"
                                  OnQuickReplySelected="@((reply) => SelectQuickReplyAsync(reply, chatMessage))" />
             }
         }
@@ -112,13 +113,13 @@
 
     <div class="input-container">
         <textarea
-            @bind="inputText"
+            @bind="ChatStateService.ComposerText"
             @bind:event="oninput"
             @onkeyup="HandleKeyPressAsync"
             aria-label="Message input"
             placeholder="Consult @(ChatStateService.CurrentAgentName)..."
             rows="1"
-            disabled="@IsTextareaDisabled"
+            disabled="@(!CanSendTurn)"
             class="message-input @ChatStateService.GetAgentClass(ChatStateService.CurrentAgentName)"></textarea>
         <SendButton
             AgentClass="@ChatStateService.GetAgentClass(ChatStateService.CurrentAgentName)"
@@ -140,11 +141,6 @@
     // =========================================================================
     // LOCAL UI STATE (not shared across components)
     // =========================================================================
-
-    /// <summary>
-    /// Current text input from the user (two-way bound to textarea).
-    /// </summary>
-    private string inputText = string.Empty;
 
     /// <summary>
     /// Landing message (waiting for Morgana presentation).
@@ -277,24 +273,17 @@
     private async Task SendMessageAsync()
     {
         // Nothing to send while the composer is empty or a turn is already in flight or the channel is offline
-        if (string.IsNullOrWhiteSpace(inputText) || ChatStateService.IsSending || !ChatStateService.IsConnected)
+        if (string.IsNullOrWhiteSpace(ChatStateService.ComposerText) || ChatStateService.IsSending || !ChatStateService.IsConnected)
             return;
 
         // Captured and cleared up front, so the box is empty the moment the user hits send
         // rather than after the round-trip completes.
-        string messageText = inputText.Trim();
-        inputText = string.Empty;
-        ChatStateService.IsSending = true;
+        string messageText = ChatStateService.ComposerText.Trim();
+        ChatStateService.ComposerText = string.Empty;
 
-        // The turn answers whatever buttons were still on offer, so none of them can be pressed after it
-        ChatStateService.RetireActiveQuickReplies();
-
-        // Echoed at once as the visitor's own turn
-        ChatStateService.AddUserMessage(messageText);
-
-        // Shown immediately: the real answer arrives over SignalR, so without this the UI
-        // would sit inert for the whole time the agent is thinking.
-        ChatStateService.AddTypingIndicator();
+        // The screen takes the turn at once: the send flag, the buttons answered by the turn retired,
+        // the visitor's own message echoed and the typing indicator shown while the answer comes over SignalR.
+        ChatStateService.BeginTurn(messageText);
         StateHasChanged();
 
         // Only a failure needs a re-render here: the success path is repainted by the
@@ -494,7 +483,7 @@
 
         // The reply's Value is what gets sent, not its Label: the button text is for the
         // user, the value is the phrasing Morgana expects back.
-        inputText = reply.Value;
+        ChatStateService.ComposerText = reply.Value;
         await SendMessageAsync();
     }
 
@@ -560,7 +549,7 @@
     /// True when the composer is locked or holds nothing to send.
     /// </summary>
     private bool IsSendButtonDisabled =>
-        IsTextareaDisabled || string.IsNullOrWhiteSpace(inputText);
+        !CanSendTurn || string.IsNullOrWhiteSpace(ChatStateService.ComposerText);
 
     /// <summary>
     /// True when the visitor can start over: a conversation exists and the chat is live or terminally spent.
@@ -581,21 +570,21 @@
                 && ChatStateService.ChatMessages.Count > 0));
 
     /// <summary>
-    /// True when the composer must stay shut because no turn can be sent right now.
+    /// True when a turn can be sent right now: the composer and the quick replies obey this one gate.
     /// </summary>
-    private bool IsTextareaDisabled =>
-        // Offline: a reply would be pushed to a connection that is not there
-        !ChatStateService.IsConnected ||
-        // A turn is in flight: one turn at a time
-        ChatStateService.IsSending ||
-        // The start or resume has not finished: there is no conversation to write into yet
-        !ChatStateService.IsInitialized ||
-        // Morgana is still answering, including a turn resumed after a reload
-        ChatStateService.HasTypingIndicator() ||
-        // The loader is up: a turn typed now would race the presentation
-        IsAwaitingFirstBackendMessage ||
-        // Dust budget spent: Morgana would reject the turn, only New Conversation is left
-        ChatStateService.IsConversationDeadFromDust();
+    private bool CanSendTurn =>
+        // Online: a reply is pushed to a connection that is there
+        ChatStateService.IsConnected &&
+        // No turn is in flight: one turn at a time
+        !ChatStateService.IsSending &&
+        // The start or resume has finished: there is a conversation to write into
+        ChatStateService.IsInitialized &&
+        // Morgana is not answering, including a turn resumed after a reload
+        !ChatStateService.HasTypingIndicator() &&
+        // The loader is down: a turn typed now would not race the presentation
+        !IsAwaitingFirstBackendMessage &&
+        // Dust budget not spent: otherwise Morgana would reject the turn and only New Conversation is left
+        !ChatStateService.IsConversationDeadFromDust();
 
     /// <summary>
     /// True while the loader is up: the presentation, or the history on a resume, has not landed

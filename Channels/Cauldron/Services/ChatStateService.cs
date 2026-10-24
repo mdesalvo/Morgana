@@ -79,31 +79,78 @@ public class ChatStateService : IChatStateService
     // MESSAGE OPERATIONS
     // =========================================================================
 
+    /// <inheritdoc />
+    public string ComposerText { get; set; } = string.Empty;
+
     /// <summary>
-    /// Adds a user message to the chat.
+    /// What a turn put on the screen and the words it took from the composer, kept so that the turn can be undone.
     /// </summary>
-    public void AddUserMessage(string text)
+    private sealed record OpenTurn(ChatMessage UserMessage, ChatMessage? AnsweredOffering, string WordsToGiveBack);
+
+    /// <summary>
+    /// The turn that <see cref="BeginTurn"/> opened and nothing has closed yet, null while none is open.
+    /// </summary>
+    private OpenTurn? openTurn;
+
+    /// <inheritdoc />
+    public void BeginTurn(string text)
     {
+        // Only the latest assistant message can hold the buttons on offer: an older row never is the one this turn answers
+        ChatMessage? latestAssistantMessage = ChatMessages.LastOrDefault(message => message.Type == MessageType.Assistant && !message.IsTyping);
+        ChatMessage? answeredOffering = latestAssistantMessage is { QuickReplies.Count: > 0 } ? latestAssistantMessage : null;
+
+        // A press has already marked its button on the offering and its value is not the user's words: only a typed turn has words to give back
+        string wordsToGiveBack = answeredOffering is { SelectedQuickReplyId: not null } ? string.Empty : text;
+
+        // One turn at a time: the composer and the buttons stay shut until the answer arrives or the turn is withdrawn
+        IsSending = true;
+
+        // On offer are the unanswered buttons of a live message or of the last message of a resumed history:
+        // left enabled they would send a press that answers a turn the user has already moved past.
+        foreach (ChatMessage offeringMessage in ChatMessages.Where(message => message is { QuickReplies.Count: > 0, SelectedQuickReplyId: null, QuickRepliesRetired: false, IsLastHistoryMessage: not false }))
+            offeringMessage.QuickRepliesRetired = true;
+
         // Echoed locally and immediately: the user sees their own words without waiting
         // for the server, which never sends them back.
-        ChatMessages.Add(new ChatMessage
+        ChatMessage userMessage = new ChatMessage
         {
             ConversationId = ConversationId,
             Text = text,
             Type = MessageType.User,
             Timestamp = DateTime.UtcNow
-        });
+        };
+        ChatMessages.Add(userMessage);
+
+        // Shown immediately: the real answer arrives over SignalR, so without this the UI
+        // would sit inert for the whole time the agent is thinking.
+        AddTypingIndicator();
+
+        // What a refusal of this turn would have to undo, until the next turn replaces it
+        openTurn = new OpenTurn(userMessage, answeredOffering, wordsToGiveBack);
     }
 
-    /// <summary>
-    /// Disables the quick replies still on offer, because a typed message answered them in their place.
-    /// </summary>
-    public void RetireActiveQuickReplies()
+    /// <inheritdoc />
+    public void WithdrawTurn()
     {
-        // On offer are the unanswered buttons of a live message or of the last message of a resumed history:
-        // left enabled they would send a press that answers a turn the user has already moved past.
-        foreach (ChatMessage offeringMessage in ChatMessages.Where(message => message is { QuickReplies.Count: > 0, SelectedQuickReplyId: null, QuickRepliesRetired: false, IsLastHistoryMessage: not false }))
-            offeringMessage.QuickRepliesRetired = true;
+        // No turn is open, so there is nothing to undo
+        if (openTurn == null)
+            return;
+
+        // The user's bubble and the indicator go away: Morgana recorded neither
+        ChatMessages.Remove(openTurn.UserMessage);
+        RemoveTypingIndicator();
+
+        // The buttons that the turn answered are the offer again, with no selection
+        if (openTurn.AnsweredOffering != null)
+        {
+            openTurn.AnsweredOffering.SelectedQuickReplyId = null;
+            openTurn.AnsweredOffering.QuickRepliesRetired = false;
+        }
+
+        // Typed words return to the composer so the user does not retype them
+        ComposerText = openTurn.WordsToGiveBack;
+        IsSending = false;
+        openTurn = null;
     }
 
     /// <summary>

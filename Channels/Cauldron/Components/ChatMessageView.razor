@@ -47,7 +47,7 @@
             {
                 <QuickReplyButton Replies="@Message.QuickReplies"
                                   OnSelect="@OnQuickReplySelected"
-                                  IsDisabled="@(Message.SelectedQuickReplyId != null || Message.QuickRepliesRetired || Message.IsLastHistoryMessage == false)"
+                                  IsDisabled="@(Message.SelectedQuickReplyId != null || Message.QuickRepliesRetired || Message.IsLastHistoryMessage == false || !CanSendTurn)"
                                   SelectedReplyId="@Message.SelectedQuickReplyId"/>
             }
 
@@ -71,6 +71,12 @@
     public EventCallback<QuickReply> OnQuickReplySelected { get; set; }
 
     /// <summary>
+    /// True when a turn can be sent right now: the quick replies obey the same gate as the composer.
+    /// </summary>
+    [Parameter]
+    public bool CanSendTurn { get; set; }
+
+    /// <summary>
     /// The fields of the message that the markup reads. Two equal snapshots mean the row on
     /// screen is already current.
     /// </summary>
@@ -82,6 +88,7 @@
         bool IsStreaming,
         string? SelectedQuickReplyId,
         bool QuickRepliesRetired,
+        bool CanSendTurn,
         List<QuickReply>? QuickReplies,
         Morgana.Contracts.RichCard? RichCard);
 
@@ -138,6 +145,7 @@
         Message.IsStreaming,
         Message.SelectedQuickReplyId,
         Message.QuickRepliesRetired,
+        CanSendTurn,
         Message.QuickReplies,
         Message.RichCard);
 }
