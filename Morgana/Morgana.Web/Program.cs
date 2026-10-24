@@ -261,10 +261,10 @@ builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
 // conversation's lifetime. Shares the per-conversation SQLite database.
 //
 // - DustLimitingOptions: policy (budget + warning/error message templates)
-// - Per-model pricing lives inline on each tier (Morgana:LanguageModels:Tiers:{tier}:MagicDust)
-//   and is resolved per-tier by ILanguageModelService.GetPricing(tier) — no single process-wide pricing singleton.
+// - Pricing is declared by each provider plugin per model and resolved per tier by
+//   ILanguageModelService.GetMorganaDust(tier) — no single process-wide pricing singleton.
 //
-// Configuration: Morgana:DustLimiting + Morgana:LanguageModels:Tiers:{tier}:MagicDust in appsettings.json
+// Configuration: Morgana:DustLimiting in appsettings.json
 
 // The lifetime budget with the warning and lockout texts.
 builder.Services.Configure<Records.DustLimitingOptions>(

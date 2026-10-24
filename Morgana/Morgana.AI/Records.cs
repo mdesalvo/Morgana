@@ -224,10 +224,17 @@ public static class Records
     // MAGIC DUST (TOKEN BUDGET)
     // ==========================================================================
 
+    /// <summary>What a model costs in US dollars per million tokens, as its vendor bills it.</summary>
+    /// <param name="InputUsdPerMillion">Price of a fresh prompt token.</param>
+    /// <param name="OutputUsdPerMillion">Price of a generated token.</param>
+    /// <param name="CacheReadUsdPerMillion">Price of a prompt token that the provider's cache served.</param>
+    /// <param name="CacheWriteUsdPerMillion">Price of a prompt token written into the provider's cache, at the lifetime that the provider's client asks for.</param>
+    public record ModelPricing(decimal InputUsdPerMillion, decimal OutputUsdPerMillion, decimal CacheReadUsdPerMillion, decimal CacheWriteUsdPerMillion);
+
     /// <summary>
     /// What one dust unit is worth on a tier: tokens per unit for each direction and the cost weights of cached input.
-    /// A zero on either axis makes that direction free. One dust unit is worth $0.015, so a tier's tokens per unit
-    /// are 0.015 divided by the model's price per token: recalibrate when the tier changes model.
+    /// A zero on either axis makes that direction free. It is derived from a provider's <see cref="ModelPricing"/> by
+    /// <c>MorganaLanguageModel.ConvertToMorganaDust</c> and never configured.
     /// Check BudgetPerConversation against the heaviest agent's calls per turn in dust_usage_log, not against nominal turn counts.
     /// </summary>
     public record MagicDustPricing
@@ -239,15 +246,15 @@ public static class Records
         public int OutputTokensPerDustUnit { get; set; }
 
         /// <summary>
-        /// Cost weight applied to cache-read input tokens (<c>CachedInputTokenCount</c>)
-        /// relative to a fresh input token: about 0.10 on most current models, 0.05 on some (Claude Opus 5.5, GPT-6.1 Sol).
+        /// Cost weight applied to cache-read input tokens (<c>CachedInputTokenCount</c>):
+        /// the price of such a token relative to a fresh input token.
         /// </summary>
         public double CachedInputWeight { get; set; }
 
         /// <summary>
         /// Cost weight applied to cache-creation input tokens
-        /// (<c>AdditionalCounts[Constants.UsageCounts.CacheCreationInputTokens]</c>) relative to a fresh input
-        /// token. Anthropic 1h cache write ≈ 2.0; providers with no separate write cost = 1.0.
+        /// (<c>AdditionalCounts[Constants.UsageCounts.CacheCreationInputTokens]</c>):
+        /// the price of such a token relative to a fresh input token.
         /// </summary>
         public double CacheCreationWeight { get; set; }
     }
@@ -296,19 +303,18 @@ public static class Records
         };
     }
 
-    /// <summary>A tier as it is served: its client, the provider that built the client and its pricing.</summary>
-    public record ServedTier(IChatClient Client, MorganaLanguageModel LanguageModel, MagicDustPricing Pricing);
+    /// <summary>A tier as it is served: its client, the provider that built the client and its dust.</summary>
+    public record ServedTier(IChatClient Client, MorganaLanguageModel LanguageModel, MagicDustPricing MorganaDust);
 
     /// <summary>
-    /// One tier with its own provider name, model and dust pricing.
+    /// One tier with its own provider name and model.
     /// Declared under Morgana:LanguageModels:Tiers:{tier} as a JSON object keyed by name rather than an array, so that overrides of
     /// different configuration layers merge by key. The Connection section is not bound here: the provider that the tier
     /// names binds it, because only that provider knows its shape.
     /// </summary>
     public record TierDefinition(
         string Provider,
-        TierConfiguration Options,
-        MagicDustPricing MagicDust);
+        TierConfiguration Options);
 
     /// <summary>
     /// Where a tool parameter's value comes from, declared on the parameter with

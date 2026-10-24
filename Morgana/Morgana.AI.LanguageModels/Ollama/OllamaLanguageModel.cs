@@ -27,6 +27,11 @@ public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
         false;
 
     /// <inheritdoc />
+    protected override Records.ModelPricing? GetModelPricing(string modelId) =>
+        // A local model costs nothing and Ollama serves whatever model is installed.
+        new Records.ModelPricing(0m, 0m, 0m, 0m);
+
+    /// <inheritdoc />
     protected override void ValidateConnection(OllamaTierConnection connection) =>
         RequireField(connection.Endpoint, nameof(OllamaTierConnection.Endpoint));
 

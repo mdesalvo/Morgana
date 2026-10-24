@@ -27,6 +27,13 @@ public sealed class LanguageModelTests
 
     private const string FunctionalPlaceholder = "_FUNCTIONAL_OVERRIDE_";
 
+    private static readonly Dictionary<string, string> AnthropicModels = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["Economy"] = "claude-haiku-5-5",
+        ["Efficiency"] = "claude-sonnet-5-5",
+        ["Performance"] = "claude-opus-5-5"
+    };
+
     [Fact]
     public void LanguageModel_Each_tier_is_built_by_the_provider_it_declares()
     {
@@ -35,15 +42,16 @@ public sealed class LanguageModelTests
         ILanguageModelService llm = Build(Configuration(
             ("Morgana:LanguageModels:Tiers:Efficiency:Provider", "Ollama"),
             ("Morgana:LanguageModels:Tiers:Efficiency:Connection:Endpoint", "http://localhost:11434"),
-            ("Morgana:LanguageModels:Tiers:Performance:Provider", "OpenAI")));
+            ("Morgana:LanguageModels:Tiers:Performance:Provider", "OpenAI"),
+            ("Morgana:LanguageModels:Tiers:Performance:Options:ModelId", "gpt-6-astra")));
 
         ChatClientMetadata economy = MetadataOf(llm, Records.LLMTier.Economy);
         ChatClientMetadata efficiency = MetadataOf(llm, Records.LLMTier.Efficiency);
         ChatClientMetadata performance = MetadataOf(llm, Records.LLMTier.Performance);
 
-        Assert.Equal("economy-model", economy.DefaultModelId);
-        Assert.Equal("efficiency-model", efficiency.DefaultModelId);
-        Assert.Equal("performance-model", performance.DefaultModelId);
+        Assert.Equal("claude-haiku-5-5", economy.DefaultModelId);
+        Assert.Equal("claude-sonnet-5-5", efficiency.DefaultModelId);
+        Assert.Equal("gpt-6-astra", performance.DefaultModelId);
         Assert.Equal(3, new[] { economy.ProviderName, efficiency.ProviderName, performance.ProviderName }.Distinct().Count());
     }
 
@@ -153,7 +161,7 @@ public sealed class LanguageModelTests
             ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "http://localhost:11434"),
             ("Morgana:LanguageModels:Tiers:Economy:Connection:ApiKey", SecurePlaceholder)));
 
-        Assert.Equal("economy-model", MetadataOf(llm, Records.LLMTier.Economy).DefaultModelId);
+        Assert.Equal("claude-haiku-5-5", MetadataOf(llm, Records.LLMTier.Economy).DefaultModelId);
     }
 
     [Fact]
@@ -161,9 +169,50 @@ public sealed class LanguageModelTests
     {
         // Google needs only its key, which the base configuration already supplies on every tier.
         ILanguageModelService llm = Build(Configuration(
-            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Google")));
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Google"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "gemini-3.5-flash-lite")));
 
-        Assert.Equal("economy-model", MetadataOf(llm, Records.LLMTier.Economy).DefaultModelId);
+        Assert.Equal("gemini-3.5-flash-lite", MetadataOf(llm, Records.LLMTier.Economy).DefaultModelId);
+    }
+
+    [Fact]
+    public void LanguageModel_Construction_is_refused_when_the_provider_does_not_price_the_model()
+    {
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
+            () => Build(Configuration(("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "claude-unpriced-9"))));
+
+        Assert.Contains("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("claude-unpriced-9", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Anthropic", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LanguageModel_The_dust_of_a_tier_is_its_models_price_converted()
+    {
+        // Sonnet 5.5 at 2 and 10 dollars per million, cache read at 0.10 and 1-hour cache write at 4.00.
+        Records.MagicDustPricing dust = Build(Configuration()).GetMorganaDust(Records.LLMTier.Efficiency);
+
+        Assert.Equal(7500, dust.InputTokensPerDustUnit);
+        Assert.Equal(1500, dust.OutputTokensPerDustUnit);
+        Assert.Equal(0.05, dust.CachedInputWeight, 1e-9);
+        Assert.Equal(2.0, dust.CacheCreationWeight, 1e-9);
+    }
+
+    [Fact]
+    public void LanguageModel_An_Ollama_tier_is_accepted_and_costs_no_dust()
+    {
+        // Ollama serves whatever model is installed and a local model is free.
+        ILanguageModelService llm = Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "http://localhost:11434"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "llama-local")));
+
+        Records.MagicDustPricing dust = llm.GetMorganaDust(Records.LLMTier.Economy);
+
+        Assert.Equal(0, dust.InputTokensPerDustUnit);
+        Assert.Equal(0, dust.OutputTokensPerDustUnit);
+        Assert.Equal(0.0, dust.CachedInputWeight, 1e-9);
+        Assert.Equal(0.0, dust.CacheCreationWeight, 1e-9);
     }
 
     [Theory]
@@ -216,10 +265,8 @@ public sealed class LanguageModelTests
         {
             values[$"Morgana:LanguageModels:Tiers:{tier}:Provider"] = "Anthropic";
             values[$"Morgana:LanguageModels:Tiers:{tier}:Connection:ApiKey"] = "test-key";
-            values[$"Morgana:LanguageModels:Tiers:{tier}:Options:ModelId"] = $"{tier.ToLowerInvariant()}-model";
+            values[$"Morgana:LanguageModels:Tiers:{tier}:Options:ModelId"] = AnthropicModels[tier];
             values[$"Morgana:LanguageModels:Tiers:{tier}:Options:MaxOutputTokens"] = "8192";
-            values[$"Morgana:LanguageModels:Tiers:{tier}:MagicDust:InputTokensPerDustUnit"] = "1000";
-            values[$"Morgana:LanguageModels:Tiers:{tier}:MagicDust:OutputTokensPerDustUnit"] = "200";
         }
 
         foreach ((string key, string value) in replaced)

@@ -1618,7 +1618,7 @@ public sealed class WorkflowTests
 
         public IChatClient GetChatClient(Records.LLMTier tier) => model;
 
-        public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => new();
+        public Records.MagicDustPricing GetMorganaDust(Records.LLMTier tier) => new Records.MagicDustPricing();
 
         // A provider that never reads a failure as a content refusal, so every fault of the double takes the general path.
         public MorganaLanguageModel GetLanguageModel(Records.LLMTier tier) => new OllamaLanguageModel();

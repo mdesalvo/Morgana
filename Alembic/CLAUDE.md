@@ -436,9 +436,6 @@ maintain.
   Alembic works on is the one in the **draft**, never one compiled into this process.
 - `ILanguageModelService` is a factory **never resolved during startup**, so a working copy without credentials still
   builds, boots and serves the shell; the failure surfaces on the first call.
-- `MagicDust` of a tier cannot be shortened to `{}` — the JSON provider reads an empty object as `null`,
-  the binder drops an element it cannot construct **without raising anything** and the whole tier
-  disappears, which is then refused as `Morgana:LanguageModels:Tiers:{tier} is missing`.
 - The LLM section is named `Morgana:` because `ConfigurationLanguageModelService` reads that path. In-repo, Alembic declares the
   **same `UserSecretsId` as Morgana.Web**, so it runs against whatever this working copy is wired to.
 

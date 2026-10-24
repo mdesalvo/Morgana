@@ -228,7 +228,7 @@ public sealed class FrameworkPromptTests
         public IChatClient GetChatClient(Records.LLMTier tier) => throw new InvalidOperationException("The actors ask for answers, never a chat client");
 
         /// <inheritdoc />
-        public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => new();
+        public Records.MagicDustPricing GetMorganaDust(Records.LLMTier tier) => new Records.MagicDustPricing();
 
         // A provider that never reads a failure as a content refusal, so every fault of the double takes the general path.
         public MorganaLanguageModel GetLanguageModel(Records.LLMTier tier) => new OllamaLanguageModel();

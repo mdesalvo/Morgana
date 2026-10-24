@@ -192,7 +192,7 @@ public sealed class CompactHistoryCommand : MorganaCommand
         return new DustAccountingChatClient(
             llmService.GetChatClient(tier),
             dustLimitService,
-            llmService.GetPricing(tier),
+            llmService.GetMorganaDust(tier),
             $"{Constants.Morgana} ({char.ToUpperInvariant(agent[0])}{agent[1..]}/{tier})",
             conversationId);
     }

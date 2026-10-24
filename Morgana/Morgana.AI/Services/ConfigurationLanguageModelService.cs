@@ -44,10 +44,10 @@ public class ConfigurationLanguageModelService : ILanguageModelService
     private IDustLimitService? dustLimitService;
 
     /// <summary>
-    /// Dust pricing of the <see cref="FrameworkTier"/>, set alongside <see cref="dustLimitService"/>. Used to
+    /// Dust of the <see cref="FrameworkTier"/>, set alongside <see cref="dustLimitService"/>. Used to
     /// convert its token counts into dust units for framework-actor calls.
     /// </summary>
-    private Records.MagicDustPricing? dustPricing;
+    private Records.MagicDustPricing? frameworkDust;
 
     /// <summary>
     /// Wires dust accounting for framework-actor LLM calls (guard, classifier, presenter,
@@ -61,8 +61,8 @@ public class ConfigurationLanguageModelService : ILanguageModelService
         this.dustLimitService = dustLimitService;
 
         // Guard, Classifier, Presenter and ChannelAdapter always run on the framework tier, so
-        // their pricing can be fixed once here instead of looked up on every call.
-        dustPricing = servedTiers[FrameworkTier].Pricing;
+        // their dust can be fixed once here instead of looked up on every call.
+        frameworkDust = servedTiers[FrameworkTier].MorganaDust;
     }
 
     /// <summary>
@@ -143,7 +143,7 @@ public class ConfigurationLanguageModelService : ILanguageModelService
         // Each tier is built from its own declaration, on the provider that it names.
         foreach (Records.LLMTier tier in Enum.GetValues<Records.LLMTier>())
         {
-            // The tier as the deployer declared it: provider name, options and pricing.
+            // The tier as the deployer declared it: provider name and options.
             Records.TierDefinition definition = tiers.For(tier);
 
             // A tier left on its placeholder would otherwise bind and build just fine, then fail
@@ -176,6 +176,13 @@ public class ConfigurationLanguageModelService : ILanguageModelService
                 throw new InvalidOperationException($"Morgana:LanguageModels:Tiers:{tier}:Connection:{ex.Message}", ex);
             }
 
+            // A model with no price would run with its dust uncounted.
+            Records.MagicDustPricing? morganaDust = languageModel.ConvertToMorganaDust(definition.Options.ModelId);
+            // A model that the provider does not price is refused at startup.
+            if (morganaDust is null)
+                throw new InvalidOperationException(
+                    $"Morgana:LanguageModels:Tiers:{tier}:Options:ModelId '{definition.Options.ModelId}' has no pricing in provider '{languageModel.Provider}': a tier runs only a model whose provider prices it.");
+
             // The tier's chain, outermost first: the defaults layer sees (and only fills in, never overrides) the
             // ChatOptions that every caller above sent, Microsoft.Agents.AI for domain agents and
             // CompleteStructuredAsync for framework actors alike.
@@ -192,7 +199,7 @@ public class ConfigurationLanguageModelService : ILanguageModelService
             IChatClient client = tierBuilder.Build();
 
             // The tier is served from here on: its client and the provider that built it and its price.
-            servedTiers[tier] = new Records.ServedTier(client, languageModel, definition.MagicDust);
+            servedTiers[tier] = new Records.ServedTier(client, languageModel, morganaDust);
         }
 
         // The tier that serves the guard, the classifier, the presenter and the channel adapter.
@@ -215,7 +222,7 @@ public class ConfigurationLanguageModelService : ILanguageModelService
     public IChatClient GetChatClient(Records.LLMTier tier) => servedTiers[tier].Client;
 
     /// <inheritdoc/>
-    public Records.MagicDustPricing GetPricing(Records.LLMTier tier) => servedTiers[tier].Pricing;
+    public Records.MagicDustPricing GetMorganaDust(Records.LLMTier tier) => servedTiers[tier].MorganaDust;
 
     /// <inheritdoc/>
     public MorganaLanguageModel GetLanguageModel(Records.LLMTier tier) => servedTiers[tier].LanguageModel;
@@ -245,13 +252,13 @@ public class ConfigurationLanguageModelService : ILanguageModelService
         // THIS method (never GetChatClient(tier)), so they always run on the tier that
         // Morgana:ActorSystem:Tier names. They have no [RequiresLLMTier] of their own;
         // a domain agent, by contrast, is built by MorganaAgentAdapter against its own
-        // declared tier via GetChatClient(tier)/GetPricing(tier) and never touches this method.
+        // declared tier via GetChatClient(tier)/GetMorganaDust(tier) and never touches this method.
         //
         // Framework-actor calls are metered under the bare framework role, which is what tells a
         // reader of the ledger that a charge belongs to the pipeline rather than to any agent.
         IChatClient frameworkChatClient = GetChatClient(FrameworkTier);
-        IChatClient client = dustLimitService is not null && dustPricing is not null
-            ? new DustAccountingChatClient(frameworkChatClient, dustLimitService, dustPricing, Constants.Morgana)
+        IChatClient client = dustLimitService is not null && frameworkDust is not null
+            ? new DustAccountingChatClient(frameworkChatClient, dustLimitService, frameworkDust, Constants.Morgana)
             : frameworkChatClient;
 
         // The provider is held to a schema: the caller's narrowed one where it gave one, else the one

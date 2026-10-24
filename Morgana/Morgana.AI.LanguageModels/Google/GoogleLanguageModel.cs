@@ -8,11 +8,10 @@ namespace Morgana.AI.LanguageModels.Google;
 
 /// <summary>
 /// Google provider.<br/>
-/// Supports Gemini models through the Gemini API (gemini-2.5-flash, gemini-2.5-pro, ...)
+/// Supports Gemini models through the Gemini API (gemini-3.5-flash-lite, gemini-3.8-flash, gemini-4-argon, ...)
 /// </summary>
 /// <remarks>
-/// Requires ApiKey on the tier's connection. MagicDust pricing is per tier: recalibrate InputTokensPerDustUnit
-/// and OutputTokensPerDustUnit when a tier's ModelId changes.
+/// Requires ApiKey on the tier's connection.
 /// </remarks>
 /// <param name="loggerFactory">Optional logger factory for the <see cref="AttemptLoggingHandler"/> that writes one line per attempt on the wire; <c>null</c> writes nothing.</param>
 public class GoogleLanguageModel(ILoggerFactory? loggerFactory = null) : MorganaLanguageModel<GoogleTierConnection>
@@ -25,6 +24,29 @@ public class GoogleLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
     public override bool IsContentFilterRefusal(Exception exception) =>
         // Gemini reports a blocked prompt or answer inside the response, so none of its refusals reaches the framework as an exception.
         false;
+
+    /// <summary>What each model of this provider costs in US dollars per million tokens.</summary>
+    // Google's standard processing prices for prompts up to 200,000 tokens: the ones in force once each promotion ends.
+    // Gemini bills a cache write as plain input, so the write price equals the input price.
+    private static readonly Dictionary<string, Records.ModelPricing> ModelPrices = new Dictionary<string, Records.ModelPricing>(StringComparer.Ordinal)
+    {
+        // GEMINI-4
+        ["gemini-4-argon"]        = new Records.ModelPricing(4.00m, 20.00m, 0.20m, 4.00m),
+        // GEMINI-3.X
+        ["gemini-3.8-flash"]      = new Records.ModelPricing(1.50m, 7.50m, 0.15m, 1.50m),
+        ["gemini-3.6-flash"]      = new Records.ModelPricing(1.50m, 7.50m, 0.15m, 1.50m),
+        ["gemini-3.5-flash-lite"] = new Records.ModelPricing(0.30m, 2.50m, 0.03m, 0.30m),
+        ["gemini-3.1-flash-lite"] = new Records.ModelPricing(0.25m, 1.50m, 0.025m, 0.25m),
+        // GEMINI-2.X
+        ["gemini-2.5-pro"]        = new Records.ModelPricing(1.25m, 10.00m, 0.125m, 1.25m),
+        ["gemini-2.5-flash"]      = new Records.ModelPricing(0.30m, 2.50m, 0.03m, 0.30m),
+        ["gemini-2.5-flash-lite"] = new Records.ModelPricing(0.10m, 0.40m, 0.01m, 0.10m)
+    };
+
+    /// <inheritdoc />
+    protected override Records.ModelPricing? GetModelPricing(string modelId) =>
+        // A model absent from the table is one that this provider does not price.
+        ModelPrices.GetValueOrDefault(modelId);
 
     /// <inheritdoc />
     protected override void ValidateConnection(GoogleTierConnection connection) =>

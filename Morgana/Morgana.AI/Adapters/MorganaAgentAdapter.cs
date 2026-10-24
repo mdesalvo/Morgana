@@ -357,8 +357,8 @@ public class MorganaAgentAdapter
 
         // The agent runs on the client and the price of its own tier, metered per agent and conversation.
         IChatClient tierChatClient = llmService.GetChatClient(tierAttribute.Tier);
-        Records.MagicDustPricing tierPricing = llmService.GetPricing(tierAttribute.Tier);
-        IChatClient agentChatClient = new DustAccountingChatClient(tierChatClient, dustLimitService, tierPricing, dustRole, conversationId);
+        Records.MagicDustPricing tierDust = llmService.GetMorganaDust(tierAttribute.Tier);
+        IChatClient agentChatClient = new DustAccountingChatClient(tierChatClient, dustLimitService, tierDust, dustRole, conversationId);
 
         // The reducer shares the metered client, so its summarization calls are charged too.
         // A null reducer hands the model the whole history.

@@ -34,6 +34,45 @@ public abstract class MorganaLanguageModel
     /// <param name="exception">The failure that the client of a tier threw.</param>
     public abstract bool IsContentFilterRefusal(Exception exception);
 
+    /// <summary>What a model costs in US dollars; <c>null</c> when this provider does not know the model. A provider author declares here the prices of the models it serves.</summary>
+    /// <param name="modelId">The model that a tier names in its <c>Options:ModelId</c>.</param>
+    protected abstract Records.ModelPricing? GetModelPricing(string modelId);
+
+    /// <summary>One dust unit is worth this many US dollars: the one place where that value exists.</summary>
+    private const decimal UsdPerDustUnit = 0.015m;
+
+    /// <summary>Tokens in the million that a price is quoted per.</summary>
+    private const decimal TokensPerPricedMillion = 1_000_000m;
+
+    /// <summary>Converts the price of a model into Morgana's dust, the one conversion for every provider; <c>null</c> when <see cref="GetModelPricing"/> does not know the model.</summary>
+    /// <param name="modelId">The model that a tier names in its <c>Options:ModelId</c>.</param>
+    public Records.MagicDustPricing? ConvertToMorganaDust(string modelId)
+    {
+        // The provider alone knows what its models cost.
+        Records.ModelPricing? modelPricing = GetModelPricing(modelId);
+
+        // A model that the provider does not price has no dust.
+        if (modelPricing is null)
+            return null;
+
+        // Tokens that one dust unit buys in each direction; a free direction keeps 0, which means "not charged".
+        // Cache weights are relative to a fresh input token and stay 0 while the input is free.
+        return new Records.MagicDustPricing
+        {
+            InputTokensPerDustUnit = TokensPerDustUnit(modelPricing.InputUsdPerMillion),
+            OutputTokensPerDustUnit = TokensPerDustUnit(modelPricing.OutputUsdPerMillion),
+            CachedInputWeight = modelPricing.InputUsdPerMillion == 0m ? 0d : (double)(modelPricing.CacheReadUsdPerMillion / modelPricing.InputUsdPerMillion),
+            CacheCreationWeight = modelPricing.InputUsdPerMillion == 0m ? 0d : (double)(modelPricing.CacheWriteUsdPerMillion / modelPricing.InputUsdPerMillion)
+        };
+    }
+
+    /// <summary>Tokens that one dust unit buys at a price per million tokens; 0 for a free direction.</summary>
+    private static int TokensPerDustUnit(decimal usdPerMillion) =>
+        // A free direction must not divide by zero: 0 is the meaning of "not charged".
+        usdPerMillion == 0m
+            ? 0
+            : (int)Math.Round(TokensPerPricedMillion * UsdPerDustUnit / usdPerMillion, MidpointRounding.AwayFromZero);
+
     /// <summary>Refuses a value that is missing, empty or still a placeholder, naming <paramref name="field"/> first.</summary>
     protected static void RequireField(string? value, string field)
     {

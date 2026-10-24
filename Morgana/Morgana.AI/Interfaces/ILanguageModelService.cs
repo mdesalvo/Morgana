@@ -45,12 +45,11 @@ public interface ILanguageModelService
     IChatClient GetChatClient(Records.LLMTier tier);
 
     /// <summary>
-    /// Gets the dust pricing for a specific <see cref="Records.LLMTier"/> — the pricing embedded
-    /// in that tier's <see cref="Records.TierDefinition"/>, not a single process-wide value.
+    /// Gets the dust of the tier's model, as its provider prices it, not a single process-wide value.
     /// </summary>
-    /// <param name="tier">Power/cost tier to resolve pricing for.</param>
+    /// <param name="tier">Power/cost tier to resolve the dust for.</param>
     /// <returns>MagicDustPricing for the requested tier's model.</returns>
-    Records.MagicDustPricing GetPricing(Records.LLMTier tier);
+    Records.MagicDustPricing GetMorganaDust(Records.LLMTier tier);
 
     /// <summary>
     /// Gets the provider that serves a specific <see cref="Records.LLMTier"/>: callers ask it how to read the failures

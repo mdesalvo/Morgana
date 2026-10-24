@@ -266,16 +266,17 @@ plugin under `Morgana.AI.LanguageModels/`, carrying its SDK beside it in `plugin
 references none of them: it registers what `LoadLanguageModels` finds, so the providers an
 installation can name are the ones deployed. A host without the loader (Alembic, the harness) registers them by hand. What
 only a vendor knows stays in its plugin: the connection record it binds from the tier's `Connection`
-section and `IsContentFilterRefusal`, the one place where a provider's own refusal of the content is
+section, the prices of its models (`GetModelPricing`, converted into dust by the base class alone) and
+`IsContentFilterRefusal`, the one place where a provider's own refusal of the content is
 told apart from a failure.
 
 `Morgana:LanguageModels:Tiers` is a JSON **object keyed by tier name**, so env-var overrides merge per tier. Each
 entry carries `Provider` (a registered provider's name, any casing), `Connection` (bound by that
 provider alone), `Options` — a deliberately narrow mirror of `ChatOptions` (`MaxOutputTokens`
-mandatory), see `Records.TierConfiguration` — plus its own `MagicDust`.
+mandatory), see `Records.TierConfiguration`.
 
 Two consumption modes: `CompleteStructuredAsync` (stateless, answered under a JSON schema, on `Morgana:ActorSystem:Tier`) and
-`GetChatClient(tier)` / `GetPricing(tier)` (an agent's own `[RequiresLLMTier]`).
+`GetChatClient(tier)` / `GetMorganaDust(tier)` (an agent's own `[RequiresLLMTier]`).
 
 ## Agent Authoring
 
@@ -461,7 +462,7 @@ fails or opens, silently.**
 4. Tools: warn on orphans, error on duplicates for one intent; every tool method and parameter carries its attributes, every scope combination is one the framework can honour, the record returned is typed with a nullable `error`, no tool is overloaded and no agents.json prompt still declares `Tools` or `Workflows`
 5. Plugin `agents.json` files merge with no duplicated intent or prompt id and none declares `other`
    or a framework prompt id
-6. All three tiers declared, each naming a registered provider and carrying a `Connection`, none with a provider, model or used connection field left on its placeholder, no provider registered twice, `ActorSystem:Tier` naming a tier
+6. All three tiers declared, each naming a registered provider and carrying a `Connection`, none with a provider, model or used connection field left on its placeholder, each tier's model priced by its provider, no provider registered twice, `ActorSystem:Tier` naming a tier
 7. Every admitted issuer — channel, partner and the ring alike — carries a name and a key of at least 256 bits and no name is admitted twice
 8. `ValidateTrustConfiguration`: each `Partners[]` entry names somebody once, does something, is coherent per open direction and carries a key that can sign
 9. `ValidatePublishedAddress`: `PublicUrl`, where declared, is absolute, on a bearer-carrying scheme and names one interface
@@ -475,12 +476,12 @@ fault reaches a user as a conversation that never answers, on a host that passed
 
 | Section | Purpose |
 |---|---|
-| `Morgana:LanguageModels:Tiers` | The three tiers: provider, connection, model and `MagicDust` of each |
+| `Morgana:LanguageModels:Tiers` | The three tiers: provider, connection and model of each |
 | `Morgana:AgentToAgent` | `Enabled`, `MaxRoundsPerTurn`, `PublicUrl` (declared only where a binding cannot answer for the address), `Partners[]`. Consultation waits are one **ladder** derived from `ActorSystem:TimeoutSeconds`, stated once in `Records.PeerConsultationWaits` |
 | `Morgana:ActorSystem` | `TimeoutSeconds`, `EnableGuardrail`, `IntentCollisionThreshold`, `Tier` (the framework actors') |
 | `Morgana:AdaptiveMessaging` | `EnableStreamingResponse`, `RichFeaturesMinLength` |
 | `Morgana:ConversationPersistence` | `StoragePath`, `EncryptionKey` (AES-256, base64, 32 bytes) |
-| `Morgana:RateLimiting` · `:DustLimiting` | Limits and their authored error messages. `MagicDust` pricing lives per tier |
+| `Morgana:RateLimiting` · `:DustLimiting` | Limits and their authored error messages. the dust of a model is its provider's |
 | `Morgana:Authentication` | Audience and `Issuers[]` — **channels only** |
 | `Morgana:HistoryReducer` · `:OpenTelemetry` · `:Plugins` | Summarization, exporters, plugin scan directories |
 

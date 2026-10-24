@@ -651,7 +651,7 @@
       <table>
         <thead><tr><th>Setting</th><th>Description</th></tr></thead>
         <tbody>
-          <tr><td>Morgana:LanguageModels:Tiers:{Tier}:*</td><td>The three tiers (<code>Economy</code>, <code>Efficiency</code>, <code>Performance</code>), each with its <code>Provider</code> (one of the four that Alembic registers: <code>Anthropic</code>, <code>Google</code>, <code>Ollama</code>, <code>OpenAI</code>), its <code>Connection</code>, <code>Options</code> and <code>MagicDust</code>. All three are declared, as in Morgana. <code>MagicDust</code> carries both axes at zero: pricing is never read, since Alembic calls <code>GetChatClient(Efficiency)</code> directly rather than going through the metered agent adapter</td></tr>
+          <tr><td>Morgana:LanguageModels:Tiers:{Tier}:*</td><td>The three tiers (<code>Economy</code>, <code>Efficiency</code>, <code>Performance</code>), each with its <code>Provider</code> (one of the four that Alembic registers: <code>Anthropic</code>, <code>Google</code>, <code>Ollama</code>, <code>OpenAI</code>), its <code>Connection</code> and <code>Options</code>. All three are declared, as in Morgana</td></tr>
           <tr><td>Alembic:Work:AutosaveSeconds</td><td>How often the Draft in the circuit is snapshotted as a fallback for &ldquo;Save my work&rdquo;: never a resumption path on its own, only a floor under that one button (default: 30)</td></tr>
         </tbody>
       </table>

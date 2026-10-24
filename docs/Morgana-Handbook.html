@@ -622,7 +622,6 @@
         <tbody>
           <tr><td>Morgana:LanguageModels:Tiers:{Tier}:*</td><td>Three tiers, <code>Economy</code>, <code>Efficiency</code> and <code>Performance</code>, from the cheapest model to the most capable. Each names its <code>Provider</code> among those found in <code>plugins/</code>, where <code>Anthropic</code>, <code>OpenAI</code>, <code>Ollama</code> and <code>Google</code> ship with Morgana. Its <code>Connection</code> carries the fields of that provider: ApiKey, Endpoint where it uses one, MaxRetries where its client retries, TimeoutSeconds. All three are mandatory: there is no cross-tier fallback</td></tr>
           <tr><td>Morgana:LanguageModels:Tiers:{Tier}:Options:*</td><td>Narrow, JSON-bindable mirror of <code>ChatOptions</code> for this tier: <code>ModelId</code> and <code>MaxOutputTokens</code> (both required: the ceiling of a single model call, generous since reasoning counts against it)</td></tr>
-          <tr><td>Morgana:LanguageModels:Tiers:{Tier}:MagicDust:*</td><td>Per-tier token pricing: <code>InputTokensPerDustUnit</code>, <code>OutputTokensPerDustUnit</code>, <code>CachedInputWeight</code>, <code>CacheCreationWeight</code></td></tr>
           <tr><td>Morgana:Authentication:Audience</td><td>Expected JWT audience (default: <code>morgana.ai</code>)</td></tr>
           <tr><td>Morgana:Authentication:Issuers[]</td><td><strong>Channels only</strong>: array of <code>{ Name, SymmetricKey }</code> entries, one per channel (e.g. <code>cauldron</code>, <code>grimoire</code>, <code>rune</code>, <code>harness</code>). Partners live in <code>Morgana:AgentToAgent:Partners[]</code> and a name declared in both lists is startup-fatal. Nothing is authored for <code>morgana</code>, the reserved name this installation's own agents consult each other under: that key is coined at every start</td></tr>
           <tr><td>Morgana:ConversationPersistence:EncryptionKey</td><td>AES-256 key for SQLite encryption (base64)</td></tr>
@@ -643,7 +642,7 @@
           </td></tr>
           <tr><td>Morgana:AdaptiveMessaging:*</td><td>Streaming toggle, rich-features threshold for ingress heuristic</td></tr>
           <tr><td>Morgana:RateLimiting:*</td><td>Per-minute, per-hour, per-day message limits</td></tr>
-          <tr><td>Morgana:DustLimiting:*</td><td>Token budget: enabled, budget per conversation, the 70% / 90% warnings and the lockout message. Pricing is not here: it is per tier, under <code>Tiers:{Tier}:MagicDust</code></td></tr>
+          <tr><td>Morgana:DustLimiting:*</td><td>Token budget: enabled, budget per conversation, the 70% / 90% warnings and the lockout message. Pricing is not here: each provider plugin prices its own models</td></tr>
           <tr><td>Morgana:HistoryReducer:*</td><td>History summarization: <code>Enabled</code>, <code>SummarizationThreshold</code>, <code>SummarizationTargetCount</code>, <code>SummarizationPrompt</code>. Disabled hands the LLM the whole history</td></tr>
           <tr><td>Morgana:Plugins:Directories</td><td>Directories scanned at startup for plugin DLLs carrying agents, tools and their <code>agents.json</code></td></tr>
           <tr><td>Morgana:OpenTelemetry:*</td><td>Tracing: <code>Enabled</code>, <code>ServiceName</code>, <code>Exporters</code> and <code>EnableSensitiveData</code> (message and response text on spans, off by default)</td></tr>
