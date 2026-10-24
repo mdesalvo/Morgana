@@ -75,6 +75,12 @@ public interface IPromptComposerService
     Task<string?> ComposeLandingDeclarationAsync(IReadOnlyList<Records.OfferedAction> menu);
 
     /// <summary>
+    /// Produces the declaration added to the instructions of the run that repeats a turn whose answer the model wrote outside Reply.
+    /// </summary>
+    /// <returns>The declaration to add; <c>null</c> when the deployment declares none.</returns>
+    Task<string?> ComposeUnsentAnswerDeclarationAsync();
+
+    /// <summary>
     /// Produces the whole of what an answering agent reads on a run serving a colleague. The instructions
     /// tell it that its reader is not the user and what the question may not claim. The question itself
     /// is the message of the turn, inside the fence marking it as data.

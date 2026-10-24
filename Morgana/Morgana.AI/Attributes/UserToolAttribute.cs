@@ -5,8 +5,8 @@ namespace Morgana.AI.Attributes;
 /// </summary>
 /// <remarks>
 /// <para>Every tool method and workflow class carries this or <see cref="SystemToolAttribute"/>, never both, checked at startup; the menu is written by code and the model only gives it a voice.</para>
-/// <para>The turn that answers a press leaves the pressed button off its menu, since the user is looking at what it shows.
-/// A tool with a required <c>Request</c> parameter stays on offer: each press asks the user for a value, so it can serve another one.</para>
+/// <para>A turn leaves off its menu the button of every tool that it called, since the user is looking at what it shows.
+/// The tools that the model reads follow the order of the buttons, so the model describing what it does follows the menu.</para>
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 public sealed class UserToolAttribute : Attribute

@@ -476,7 +476,7 @@ public sealed class WorkflowTests
     [Fact]
     public void Workflow_A_closure_is_completed_with_a_button_for_each_missing_step_tool_worded_from_its_name()
     {
-        Records.ClosingDeclaration closed = new("Here is the quote.", Records.AwaitedFromUser.Nothing, false, [], null);
+        Records.ClosingDeclaration closed = new("Here is the quote.", Records.AwaitedFromUser.Nothing, false, false, [], null);
 
         Records.ClosingDeclaration completed = closed.WithStepActions(["ConfirmOrder", "CancelOrder"]);
 
@@ -488,7 +488,7 @@ public sealed class WorkflowTests
     [Fact]
     public void Workflow_A_closure_keeps_the_model_wording_drops_foreign_actions_and_orders_the_rest_as_declared()
     {
-        Records.ClosingDeclaration closed = new("Here is the quote.", Records.AwaitedFromUser.TypedAnswer, false,
+        Records.ClosingDeclaration closed = new("Here is the quote.", Records.AwaitedFromUser.TypedAnswer, false, false,
         [
             new("Stock", "Stock", "stock"),
             new("CancelOrder", "Drop it", "drop"),

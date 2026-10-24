@@ -216,7 +216,7 @@ public sealed class ApprovalTurnChatClient : DelegatingChatClient
         // Only the text matters here: the approval turn's buttons are the framework's.
         await contextProvider.SetVariableAsync(session, Constants.ContextKeys.ClosingDeclaration,
             JsonSerializer.Serialize(
-                new Records.ClosingDeclaration(replyText, Records.AwaitedFromUser.Nothing, false, [], null),
+                new Records.ClosingDeclaration(replyText, Records.AwaitedFromUser.Nothing, false, false, [], null),
                 Records.DefaultJsonSerializerOptions));
     }
 

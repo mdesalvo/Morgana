@@ -43,7 +43,7 @@ public sealed class FrameworkPromptTests
         string[] promptInjections = [.. morgana.GetAdditionalProperty<List<Records.Injection>>("PromptInjections").Select(injection => injection.Name)];
         Assert.Equivalent(new[]
         {
-            "ColleaguesDeclaration", "PeerConsultationDeclaration", "PeerConsultationGuardrail", "PeerConsultationQuestion", "LandingDeclaration"
+            "ColleaguesDeclaration", "PeerConsultationDeclaration", "PeerConsultationGuardrail", "PeerConsultationQuestion", "LandingDeclaration", "UnsentAnswer"
         }, promptInjections);
     }
 

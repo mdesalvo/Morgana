@@ -1454,7 +1454,8 @@ public static class Records
     /// <summary>
     /// The call that the user's request waits on: opened by a pressed action button or by a call of the model's own that lacks a value
     /// only the user can give or that fails. It is satisfied when it runs and succeeds; until then it waits for the user's typed answer,
-    /// offered beside every other tool; only a press binds arguments. It is let go when the turn makes another call, the user leaves or another press replaces it.
+    /// offered beside every other tool; only a press binds arguments. It is let go by another call in the turn, by the user leaving or
+    /// setting it aside in words and by another press.
     /// </summary>
     /// <param name="Tool">The tool that the button leads to.</param>
     /// <param name="Arguments">Parameter name to the JSON text of the value that the button supplies.</param>
@@ -1621,13 +1622,15 @@ public static class Records
     /// </summary>
     /// <param name="Text">The words the turn answers with.</param>
     /// <param name="Awaits">What the turn ends waiting for from the user.</param>
-    /// <param name="UserIsLeaving">True when the user's own message was a goodbye.</param>
+    /// <param name="UserIsLeaving">True when the user's message takes leave of the agent; leaving ends everything, a call still waiting included.</param>
+    /// <param name="UserSetsRequestAside">True when the user stays with the agent but drops the call still waiting for their answer; never a goodbye.</param>
     /// <param name="Actions">The actions offered as buttons; empty when none.</param>
     /// <param name="Card">The card presenting the turn's structured data; null when none.</param>
     public record ClosingDeclaration(
         [property: JsonPropertyName(Constants.Tools.ReplyParameters.Text)] string Text,
         [property: JsonPropertyName(Constants.Tools.ReplyParameters.Awaits)] AwaitedFromUser Awaits,
         [property: JsonPropertyName(Constants.Tools.ReplyParameters.UserIsLeaving)] bool UserIsLeaving,
+        [property: JsonPropertyName(Constants.Tools.ReplyParameters.UserSetsRequestAside)] bool UserSetsRequestAside,
         [property: JsonPropertyName(Constants.Tools.ReplyParameters.Actions)] IReadOnlyList<OfferedAction> Actions,
         [property: JsonPropertyName(Constants.Tools.ReplyParameters.Card)] RichCard? Card)
     {
@@ -1665,7 +1668,7 @@ public static class Records
                 ?? new OfferedAction(tool, LabelFromToolName(tool), LabelFromToolName(tool)))];
 
             // The turn now awaits a choice among exactly those buttons; the model's other decisions are kept.
-            return new ClosingDeclaration(Text, AwaitedFromUser.ActionChoice, UserIsLeaving, actions, Card);
+            return new ClosingDeclaration(Text, AwaitedFromUser.ActionChoice, UserIsLeaving, UserSetsRequestAside, actions, Card);
         }
 
         /// <summary>
@@ -1674,7 +1677,7 @@ public static class Records
         /// <param name="menu">The agent's menu, in menu order.</param>
         public ClosingDeclaration WithMenu(IReadOnlyList<OfferedAction> menu)
             // The menu is the turn's only action list, while the card that presents the turn's data stays.
-            => new ClosingDeclaration(Text, menu.Count > 0 ? AwaitedFromUser.ActionChoice : AwaitedFromUser.Nothing, UserIsLeaving, menu, Card);
+            => new ClosingDeclaration(Text, menu.Count > 0 ? AwaitedFromUser.ActionChoice : AwaitedFromUser.Nothing, UserIsLeaving, UserSetsRequestAside, menu, Card);
 
         /// <summary>Words a tool name as a button label: <c>ConfirmOrder</c> becomes <c>Confirm order</c>.</summary>
         private static string LabelFromToolName(string toolName)

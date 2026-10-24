@@ -58,7 +58,11 @@
             },
             {
               "Name": "LandingDeclaration",
-              "Content": "[THE USER HAS JUST CHOSEN YOU]\nYour text this turn opens your part of the conversation. The user has already been greeted and knows who you are, so your text goes straight to what the user can get from you here, in a few sentences of your own. The buttons the user receives beneath your text, in order: ((actions))."
+              "Content": "[THE USER HAS JUST CHOSEN YOU]\nYour text this turn opens your part of the conversation. The user has already been greeted and knows who you are, so your text goes straight to what the user can get from you here, in a few sentences of your own. The buttons the user receives beneath your text, in order: ((actions)). Each of these buttons is something you do for the user with your own tools, which this turn alone does not offer you."
+            },
+            {
+              "Name": "UnsentAnswer",
+              "Content": "[YOUR ANSWER HAS NOT REACHED THE USER]\nWhat you wrote outside Reply is never shown. Give your answer through Reply, judging every field it asks for."
             }
           ]
         },

@@ -472,6 +472,83 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
+    public async Task TurnClosure_Free_text_while_a_request_waits_is_run_again_for_the_judgement()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Text("I can help with plants and orders."));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I can help with plants and orders.","userIsLeaving":false,"userSetsRequestAside":true}""")));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "🌼 A plant", null));
+        List<object> answered = await turn.AskAsync(new Records.AgentRequest("conv-turn", "How can you help me?", null));
+
+        // The words written outside Reply carried no judgement, so the turn ran once more and the model gave it through Reply.
+        Assert.Equal(4, turn.Model.Requests.Count);
+        Assert.DoesNotContain("[YOUR ANSWER HAS NOT REACHED THE USER]", turn.Model.Requests[2].Options!.Instructions!, StringComparison.Ordinal);
+        Assert.Contains("[YOUR ANSWER HAS NOT REACHED THE USER]", turn.Model.Requests[3].Options!.Instructions!, StringComparison.Ordinal);
+
+        // The user set the request aside, so the turn closes on the menu and the request is let go.
+        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
+            answered.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
+    }
+
+    [Fact]
+    public async Task TurnClosure_Free_text_twice_while_a_request_waits_keeps_the_request()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Text("I can help with plants and orders."));
+        turn.Model.Enqueue(Text("I can help with plants and orders, really."));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "🌼 A plant", null));
+        List<object> answered = await turn.AskAsync(new Records.AgentRequest("conv-turn", "How can you help me?", null));
+
+        // The model gave no judgement twice, so the turn closes on its last words and the request stays open: no button.
+        Records.AgentResponse response = answered.OfType<Records.AgentResponse>().Single();
+        Assert.Equal("I can help with plants and orders, really.", response.Response);
+        Assert.Null(response.QuickReplies);
+        Assert.Equal(4, turn.Model.Requests.Count);
+    }
+
+    [Fact]
+    public async Task TurnClosure_Free_text_with_no_request_waiting_is_closed_at_once()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Text("We keep plants and orders."));
+
+        List<object> answered = await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
+
+        // Nothing waits for the user, so the last words close the turn in a single pass.
+        Assert.Single(turn.Model.Requests);
+        Assert.Equal("We keep plants and orders.", answered.OfType<Records.AgentResponse>().Single().Response);
+    }
+
+    [Fact]
+    public async Task TurnClosure_Menu_leaves_off_the_button_of_a_tool_the_model_called_itself()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("OrderHistory", """{"customerCode":"P994E"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"You have 2 orders.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Hello again.","userIsLeaving":false}""")));
+
+        List<object> called = await turn.AskAsync(new Records.AgentRequest("conv-turn", "What are my orders?", null));
+
+        // The turn showed the orders, so their button is left off whoever made the call and the others stay.
+        Assert.Equal(["🌼 A plant", "✨ We're done, thanks"],
+            called.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
+
+        List<object> next = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Hello", null));
+
+        // The next turn called nothing, so it offers every button again.
+        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
+            next.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
+    }
+
+    [Fact]
     public async Task TurnClosure_Free_text_written_beside_an_accepted_Reply_never_becomes_the_answer()
     {
         ReplyUnderTest reply = await ReplyUnderTest.CreateAsync();
@@ -596,15 +673,15 @@ public sealed class TurnClosureTests
         List<object> questioning = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Do you have it in colours?", null));
 
         // An answered turn and a turn whose model wrote buttons of its own close alike: the menu in menu order, then the way out.
-        string[] menuButtons = ["🌼 A plant", "📦 My orders", "✨ We're done, thanks"];
-        Assert.Equal(menuButtons, answered.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
-        Assert.Equal(menuButtons, offering.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
+        // The turn that called Stock leaves its button off, since the user is looking at the plant it showed.
+        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"], answered.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
+        Assert.Equal(["📦 My orders", "✨ We're done, thanks"], offering.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
 
         // A turn that leaves a call waiting for the user to type offers no button at all, since buttons would lock the field the user types in.
         Assert.Null(asking.OfType<Records.AgentResponse>().Single().QuickReplies);
 
         // A model that asks a question with no call behind it has left nothing waiting, so its turn closes on the menu like any answered one.
-        Assert.Equal(menuButtons, questioning.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
+        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"], questioning.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
 
         // The model is never asked for buttons: Reply reaches it with no actions.
         AIFunction reply = Assert.IsAssignableFrom<AIFunction>(Assert.Single(turn.Model.Requests[0].Options!.Tools!, tool => tool.Name == "Reply"));
@@ -691,8 +768,8 @@ public sealed class TurnClosureTests
         Assert.Equal(["Reply"], OfferedTools(turn.Model, 3));
         Assert.Equal(["Stock:tulip"], WorkflowTests.InventoryTools.Calls);
 
-        // The plant is the user's to give, so the turn that answers the press still offers it for another plant.
-        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
+        // The turn called Stock, so it leaves its button off: the user is looking at the plant it showed.
+        Assert.Equal(["📦 My orders", "✨ We're done, thanks"],
             pressAnswer.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "and roses?", null));
@@ -749,8 +826,8 @@ public sealed class TurnClosureTests
         // The typed answer still finds the waiting call, which runs with the value.
         Assert.Equal(["Stock:tulip"], WorkflowTests.InventoryTools.Calls);
 
-        // The call was made, so the turn closes on the menu.
-        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
+        // The call was made, so the turn closes on the menu, which leaves off the plant it has just shown.
+        Assert.Equal(["📦 My orders", "✨ We're done, thanks"],
             answered.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
     }
 
@@ -772,8 +849,9 @@ public sealed class TurnClosureTests
 
         List<object> otherAnswer = await turn.AskAsync(new Records.AgentRequest("conv-turn", "What are my orders?", null));
 
-        // The model called another tool, so the user went elsewhere: the waiting call is let go and the turn closes on the menu.
-        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
+        // The model called another tool, so the user went elsewhere: the waiting call is let go and the turn closes on the menu,
+        // which leaves off the orders the turn has just shown.
+        Assert.Equal(["🌼 A plant", "✨ We're done, thanks"],
             otherAnswer.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "Hello", null));
@@ -811,9 +889,75 @@ public sealed class TurnClosureTests
         Assert.Equal(["Reply"], OfferedTools(turn.Model, 3));
         Assert.Equal(["Stock:tulip"], WorkflowTests.InventoryTools.Calls);
 
-        // The call was made, so the turn closes on the menu.
-        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
+        // The call was made, so the turn closes on the menu, which leaves off the plant it has just shown.
+        Assert.Equal(["📦 My orders", "✨ We're done, thanks"],
             answered.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
+    }
+
+    [Fact]
+    public async Task TurnClosure_Request_set_aside_in_words_closes_on_the_menu()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Stock", "{}")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Then we leave the stock alone.","userIsLeaving":false,"userSetsRequestAside":true}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Hello again.","userIsLeaving":false}""")));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "How many do you have?", null));
+        List<object> setAside = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Never mind the stock", null));
+
+        // The user dropped the request in words, so the turn closes on the menu with the way out and the agent stays active.
+        Records.AgentResponse closed = setAside.OfType<Records.AgentResponse>().Single();
+        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"], closed.QuickReplies!.Select(button => button.Label));
+        Assert.False(closed.IsCompleted);
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "Hello", null));
+
+        // Nothing waits any longer, so the next message is bound to no call: every tool is on offer and Stock did not run.
+        Assert.Contains("CancelOrder", OfferedTools(turn.Model, 3));
+        Assert.Contains("Stock", OfferedTools(turn.Model, 3));
+        Assert.Empty(WorkflowTests.InventoryTools.Calls);
+    }
+
+    [Fact]
+    public async Task TurnClosure_Reply_offers_set_aside_only_while_a_request_waits()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant, then?","userIsLeaving":false}""")));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "🌼 A plant", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "Hmm", null));
+
+        // An ordinary turn and the turn of the press have nothing waiting to be set aside, so Reply reaches the model without the judgement.
+        Assert.False(ReplyProperties(turn.Model, 0).TryGetProperty("userSetsRequestAside", out _));
+        Assert.False(ReplyProperties(turn.Model, 1).TryGetProperty("userSetsRequestAside", out _));
+
+        // The press left its call waiting for a plant, so the next message may set it aside and Reply carries the judgement.
+        Assert.True(ReplyProperties(turn.Model, 2).TryGetProperty("userSetsRequestAside", out _));
+
+        // Offered, it is required like userIsLeaving, so the model judges it explicitly on every answer; withheld, it is not listed at all.
+        Assert.Contains("userSetsRequestAside", ReplyRequired(turn.Model, 2));
+        Assert.DoesNotContain("userSetsRequestAside", ReplyRequired(turn.Model, 0));
+    }
+
+    [Fact]
+    public async Task TurnClosure_Leaving_wins_over_setting_a_request_aside()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Stock", "{}")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Goodbye, come back soon.","userIsLeaving":true,"userSetsRequestAside":true}""")));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "How many do you have?", null));
+        List<object> leaving = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Forget it, goodbye", null));
+
+        // Leaving ends everything: no button and the conversation goes back to Morgana.
+        Records.AgentResponse farewell = leaving.OfType<Records.AgentResponse>().Single();
+        Assert.Null(farewell.QuickReplies);
+        Assert.True(farewell.IsCompleted);
     }
 
     [Fact]
@@ -871,7 +1015,7 @@ public sealed class TurnClosureTests
         Assert.Contains("Stock", OfferedTools(turn.Model, 4));
         Assert.Contains("CancelOrder", OfferedTools(turn.Model, 4));
         Assert.Equal(["Stock:unknown", "Stock:tulip"], WorkflowTests.InventoryTools.Calls);
-        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
+        Assert.Equal(["📦 My orders", "✨ We're done, thanks"],
             answered.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
     }
 
@@ -897,7 +1041,7 @@ public sealed class TurnClosureTests
         Assert.Contains("Stock", OfferedTools(turn.Model, 2));
         Assert.Contains("CancelOrder", OfferedTools(turn.Model, 2));
         Assert.Equal(["Stock:unknown", "Stock:tulip"], WorkflowTests.InventoryTools.Calls);
-        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
+        Assert.Equal(["📦 My orders", "✨ We're done, thanks"],
             answered.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
     }
 
@@ -980,6 +1124,15 @@ public sealed class TurnClosureTests
             _ => tool
         })
     ];
+
+    /// <summary>The properties of the Reply schema that the model read on the given request.</summary>
+    private static JsonElement ReplyProperties(ScriptedChatClient model, int request)
+        => Assert.IsAssignableFrom<AIFunction>(Assert.Single(model.Requests[request].Options!.Tools!, tool => tool.Name == "Reply")).JsonSchema.GetProperty("properties");
+
+    /// <summary>The required property names of the Reply schema that the model read on the given request.</summary>
+    private static string[] ReplyRequired(ScriptedChatClient model, int request)
+        => [.. Assert.IsAssignableFrom<AIFunction>(Assert.Single(model.Requests[request].Options!.Tools!, tool => tool.Name == "Reply"))
+            .JsonSchema.GetProperty("required").EnumerateArray().Select(name => name.GetString()!)];
 
     /// <summary>The names of the tools that the model was offered on one of its requests, in alphabetical order.</summary>
     private static string[] OfferedTools(ScriptedChatClient model, int request)
@@ -1216,6 +1369,8 @@ public sealed class TurnClosureTests
         TurnClosingChatClient chain = new TurnClosingChatClient(
             new FunctionInvokingChatClient(model),
             "Turn closed.",
+            () => reply.Session,
+            reply.Provider,
             NullLogger.Instance);
 
         return await chain.GetResponseAsync(
@@ -1237,6 +1392,12 @@ public sealed class TurnClosureTests
         /// <summary>The in-flight session.</summary>
         private AgentSession session = null!;
 
+        /// <summary>The in-flight session, as the clients of the chain read it.</summary>
+        public AgentSession Session => session;
+
+        /// <summary>The agent's context store, as the clients of the chain read it.</summary>
+        public MorganaAIContextProvider Provider => provider;
+
         /// <summary>
         /// Builds Reply over a session of an agent that never talks to a model.
         /// </summary>
@@ -1257,6 +1418,7 @@ public sealed class TurnClosureTests
             [
                 new Records.ToolParameter("text", "The words of the answer.", true, ""),
                 new Records.ToolParameter("userIsLeaving", "Whether the user is leaving.", true, ""),
+                new Records.ToolParameter("userSetsRequestAside", "Whether the user set the waiting request aside.", false, ""),
                 new Records.ToolParameter("actions", "The actions offered.", false, ""),
                 new Records.ToolParameter("card", "The card.", false, "")
             ]);
@@ -1266,7 +1428,7 @@ public sealed class TurnClosureTests
             MorganaToolAdapter adapter = new MorganaToolAdapter(NullLogger.Instance,
                 () => new MorganaTool.ToolContext(reply.provider, reply.session, "turn-closure"));
 
-            Func<string, bool, List<Records.OfferedAction>?, RichCard?, Task<Records.FrameworkToolResult>> implementation = baseTool.Reply;
+            Func<string, bool, bool, List<Records.OfferedAction>?, RichCard?, Task<Records.FrameworkToolResult>> implementation = baseTool.Reply;
             adapter.AddTool(definition.Name, implementation, definition);
             AIFunction createdReply = await adapter.CreateFunctionAsync(definition.Name);
 

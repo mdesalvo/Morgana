@@ -337,7 +337,6 @@ public class ContractTool : MorganaTool
         PlanProduct product = await GetPlanProductAsync(connection, schedule.PlanCode);
         List<string> features = await GetFeaturesAsync(connection, schedule.PlanCode);
         List<PlanService> services = await GetServicesAsync(connection, schedule.PlanCode);
-        List<PlanClause> clauses = await GetClausesAsync(connection, schedule.PlanCode);
 
         int remainingDays = (schedule.EndDate - DateTime.UtcNow).Days;
 
@@ -377,51 +376,51 @@ public class ContractTool : MorganaTool
             Termination: new ContractTermination(
                 product.NoticePeriodDays,
                 product.EarlyTerminationFee,
-                new AutoRenewal(true, 60, schedule.EndDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture))),
-            AvailableClauses: [.. clauses.Select(clause => new ClauseListing(
-                clause.ClauseNumber,
-                clause.Title,
-                clause.ClauseType))]);
+                new AutoRenewal(true, 60, schedule.EndDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture))));
     }
 
     /// <summary>
-    /// Retrieves a single clause of the customer's Green Care Plan.
+    /// Retrieves one clause of the Green Care Plan, the same for every customer.
     /// </summary>
-    /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="clauseNumber">Clause number to retrieve (1-7)</param>
-    /// <returns>The complete clause details, or the error saying why none can be read</returns>
-    [Description("Retrieves one clause of the plan. The plan has 7 clauses: (1) Plant Health Guarantee, (2) Payment Terms, (3) Visit Schedule and Rescheduling, (4) Termination Terms, (5) Auto-Renewal, (6) Limitation of Liability, (7) Data Privacy (GDPR). The clauses are the plan's own terms, identical for everyone who signs it; the dates and fees specific to this customer are in GetContractDetails. This tool has only informative capabilities: you will not find dispositive actions here (e.g: 'Modify clause', ...).")]
-    [UserTool(3, "📑 A contract clause")]
+    /// <returns>The complete clause or the error saying that the clause does not exist</returns>
+    [Description("Retrieves the binding wording of one clause of the Green Care Plan. Needs no customer code: the clauses are the plan's own terms, identical for everyone who signs it, so they answer a prospect deciding whether to sign as much as a customer who already holds one. The plan has 7 clauses: (1) Plant Health Guarantee, (2) Payment Terms, (3) Visit Schedule and Rescheduling, (4) Termination Terms, (5) Auto-Renewal, (6) Limitation of Liability, (7) Data Privacy (GDPR). The dates and fees specific to a customer are in GetContractDetails. This tool has only informative capabilities: you will not find dispositive actions here (e.g: 'Modify clause', ...).")]
+    [UserTool(3, "📑 A plan clause")]
     public async Task<ContractClauseResult> GetContractClause(
-        [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.Context, shared: true)] string customerCode,
         [Description("Clause number to retrieve (1-7). Which clause is the user's choice: never guess it.")] [ToolParameter(Records.ToolScope.Request)] int clauseNumber)
     {
+        // The clauses sit in the shop's one system of record beside every other agent's data.
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
-        if (schedule == null)
-            return new ContractClauseResult(Error: NoCarePlanError, CustomerCode: customerCode, Note: NoCarePlanNote);
+        // The clauses belong to the plan and not to a customer's contract: the plan's own code reads them
+        // so a prospect and a customer are shown the same wording.
+        List<PlanClause> clauses = await GetClausesAsync(connection, DefaultPlanCode, clauseNumber);
 
-        List<PlanClause> clauses = await GetClausesAsync(connection, schedule.PlanCode, clauseNumber);
+        // No clause of the plan carries the number that was asked for.
         if (clauses.Count == 0)
         {
-            List<PlanClause> allClauses = await GetClausesAsync(connection, schedule.PlanCode);
+            // The clauses that exist let the caller pick a valid number instead of guessing again.
+            List<PlanClause> allClauses = await GetClausesAsync(connection, DefaultPlanCode);
+
+            // Delivers the refusal together with the numbers and titles that can be asked for.
             return new ContractClauseResult(
                 Error: "Clause not found",
                 RequestedClauseNumber: clauseNumber,
                 AvailableClauses: [.. allClauses.Select(clause => new ClauseHeading(clause.ClauseNumber, clause.Title))]);
         }
 
-        PlanClause found = clauses[0];
+        // A clause number is unique within the plan so the one row is the clause that was asked for.
+        PlanClause requestedClause = clauses[0];
 
+        // Delivers the binding wording of the clause with its summary and where related matters are read.
         return new ContractClauseResult(
-            ContractId: schedule.ContractId,
-            ClauseNumber: found.ClauseNumber,
-            Title: found.Title,
-            Type: found.ClauseType,
-            Summary: found.Summary,
-            FullText: found.FullText,
-            RelatedInfo: found.ClauseType switch
+            ClauseNumber: requestedClause.ClauseNumber,
+            Title: requestedClause.Title,
+            Type: requestedClause.ClauseType,
+            Summary: requestedClause.Summary,
+            FullText: requestedClause.FullText,
+            // Points each clause type to where its related matter is read; any other type points nowhere.
+            RelatedInfo: requestedClause.ClauseType switch
             {
                 "Termination" => "For termination procedures, use GetTerminationProcedure tool",
                 "VisitSchedule" => "Extra visits are charged on the customer's invoices, which another bench of the nursery keeps: no tool here reads them",

@@ -121,6 +121,9 @@ public static class Constants
 
         /// <summary>Added to a landing turn's instructions: the agent introduces itself and learns the buttons beneath its text.</summary>
         public const string LandingDeclaration = "LandingDeclaration";
+
+        /// <summary>Added to the instructions of the run that repeats a turn whose answer was written outside Reply while a request waited.</summary>
+        public const string UnsentAnswer = "UnsentAnswer";
     }
 
     /// <summary>
@@ -288,8 +291,11 @@ public static class Constants
             /// <summary>What the turn ends waiting for from the user.</summary>
             public const string Awaits = "awaits";
 
-            /// <summary>Whether the user's own message was a goodbye.</summary>
+            /// <summary>Whether the user's message takes leave of the agent.</summary>
             public const string UserIsLeaving = "userIsLeaving";
+
+            /// <summary>Whether the user stays with the agent but drops the call still waiting for their answer.</summary>
+            public const string UserSetsRequestAside = "userSetsRequestAside";
 
             /// <summary>The actions of a workflow's choice step.</summary>
             public const string Actions = "actions";
@@ -349,6 +355,9 @@ public static class Constants
 
         /// <summary>Marks the turn in which the pressed call has been made, so the turn goes on to its answer; dropped when the turn ends.</summary>
         public const string PressedCallMade = "pressed_call_made";
+
+        /// <summary>Marks a turn left open once for the model's own judgement of a waiting request, after it answered outside Reply; dropped when the turn ends.</summary>
+        public const string ReplyJudgementAsked = "reply_judgement_asked";
 
         /// <summary>The actions that the agent's last delivered turn offered as buttons, which a press of the next message is read against.</summary>
         public const string OfferedActions = "offered_actions";

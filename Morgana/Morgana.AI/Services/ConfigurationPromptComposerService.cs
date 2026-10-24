@@ -206,6 +206,17 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     }
 
     /// <inheritdoc />
+    public async Task<string?> ComposeUnsentAnswerDeclarationAsync()
+    {
+        // The text that tells the model why its turn runs again: the framework's own wording, resolved by name.
+        FrameworkLayer framework = await frameworkLayer.Value;
+        string declaration = Records.Injection.ResolveTemplate(framework.PromptInjections, Constants.PromptInjections.UnsentAnswer);
+
+        // A deployment declaring no text runs the turn again on the agent's instructions alone.
+        return declaration.Length == 0 ? null : declaration;
+    }
+
+    /// <inheritdoc />
     public async Task<Records.ConsultationRequest> ComposeConsultationRequestAsync(string? callerIntent, string question)
     {
         // All templates are the framework's: the question is the only text here that somebody else wrote.

@@ -12,6 +12,8 @@ A new **Economy** tier joins Efficiency and Performance, taking over Morgana's o
 ### 🎯 Major Feature: LLM providers as plugins
 Morgana's core no longer knows any LLM vendor: **each provider is a plugin**, dropped into `plugins/` beside the domain agents. A tier picks it by name.
 Anthropic, OpenAI, Google and Ollama ship as **`Morgana.AI.LanguageModels`** packages. Any other vendor offering a `Microsoft.Extensions.AI` client can join the same way, without touching the framework.
+### 🎯 Major Feature: Google Gemini gets in, Azure OpenAI gets out
+Morgana starts supporting **Google Gemini** models, while drops support for **Azure OpenAI** models.
 ### 🎯 Major Feature: Agents that present themselves
 Morgana's welcome works like a phone menu: pressing one of her buttons takes the user straight to that agent, which presents itself with its own menu. Pressing an entry of that menu is the request itself.
 The buttons on both levels are written by code, from the intents and from the tools marked **`[UserTool]`**: the model only gives them a voice.
@@ -33,6 +35,7 @@ A tool performing a dispositive action (e.g: placing an order, signing a contrac
 ### 🔄 Changed
 - Prompt aspects of tools no longer live in `agents.json`: they are now based on **`Microsoft.Extensions.AI`**. A tool and each of its parameters are described with the standard **`[Description]`** attribute on the public methods of a `MorganaTool`: `Microsoft.Extensions.AI` turns it into the tool schema handed to the model.
 - `morgana.json` is lighter: tools are no longer declared in it and `GlobalPolicies` drop from 9 to 5, now that the protocol is enforced in code. Some `AdditionalProperties` are renamed after what they do: `Injections` is split into `PromptInjections` and `ToolInjections`.
+- Azure OpenAI provider has been dropped from the baseline.
 
 ### 🐛 Fixed
 - On Claude 5.5 models the answer that an agent wrote before closing its turn never reached the user, hidden by the provider as reasoning

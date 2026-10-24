@@ -171,6 +171,7 @@ public sealed class HistoryViewTests
         public Task<string> ComposePeerDescriptionAsync(A2A.AgentCard peerCard) => throw new NotSupportedException();
         public Task<string?> ComposeColleaguesDeclarationAsync(IReadOnlyDictionary<string, string> colleagues) => throw new NotSupportedException();
         public Task<string?> ComposeLandingDeclarationAsync(IReadOnlyList<Records.OfferedAction> menu) => throw new NotSupportedException();
+        public Task<string?> ComposeUnsentAnswerDeclarationAsync() => throw new NotSupportedException();
         public Task<Records.ConsultationRequest> ComposeConsultationRequestAsync(string? callerIntent, string question) => throw new NotSupportedException();
         public Task<string> ComposeTurnClosureNotAcceptedAsync(string reason) => throw new NotSupportedException();
         public Task<string> ComposeToolInjectionAsync(string name, IReadOnlyDictionary<string, string>? values = null) => throw new NotSupportedException();

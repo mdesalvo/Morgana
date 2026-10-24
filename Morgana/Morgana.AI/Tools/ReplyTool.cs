@@ -36,7 +36,8 @@ public class ReplyTool : MorganaTool
     /// that it presents. Recorded for <c>MorganaAgent</c> to read at the end of the turn.
     /// </summary>
     /// <param name="text">The words of the turn's answer to the user.</param>
-    /// <param name="userIsLeaving">True when the user's own message was a goodbye.</param>
+    /// <param name="userIsLeaving">True when the user's message takes leave of the agent; leaving ends everything, a call still waiting included.</param>
+    /// <param name="userSetsRequestAside">True when the user stays with the agent but drops the call still waiting for their answer; offered only while such a call waits and never a goodbye.</param>
     /// <param name="actions">The actions of a workflow's choice step, worded by the model; no other turn asks for them.</param>
     /// <param name="card">The card presenting the turn's structured data, if any.</param>
     /// <returns>
@@ -48,8 +49,10 @@ public class ReplyTool : MorganaTool
     public async Task<Records.FrameworkToolResult> Reply(
         [Description("Your words to your reader, written against everything the tools returned. A button to leave follows them by themselves once the request is answered, so they never ask whether the user needs anything else.")]
         [ToolParameter(Records.ToolScope.Request)] string text,
-        [Description("True when the user's own message was a goodbye: thanks, we're done, declining further help, wanting to return to the main assistant.")]
+        [Description("True when the user's message takes leave of you: a goodbye, thanks with nothing more asked, wanting to go back to the main assistant. Leaving ends everything, a call still waiting for their answer included.")]
         [ToolParameter(Records.ToolScope.Request)] bool userIsLeaving,
+        [Description("True when the user stays with you but drops the call still waiting for their answer: they say they no longer want it or ask you for something else. Answering it, asking about it or correcting a value keeps it: leave it false. A goodbye is userIsLeaving, never this.")]
+        [ToolParameter(Records.ToolScope.Request)] bool userSetsRequestAside = false,
         [Description("The step's actions as buttons, worded by you.")]
         [ToolParameter(Records.ToolScope.Request)] List<Records.OfferedAction>? actions = null,
         [Description("A card presenting the turn's structured data; omit when none. At most 50 components.")]
@@ -132,7 +135,7 @@ public class ReplyTool : MorganaTool
         Records.AwaitedFromUser awaits = choiceStepOffered ? Records.AwaitedFromUser.ActionChoice : Records.AwaitedFromUser.Nothing;
 
         // The answer as the channel will deliver it: the trimmed text, the awaited input, the leaving flag and the buttons and card that survived the checks.
-        Records.ClosingDeclaration closingDeclaration = new Records.ClosingDeclaration(text.Trim(), awaits, userIsLeaving, offeredActions, card);
+        Records.ClosingDeclaration closingDeclaration = new Records.ClosingDeclaration(text.Trim(), awaits, userIsLeaving, userSetsRequestAside, offeredActions, card);
 
         // The agent reads the closure from the session at the end of the turn: this is how Reply hands it over.
         await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.ClosingDeclaration,
@@ -142,8 +145,8 @@ public class ReplyTool : MorganaTool
         EndToolLoopOnceResponseIsAnswered();
 
         toolLogger.LogInformation(
-            "LLM answered via Reply: textLength={TextLength}, awaits={Awaits}, userIsLeaving={UserIsLeaving}, actions={Actions}, card={Card}",
-            closingDeclaration.Text.Length, awaits, userIsLeaving, closingDeclaration.Actions.Count, card?.Title ?? "(none)");
+            "LLM answered via Reply: textLength={TextLength}, awaits={Awaits}, userIsLeaving={UserIsLeaving}, userSetsRequestAside={UserSetsRequestAside}, actions={Actions}, card={Card}",
+            closingDeclaration.Text.Length, awaits, userIsLeaving, userSetsRequestAside, closingDeclaration.Actions.Count, card?.Title ?? "(none)");
 
         // The model is told the turn is closed.
         return new Records.FrameworkToolResult(Constants.ToolInjections.TurnClosed);

@@ -1,7 +1,9 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.Providers;
 
 namespace Morgana.AI.ChatClients;
 
@@ -19,6 +21,12 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
     /// <summary>What an accepted Reply answers, which tells a closed turn from one whose Reply was refused.</summary>
     private readonly string turnClosedResult;
 
+    /// <summary>Returns the agent's current session, the one that holds the waiting request and the mark of the judgement asked.</summary>
+    private readonly Func<AgentSession?> sessionAccessor;
+
+    /// <summary>The store that the waiting request and the mark are read from and written to.</summary>
+    private readonly MorganaAIContextProvider contextProvider;
+
     /// <summary>Records each turn closed on the model's last words, a sign the prose is not doing its job.</summary>
     private readonly ILogger logger;
 
@@ -27,10 +35,19 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
     /// </summary>
     /// <param name="innerClient">The tool loop the agent runs on.</param>
     /// <param name="turnClosedResult">What an accepted Reply answers.</param>
+    /// <param name="sessionAccessor">Returns the agent's current session.</param>
+    /// <param name="contextProvider">The agent's context store.</param>
     /// <param name="logger">Receives a line for every turn closed on the model's last words.</param>
-    public TurnClosingChatClient(IChatClient innerClient, string turnClosedResult, ILogger logger) : base(innerClient)
+    public TurnClosingChatClient(
+        IChatClient innerClient,
+        string turnClosedResult,
+        Func<AgentSession?> sessionAccessor,
+        MorganaAIContextProvider contextProvider,
+        ILogger logger) : base(innerClient)
     {
         this.turnClosedResult = turnClosedResult;
+        this.sessionAccessor = sessionAccessor;
+        this.contextProvider = contextProvider;
         this.logger = logger;
     }
 
@@ -107,6 +124,20 @@ public sealed class TurnClosingChatClient : DelegatingChatClient
         // A turn with no text is run again by the agent, which may close it then: nothing to close yet.
         if (lastWords.Length == 0)
             return;
+
+        // While a request waits Reply requires the judgement of whether the user set it aside. Words written outside Reply
+        // carry none: the first time the turn is left open for the model to give it, the second time it closes on the words.
+        AgentSession? session = sessionAccessor();
+        if (session is not null
+            && !contextProvider.IsPressedCallMade(session)
+            && contextProvider.GetPressedCall(session) is { AwaitingAnswer: true }
+            && !contextProvider.HoldsFrameworkKey(session, Constants.ContextKeys.ReplyJudgementAsked))
+        {
+            // The mark tells the agent why the turn is run again and ends with the turn.
+            await contextProvider.SetVariableAsync(session, Constants.ContextKeys.ReplyJudgementAsked, true);
+            logger.LogWarning("Turn ended without Reply while a request waits: left open for the model's own judgement");
+            return;
+        }
 
         // Each closure on the model's last words is a sign that the prose leaves Reply unmentioned or unheeded.
         logger.LogWarning("Turn ended without Reply: closing it on the model's last words");

@@ -46,7 +46,6 @@ public record ContractDetailsResult(
     [Description("The fee that the contract charges.")] ContractFee? Fee = null,
     [Description("The services of the plan.")] List<ContractService>? Services = null,
     [Description("How the contract ends and renews.")] ContractTermination? Termination = null,
-    [Description("The clauses that the plan has.")] List<ClauseListing>? AvailableClauses = null,
     [Description("States what this response does and does not carry.")] string? Note = null);
 
 /// <summary>The status of a contract with its icon.</summary>
@@ -102,26 +101,16 @@ public record AutoRenewal(
     [Description("The days before the renewal date by which the customer must give notice to stop it.")] int NoticeDays,
     [Description("The date the contract renews, as dd/MM/yyyy.")] string RenewalDate);
 
-/// <summary>One clause of the plan as a list shows it.</summary>
-[Description("One clause of the plan in a list.")]
-public record ClauseListing(
-    [Description("The number of the clause, from 1 to 7.")] int ClauseNumber,
-    [Description("The title of the clause.")] string Title,
-    [Description("The subject of the clause: PlantHealth, Payment, VisitSchedule, Termination, RenewalTerms, Liability or Privacy.")] string Type);
-
 /// <summary>One clause of the plan as the list of what exists shows it.</summary>
 [Description("One clause of the plan that exists.")]
 public record ClauseHeading(
     [Description("The number of the clause, from 1 to 7.")] int ClauseNumber,
     [Description("The title of the clause.")] string Title);
 
-/// <summary>What <see cref="ContractTool.GetContractClause"/> returns: one clause, or the error saying that no plan is held or that the clause does not exist.</summary>
+/// <summary>What <see cref="ContractTool.GetContractClause"/> returns: one clause of the plan or the error saying that the clause does not exist.</summary>
 [Description("One clause of the plan.")]
 public record ContractClauseResult(
-    [Description("Why no clause is returned; present only when no plan is held or the clause does not exist.")] string? Error = null,
-    [Description("The customer code the books were asked about; present only on an error.")] string? CustomerCode = null,
-    [Description("States what this response does and does not carry.")] string? Note = null,
-    [Description("The contract identifier.")] string? ContractId = null,
+    [Description("Why no clause is returned; present only when the clause does not exist.")] string? Error = null,
     [Description("The number of the clause, from 1 to 7.")] int? ClauseNumber = null,
     [Description("The title of the clause.")] string? Title = null,
     [Description("The subject of the clause: PlantHealth, Payment, VisitSchedule, Termination, RenewalTerms, Liability or Privacy.")] string? Type = null,

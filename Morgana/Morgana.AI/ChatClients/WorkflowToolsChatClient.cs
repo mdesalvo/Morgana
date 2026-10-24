@@ -135,7 +135,7 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         {
             // The clone carries Reply alone, whatever else the agent holds, without actions: the landing closes on the menu.
             ChatOptions landingOptions = options.Clone();
-            landingOptions.Tools = [.. tools.Where(tool => tool.Name is Constants.Tools.Reply).Select(WithoutActions)];
+            landingOptions.Tools = [.. tools.Where(tool => tool.Name is Constants.Tools.Reply).Select(WithoutActionsOrSetAside)];
 
             // The landing's options go to the model with no tool mode: no provider is ever made to call a tool.
             return landingOptions;
@@ -167,16 +167,15 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
         {
             // The clone carries Reply alone, as a landing's does: no workflow runs, so the turn closes on the menu.
             ChatOptions answerOptions = options.Clone();
-            answerOptions.Tools = [.. tools.Where(tool => tool.Name is Constants.Tools.Reply).Select(WithoutActions)];
+            answerOptions.Tools = [.. tools.Where(tool => tool.Name is Constants.Tools.Reply).Select(WithoutActionsOrSetAside)];
 
             // The model reads Reply alone and answers on the result of the call.
             return answerOptions;
         }
 
-        // With no workflow declared and every colleague within reach the agent is offered exactly the tools it was given,
-        // unless a call awaits the user's answer: its own form must still be put on offer.
-        if (workflows.Count == 0 && !colleaguesOutOfReach && awaitingToolOffer is null)
-            return options;
+        // A request waits for the user when a call was left awaiting the answer and this turn has not made it yet: the user's
+        // message may then have set it aside. On the turn of the press the call is made first, so nothing waits to be set aside.
+        bool requestWaits = !pressedCallMade && contextProvider.GetPressedCall(session) is { AwaitingAnswer: true };
 
         // The tools the model is offered on this call, each one weighed against the state of the session.
         List<AITool> offeredTools = [];
@@ -201,12 +200,15 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
             if (isServingConsultation && tool is WorkflowLauncherFunction)
                 continue;
 
+            // Reply carries the set-aside judgement only while a request waits, where the model must give it every time; every other turn offers it without.
+            AITool offeredTool = tool.Name != Constants.Tools.Reply ? tool : requestWaits ? WithSetAsideRequired(tool) : WithoutSetAside(tool);
+
             // Each tool is offered in the form that the running workflow allows, as it is held where no workflow runs.
             switch (runningWorkflow)
             {
                 // At a choice step Reply is offered with the step's tools as the only actions it may propose.
                 case { Step.Tools.Count: > 1 } when tool.Name == Constants.Tools.Reply:
-                    offeredTools.Add(WithStepActions(tool, runningWorkflow.Value.Step.Tools));
+                    offeredTools.Add(WithStepActions(offeredTool, runningWorkflow.Value.Step.Tools));
                     break;
                 // A tool of the current step is offered without what the framework binds.
                 case { } workflowAndStep when workflowAndStep.Step.Tools.Contains(tool.Name):
@@ -214,11 +216,11 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
                     break;
                 // Anywhere but a choice step the buttons are the framework's, so Reply is offered without actions.
                 case var _ when tool.Name == Constants.Tools.Reply:
-                    offeredTools.Add(WithoutActions(tool));
+                    offeredTools.Add(WithoutActions(offeredTool));
                     break;
                 // Any other tool that the workflows let through is offered as the agent holds it.
                 default:
-                    offeredTools.Add(tool);
+                    offeredTools.Add(offeredTool);
                     break;
             }
         }
@@ -274,6 +276,39 @@ public sealed class WorkflowToolsChatClient : DelegatingChatClient
     private static AITool WithoutActions(AITool reply)
         // The buttons of such a turn are bound by the framework as a step's values are, so the model is never asked for them.
         => WithoutBoundParameters(reply, [Constants.Tools.ReplyParameters.Actions]);
+
+    /// <summary>Offers <c>Reply</c> without the user's set-aside judgement, for a turn on which no request waits for the user.</summary>
+    /// <param name="reply">The <c>Reply</c> tool as the agent holds it.</param>
+    private static AITool WithoutSetAside(AITool reply)
+        // Nothing waits to be set aside, so the judgement would only invite a wrong one.
+        => WithoutBoundParameters(reply, [Constants.Tools.ReplyParameters.UserSetsRequestAside]);
+
+    /// <summary>Offers <c>Reply</c> with the set-aside judgement required, for a turn on which a request waits for the user.</summary>
+    /// <param name="reply">The <c>Reply</c> tool as the agent holds it.</param>
+    private static AITool WithSetAsideRequired(AITool reply)
+    {
+        // A Reply that is not a function has no schema to edit.
+        if (reply is not AIFunction replyFunction)
+            return reply;
+
+        // The schema of Reply is read, so that the judgement can be listed among the required properties.
+        JsonObject schema = SchemaOf(replyFunction);
+
+        // Left optional the judgement would be given by omission; required, the model weighs it on every answer while a request waits.
+        JsonArray required = schema["required"] as JsonArray ?? [];
+        if (required.All(name => name!.GetValue<string>() != Constants.Tools.ReplyParameters.UserSetsRequestAside))
+            required.Add(Constants.Tools.ReplyParameters.UserSetsRequestAside);
+        schema["required"] = required;
+
+        // The model reads Reply with the judgement required.
+        return PresentUnderSchema(replyFunction, schema);
+    }
+
+    /// <summary>Offers <c>Reply</c> with no actions and no set-aside judgement, for the turns that no request waits through.</summary>
+    /// <param name="reply">The <c>Reply</c> tool as the agent holds it.</param>
+    private static AITool WithoutActionsOrSetAside(AITool reply)
+        // A landing and the answer to a made call both close on the menu with no request waiting to be set aside.
+        => WithoutBoundParameters(reply, [Constants.Tools.ReplyParameters.Actions, Constants.Tools.ReplyParameters.UserSetsRequestAside]);
 
     /// <summary>
     /// Turns the actions of <c>Reply</c> into the proposal of a choice step: required, one per tool of the step and each leading to one of them.

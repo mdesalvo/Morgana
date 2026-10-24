@@ -249,6 +249,7 @@ public class MorganaAgent : MorganaActor
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.Landing);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.RunInstructions);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.PressedCallMade);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ReplyJudgementAsked);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ConsultationRounds);
             }
         }
@@ -490,6 +491,11 @@ public class MorganaAgent : MorganaActor
         if (turnText.Length == 0 && !awaitsApproval)
         {
             agentLogger.LogWarning("Agent '{AgentIntent}' ended its turn with no answer: running it once more", AgentIntent);
+
+            // A turn left open for the model's judgement of a waiting request is told why it runs again: its words never reached the user.
+            if (aiContextProvider.HoldsFrameworkKey(session, Constants.ContextKeys.ReplyJudgementAsked)
+                && aiContextProvider.UnsentAnswerDeclaration is not null)
+                await aiContextProvider.SetVariableAsync(session, Constants.ContextKeys.RunInstructions, aiContextProvider.UnsentAnswerDeclaration);
             await RunModelAsync();
             turnText = GetClosingDeclarationFromContext(session)?.Text.Trim() ?? string.Empty;
         }
@@ -516,32 +522,39 @@ public class MorganaAgent : MorganaActor
         // How the turn closes, recorded by Reply whether the model called it or the framework closed
         // the turn on its last words. A turn that still declares nothing is answered and ends.
         Records.ClosingDeclaration closingDeclaration = GetClosingDeclarationFromContext(session)
-                                      ?? new Records.ClosingDeclaration(string.Empty, Records.AwaitedFromUser.Nothing, false, [], null);
+                                      ?? new Records.ClosingDeclaration(string.Empty, Records.AwaitedFromUser.Nothing, false, false, [], null);
 
         // A Reply held beside an approval request never moves the workflow nor offers its buttons: in that turn only its text counts.
         if (turnOutcome.AwaitsApproval)
-            closingDeclaration = new Records.ClosingDeclaration(turnOutcome.Text, Records.AwaitedFromUser.Nothing, false, [], null);
+            closingDeclaration = new Records.ClosingDeclaration(turnOutcome.Text, Records.AwaitedFromUser.Nothing, false, false, [], null);
 
         // A press of the button to leave ends the stay whatever the model answered, so the user is back with Morgana.
         if (pressedFrameworkReply is { Termination: true })
             closingDeclaration = closingDeclaration with { UserIsLeaving = true };
 
+        // The tools that this turn called, whoever made the call: what the turn showed and what its waiting call is weighed against.
+        HashSet<string> calledToolNames = [.. aiChatHistoryProvider.GetMessages(session)
+            .Skip(turnOpening.HistoryBaseline)
+            .SelectMany(message => message.Contents)
+            .OfType<FunctionCallContent>()
+            .Select(call => call.Name)];
+
         // A waiting call (see Records.PressedCall) stays while the turn makes it or makes no call but Reply (a clarification
-        // within the same question). A turn that made any other call lets it go: the drop below releases it.
+        // within the same question). A turn that made any other call or whose user set the request aside in words lets it go:
+        // the drop below releases it. A leaving user ends everything, so the flag counts only beside a user who stays.
         bool holdsWaitingCall = false;
         if (aiContextProvider.GetPressedCall(session) is { AwaitingAnswer: true } waitingCall)
         {
+            // A user who set the request aside has said they are done with it, whatever the turn called.
+            if (closingDeclaration is { UserSetsRequestAside: true, UserIsLeaving: false })
+                holdsWaitingCall = false;
             // The waiting call made in this turn holds it without looking at the rest of the turn.
-            if (aiContextProvider.IsPressedCallMade(session))
+            else if (aiContextProvider.IsPressedCallMade(session))
                 holdsWaitingCall = true;
             // Otherwise the turn holds it only if its calls are Reply alone: any other call is the user going elsewhere.
             else
-                holdsWaitingCall = !aiChatHistoryProvider.GetMessages(session)
-                    .Skip(turnOpening.HistoryBaseline)
-                    .SelectMany(message => message.Contents)
-                    .OfType<FunctionCallContent>()
-                    .Any(call => !string.Equals(call.Name, Constants.Tools.Reply, StringComparison.Ordinal)
-                                 && !string.Equals(call.Name, waitingCall.Tool, StringComparison.Ordinal));
+                holdsWaitingCall = !calledToolNames.Any(name => !string.Equals(name, Constants.Tools.Reply, StringComparison.Ordinal)
+                                                                  && !string.Equals(name, waitingCall.Tool, StringComparison.Ordinal));
         }
 
         // The turn that holds the waiting call awaits the typed answer whatever the model closed with.
@@ -563,6 +576,9 @@ public class MorganaAgent : MorganaActor
 
         // The mark of the pressed call made ends with the turn too, before the session is saved: a restart must not find it set.
         aiContextProvider.DropVariable(session, Constants.ContextKeys.PressedCallMade);
+
+        // The mark of the judgement asked ends with the turn too, before the session is saved: a restart must not find it set.
+        aiContextProvider.DropVariable(session, Constants.ContextKeys.ReplyJudgementAsked);
 
         // The consultation budget is spent per turn, before the session is saved: a restart must not start the next turn with it already spent.
         aiContextProvider.DropVariable(session, Constants.ContextKeys.ConsultationRounds);
@@ -592,12 +608,18 @@ public class MorganaAgent : MorganaActor
         // the landing, which is the agent presenting itself. A running workflow offers what its step allows instead.
         bool closesOnMenu = isLanding
                             || (closingDeclaration.Awaits != Records.AwaitedFromUser.TypedAnswer && aiContextProvider.GetWorkflowPosition(session) is null);
-        // The turn that answers a press leaves that button off its menu: the user is looking at what it shows,
-        // so offering it again would only show the same thing once more. A tool that takes a value from the user
-        // stays, since it can serve another one. The next turn offers every button again.
+        // The menu leaves off the button of every tool that the turn called, whoever made the call: the user is looking at what
+        // it shows, so offering it again would only show the same thing once more. The next turn offers every button again.
         if (closesOnMenu && !closingDeclaration.UserIsLeaving && !turnOutcome.AwaitsApproval)
-            closingDeclaration = closingDeclaration.WithMenu([.. aiContextProvider.Menu.Where(action =>
-                aiContextProvider.ParametricTools.Contains(action.Tool) || !string.Equals(action.Tool, turnOpening.PressedCall?.Tool, StringComparison.Ordinal))]);
+        {
+            closingDeclaration = closingDeclaration.WithMenu([.. aiContextProvider.Menu.Where(action => !calledToolNames.Contains(action.Tool))]);
+
+            agentLogger.LogInformation(
+                "Agent '{AgentIntent}' closes on its menu: called=[{CalledTools}], offered=[{OfferedTools}]",
+                AgentIntent,
+                string.Join(", ", calledToolNames),
+                string.Join(", ", closingDeclaration.Actions.Select(action => action.Tool)));
+        }
 
         // Every turn gets the buttons its closure calls for, the way out included.
         (List<QuickReply>? quickReplies, bool isCompleted) = turnOutcome.AwaitsApproval switch

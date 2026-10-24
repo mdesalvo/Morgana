@@ -48,14 +48,14 @@ public class MorganaAIContextProvider : AIContextProvider
     public IReadOnlyList<Records.OfferedAction> Menu { get; }
 
     /// <summary>
-    /// The agent's tools whose call needs a value that only the user gives, so a press of one may serve another value.
-    /// </summary>
-    public IReadOnlySet<string> ParametricTools { get; }
-
-    /// <summary>
     /// The declaration that the agent's landing run carries, composed from <see cref="Menu"/> at the agent's birth; <c>null</c> where the deployment declares none.
     /// </summary>
     public string? LandingDeclaration { get; }
+
+    /// <summary>
+    /// The declaration that the run repeating a turn answered outside Reply carries, composed at the agent's birth; <c>null</c> where the deployment declares none.
+    /// </summary>
+    public string? UnsentAnswerDeclaration { get; }
 
     /// <summary>
     /// Keys used by the framework to store and retrieve this provider's state within <see cref="AgentSession"/>.
@@ -78,7 +78,7 @@ public class MorganaAIContextProvider : AIContextProvider
     /// <param name="workflows">The workflows that the agent runs; none for an agent that declares no workflow.</param>
     /// <param name="menu">The actions that the agent offers to the user; none for an agent that offers nothing.</param>
     /// <param name="landingDeclaration">The declaration of the agent's menu that its landing run carries; none where the deployment declares none.</param>
-    /// <param name="parametricTools">The tools whose call needs a value that only the user gives; none for an agent whose tools need none.</param>
+    /// <param name="unsentAnswerDeclaration">The declaration that the run repeating a turn answered outside Reply carries; none where the deployment declares none.</param>
     public MorganaAIContextProvider(
         ILogger logger,
         IEnumerable<string>? sharedVariableNames = null,
@@ -86,7 +86,7 @@ public class MorganaAIContextProvider : AIContextProvider
         IReadOnlyList<Records.WorkflowDefinition>? workflows = null,
         IReadOnlyList<Records.OfferedAction>? menu = null,
         string? landingDeclaration = null,
-        IReadOnlySet<string>? parametricTools = null)
+        string? unsentAnswerDeclaration = null)
     {
         // A provider built without shared names persists nothing across agents.
         this.logger = logger;
@@ -94,7 +94,7 @@ public class MorganaAIContextProvider : AIContextProvider
         Workflows = workflows ?? [];
         Menu = menu ?? [];
         LandingDeclaration = landingDeclaration;
-        ParametricTools = parametricTools ?? new HashSet<string>(StringComparer.Ordinal);
+        UnsentAnswerDeclaration = unsentAnswerDeclaration;
 
         // A session that holds no variables yet starts with an empty set, so the first turn needs no special case.
         sessionState = new ProviderSessionState<MorganaContextState>(
