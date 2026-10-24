@@ -4,7 +4,7 @@
 # Multi-stage build for optimized image with all required projects:
 # - Morgana.Web (API + SignalR Hub)
 # - Morgana.AI (AI framework)
-# - Morgana.AI.LanguageModels.Anthropic, Morgana.AI.LanguageModels.OpenAI, Morgana.AI.LanguageModels.AzureOpenAI, Morgana.AI.LanguageModels.Ollama, Morgana.AI.LanguageModels.Google (the LLM providers, referenced by Morgana.Web)
+# - Morgana.AI.LanguageModels.Anthropic, Morgana.AI.LanguageModels.OpenAI, Morgana.AI.LanguageModels.Ollama, Morgana.AI.LanguageModels.Google (the LLM providers, referenced by Morgana.Web)
 # - Morgana.Contracts (zero-dependency wire contracts, referenced by Morgana.AI)
 # - Examples (showcase plugins with 4 agents)
 # ==============================================================================
@@ -28,7 +28,6 @@ COPY ["Morgana/Morgana.Web/Morgana.Web.csproj", "Morgana/Morgana.Web/"]
 COPY ["Morgana/Morgana.AI/Morgana.AI.csproj", "Morgana/Morgana.AI/"]
 COPY ["Morgana/Morgana.AI.LanguageModels/Anthropic/Morgana.AI.LanguageModels.Anthropic.csproj", "Morgana/Morgana.AI.LanguageModels/Anthropic/"]
 COPY ["Morgana/Morgana.AI.LanguageModels/OpenAI/Morgana.AI.LanguageModels.OpenAI.csproj", "Morgana/Morgana.AI.LanguageModels/OpenAI/"]
-COPY ["Morgana/Morgana.AI.LanguageModels/AzureOpenAI/Morgana.AI.LanguageModels.AzureOpenAI.csproj", "Morgana/Morgana.AI.LanguageModels/AzureOpenAI/"]
 COPY ["Morgana/Morgana.AI.LanguageModels/Ollama/Morgana.AI.LanguageModels.Ollama.csproj", "Morgana/Morgana.AI.LanguageModels/Ollama/"]
 COPY ["Morgana/Morgana.AI.LanguageModels/Google/Morgana.AI.LanguageModels.Google.csproj", "Morgana/Morgana.AI.LanguageModels/Google/"]
 COPY ["Morgana/Morgana.Contracts/Morgana.Contracts.csproj", "Morgana/Morgana.Contracts/"]
@@ -44,7 +43,6 @@ COPY Morgana/Morgana.Web/ Morgana/Morgana.Web/
 COPY Morgana/Morgana.AI/ Morgana/Morgana.AI/
 COPY Morgana/Morgana.AI.LanguageModels/Anthropic/ Morgana/Morgana.AI.LanguageModels/Anthropic/
 COPY Morgana/Morgana.AI.LanguageModels/OpenAI/ Morgana/Morgana.AI.LanguageModels/OpenAI/
-COPY Morgana/Morgana.AI.LanguageModels/AzureOpenAI/ Morgana/Morgana.AI.LanguageModels/AzureOpenAI/
 COPY Morgana/Morgana.AI.LanguageModels/Ollama/ Morgana/Morgana.AI.LanguageModels/Ollama/
 COPY Morgana/Morgana.AI.LanguageModels/Google/ Morgana/Morgana.AI.LanguageModels/Google/
 COPY Morgana/Morgana.Contracts/ Morgana/Morgana.Contracts/
@@ -73,8 +71,6 @@ WORKDIR "/src/Morgana/Morgana.AI.LanguageModels/Anthropic"
 RUN dotnet publish "Morgana.AI.LanguageModels.Anthropic.csproj" -c Release -o /app/publish/plugins /p:UseAppHost=false /p:InsideDockerBuild=true
 WORKDIR "/src/Morgana/Morgana.AI.LanguageModels/OpenAI"
 RUN dotnet publish "Morgana.AI.LanguageModels.OpenAI.csproj" -c Release -o /app/publish/plugins /p:UseAppHost=false /p:InsideDockerBuild=true
-WORKDIR "/src/Morgana/Morgana.AI.LanguageModels/AzureOpenAI"
-RUN dotnet publish "Morgana.AI.LanguageModels.AzureOpenAI.csproj" -c Release -o /app/publish/plugins /p:UseAppHost=false /p:InsideDockerBuild=true
 WORKDIR "/src/Morgana/Morgana.AI.LanguageModels/Ollama"
 RUN dotnet publish "Morgana.AI.LanguageModels.Ollama.csproj" -c Release -o /app/publish/plugins /p:UseAppHost=false /p:InsideDockerBuild=true
 WORKDIR "/src/Morgana/Morgana.AI.LanguageModels/Google"
@@ -120,7 +116,7 @@ RUN mkdir -p /app/data
 RUN ls -la /app/plugins/ && \
     test -f /app/plugins/Examples.dll || \
     (echo "ERROR: Examples.dll not found in plugins/" && exit 1)
-RUN for provider in Anthropic OpenAI AzureOpenAI Ollama Google; do \
+RUN for provider in Anthropic OpenAI Ollama Google; do \
       test -f "/app/plugins/Morgana.AI.LanguageModels.${provider}.dll" || \
       (echo "ERROR: Morgana.AI.LanguageModels.${provider}.dll not found in plugins/" && exit 1); \
     done

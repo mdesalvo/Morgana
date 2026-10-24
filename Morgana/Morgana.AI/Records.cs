@@ -627,7 +627,7 @@ public static class Records
     
     /// <summary>
     /// Sent by an agent back to the supervisor when the LLM provider rejects the request
-    /// due to a content filter (e.g. Azure OpenAI content_filter).
+    /// due to its own content filter.
     /// The supervisor treats this identically to a guard rejection and routes the reply
     /// to the user-facing sender captured in its current processing state.
     /// </summary>

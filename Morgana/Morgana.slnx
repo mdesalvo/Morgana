@@ -4,7 +4,6 @@
   <Folder Name="/Morgana.AI.LanguageModels/">
     <Project Path="Morgana.AI.LanguageModels\Anthropic\Morgana.AI.LanguageModels.Anthropic.csproj" />
     <Project Path="Morgana.AI.LanguageModels\OpenAI\Morgana.AI.LanguageModels.OpenAI.csproj" />
-    <Project Path="Morgana.AI.LanguageModels\AzureOpenAI\Morgana.AI.LanguageModels.AzureOpenAI.csproj" />
     <Project Path="Morgana.AI.LanguageModels\Ollama\Morgana.AI.LanguageModels.Ollama.csproj" />
     <Project Path="Morgana.AI.LanguageModels\Google\Morgana.AI.LanguageModels.Google.csproj" />
   </Folder>

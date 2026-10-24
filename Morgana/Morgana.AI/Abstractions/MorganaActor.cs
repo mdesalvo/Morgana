@@ -24,7 +24,7 @@ public class MorganaActor : ReceiveActor
     protected readonly string conversationId;
 
     /// <summary>
-    /// LLM service for AI completions (Anthropic, Azure OpenAI, etc.).
+    /// LLM service for AI completions (Anthropic, Google, OpenAI, etc.).
     /// Provides access to chat completion APIs with conversation history management.
     /// </summary>
     protected readonly ILanguageModelService llmService;

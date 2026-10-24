@@ -5,7 +5,6 @@ using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.LanguageModels.Anthropic;
 using Morgana.AI.LanguageModels.OpenAI;
-using Morgana.AI.LanguageModels.AzureOpenAI;
 using Morgana.AI.LanguageModels.Google;
 using Morgana.AI.LanguageModels.Ollama;
 using Morgana.AI.Services;
@@ -204,7 +203,7 @@ public sealed class LanguageModelTests
                 values.Remove(key);
 
         IConfiguration configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
-        MorganaLanguageModel[] providers = [new AnthropicLanguageModel(), new AzureOpenAILanguageModel(), new OpenAILanguageModel(), new OllamaLanguageModel(), new GoogleLanguageModel()];
+        MorganaLanguageModel[] providers = [new AnthropicLanguageModel(), new OpenAILanguageModel(), new OllamaLanguageModel(), new GoogleLanguageModel()];
         return new ConfigurationLanguageModelService(configuration, duplicateProvider is null ? providers : [.. providers, duplicateProvider]);
     }
 

@@ -84,7 +84,7 @@ graph LR
   R -- 7. Activates agent for intent handling --> MA
 
   %% External systems
-  G -. 3 Prompts for language compliance .-> LLM@{shape: braces, label: "LLM (Anthropic, Azure OpenAI, Google, Ollama, OpenAI)"}
+  G -. 3 Prompts for language compliance .-> LLM@{shape: braces, label: "LLM (Anthropic, Google, Ollama, OpenAI)"}
   C -. 5 Prompts for intent classification .-> LLM
   MA -. 8 MCP tool discovery .-> MCP@{shape: das, label: "MCP Server"}
   MA -. 9 Intent handling .-> LLM

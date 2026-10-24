@@ -11,7 +11,6 @@
     <!-- Built with the host and deployed by it into plugins/, never referenced as assemblies: the host knows only the providers it finds there -->
     <ProjectReference Include="..\Morgana.AI.LanguageModels\Anthropic\Morgana.AI.LanguageModels.Anthropic.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
     <ProjectReference Include="..\Morgana.AI.LanguageModels\OpenAI\Morgana.AI.LanguageModels.OpenAI.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
-    <ProjectReference Include="..\Morgana.AI.LanguageModels\AzureOpenAI\Morgana.AI.LanguageModels.AzureOpenAI.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
     <ProjectReference Include="..\Morgana.AI.LanguageModels\Ollama\Morgana.AI.LanguageModels.Ollama.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
     <ProjectReference Include="..\Morgana.AI.LanguageModels\Google\Morgana.AI.LanguageModels.Google.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
   </ItemGroup>

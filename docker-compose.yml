@@ -57,9 +57,9 @@ services:
       - Morgana__ConversationPersistence__StoragePath=/app/data
 
       # LLM tiers: Economy, Efficiency and Performance each name their own provider
-      # (Anthropic, AzureOpenAI, OpenAI, Ollama or Google). All three are mandatory: an agent declares
+      # (Anthropic, OpenAI, Ollama or Google). All three are mandatory: an agent declares
       # its tier with [RequiresLLMTier] and no tier falls back to another.
-      # ApiKey is read by Anthropic, OpenAI, AzureOpenAI and Google, Endpoint by AzureOpenAI and Ollama.
+      # ApiKey is read by Anthropic, OpenAI and Google, Endpoint by Ollama.
       # Every value falls back to its appsettings.json sentinel placeholder when the variable is
       # unset: an unset variable would otherwise inject an EMPTY string, silently defeating
       # Morgana's fail-fast placeholder check at startup. A provider ignores a field it does not

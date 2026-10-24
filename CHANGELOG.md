@@ -7,11 +7,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [1.0.0-beta1] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: Multi-vendor LLM tiers
-No more vendor lock-in: **each LLM tier now brings its own provider**, so Morgana can think with Anthropic, OpenAI, AzureOpenAI and Ollama at once.
+No more vendor lock-in: **each LLM tier now brings its own provider**, so Morgana can think with Anthropic, OpenAI, Google and Ollama at once.
 A new **Economy** tier joins Efficiency and Performance, taking over Morgana's own pipeline so that the premium models are spent only where an agent needs them.
 ### 🎯 Major Feature: LLM providers as plugins
 Morgana's core no longer knows any LLM vendor: **each provider is a plugin**, dropped into `plugins/` beside the domain agents. A tier picks it by name.
-Anthropic, OpenAI, AzureOpenAI and Ollama ship as **`Morgana.AI.LanguageModels`** packages. Any other vendor offering a `Microsoft.Extensions.AI` client can join the same way (e.g: Google), without touching the framework.
+Anthropic, OpenAI, Google and Ollama ship as **`Morgana.AI.LanguageModels`** packages. Any other vendor offering a `Microsoft.Extensions.AI` client can join the same way, without touching the framework.
 ### 🎯 Major Feature: Agents that present themselves
 Morgana's welcome works like a phone menu: pressing one of her buttons takes the user straight to that agent, which presents itself with its own menu. Pressing an entry of that menu is the request itself.
 The buttons on both levels are written by code, from the intents and from the tools marked **`[UserTool]`**: the model only gives them a voice.
