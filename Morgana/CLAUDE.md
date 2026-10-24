@@ -175,9 +175,9 @@ out, is `BackToMorgana` in `FrameworkReplies` (`morgana.json`), chosen from that
 user leaves.
 
 **A press is a call.** An action carries the `arguments` of the call that its button makes and the
-framework makes it itself on the turn of the press. A value the call lacks is asked of the user and the
-call waits, alone on offer, for the typed answer; see `WorkflowToolsChatClient` and
-`MorganaAgentAdapter.InvokeToolAsync`.
+framework makes it itself on the turn of the press. The call waits for the user, offered beside the agent's
+other tools, until it runs and succeeds or the user goes elsewhere; see `Records.PressedCall`,
+`WorkflowToolsChatClient` and `MorganaAgentAdapter.InvokeToolAsync`.
 
 Tool parameters declared `[ToolParameter(ToolScope.Context, shared: true)]` route their values into a
 conversation-scoped `shared_context` registry (first-write-wins, `INSERT OR IGNORE`). Every agent merges it at the start of each turn, so

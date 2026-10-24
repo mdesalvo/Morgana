@@ -844,6 +844,102 @@ public sealed class TurnClosureTests
         Assert.Equal("You have 2 orders.", answered.OfType<Records.AgentResponse>().Single().Response);
     }
 
+    [Fact]
+    public async Task TurnClosure_Press_whose_call_fails_keeps_waiting_for_the_typed_answer()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Stock", """{"item":"unknown"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"We keep no such plant. Which one?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Stock", """{"item":"tulip"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"There are 12 tulips.","userIsLeaving":false}""")));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "🌼 A plant", null));
+        List<object> failed = await turn.AskAsync(new Records.AgentRequest("conv-turn", "unknown", null));
+
+        // The call ran and failed: the model read the error, the request is not satisfied and the turn awaits a typed answer with no button.
+        Assert.Equal(["Stock:unknown"], WorkflowTests.InventoryTools.Calls);
+        Assert.Contains(ResultTexts(turn.Model.Requests[3]), text => text.Contains("No such plant", StringComparison.Ordinal));
+        Assert.Equal(["Reply"], OfferedTools(turn.Model, 3));
+        Assert.Null(failed.OfType<Records.AgentResponse>().Single().QuickReplies);
+
+        List<object> answered = await turn.AskAsync(new Records.AgentRequest("conv-turn", "tulip", null));
+
+        // The call is still on offer beside the agent's other tools and, once it runs and succeeds, the turn closes on the menu.
+        Assert.Contains("Stock", OfferedTools(turn.Model, 4));
+        Assert.Contains("CancelOrder", OfferedTools(turn.Model, 4));
+        Assert.Equal(["Stock:unknown", "Stock:tulip"], WorkflowTests.InventoryTools.Calls);
+        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
+            answered.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
+    }
+
+    [Fact]
+    public async Task TurnClosure_Own_call_that_fails_waits_for_the_typed_answer()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Stock", """{"item":"unknown"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"We keep no such plant. Which one?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Stock", """{"item":"tulip"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"There are 12 tulips.","userIsLeaving":false}""")));
+
+        List<object> failed = await turn.AskAsync(new Records.AgentRequest("conv-turn", "How many unknown do you have?", null));
+
+        // The model's own call ran and failed: the rest of the turn offers Reply alone and the answer carries no button.
+        Assert.Equal(["Stock:unknown"], WorkflowTests.InventoryTools.Calls);
+        Assert.Equal(["Reply"], OfferedTools(turn.Model, 1));
+        Assert.Null(failed.OfType<Records.AgentResponse>().Single().QuickReplies);
+
+        List<object> answered = await turn.AskAsync(new Records.AgentRequest("conv-turn", "tulip", null));
+
+        // The typed answer finds the failed call on offer beside the agent's other tools; once it succeeds the turn closes on the menu.
+        Assert.Contains("Stock", OfferedTools(turn.Model, 2));
+        Assert.Contains("CancelOrder", OfferedTools(turn.Model, 2));
+        Assert.Equal(["Stock:unknown", "Stock:tulip"], WorkflowTests.InventoryTools.Calls);
+        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
+            answered.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
+    }
+
+    [Fact]
+    public async Task TurnClosure_Failed_call_waits_without_the_values_that_failed()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Stock", """{"item":"unknown"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"We keep no such plant. Which one?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Stock", """{"item":"rose"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"There are 12 roses.","userIsLeaving":false}""")));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "How many unknown do you have?", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "rose", null));
+
+        // The value that failed is not bound, so the waiting call is offered with its full schema and nothing is taken out of it.
+        AIFunction offered = Assert.IsAssignableFrom<AIFunction>(turn.Model.Requests[2].Options!.Tools!.Single(tool => tool.Name == "Stock"));
+        Assert.True(offered.JsonSchema.GetProperty("properties").TryGetProperty("item", out _));
+
+        // The tool received what the model passed from the answer alone.
+        Assert.Equal(["Stock:unknown", "Stock:rose"], WorkflowTests.InventoryTools.Calls);
+    }
+
+    [Fact]
+    public async Task TurnClosure_Own_call_waiting_binds_nothing_over_the_value_the_user_corrects()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Refund", """{"orderId":"ORD-1"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"What is the total?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Refund", """{"orderId":"ORD-2","total":"12.5"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Refunded.","userIsLeaving":false}""")));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "Refund my order", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "Sorry, the order is ORD-2 and the total 12.5", null));
+
+        // The first call lacked the total and the user corrected the order: the waiting call is offered with its full schema
+        // and the tool receives the corrected order, with nothing bound over it.
+        AIFunction offered = Assert.IsAssignableFrom<AIFunction>(turn.Model.Requests[2].Options!.Tools!.Single(tool => tool.Name == "Refund"));
+        Assert.True(offered.JsonSchema.GetProperty("properties").TryGetProperty("orderId", out _));
+        Assert.Equal(["Refund:ORD-2:12.5"], WorkflowTests.InventoryTools.Calls);
+    }
+
     [Theory]
     [InlineData("""{"plant":"rose"}""", "the action '🌹 Roses' passes 'plant' to 'Stock', which takes: item")]
     [InlineData("""{"item":12}""", "the action '🌹 Roses' passes 'item' as number while 'Stock' takes it as string")]
@@ -879,6 +975,8 @@ public sealed class TurnClosureTests
         {
             "Stock" => tool with { MenuEntry = new Records.MenuEntry(1, "🌼 A plant") },
             "OrderHistory" => tool with { MenuEntry = new Records.MenuEntry(2, "📦 My orders") },
+            // A refund that runs without an approval turn, so a call lacking one of its two values can wait and be corrected.
+            "Refund" => tool with { RequiresExecutionApproval = false },
             _ => tool
         })
     ];

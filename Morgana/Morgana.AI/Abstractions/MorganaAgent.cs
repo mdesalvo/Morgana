@@ -526,9 +526,8 @@ public class MorganaAgent : MorganaActor
         if (pressedFrameworkReply is { Termination: true })
             closingDeclaration = closingDeclaration with { UserIsLeaving = true };
 
-        // A call that lacks a value only the user can give waits for the typed answer until a turn goes elsewhere. The turn that
-        // made the waiting call holds it and so does a turn that made no call but Reply (a clarification within the same question).
-        // A turn that made any other call lets it go: the drop below releases it.
+        // A waiting call (see Records.PressedCall) stays while the turn makes it or makes no call but Reply (a clarification
+        // within the same question). A turn that made any other call lets it go: the drop below releases it.
         bool holdsWaitingCall = false;
         if (aiContextProvider.GetPressedCall(session) is { AwaitingAnswer: true } waitingCall)
         {

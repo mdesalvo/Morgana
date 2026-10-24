@@ -1452,8 +1452,9 @@ public static class Records
         [property: Description("The arguments of the call that pressing the button makes, by the tool's parameter names: what the button names, such as the invoice or the order that it opens. Omit any value the user has not chosen yet.")] IReadOnlyDictionary<string, JsonElement>? Arguments = null);
 
     /// <summary>
-    /// The call that waits for a value that only the user can give: the one that a pressed action button makes on the turn of the
-    /// press or one of the model's own that lacked such a value. The model composes it from the user's typed answer.
+    /// The call that the user's request waits on: opened by a pressed action button or by a call of the model's own that lacks a value
+    /// only the user can give or that fails. It is satisfied when it runs and succeeds; until then it waits for the user's typed answer,
+    /// offered beside every other tool; only a press binds arguments. It is let go when the turn makes another call, the user leaves or another press replaces it.
     /// </summary>
     /// <param name="Tool">The tool that the button leads to.</param>
     /// <param name="Arguments">Parameter name to the JSON text of the value that the button supplies.</param>

@@ -306,6 +306,25 @@ public sealed class WorkflowTests
     }
 
     [Fact]
+    public async Task Workflow_A_pressed_step_tool_that_fails_follows_the_workflow_and_waits_for_nothing()
+    {
+        AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
+        agent.Model.Enqueue(Answer([Call("StartPlaceOrder", "{}")]));
+        agent.Model.Enqueue(Answer(Closing("Which plant?")));
+        await agent.TurnAsync("I want a plant");
+
+        // The user presses the quote button with a plant that the shop does not keep, so the step's tool fails.
+        agent.Provider.SetPressedCall(agent.Session, new Records.PressedCall("CreatePurchaseOrder", new Dictionary<string, string> { ["item"] = "\"unknown\"" }));
+        agent.Model.Enqueue(Answer(Closing("There is no such plant.")));
+        await agent.TurnAsync("quote");
+
+        // The quote step has no failure edge, so the failure ended the workflow and nothing is left waiting for the user.
+        Assert.Contains("CreatePurchaseOrder:unknown", InventoryTools.Calls);
+        Assert.Null(agent.Provider.GetWorkflowPosition(agent.Session));
+        Assert.Null(agent.Provider.GetPressedCall(agent.Session));
+    }
+
+    [Fact]
     public async Task Workflow_A_pressed_launcher_starts_the_workflow_and_the_turn_goes_on_at_its_first_step()
     {
         AgentUnderTest agent = await AgentUnderTest.CreateAsync(PlaceOrder());
@@ -1314,8 +1333,8 @@ public sealed class WorkflowTests
     /// <summary>What confirming or cancelling returns.</summary>
     public sealed record StatusResult(string? Error = null, string? Status = null);
 
-    /// <summary>What reading a stock level returns.</summary>
-    public sealed record StockResult(int Quantity);
+    /// <summary>What reading a stock level returns; a plant that is not kept fails with an error.</summary>
+    public sealed record StockResult(int Quantity, string? Error = null);
 
     /// <summary>What a refund returns.</summary>
     public sealed record RefundResult(string? Status = null);
@@ -1352,7 +1371,7 @@ public sealed class WorkflowTests
         public Task<StockResult> Stock(string item)
         {
             Calls.Add($"Stock:{item}");
-            return Task.FromResult(new StockResult(12));
+            return Task.FromResult(item == "unknown" ? new StockResult(0, Error: "No such plant") : new StockResult(12));
         }
 
         public Task<RefundResult> Refund(string orderId, string total)

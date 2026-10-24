@@ -477,22 +477,15 @@ public class MorganaAgentAdapter
                 [Constants.Placeholders.MissingValues] = string.Join(", ", missingValues)
             });
 
-    /// <summary>Keeps the model's own call waiting for the user's answer and marks the turn's call as made.</summary>
-    /// <param name="context">The call that lacks a value.</param>
+    /// <summary>Opens the wait of <see cref="Records.PressedCall"/> for the model's own call, which binds nothing; the turn's call is marked as made.</summary>
+    /// <param name="context">The call that lacks a value or has failed.</param>
     /// <param name="contextProvider">The agent's context store, where the waiting call is kept.</param>
     /// <param name="callSession">The session of the turn in flight.</param>
     private static async Task KeepOwnCallWaitingAsync(FunctionInvocationContext context, MorganaAIContextProvider contextProvider, AgentSession callSession)
     {
-        // Each argument that the model passed is kept as JSON text, the form in which the session stores every bound value.
-        Dictionary<string, string> passedArguments = context.Arguments
-            .Where(argument => argument.Value is not null and not JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined })
-            .ToDictionary(
-                argument => argument.Key,
-                argument => argument.Value is JsonElement element ? element.GetRawText() : JsonSerializer.Serialize(argument.Value, Records.DefaultJsonSerializerOptions),
-                StringComparer.Ordinal);
-
-        // The call waits for the typed answer, which the model composes into it on the next turn.
-        contextProvider.SetPressedCall(callSession, new Records.PressedCall(context.Function.Name, passedArguments, AwaitingAnswer: true));
+        // The call waits for the typed answer and binds no argument: the model recomposes the whole call from the conversation,
+        // so a value it passed before never overrides one that the user corrects.
+        contextProvider.SetPressedCall(callSession, new Records.PressedCall(context.Function.Name, new Dictionary<string, string>(StringComparer.Ordinal), AwaitingAnswer: true));
 
         // The call has had its turn: without the mark the tool would be offered alone for the rest of this turn and the model could not Reply.
         await contextProvider.SetVariableAsync(callSession, Constants.ContextKeys.PressedCallMade, true);
@@ -626,7 +619,7 @@ public class MorganaAgentAdapter
             {
                 logger.LogInformation("Call to '{Tool}' lacks [{Missing}]: the user is asked for them", context.Function.Name, string.Join(", ", ownMissingValues));
 
-                // The call is kept waiting, with the arguments that the model passed.
+                // The call is kept waiting for the user's answer.
                 await KeepOwnCallWaitingAsync(context, contextProvider, callSession!);
 
                 // The model reads the fact of the missing values.
@@ -656,24 +649,39 @@ public class MorganaAgentAdapter
             return await promptComposerService.ComposeTurnClosureNotAcceptedAsync(ex.Message);
         }
 
-        // A pressed call that ran ends the press. One that the session could not complete waits for the user's answer to it.
+        // A step tool's failure follows the workflow's edges; any other call that can wait is satisfied only if it succeeded.
+        // A framework tool's named result is never a tool's failure: the context resolution reports through it before the tool is reached.
+        bool isFailedCall = (isPressedCall || isOwnCall)
+            && !isCurrentStepTool
+            && result is not Records.FrameworkToolResult
+            && WorkflowEngine.ReadOutcome(
+                context.Function.Name,
+                ResultText(result),
+                workflows?.MCPToolNames.Contains(context.Function.Name) == true).Failed;
+
+        // A pressed call that ran and succeeded is satisfied; one that lacked a context value or failed keeps waiting (see Records.PressedCall).
         if (isPressedCall)
         {
             // The context resolution reports a value that the conversation lacks under this name, before the tool is reached.
-            if (result is Records.FrameworkToolResult { Name: Constants.ToolInjections.ContextValueMissing })
+            // Only a press binds arguments: they are the user's choice, so they stay bound on a failure too.
+            if (result is Records.FrameworkToolResult { Name: Constants.ToolInjections.ContextValueMissing } || isFailedCall)
                 contextProvider.SetPressedCall(callSession!, pressedCall! with { AwaitingAnswer = true });
             else
                 contextProvider.DropPressedCall(callSession!);
         }
 
-        // A model's own call that ran waits when a context value nobody holds stopped it. One that ran with the value ends the waiting.
+        // A model's own call waits when a context value nobody holds stopped it or when it failed; one that succeeded satisfies the waiting call.
         if (isOwnCall)
         {
             // The context resolution reports a value that the conversation lacks under this name, before the tool is reached.
             if (result is Records.FrameworkToolResult { Name: Constants.ToolInjections.ContextValueMissing })
                 await KeepOwnCallWaitingAsync(context, contextProvider, callSession!);
 
-            // The model made the call again with the value, so no question about it is left to the user.
+            // A failed call waits like one that lacks a value: the values it was passed may be the ones that failed.
+            else if (isFailedCall)
+                await KeepOwnCallWaitingAsync(context, contextProvider, callSession!);
+
+            // The model made the call again with the value and it succeeded, so no question about it is left to the user.
             else if (isRetryOfWaitingCall)
                 contextProvider.DropPressedCall(callSession!);
         }
@@ -728,6 +736,21 @@ public class MorganaAgentAdapter
         }
     }
 
+    /// <summary>Reads a tool's result as the text that the model reads.</summary>
+    /// <param name="result">The result that the tool returned.</param>
+    private static string ResultText(object? result)
+        => result switch
+        {
+            // A tool that answered in text is read as the text the model saw.
+            string text => text,
+            // A result that arrived as JSON is read as the JSON text the model saw.
+            JsonElement element => element.GetRawText(),
+            // A plain-text MCP result arrives as a content block: the model reads its text, not the block's serialization.
+            TextContent content => content.Text,
+            // Any other result is serialized, which is the text the model would have been handed.
+            _ => JsonSerializer.Serialize(result)
+        };
+
     /// <summary>
     /// Hands the result of a current-step tool to the engine and stores where the workflow stands afterwards.
     /// </summary>
@@ -741,17 +764,7 @@ public class MorganaAgentAdapter
         object? result)
     {
         // The engine reads the result as the text that the model read.
-        string resultText = result switch
-        {
-            // A tool that answered in text is read as the text the model saw.
-            string text => text,
-            // A result that arrived as JSON is read as the JSON text the model saw.
-            JsonElement element => element.GetRawText(),
-            // A plain-text MCP result arrives as a content block: the model reads its text, not the block's serialization.
-            TextContent content => content.Text,
-            // Any other result is serialized, which is the text the model would have been handed.
-            _ => JsonSerializer.Serialize(result)
-        };
+        string resultText = ResultText(result);
 
         // Where the failure marker and the fields sit depends on the tool's origin, never on the shape of its result.
         Records.StepOutcome stepOutcome = WorkflowEngine.ReadOutcome(toolName, resultText, workflows.MCPToolNames.Contains(toolName));
