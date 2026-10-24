@@ -209,7 +209,7 @@ public class MorganaAgent : MorganaActor
             // The turn is filed before the model runs, then run, then closed and recorded.
             Records.TurnOpening turnOpening = await OpenTurnAsync(req, frameworkReplies, pressedFrameworkReply, agentSpan);
             Records.TurnOutcome turnOutcome = await RunTurnAsync(turnOpening.Session, req, turnOpening.PressedCall?.Tool, senderRef, agentSpan);
-            Records.TurnClosure turnClosure = ConcludeTurn(turnOpening.Session, turnOutcome, morganaPrompt, frameworkReplies, pressedFrameworkReply, turnOpening.PressedCall, req.IsLanding);
+            Records.TurnClosure turnClosure = ConcludeTurn(turnOpening, turnOutcome, morganaPrompt, frameworkReplies, pressedFrameworkReply, req.IsLanding);
             DateTime? recordedAt = await RecordTurnAsync(turnOpening.Session, turnClosure, turnOpening.HistoryBaseline, agentSpan);
 
             // Dated as the history keeps it, so a client catching up recognises the reply it was pushed.
@@ -503,8 +503,11 @@ public class MorganaAgent : MorganaActor
     }
 
     /// <summary>Decides the text, buttons and card that the user receives, from the answer that the Reply tool recorded.</summary>
-    private Records.TurnClosure ConcludeTurn(AgentSession session, Records.TurnOutcome turnOutcome, Records.Prompt morganaPrompt, Records.FrameworkReplies frameworkReplies, QuickReply? pressedFrameworkReply, Records.PressedCall? pressedCall, bool isLanding)
+    private Records.TurnClosure ConcludeTurn(Records.TurnOpening turnOpening, Records.TurnOutcome turnOutcome, Records.Prompt morganaPrompt, Records.FrameworkReplies frameworkReplies, QuickReply? pressedFrameworkReply, bool isLanding)
     {
+        // The session the turn ran on holds the closure the Reply tool recorded.
+        AgentSession session = turnOpening.Session;
+
         // An approval asked with no word of the model's own is asked in Morgana's words.
         string llmResponseText = turnOutcome.Text;
         if (llmResponseText.Length == 0)
@@ -523,11 +526,27 @@ public class MorganaAgent : MorganaActor
         if (pressedFrameworkReply is { Termination: true })
             closingDeclaration = closingDeclaration with { UserIsLeaving = true };
 
-        // A call made in this turn still lacks a value that only the user can give and the turn asked for it: the turn awaits the
-        // typed answer whatever the model closed with. A call left waiting by an earlier turn and not made on this one (the user wrote
-        // something else and the model answered without it) does not hold the turn: the drop below lets it go.
-        if (aiContextProvider.IsPressedCallMade(session)
-             && aiContextProvider.GetPressedCall(session) is { AwaitingAnswer: true }
+        // A call that lacks a value only the user can give waits for the typed answer until a turn goes elsewhere. The turn that
+        // made the waiting call holds it and so does a turn that made no call but Reply (a clarification within the same question).
+        // A turn that made any other call lets it go: the drop below releases it.
+        bool holdsWaitingCall = false;
+        if (aiContextProvider.GetPressedCall(session) is { AwaitingAnswer: true } waitingCall)
+        {
+            // The waiting call made in this turn holds it without looking at the rest of the turn.
+            if (aiContextProvider.IsPressedCallMade(session))
+                holdsWaitingCall = true;
+            // Otherwise the turn holds it only if its calls are Reply alone: any other call is the user going elsewhere.
+            else
+                holdsWaitingCall = !aiChatHistoryProvider.GetMessages(session)
+                    .Skip(turnOpening.HistoryBaseline)
+                    .SelectMany(message => message.Contents)
+                    .OfType<FunctionCallContent>()
+                    .Any(call => !string.Equals(call.Name, Constants.Tools.Reply, StringComparison.Ordinal)
+                                 && !string.Equals(call.Name, waitingCall.Tool, StringComparison.Ordinal));
+        }
+
+        // The turn that holds the waiting call awaits the typed answer whatever the model closed with.
+        if (holdsWaitingCall
              && !turnOutcome.AwaitsApproval
              && !closingDeclaration.UserIsLeaving)
         {
@@ -579,7 +598,7 @@ public class MorganaAgent : MorganaActor
         // stays, since it can serve another one. The next turn offers every button again.
         if (closesOnMenu && !closingDeclaration.UserIsLeaving && !turnOutcome.AwaitsApproval)
             closingDeclaration = closingDeclaration.WithMenu([.. aiContextProvider.Menu.Where(action =>
-                aiContextProvider.ParametricTools.Contains(action.Tool) || !string.Equals(action.Tool, pressedCall?.Tool, StringComparison.Ordinal))]);
+                aiContextProvider.ParametricTools.Contains(action.Tool) || !string.Equals(action.Tool, turnOpening.PressedCall?.Tool, StringComparison.Ordinal))]);
 
         // Every turn gets the buttons its closure calls for, the way out included.
         (List<QuickReply>? quickReplies, bool isCompleted) = turnOutcome.AwaitsApproval switch

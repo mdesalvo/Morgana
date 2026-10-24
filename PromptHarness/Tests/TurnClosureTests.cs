@@ -728,32 +728,60 @@ public sealed class TurnClosureTests
     }
 
     [Fact]
-    public async Task TurnClosure_Press_waiting_for_a_value_is_let_go_by_a_turn_that_does_not_make_it()
+    public async Task TurnClosure_Press_waiting_for_a_value_is_kept_by_a_turn_that_answers_with_Reply_alone()
     {
         await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
         turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Our catalogue is online.","userIsLeaving":false}""")));
-        turn.Model.Enqueue(Text("Seeds are in the nursery."));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"We keep tulips and daisies. Which one?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Stock", """{"item":"tulip"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"There are 12 tulips.","userIsLeaving":false}""")));
+
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
+        await turn.AskAsync(new Records.AgentRequest("conv-turn", "🌼 A plant", null));
+        List<object> clarifyingAnswer = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Which plants do you keep?", null));
+
+        // The model made no call but Reply, so the question is still open: the turn awaits the typed answer and offers no button.
+        Assert.Null(clarifyingAnswer.OfType<Records.AgentResponse>().Single().QuickReplies);
+
+        List<object> answered = await turn.AskAsync(new Records.AgentRequest("conv-turn", "tulip", null));
+
+        // The typed answer still finds the waiting call, which runs with the value.
+        Assert.Equal(["Stock:tulip"], WorkflowTests.InventoryTools.Calls);
+
+        // The call was made, so the turn closes on the menu.
+        Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
+            answered.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
+    }
+
+    [Fact]
+    public async Task TurnClosure_Press_waiting_for_a_value_is_let_go_by_a_turn_that_makes_another_call()
+    {
+        await using AgentTurnUnderTest turn = await AgentTurnUnderTest.CreateAsync();
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"I keep the stock.","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Which plant?","userIsLeaving":false}""")));
+        turn.Model.Enqueue(Answer(Call("OrderHistory", """{"customerCode":"P994E"}""")));
+        turn.Model.Enqueue(Answer(Call("Reply", """{"text":"You have 2 orders.","userIsLeaving":false}""")));
         turn.Model.Enqueue(Answer(Call("Reply", """{"text":"Hello again.","userIsLeaving":false}""")));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "What do you keep?", null));
         List<object> pressAnswer = await turn.AskAsync(new Records.AgentRequest("conv-turn", "🌼 A plant", null));
 
-        // The press lacks the plant, so the framework waits for it though the model closed the turn as answered.
+        // The press lacks the plant, so the framework waits for it.
         Assert.Null(pressAnswer.OfType<Records.AgentResponse>().Single().QuickReplies);
 
-        List<object> otherAnswer = await turn.AskAsync(new Records.AgentRequest("conv-turn", "Do you sell seeds?", null));
+        List<object> otherAnswer = await turn.AskAsync(new Records.AgentRequest("conv-turn", "What are my orders?", null));
 
-        // The user wrote no plant and the model made no call, so the waiting call is let go and the turn closes on the menu.
+        // The model called another tool, so the user went elsewhere: the waiting call is let go and the turn closes on the menu.
         Assert.Equal(["🌼 A plant", "📦 My orders", "✨ We're done, thanks"],
             otherAnswer.OfType<Records.AgentResponse>().Single().QuickReplies!.Select(button => button.Label));
 
         await turn.AskAsync(new Records.AgentRequest("conv-turn", "Hello", null));
 
-        // Nothing waits any longer, so the next message is bound to no call: every tool is on offer and none ran.
-        Assert.Contains("CancelOrder", OfferedTools(turn.Model, 3));
-        Assert.Contains("Stock", OfferedTools(turn.Model, 3));
-        Assert.Empty(WorkflowTests.InventoryTools.Calls);
+        // Nothing waits any longer, so the next message is bound to no call: every tool is on offer and Stock did not run.
+        Assert.Contains("CancelOrder", OfferedTools(turn.Model, 4));
+        Assert.Contains("Stock", OfferedTools(turn.Model, 4));
+        Assert.Equal(["OrderHistory:P994E"], WorkflowTests.InventoryTools.Calls);
     }
 
     [Fact]
