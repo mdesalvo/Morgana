@@ -104,6 +104,11 @@ public sealed class MorganaHostedAgentSessionStore : AgentSessionStore
     /// <inheritdoc />
     public override ValueTask SaveSessionAsync(AIAgent agent, AgentSessionStoreKey sessionStoreKey, AgentSession session, CancellationToken cancellationToken = default)
         => ValueTask.CompletedTask;
+
+    /// <inheritdoc />
+    public override ValueTask DeleteSessionAsync(AIAgent agent, AgentSessionStoreKey sessionStoreKey, CancellationToken cancellationToken = default)
+        // The store holds no session to delete: the conversation's record is ended through Morgana's own API, never by a caller over A2A.
+        => ValueTask.CompletedTask;
 }
 
 #pragma warning restore MAAI001
