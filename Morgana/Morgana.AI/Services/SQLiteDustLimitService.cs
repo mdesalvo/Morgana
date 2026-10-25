@@ -3,7 +3,6 @@ using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Telemetry;
 using static Morgana.AI.Records;
 
 namespace Morgana.AI.Services;
@@ -115,10 +114,10 @@ public class SQLiteDustLimitService : IDustLimitService
 
                 // Emitted after the commit, never before: a metric reporting spend the ledger rolled back
                 // would make a conversation look more expensive than its own books say.
-                MorganaTelemetry.DustConsumed.Add(
+                Telemetry.DustConsumed.Add(
                     dust,
-                    new KeyValuePair<string, object?>(MorganaTelemetry.DustLlmRole, llmRole),
-                    new KeyValuePair<string, object?>(MorganaTelemetry.ConversationId, conversationId));
+                    new KeyValuePair<string, object?>(Telemetry.DustLlmRole, llmRole),
+                    new KeyValuePair<string, object?>(Telemetry.ConversationId, conversationId));
 
                 logger.LogDebug(
                     "Charged {Dust:F4} dust to {ConversationId} (role={LlmRole})", dust, conversationId, llmRole);

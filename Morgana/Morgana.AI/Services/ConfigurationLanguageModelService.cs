@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Telemetry;
 
 namespace Morgana.AI.Services;
 
@@ -254,7 +253,7 @@ public class ConfigurationLanguageModelService : ILanguageModelService
         bool enableSensitiveData = configuration.GetValue("Morgana:OpenTelemetry:EnableSensitiveData", false);
 
         // The layer sits below the defaults layer, so the spans carry the model and ceiling that were actually sent.
-        tierBuilder.UseOpenTelemetry(loggerFactory, MorganaTelemetry.LLMChatClientSourceName, otel => otel.EnableSensitiveData = enableSensitiveData);
+        tierBuilder.UseOpenTelemetry(loggerFactory, Telemetry.LLMChatClientSourceName, otel => otel.EnableSensitiveData = enableSensitiveData);
     }
 
     /// <summary>

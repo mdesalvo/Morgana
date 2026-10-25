@@ -10,7 +10,6 @@ using Microsoft.Extensions.Logging;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
-using Morgana.AI.Telemetry;
 using Morgana.Contracts;
 using Status = Akka.Actor.Status;
 
@@ -199,14 +198,14 @@ public class MorganaAgent : MorganaActor
 
         // Open morgana.agent span as child of the turn span propagated from the supervisor.
         // The span stays open for the full duration of LLM streaming so TTFT can be recorded.
-        Activity? agentSpan = MorganaTelemetry.Source.StartActivity(
-            MorganaTelemetry.AgentActivity,
+        Activity? agentSpan = Telemetry.Source.StartActivity(
+            Telemetry.AgentActivity,
             ActivityKind.Internal,
             req.TurnContext);
 
-        agentSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
-        agentSpan?.SetTag(MorganaTelemetry.AgentName, GetType().Name);
-        agentSpan?.SetTag(MorganaTelemetry.AgentIntent, AgentIntent);
+        agentSpan?.SetTag(Telemetry.ConversationId, conversationId);
+        agentSpan?.SetTag(Telemetry.AgentName, GetType().Name);
+        agentSpan?.SetTag(Telemetry.AgentIntent, AgentIntent);
 
         try
         {
@@ -222,7 +221,7 @@ public class MorganaAgent : MorganaActor
                 {
                     agentLogger.LogInformation("Loaded existing conversation session for {AgentIdentifier}", AgentIdentifier);
 
-                    agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.ResumeAgentConversation));
+                    agentSpan?.AddEvent(new ActivityEvent(Telemetry.ResumeAgentConversation));
                 }
             }
             if (aiAgentSession is null)
@@ -233,9 +232,9 @@ public class MorganaAgent : MorganaActor
 
                 agentLogger.LogInformation("Created new conversation session for {AgentIdentifier}", AgentIdentifier);
 
-                agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.CreateAgentConversation));
+                agentSpan?.AddEvent(new ActivityEvent(Telemetry.CreateAgentConversation));
             }
-            agentSpan?.SetTag(MorganaTelemetry.AgentIdentifier, AgentIdentifier);
+            agentSpan?.SetTag(Telemetry.AgentIdentifier, AgentIdentifier);
 
             // Hydrate the agent's local context from the conversation-scoped shared_context
             // registry. Shared variables produced by any other agent of this conversation —
@@ -342,9 +341,9 @@ public class MorganaAgent : MorganaActor
                             firstChunkEmitted = true;
                             long ttft = firstChunkStopwatch.ElapsedMilliseconds;
                             firstChunkStopwatch.Stop();
-                            agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.EventFirstChunk));
-                            agentSpan?.SetTag(MorganaTelemetry.AgentTtftMs, ttft);
-                            MorganaTelemetry.AgentTtftHistogram.Record(ttft);
+                            agentSpan?.AddEvent(new ActivityEvent(Telemetry.EventFirstChunk));
+                            agentSpan?.SetTag(Telemetry.AgentTtftMs, ttft);
+                            Telemetry.AgentTtftHistogram.Record(ttft);
                         }
                     }
                     else
@@ -382,9 +381,9 @@ public class MorganaAgent : MorganaActor
                 }
 
                 long ttft = responseStopwatch.ElapsedMilliseconds;
-                agentSpan?.AddEvent(new ActivityEvent(MorganaTelemetry.EventFirstChunk));
-                agentSpan?.SetTag(MorganaTelemetry.AgentTtftMs, ttft);
-                MorganaTelemetry.AgentTtftHistogram.Record(ttft);
+                agentSpan?.AddEvent(new ActivityEvent(Telemetry.EventFirstChunk));
+                agentSpan?.SetTag(Telemetry.AgentTtftMs, ttft);
+                Telemetry.AgentTtftHistogram.Record(ttft);
             }
 
             string llmResponseText = fullResponse.ToString().Trim();
@@ -429,10 +428,10 @@ public class MorganaAgent : MorganaActor
 
             // Finalize agent span with outcome attributes
             string responsePreview = Preview(llmResponseText);
-            agentSpan?.SetTag(MorganaTelemetry.AgentIsCompleted, isCompleted);
-            agentSpan?.SetTag(MorganaTelemetry.AgentHasQuickReplies, hasQuickReplies);
-            agentSpan?.SetTag(MorganaTelemetry.AgentToolsInvoked, GetToolsInvoked(aiAgentSession, historyBaseline));
-            agentSpan?.SetTag(MorganaTelemetry.AgentResponsePreview, responsePreview);
+            agentSpan?.SetTag(Telemetry.AgentIsCompleted, isCompleted);
+            agentSpan?.SetTag(Telemetry.AgentHasQuickReplies, hasQuickReplies);
+            agentSpan?.SetTag(Telemetry.AgentToolsInvoked, GetToolsInvoked(aiAgentSession, historyBaseline));
+            agentSpan?.SetTag(Telemetry.AgentResponsePreview, responsePreview);
             agentSpan?.Dispose();
 
             // The exchange with a colleague is spent once it has been read. Clearing it here keeps
@@ -509,15 +508,15 @@ public class MorganaAgent : MorganaActor
 
         // Parented on the caller's turn context, which travelled with the question: the answer shows in
         // the trace nested under the work of the agent that asked, not as a turn of its own.
-        Activity? consultationSpan = MorganaTelemetry.Source.StartActivity(
-            MorganaTelemetry.ConsultationActivity,
+        Activity? consultationSpan = Telemetry.Source.StartActivity(
+            Telemetry.ConsultationActivity,
             ActivityKind.Internal,
             consultation.TurnContext);
 
-        consultationSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
-        consultationSpan?.SetTag(MorganaTelemetry.ConsultationCaller, consultation.CallerIntent);
-        consultationSpan?.SetTag(MorganaTelemetry.ConsultationTarget, AgentIntent);
-        consultationSpan?.SetTag(MorganaTelemetry.ConsultationQuestion, consultation.Question);
+        consultationSpan?.SetTag(Telemetry.ConversationId, conversationId);
+        consultationSpan?.SetTag(Telemetry.ConsultationCaller, consultation.CallerIntent);
+        consultationSpan?.SetTag(Telemetry.ConsultationTarget, AgentIntent);
+        consultationSpan?.SetTag(Telemetry.ConsultationQuestion, consultation.Question);
 
         try
         {
@@ -561,9 +560,9 @@ public class MorganaAgent : MorganaActor
             // A baseline of 0 where a user turn passes its own: this session was created for the
             // exchange and holds nothing else, so every tool call in it belongs to this answer and
             // there is no earlier history to skip past.
-            consultationSpan?.SetTag(MorganaTelemetry.ConsultationAwaitingReply, awaitsReply);
-            consultationSpan?.SetTag(MorganaTelemetry.AgentToolsInvoked, GetToolsInvoked(consultationSession, 0));
-            consultationSpan?.SetTag(MorganaTelemetry.ConsultationAnswer, response.Text);
+            consultationSpan?.SetTag(Telemetry.ConsultationAwaitingReply, awaitsReply);
+            consultationSpan?.SetTag(Telemetry.AgentToolsInvoked, GetToolsInvoked(consultationSession, 0));
+            consultationSpan?.SetTag(Telemetry.ConsultationAnswer, response.Text);
             consultationSpan?.Dispose();
 
             // Nothing is persisted and that is the design rather than an omission: what this turn

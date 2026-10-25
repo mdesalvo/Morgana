@@ -7,7 +7,6 @@ using Microsoft.Extensions.Configuration;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Telemetry;
 using Morgana.Contracts;
 using Status = Akka.Actor.Status;
 
@@ -172,9 +171,9 @@ public class ConversationSupervisorActor : MorganaActor
         // actor keeps processing after the HTTP response has already returned to the client, so a
         // parent/child pair (which a trace UI expects to close together) would be the wrong shape.
         ActivityLink[] links = msg.TurnContext != default ? [new ActivityLink(msg.TurnContext)] : [];
-        turnSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.TurnActivity, ActivityKind.Internal, parentContext: default, links: links);
-        turnSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
-        turnSpan?.SetTag(MorganaTelemetry.TurnUserMessage, msg.Text.Length > 200 ? msg.Text[..200] : msg.Text);
+        turnSpan = Telemetry.Source.StartActivity(Telemetry.TurnActivity, ActivityKind.Internal, parentContext: default, links: links);
+        turnSpan?.SetTag(Telemetry.ConversationId, conversationId);
+        turnSpan?.SetTag(Telemetry.TurnUserMessage, msg.Text.Length > 200 ? msg.Text[..200] : msg.Text);
         ActivityContext turnContext = turnSpan?.Context ?? default;
 
         // A press of a button that Morgana offered to choose an agent lands the turn on that agent: the
@@ -191,11 +190,11 @@ public class ConversationSupervisorActor : MorganaActor
                 msg, originalSender, turnCapabilities, landingClassification, turnContext, UserMessageAlreadyStored: noActiveAgent);
 
             // The same "morgana.router" span a classified turn opens, covering the round-trip to the agent.
-            using Activity? landingRouterSpan = MorganaTelemetry.Source.StartActivity(
-                MorganaTelemetry.RouterActivity,
+            using Activity? landingRouterSpan = Telemetry.Source.StartActivity(
+                Telemetry.RouterActivity,
                 ActivityKind.Internal,
                 turnContext);
-            landingRouterSpan?.SetTag(MorganaTelemetry.RouterIntent, landingIntent);
+            landingRouterSpan?.SetTag(Telemetry.RouterIntent, landingIntent);
 
             // Moves the FSM to AwaitingAgentResponse, carrying the landing context forward.
             Become(() => AwaitingAgentResponse(landingCtx));
@@ -218,8 +217,8 @@ public class ConversationSupervisorActor : MorganaActor
         // rather than when its response arrives in AwaitingGuardCheck, so the recorded duration
         // covers the full round-trip — mailbox/dispatch latency included, not just GuardActor's
         // own processing time once it picks the message up.
-        guardSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.GuardActivity, ActivityKind.Internal, turnContext);
-        guardSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+        guardSpan = Telemetry.Source.StartActivity(Telemetry.GuardActivity, ActivityKind.Internal, turnContext);
+        guardSpan?.SetTag(Telemetry.ConversationId, conversationId);
 
         // Moves the FSM to AwaitingGuardCheck, carrying ctx forward.
         Records.ProcessingContext ctx = new Records.ProcessingContext(
@@ -378,11 +377,11 @@ public class ConversationSupervisorActor : MorganaActor
             Context.SetReceiveTimeout(null);
 
             // Close and dispose the guard span by tracking compliance and the eventually reported violation
-            guardSpan?.SetTag(MorganaTelemetry.GuardCompliant, response.Compliant);
+            guardSpan?.SetTag(Telemetry.GuardCompliant, response.Compliant);
             if (!response.Compliant && response.Violation != null)
-                guardSpan?.SetTag(MorganaTelemetry.GuardViolation, response.Violation);
+                guardSpan?.SetTag(Telemetry.GuardViolation, response.Violation);
             if (guardSpan is not null)
-                MorganaTelemetry.GuardDuration.Record((DateTime.UtcNow - guardSpan.StartTimeUtc).TotalMilliseconds);
+                Telemetry.GuardDuration.Record((DateTime.UtcNow - guardSpan.StartTimeUtc).TotalMilliseconds);
             guardSpan?.Dispose();
             guardSpan = null;
 
@@ -418,7 +417,7 @@ public class ConversationSupervisorActor : MorganaActor
 
                 // Increments the dedicated guard-rejection counter, kept separate from the
                 // generic per-turn counter CloseTurnSpan emits below.
-                MorganaTelemetry.GuardRejectionCounter.Add(1);
+                Telemetry.GuardRejectionCounter.Add(1);
 
                 // Closes the turn span, tagging it with whatever intent ctx.Classification currently carries.
                 CloseTurnSpan(intent: ctx.Classification?.Intent, completed: false);
@@ -460,8 +459,8 @@ public class ConversationSupervisorActor : MorganaActor
                 // HandleUserMessageAsync: capturing the duration from here, not from when
                 // AwaitingClassification receives the result, means it covers the full
                 // round-trip rather than just ClassifierActor's own processing time.
-                classifierSpan = MorganaTelemetry.Source.StartActivity(MorganaTelemetry.ClassifierActivity, ActivityKind.Internal, ctx.TurnContext);
-                classifierSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+                classifierSpan = Telemetry.Source.StartActivity(Telemetry.ClassifierActivity, ActivityKind.Internal, ctx.TurnContext);
+                classifierSpan?.SetTag(Telemetry.ConversationId, conversationId);
 
                 // Moves the FSM to AwaitingClassification, carrying ctx forward.
                 Become(() => AwaitingClassification(ctx));
@@ -533,11 +532,11 @@ public class ConversationSupervisorActor : MorganaActor
                 // Opens the classifier span before dispatching to ClassifierActor, same reasoning
                 // as the compliant path's classifierSpan above (its duration should cover the
                 // full round-trip, not just ClassifierActor's own processing time).
-                classifierSpan = MorganaTelemetry.Source.StartActivity(
-                    MorganaTelemetry.ClassifierActivity,
+                classifierSpan = Telemetry.Source.StartActivity(
+                    Telemetry.ClassifierActivity,
                     ActivityKind.Internal,
                     ctx.TurnContext);
-                classifierSpan?.SetTag(MorganaTelemetry.ConversationId, conversationId);
+                classifierSpan?.SetTag(Telemetry.ConversationId, conversationId);
 
                 // Moves the FSM to AwaitingClassification, carrying ctx forward.
                 Become(() => AwaitingClassification(ctx));
@@ -575,12 +574,12 @@ public class ConversationSupervisorActor : MorganaActor
             actorLogger.Info($"Classification result: {classification.Intent}");
 
             // Close and dispose the classifier span by tracking the top intent, its confidence and the full metadata
-            classifierSpan?.SetTag(MorganaTelemetry.ClassificationIntent, classification.Intent);
-            classifierSpan?.SetTag(MorganaTelemetry.ClassificationMetadata, classification.Metadata);
+            classifierSpan?.SetTag(Telemetry.ClassificationIntent, classification.Intent);
+            classifierSpan?.SetTag(Telemetry.ClassificationMetadata, classification.Metadata);
             if (classification.Metadata.TryGetValue("confidence", out string? confidence))
-                classifierSpan?.SetTag(MorganaTelemetry.ClassificationConfidence, confidence);
+                classifierSpan?.SetTag(Telemetry.ClassificationConfidence, confidence);
             if (classifierSpan is not null)
-                MorganaTelemetry.ClassifierDuration.Record((DateTime.UtcNow - classifierSpan.StartTimeUtc).TotalMilliseconds);
+                Telemetry.ClassifierDuration.Record((DateTime.UtcNow - classifierSpan.StartTimeUtc).TotalMilliseconds);
             classifierSpan?.Dispose();
             classifierSpan = null;
 
@@ -601,11 +600,11 @@ public class ConversationSupervisorActor : MorganaActor
             // here means its duration covers the full round-trip, not just the time RouterActor
             // itself takes to pick an agent. Unlike guardSpan/classifierSpan it's a local `using`,
             // not a field: nothing outside this method needs to close it from an async callback.
-            using Activity? routerSpan = MorganaTelemetry.Source.StartActivity(
-                MorganaTelemetry.RouterActivity,
+            using Activity? routerSpan = Telemetry.Source.StartActivity(
+                Telemetry.RouterActivity,
                 ActivityKind.Internal,
                 ctx.TurnContext);
-            routerSpan?.SetTag(MorganaTelemetry.RouterIntent, classification.Intent);
+            routerSpan?.SetTag(Telemetry.RouterIntent, classification.Intent);
 
             // Moves the FSM to AwaitingAgentResponse, carrying the classified context forward.
             Become(() => AwaitingAgentResponse(updatedCtx));
@@ -678,11 +677,11 @@ public class ConversationSupervisorActor : MorganaActor
 
             // Same "morgana.router" span as the primary classification path above, opened here
             // for the same reason: its duration should cover the full round-trip to RouterActor.
-            using Activity? routerSpan = MorganaTelemetry.Source.StartActivity(
-                MorganaTelemetry.RouterActivity,
+            using Activity? routerSpan = Telemetry.Source.StartActivity(
+                Telemetry.RouterActivity,
                 ActivityKind.Internal,
                 ctx.TurnContext);
-            routerSpan?.SetTag(MorganaTelemetry.RouterIntent, fallbackClassification.Intent);
+            routerSpan?.SetTag(Telemetry.RouterIntent, fallbackClassification.Intent);
 
             // Moves the FSM to AwaitingAgentResponse, carrying the fallback-classified context forward.
             Become(() => AwaitingAgentResponse(updatedCtx));
@@ -1122,8 +1121,8 @@ public class ConversationSupervisorActor : MorganaActor
 
             // Records the turn's duration and increments the per-turn counter, both tagged by
             // intent and completion so a dashboard can break volume and latency down by either.
-            MorganaTelemetry.TurnDuration.Record(durationMs);
-            MorganaTelemetry.TurnCounter.Add(1,
+            Telemetry.TurnDuration.Record(durationMs);
+            Telemetry.TurnCounter.Add(1,
                 new KeyValuePair<string, object?>("intent", intent ?? "unknown"),
                 new KeyValuePair<string, object?>("completed", completed ?? false));
 
@@ -1218,7 +1217,7 @@ public class ConversationSupervisorActor : MorganaActor
             null));
 
         // Counts this the same as a guard rejection: a content-policy block either way.
-        MorganaTelemetry.GuardRejectionCounter.Add(1);
+        Telemetry.GuardRejectionCounter.Add(1);
 
         // Closes the turn span, tagged with whatever agent was active when the violation was flagged.
         CloseTurnSpan(intent: activeAgentIntent, completed: false);

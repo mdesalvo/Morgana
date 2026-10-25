@@ -99,9 +99,9 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `ChatClients/` | `IChatClient` decorators: `DustAccountingChatClient` |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
 | `Providers/` | `MorganaAIContextProvider` (context variables plus the shared registry), `MorganaChatHistoryProvider` |
-| `Telemetry/` | `MorganaTelemetry`, holding its own span and attribute glossary |
 | `Records.cs` | Every immutable record: actor messages, configuration, DTOs |
 | `Constants.cs` | The glossary: **every literal that is a contract between two parties who cannot see each other**, `PromptProperties` included. Deliberately absent: log text, prompt prose, `IConfiguration` keys. The test is a *resolver*, not a mention |
+| `Telemetry.cs` | The activity source and the meter, holding their own span and attribute glossary |
 | `morgana.json` | Framework prompts: Morgana, Classifier, Guard, Presentation, ChannelAdapter |
 
 ### Morgana.Web
