@@ -956,48 +956,59 @@ public sealed class ConsoleUiService : ITerminalUi
                     await SubmitTurnAsync(ctx, line, () => session.SendUserTurnAsync(line));
                     break;
                 }
+                // Backspace deletes the rune left of the caret, which is the tail only at the end of the line
                 case ConsoleKey.Backspace:
                     lock (renderLock)
                     {
-                        // Delete the char to the LEFT of the caret (and step the caret back over it),
-                        // not the tail: with an in-place caret the two only coincide at end-of-line.
+                        // At the start of the line there is nothing to delete
                         if (cursorPosition > 0)
                         {
-                            currentInput = currentInput.Remove(cursorPosition - 1, 1);
-                            cursorPosition--;
+                            // A surrogate pair is deleted whole
+                            int runeLength = RuneLengthBefore(cursorPosition);
+                            currentInput = currentInput.Remove(cursorPosition - runeLength, runeLength);
+                            cursorPosition -= runeLength;
                             promptNotice = null;
                             RefreshWhenInputSettles(ctx);
                         }
                     }
                     break;
+                // Delete removes the rune under the caret and leaves the caret put
                 case ConsoleKey.Delete:
                     lock (renderLock)
                     {
-                        // Forward delete: remove the char UNDER the caret, leaving the caret put.
+                        // At the end of the line there is nothing under the caret
                         if (cursorPosition < currentInput.Length)
                         {
-                            currentInput = currentInput.Remove(cursorPosition, 1);
+                            // A surrogate pair is deleted whole
+                            int runeLength = RuneLengthAt(cursorPosition);
+                            currentInput = currentInput.Remove(cursorPosition, runeLength);
                             promptNotice = null;
                             RefreshWhenInputSettles(ctx);
                         }
                     }
                     break;
+                // Left steps the caret back over one whole rune
                 case ConsoleKey.LeftArrow:
                     lock (renderLock)
                     {
+                        // At the start of the line the caret cannot move left
                         if (cursorPosition > 0)
                         {
-                            cursorPosition--;
+                            // The caret steps over a whole rune
+                            cursorPosition -= RuneLengthBefore(cursorPosition);
                             RefreshWhenInputSettles(ctx);
                         }
                     }
                     break;
+                // Right steps the caret forward over one whole rune
                 case ConsoleKey.RightArrow:
                     lock (renderLock)
                     {
+                        // At the end of the line the caret cannot move right
                         if (cursorPosition < currentInput.Length)
                         {
-                            cursorPosition++;
+                            // The caret steps over a whole rune
+                            cursorPosition += RuneLengthAt(cursorPosition);
                             RefreshWhenInputSettles(ctx);
                         }
                     }
@@ -1871,6 +1882,14 @@ public sealed class ConsoleUiService : ITerminalUi
         ctx.UpdateTarget(BuildLayout());
         ctx.Refresh();
     }
+
+    /// <summary>UTF-16 length (1 or 2 for a surrogate pair) of the rune ending just before <paramref name="position"/> in <see cref="currentInput"/>; keeps the caret on a rune boundary going left. The caller guarantees <paramref name="position"/> is above 0.</summary>
+    private int RuneLengthBefore(int position) =>
+        position >= 2 && char.IsLowSurrogate(currentInput[position - 1]) && char.IsHighSurrogate(currentInput[position - 2]) ? 2 : 1;
+
+    /// <summary>UTF-16 length (1 or 2 for a surrogate pair) of the rune starting at <paramref name="position"/> in <see cref="currentInput"/>; keeps the caret on a rune boundary going right. The caller guarantees <paramref name="position"/> is below the length.</summary>
+    private int RuneLengthAt(int position) =>
+        position + 1 < currentInput.Length && char.IsHighSurrogate(currentInput[position]) && char.IsLowSurrogate(currentInput[position + 1]) ? 2 : 1;
 
     /// <summary>Builds the two-row Spectre layout (fixed 3-row header + flex body).</summary>
     private Layout BuildLayout()

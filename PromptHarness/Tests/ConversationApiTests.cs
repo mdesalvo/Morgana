@@ -125,6 +125,7 @@ public sealed class ConversationApiTests
         { "POST", "/api/morgana/conversation/{id}/message" },
         { "POST", "/api/morgana/conversation/{id}/resume" },
         { "GET", "/api/morgana/conversation/{id}/history" },
+        { "POST", "/api/morgana/conversation/{id}/end" },
         { "POST", "/api/morgana/conversation/{id}/command" }
     };
 
@@ -175,6 +176,23 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
+    public async Task Record_takes_a_departed_agent_off_active_duty_and_keeps_its_session()
+    {
+        string conversationId = ChannelApiClient.NewConversationId();
+        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
+        object? sessionBefore = await api.QueryRecordAsync(conversationId, "SELECT hex(agent_session) FROM morgana WHERE agent_name = 'billing';");
+
+        await api.HostPersistenceService().DeactivateAgentAsync(conversationId, "billing");
+
+        // A second call finds the row already off duty and leaves it as it is
+        await api.HostPersistenceService().DeactivateAgentAsync(conversationId, "billing");
+
+        // The record names no agent any more while the session the agent wrote stays byte for byte as it was
+        Assert.Null(await api.HostPersistenceService().GetMostRecentActiveAgentAsync(conversationId));
+        Assert.Equal(sessionBefore, await api.QueryRecordAsync(conversationId, "SELECT hex(agent_session) FROM morgana WHERE agent_name = 'billing';"));
+    }
+
+    [Fact]
     public async Task Resume_reports_the_state_to_redraw()
     {
         string conversationId = ChannelApiClient.NewConversationId();
@@ -192,6 +210,21 @@ public sealed class ConversationApiTests
         Assert.Equal("billing", body.GetProperty("activeAgent").GetString());
         Assert.Equal(JsonValueKind.Null, body.GetProperty("dustLevel").ValueKind);
         Assert.Equal(JsonValueKind.Null, body.GetProperty("dustExhaustedMessage").ValueKind);
+    }
+
+    [Fact]
+    public async Task History_of_a_started_conversation_nobody_spoke_in_is_empty_not_missing()
+    {
+        string conversationId = ChannelApiClient.NewConversationId();
+        await api.SeedConversationOnRecordAsync(conversationId, activeAgent: null);
+
+        HttpResponseMessage response = await api.SendAsync("GET", "/api/morgana/conversation/{id}/history", conversationId, api.HarnessToken());
+
+        // Started and silent is a conversation with an empty transcript: only one never started is a 404.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        ConversationHistoryResponse? history = await response.Content.ReadFromJsonAsync<ConversationHistoryResponse>();
+        Assert.NotNull(history);
+        Assert.Empty(history.Messages);
     }
 
     [Fact]

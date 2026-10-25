@@ -156,10 +156,10 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `conversation/start` | POST | Validates `ChannelMetadata` (required), settles it on record, then creates the manager actor |
-| `conversation/{id}/end` | POST | Stops the supervisor |
+| `conversation/{id}/end` | POST | 404 if unknown; stops the conversation's actors, where any are running |
 | `conversation/{id}/resume` | POST | 404 if unknown; read-only, reports the active agent and the dust level |
 | `conversation/{id}/message` | POST | Auth, 404 if unknown, then rate limit, then dust budget, then `UserMessage` |
-| `conversation/{id}/history` | GET | `ConversationHistoryResponse` |
+| `conversation/{id}/history` | GET | 404 if unknown; `ConversationHistoryResponse`, empty while nobody has spoken |
 | `conversation/{id}/command` | POST | Auth, 404 if unknown, 400 for an unknown name or a missing confirmation, rate limit, dust budget, then runs it; the outcome arrives over the channel |
 | `commands` | GET | `CommandCatalogResponse`: every `ICommand` registered in DI. The framework publishes `/compact` |
 | `health` | GET | Actor system liveness |

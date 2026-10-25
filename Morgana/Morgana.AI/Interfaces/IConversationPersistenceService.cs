@@ -72,6 +72,12 @@ public interface IConversationPersistenceService
     /// <returns>Agent name (e.g., "billing") or null if conversation not found</returns>
     Task<string?> GetMostRecentActiveAgentAsync(string conversationId);
 
+    /// <summary>Takes an agent off active duty in a conversation, leaving its session and messages as they are, so the record names no agent the conversation has handed back from.</summary>
+    /// <param name="conversationId">Conversation identifier</param>
+    /// <param name="agentName">The agent as its row names it, such as "billing"</param>
+    /// <remarks>A row already inactive or missing is left as it is. A failure is logged and absorbed, as for <see cref="GetMostRecentActiveAgentAsync"/>, since the turn it follows has already been answered.</remarks>
+    Task DeactivateAgentAsync(string conversationId, string agentName);
+
     /// <summary>
     /// Retrieves the complete conversation history across all agents for a given conversation.
     /// Decrypts, deserializes and chronologically orders messages from all participating agents.

@@ -763,7 +763,7 @@ public class ConversationSupervisorActor : MorganaActor
         // ActiveAgentResponse comes from RouterActor when it found and ran a real agent for the
         // classified intent; AgentResponse below is the OTHER possible reply, RouterActor's own
         // own answer when no agent handles that intent at all: the presentation or the classification error.
-        Receive<Records.ActiveAgentResponse>(response =>
+        ReceiveAsync<Records.ActiveAgentResponse>(async response =>
         {
             // Cancels the routing/agent window now that a real agent actually answered — this
             // handler is about to Become(Idle), which arms no timeout of its own.
@@ -816,7 +816,14 @@ public class ConversationSupervisorActor : MorganaActor
                 // The agent has finished: Morgana takes the conversation back and says so, behind
                 // the answer above rather than in place of it.
                 if (response.IsCompleted)
+                {
                     TellAgentFarewell(ctx.OriginalSender, agentName);
+
+                    // The farewell hands the conversation back to Morgana, so the departed agent's row leaves active duty in the same step.
+                    // Awaited before the next message is read: a user returning at once to the same agent cannot have the new turn's active row switched off behind it.
+                    if (ctx.Classification?.Intent is { Length: > 0 } departedIntent)
+                        await conversationPersistenceService.DeactivateAgentAsync(conversationId, departedIntent);
+                }
 
                 // Closes the turn span, tagged with the classified intent and whether the agent completed.
                 CloseTurnSpan(intent: ctx.Classification?.Intent, completed: response.IsCompleted);
@@ -981,7 +988,7 @@ public class ConversationSupervisorActor : MorganaActor
             Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture))));
 
         // Handles the already-active agent's reply to this follow-up message.
-        Receive<Records.AgentResponse>(response =>
+        ReceiveAsync<Records.AgentResponse>(async response =>
         {
             // Cancels the follow-up window now that the active agent actually answered — this
             // handler always Become(Idle)s next, completed or not: multi-turn stickiness lives
@@ -1026,7 +1033,14 @@ public class ConversationSupervisorActor : MorganaActor
                 // The agent has finished: Morgana takes the conversation back and says so, behind
                 // the answer above rather than in place of it.
                 if (response.IsCompleted)
+                {
                     TellAgentFarewell(originalSender, agentName);
+
+                    // The farewell hands the conversation back to Morgana, so the departed agent's row leaves active duty in the same step.
+                    // Awaited before the next message is read: a user returning at once to the same agent cannot have the new turn's active row switched off behind it.
+                    if (currentIntent is { Length: > 0 })
+                        await conversationPersistenceService.DeactivateAgentAsync(conversationId, currentIntent);
+                }
 
                 // Closes the turn span, tagged with the active agent's intent and whether it completed.
                 CloseTurnSpan(intent: currentIntent, completed: response.IsCompleted);

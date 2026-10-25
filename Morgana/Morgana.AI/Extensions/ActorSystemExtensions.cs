@@ -39,6 +39,24 @@ public static class ActorSystemExtensions
         }
 
         /// <summary>
+        /// Returns the conversation's live actor at /user/{actorSuffix}-{conversationId}; null when none is running.
+        /// </summary>
+        public async Task<IActorRef?> FindActorAsync(string actorSuffix, string conversationId)
+        {
+            try
+            {
+                // Only a running actor answers: a conversation whose actors have stopped has none, as does one never started in this process.
+                return await actorSystem.ActorSelection($"/user/{actorSuffix}-{conversationId}")
+                    .ResolveOne(TimeSpan.FromMilliseconds(500));
+            }
+            catch (ActorNotFoundException)
+            {
+                // No actor answers at the path, so the caller learns that there is none.
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Gets existing agent or creates new one with runtime type info (supports plugin discovery). Used by RouterActor
         /// to create agents via [HandlesIntent] reflection. Path: /user/{actorSuffix}-{conversationId}. 250ms timeout;
         /// if not found creates via DependencyResolver with runtime type info. Enables plugin agents without compile-time knowledge.

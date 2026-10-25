@@ -336,6 +336,43 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
     }
 
     /// <inheritdoc/>
+    public async Task DeactivateAgentAsync(string conversationId, string agentName)
+    {
+        try
+        {
+            // Both paths are derived from the conversation id: the connection string opens the database and the path tells whether it was ever created.
+            string sqliteConnectionString = GetConnectionString(conversationId);
+            string sqliteDbPath = GetDatabasePath(conversationId);
+
+            // A conversation never saved has no row to switch off. The call must not create its database.
+            if (!File.Exists(sqliteDbPath))
+            {
+                logger.LogInformation("SQLite database for conversation {ConversationId} not found", conversationId);
+                return;
+            }
+
+            // The row is switched off in this conversation's database, which exists by now.
+            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
+            await sqliteConnection.OpenAsync();
+
+            await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
+            // Only is_active changes: the session and the messages are the agent's own and stay as it wrote them.
+            sqliteCommand.CommandText = "UPDATE morgana SET is_active = 0 WHERE agent_name = @agent_name COLLATE NOCASE AND is_active = 1;";
+            sqliteCommand.Parameters.AddWithValue("@agent_name", agentName);
+
+            // The count tells whether the row was still on active duty.
+            int changedRows = await sqliteCommand.ExecuteNonQueryAsync();
+
+            logger.LogInformation("Deactivated {Count} row(s) of agent {AgentName} for conversation {ConversationId}", changedRows, agentName, conversationId);
+        }
+        catch (Exception ex)
+        {
+            // The turn this follows has been answered already: a failed switch-off is recorded and never surfaces to the user.
+            logger.LogError(ex, "Failed to deactivate agent {AgentName} for conversation {ConversationId}", agentName, conversationId);
+        }
+    }
+
+    /// <inheritdoc/>
     public async Task<MorganaChatMessage[]> GetConversationHistoryAsync(
         string conversationId,
         JsonSerializerOptions? jsonSerializerOptions = null)
