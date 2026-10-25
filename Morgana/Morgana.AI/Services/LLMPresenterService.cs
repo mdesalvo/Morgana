@@ -15,7 +15,7 @@ namespace Morgana.AI.Services;
 public class LLMPresenterService : IPresenterService
 {
     /// <summary>
-    /// LLM used to author the welcome message and its quick replies. Consumed through the
+    /// LLM used to author the welcome message and its reintroduction. Consumed through the
     /// stateless completion path, so it always runs on the framework tier.
     /// </summary>
     private readonly ILanguageModelService llmService;
@@ -23,7 +23,8 @@ public class LLMPresenterService : IPresenterService
     /// <summary>
     /// Source of the <c>Presentation</c> prompt: the message template interpolated with
     /// <c>((intents))</c>, plus the <c>FallbackMessage</c> and <c>NoAgentsMessage</c>
-    /// additional properties the two non-LLM paths return verbatim.
+    /// additional properties the two non-LLM paths return verbatim. It also yields the
+    /// <c>Morgana</c> prompt, whose personality gives the welcome its voice.
     /// </summary>
     private readonly IPromptResolverService promptResolverService;
 
@@ -114,8 +115,10 @@ public class LLMPresenterService : IPresenterService
         // Generate the rich presentation message, or the fallback version in case of any blocking issues.
         // Morgana must always present herself.
         Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Presentation);
+        // With no agent to offer, the same authored message both opens and answers a request no agent claims.
+        string noAgentsMessage = presentationPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.NoAgentsMessage);
         Records.PresentationResult presentationResult = displayableIntents.Count == 0
-            ? new Records.PresentationResult(presentationPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.NoAgentsMessage), [])
+            ? new Records.PresentationResult(noAgentsMessage, noAgentsMessage, [])
             : await GenerateMessageAsync(presentationPrompt, displayableIntents);
 
         // Capability-driven degradation with caching of the outcome: subsequent conversations on this channel pay zero LLM cost.
@@ -130,10 +133,23 @@ public class LLMPresenterService : IPresenterService
                 AgentCompleted = false
             }, channelCapabilities);
 
+        // The reintroduction reaches the same channel under the same budget, so it is degraded once
+        // and cached with the welcome. Its buttons are the welcome's own and are not read back.
+        ChannelMessage reintroductionMessage = await channelAdapter.AdaptAsync(
+            new ChannelMessage
+            {
+                ConversationId = $"{channelName}-presentation-reintroduction-cache",
+                Text = presentationResult.Reintroduction,
+                MessageType = Constants.MessageTypes.Presentation,
+                QuickReplies = presentationResult.QuickReplies,
+                AgentName = Constants.Morgana,
+                AgentCompleted = true
+            }, channelCapabilities);
+
         // Unwrap back into the presenter's domain type. RichCard is intentionally ignored here —
         // the presentation never produces one and the supervisor's send path doesn't read it
         // off PresentationResult either.
-        return new Records.PresentationResult(channelMessage.Text, channelMessage.QuickReplies ?? []);
+        return new Records.PresentationResult(channelMessage.Text, reintroductionMessage.Text, channelMessage.QuickReplies ?? []);
     }
 
     /// <summary>
@@ -154,9 +170,14 @@ public class LLMPresenterService : IPresenterService
             string formattedIntents = string.Join("\n",
                 displayableIntents.Select(i => $"- {i.Name}: {i.Description}"));
 
-            // Compose the system prompt by interpolating the formatted list into the template.
+            // The welcome is the first thing Morgana says, so it speaks in the voice her agents speak in.
+            // Classifier and channel adapter never borrow it: they answer the framework, not the user.
+            Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
+
+            // The authored sections say how to welcome and Morgana's personality how it sounds; the
+            // formatted list is interpolated into the template as what there is to offer.
             string presentationSystemPrompt =
-                $"{presentationPrompt.Target}\n\n{presentationPrompt.Instructions}\n\n{presentationPrompt.Formatting}".Replace(Constants.Placeholders.Intents, formattedIntents);
+                $"{presentationPrompt.Target}\n\n{morganaPrompt.Personality}\n\n{presentationPrompt.Instructions}\n\n{presentationPrompt.Formatting}".Replace(Constants.Placeholders.Intents, formattedIntents);
 
             // The fixed user message acts as a trigger; the real instructions live in the system prompt.
             string llmResponse = await llmService.CompleteWithSystemPromptAsync(
@@ -168,13 +189,18 @@ public class LLMPresenterService : IPresenterService
                 JsonSerializer.Deserialize<Records.PresentationResponse>(llmResponse, Records.DefaultJsonSerializerOptions)
                  ?? throw new InvalidOperationException("LLM returned null presentation");
 
-            // Map the wire-format DTO into the domain QuickReply records the rest of Morgana speaks.
-            List<QuickReply> quickReplies = [.. presentation.QuickReplies.Select(qr => new QuickReply(qr.Id, qr.Label, qr.Value))];
+            // Either text left empty would reach the user as a turn with no words, so the fallback answers instead.
+            if (string.IsNullOrWhiteSpace(presentation.Message) || string.IsNullOrWhiteSpace(presentation.Reintroduction))
+                throw new InvalidOperationException("LLM returned an empty presentation text");
+
+            // The model wrote the texts alone: the buttons are the configured intents, never the model's.
+            List<QuickReply> quickReplies = BuildIntentButtons(displayableIntents);
 
             logger.LogInformation(
                 "LLMPresenterService: LLM generated presentation with {Count} quick replies", quickReplies.Count);
 
-            return new Records.PresentationResult(presentation.Message, quickReplies);
+            // The welcome and the reintroduction the model wrote, with the buttons that lead to the agents.
+            return new Records.PresentationResult(presentation.Message, presentation.Reintroduction, quickReplies);
         }
         catch (Exception ex)
         {
@@ -202,20 +228,22 @@ public class LLMPresenterService : IPresenterService
         // never an error string, because the user is opening a conversation rather than meeting a fault.
         string fallbackMessage = presentationPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.FallbackMessage);
 
-        // One quick reply per intent. Label falls back to the intent name; value falls back to a
-        // generic "Help me with X" so the button always carries a usable payload.
-        List<QuickReply> fallbackReplies =
-        [
-            .. displayableIntents
-                .Select(intent => new QuickReply(
-                    intent.Name,
-                    intent.Label ?? intent.Name,
-                    intent.DefaultValue ?? $"Help me with {intent.Name}"))
-        ];
+        // The same buttons a generated presentation carries: they never depend on the model.
+        List<QuickReply> fallbackReplies = BuildIntentButtons(displayableIntents);
 
         logger.LogInformation(
             "LLMPresenterService: fallback presentation with {Count} quick replies", fallbackReplies.Count);
 
-        return new Records.PresentationResult(fallbackMessage, fallbackReplies);
+        // The authored greeting holds no welcome of its own, so it also serves as the reintroduction.
+        return new Records.PresentationResult(fallbackMessage, fallbackMessage, fallbackReplies);
     }
+
+    /// <summary>
+    /// Builds the buttons of the presentation: one per displayable intent in its configured order, which the model neither chooses nor words.
+    /// </summary>
+    /// <param name="displayableIntents">The intents the presentation offers.</param>
+    private static List<QuickReply> BuildIntentButtons(IReadOnlyList<Records.IntentDefinition> displayableIntents)
+        // The id names the intent that a press chooses and the supervisor reads it back to land the turn on that agent.
+        // Label falls back to the intent name and value to a generic "Help me with X", so the button always carries a usable payload.
+        => [.. displayableIntents.Select(intent => new QuickReply(intent.Name, intent.Label ?? intent.Name, intent.DefaultValue ?? $"Help me with {intent.Name}"))];
 }

@@ -1,0 +1,35 @@
+id: behaviour-landing-presents-the-agent
+description: >-
+  A press of one of Morgana's welcome buttons lands on that intent's agent, which opens its part of
+  the conversation: the press is the choice of the agent and nothing else, so no classifier runs and
+  no domain tool is called. The agent offers what it can do as its own action buttons, with the
+  way out appended. Asked again what it can do once the conversation is under way, the same agent
+  answers the same way: one line and its action buttons, still without reaching for a domain tool.
+
+turns:
+  - press: billing
+    expect:
+      agent: BillingAgent
+      # The press is the choice: nothing is left for the classifier to decide.
+      classified: false
+      agentCompleted: false
+      toolsCalled: [SetQuickReplies]
+      toolsNotCalled: [GetInvoices, GetInvoiceDetails, GetOutstandingBalance, GetPaymentHistory]
+      escapeOptionsWithPrimary: true
+      richCard: absent
+      textNotEmpty: true
+    judge:
+      - "The response tells the user what can be done for them about their invoices or payments."
+
+  # Typed to the agent already in service: the question is answered by the agent, never classified.
+  - say: "How can you help me?"
+    expect:
+      agent: BillingAgent
+      classified: false
+      agentCompleted: false
+      toolsCalled: [SetQuickReplies]
+      toolsNotCalled: [GetInvoices, GetInvoiceDetails, GetOutstandingBalance, GetPaymentHistory]
+      escapeOptionsWithPrimary: true
+      textNotEmpty: true
+    judge:
+      - "The response tells the user what can be done for them about their invoices or payments."

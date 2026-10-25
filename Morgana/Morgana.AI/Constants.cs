@@ -93,6 +93,9 @@ public static class Constants
 
         /// <summary>Spliced into a peer-capable agent's own instructions, naming the colleagues it holds.</summary>
         public const string ColleaguesDeclaration = "ColleaguesDeclaration";
+
+        /// <summary>Added to a landing turn's instructions: the agent the user has just chosen opens its part of the conversation.</summary>
+        public const string LandingDeclaration = "LandingDeclaration";
     }
 
     /// <summary>
@@ -130,8 +133,11 @@ public static class Constants
         /// </summary>
         public const string AgentExitMessage = "AgentExitMessage";
 
-        /// <summary>What the user is told when classification lands on an intent no agent handles.</summary>
+        /// <summary>What the user is told when a request lands on an intent no agent handles, ahead of Morgana's presentation.</summary>
         public const string UnrecognizedIntentError = "UnrecognizedIntentError";
+
+        /// <summary>What the user is told when the classifier fails and its classification is only a fallback.</summary>
+        public const string ClassificationError = "ClassificationError";
 
         /// <summary>
         /// What a request matching no modelled agent is. It belongs to the classifier and to no domain,
@@ -219,6 +225,9 @@ public static class Constants
 
         /// <summary>Counts the consultations spent on one user turn, against the configured cap.</summary>
         public const string ConsultationRounds = "peer_consultation_rounds";
+
+        /// <summary>Marks a turn that opens with the user choosing this agent: the run carries the landing declaration; dropped when the turn ends.</summary>
+        public const string Landing = "landing";
     }
 
     /// <summary>
@@ -311,8 +320,9 @@ public static class Constants
         /// <summary>
         /// The complement of whatever domain is deployed: what a request matching no modelled agent
         /// is. No agent handles it, it is never offered as a quick reply and never counts as a
-        /// collision candidate. Routed all the same, so the router answers with its
-        /// unrecognized-intent message rather than the pipeline stalling.
+        /// collision candidate. Routed all the same: the router answers a genuine complement with the
+        /// unrecognized-intent message and Morgana's presentation, a classification failure with the
+        /// classification-error message.
         /// </summary>
         /// <remarks>
         /// The classifier's own and no domain's: the name is here because three parties compare it,
@@ -320,6 +330,15 @@ public static class Constants
         /// of that actor's prose. A plugin declaring it is ignored at the door.
         /// </remarks>
         public const string Other = "other";
+    }
+
+    /// <summary>
+    /// Keys of a classification's metadata that the classifier, the supervisor and the router agree on.
+    /// </summary>
+    public static class ClassificationMetadata
+    {
+        /// <summary>Marks a classification as a technical fallback rather than the classifier's own answer: written by the classifier and the supervisor, read by the router.</summary>
+        public const string Error = "error";
     }
 
     /// <summary>

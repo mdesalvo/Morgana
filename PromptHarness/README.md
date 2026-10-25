@@ -159,11 +159,11 @@ otherwise would mean measuring a configuration nobody runs. With the example plu
 
 | Scenario | Agent | Tier |
 |---|---|---|
-| `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand` | Billing, Contract | `Efficiency` |
+| `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand`, `behaviour-landing-presents-the-agent`, `behaviour-landing-only-on-a-press` | Billing, Contract | `Efficiency` |
 | `context-closed-vocabulary-monkeys` | Monkeys | `Efficiency` |
 | `classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
 | `behaviour-rich-card`, `context-no-invented-writes`, `classifier-routes-catalog-request-to-inventory` | Inventory | `Efficiency` |
-| `classifier-disambiguates-colliding-billing-contract` | *(none — diverted before routing)* | `Efficiency` (classifier only) |
+| `classifier-disambiguates-colliding-billing-contract`, `actor-complement-reintroduces-morgana` | *(none — answered by Morgana)* | `Efficiency` (classifier only) |
 
 Everything Morgana runs on its own account — guard, classifier, presenter — plus the judge, always
 goes to the tier `Morgana:ActorSystem:Tier` names. Every agent of the example plugin runs on
@@ -213,13 +213,14 @@ runs: 5            # default: Harness:DefaultRuns
 minPasses: 4       # default: Harness:DefaultMinPasses
 
 turns:
-  - say: "what the user types"
+  - say: "what the user types"    # or press: billing — the id of a button on the last answer
     expect:
       agent: BillingAgent
       agentCompleted: false
       quickReplies: none          # none | any | count:N | min:N
       quickReplyIds: [continue_agent]
       noQuickReplyIds: [exit_agent]
+      quickReplyLabels: ["🧾 Invoices", "📜 Care Plan"]   # the whole list, in order
       richCard: absent            # absent | present
       toolsCalled: [GetContextVariable]
       toolsNotCalled: [GetInvoices]
@@ -233,6 +234,7 @@ turns:
       historyUserMessages: 2            # …and exactly one user message per turn played so far
       textNotEmpty: true
       textNotContains: ["#INT#"]
+      classified: false           # no classifier span: a landing or a follow-up turn
     judge:                        # propositions an LLM must find TRUE
       - "The response asks the user for an identifier."
     judgeNot:                     # …and FALSE

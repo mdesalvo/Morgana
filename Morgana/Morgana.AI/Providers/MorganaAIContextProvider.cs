@@ -26,7 +26,8 @@ public class MorganaAIContextProvider : AIContextProvider
             Constants.ContextKeys.QuickReplies,
             Constants.ContextKeys.RichCard,
             Constants.ContextKeys.ServingConsultation,
-            Constants.ContextKeys.ConsultationRounds
+            Constants.ContextKeys.ConsultationRounds,
+            Constants.ContextKeys.Landing
         ];
 
     /// <summary>Logger for provider-level diagnostics.</summary>
@@ -193,6 +194,7 @@ public class MorganaAIContextProvider : AIContextProvider
     /// Per-turn injection: hands the model the context variables the session holds, name and value,
     /// ordinal-sorted. Critical for agents activated mid-conversation on empty per-agent history:
     /// hydrated shared variables from registry are invisible in history. Empty session → no injection.
+    /// A landing turn also carries the landing declaration, for that run alone and never in the history.
     /// </summary>
     protected override async ValueTask<AIContext> ProvideAIContextAsync(
         InvokingContext context,
@@ -202,6 +204,11 @@ public class MorganaAIContextProvider : AIContextProvider
             return new AIContext();
 
         MorganaContextState contextState = sessionState.GetOrInitializeState(context.Session);
+
+        // The landing declaration, only on the turn the user has just chosen this agent.
+        string? landingDeclaration = contextState.Variables.ContainsKey(Constants.ContextKeys.Landing)
+            ? await promptComposerService.ComposeLandingDeclarationAsync()
+            : null;
 
         // Strip the framework's own ephemeral keys (turn_ending, quick_replies, rich_card) —
         // they are not inputs to resolve, never something the model should be told it "holds". The
@@ -215,14 +222,28 @@ public class MorganaAIContextProvider : AIContextProvider
 
         string? declaration = await promptComposerService.ComposeHeldContextDeclarationAsync(heldVariables);
 
-        if (declaration is null)
+        // Neither a held value nor a landing: the agent's own instructions are all the model reads.
+        if (declaration is null && landingDeclaration is null)
             return new AIContext();
 
-        logger.LogInformation(
-            Constants.ObservableLogs.DeclaredContext,
-            Constants.ObservableLogs.ContextProviderName, string.Join(", ", heldVariables.Keys));
+        if (declaration is not null)
+            logger.LogInformation(
+                Constants.ObservableLogs.DeclaredContext,
+                Constants.ObservableLogs.ContextProviderName, string.Join(", ", heldVariables.Keys));
 
-        return new AIContext { Instructions = declaration };
+        // Both ride in the per-turn tail, which opens with the one marker the cache split looks for: the held-context
+        // declaration carries it and a landing without held values takes it in front of its own text.
+        string perTurnInstructions = (declaration, landingDeclaration) switch
+        {
+            // Values held and a landing: the declaration's marker already opens the tail.
+            ({ } heldDeclaration, { } landing) => $"{heldDeclaration}\n\n{landing}",
+            // Values held on an ordinary turn.
+            ({ } heldDeclaration, null) => heldDeclaration,
+            // A landing on a session that holds nothing yet.
+            _ => Constants.Markers.DynamicInstructions + landingDeclaration
+        };
+
+        return new AIContext { Instructions = perTurnInstructions };
     }
 
     /// <summary>

@@ -54,8 +54,11 @@ public sealed class ScenarioDefinition
 /// <summary>A single user turn and its expectations.</summary>
 public sealed class TurnDefinition
 {
-    /// <summary>What the user says.</summary>
+    /// <summary>What the user says. Exactly one of <c>say:</c> and <c>press:</c> is set.</summary>
     public string Say { get; init; } = string.Empty;
+
+    /// <summary>The exact id of a button on the last answer (a welcome or disambiguation button is an intent name) that this turn presses instead of typing.</summary>
+    public string? Press { get; init; }
 
     /// <summary>Structural expectations, evaluated deterministically. Optional.</summary>
     public ExpectSpec? Expect { get; init; }
@@ -80,6 +83,9 @@ public sealed class ExpectSpec
 
     /// <summary>Quick-reply ids that must all be present.</summary>
     public List<string>? QuickReplyIds { get; init; }
+
+    /// <summary>The delivered buttons' labels, exactly and in order: the whole list must be equal.</summary>
+    public List<string>? QuickReplyLabels { get; init; }
 
     /// <summary>Quick-reply ids that must all be absent.</summary>
     public List<string>? NoQuickReplyIds { get; init; }
@@ -177,6 +183,9 @@ public sealed class ExpectSpec
     /// <summary>Expected <c>guard.compliant</c> verdict from the <c>morgana.guard</c> span.</summary>
     public bool? GuardCompliant { get; init; }
 
+    /// <summary>Whether a <c>morgana.classifier</c> span was seen in the turn: false for a landing or a follow-up turn.</summary>
+    public bool? Classified { get; init; }
+
     /// <summary>Expected intent from the <c>morgana.classifier</c> span.</summary>
     public string? ClassifierIntent { get; init; }
 
@@ -242,6 +251,19 @@ public static class ScenarioLoader
         // A YAML file that parses but never sets "id:" would otherwise silently produce a
         // ScenarioDefinition whose Id doesn't round-trip back to the file it came from — every
         // failure message and harness row keys off Id, so this catches the gap at load time.
-        return string.IsNullOrWhiteSpace(scenario.Id) ? throw new InvalidOperationException($"Scenario file {path} declares no id.") : scenario;
+        if (string.IsNullOrWhiteSpace(scenario.Id))
+            throw new InvalidOperationException($"Scenario file {path} declares no id.");
+
+        // A turn that says and presses acts twice and one that does neither acts not at all: both are a typo caught before any paid run.
+        for (int turnIndex = 0; turnIndex < scenario.Turns.Count; turnIndex++)
+        {
+            bool says = !string.IsNullOrWhiteSpace(scenario.Turns[turnIndex].Say);
+            bool presses = !string.IsNullOrWhiteSpace(scenario.Turns[turnIndex].Press);
+            if (says == presses)
+                throw new InvalidOperationException($"Scenario file {path}: turn {turnIndex + 1} must declare exactly one of 'say' and 'press'.");
+        }
+
+        // A scenario whose every turn acts exactly once.
+        return scenario;
     }
 }

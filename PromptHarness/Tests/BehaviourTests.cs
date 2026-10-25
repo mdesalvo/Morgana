@@ -17,6 +17,8 @@ public sealed class BehaviourTests
 
     [Theory]
     [InlineData("behaviour-turn-continuation-operand")]
+    [InlineData("behaviour-landing-presents-the-agent")]
+    [InlineData("behaviour-landing-only-on-a-press")]
     [InlineData("behaviour-conversation-closure")]
     [InlineData("behaviour-rich-card")]
     [InlineData("behaviour-order-confirmation-bills-invoice")]

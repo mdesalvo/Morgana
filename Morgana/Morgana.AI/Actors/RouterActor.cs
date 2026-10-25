@@ -34,6 +34,16 @@ public class RouterActor : MorganaActor
     private readonly IAgentRegistryService agentResolverService;
 
     /// <summary>
+    /// Source of the presentation that a genuine complement classification is answered with.
+    /// </summary>
+    private readonly IPresenterService presenterService;
+
+    /// <summary>
+    /// Source of the intents that the presentation offers as buttons.
+    /// </summary>
+    private readonly IAgentConfigurationService agentConfigService;
+
+    /// <summary>
     /// Reference to the <see cref="ConversationSupervisorActor"/>, captured from the first
     /// <see cref="Records.AgentRequest"/> (which the supervisor always originates).
     /// Used as the fallback destination for late stream chunks whose <c>streamingContexts</c>
@@ -51,15 +61,25 @@ public class RouterActor : MorganaActor
     /// <param name="llmService">LLM service for AI completions</param>
     /// <param name="promptResolverService">Service for resolving prompt templates</param>
     /// <param name="agentResolverService">Service for agent discovery and resolution</param>
+    /// <param name="presenterService">Service that serves the presentation without greeting on a complement classification</param>
+    /// <param name="agentConfigService">Service that lists the configured intents offered as buttons</param>
     /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
     public RouterActor(
         string conversationId,
         ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IAgentRegistryService agentResolverService,
+        IPresenterService presenterService,
+        IAgentConfigurationService agentConfigService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
         this.agentResolverService = agentResolverService;
+
+        // The presentation is what a request that no agent claims is answered with.
+        this.presenterService = presenterService;
+
+        // The configured intents are what the presentation turns into buttons.
+        this.agentConfigService = agentConfigService;
 
         // Route classified requests to specialized agents based on intent:
         // - Validates classification exists and intent is recognized
@@ -115,7 +135,8 @@ public class RouterActor : MorganaActor
 
     /// <summary>
     /// Routes an agent request to the appropriate specialized agent, creating it on-demand
-    /// if this intent hasn't been routed to yet.
+    /// if this intent hasn't been routed to yet. An intent with no agent is answered with the
+    /// presentation or, after a classification failure, with the classification-error message.
     /// </summary>
     /// <param name="req">Agent request containing classification and message data</param>
     private async Task RouteToAgentAsync(Records.AgentRequest req)
@@ -129,13 +150,33 @@ public class RouterActor : MorganaActor
         // Get or create agent for this intent
         IActorRef? selectedAgent = await GetOrCreateAgentForIntent(req.Classification!.Intent);
 
-        // Validate that an agent exists for this intent
+        // No [HandlesIntent] agent is registered for this intent: Morgana answers it herself
         if (selectedAgent == null)
         {
-            // No [HandlesIntent] agent is registered for this intent
+            // Both wordings Morgana answers with here come from the classifier's prompt, in her own voice.
             Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Classifier);
-            string unrecognizedIntentError = classifierPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.UnrecognizedIntentError);
-            originalSender.Tell(new Records.AgentResponse(unrecognizedIntentError, true));
+
+            // A classification marked as a failure must not push a menu at a user whose request may have been perfectly legitimate.
+            if (req.Classification.Metadata.ContainsKey(Constants.ClassificationMetadata.Error))
+            {
+                // The fallback was technical: the classification-error wording alone answers it, with no menu.
+                string classificationError =classifierPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.ClassificationError);
+                originalSender.Tell(new Records.AgentResponse(classificationError, true));
+            }
+            else
+            {
+                // A genuine complement is a request that no agent claims: it is answered by showing what the domain offers.
+                List<Records.IntentDefinition> configuredIntents = await agentConfigService.GetIntentsAsync();
+                Records.IntentCollection intentCollection = new Records.IntentCollection(configuredIntents);
+
+                // The presentation is cached per channel: showing it again costs no model call.
+                Records.PresentationResult presentation = await presenterService.GenerateAsync(intentCollection.GetDisplayableIntents(), conversationId);
+
+                // Morgana first says that nothing here answers the request, then the reintroduction, which holds no
+                // greeting since the user is already in the conversation, with every intent's button.
+                string unrecognizedIntentError = classifierPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.UnrecognizedIntentError);
+                originalSender.Tell(new Records.AgentResponse($"{unrecognizedIntentError}\n\n{presentation.Reintroduction}", true, presentation.QuickReplies));
+            }
             return;
         }
 

@@ -1,0 +1,28 @@
+id: behaviour-landing-only-on-a-press
+description: >-
+  An agent opens with its presentation only when the user pressed one of Morgana's buttons, never on
+  text. A concrete first message is classified and served at once. After the farewell the very words
+  of a welcome button, typed rather than pressed, are classified like any other message: Morgana's
+  last line is the farewell and carries no button to press.
+
+turns:
+  - say: "Hi, my customer code is P994E — show me my most recent invoice"
+    expect:
+      agent: BillingAgent
+      classified: true
+      toolsCalled: [GetInvoices]
+      textNotEmpty: true
+
+  # The farewell is typed rather than pressed.
+  - say: "We're done, thanks"
+    expect:
+      agent: BillingAgent
+      agentCompleted: true
+      textNotEmpty: true
+
+  - say: "What can you do with my invoices?"
+    expect:
+      agent: BillingAgent
+      # Typed after the farewell, the button's words are a message like any other.
+      classified: true
+      textNotEmpty: true

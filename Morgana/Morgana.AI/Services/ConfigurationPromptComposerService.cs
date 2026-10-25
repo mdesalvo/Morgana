@@ -229,6 +229,17 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         return Constants.Markers.DynamicInstructions + resolvedDeclaration;
     }
 
+    /// <inheritdoc/>
+    public async Task<string?> ComposeLandingDeclarationAsync()
+    {
+        // The text that tells a landing agent what this turn is: the framework's own wording, resolved by name.
+        FrameworkLayer framework = await frameworkLayer.Value;
+        string declaration = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.LandingDeclaration);
+
+        // A deployment declaring no such template has its landing turn run on the agent's instructions alone.
+        return declaration.Length == 0 ? null : declaration;
+    }
+
     /// <summary>
     /// Renders the global policies into the fenced block that opens the framework layer.
     /// </summary>

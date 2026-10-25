@@ -645,6 +645,7 @@ public static class Records
     /// <summary>
     /// Request to agent: ConversationId, user message Content (null for tool-only), optional Classification
     /// (null for follow-up to active agents), TurnContext for OTel span, channel Capabilities (null→full capability).
+    /// IsLanding marks the press of a button that Morgana offered to choose this agent: the turn opens with the agent presenting itself.
     /// </summary>
     public record AgentRequest(
         string ConversationId,
@@ -652,7 +653,8 @@ public static class Records
         ClassificationResult? Classification,
         ActivityContext TurnContext = default,
         ChannelCapabilities? Capabilities = null,
-        bool ContentAlreadyStored = false);
+        bool ContentAlreadyStored = false,
+        bool IsLanding = false);
 
     /// <summary>
     /// Agent response: text, IsCompleted flag (true→idle, false→agent stays active),
@@ -797,15 +799,14 @@ public static class Records
         [property: JsonPropertyName("dustConsumed")] double? DustConsumed = null);
 
     /// <summary>
-    /// LLM-generated presentation response from ConversationSupervisorActor.
-    /// Contains the welcome message and quick reply buttons for user interaction.
-    /// Deserialized from JSON returned by the LLM when generating presentation messages.
+    /// LLM-generated presentation: the two texts of Morgana's presentation, deserialized from the JSON
+    /// the model returns. The buttons beneath them are never the model's: they are the configured intents.
     /// </summary>
-    /// <param name="Message">Welcome/presentation message text (2-4 sentences)</param>
-    /// <param name="QuickReplies">List of quick reply button definitions</param>
+    /// <param name="Message">Welcome/presentation message text (2-3 sentences)</param>
+    /// <param name="Reintroduction">The same presentation without greeting, for a user who asks again what Morgana can do.</param>
     public record PresentationResponse(
         [property: JsonPropertyName("message")] string Message,
-        [property: JsonPropertyName("quickReplies")] List<QuickReply> QuickReplies);
+        [property: JsonPropertyName("reintroduction")] string Reintroduction);
 
     /// <summary>
     /// LLM-generated rewrite produced by the ChannelAdapter prompt. Contains the degraded
@@ -825,6 +826,9 @@ public static class Records
     /// <param name="Message">
     /// Welcome/presentation message text to display to the user (2-4 sentences).
     /// </param>
+    /// <param name="Reintroduction">
+    /// The same presentation without greeting, served when a request lands on the complement intent.
+    /// </param>
     /// <param name="QuickReplies">
     /// List of quick reply buttons derived from displayable intents.
     /// May be empty if no intents are configured; never null.
@@ -836,6 +840,7 @@ public static class Records
     /// </remarks>
     public record PresentationResult(
         string Message,
+        string Reintroduction,
         List<QuickReply> QuickReplies);
 
     // ==========================================================================
@@ -859,10 +864,10 @@ public static class Records
         List<IntentDefinition> Intents)
     {
         /// <summary>
-        /// LLM-generated quick replies (takes precedence over Intents if available).
-        /// If null, quick replies are derived from Intents directly.
+        /// The buttons beneath the welcome, one per displayable intent, as the presenter built them;
+        /// null sends the welcome with none.
         /// </summary>
-        public List<QuickReply>? LLMQuickReplies { get; init; }
+        public List<QuickReply>? QuickReplies { get; init; }
     }
 
     // ==========================================================================

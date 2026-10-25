@@ -63,6 +63,10 @@ public class AdaptingChannelService : IChannelService
         // Puts the message on the channel — SignalR to the conversation's group, webhook to its
         // callback — already within the budget that channel declared.
         await concreteChannelService.SendMessageAsync(adaptedChannelMessage);
+
+        // The message as the user received it becomes the conversation's last answer, whose buttons a press of the
+        // next message is recognised on. Kept only once the transport accepted it, so an undelivered message never counts.
+        channelMetadataStore.RecordDeliveredMessage(adaptedChannelMessage);
     }
 
     /// <inheritdoc/>

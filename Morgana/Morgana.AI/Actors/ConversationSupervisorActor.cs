@@ -177,6 +177,41 @@ public class ConversationSupervisorActor : MorganaActor
         turnSpan?.SetTag(MorganaTelemetry.TurnUserMessage, msg.Text.Length > 200 ? msg.Text[..200] : msg.Text);
         ActivityContext turnContext = turnSpan?.Context ?? default;
 
+        // A press of a button that Morgana offered to choose an agent lands the turn on that agent: the
+        // press is the choice, so neither the guard nor the classifier has anything left to decide.
+        string? landingIntent = noActiveAgent ? await FindLandingIntentAsync(msg.Text) : null;
+        if (landingIntent is not null)
+        {
+            actorLogger.Info($"Landing on intent '{landingIntent}': the message is the press of Morgana's button");
+
+            // A certain classification, so the rest of the turn reads exactly as a classified one does.
+            Records.ClassificationResult landingClassification = new Records.ClassificationResult(
+                landingIntent, new Dictionary<string, string> { ["confidence"] = "1.00" });
+            Records.ProcessingContext landingCtx = new Records.ProcessingContext(
+                msg, originalSender, turnCapabilities, landingClassification, turnContext, UserMessageAlreadyStored: noActiveAgent);
+
+            // The same "morgana.router" span a classified turn opens, covering the round-trip to the agent.
+            using Activity? landingRouterSpan = MorganaTelemetry.Source.StartActivity(
+                MorganaTelemetry.RouterActivity,
+                ActivityKind.Internal,
+                turnContext);
+            landingRouterSpan?.SetTag(MorganaTelemetry.RouterIntent, landingIntent);
+
+            // Moves the FSM to AwaitingAgentResponse, carrying the landing context forward.
+            Become(() => AwaitingAgentResponse(landingCtx));
+
+            // The router reaches the chosen agent, which is told the turn is its landing so that it presents itself.
+            router.Tell(new Records.AgentRequest(
+                msg.ConversationId,
+                msg.Text,
+                landingClassification,
+                turnContext,
+                turnCapabilities,
+                noActiveAgent,
+                IsLanding: true));
+            return;
+        }
+
         // Starts "morgana.guard", the first child span under morgana.turn — it exists so the guard
         // check's own latency and compliance verdict show up as their own row in a trace, separate
         // from classification/routing/agent time. Started here, before the Tell to GuardActor
@@ -193,6 +228,37 @@ public class ConversationSupervisorActor : MorganaActor
 
         // Engage the guard actor with the utterance from the user
         guard.Tell(new Records.GuardCheckRequest(msg.ConversationId, msg.Text));
+    }
+
+    /// <summary>
+    /// Finds the intent that the user's message chooses when it is the press of a button on the last answer delivered to the user.
+    /// </summary>
+    /// <param name="userText">What the user sent: a pressed button sends its own value.</param>
+    /// <returns>The configured intent that the pressed button names; <c>null</c> when the message is not such a press.</returns>
+    private async Task<string?> FindLandingIntentAsync(string userText)
+    {
+        // The buttons on screen are those of the last answer the channel delivered, as the user received it;
+        // after a restart none is held, so a press reaches the classifier as an ordinary request.
+        List<QuickReply>? offeredButtons = channelMetadataStore.GetLastAnswer(conversationId)?.QuickReplies;
+
+        // A last answer with no buttons leaves the message an ordinary request: a farewell offers none
+        // and a channel that shows none receives none.
+        if (offeredButtons is null || offeredButtons.Count == 0)
+            return null;
+
+        // A press sends the button's own value, so the text that matches an offered value is that button.
+        QuickReply? pressedButton = offeredButtons.FirstOrDefault(button =>
+            string.Equals(button.Value, userText.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        // Typed text that matches no offered button is an ordinary request.
+        if (pressedButton is null)
+            return null;
+
+        // Only a button naming a configured intent chooses an agent: Morgana's welcome, her reintroduction and her
+        // disambiguation offer such buttons and nothing else she says does.
+        List<Records.IntentDefinition> configuredIntents = await agentConfigService.GetIntentsAsync();
+        return configuredIntents
+            .FirstOrDefault(intent => string.Equals(intent.Name, pressedButton.Id, StringComparison.OrdinalIgnoreCase))?.Name;
     }
 
     /// <summary>
@@ -229,7 +295,7 @@ public class ConversationSupervisorActor : MorganaActor
         Records.PresentationResult result = await presenterService.GenerateAsync(displayableIntents, conversationId);
         Self.Tell(new Records.PresentationContext(result.Message, displayableIntents)
         {
-            LLMQuickReplies = result.QuickReplies
+            QuickReplies = result.QuickReplies
         });
     }
 
@@ -241,11 +307,9 @@ public class ConversationSupervisorActor : MorganaActor
     {
         actorLogger.Info("Sending presentation to client via channel");
 
-        // ctx.LLMQuickReplies is already List<QuickReply> (Morgana.Contracts) — this isn't a type
-        // conversion, it's a defensive rebuild that only carries over Id/Label/Value and drops
-        // whatever Termination the source item had (always false here in practice: the Presentation
-        // prompt's JSON schema never asks the LLM for a termination flag, see morgana.json).
-        List<QuickReply> quickReplies = ctx.LLMQuickReplies?
+        // A defensive rebuild that only carries over Id/Label/Value and drops whatever Termination
+        // the source item had: a welcome button chooses an agent and never ends anything.
+        List<QuickReply> quickReplies = ctx.QuickReplies?
             .Select(qr => new QuickReply(qr.Id, qr.Label, qr.Value))
             .ToList() ?? [];
 
@@ -592,19 +656,19 @@ public class ConversationSupervisorActor : MorganaActor
             // Shaped exactly like a real ClassifierActor result — same "confidence" key, same
             // string type — so nothing downstream (the confidence tag read a few lines above in
             // the success path, or any future consumer) needs a special case for the failure
-            // path; "error" is the one extra key a successful classification never carries, kept
-            // here purely for diagnostics.
+            // path; the classification-error key is the one extra key a successful classification
+            // never carries and the router reads it to answer with the classification-error message.
             Records.ClassificationResult fallbackClassification = new Records.ClassificationResult(
                 Constants.Intents.Other,
                 new Dictionary<string, string>
                 {
                     ["confidence"] = "0.00",
-                    ["error"] = $"classification_failed: {description}"
+                    [Constants.ClassificationMetadata.Error] = $"classification_failed: {description}"
                 });
 
             // Routing to Intents.Other still goes through the router below, even though it has no
             // registered agent by design (see HandlesIntentAgentRegistryService) — RouterActor
-            // won't find one either and replies with its own unrecognized-intent fallback, which
+            // won't find one either and replies with the classification-error message, which
             // AwaitingAgentResponse's bare Receive<AgentResponse> handler is exactly there to catch.
             actorLogger.Info("Falling back to 'other' intent");
 
@@ -624,7 +688,7 @@ public class ConversationSupervisorActor : MorganaActor
             Become(() => AwaitingAgentResponse(updatedCtx));
 
             // Sends the request to RouterActor, same as the primary classification path above —
-            // it will find no agent for Intents.Other and reply with its unrecognized-intent fallback.
+            // it will find no agent for Intents.Other and reply with the classification-error message.
             router.Tell(new Records.AgentRequest(
                 ctx.OriginalMessage.ConversationId,
                 ctx.OriginalMessage.Text,
@@ -698,7 +762,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         // ActiveAgentResponse comes from RouterActor when it found and ran a real agent for the
         // classified intent; AgentResponse below is the OTHER possible reply, RouterActor's own
-        // fallback when no agent handles that intent at all (see UnrecognizedIntentError).
+        // own answer when no agent handles that intent at all: the presentation or the classification error.
         Receive<Records.ActiveAgentResponse>(response =>
         {
             // Cancels the routing/agent window now that a real agent actually answered — this
@@ -1075,7 +1139,7 @@ public class ConversationSupervisorActor : MorganaActor
 
         // One QuickReply per colliding intent, most-confident first. Value is the intent's own
         // DefaultValue sample phrase (same fallback the Presenter uses) — tapping the button
-        // resubmits that phrase as the user's next message, which classifies unambiguously.
+        // sends that phrase as the user's next message, which lands on that intent's agent.
         List<QuickReply> quickReplies =
         [
             .. intentNames
@@ -1096,8 +1160,8 @@ public class ConversationSupervisorActor : MorganaActor
 
         // Tell the response straight to the client — no router, no agent, exactly like a Guard
         // rejection or the Presentation message. AgentCompleted:false signals "I'm not done, I'm
-        // waiting on you" even though there is no activeAgent behind it: the next message from the
-        // user is just a normal fresh turn that re-enters guard check → classification from scratch.
+        // waiting on you" even though there is no activeAgent behind it: a press of one of these
+        // buttons lands on its agent, any other message re-enters guard check and classification.
         ctx.OriginalSender.Tell(new Records.ConversationResponse(
             disambiguationMessage,
             ctx.Classification?.Intent,

@@ -136,11 +136,15 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
 
 ### Turn pipeline (FSM states)
 
-1. **Idle** — waits for `UserMessage`
+1. **Idle** — waits for `UserMessage`. A press of one of Morgana's buttons on the last answer the
+   channel delivered skips 2 and 3: the turn lands on that intent's agent, which opens its part of
+   the conversation under `LandingDeclaration`
 2. **AwaitingGuardCheck** — LLM policy check. Fail: rejection, stay idle
 3. **AwaitingClassification** — LLM classification, falling back to `"other"`. *Skipped when an
    active agent exists.* Candidates colliding within `IntentCollisionThreshold` divert here: a
-   disambiguation quick reply goes straight to the user and the turn returns to Idle
+   disambiguation quick reply goes straight to the user and the turn returns to Idle. A request no
+   agent claims is answered by the router with `UnrecognizedIntentError`, then Morgana's presentation
+   without greeting and every intent's button
 4. **AwaitingAgentResponse / AwaitingFollowUpResponse** — the agent runs its tool loop and streams.
    The wait here is a budget on **silence**, not on the turn: every chunk renews it and so does
    `AgentStillWorking` on updates carrying no text — without it a consultation reads as a dead agent
@@ -219,9 +223,9 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 
 | Service | Interface | Purpose |
 |---|---|---|
-| `LLMClassifierService` | `IClassifierService` | LLM intent classification; falls back to `"other"` at confidence 0 |
+| `LLMClassifierService` | `IClassifierService` | LLM intent classification; falls back to `"other"` at confidence 0, marked as a classification error |
 | `LLMGuardRailService` | `IGuardRailService` | LLM policy check. **Fails open** |
-| `LLMPresenterService` | `IPresenterService` | Welcome message and quick replies. Never throws |
+| `LLMPresenterService` | `IPresenterService` | Welcome message and its reintroduction, in Morgana's personality; the buttons are the intents' own. Never throws |
 | `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
 | `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json`, domain from `agents.json`. Throws if one ID is declared in both |
@@ -339,7 +343,8 @@ entry is follows from the array it lives in**, never from a field inside it:
   `ToolDescriptionContextGuidance` (into a tool's own description), `HeldContextDeclaration` (per
   turn, the variables the session holds — the one entry carrying a *fact* rather than a rule),
   `ColleaguesDeclaration` (closing a peer-capable agent's instructions),
-  `PeerConsultationDeclaration` and `PeerConsultationGuardrail` (in front of a colleague's question).
+  `PeerConsultationDeclaration` and `PeerConsultationGuardrail` (in front of a colleague's question),
+  `LandingDeclaration` (per turn, on the turn the user chose the agent by pressing Morgana's button).
 
 Every injection opens with a **bracketed all-caps label at the head of its first line** — the idiom
 the prompt layers already use for `[TARGET]`. A template arrives spliced into somebody else's text,

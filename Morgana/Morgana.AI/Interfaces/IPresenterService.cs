@@ -2,6 +2,7 @@ namespace Morgana.AI.Interfaces;
 
 /// <summary>
 /// Service abstraction for generating the initial presentation message shown to the user when a new conversation starts.
+/// It also carries the same presentation without greeting, served when a request lands on the complement intent.
 /// Decouples presentation generation from the actor infrastructure. ConversationSupervisorActor delegates entirely
 /// to this service and is agnostic of the underlying generation strategy.
 /// Default implementation: LLMPresenterService provides LLM-driven presentation generation
@@ -26,8 +27,9 @@ public interface IPresenterService
     /// agnostic of any such mechanism.
     /// </param>
     /// <returns>
-    /// A <see cref="Records.PresentationResult"/> containing the welcome message and the
-    /// quick reply buttons to render in the UI. Never null; never throws.
+    /// A <see cref="Records.PresentationResult"/> containing the welcome message, the
+    /// reintroduction served on a complement classification and the quick reply buttons to render
+    /// in the UI, one per displayable intent. Never null; never throws.
     /// </returns>
     Task<Records.PresentationResult> GenerateAsync(IReadOnlyList<Records.IntentDefinition> displayableIntents, string conversationId);
 }

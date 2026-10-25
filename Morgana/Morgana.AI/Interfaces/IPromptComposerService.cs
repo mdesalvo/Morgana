@@ -89,4 +89,14 @@ public interface IPromptComposerService
     /// the session holds no variables or because the prompt layer declares no such template.
     /// </returns>
     Task<string?> ComposeHeldContextDeclarationAsync(IReadOnlyDictionary<string, object> heldVariables);
+
+    /// <summary>
+    /// Produces the declaration added to the instructions of a landing turn, in which the user has just
+    /// chosen the agent by pressing one of Morgana's buttons and the agent opens its part of the conversation.
+    /// </summary>
+    /// <returns>
+    /// The declaration to inject; <c>null</c> when the prompt layer declares no such template, in which case the
+    /// landing turn runs on the agent's own instructions alone.
+    /// </returns>
+    Task<string?> ComposeLandingDeclarationAsync();
 }

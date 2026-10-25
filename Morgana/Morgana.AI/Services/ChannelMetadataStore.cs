@@ -31,6 +31,9 @@ public class ChannelMetadataStore : IChannelMetadataStore
     /// </summary>
     private readonly ConcurrentDictionary<string, ChannelMetadata> metadataByConversation = new();
 
+    /// <summary>The last answer delivered to each conversation, as the user saw it, keyed by conversation id.</summary>
+    private readonly ConcurrentDictionary<string, ChannelMessage> lastAnswerByConversation = new();
+
     /// <summary>Builds the store over the persistence service holding each conversation's handshake.</summary>
     public ChannelMetadataStore(
         IConversationPersistenceService conversationPersistenceService,
@@ -72,8 +75,29 @@ public class ChannelMetadataStore : IChannelMetadataStore
     }
 
     /// <inheritdoc/>
-    public void EvictChannelMetadata(string conversationId) =>
+    public void EvictChannelMetadata(string conversationId)
+    {
+        // Both copies live and die with the conversation's actors, so nothing is kept for a conversation that ended.
         metadataByConversation.TryRemove(conversationId, out _);
+        lastAnswerByConversation.TryRemove(conversationId, out _);
+    }
+
+    /// <inheritdoc/>
+    public void RecordDeliveredMessage(ChannelMessage deliveredMessage)
+    {
+        // Only what was said counts as an answer, which a later one replaces: warnings, errors and command frames are notices
+        // about the conversation and leave the last answer as it was.
+        if (string.Equals(deliveredMessage.MessageType, Constants.MessageTypes.Assistant, StringComparison.Ordinal)
+             || string.Equals(deliveredMessage.MessageType, Constants.MessageTypes.Presentation, StringComparison.Ordinal))
+        {
+            lastAnswerByConversation[deliveredMessage.ConversationId] = deliveredMessage;
+        }
+    }
+
+    /// <inheritdoc/>
+    public ChannelMessage? GetLastAnswer(string conversationId) =>
+        // Absent until the channel delivers an answer in this process.
+        lastAnswerByConversation.GetValueOrDefault(conversationId);
 
     /// <inheritdoc/>
     public async ValueTask<ChannelMetadata> GetChannelMetadataAsync(string conversationId)

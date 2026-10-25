@@ -286,6 +286,11 @@ public class MorganaAgent : MorganaActor
             aiChatHistoryProvider.AppendMessage(aiAgentSession, userMessage);
             await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted: false);
 
+            // A landing is the one turn in which the agent opens its part of the conversation: the mark is set after
+            // the save above, so a turn interrupted here never leaves a row that would land again on resume.
+            if (req.IsLanding)
+                await aiContextProvider.SetVariableAsync(aiAgentSession, Constants.ContextKeys.Landing, true);
+
             // Streaming is gated on two independent signals:
             //   1. Global config flag (Morgana:AdaptiveMessaging:EnableStreamingResponse)
             //   2. Channel capability — we don't even attach to the LLM streaming endpoint
@@ -389,6 +394,9 @@ public class MorganaAgent : MorganaActor
             bool wantsEnding = GetTurnEndingFromContext(aiAgentSession);
             aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnEnding);
 
+            // Landing: it lasts this turn alone and must not be saved with the session below.
+            aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.Landing);
+
             // QuickReplies
             List<QuickReply>? quickReplies = GetQuickRepliesFromContext(aiAgentSession);
             bool hasQuickReplies = quickReplies?.Count > 0;
@@ -486,6 +494,7 @@ public class MorganaAgent : MorganaActor
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.QuickReplies);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnEnding);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ConsultationRounds);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.Landing);
             }
         }
     }
