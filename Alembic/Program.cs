@@ -71,7 +71,7 @@ builder.Services.AddSingleton<IAssetPackageService, AssetPackageService>();
 // ==============================================================================
 // 4. LLM
 // ==============================================================================
-// Performance tier, resolved on first use so a working copy without credentials still boots.
+// Efficiency tier, resolved on first use so a working copy without credentials still boots.
 
 builder.Services.AddSingleton<ILLMService>(sp =>
 {

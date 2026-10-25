@@ -94,7 +94,7 @@ public class InterviewService : IInterviewService
     private readonly IRecapService recapService;
 
     /// <summary>
-    /// Resolves the chat client every pass runs on — always <see cref="Records.LLMTier.Performance"/>,
+    /// Resolves the chat client every pass runs on — always <see cref="Records.LLMTier.Efficiency"/>,
     /// never the tier a domain agent itself will run on.
     /// </summary>
     private readonly ILLMService llmService;
@@ -1310,10 +1310,10 @@ public class InterviewService : IInterviewService
             toolAdapter.AddTool(definition.Name, implementation, definition);
         }
 
-        // Performance, resolved directly rather than through CompleteWithSystemPromptAsync, which
-        // always runs on the cheapest configured tier. Writing non-contradictory dispositive prose
-        // is the exact task the Efficiency die is weakest at.
-        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);
+        // Efficiency, resolved directly rather than through CompleteWithSystemPromptAsync, which
+        // runs on the framework tier. Writing non-contradictory dispositive prose is the exact task
+        // the Economy tier is weakest at.
+        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 
         agent = chatClient.AsAIAgent(new ChatClientAgentOptions
         {

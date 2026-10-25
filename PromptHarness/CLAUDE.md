@@ -75,8 +75,8 @@ or the listener heard nothing.
 
 **Cost discipline.** Every turn is a live call, multiplied by the run count (default 5), plus one
 judge call per proposition on structurally-passing turns. An agent's `[RequiresLLMTier]` decides its
-cost — the suite does not get to choose it — so the Inventory scenarios run on `Performance` while
-the rest run on `Efficiency`. Keep those out of the tight loop. Before running anything, check
+cost — the suite does not get to choose it — so every scenario of the example plugin runs on `Efficiency` and the judge on the framework tier.
+Before running anything, check
 whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harness/<id>.md` row.
 
 ## The groups and what a failure in each means

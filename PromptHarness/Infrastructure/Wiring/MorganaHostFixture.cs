@@ -277,14 +277,14 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
     /// <summary>
     /// Renders the provider and the model bound to each tier, e.g.
-    /// <c>Anthropic (Efficiency=claude-haiku-4-5, Performance=claude-sonnet-5)</c>. Recorded in
+    /// <c>Anthropic (Economy=claude-haiku-5-5, Efficiency=claude-sonnet-5-5, Performance=claude-opus-5-5)</c>. Recorded in
     /// every harness file: a token count is only comparable against the same models.
     /// </summary>
     private string DescribeLlm()
     {
         string provider = Configuration["Morgana:LLM:Provider"] ?? "(unknown)";
 
-        // Walk every tier configured under the active provider (e.g. Efficiency, Performance) and
+        // Walk every tier configured under the active provider (e.g. Economy, Efficiency, Performance) and
         // read the model id bound to each — the same shape ScenarioRunner reports per-scenario cost
         // against, so a harness row is always legible without cross-referencing appsettings.
         IEnumerable<string> tiers = Configuration.GetSection($"Morgana:LLM:{provider}:Tiers").GetChildren()

@@ -42,8 +42,8 @@ instances of it. That shrinks the contradiction surface instead of chasing sympt
 
 Two things *outside* the prose can sabotage a correct prompt and are worth ruling out first because
 they are invisible from `agents.json`:
-- **Model tier** — a dense, layered prompt needs a capable model; `Efficiency` amplifies
-  contradiction-following failures where `Performance` would not.
+- **Model tier** — a dense, layered prompt needs a capable model; `Economy` amplifies
+  contradiction-following failures where `Efficiency` would not.
 - **Rendering / channel code** — a rich-card leaf showing raw `**` is a Razor bug in Cauldron,
   unfixable from any prompt.
 
@@ -245,19 +245,19 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 `MorganaLLM` implements `ILLMService`; four providers (`Anthropic`, `AzureOpenAI`, `OpenAI`,
 `Ollama`) selected by `Morgana:LLM:Provider`, all wrapped into `IChatClient`.
 
-**Exactly two dies**, modelled on Intel's E-core/P-core split. `Efficiency` is the default and serves
-every framework actor; `Performance` is reserved for agents whose author declares an existential need
-for deep reasoning, never a nice-to-have upgrade. **There is no cross-tier fallback**: a single-model
-deployment declares only `Efficiency` and any agent requiring `Performance` fails startup until a
-second entry exists.
+**Three tiers**: `Economy`, `Efficiency`, `Performance`. The framework actors run on the one
+`Morgana:ActorSystem:Tier` names, mandatory; `Efficiency` serves ordinary agents; `Performance` is
+reserved for agents whose author declares an existential need for deep reasoning, never a nice-to-have
+upgrade. **There is no cross-tier fallback**: a tier an agent or the actors need fails startup until
+its entry exists.
 
 `Tiers` is a JSON **object keyed by tier name**, not an array, so env-var overrides merge per tier.
 Each entry carries `Options` — a deliberately narrow, JSON-bindable mirror of `ChatOptions`:
 `ModelId` and `MaxOutputTokens` only, see `Records.TierConfiguration` for the census and the reason —
 plus its own `MagicDust` pricing.
 
-Two consumption modes: `CompleteWithSystemPromptAsync` (stateless, always on the cheapest configured
-tier) and `GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
+Two consumption modes: `CompleteWithSystemPromptAsync` (stateless, always on the framework tier) and
+`GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
 
 ## Agent Authoring
 
@@ -442,7 +442,7 @@ fault reaches a user as a conversation that never answers, on a host that passed
 |---|---|
 | `Morgana:LLM:Provider` · `:{Provider}` | Provider choice, credentials, the `Tiers` map |
 | `Morgana:AgentToAgent` | `Enabled`, `MaxRoundsPerTurn`, `PublicUrl` (declared only where a binding cannot answer for the address), `Partners[]`. Consultation waits are one **ladder** derived from `ActorSystem:TimeoutSeconds`, stated once in `Records.PeerConsultationWaits` |
-| `Morgana:ActorSystem` | `TimeoutSeconds`, `EnableGuardrail`, `IntentCollisionThreshold` |
+| `Morgana:ActorSystem` | `Tier` (the framework actors' tier, mandatory), `TimeoutSeconds`, `EnableGuardrail`, `IntentCollisionThreshold` |
 | `Morgana:AdaptiveMessaging` | `EnableStreamingResponse`, `RichFeaturesMinLength` |
 | `Morgana:ConversationPersistence` | `StoragePath`, `EncryptionKey` (AES-256, base64, 32 bytes) |
 | `Morgana:RateLimiting` · `:DustLimiting` | Limits and their authored error messages. `MagicDust` pricing lives per tier |

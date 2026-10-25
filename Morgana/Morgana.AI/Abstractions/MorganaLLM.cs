@@ -41,7 +41,7 @@ public class MorganaLLM : ILLMService
 
     /// <summary>
     /// Chat client used by Morgana's own framework actors (Guard, Classifier, Presenter,
-    /// ChannelAdapter) — always the cheapest tier the active provider has configured, set by
+    /// ChannelAdapter) — the tier <c>Morgana:ActorSystem:Tier</c> names, set by
     /// <see cref="FinalizeModelRegistration"/>, which every provider constructor is required
     /// to call (hence the <c>null!</c> initializer: the field is guaranteed assigned before
     /// any instance is ever handed out by DI). Domain agents never read this field; they
@@ -56,12 +56,9 @@ public class MorganaLLM : ILLMService
     /// </summary>
     private readonly Dictionary<Records.LLMTier, (IChatClient Client, Records.MagicDustPricing Pricing)> tierClients = new();
 
-    /// <summary>
-    /// The tier used for framework-actor calls (Guard, Classifier, Presenter, ChannelAdapter).
-    /// Always the cheapest tier the active provider has configured. Computed lazily from
-    /// <see cref="tierClients"/> once <see cref="FinalizeModelRegistration"/> has run.
-    /// </summary>
-    private Records.LLMTier FrameworkDefaultTier => tierClients.Keys.Min();
+    /// <inheritdoc/>
+    /// <remarks>Set by <see cref="FinalizeModelRegistration"/>, which refuses a tier the active provider has not configured.</remarks>
+    public Records.LLMTier FrameworkTier { get; private set; }
 
     /// <summary>
     /// Logger factory used to instrument the chat client pipeline (in particular,
@@ -95,9 +92,9 @@ public class MorganaLLM : ILLMService
     {
         this.dustLimitService = dustLimitService;
 
-        // Guard, Classifier, Presenter and ChannelAdapter always run on the cheapest tier, so
+        // Guard, Classifier, Presenter and ChannelAdapter always run on the framework tier, so
         // their pricing can be fixed once here instead of looked up on every call.
-        dustPricing = tierClients[FrameworkDefaultTier].Pricing;
+        dustPricing = tierClients[FrameworkTier].Pricing;
     }
 
     /// <summary>
@@ -175,24 +172,46 @@ public class MorganaLLM : ILLMService
     }
 
     /// <summary>
-    /// Finalizes tier registration: picks the cheapest configured tier as the
-    /// <see cref="frameworkChatClient"/>. Must be called by every derived provider's
+    /// Finalizes tier registration: binds <see cref="frameworkChatClient"/> to the tier that
+    /// <c>Morgana:ActorSystem:Tier</c> names. Must be called by every derived provider's
     /// constructor after all <see cref="RegisterTierClient"/> calls for its <c>Tiers</c> map.
     /// </summary>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when a provider declares no <c>Tiers</c> entries at all (an agent could never
-    /// resolve any tier against it).
+    /// Thrown when a provider declares no <c>Tiers</c> entries at all. Also thrown when
+    /// <c>Morgana:ActorSystem:Tier</c> is missing, names no tier or names one the provider has not configured.
     /// </exception>
     protected void FinalizeModelRegistration()
     {
+        // A provider with no tier could serve neither an agent nor the framework's own actors.
         if (tierClients.Count == 0)
             throw new InvalidOperationException(
                 "No tiers configured under 'Morgana:LLM:{Provider}:Tiers'. At least one tier " +
-                "(keyed by Efficiency/Performance, with a ModelId and MagicDust pricing) is required for the active LLM provider.");
+                "(keyed by Economy/Efficiency/Performance, with a ModelId and MagicDust pricing) is required for the active LLM provider.");
 
-        // The framework's own actors (Guard, Classifier, Presenter, ChannelAdapter) always run
-        // on the cheapest tier available, whatever that turns out to be for this provider.
-        frameworkChatClient = tierClients[FrameworkDefaultTier].Client;
+        // The framework's own actors (Guard, Classifier, Presenter, ChannelAdapter) run on the tier the
+        // deployment names, never on one picked for it: a missing name refuses the startup, since the first
+        // turn would otherwise reach a model nobody chose.
+        string frameworkTierName = configuration["Morgana:ActorSystem:Tier"] is { Length: > 0 } configuredTierName
+            ? configuredTierName
+            : throw new InvalidOperationException(
+                "Morgana:ActorSystem:Tier is not configured. Name the tier Morgana's own actors run on: Economy, Efficiency or Performance.");
+
+        // Only a tier's name is accepted: a number would parse as a tier just as well and say nothing to whoever reads the configuration.
+        FrameworkTier = Enum.GetValues<Records.LLMTier>()
+            .Where(tier => string.Equals(tier.ToString(), frameworkTierName.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Select(tier => (Records.LLMTier?)tier)
+            .FirstOrDefault()
+            ?? throw new InvalidOperationException(
+                $"Morgana:ActorSystem:Tier '{frameworkTierName}' is not a tier. Use Economy, Efficiency or Performance.");
+
+        // The named tier must be one this provider serves: there is no fallback from one tier to another.
+        if (!tierClients.TryGetValue(FrameworkTier, out (IChatClient Client, Records.MagicDustPricing Pricing) frameworkTierEntry))
+            throw new InvalidOperationException(
+                $"Morgana:ActorSystem:Tier names '{FrameworkTier}', which is not configured for the active provider. " +
+                $"Add a \"{FrameworkTier}\" entry under Morgana:LLM:{{Provider}}:Tiers or name a tier the provider has.");
+
+        // Every framework-actor call from now on goes to that tier's client.
+        frameworkChatClient = frameworkTierEntry.Client;
     }
 
     /// <summary>
@@ -258,7 +277,7 @@ public class MorganaLLM : ILLMService
             // This is how Morgana's own framework actors get an LLM, as opposed to how a
             // domain agent gets one: Guard, Classifier, Presenter and ChannelAdapter all call
             // THIS method (never GetChatClient(tier)), so they always run on
-            // frameworkChatClient — the cheapest tier the active provider has configured,
+            // frameworkChatClient — the tier Morgana:ActorSystem:Tier names,
             // fixed once at startup by FinalizeModelRegistration. They have no
             // [RequiresLLMTier] of their own; a domain agent, by contrast, is built by
             // MorganaAgentAdapter against its own declared tier via

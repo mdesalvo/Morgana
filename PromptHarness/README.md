@@ -46,7 +46,7 @@ PromptHarness (test process)
   ├── TurnObserver      ──► ActivityListener on morgana.agent  → agent.tools_invoked
   │                          Console.Out tee on MorganaTool logs → context reads/writes
   │                          + MorganaAIContextProvider's per-turn declaration → Declared reads
-  ├── LlmJudge          ──► ILLMService.CompleteWithSystemPromptAsync (cheapest configured tier)
+  ├── LlmJudge          ──► ILLMService.CompleteWithSystemPromptAsync (Morgana:ActorSystem:Tier)
   └── ScenarioRunner    ──► replays a YAML scenario N times, reports passes against a threshold
 ```
 
@@ -162,18 +162,12 @@ otherwise would mean measuring a configuration nobody runs. With the example plu
 | `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand` | Billing, Contract | `Efficiency` |
 | `context-closed-vocabulary-monkeys` | Monkeys | `Efficiency` |
 | `classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
-| `behaviour-rich-card`, `context-no-invented-writes`, `classifier-routes-catalog-request-to-inventory` | Inventory | **`Performance`** |
+| `behaviour-rich-card`, `context-no-invented-writes`, `classifier-routes-catalog-request-to-inventory` | Inventory | `Efficiency` |
 | `classifier-disambiguates-colliding-billing-contract` | *(none — diverted before routing)* | `Efficiency` (classifier only) |
 
 Everything Morgana runs on its own account — guard, classifier, presenter — plus the judge, always
-goes to the cheapest configured tier. So the three Inventory scenarios dominate the bill: a handful
-of `Performance` turns against a suite that is otherwise `Efficiency` throughout — which is also why
-`classifier-routes-catalog-request-to-inventory` runs 3 times rather than 5, its property being a
-routing decision that merely happens to land on a `Performance` agent. Keep them out of the tight
-iteration loop and run them at checkpoints.
-
-Running the rest against `Efficiency` is also a useful stress test in its own right: it is the tier
-that amplifies contradiction-following failures.
+goes to the tier `Morgana:ActorSystem:Tier` names. Every agent of the example plugin runs on
+`Efficiency`, so no scenario costs more than another for the tier it lands on.
 
 ## The journey
 

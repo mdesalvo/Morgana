@@ -32,15 +32,15 @@ never guesses, patches or merges it. See *Regeneration contract*.
 
 ## Design decisions
 
-### Performance tier, non-negotiable
+### Efficiency tier, never Economy
 
-Its whole job is writing **dispositive prose that does not contradict itself** — the exact task where
-the `Efficiency` die amplifies contradiction-following failures. A wizard emitting a subtly
-self-contradictory prompt is worse than no wizard, because the client has no instrument to notice.
-Alembic runs once at onboarding, not per turn: the wrong place to save.
+Its whole job is writing **dispositive prose that does not contradict itself**, which needs a capable
+model. A wizard emitting a subtly self-contradictory prompt is worse than no wizard, because the client
+has no instrument to notice. Alembic runs all its model work on `Efficiency`, never on `Economy` and
+runs once at onboarding, not per turn: the wrong place to save.
 
-Consequence of the framework's no-cross-tier-fallback rule: **Alembic does not serve a single-tier
-deployment** until a `Performance` entry is configured.
+Consequence of the framework's no-cross-tier-fallback rule: **Alembic does not serve a deployment**
+until an `Efficiency` entry is configured.
 
 ### Alembic is of Morgana and so is everything it writes
 
@@ -440,7 +440,7 @@ is therefore free: there is no parallel representation to maintain.
   Alembic works on is the **uploaded** one, never one compiled into this process.
 - `ILLMService` is a factory **never resolved during startup**, so a working copy without credentials still
   builds, boots and serves the shell; the failure surfaces on the first call.
-- `MagicDust` in the `Performance` tier cannot be shortened to `{}` — the JSON provider reads an empty
+- `MagicDust` in the `Efficiency` tier cannot be shortened to `{}` — the JSON provider reads an empty
   object as `null`, the binder drops an element it cannot construct **without raising anything** and the
   whole tier disappears, surfacing a page later as `No tiers configured`.
 - The LLM section is named `Morgana:` because `MorganaLLM` reads that path. In-repo, Alembic declares the

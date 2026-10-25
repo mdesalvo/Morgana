@@ -17,10 +17,10 @@ namespace Morgana.AI.Abstractions.LLMs;
 /// </summary>
 /// <remarks>
 /// Anthropic provider implementation. Configuration under Morgana:LLM:Anthropic with ApiKey
-/// and Tiers map (Efficiency/Performance). MagicDust pricing defaults are calibrated to the
-/// claude-haiku-4-5 and claude-sonnet-5 model pair. If you point either tier to a different
-/// model, recalibrate InputTokensPerDustUnit and OutputTokensPerDustUnit per that model's
-/// actual published per-token pricing.
+/// and Tiers map (Economy/Efficiency/Performance). MagicDust pricing defaults are calibrated to
+/// Haiku on Economy and Sonnet on Efficiency, with Performance priced at twice Sonnet. If you point
+/// a tier to a different model, recalibrate InputTokensPerDustUnit and OutputTokensPerDustUnit per
+/// that model's actual published per-token pricing.
 /// </remarks>
 public class Anthropic : MorganaLLM
 {

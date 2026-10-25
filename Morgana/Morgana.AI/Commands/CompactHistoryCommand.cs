@@ -179,8 +179,8 @@ public sealed class CompactHistoryCommand : ICommand
             .OfType<RequiresLLMTierAttribute>()
             .FirstOrDefault()?.Tier
             // A row left by an agent this installation no longer serves is still summarizable, on the tier
-            // every framework call falls back to
-            ?? Records.LLMTier.Efficiency;
+            // Morgana's own actors run on
+            ?? llmService.FrameworkTier;
 
         // Charged under the agent whose history is being folded, beside that agent's own turns on the ledger
         return new DustAccountingChatClient(

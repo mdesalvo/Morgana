@@ -93,7 +93,7 @@ public class CoherenceApplyService : ICoherenceApplyService
             toolAdapter.AddTool(definition.Name, implementation, definition);
         }
 
-        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);
+        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 
         AIAgent agent = chatClient.AsAIAgent(new ChatClientAgentOptions
         {

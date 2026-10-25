@@ -67,4 +67,10 @@ public interface ILLMService
     /// <see cref="GetChatClient(Records.LLMTier)"/>/<see cref="GetPricing(Records.LLMTier)"/>.
     /// </summary>
     IReadOnlyCollection<Records.LLMTier> ConfiguredTiers { get; }
+
+    /// <summary>
+    /// The tier that Morgana's own actors (Guard, Classifier, Presenter, ChannelAdapter) run on through
+    /// <see cref="CompleteWithSystemPromptAsync"/>, as <c>Morgana:ActorSystem:Tier</c> names it.
+    /// </summary>
+    Records.LLMTier FrameworkTier { get; }
 }

@@ -19,7 +19,7 @@ public sealed record JudgeVerdict(bool Holds, string Reason);
 /// </summary>
 /// <remarks>
 /// <para>The judge runs through <see cref="ILLMService.CompleteWithSystemPromptAsync"/>, which by
-/// construction uses the cheapest configured tier. That keeps the suite's judging cost proportional
+/// construction uses the tier <c>Morgana:ActorSystem:Tier</c> names. That keeps the suite's judging cost proportional
 /// to the deployment it is testing and adds no provider, key or dependency of its own.</para>
 ///
 /// <para>It is deliberately given exactly what a user would see (the text, the button labels and
@@ -46,7 +46,7 @@ public sealed class LLMJudge
         {"holds": true|false, "reason": "<one short sentence>"}
         """;
 
-    /// <summary>LLM used for judging, on the cheapest configured tier.</summary>
+    /// <summary>LLM used for judging, on the framework tier.</summary>
     private readonly ILLMService llmService;
 
     private LLMJudge(ILLMService llmService) => this.llmService = llmService;

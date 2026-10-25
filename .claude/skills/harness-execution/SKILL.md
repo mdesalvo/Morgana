@@ -23,7 +23,8 @@ Activated when the user says things like:
 1. **Confirm the active provider** before anything else: read `Morgana:LLM:Provider` from the shared
    User Secrets store (`UserSecretsId 374228be-4f26-4382-a3ef-7500a0b829dd`, same as `Morgana.Web`)
    without printing the ApiKey/Endpoint values and tell the user which provider/tier models
-   (`Tiers.Efficiency.Options.ModelId` / `Tiers.Performance.Options.ModelId`) this run will hit. This
+   (`Tiers.Economy.Options.ModelId` / `Tiers.Efficiency.Options.ModelId` / `Tiers.Performance.Options.ModelId`)
+   and `Morgana:ActorSystem:Tier` this run will hit. This
    is the harness's own design (`PromptHarness/README.md`): it never has its own `Morgana:` config,
    it inherits the host's. The same file is where `Harness:HarnessDirectory` lives when the user has
    overridden it (see step 7), so read both in one pass. Note the store is written with a UTF-8 BOM:
@@ -178,7 +179,7 @@ Activated when the user says things like:
 
 - Every run is billed — live LLM calls, no mocking. Never run without both questions (scope,
   threshold) answered first and never assume a repeat of a previous scope/threshold.
-- The judge (`LLMJudge`) always runs on the same provider under test, on its cheapest tier, with a
+- The judge (`LLMJudge`) always runs on the same provider under test, on the framework tier (`Morgana:ActorSystem:Tier`), with a
   deliberately strict system prompt ("do not be charitable"). A judge-proposition failure is not
   automatically a prompt defect — check whether the proposition itself is well-calibrated before
   concluding the agent is wrong (see the `behaviour-conversation-closure` / `context-cross-agent`

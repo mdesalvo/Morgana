@@ -90,7 +90,7 @@ public class ToolMockService : IToolMockService
         // guessed: what the generated half declares is what a second declaration would collide with.
         string className = agent.Code.ToolClassName ?? intentName;
 
-        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);
+        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 
         string authored = await StreamedCompletion.RunAsync(
             chatClient, system, request.ToString(),

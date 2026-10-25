@@ -120,7 +120,7 @@ public class CoherenceService : ICoherenceService
             new[] { await alembicPromptService.ComposeFrameworkPrimerAsync(), coherence.Target, instructions, formatting }
                 .Where(s => !string.IsNullOrWhiteSpace(s)));
 
-        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);
+        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 
         try
         {

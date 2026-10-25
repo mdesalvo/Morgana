@@ -15,8 +15,8 @@ namespace Morgana.AI.Abstractions.LLMs;
 /// Ollama provider for local models. Configuration under Morgana:LLM:Ollama with Endpoint (e.g., http://localhost:11434)
 /// and Tiers map. Choose a model with solid function calling support (e.g., gpt-oss:20b, phi4-mini) because Morgana
 /// relies heavily on tool calling. Before starting Morgana, verify your model is already loaded via "ollama ps".
-/// Typical dev setup: declare only Efficiency tier (all agents use it). If your agent requires Performance tier,
-/// you must load a distinct second model (no cross-tier fallback available).
+/// Typical dev setup: declare only Efficiency tier (all agents use it) and set Morgana:ActorSystem:Tier to Efficiency.
+/// If your agent requires Performance tier, you must load a distinct second model (no cross-tier fallback available).
 /// </remarks>
 public class Ollama : MorganaLLM
 {

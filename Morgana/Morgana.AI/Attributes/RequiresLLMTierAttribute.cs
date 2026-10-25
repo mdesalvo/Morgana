@@ -1,7 +1,7 @@
 namespace Morgana.AI.Attributes;
 
 /// <summary>
-/// Mandatory on every MorganaAgent: declares fixed LLMTier (Efficiency/Performance). Static declaration, resolved once
+/// Mandatory on every MorganaAgent: declares fixed LLMTier (Economy/Efficiency/Performance). Static declaration, resolved once
 /// at agent creation, never changes. Startup validation by RequiresLLMTierValidationService ensures declared tier is
 /// configured in appsettings.json. Missing tier fails application startup (prevent silent fallback).
 /// </summary>

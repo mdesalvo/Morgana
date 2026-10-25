@@ -225,27 +225,28 @@ public static class Records
 
     /// <summary>
     /// Closed set of LLM power/cost tiers an agent can declare itself against via
-    /// <see cref="Attributes.RequiresLLMTierAttribute"/>. Modeled on the Intel E-core/P-core
-    /// die split rather than a graduated price ladder: there are exactly two physical
-    /// "core types" an agent can be built on, not a spectrum. Ordinal order (Efficiency &lt;
-    /// Performance) is load-bearing: it is used to pick the framework-actor default (the
-    /// cheapest configured tier). Cross-tier pricing is deliberately NOT assumed to be
+    /// <see cref="Attributes.RequiresLLMTierAttribute"/>: three models, not a spectrum, with no
+    /// fallback from one to another. Morgana's own framework actors run on the tier that
+    /// <c>Morgana:ActorSystem:Tier</c> names. Cross-tier pricing is deliberately NOT assumed to be
     /// monotonic — see <c>Services.RequiresLLMTierValidationService</c> remarks.
     /// </summary>
     public enum LLMTier
     {
         /// <summary>
-        /// The E-core die: Morgana's own framework actors (Guard, Classifier, Presenter,
-        /// ChannelAdapter) and any domain agent handling routine work run here. Default for
-        /// framework actors — always the cheapest configured tier. An agent belongs on
-        /// Efficiency unless its author can point to a genuine, existential need for the
-        /// expressive or computational headroom only Performance provides; "it might do a
-        /// bit better" is not that bar.
+        /// The cheapest model: routine work that needs no deliberate reasoning, such as the framework
+        /// actors (Guard, Classifier, Presenter, ChannelAdapter) where the deployment puts them here.
+        /// </summary>
+        Economy,
+
+        /// <summary>
+        /// The tier of any domain agent handling ordinary work. An agent belongs on Efficiency unless
+        /// its author can point to a genuine, existential need for the expressive or computational
+        /// headroom only Performance provides; "it might do a bit better" is not that bar.
         /// </summary>
         Efficiency,
 
         /// <summary>
-        /// The P-core die: reserved exclusively for agents whose domain author declares an
+        /// Reserved exclusively for agents whose domain author declares an
         /// existential need for deep reasoning or high expressive power — not a "nicer to
         /// have" upgrade from Efficiency, a hard requirement the agent cannot function
         /// without. Most capable/expensive tier.
@@ -254,7 +255,7 @@ public static class Records
     }
 
     /// <summary>
-    /// Single provider die (E-core/P-core) with own dust pricing. Tier IS the unit deployer configures + agent binds to.
+    /// Single provider tier with own dust pricing. Tier IS the unit deployer configures + agent binds to.
     /// Lives under Morgana:LLM:{Provider}:Tiers as JSON object (keyed by name) not array: allows per-layer overrides to merge
     /// by key. TierConfiguration is deliberate ChatOptions subset (ModelId, MaxOutputTokens only); MagicDust is tier-specific.
     /// </summary>

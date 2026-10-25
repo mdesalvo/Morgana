@@ -144,7 +144,7 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
 // - ICommandRegistryService: Publishes the commands channels may run on a conversation (every ICommand registered here)
-// - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI, OpenAI), two-tier Efficiency/Performance via each provider's Tiers{} configuration
+// - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI, OpenAI), tiers Economy/Efficiency/Performance via each provider's Tiers{} configuration
 // - ICommand: One per command a channel may run on a conversation
 
 builder.Services.AddSingleton<IMCPClientRegistryService, MCPClientRegistryService>();

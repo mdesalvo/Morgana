@@ -63,7 +63,7 @@ public class DomainReadingService : IDomainReadingService
             new[] { reader.Target, reader.Instructions, reader.Formatting }
                 .Where(section => !string.IsNullOrWhiteSpace(section)));
 
-        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Performance);
+        IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 
         try
         {
