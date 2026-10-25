@@ -58,8 +58,6 @@ public static class DraftProjection
 
         return new Records.Prompt(
             agent.ID ?? string.Empty,
-            agent.Type,
-            agent.SubType,
             agent.Target ?? string.Empty,
             agent.Instructions ?? string.Empty,
             agent.Formatting ?? string.Empty,

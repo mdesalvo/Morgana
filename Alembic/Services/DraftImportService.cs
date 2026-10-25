@@ -158,8 +158,6 @@ public class DraftImportService : IDraftImportService
         return new AgentDraft
         {
             ID = prompt.ID,
-            Type = prompt.Type,
-            SubType = prompt.SubType,
             Target = prompt.Target,
             ConsultMeFor = prompt.ConsultMeFor,
             Instructions = prompt.Instructions,

@@ -996,8 +996,6 @@ public static class Records
     /// Loaded from morgana.json (framework) or agents.json (domain, intent-keyed).
     /// </summary>
     /// <param name="ID">Prompt identifier: framework="Morgana"/"Classifier"/"Guard"/"Presentation", domain=intent name</param>
-    /// <param name="Type">Prompt type category (e.g., "SYSTEM", "INTENT")</param>
-    /// <param name="SubType">Prompt subtype (e.g., "AGENT", "ACTOR", "PRESENTATION")</param>
     /// <param name="Target">Core prompt text: role definition, capabilities statement, operational boundaries</param>
     /// <param name="Instructions">Behavioral rules, operational order, response constraints, tool-usage doctrine</param>
     /// <param name="Formatting">Output formatting rules: markdown usage, quick reply format, rich card rendering</param>
@@ -1008,8 +1006,6 @@ public static class Records
     /// <param name="ConsultMeFor">Optional: what falls to this agent, addressed to a colleague who might consult it</param>
     public record Prompt(
         string ID,
-        string Type,
-        string SubType,
         string Target,
         string Instructions,
         string Formatting,

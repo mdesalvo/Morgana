@@ -335,16 +335,6 @@ public sealed class AgentDraft
     public string? ID { get; set; }
 
     /// <summary>
-    /// Prompt type category. <c>"INTENT"</c> for a domain agent.
-    /// </summary>
-    public string Type { get; set; } = "INTENT";
-
-    /// <summary>
-    /// Prompt subtype. <c>"AGENT"</c> for a domain agent.
-    /// </summary>
-    public string SubType { get; set; } = "AGENT";
-
-    /// <summary>
     /// What the client has said about the work this agent does, in their own words: the picture of
     /// their counter as the interview has painted it so far, step by step.
     /// </summary>
