@@ -12,11 +12,13 @@ namespace PromptHarness.Infrastructure.Engine;
 /// <param name="Failures">Violated expectations; empty when the run passed.</param>
 /// <param name="Transcript">Per-turn rendering of what happened, attached to failing runs.</param>
 /// <param name="Tokens">Token usage summed over the run's turns. Judge calls are excluded: they are the harness's cost, not Morgana's.</param>
+/// <param name="Turns">Every turn played, kept whole so a failing run's model calls can be written out.</param>
 public sealed record RunOutcome(
     int Index,
     IReadOnlyList<string> Failures,
     IReadOnlyList<string> Transcript,
-    TokenUsage Tokens)
+    TokenUsage Tokens,
+    IReadOnlyList<TurnResult> Turns)
 {
     /// <summary>Whether every expectation of every turn held.</summary>
     public bool Passed => Failures.Count == 0;
@@ -160,6 +162,7 @@ public sealed class ScenarioRunner
     {
         List<string> failures = [];
         List<string> transcript = [];
+        List<TurnResult> turns = [];
         TokenUsage tokens = TokenUsage.Zero;
         string? conversationId = null;
 
@@ -221,6 +224,7 @@ public sealed class ScenarioRunner
                 TurnResult turn = await observer.CompleteTurnAsync(scope, say, message);
 
                 transcript.Add(turn.Describe());
+                turns.Add(turn);
 
                 // Accumulated before the judge runs, so the measurement stays Morgana's cost only.
                 tokens += turn.Tokens;
@@ -244,7 +248,11 @@ public sealed class ScenarioRunner
                 // either way and judging costs a live LLM call.
                 if (structural.Count == 0)
                 {
+                    // The judge's calls are windowed apart from the turn's, so a verdict is read on its evidence
+                    // in the failure log without ever entering the turn's cost.
+                    int judgeMark = observer.ModelCallMark();
                     IReadOnlyList<string> judged = await judge.EvaluateAsync(turnDefinition, turn);
+                    turns[^1] = turn with { JudgeModelCalls = observer.ModelCallsSince(judgeMark) };
                     failures.AddRange(judged.Select(failure => $"turn {transcript.Count}: {failure}"));
                 }
             }
@@ -264,6 +272,6 @@ public sealed class ScenarioRunner
                 await channel.EndConversationAsync(conversationId);
         }
 
-        return new RunOutcome(index, failures, transcript, tokens);
+        return new RunOutcome(index, failures, transcript, tokens, turns);
     }
 }

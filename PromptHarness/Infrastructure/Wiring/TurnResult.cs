@@ -53,6 +53,15 @@ public sealed record ConsultationObservation(
     string? Question,
     string? Answer);
 
+/// <summary>One LLM call as the model saw it: its cost, its instructions, its tools, the messages it read and its answer.</summary>
+/// <remarks>The texts are the OpenTelemetry <c>gen_ai.*</c> content attributes, as JSON; null when the host records no content.</remarks>
+public sealed record ModelCall(
+    TokenUsage Usage,
+    string? Instructions,
+    string? ToolDefinitions,
+    string? InputMessages,
+    string? OutputMessages);
+
 /// <summary>
 /// Everything the harness observed about one turn: what the user said, what the channel received
 /// and the two structural signals read from inside the process.
@@ -78,6 +87,8 @@ public sealed record ConsultationObservation(
 /// checking "has this happened by now" against the whole conversation is the only way to assert on it
 /// without pinning to a turn index that variance can invalidate. See <c>ExpectationChecker.CheckDust</c>.
 /// </param>
+/// <param name="ModelCalls">Every LLM call of the turn as the model saw it, classification included; the forensic record of a failing run.</param>
+/// <param name="JudgeModelCalls">The judge's own calls on this turn, kept apart so that the turn's cost stays Morgana's alone.</param>
 public sealed record TurnResult(
     string ConversationId,
     string UserMessage,
@@ -92,13 +103,45 @@ public sealed record TurnResult(
     string? ClassifierIntent = null,
     double? ClassifierConfidence = null,
     IReadOnlyList<ConsultationObservation>? Consultations = null,
-    IReadOnlyList<string>? CumulativeLogLines = null)
+    IReadOnlyList<string>? CumulativeLogLines = null,
+    IReadOnlyList<ModelCall>? ModelCalls = null,
+    IReadOnlyList<ModelCall>? JudgeModelCalls = null)
 {
     /// <summary>Consultations served during the turn, never null.</summary>
     public IReadOnlyList<ConsultationObservation> Consulted => Consultations ?? [];
 
     /// <summary>Never null even when the caller didn't ask for cumulative tracking — see the parameter's own remarks.</summary>
     public IReadOnlyList<string> Cumulative => CumulativeLogLines ?? [];
+
+    /// <summary>The turn's LLM calls as the model saw them, never null.</summary>
+    public IReadOnlyList<ModelCall> Calls => ModelCalls ?? [];
+
+    /// <summary>The judge's calls on the turn, never null; empty where the turn was not judged.</summary>
+    public IReadOnlyList<ModelCall> JudgeCalls => JudgeModelCalls ?? [];
+
+    /// <summary>The host's error and critical entries during the turn, each with its message and exception lines.</summary>
+    public IReadOnlyList<string> HostErrors
+    {
+        get
+        {
+            // The console logger opens an entry with its level and writes the message and the exception
+            // on the indented lines below it, so an error entry runs until the next unindented line.
+            List<string> errors = [];
+            bool insideError = false;
+            foreach (string line in LogLines)
+            {
+                if (line.StartsWith("fail:", StringComparison.Ordinal) || line.StartsWith("crit:", StringComparison.Ordinal))
+                    insideError = true;
+                else if (line.Length > 0 && !char.IsWhiteSpace(line[0]))
+                    insideError = false;
+
+                if (insideError)
+                    errors.Add(line);
+            }
+
+            return errors;
+        }
+    }
 
     /// <summary>Names read via <c>GetContextVariable</c>, whether the read hit or missed.</summary>
     public IReadOnlyList<string> ContextReads
@@ -125,6 +168,6 @@ public sealed record TurnResult(
             {(Consultations is not { Count: > 0 } ? "" : string.Join("\n            ", Consultations.Select(c => $"consulted {c.Target}: tools={(c.ToolsInvoked.Count == 0 ? "(none)" : string.Join("/", c.ToolsInvoked))} | awaitingReply={c.AwaitingReply}\n              asked: {c.Question}\n              replied: {c.Answer}")) + "\n            ")}
             tokens: {Tokens}
             context: {(ContextAccesses.Count == 0 ? "(none)" : string.Join(", ", ContextAccesses.Select(a => $"{a.Operation}:{a.VariableName}")))}
-            text: {Text}
+            text: {Text}{(HostErrors.Count == 0 ? "" : "\nhost errors:\n" + string.Join("\n", HostErrors))}
             """;
 }

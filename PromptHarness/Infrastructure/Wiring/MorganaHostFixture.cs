@@ -242,7 +242,13 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // the channel to drive conversations, the observer to read signals and a judge built
         // over the same LLM configuration the instance under test uses.
         judgeLoggerFactory = LoggerFactory.Create(logging => logging.ClearProviders());
-        Judge = LLMJudge.Create(Configuration, judgeLoggerFactory);
+
+        // The judge's own calls are evidence of a failing run too, so its configuration records their content.
+        IConfiguration judgeConfiguration = new ConfigurationBuilder()
+            .AddConfiguration(Configuration)
+            .AddInMemoryCollection([new KeyValuePair<string, string?>("Morgana:OpenTelemetry:EnableSensitiveData", "true")])
+            .Build();
+        Judge = LLMJudge.Create(judgeConfiguration, judgeLoggerFactory);
         Runner = new ScenarioRunner(Channel, Observer, Judge, Options, DescribeLlm());
     }
 
@@ -337,6 +343,10 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // installation reads the first agents.json it finds and holds exactly one domain.
         Environment.SetEnvironmentVariable("Morgana__Plugins__Directories__0", "domain-plugins");
         Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableGuardrail", Options.EnableGuardrail ? "true" : "false");
+
+        // Every LLM span carries what the model was handed and answered, so a failing run keeps its own
+        // evidence. The exporters are off, so none of it leaves the process.
+        Environment.SetEnvironmentVariable("Morgana__OpenTelemetry__EnableSensitiveData", "true");
 
         // Unset by default: only RateLimitTests sets it, in its own filtered dotnet test invocation, so no
         // other group's conversation is ever refused for calling too often
