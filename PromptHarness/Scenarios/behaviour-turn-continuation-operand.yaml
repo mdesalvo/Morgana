@@ -1,8 +1,8 @@
 id: behaviour-turn-continuation-operand
 description: >-
-  A turn that ends awaiting the user declares it through SetTurnContinuation alone and never gates
-  that wait behind a standalone exit button. This is the interplay of TurnContinuation,
-  QuickReplyDoctrine and QuickReplyEscapeOptions read together.
+  A turn that ends awaiting the user stays in service without declaring it, never calls
+  SetTurnEnding and never gates that wait behind a standalone exit button. This is the interplay of
+  TurnEnding, QuickReplyDoctrine and QuickReplyEscapeOptions read together.
 
 turns:
   # Deliberately admits two lawful shapes and asserts what holds in both.
@@ -16,7 +16,7 @@ turns:
     expect:
       agent: BillingAgent
       agentCompleted: false
-      toolsCalled: [SetTurnContinuation]
+      toolsNotCalled: [SetTurnEnding]
       noStandaloneEscapeOptions: true
       textNotEmpty: true
       textNotContains: ["#INT#", "context variable", "context store", "database", "session", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]

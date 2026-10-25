@@ -164,8 +164,9 @@ Every endpoint but `health` authenticates through `ChannelAuthenticationFilter` 
 
 ### Multi-turn and shared context
 
-An agent signalling `IsCompleted = false` — declared via `SetTurnContinuation` or implied by quick
-replies or a rich card — is remembered as `activeAgent`; later messages skip classification.
+An agent stays in service by default and is remembered as `activeAgent`, so later messages skip
+classification. It hands the conversation back by calling `SetTurnEnding`, unless the same turn shows
+quick replies or a rich card, which always await an answer.
 
 Tool parameters marked `Shared: true` route their values into a conversation-scoped `shared_context`
 registry (first-write-wins, `INSERT OR IGNORE`). Every agent merges it at the start of each turn, so
@@ -283,7 +284,7 @@ Two consumption modes: `CompleteWithSystemPromptAsync` (stateless, always on the
 ## Tool System
 
 Every agent gets the **base tools** from `morgana.json` (`GetContextVariable`, `SetContextVariable`,
-`SetTurnContinuation`, `SetQuickReplies`, `SetRichCard`) plus its domain tools.
+`SetTurnEnding`, `SetQuickReplies`, `SetRichCard`) plus its domain tools.
 
 A parameter resolving an *input* declares a `Scope`: `context` (looked up before being asked) or
 `request` (asked of the user). A parameter carrying a value the model itself authors declares none.
@@ -328,7 +329,7 @@ The `Morgana` prompt's `AdditionalProperties` carry two sibling arrays and **whi
 entry is follows from the array it lives in**, never from a field inside it:
 
 - **`GlobalPolicies`** — P0-P8, rendered into every agent's prompt in `Priority` order:
-  ContextHandling, QuickReplyDoctrine, TurnContinuation, SessionContinuation, ToolUsage,
+  ContextHandling, QuickReplyDoctrine, TurnEnding, SessionContinuation, ToolUsage,
   ToolGrounding, MandatoryTextualResponse, RichCardUsage, PeerConsultation. `QuickReplyDoctrine` (P1)
   is the master rule the other quick-reply policies instantiate. `PeerConsultation` (P8) is the
   **only conditionally rendered** one — an agent outside the A2A topology never pays for it — and
@@ -482,7 +483,7 @@ or environment variables.
 - Tool method names match the JSON `Name` exactly
 - Prompts resolve by ID: the five framework ids or an intent name
 - Rich cards use polymorphic JSON with a `type` discriminator
-- Turn continuation is signalled out-of-band by a tool, never by a token inside the response text
+- Handing the conversation back is signalled out-of-band by a tool, never by a token inside the response text
 - Channel names are normalized to lowercase at ingress
 - **Invariant culture everywhere**: every host sets it as its first statement and library code
   (`Morgana.AI`, `Morgana.Terminal`) still passes `CultureInfo.InvariantCulture` or

@@ -22,7 +22,7 @@ public class MorganaAIContextProvider : AIContextProvider
     /// </summary>
     private static readonly ImmutableHashSet<string> EphemeralVariableNames =
         [
-            Constants.ContextKeys.TurnContinuation,
+            Constants.ContextKeys.TurnEnding,
             Constants.ContextKeys.QuickReplies,
             Constants.ContextKeys.RichCard,
             Constants.ContextKeys.ServingConsultation,
@@ -203,7 +203,7 @@ public class MorganaAIContextProvider : AIContextProvider
 
         MorganaContextState contextState = sessionState.GetOrInitializeState(context.Session);
 
-        // Strip the framework's own ephemeral keys (turn_continuation, quick_replies, rich_card) —
+        // Strip the framework's own ephemeral keys (turn_ending, quick_replies, rich_card) —
         // they are not inputs to resolve, never something the model should be told it "holds". The
         // SortedDictionary keeps keys in ordinal order so the declaration text is byte-identical
         // across turns whenever the held set itself doesn't change (keeps the composed prompt stable).

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Providers;
 using Morgana.Contracts;
@@ -109,29 +110,54 @@ public class MorganaTool
     }
 
     // =========================================================================
-    // TURN CONTINUATION SYSTEM TOOL
+    // TURN ENDING SYSTEM TOOL
     // =========================================================================
 
     /// <summary>
-    /// Declares whether the agent expects the user to take another turn with it.
-    /// Replaces the legacy in-band <c>#INT#</c> token with an explicit, out-of-band signal
-    /// that lives where quick replies and rich cards already live: the ephemeral context.
+    /// Hands the conversation back to Morgana once the current turn ends. An agent stays in service
+    /// by default, so this out-of-band signal, kept in the ephemeral context beside quick replies and
+    /// rich cards, is the one declaration a turn makes about where the conversation goes next.
     /// </summary>
-    /// <param name="turnContinuation">
-    /// <c>true</c> when the agent awaits the user's turn and must stay in service;
-    /// <c>false</c> when the agent has finished and the conversation may return to Morgana.
-    /// </param>
     /// <returns>Confirmation message for the LLM.</returns>
-    public async Task<object> SetTurnContinuation(bool turnContinuation)
+    public async Task<object> SetTurnEnding()
     {
+        // Read by the agent at the end of the turn, which is when the conversation actually returns to Morgana.
         ToolContext ctx = getToolContext();
-        await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.TurnContinuation, turnContinuation);
+        await ctx.Provider.SetVariableAsync(ctx.Session, Constants.ContextKeys.TurnEnding, true);
 
-        toolLogger.LogInformation("LLM set turn continuation to {TurnContinuation} via SetTurnContinuation tool", turnContinuation);
+        toolLogger.LogInformation("LLM handed the conversation back to Morgana via SetTurnEnding tool");
 
-        return turnContinuation
-            ? "Turn continuation set: you remain in service and await the user's next turn."
-            : "Turn continuation cleared: this turn concludes your handling of the request.";
+        // The hand-back confirmed, with the fact that the farewell is still to be written while it is.
+        return "Turn ending set: once this turn ends, the conversation returns to Morgana." + NothingReachedUserFact();
+    }
+
+    /// <summary>
+    /// States that the turn has shown the user nothing yet; once the turn has written some text it states nothing.
+    /// </summary>
+    /// <remarks>
+    /// A presentation tool is called before the text it accompanies, so its result is the last thing
+    /// the model reads before writing. Told as a fact, it lets the model see that the words are still
+    /// owed. A turn that already wrote them reads no such line, so nothing invites it to write them twice.
+    /// </remarks>
+    private static string NothingReachedUserFact()
+    {
+        // The messages the tool loop runs on: the history, the turn's phrase and what the model answered since.
+        // Outside a tool loop nobody knows what the turn has written, so no fact is claimed.
+        IList<ChatMessage>? loopMessages = FunctionInvokingChatClient.CurrentContext?.Messages;
+        if (loopMessages is null)
+            return string.Empty;
+
+        // Back from the newest message to the turn's phrase: whatever precedes it the user read in an earlier turn.
+        for (int index = loopMessages.Count - 1; index >= 0 && loopMessages[index].Role != ChatRole.User; index--)
+        {
+            // Only the model's own text reaches the user: a tool call or a thinking block carries none.
+            if (loopMessages[index].Role == ChatRole.Assistant
+                && loopMessages[index].Contents.OfType<TextContent>().Any(textContent => !string.IsNullOrWhiteSpace(textContent.Text)))
+                return string.Empty;
+        }
+
+        // The turn has written nothing yet: its text is what the user will read.
+        return " Nothing has reached the user in this turn yet.";
     }
 
     // =========================================================================
@@ -163,7 +189,8 @@ public class MorganaTool
 
         toolLogger.LogInformation("LLM set {Count} quick reply buttons via SetQuickReplies tool", quickReplies.Count);
 
-        return $"Quick reply buttons set successfully. The user will see {quickReplies.Count} interactive options. Now provide your text response to the user - the quick reply buttons will appear below your message.";
+        // The buttons confirmed, with the fact that the text they sit under is still to be written while it is.
+        return $"Quick reply buttons set successfully. The user will see {quickReplies.Count} interactive options. Now provide your text response to the user - the quick reply buttons will appear below your message." + NothingReachedUserFact();
     }
 
     // =========================================================================
@@ -223,7 +250,8 @@ public class MorganaTool
                 "LLM set rich card '{Title}' with {TotalComponents} components (depth: {Depth}) via SetRichCard tool",
                 parsedRichCard.Title, totalComponents, depth);
 
-            return $"Rich card set successfully. The user will see a structured visual card titled '{parsedRichCard.Title}'. You can now provide additional context or explanation in text if needed.";
+            // The card confirmed, with the fact that the text it renders under is still to be written while it is.
+            return $"Rich card set successfully. The user will see a structured visual card titled '{parsedRichCard.Title}'. You can now provide additional context or explanation in text if needed." + NothingReachedUserFact();
         }
         catch (JsonException ex)
         {

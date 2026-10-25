@@ -22,7 +22,7 @@ namespace Alembic.Interfaces;
 /// </para>
 /// <para>
 /// Left out: the policies' bodies and her <c>Formatting</c>. Those govern how a <em>channel turn</em>
-/// is formed — quick replies, rich cards, turn continuation, markdown for a rendered surface — and
+/// is formed — quick replies, rich cards, the hand-back to Morgana, markdown for a rendered surface — and
 /// Alembic has no channel, no Guard, no Classifier and no turn in that sense. Handing it rules about
 /// things that do not exist in its world is the most direct way to manufacture the non-local
 /// contradictions this whole project exists to avoid. What carries over is who she is and what she
