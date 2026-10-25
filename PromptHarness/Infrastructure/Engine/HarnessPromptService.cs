@@ -98,9 +98,10 @@ public sealed class HarnessPromptService
         sb.AppendLine(ResolvePromptInjection(JudgePromptId, "MorganaPrimerFooter"));
         sb.AppendLine();
 
-        // The second layer is the judge's own identity and rules: their texts carry their section labels, as every prompt of the branch does.
-        sb.AppendLine(judge.Target);
-        sb.AppendLine(judge.Instructions);
+        // The second layer is the judge's own identity and rules, under the framework's section labels.
+        sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Target, judge.Target));
+        sb.AppendLine();
+        sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Instructions, judge.Instructions));
 
         // The whole system prompt of the judge.
         return sb.ToString().TrimEnd();

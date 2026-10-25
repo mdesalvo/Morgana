@@ -62,10 +62,10 @@ public static class DraftProjection
             agent.Instructions ?? string.Empty,
             agent.Formatting ?? string.Empty,
             agent.Personality,
+            agent.Territory,
             agent.Language,
             agent.Version,
-            additionalProperties,
-            agent.ConsultMeFor);
+            additionalProperties);
     }
 
     /// <summary>

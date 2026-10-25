@@ -159,7 +159,7 @@ public class DraftImportService : IDraftImportService
         {
             ID = prompt.ID,
             Target = prompt.Target,
-            ConsultMeFor = prompt.ConsultMeFor,
+            Territory = prompt.Territory,
             Instructions = prompt.Instructions,
             Formatting = prompt.Formatting,
             Personality = prompt.Personality,

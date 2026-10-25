@@ -58,6 +58,26 @@ public static class Constants
     }
 
     /// <summary>
+    /// The labels that open each section of a composed prompt. Put there by code at composition, never
+    /// written in configuration, so a section can never reach a model without the label that tells it
+    /// which section it is reading.
+    /// </summary>
+    public static class SectionLabels
+    {
+        /// <summary>What the agent is for.</summary>
+        public const string Target = "[TARGET]";
+
+        /// <summary>How the agent speaks.</summary>
+        public const string Personality = "[PERSONALITY]";
+
+        /// <summary>How the agent goes about its work.</summary>
+        public const string Instructions = "[INSTRUCTIONS]";
+
+        /// <summary>How the agent presents what it finds.</summary>
+        public const string Formatting = "[FORMATTING]";
+    }
+
+    /// <summary>
     /// Names of the global policies that code resolves by name. The rest of the list lives in
     /// <c>morgana.json</c> and nowhere else: a policy the framework only renders is read by the model
     /// and by whoever edits the prompt and naming it here would be an index that no rename breaks.

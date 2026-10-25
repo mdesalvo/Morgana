@@ -177,7 +177,12 @@ public class LLMPresenterService : IPresenterService
             // The authored sections say how to welcome and Morgana's personality how it sounds; the
             // formatted list is interpolated into the template as what there is to offer.
             string presentationSystemPrompt =
-                $"{presentationPrompt.Target}\n\n{morganaPrompt.Personality}\n\n{presentationPrompt.Instructions}\n\n{presentationPrompt.Formatting}".Replace(Constants.Placeholders.Intents, formattedIntents);
+                string.Join("\n\n",
+                    Records.Prompt.Labeled(Constants.SectionLabels.Target, presentationPrompt.Target),
+                    Records.Prompt.Labeled(Constants.SectionLabels.Personality, morganaPrompt.Personality),
+                    Records.Prompt.Labeled(Constants.SectionLabels.Instructions, presentationPrompt.Instructions),
+                    Records.Prompt.Labeled(Constants.SectionLabels.Formatting, presentationPrompt.Formatting))
+                .Replace(Constants.Placeholders.Intents, formattedIntents);
 
             // The fixed user message acts as a trigger; the real instructions live in the system prompt.
             string llmResponse = await llmService.CompleteWithSystemPromptAsync(

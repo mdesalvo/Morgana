@@ -59,7 +59,7 @@ public class InterviewService : IInterviewService
                                       + "people with.",
         [InterviewStep.AgentToolkit] = "This step settles its Toolkit, which gives it everything it can "
                                          + "reach outside the conversation.",
-        [InterviewStep.AgentTerritory] = "This step settles its ConsultMeFor, which gives it what this agent is "
+        [InterviewStep.AgentTerritory] = "This step settles its Territory, which gives it what this agent is "
                                          + "the one to be asked about.",
         [InterviewStep.AgentInstructions] = "This step settles its Instructions, which give it how it goes "
                                           + "about the work.",
@@ -1271,7 +1271,7 @@ public class InterviewService : IInterviewService
             [nameof(InterviewTools.DropIntent)] = tools.DropIntent,
             [nameof(InterviewTools.GetDomainMap)] = tools.GetDomainMap,
             [nameof(InterviewTools.SetAgentTarget)] = tools.SetAgentTarget,
-            [nameof(InterviewTools.SetAgentConsultMeFor)] = tools.SetAgentConsultMeFor,
+            [nameof(InterviewTools.SetAgentTerritory)] = tools.SetAgentTerritory,
             [nameof(InterviewTools.SetIntentDescription)] = tools.SetIntentDescription,
             [nameof(InterviewTools.GetAgentCard)] = tools.GetAgentCard,
             [nameof(InterviewTools.SetAgentPersonality)] = tools.SetAgentPersonality,

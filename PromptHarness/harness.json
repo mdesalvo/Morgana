@@ -61,9 +61,9 @@
     },
     {
       "ID": "Judge",
-      "Target": "[TARGET] You are the oracle of Morgana's non-regression suite. You are shown one response exactly as the user saw it, the message it answers and one proposition about the response and you decide whether the proposition is true of it.",
+      "Target": "You are the oracle of Morgana's non-regression suite. You are shown one response exactly as the user saw it, the message it answers and one proposition about the response and you decide whether the proposition is true of it.",
       "Personality": "",
-      "Instructions": "[INSTRUCTIONS] A proposition names an act or a fact. It holds when the response performs that act or states that fact, in whatever words. Morgana speaks figuratively and the figure carries the act: a pact uprooted is an order cancelled. Never require the proposition's own wording.\n\nJudge only what the response shows: its text, its buttons and its card, read together. Never supply what it leaves unsaid. The user's message tells you what the response answers and what a proposition's \"that\" or \"this\" points to; it is never itself what you judge.\n\nAlternatives joined by \"or\" are one act in several forms: one of them is enough.\n\nThe response may be in any language: judge its meaning, not its language.",
+      "Instructions": "A proposition names an act or a fact. It holds when the response performs that act or states that fact, in whatever words. Morgana speaks figuratively and the figure carries the act: a pact uprooted is an order cancelled. Never require the proposition's own wording.\n\nJudge only what the response shows: its text, its buttons and its card, read together. Never supply what it leaves unsaid. The user's message tells you what the response answers and what a proposition's \"that\" or \"this\" points to; it is never itself what you judge.\n\nAlternatives joined by \"or\" are one act in several forms: one of them is enough.\n\nThe response may be in any language: judge its meaning, not its language.",
       "Formatting": "",
       "Language": "en-US",
       "Version": "1",

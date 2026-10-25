@@ -1000,20 +1000,20 @@ public static class Records
     /// <param name="Instructions">Behavioral rules, operational order, response constraints, tool-usage doctrine</param>
     /// <param name="Formatting">Output formatting rules: markdown usage, quick reply format, rich card rendering</param>
     /// <param name="Personality">Optional tone/character: formality, voice, domain-specific persona traits</param>
+    /// <param name="Territory">What falls to this agent, addressed to a colleague who might consult it</param>
     /// <param name="Language">BCP 47 language code (e.g., "en-US", "it-IT")</param>
     /// <param name="Version">Prompt version string for tracking iteration history and regression detection</param>
     /// <param name="AdditionalProperties">List of structured properties: Tools, GlobalPolicies, ErrorAnswers, FallbackMessage, etc</param>
-    /// <param name="ConsultMeFor">Optional: what falls to this agent, addressed to a colleague who might consult it</param>
     public record Prompt(
         string ID,
         string Target,
         string Instructions,
         string Formatting,
         string? Personality,
+        string? Territory,
         string Language,
         string Version,
-        List<Dictionary<string, object>> AdditionalProperties,
-        string? ConsultMeFor = null)
+        List<Dictionary<string, object>> AdditionalProperties)
     {
         /// <summary>
         /// Gets additional property value (Tools, GlobalPolicies, ErrorAnswers, FallbackMessage, etc).
@@ -1030,6 +1030,22 @@ public static class Records
                 }
             }
             throw new KeyNotFoundException($"AdditionalProperty with key '{additionalPropertyName}' was not found in the prompt with id='{ID}'");
+        }
+
+        /// <summary>
+        /// Puts a section's label in front of its text, as every composed prompt shows it (see
+        /// <see cref="Constants.SectionLabels"/>); empty for a section that says nothing.
+        /// </summary>
+        /// <param name="label">The section's label.</param>
+        /// <param name="text">The section as authored.</param>
+        public static string Labeled(string label, string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return string.Empty;
+
+            // A plugin's agents.json may still open a section with its own label: it is kept once, never doubled.
+            string trimmed = text.Trim();
+            return trimmed.StartsWith(label, StringComparison.Ordinal) ? trimmed : $"{label} {trimmed}";
         }
 
         /// <summary>
