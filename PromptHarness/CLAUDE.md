@@ -20,7 +20,8 @@ judge — where what is under test is a wire document or a gate's status codes.
 top of whatever configuration declares, so a domain deployed there can be added to but never left
 out — while an installation reads the **first** `agents.json` it finds and holds exactly one domain.
 The federation run needs to **swap** the domain rather than extend it, which is only possible while
-the implicit directory stays empty.
+the implicit directory holds no domain. The LLM providers do land in `plugins/`: they are no domain
+and every run, the federation one included, needs them.
 
 **Its own solution**, sibling of `../Morgana/` and `../Examples/`. Two project references reach the
 framework, one of them deliberately excluding the compiled assembly (`Examples`,
@@ -31,7 +32,7 @@ project: every build setting lives in the `.csproj`, so it carries unchanged acr
 
 ## Commands
 
-Sixteen test classes. **Never combine filters**: six groups carry a process-wide boot knob the
+Nineteen test classes. **Never combine filters**: six groups carry a process-wide boot knob the
 others must not see and two of those five share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
@@ -43,6 +44,9 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~StartupValidationT
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~AgentCardTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PeerFederationTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ConversationApiTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~LanguageModelTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~TurnEndingTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~FrameworkPromptTests"
 
 # blocking
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ContextHandlingTests"
@@ -61,7 +65,8 @@ Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateL
 Harness__FederatedPeer=true dotnet test … --filter "FullyQualifiedName~FederationTests"
 Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~ConversationPersistenceTests"
 
-# one scenario — the id is a Theory argument, so match DisplayName, never the FQN
+# one scenario — the id is a Theory argument, so match DisplayName, never the FQN, on at most its
+# first 50 characters: xUnit truncates the argument and a longer id matches nothing
 dotnet test PromptHarness.csproj --filter "DisplayName~behaviour-rich-card"
 ```
 
@@ -75,7 +80,8 @@ or the listener heard nothing.
 
 **Cost discipline.** Every turn is a live call, multiplied by the run count (default 5), plus one
 judge call per proposition on structurally-passing turns. An agent's `[RequiresLLMTier]` decides its
-cost — the suite does not get to choose it — so every scenario of the example plugin runs on `Efficiency` and the judge on the framework tier.
+cost — the suite does not get to choose it — so every scenario of the example plugin runs on `Efficiency`. The judge runs on `Efficiency` too,
+whatever the framework tier, so a verdict never changes with the deployment under test.
 Before running anything, check
 whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harness/<id>.md` row.
 
@@ -93,12 +99,20 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `DustTests` | — | The budget thresholds, crossed in order. Evidence-driven rather than turn-pinned: how many turns it takes is a real token measurement |
 | `RateLimitTests` | none | The REST gate's rate limit: the 429 past the window, refused commands left uncounted, one window shared by messages and commands. No model is reached |
 | `ConversationPersistenceTests` | — | Who owns each line of a conversation, how it is dated and in what order it is read back. The record is photographed after every exchange rather than at the end, because a transcript that reads correctly can still have been written by the wrong participant. Asserts nothing about wording: the oracle is what the channel was pushed and what the channel said. Shares the guard's knob, since a refused turn is one of the five it stages |
+| `TurnEndingTests` | none | What a presentation tool tells the model about the turn's words: the fact that nothing has reached the user yet, stated before any text and never after. The landing declaration reaches the model on the landing turn alone. A scripted model behind the real tool loop |
+| `FrameworkPromptTests` | none | The morgana.json shipped in Morgana.AI carries every entry that the framework fetches by name — policies, templates with their labels and placeholders, base tools, error answers, messages. No framework section carries a label of its own |
+| `LanguageModelTests` | none | The three tiers built from configuration, each by the provider it declares; a missing tier, connection or framework tier, an unregistered or twice-registered provider and a placeholder in a field the provider uses refused. No model is reached |
 | `AgentCardTests` · `StartupValidationTests` · `PeerFederationTests` · `ConversationApiTests` | none | Wire contracts and boot refusals, asserted deterministically. **Every literal is spelled out in the test** rather than read from `Constants`: a test comparing a constant against itself asserts that a constant equals a constant, while the point is to notice a published document changing shape under whoever consumes it |
 | `FederationTests` | — | Two Morganas, one consulting the other — the only test where the card is written by a Morgana, read by a Morgana and the token one mints is proven by the other |
 
-**The judge sees exactly what a user would see** — text, buttons, the card as rendered — never the
-tool trace, so it cannot justify a verdict on evidence the user never had. Showing it less than the
-screen is the mirror error: an agent's `Formatting` routinely puts the answering figure on the card,
+**The judge is an agent of Morgana**: the primer that Alembic gives its passes, copied into
+`harness.json` with a line for each of morgana.json's policies, beneath the judge's own prose. It
+answers one typed verdict through `RunAsync<JudgeVerdict>`, never a stream. A proposition it cannot
+judge fails the run. No text it reads lives in C#.
+
+**The judge sees exactly what a user would see** — their own message, then the response's text,
+buttons and card as rendered — never the tool trace, so it cannot justify a verdict on evidence the
+user never had. Showing it less than the screen is the mirror error: an agent's `Formatting` routinely puts the answering figure on the card,
 so a judge reading half the screen convicts a response that answered. It is skipped once a turn
 already fails structurally.
 

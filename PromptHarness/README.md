@@ -46,7 +46,7 @@ PromptHarness (test process)
   ├── TurnObserver      ──► ActivityListener on morgana.agent  → agent.tools_invoked
   │                          Console.Out tee on MorganaTool logs → context reads/writes
   │                          + MorganaAIContextProvider's per-turn declaration → Declared reads
-  ├── LlmJudge          ──► ILanguageModelService.CompleteWithSystemPromptAsync (Morgana:ActorSystem:Tier)
+  ├── LLMJudge          ──► an AIAgent on GetChatClient(Efficiency), prose from harness.json
   └── ScenarioRunner    ──► replays a YAML scenario N times, reports passes against a threshold
 ```
 
@@ -78,7 +78,7 @@ The harness channel declares the **full** capability profile with no length budg
 `MorganaChannelAdapter` short-circuits and most scenarios measure undegraded output. One scenario
 opts into a degraded profile instead (`ScenarioDefinition.DegradedChannel`, mirroring Rune's "poor
 but honest" capabilities under a distinct channel name) specifically to exercise the adapter's
-rewrite path — see `channeladapter-degrades-invoice-card` and `GuardTests`/`ActorTests` below.
+rewrite path — see `actor-channeladapter-degrades-invoice-card` and `GuardTests`/`ActorTests` below.
 
 ## Configuration and secrets
 
@@ -143,6 +143,11 @@ or the listener heard nothing.
 **Cost.** Every turn is a live LLM call, multiplied by the scenario's run count, plus one judge call
 per proposition on structurally-passing turns. The default is 5 runs.
 
+**A failing run keeps its evidence.** Whenever a run of a scenario fails, `Harness/failures/<id>.log`
+holds its transcript with the host's error entries and `<id>.model.log` every model call of the
+failing runs, the judge's included: what each call was handed and what it answered. A red is read
+there, never bought again with another run.
+
 **`P994E` is not an arbitrary string.** The example plugin models one shop, *The Greenhouse &
 Nursery*, on one SQLite system of record shipped as a seed (`Examples/Data/Examples.db`) and every
 agent of that shop keys on the customer code: `P994E` is the seeded customer who has invoices, a
@@ -161,13 +166,14 @@ otherwise would mean measuring a configuration nobody runs. With the example plu
 |---|---|---|
 | `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand`, `behaviour-landing-presents-the-agent`, `behaviour-landing-only-on-a-press` | Billing, Contract | `Efficiency` |
 | `context-closed-vocabulary-monkeys` | Monkeys | `Efficiency` |
-| `classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
-| `behaviour-rich-card`, `context-no-invented-writes`, `classifier-routes-catalog-request-to-inventory` | Inventory | `Efficiency` |
-| `classifier-disambiguates-colliding-billing-contract`, `actor-complement-reintroduces-morgana` | *(none — answered by Morgana)* | `Efficiency` (classifier only) |
+| `actor-classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `actor-channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
+| `behaviour-rich-card`, `context-no-invented-writes`, `actor-classifier-routes-catalog-request-to-inventory` | Inventory | `Efficiency` |
+| `actor-classifier-disambiguates-colliding-billing-contract`, `actor-classifier-routes-off-domain-to-other`, `actor-complement-reintroduces-morgana` | *(none — answered by Morgana)* | `Efficiency` (classifier only) |
 
-Everything Morgana runs on its own account — guard, classifier, presenter — plus the judge, always
-goes to the tier `Morgana:ActorSystem:Tier` names. Every agent of the example plugin runs on
-`Efficiency`, so no scenario costs more than another for the tier it lands on.
+Everything Morgana runs on its own account — guard, classifier, presenter — goes to the tier
+`Morgana:ActorSystem:Tier` names. The judge always goes to `Efficiency`, so a verdict never changes
+with the deployment under test. Every agent of the example plugin runs on `Efficiency`, so no
+scenario costs more than another for the tier it lands on.
 
 ## The journey
 
@@ -215,7 +221,7 @@ minPasses: 4       # default: Harness:DefaultMinPasses
 turns:
   - say: "what the user types"    # or press: billing — the id of a button on the last answer
     expect:
-      agent: BillingAgent
+      agent: BillingAgent         # or none: a turn Morgana answered herself, with no agent span
       agentCompleted: false
       quickReplies: none          # none | any | count:N | min:N
       quickReplyIds: [continue_agent]
@@ -233,7 +239,7 @@ turns:
       historyExcludesAgents: [billing]  # no message in the persisted history belongs to that agent
       historyUserMessages: 2            # …and exactly one user message per turn played so far
       textNotEmpty: true
-      textNotContains: ["#INT#"]
+      textNotContains: ["context variable"]
       classified: false           # no classifier span: a landing or a follow-up turn
     judge:                        # propositions an LLM must find TRUE
       - "The response asks the user for an identifier."
@@ -249,8 +255,8 @@ person did not send.
 
 Two layers and the split is deliberate: **structural** assertions are deterministic and read only
 span, log and message data; the **judge** is for what no structural assertion can reach ("asks in
-prose without enumerating options"). The judge sees exactly what a user would see — text, buttons,
-and the card's rendered content — never the tool trace, so it cannot justify a verdict from evidence
+prose without enumerating options"). The judge sees exactly what a user would see — their own message,
+then the response's text, buttons and card as rendered — never the tool trace, so it cannot justify a verdict from evidence
 the user never had, nor be convicted of missing what the screen did carry.
 
 **Thresholds.** Repetition with a pass threshold is the only honest shape when the system under test
