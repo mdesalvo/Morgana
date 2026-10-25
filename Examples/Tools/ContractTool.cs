@@ -74,15 +74,6 @@ public class ContractTool : MorganaTool
         decimal MonthlyCost,
         bool IsOptional);
 
-    private static async Task<string?> FindCustomerNameAsync(SqliteConnection connection, string customerCode)
-    {
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT DisplayName FROM Customers WHERE CustomerCode = $customerCode COLLATE NOCASE";
-        command.Parameters.AddWithValue("$customerCode", customerCode);
-
-        return (string?)await command.ExecuteScalarAsync();
-    }
-
     private static async Task<CarePlanSchedule?> FindScheduleAsync(SqliteConnection connection, string customerCode)
     {
         await using SqliteCommand command = connection.CreateCommand();
@@ -201,11 +192,10 @@ public class ContractTool : MorganaTool
     // No gate on the customer registry, here or anywhere else in this plugin: an unknown code is
     // simply a code no plan hangs from, which is the same answer a known customer without a plan
     // gets — SubscribeToGreenCarePlan takes either exactly the same way.
-    private static string NoCarePlan(string customerCode, string? customerName) => JsonSerializer.Serialize(new
+    private static string NoCarePlan(string customerCode) => JsonSerializer.Serialize(new
     {
         error = "No care plan found",
         customerCode,
-        customerName,
         note = "No Green Care Plan is held under this customer code: either none was ever opened under it, or the code is mistyped. This response carries nothing about what the plan offers or costs — no term, fee or figure of the plan can be read out of it. SubscribeToGreenCarePlan is the only tool that opens one."
     }, GreenhouseDatabaseHelper.JsonOptions);
 
@@ -342,11 +332,9 @@ public class ContractTool : MorganaTool
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, customerCode);
-
         CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
-            return NoCarePlan(customerCode, customerName);
+            return NoCarePlan(customerCode);
 
         PlanProduct product = await GetPlanProductAsync(connection, schedule.PlanCode);
         List<string> features = await GetFeaturesAsync(connection, schedule.PlanCode);
@@ -359,7 +347,6 @@ public class ContractTool : MorganaTool
         {
             contractId = schedule.ContractId,
             customerCode = schedule.CustomerCode,
-            customerName,
             status = new
             {
                 value = schedule.Status,
@@ -425,25 +412,26 @@ public class ContractTool : MorganaTool
     }
 
     /// <summary>
-    /// Retrieves a single clause of the customer's Green Care Plan as structured JSON.
+    /// Retrieves one clause of the Green Care Plan, the same for every customer, as structured JSON.
     /// </summary>
-    /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="clauseNumber">Clause number to retrieve (1-7)</param>
-    /// <returns>JSON object with complete clause details</returns>
-    public async Task<string> GetContractClause(string customerCode, int clauseNumber)
+    /// <returns>JSON object with the complete clause or the error saying that the clause does not exist</returns>
+    public async Task<string> GetContractClause(int clauseNumber)
     {
+        // The clauses sit in the shop's one system of record beside every other agent's data.
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, customerCode);
+        // The clauses belong to the plan and not to a customer's contract: the plan's own code reads them
+        // so a prospect and a customer are shown the same wording.
+        List<PlanClause> clauses = await GetClausesAsync(connection, DefaultPlanCode, clauseNumber);
 
-        CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
-        if (schedule == null)
-            return NoCarePlan(customerCode, customerName);
-
-        List<PlanClause> clauses = await GetClausesAsync(connection, schedule.PlanCode, clauseNumber);
+        // No clause of the plan carries the number that was asked for.
         if (clauses.Count == 0)
         {
-            List<PlanClause> allClauses = await GetClausesAsync(connection, schedule.PlanCode);
+            // The clauses that exist let the caller pick a valid number instead of guessing again.
+            List<PlanClause> allClauses = await GetClausesAsync(connection, DefaultPlanCode);
+
+            // Delivers the refusal together with the numbers and titles that can be asked for.
             return JsonSerializer.Serialize(new
             {
                 error = "Clause not found",
@@ -456,17 +444,19 @@ public class ContractTool : MorganaTool
             }, GreenhouseDatabaseHelper.JsonOptions);
         }
 
-        PlanClause found = clauses[0];
+        // A clause number is unique within the plan so the one row is the clause that was asked for.
+        PlanClause requestedClause = clauses[0];
 
+        // Holds the binding wording of the clause with its summary and where related matters are read.
         var result = new
         {
-            contractId = schedule.ContractId,
-            clauseNumber = found.ClauseNumber,
-            title = found.Title,
-            type = found.ClauseType,
-            summary = found.Summary,
-            fullText = found.FullText,
-            relatedInfo = found.ClauseType switch
+            clauseNumber = requestedClause.ClauseNumber,
+            title = requestedClause.Title,
+            type = requestedClause.ClauseType,
+            summary = requestedClause.Summary,
+            fullText = requestedClause.FullText,
+            // Points each clause type to where its related matter is read; any other type points nowhere.
+            relatedInfo = requestedClause.ClauseType switch
             {
                 "Termination" => "For termination procedures, use GetTerminationProcedure tool",
                 "VisitSchedule" => "Extra visits are charged on the customer's invoices, which another bench of the nursery keeps: no tool here reads them",
@@ -475,6 +465,7 @@ public class ContractTool : MorganaTool
             }
         };
 
+        // Delivers the clause to the caller as JSON.
         return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
     }
 
@@ -487,11 +478,9 @@ public class ContractTool : MorganaTool
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, customerCode);
-
         CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
-            return NoCarePlan(customerCode, customerName);
+            return NoCarePlan(customerCode);
 
         PlanProduct product = await GetPlanProductAsync(connection, schedule.PlanCode);
         DateTime today = DateTime.UtcNow.Date;
@@ -534,7 +523,6 @@ public class ContractTool : MorganaTool
         var result = new
         {
             contractId = schedule.ContractId,
-            customerName,
             visitFrequency = product.VisitFrequency,
             visitDays = schedule.VisitDays,
             allowance = new
@@ -603,11 +591,9 @@ public class ContractTool : MorganaTool
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
-        string? customerName = await FindCustomerNameAsync(connection, customerCode);
-
         CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
-            return NoCarePlan(customerCode, customerName);
+            return NoCarePlan(customerCode);
 
         PlanProduct product = await GetPlanProductAsync(connection, schedule.PlanCode);
         List<string> steps = await GetTerminationStepsAsync(connection, schedule.PlanCode);
@@ -619,7 +605,6 @@ public class ContractTool : MorganaTool
         var result = new
         {
             contractId = schedule.ContractId,
-            customerName,
             reason = reason ?? "Not specified",
             noticePeriod = new
             {

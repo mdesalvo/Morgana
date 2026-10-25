@@ -136,7 +136,6 @@ internal static class GreenhouseDatabaseHelper
         if (months <= 0)
             return;
 
-        ShiftDates(connection, "Customers", "CustomerCode", ["JoinedAt"], months);
         ShiftDates(connection, "Orders", "OrderId", ["CreatedAt", "ConfirmedAt", "CancelledAt"], months);
         ShiftDates(connection, "CarePlans", "ContractId", ["StartDate", "EndDate"], months);
         ShiftDates(connection, "PlanVisits", "VisitId", ["VisitDate"], months);
@@ -229,7 +228,7 @@ internal static class GreenhouseDatabaseHelper
     /// </summary>
     /// <param name="connection">An open connection, sharing <paramref name="transaction"/> with the caller's own writes.</param>
     /// <param name="transaction">The caller's transaction: the charge commits or rolls back together with whatever earned it.</param>
-    /// <param name="customerCode">Customer code to bill. Not validated against Customers — see the "not a gate" remark on FindCustomerNameAsync in BillingTool/InventoryTool/ContractTool.</param>
+    /// <param name="customerCode">Customer code to bill. Never validated: the nursery takes anyone at the counter, so a code that the books have never seen is billed like any other.</param>
     /// <param name="description">Line description as it will read on the invoice (e.g. a product name, or a plan's fee label).</param>
     /// <param name="sku">Product SKU the line is for, or null when the charge isn't a catalog item (e.g. a plan fee).</param>
     /// <param name="orderId">Order the line was produced by, or null when there isn't one (e.g. a plan fee).</param>
