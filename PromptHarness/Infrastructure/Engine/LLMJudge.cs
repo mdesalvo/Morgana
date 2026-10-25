@@ -1,7 +1,12 @@
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
+using Morgana.AI.LanguageModels.Anthropic;
+using Morgana.AI.LanguageModels.Google;
+using Morgana.AI.LanguageModels.Ollama;
+using Morgana.AI.LanguageModels.OpenAI;
 using Morgana.AI.Services;
 using Morgana.Contracts;
 using PromptHarness.Infrastructure.Wiring;
@@ -18,7 +23,7 @@ public sealed record JudgeVerdict(bool Holds, string Reason);
 /// assertion can reach, such as "asks for the operand in prose without enumerating options".
 /// </summary>
 /// <remarks>
-/// <para>The judge runs through <see cref="ILLMService.CompleteWithSystemPromptAsync"/>, which by
+/// <para>The judge runs through <see cref="ILanguageModelService.CompleteWithSystemPromptAsync"/>, which by
 /// construction uses the tier <c>Morgana:ActorSystem:Tier</c> names. That keeps the suite's judging cost proportional
 /// to the deployment it is testing and adds no provider, key or dependency of its own.</para>
 ///
@@ -47,15 +52,15 @@ public sealed class LLMJudge
         """;
 
     /// <summary>LLM used for judging, on the framework tier.</summary>
-    private readonly ILLMService llmService;
+    private readonly ILanguageModelService llmService;
 
-    private LLMJudge(ILLMService llmService) => this.llmService = llmService;
+    private LLMJudge(ILanguageModelService llmService) => this.llmService = llmService;
 
     /// <summary>
-    /// Builds a judge over the same provider and credentials the instance under test uses, mirroring
-    /// the provider switch in <c>Morgana.Web/Program.cs</c>.
+    /// Builds a judge over the same tiers and credentials the instance under test uses, on the four
+    /// providers Morgana ships.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown when the configured provider is unknown.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when a tier is configured in a way the host would refuse.</exception>
     public static LLMJudge Create(IConfiguration configuration, ILoggerFactory loggerFactory)
     {
         // These two exist only to satisfy the LLM classes' constructors — the judge never resolves
@@ -66,19 +71,16 @@ public sealed class LLMJudge
         IPromptResolverService promptResolverService =
             new ConfigurationPromptResolverService(agentConfigurationService);
 
-        string provider = configuration["Morgana:LLM:Provider"]
-            ?? throw new InvalidOperationException("Morgana:LLM:Provider is not configured.");
-
-        // Mirrors the provider switch in Morgana.Web/Program.cs by hand — there is no shared
-        // factory to call into, so a new provider added there has to be added here too.
-        ILLMService llmService = provider.ToLowerInvariant() switch
-        {
-            "anthropic" => new Morgana.AI.Abstractions.LLMs.Anthropic(configuration, promptResolverService, loggerFactory),
-            "azureopenai" => new Morgana.AI.Abstractions.LLMs.AzureOpenAI(configuration, promptResolverService, loggerFactory),
-            "ollama" => new Morgana.AI.Abstractions.LLMs.Ollama(configuration, promptResolverService, loggerFactory),
-            "openai" => new Morgana.AI.Abstractions.LLMs.OpenAI(configuration, promptResolverService, loggerFactory),
-            _ => throw new InvalidOperationException($"LLM Provider '{provider}' not supported by the harness judge.")
-        };
+        // The providers the host finds in its plugins/, built here by hand: the judge reads the same
+        // tiers, so it runs on the framework tier of the instance it judges.
+        MorganaLanguageModel[] languageModels =
+        [
+            new AnthropicLanguageModel(loggerFactory),
+            new OpenAILanguageModel(loggerFactory),
+            new OllamaLanguageModel(loggerFactory),
+            new GoogleLanguageModel(loggerFactory)
+        ];
+        ILanguageModelService llmService = new ConfigurationLanguageModelService(configuration, languageModels, promptResolverService, loggerFactory);
 
         return new LLMJudge(llmService);
     }

@@ -18,7 +18,7 @@ public class LLMPresenterService : IPresenterService
     /// LLM used to author the welcome message and its quick replies. Consumed through the
     /// stateless completion path, so it always runs on the framework tier.
     /// </summary>
-    private readonly ILLMService llmService;
+    private readonly ILanguageModelService llmService;
 
     /// <summary>
     /// Source of the <c>Presentation</c> prompt: the message template interpolated with
@@ -59,7 +59,7 @@ public class LLMPresenterService : IPresenterService
     /// <param name="channelAdapter">Same capability-driven degradation chain any outbound message goes through.</param>
     /// <param name="logger">Logger for generation, cache-miss and fallback diagnostics.</param>
     public LLMPresenterService(
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IChannelMetadataStore channelMetadataStore,
         MorganaChannelAdapter channelAdapter,

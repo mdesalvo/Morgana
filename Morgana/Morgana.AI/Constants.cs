@@ -461,4 +461,14 @@ public static class Constants
         /// </summary>
         public const string MessageSeparator = "\n\n";
     }
+
+    /// <summary>
+    /// Keys of the extra counts that a provider's chat client reports beside the standard usage. The client writes
+    /// them; the dust ledger and the telemetry read the same key, so a charge and a span count the same tokens.
+    /// </summary>
+    public static class UsageCounts
+    {
+        /// <summary>Prompt tokens written to the provider's cache by this call, billed apart from fresh and cached ones.</summary>
+        public const string CacheCreationInputTokens = "CacheCreationInputTokens";
+    }
 }

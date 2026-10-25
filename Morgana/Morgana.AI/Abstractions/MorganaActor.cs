@@ -24,10 +24,10 @@ public class MorganaActor : ReceiveActor
     protected readonly string conversationId;
 
     /// <summary>
-    /// LLM service for AI completions (Anthropic, Azure OpenAI, etc.).
+    /// LLM service for AI completions, on the tier each caller is served by.
     /// Provides access to chat completion APIs with conversation history management.
     /// </summary>
-    protected readonly ILLMService llmService;
+    protected readonly ILanguageModelService llmService;
 
     /// <summary>
     /// Service for resolving prompt templates from configuration (morgana.json, agents.json).
@@ -56,7 +56,7 @@ public class MorganaActor : ReceiveActor
     /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
     protected MorganaActor(
         string conversationId,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IConfiguration configuration)
     {

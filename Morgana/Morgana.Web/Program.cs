@@ -124,7 +124,15 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
     PluginLoaderService pluginLoaderService = new PluginLoaderService(
         builder.Configuration,
         bootstrapLoggerFactory.CreateLogger<PluginLoaderService>());
-    pluginLoaderService.LoadPluginAssemblies();
+    pluginLoaderService.LoadAgents();
+
+    // The providers come from the plugin directories alone: the host knows only those it finds there.
+    // The configuration then picks among them per tier.
+    foreach (Type languageModelType in pluginLoaderService.LoadLanguageModels())
+    {
+        // Each provider joins the container under the common base, so the LLM service receives them all and indexes them by name.
+        builder.Services.AddSingleton(typeof(MorganaLanguageModel), languageModelType);
+    }
 }
 
 // ==============================================================================
@@ -144,7 +152,8 @@ using (ILoggerFactory bootstrapLoggerFactory = LoggerFactory.Create(b => b.AddCo
 // - IClassifierService: Classifies user messages for proper agent activation
 // - IPresenterService: Presents Morgana's capabilities at the first prompt
 // - ICommandRegistryService: Publishes the commands channels may run on a conversation (every ICommand registered here)
-// - ILLMService: Abstraction over LLM providers (Anthropic, Azure OpenAI, OpenAI), tiers Economy/Efficiency/Performance via each provider's Tiers{} configuration
+// - ILanguageModelService: Abstraction over LLM providers, three tiers Economy/Efficiency/Performance each served by the registered provider it names (Morgana:LanguageModels:Tiers)
+// - MorganaLanguageModel: One per LLM provider that a tier may name
 // - ICommand: One per command a channel may run on a conversation
 
 builder.Services.AddSingleton<IMCPClientRegistryService, MCPClientRegistryService>();
@@ -154,27 +163,20 @@ builder.Services.AddSingleton<IHostAddressService, KestrelHostAddressService>();
 builder.Services.AddSingleton<IAgentDirectoryService, ConfigurationAgentDirectoryService>();
 builder.Services.AddSingleton<IPromptResolverService, ConfigurationPromptResolverService>();
 builder.Services.AddSingleton<IPromptComposerService, ConfigurationPromptComposerService>();
-builder.Services.AddSingleton<ILLMTierValidationService, RequiresLLMTierValidationService>();
 builder.Services.AddSingleton<IAgentRegistryService, HandlesIntentAgentRegistryService>();
 builder.Services.AddSingleton<IGuardRailService, LLMGuardRailService>();
 builder.Services.AddSingleton<IClassifierService, LLMClassifierService>();
 builder.Services.AddSingleton<IPresenterService, LLMPresenterService>();
 builder.Services.AddSingleton<ICommandRegistryService, CommandRegistryService>();
 builder.Services.AddSingleton<ICommand, CompactHistoryCommand>();
-builder.Services.AddSingleton<ILLMService>(sp => {
+builder.Services.AddSingleton<ILanguageModelService>(sp => {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-    string llmProvider = builder.Configuration["Morgana:LLM:Provider"]!;
 
-    MorganaLLM llm = llmProvider.ToLowerInvariant() switch
-    {
-        "anthropic"   => new Morgana.AI.Abstractions.LLMs.Anthropic(config, promptResolver, loggerFactory),
-        "azureopenai" => new Morgana.AI.Abstractions.LLMs.AzureOpenAI(config, promptResolver, loggerFactory),
-        "ollama"      => new Morgana.AI.Abstractions.LLMs.Ollama(config, promptResolver, loggerFactory),
-        "openai"      => new Morgana.AI.Abstractions.LLMs.OpenAI(config, promptResolver, loggerFactory),
-        _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' not supported. Valid values: 'Anthropic', 'AzureOpenAI', 'Ollama', 'OpenAI'")
-    };
+    // The tiers are built here, from the configuration, so a tier left unconfigured refuses the boot.
+    ConfigurationLanguageModelService llm = new ConfigurationLanguageModelService(
+        config, sp.GetServices<MorganaLanguageModel>(), promptResolver, loggerFactory);
 
     // Wire dust accounting for the framework-actor path (CompleteWithSystemPromptAsync).
     // Done post-construction because the dust limiter depends on conversation persistence,
@@ -231,10 +233,10 @@ builder.Services.AddSingleton<IRateLimitService, SQLiteRateLimitService>();
 // conversation's lifetime. Shares the per-conversation SQLite database.
 //
 // - DustLimitingOptions: policy (budget + warning/error message templates)
-// - Per-model pricing now lives inline on each Tiers{} entry (Morgana:LLM:{Provider}:Tiers{}.MagicDust)
-//   and is resolved per-tier by ILLMService.GetPricing(tier) — no single process-wide pricing singleton.
+// - Pricing is declared by each provider plugin per model and resolved per tier by
+//   ILanguageModelService.GetMorganaDust(tier) — no single process-wide pricing singleton.
 //
-// Configuration: Morgana:DustLimiting + Morgana:LLM:{Provider}:Tiers{}.MagicDust in appsettings.json
+// Configuration: Morgana:DustLimiting in appsettings.json
 
 builder.Services.Configure<Records.DustLimitingOptions>(
     builder.Configuration.GetSection("Morgana:DustLimiting"));
@@ -355,6 +357,8 @@ WebApplication app = builder.Build();
 await app.Services.GetRequiredService<IAgentConfigurationService>().GetIntentsAsync();
 app.Services.GetRequiredService<IAgentRegistryService>();
 app.Services.GetRequiredService<ICommandRegistryService>();
+// Builds the three tiers at startup, so that a tier left unconfigured refuses the boot rather than the first turn.
+app.Services.GetRequiredService<ILanguageModelService>();
 
 app.UseCors("Channel");                 // Open CORS; trust gate is JWT, not origin
 app.UseHttpsRedirection();              // Redirect HTTP to HTTPS

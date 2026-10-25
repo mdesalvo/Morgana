@@ -57,6 +57,7 @@ Morgana/
   Morgana/                 # working directory
     Morgana.Contracts/     # zero-dependency wire contracts (NuGet)
     Morgana.AI/            # core framework library (NuGet)
+    Morgana.AI.LanguageModels/  # LLM providers, one plugin each (NuGet): Anthropic, OpenAI, Ollama, Google
     Morgana.Web/           # ASP.NET Core host
     Directory.Build.props  # shared build settings, version, dependencies
   Channels/                # Cauldron (Blazor), Grimoire (rich TTY), Rune (poor TTY)
@@ -91,11 +92,11 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 
 | Folder | Purpose |
 |---|---|
-| `Abstractions/` | `MorganaActor`, `MorganaAgent`, `MorganaLLM`, `MorganaTool`, `MorganaHostedAgent` (the `AIAgent` publishing an intent over A2A) |
+| `Abstractions/` | `MorganaActor`, `MorganaAgent`, `MorganaLanguageModel`, `MorganaTool`, `MorganaHostedAgent` (the `AIAgent` publishing an intent over A2A) |
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
-| `ChatClients/` | `IChatClient` decorators: `TierDefaultsChatClient`, `DustAccountingChatClient`, `MorganaAnthropicClient` |
+| `ChatClients/` | `IChatClient` decorators: `DustAccountingChatClient` |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
 | `Providers/` | `MorganaAIContextProvider` (context variables plus the shared registry), `MorganaChatHistoryProvider` |
 | `SessionStores/` | `MorganaHostedAgentSessionStore` — which conversation an inbound A2A request is served on |
@@ -115,7 +116,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Filters/ChannelAuthenticationFilter.cs` · `KnownConversationFilter.cs` · `CommandAdmissionFilter.cs` · `ConversationLimitsFilter.cs` | The REST gates as MVC filters. Their `Order` on each action is the gate order |
 | `Hubs/MorganaHub.cs` | SignalR at `/morganaHub` |
 | `Filters/PartnerAuthenticationFilter.cs` | The partners' auth gate on the A2A JSON-RPC endpoints: the channels' token validation, narrowed to the partners admitted to each agent, fail-closed. The card endpoint stays open by design |
-| `Services/PluginLoaderService.cs` | Scans `plugins/` for `MorganaAgent` subclasses |
+| `Services/PluginLoaderService.cs` | Two passes over the plugin directories: `LoadAgents` loads every assembly and reports the agents, `LoadLanguageModels` returns the providers that `Program.cs` registers |
 | `Services/KestrelHostAddressService.cs` | Reports the address Kestrel actually bound, so a card names a callable endpoint with nothing configured |
 | `Services/SignalRChannelService.cs` | Pushes messages and stream chunks over SignalR |
 
@@ -227,7 +228,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `ConfigurationAgentDirectoryService` | `IAgentDirectoryService` | Both halves of A2A discovery, plus `ValidateTrustConfiguration` and `ValidatePublishedAddress` |
 | `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Merges every plugin's `agents.json`. Refuses a duplicated intent or prompt id and the reserved names `other` and `Morgana`. Its refusals are fatal |
 | `HandlesIntentAgentRegistryService` | `IAgentRegistryService` | Discovers agents by attribute; bidirectional intent validation; validates `[ConsultsAgent]` |
-| `RequiresLLMTierValidationService` | `ILLMTierValidationService` | Every agent must declare a tier the active provider configures |
+| `ConfigurationLanguageModelService` | `ILanguageModelService` | Builds the three tiers, each on the registered provider it names; the framework actors run on `ActorSystem:Tier` |
 | `ProvidesToolForIntentRegistryService` | `IToolRegistryService` | Discovers tools; warns on orphans; errors on duplicates |
 | `MCPClientRegistryService` | `IMCPClientRegistryService` | MCP connection pool keyed by URI or `stdio:{command}`. A client the library reports ended is replaced; only discovery is retried, never a tool call |
 | `SQLiteConversationPersistenceService` | `IConversationPersistenceService` | Per-conversation SQLite: encrypted session BLOBs, the shared-context registry |
@@ -242,22 +243,29 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 
 ## LLM providers and tiers
 
-`MorganaLLM` implements `ILLMService`; four providers (`Anthropic`, `AzureOpenAI`, `OpenAI`,
-`Ollama`) selected by `Morgana:LLM:Provider`, all wrapped into `IChatClient`.
+`ConfigurationLanguageModelService` is the one `ILanguageModelService`. **Three tiers, each with its own provider**:
+`Economy`, `Efficiency`, `Performance`, from the cheapest model to the most capable. All three are
+always declared and filled, whether or not an agent uses them. **There is no cross-tier fallback**.
+The framework actors run on the tier `Morgana:ActorSystem:Tier` names, mandatory; `Efficiency` serves
+ordinary agents; `Performance` is reserved for agents whose author declares an existential need for
+deep reasoning, never a nice-to-have upgrade.
 
-**Three tiers**: `Economy`, `Efficiency`, `Performance`. The framework actors run on the one
-`Morgana:ActorSystem:Tier` names, mandatory; `Efficiency` serves ordinary agents; `Performance` is
-reserved for agents whose author declares an existential need for deep reasoning, never a nice-to-have
-upgrade. **There is no cross-tier fallback**: a tier an agent or the actors need fails startup until
-its entry exists.
+**Morgana.AI knows no vendor.** A provider is a `MorganaLanguageModel<TConnection>` in its own
+plugin under `Morgana.AI.LanguageModels/`, carrying its SDK beside it in `plugins/`. Morgana.Web
+references none of them: it registers what `LoadLanguageModels` finds, so the providers an
+installation can name are the ones deployed. A host without the loader (Alembic, the harness) registers them by hand. What
+only a vendor knows stays in its plugin: the connection record it binds from the tier's `Connection`
+section, the prices of its models (`GetModelPricing`, converted into dust by the base class alone) and
+`IsContentFilterRefusal`, the one place where a provider's own refusal of the content is
+told apart from a failure.
 
-`Tiers` is a JSON **object keyed by tier name**, not an array, so env-var overrides merge per tier.
-Each entry carries `Options` — a deliberately narrow, JSON-bindable mirror of `ChatOptions`:
-`ModelId` and `MaxOutputTokens` only, see `Records.TierConfiguration` for the census and the reason —
-plus its own `MagicDust` pricing.
+`Morgana:LanguageModels:Tiers` is a JSON **object keyed by tier name**, so env-var overrides merge per tier. Each
+entry carries `Provider` (a registered provider's name, any casing), `Connection` (bound by that
+provider alone), `Options` — a deliberately narrow mirror of `ChatOptions` (`MaxOutputTokens`
+mandatory), see `Records.TierConfiguration`.
 
 Two consumption modes: `CompleteWithSystemPromptAsync` (stateless, always on the framework tier) and
-`GetChatClient(tier)` / `GetPricing(tier)` (exact match, no fallback).
+`GetChatClient(tier)` / `GetMorganaDust(tier)` (an agent's own `[RequiresLLMTier]`).
 
 ## Agent Authoring
 
@@ -422,12 +430,12 @@ Nine checks, each fatal, all guarding one failure shape: **a topology that valid
 fails or opens, silently.**
 
 1. Every configured intent has an agent and every agent an intent
-2. Every agent declares `[RequiresLLMTier]` and that tier is configured
+2. Every agent declares `[RequiresLLMTier]`
 3. Every `[ConsultsAgent]` names a reachable colleague and no two fold to one function name
 4. Tools: warn on orphans, error on duplicates for one intent
 5. Plugin `agents.json` files merge with no duplicated intent or prompt id and none declares `other`
    or `Morgana`
-6. No `Tiers` entry left on its override placeholder, no empty `Tiers` map
+6. All three tiers declared, each naming a registered provider and carrying a `Connection`, none with a provider, model or used connection field left on its placeholder, each tier's model priced by its provider, no provider registered twice, `ActorSystem:Tier` naming a tier
 7. Every admitted issuer — channel, partner and the ring alike — carries a name and a key of at least 256 bits and no name is admitted twice
 8. `ValidateTrustConfiguration`: each `Partners[]` entry names somebody once, does something, is coherent per open direction and carries a key that can sign
 9. `ValidatePublishedAddress`: `PublicUrl`, where declared, is absolute, on a bearer-carrying scheme and names one interface
@@ -440,12 +448,12 @@ fault reaches a user as a conversation that never answers, on a host that passed
 
 | Section | Purpose |
 |---|---|
-| `Morgana:LLM:Provider` · `:{Provider}` | Provider choice, credentials, the `Tiers` map |
+| `Morgana:LanguageModels:Tiers` | The three tiers: provider, connection and model of each |
 | `Morgana:AgentToAgent` | `Enabled`, `MaxRoundsPerTurn`, `PublicUrl` (declared only where a binding cannot answer for the address), `Partners[]`. Consultation waits are one **ladder** derived from `ActorSystem:TimeoutSeconds`, stated once in `Records.PeerConsultationWaits` |
 | `Morgana:ActorSystem` | `Tier` (the framework actors' tier, mandatory), `TimeoutSeconds`, `EnableGuardrail`, `IntentCollisionThreshold` |
 | `Morgana:AdaptiveMessaging` | `EnableStreamingResponse`, `RichFeaturesMinLength` |
 | `Morgana:ConversationPersistence` | `StoragePath`, `EncryptionKey` (AES-256, base64, 32 bytes) |
-| `Morgana:RateLimiting` · `:DustLimiting` | Limits and their authored error messages. `MagicDust` pricing lives per tier |
+| `Morgana:RateLimiting` · `:DustLimiting` | Limits and their authored error messages. A model's price lives in its provider plugin |
 | `Morgana:Authentication` | Audience and `Issuers[]` — **channels only** |
 | `Morgana:HistoryReducer` · `:OpenTelemetry` · `:Plugins` | Summarization, exporters, plugin scan directories |
 

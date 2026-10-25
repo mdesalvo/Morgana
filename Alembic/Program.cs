@@ -3,7 +3,12 @@ using Alembic.Interfaces;
 using Alembic.Services;
 using Alembic.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
+using Morgana.AI.LanguageModels.Anthropic;
+using Morgana.AI.LanguageModels.Google;
+using Morgana.AI.LanguageModels.Ollama;
+using Morgana.AI.LanguageModels.OpenAI;
 using Morgana.AI.Services;
 
 // Invariant before anything else runs, so no thread or circuit inherits the host's locale: the
@@ -73,22 +78,21 @@ builder.Services.AddSingleton<IAssetPackageService, AssetPackageService>();
 // ==============================================================================
 // Efficiency tier, resolved on first use so a working copy without credentials still boots.
 
-builder.Services.AddSingleton<ILLMService>(sp =>
+// The workbench registers every provider so that a tier chooses any of them in configuration alone.
+builder.Services.AddSingleton<MorganaLanguageModel, AnthropicLanguageModel>();
+builder.Services.AddSingleton<MorganaLanguageModel, OpenAILanguageModel>();
+builder.Services.AddSingleton<MorganaLanguageModel, OllamaLanguageModel>();
+builder.Services.AddSingleton<MorganaLanguageModel, GoogleLanguageModel>();
+
+// The tiers are read from the user secrets that Morgana shares.
+builder.Services.AddSingleton<ILanguageModelService>(sp =>
 {
     IConfiguration config = sp.GetRequiredService<IConfiguration>();
     IPromptResolverService promptResolver = sp.GetRequiredService<IPromptResolverService>();
     ILoggerFactory loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-    string llmProvider = config["Morgana:LLM:Provider"]
-        ?? throw new InvalidOperationException("Morgana:LLM:Provider is not configured.");
 
-    return llmProvider.ToLowerInvariant() switch
-    {
-        "anthropic"   => new Morgana.AI.Abstractions.LLMs.Anthropic(config, promptResolver, loggerFactory),
-        "azureopenai" => new Morgana.AI.Abstractions.LLMs.AzureOpenAI(config, promptResolver, loggerFactory),
-        "ollama"      => new Morgana.AI.Abstractions.LLMs.Ollama(config, promptResolver, loggerFactory),
-        "openai"      => new Morgana.AI.Abstractions.LLMs.OpenAI(config, promptResolver, loggerFactory),
-        _ => throw new InvalidOperationException($"LLM Provider '{llmProvider}' not supported. Valid values: 'Anthropic', 'AzureOpenAI', 'Ollama', 'OpenAI'")
-    };
+    // The factory builds the chat client of a tier on the first model call.
+    return new ConfigurationLanguageModelService(config, sp.GetServices<MorganaLanguageModel>(), promptResolver, loggerFactory);
 });
 
 // ============================================================================

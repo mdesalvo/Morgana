@@ -21,7 +21,7 @@ public class MorganaChannelAdapter
     /// the target channel cannot carry the original features (rich cards, quick replies,
     /// markdown). Invoked only when <see cref="FitsWithin"/> rejects the message.
     /// </summary>
-    private readonly ILLMService llmService;
+    private readonly ILanguageModelService llmService;
 
     /// <summary>
     /// Resolves the ChannelDowngrade prompt that instructs the LLM on how to produce a
@@ -44,7 +44,7 @@ public class MorganaChannelAdapter
     /// <param name="promptResolverService">Prompt resolver used to load the ChannelDowngrade prompt.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
     public MorganaChannelAdapter(
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         ILogger logger)
     {

@@ -5,7 +5,7 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Default <see cref="IGuardRailService"/> implementation. Delegates to <see cref="ILLMService"/>
+/// Default <see cref="IGuardRailService"/> implementation. Delegates to <see cref="ILanguageModelService"/>
 /// with the Guard system prompt for detection of spam, phishing, violence, profanity and other
 /// policy violations.
 /// </summary>
@@ -15,7 +15,7 @@ public class LLMGuardRailService : IGuardRailService
     /// LLM used for the policy check. Consumed through the stateless completion path — each
     /// message is judged on its own text, on the framework tier.
     /// </summary>
-    private readonly ILLMService llmService;
+    private readonly ILanguageModelService llmService;
 
     /// <summary>
     /// Logger for compliance verdicts and for the fail-open path, which admits a message the
@@ -36,7 +36,7 @@ public class LLMGuardRailService : IGuardRailService
     /// <param name="promptResolverService">Prompt resolver used to load Guard configuration.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
     public LLMGuardRailService(
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         ILogger logger)
     {
@@ -85,11 +85,10 @@ public class LLMGuardRailService : IGuardRailService
                 ? new Records.GuardRailResult(llmResult.Compliant, llmResult.Violation)
                 : new Records.GuardRailResult(Compliant: true, Violation: null);
         }
-        catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } cre
-                                     && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
+        catch (Exception ex) when (llmService.GetLanguageModel(llmService.FrameworkTier).IsContentFilterRefusal(ex))
         {
-            // The provider's own content filter (e.g. Azure Prompt Shields) blocked the prompt before
-            // any judgment could run — a genuine violation signal, never fail-open.
+            // The provider's own content filter blocked the prompt before any judgment could run —
+            // a genuine violation signal, never fail-open.
             logger.LogWarning(ex,
                 "LLMGuardRailService: provider-level content filter rejected the prompt for conversation {ConversationId} — treating as a compliance violation",
                 conversationId);

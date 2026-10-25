@@ -27,7 +27,7 @@ public class CoherenceApplyService : ICoherenceApplyService
 
     private readonly IAlembicPromptService alembicPromptService;
     private readonly IPromptComposerService promptComposerService;
-    private readonly ILLMService llmService;
+    private readonly ILanguageModelService llmService;
     private readonly ILogger logger;
 
     /// <summary>
@@ -40,7 +40,7 @@ public class CoherenceApplyService : ICoherenceApplyService
     public CoherenceApplyService(
         IAlembicPromptService alembicPromptService,
         IPromptComposerService promptComposerService,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         ILogger logger)
     {
         this.alembicPromptService = alembicPromptService;

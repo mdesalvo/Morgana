@@ -10,11 +10,11 @@ namespace Morgana.AI.ChatClients;
 /// </summary>
 /// <remarks>
 /// <para><strong>Why an instance carries its own llmRole.</strong> There is no singleton dust
-/// wrapper on <see cref="Abstractions.MorganaLLM"/>'s chat client. Instead this client is constructed at
+/// wrapper on a tier's chat client. Instead this client is constructed at
 /// exactly two points, each stamping its own <c>llmRole</c> at construction time — so we never
 /// need a separate llmRole-stamping decorator and the same call is never charged twice:</para>
 /// <list type="bullet">
-///   <item><see cref="Abstractions.MorganaLLM.CompleteWithSystemPromptAsync"/> wraps per call with llmRole
+///   <item><see cref="Services.ConfigurationLanguageModelService.CompleteWithSystemPromptAsync"/> wraps per call with llmRole
 ///   <c>"Morgana"</c> (framework actors: guard, classifier, presenter, channel adapter).</item>
 ///   <item><see cref="Adapters.MorganaAgentAdapter"/> wraps per agent with llmRole
 ///   <c>"Morgana (Intent)"</c> (domain agents and their history reducer).</item>
@@ -99,7 +99,7 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
     /// The Anthropic MEAI adapter reports <see cref="UsageDetails.InputTokenCount"/> as the
     /// total prompt (fresh + cache-read + cache-write), with cache-read in
     /// <see cref="UsageDetails.CachedInputTokenCount"/> and cache-write in
-    /// <c>AdditionalCounts["CacheCreationInputTokens"]</c>. We decompose it and apply the
+    /// <c>AdditionalCounts[Constants.UsageCounts.CacheCreationInputTokens]</c>. We decompose it and apply the
     /// per-provider cache weights so the charge tracks real cache economics rather than
     /// over-counting cheap cache reads at full price.
     /// </remarks>
@@ -113,7 +113,7 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
 
         long cacheWrite = 0;
         if (usageDetails.AdditionalCounts is not null &&
-            usageDetails.AdditionalCounts.TryGetValue("CacheCreationInputTokens", out long w))
+            usageDetails.AdditionalCounts.TryGetValue(Constants.UsageCounts.CacheCreationInputTokens, out long w))
             cacheWrite = w;
 
         // Fresh = total minus the two cache components. Clamp at 0: defends against any

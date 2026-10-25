@@ -39,8 +39,9 @@ model. A wizard emitting a subtly self-contradictory prompt is worse than no wiz
 has no instrument to notice. Alembic runs all its model work on `Efficiency`, never on `Economy` and
 runs once at onboarding, not per turn: the wrong place to save.
 
-Consequence of the framework's no-cross-tier-fallback rule: **Alembic does not serve a deployment**
-until an `Efficiency` entry is configured.
+Alembic declares the three tiers like Morgana, the same `Morgana:LanguageModels:Tiers` section read from the same
+shared user secrets. The service is resolved at the first model call, so a deployment missing a tier
+boots and is refused there.
 
 ### Alembic is of Morgana and so is everything it writes
 
@@ -438,12 +439,9 @@ is therefore free: there is no parallel representation to maintain.
   one Draft per circuit.
 - `IAgentConfigurationService` is `AgentlessConfigurationService`, empty **by construction**: the domain
   Alembic works on is the **uploaded** one, never one compiled into this process.
-- `ILLMService` is a factory **never resolved during startup**, so a working copy without credentials still
+- `ILanguageModelService` is a factory **never resolved during startup**, so a working copy without credentials still
   builds, boots and serves the shell; the failure surfaces on the first call.
-- `MagicDust` in the `Efficiency` tier cannot be shortened to `{}` — the JSON provider reads an empty
-  object as `null`, the binder drops an element it cannot construct **without raising anything** and the
-  whole tier disappears, surfacing a page later as `No tiers configured`.
-- The LLM section is named `Morgana:` because `MorganaLLM` reads that path. In-repo, Alembic declares the
+- The LLM section is named `Morgana:` because `ConfigurationLanguageModelService` reads that path. In-repo, Alembic declares the
   **same `UserSecretsId` as Morgana.Web**, so it runs against whatever this working copy is wired to.
 
 ## Build and Run

@@ -110,7 +110,7 @@ public class MorganaAgent : MorganaActor
     /// <param name="configuration">Application configuration (streaming flags, etc.).</param>
     public MorganaAgent(
         string conversationId,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IConversationPersistenceService persistenceService,
         ILogger agentLogger,
@@ -456,8 +456,9 @@ public class MorganaAgent : MorganaActor
             senderRef.Tell(new Records.AgentResponse(
                 llmResponseText, isCompleted, quickReplies, richCard, finalAssistantMessage?.CreatedAt?.UtcDateTime));
         }
-        catch (Exception ex) when (ex is System.ClientModel.ClientResultException { Status: 400 } cre
-                                     && cre.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase))
+        // The provider of the agent's tier decides whether the failure is its own content refusal; the registry
+        // refuses at startup an agent without [RequiresLLMTier], so the tier is always declared.
+        catch (Exception ex) when (llmService.GetLanguageModel(GetType().GetCustomAttribute<RequiresLLMTierAttribute>()!.Tier).IsContentFilterRefusal(ex))
         {
             agentLogger.LogWarning(ex, "Content filter rejection in {Name} for conversation {ConversationId}", GetType().Name, conversationId);
             agentSpan?.SetStatus(ActivityStatusCode.Error, "content_filter");

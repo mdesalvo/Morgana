@@ -8,6 +8,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Morgana.AI\Morgana.AI.csproj" />
+    <!-- Built with the host and deployed by it into plugins/, never referenced as assemblies: the host knows only the providers it finds there -->
+    <ProjectReference Include="..\Morgana.AI.LanguageModels\Anthropic\Morgana.AI.LanguageModels.Anthropic.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
+    <ProjectReference Include="..\Morgana.AI.LanguageModels\OpenAI\Morgana.AI.LanguageModels.OpenAI.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
+    <ProjectReference Include="..\Morgana.AI.LanguageModels\Ollama\Morgana.AI.LanguageModels.Ollama.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
+    <ProjectReference Include="..\Morgana.AI.LanguageModels\Google\Morgana.AI.LanguageModels.Google.csproj" ReferenceOutputAssembly="false" Private="false" LanguageModelPlugin="true" />
   </ItemGroup>
 
   <!-- A2A hosting: publishes each Morgana agent as an A2A endpoint (server side + routes) -->
@@ -24,6 +29,27 @@
     </PropertyGroup>
     <Message Text="Ensuring plugins directory exists: $(PluginsDir)" Importance="high" />
     <MakeDir Directories="$(PluginsDir)" Condition="!Exists('$(PluginsDir)')" />
+  </Target>
+
+  <!--
+    The providers are deployed by the host because only the host knows which assemblies it already
+    holds: a provider brings its vendor SDK into plugins/, while every assembly the host references
+    (Morgana.AI, its packages and the shared framework) stays out, since the host's own copy is the one loaded.
+  -->
+  <Target Name="DeployLanguageModelPlugins" AfterTargets="Build">
+    <MSBuild Projects="@(ProjectReference)"
+             Condition="'%(ProjectReference.LanguageModelPlugin)' == 'true'"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="LanguageModelPluginAssembly" />
+    </MSBuild>
+    <ItemGroup>
+      <LanguageModelPluginOutput Include="%(LanguageModelPluginAssembly.RootDir)%(LanguageModelPluginAssembly.Directory)*.dll" />
+      <LanguageModelPluginFile Include="@(LanguageModelPluginOutput)" />
+      <LanguageModelPluginFile Remove="@(ReferencePath)" MatchOnMetadata="Filename" />
+    </ItemGroup>
+    <MakeDir Directories="$(OutDir)plugins" Condition="!Exists('$(OutDir)plugins')" />
+    <Copy SourceFiles="@(LanguageModelPluginFile)" DestinationFolder="$(OutDir)plugins" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

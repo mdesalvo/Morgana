@@ -18,7 +18,7 @@ public class LLMClassifierService : IClassifierService
     /// LLM used for every classification call. Consumed through the stateless completion path:
     /// classification keeps no per-conversation memory, so it always runs on the framework tier.
     /// </summary>
-    private readonly ILLMService llmService;
+    private readonly ILanguageModelService llmService;
 
     /// <summary>
     /// Logger for the intent load at construction and for each classification outcome, including
@@ -57,7 +57,7 @@ public class LLMClassifierService : IClassifierService
     /// <param name="configuration">Read for <c>Morgana:ActorSystem:IntentCollisionThreshold</c>.</param>
     /// <param name="logger">Logger for load-time and per-classification diagnostics.</param>
     public LLMClassifierService(
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IAgentConfigurationService agentConfigService,
         IConfiguration configuration,

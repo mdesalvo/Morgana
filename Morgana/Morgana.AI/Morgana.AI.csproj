@@ -49,18 +49,13 @@
     <PackageReference Include="Akka.DependencyInjection" Version="1.5.*" />
     <!-- Agents -->
     <PackageReference Include="A2A" Version="$(A2AVersion)" />
-    <PackageReference Include="Azure.AI.OpenAI" Version="2.9.0-beta.1" />
     <PackageReference Include="Microsoft.Agents.AI" Version="$(MicrosoftAgentsAIVersion)" />
     <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="$(MicrosoftAgentsAIVersion)" />
     <PackageReference Include="Microsoft.Agents.AI.A2A" Version="$(MicrosoftAgentsAIPreviewVersion)" />
     <PackageReference Include="Microsoft.Agents.AI.Hosting" Version="$(MicrosoftAgentsAIPreviewVersion)" />
-    <PackageReference Include="Microsoft.Agents.AI.Anthropic" Version="$(MicrosoftAgentsAIVersion)" />
-    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="$(MicrosoftAgentsAIVersion)" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="$(MicrosoftExtensionsAIVersion)" />
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="$(MicrosoftExtensionsAIVersion)" />
-    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="$(MicrosoftExtensionsAIVersion)" />
     <PackageReference Include="ModelContextProtocol.Core" Version="$(ModelContextProtocolVersion)" />
-    <PackageReference Include="OllamaSharp" Version="5.5.0" />
     <!-- OpenTelemetry -->
     <PackageReference Include="OpenTelemetry" Version="$(OpenTelemetryVersion)" />
     <PackageReference Include="OpenTelemetry.Api" Version="$(OpenTelemetryVersion)" />

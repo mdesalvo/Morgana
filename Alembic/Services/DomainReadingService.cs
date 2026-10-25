@@ -28,7 +28,7 @@ public class DomainReadingService : IDomainReadingService
     private const string ReaderPromptId = "DomainReader";
 
     private readonly IAlembicPromptService alembicPromptService;
-    private readonly ILLMService llmService;
+    private readonly ILanguageModelService llmService;
     private readonly ILogger logger;
 
     /// <summary>
@@ -39,7 +39,7 @@ public class DomainReadingService : IDomainReadingService
     /// <param name="logger">Records provider and parse failures, which surface to the caller too.</param>
     public DomainReadingService(
         IAlembicPromptService alembicPromptService,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         ILogger logger)
     {
         this.alembicPromptService = alembicPromptService;

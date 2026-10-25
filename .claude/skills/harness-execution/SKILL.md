@@ -6,7 +6,7 @@ description: Runs PromptHarness on demand against the currently configured LLM p
 # HarnessExecution
 
 Runs the PromptHarness (`PromptHarness/PromptHarness.csproj`) on demand against whichever LLM
-provider is currently configured in User Secrets (`Morgana:LLM:Provider`), against a user-chosen
+providers are currently configured in User Secrets (`Morgana:LanguageModels:Tiers`), against a user-chosen
 scope and a user-chosen global run/pass threshold. Live LLM calls, real cost — never runs without
 the two questions below being answered first.
 
@@ -20,11 +20,11 @@ Activated when the user says things like:
 
 ## Procedure
 
-1. **Confirm the active provider** before anything else: read `Morgana:LLM:Provider` from the shared
+1. **Confirm the active providers** before anything else: read `Morgana:LanguageModels:Tiers` from the shared
    User Secrets store (`UserSecretsId 374228be-4f26-4382-a3ef-7500a0b829dd`, same as `Morgana.Web`)
-   without printing the ApiKey/Endpoint values and tell the user which provider/tier models
-   (`Tiers.Economy.Options.ModelId` / `Tiers.Efficiency.Options.ModelId` / `Tiers.Performance.Options.ModelId`)
-   and `Morgana:ActorSystem:Tier` this run will hit. This
+   without printing the ApiKey/Endpoint values and tell the user which provider and model each tier
+   (`Economy` / `Efficiency` / `Performance`: `Provider` and `Options.ModelId`) and
+   `Morgana:ActorSystem:Tier` this run will hit. This
    is the harness's own design (`PromptHarness/README.md`): it never has its own `Morgana:` config,
    it inherits the host's. The same file is where `Harness:HarnessDirectory` lives when the user has
    overridden it (see step 7), so read both in one pass. Note the store is written with a UTF-8 BOM:

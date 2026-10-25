@@ -27,7 +27,7 @@ public class ToolMockService : IToolMockService
 
     private readonly IAlembicPromptService alembicPromptService;
     private readonly ICodeEmitService codeEmitService;
-    private readonly ILLMService llmService;
+    private readonly ILanguageModelService llmService;
     private readonly ILogger logger;
 
     /// <summary>
@@ -40,7 +40,7 @@ public class ToolMockService : IToolMockService
     public ToolMockService(
         IAlembicPromptService alembicPromptService,
         ICodeEmitService codeEmitService,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         ILogger logger)
     {
         this.alembicPromptService = alembicPromptService;

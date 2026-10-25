@@ -82,7 +82,7 @@ public class ConversationManagerActor : MorganaActor
         IDustLimitService dustLimitService,
         IConversationPersistenceService conversationPersistenceService,
         IOptions<Records.DustLimitingOptions> dustLimitingOptions,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {

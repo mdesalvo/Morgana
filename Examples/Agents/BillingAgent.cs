@@ -15,7 +15,7 @@ public class BillingAgent : MorganaAgent
 {
     public BillingAgent(
         string conversationId,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IConversationPersistenceService conversationPersistenceService,
         ILogger logger,

@@ -101,6 +101,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The judge builds its own language model service on the provider types, so these are compile-time references. -->
+    <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\Anthropic\Morgana.AI.LanguageModels.Anthropic.csproj" />
+    <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\OpenAI\Morgana.AI.LanguageModels.OpenAI.csproj" />
+    <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\Ollama\Morgana.AI.LanguageModels.Ollama.csproj" />
+    <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\Google\Morgana.AI.LanguageModels.Google.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!--
       Where the second instance is started from. It is Morgana.Web's own output rather than this one,
       because a child process needs the runtime configuration and dependency manifest that are
@@ -117,6 +125,20 @@
     <Content Include="appsettings.Harness.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Scenarios\**\*.yaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <!--
+    The instance under test finds its providers as Morgana does, from plugins/. They land there and not
+    in domain-plugins/ because they are not a domain and every run, the federation one included, needs them.
+    Only the provider assemblies are copied: their vendor SDKs already sit in this output, since the judge
+    references the providers. The copy loaded there is the one every assembly resolves.
+  -->
+  <Target Name="CopyLanguageModelPluginsToHarness" AfterTargets="Build">
+    <ItemGroup>
+      <LanguageModelPluginAssembly Include="$(OutDir)Morgana.AI.LanguageModels.*.dll" />
+    </ItemGroup>
+    <MakeDir Directories="$(OutDir)plugins" Condition="!Exists('$(OutDir)plugins')" />
+    <Copy SourceFiles="@(LanguageModelPluginAssembly)" DestinationFolder="$(OutDir)plugins" SkipUnchangedFiles="true" />
+  </Target>
 
   <!--
     The example plugin has to land in the harness output, since that is the base directory the

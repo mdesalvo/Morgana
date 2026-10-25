@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using Akka.Actor;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Attributes;
 using Morgana.Contracts;
 
@@ -189,13 +190,18 @@ public static class Records
     // MAGIC DUST (TOKEN BUDGET)
     // ==========================================================================
 
+    /// <summary>What a model costs in US dollars per million tokens, as its vendor bills it.</summary>
+    /// <param name="InputUsdPerMillion">Price of a fresh prompt token.</param>
+    /// <param name="OutputUsdPerMillion">Price of a generated token.</param>
+    /// <param name="CacheReadUsdPerMillion">Price of a prompt token that the provider's cache served.</param>
+    /// <param name="CacheWriteUsdPerMillion">Price of a prompt token written into the provider's cache, at the lifetime that the provider's client asks for.</param>
+    public record ModelPricing(decimal InputUsdPerMillion, decimal OutputUsdPerMillion, decimal CacheReadUsdPerMillion, decimal CacheWriteUsdPerMillion);
+
     /// <summary>
-    /// Per-tier pricing: tokens-per-dust and cache cost-weights for accurate token-budget tracking.
-    /// Live cost = (InputTokens × CachedInputWeight) + (CacheWriteTokens × CacheCreationWeight).
-    /// Zero on either axis means that direction is free. Defaults calibrated for Haiku 4.5/Sonnet 5
-    /// or gpt-4o-mini/gpt-4o; recalibrate when pointing a tier at a different model.
-    /// Sanity-check BudgetPerConversation against your heaviest agent's actual calls-per-turn
-    /// by inspecting dust_usage_log, not against nominal turn counts.
+    /// What one dust unit is worth on a tier: tokens per unit for each direction and the cost weights of cached input.
+    /// A zero on either axis makes that direction free. It is derived from a provider's <see cref="ModelPricing"/> by
+    /// <c>MorganaLanguageModel.ConvertToMorganaDust</c> and never configured.
+    /// Check BudgetPerConversation against the heaviest agent's calls per turn in dust_usage_log, not against nominal turn counts.
     /// </summary>
     public record MagicDustPricing
     {
@@ -206,15 +212,15 @@ public static class Records
         public int OutputTokensPerDustUnit { get; set; }
 
         /// <summary>
-        /// Cost weight applied to cache-read input tokens (<c>CachedInputTokenCount</c>)
-        /// relative to a fresh input token. Anthropic cache-read ≈ 0.10; OpenAI ≈ 0.50.
+        /// Cost weight applied to cache-read input tokens (<c>CachedInputTokenCount</c>):
+        /// the price of such a token relative to a fresh input token.
         /// </summary>
         public double CachedInputWeight { get; set; }
 
         /// <summary>
         /// Cost weight applied to cache-creation input tokens
-        /// (<c>AdditionalCounts["CacheCreationInputTokens"]</c>) relative to a fresh input
-        /// token. Anthropic 1h cache write ≈ 2.0; providers with no separate write cost = 1.0.
+        /// (<c>AdditionalCounts[Constants.UsageCounts.CacheCreationInputTokens]</c>):
+        /// the price of such a token relative to a fresh input token.
         /// </summary>
         public double CacheCreationWeight { get; set; }
     }
@@ -254,31 +260,53 @@ public static class Records
         Performance
     }
 
-    /// <summary>
-    /// Single provider tier with own dust pricing. Tier IS the unit deployer configures + agent binds to.
-    /// Lives under Morgana:LLM:{Provider}:Tiers as JSON object (keyed by name) not array: allows per-layer overrides to merge
-    /// by key. TierConfiguration is deliberate ChatOptions subset (ModelId, MaxOutputTokens only); MagicDust is tier-specific.
-    /// </summary>
-    public record TierDefinition(
-        TierConfiguration Options,
-        MagicDustPricing MagicDust);
+    /// <summary>The <c>Morgana:LanguageModels</c> section: the three tiers, each served by its own provider.</summary>
+    public record LLMConfiguration(LLMTiers Tiers);
+
+    /// <summary>The definitions of the three tiers, all of them mandatory.</summary>
+    public record LLMTiers(
+        TierDefinition Economy,
+        TierDefinition Efficiency,
+        TierDefinition Performance)
+    {
+        /// <summary>Returns the definition declared for <paramref name="tier"/>.</summary>
+        public TierDefinition For(LLMTier tier) => tier switch
+        {
+            // The cheapest tier takes the definition that the deployer declared for Economy.
+            LLMTier.Economy => Economy,
+            // The middle tier takes the definition that the deployer declared for Efficiency.
+            LLMTier.Efficiency => Efficiency,
+            // The most capable tier takes the definition that the deployer declared for Performance.
+            LLMTier.Performance => Performance,
+            // An unknown tier is refused, since every tier must be declared.
+            _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, null)
+        };
+    }
+
+    /// <summary>A tier as it is served: its client, the provider that built the client and its dust.</summary>
+    public record ServedTier(IChatClient Client, MorganaLanguageModel LanguageModel, MagicDustPricing MorganaDust);
 
     /// <summary>
-    /// Deliberately minimal JSON-bindable DTO of tier-configurable ChatOptions subset.
-    /// Excludes sampling knobs, Reasoning, StopSequences and per-call parameters.
-    /// Contains only ModelId (provider-specific identifier, e.g. "claude-haiku-4-5") and
-    /// MaxOutputTokens (per-tier ceiling). Left null, MaxOutputTokens defers to provider SDK
-    /// defaults, which are NOT uniform: Anthropic caps at 1024, while OpenAI/AzureOpenAI/Ollama
-    /// leave uncapped up to the model's context window.
+    /// One tier with its own provider name and model.
+    /// Declared under Morgana:LanguageModels:Tiers:{tier} as a JSON object keyed by name rather than an array, so that overrides of
+    /// different configuration layers merge by key. The Connection section is not bound here: the provider that the tier
+    /// names binds it, because only that provider knows its shape.
+    /// </summary>
+    public record TierDefinition(
+        string Provider,
+        TierConfiguration Options);
+
+    /// <summary>
+    /// The part of <see cref="ChatOptions"/> that a deployer sets per tier: the model and the output ceiling, nothing else.
+    /// The ceiling is mandatory on every tier: the Anthropic adapter falls back to 1024 when none is given
+    /// and reasoning tokens count against it. Sampling, reasoning and stop sequences are per-call parameters.
     /// </summary>
     public record TierConfiguration(
         string ModelId,
-        int? MaxOutputTokens = null)
+        int MaxOutputTokens)
     {
         /// <summary>
-        /// Materializes this census into a real <see cref="ChatOptions"/>, ready to be merged
-        /// (field-by-field, fill-if-absent — see <see cref="ChatClients.TierDefaultsChatClient"/>)
-        /// into every per-turn call on this tier.
+        /// Builds the <see cref="ChatOptions"/> that the tier's client fills into every call on this tier that leaves them unset.
         /// </summary>
         public ChatOptions ToChatOptions() => new()
         {
@@ -569,7 +597,7 @@ public static class Records
     
     /// <summary>
     /// Sent by an agent back to the supervisor when the LLM provider rejects the request
-    /// due to a content filter (e.g. Azure OpenAI content_filter).
+    /// due to a content filter, as the provider of the agent's tier recognises it.
     /// The supervisor treats this identically to a guard rejection and routes the reply
     /// to the user-facing sender captured in its current processing state.
     /// </summary>

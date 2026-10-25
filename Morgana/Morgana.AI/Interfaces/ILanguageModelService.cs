@@ -1,26 +1,23 @@
 using Microsoft.Extensions.AI;
+using Morgana.AI.Abstractions;
 
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
-/// Service abstraction for Large Language Model (LLM) interactions across multiple providers.
-/// Provides conversation-scoped completion APIs and access to Microsoft.Extensions.AI IChatClient.
+/// Service abstraction for Large Language Model (LLM) interactions across the three tiers, each served by the provider it names.
+/// Provides the stateless completion of the framework actors and the Microsoft.Extensions.AI IChatClient of each tier.
 /// </summary>
 /// <remarks>
-/// <para><strong>Purpose:</strong></para>
-/// <para>This service abstracts LLM provider specifics (Anthropic, Azure OpenAI, Ollama, OpenAI, ...) and provides
-/// a unified interface for all LLM interactions in the Morgana framework. It manages conversation
-/// history, prompt formatting and provider-specific API calls.</para>
 /// <para><strong>Usage Patterns:</strong></para>
 /// <list type="bullet">
 /// <item><term>Actors</term><description>GuardActor, ClassifierActor use CompleteWithSystemPromptAsync for stateless operations</description></item>
 /// <item><term>Agents</term><description>MorganaAgent uses the IChatClient of its declared tier (via GetChatClient(tier)) for stateful conversations with tool calling</description></item>
 /// </list>
 /// </remarks>
-public interface ILLMService
+public interface ILanguageModelService
 {
     /// <summary>
-    /// Performs a completion with an explicit system prompt and user prompt.
+    /// Performs a completion with an explicit system prompt and user prompt, on the <see cref="FrameworkTier"/>.
     /// Commonly used by actors for stateless LLM operations (classification, guard checks, etc.).
     /// </summary>
     /// <param name="conversationId">Unique identifier of the conversation (used for logging, not history)</param>
@@ -38,35 +35,29 @@ public interface ILLMService
     Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt);
 
     /// <summary>
-    /// Gets the Microsoft.Extensions.AI IChatClient configured for a specific <see cref="Records.LLMTier"/>.
+    /// Gets the Microsoft.Extensions.AI IChatClient that serves a specific <see cref="Records.LLMTier"/>.
     /// Used by <c>MorganaAgentAdapter</c> to build each agent's <c>AIAgent</c> on the model its
     /// <c>[RequiresLLMTier]</c> attribute declares, rather than a single process-wide client.
     /// </summary>
     /// <param name="tier">Power/cost tier to resolve a client for.</param>
     /// <returns>IChatClient instance for the requested tier.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown if the active provider has no <c>Tiers</c> entry configured for <paramref name="tier"/>.
-    /// </exception>
     IChatClient GetChatClient(Records.LLMTier tier);
 
     /// <summary>
-    /// Gets the dust pricing for a specific <see cref="Records.LLMTier"/> — the pricing embedded
-    /// in that tier's <see cref="Records.TierDefinition"/>, not a single process-wide value.
+    /// Gets the dust of a specific <see cref="Records.LLMTier"/>: the price that the provider of that tier declares
+    /// for the tier's model, converted into dust.
     /// </summary>
-    /// <param name="tier">Power/cost tier to resolve pricing for.</param>
+    /// <param name="tier">Power/cost tier to resolve the dust for.</param>
     /// <returns>MagicDustPricing for the requested tier's model.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown if the active provider has no <c>Tiers</c> entry configured for <paramref name="tier"/>.
-    /// </exception>
-    Records.MagicDustPricing GetPricing(Records.LLMTier tier);
+    Records.MagicDustPricing GetMorganaDust(Records.LLMTier tier);
 
     /// <summary>
-    /// Gets the set of tiers actually configured (via <c>Tiers</c>) for the active provider.
-    /// Used at startup by agent/tier validation to check every agent's declared tier actually
-    /// exists, without relying on catching exceptions from
-    /// <see cref="GetChatClient(Records.LLMTier)"/>/<see cref="GetPricing(Records.LLMTier)"/>.
+    /// Gets the provider that serves a specific <see cref="Records.LLMTier"/>: callers ask it how to read the failures
+    /// thrown by that tier's client.
     /// </summary>
-    IReadOnlyCollection<Records.LLMTier> ConfiguredTiers { get; }
+    /// <param name="tier">Power/cost tier to resolve the provider for.</param>
+    /// <returns>The <see cref="MorganaLanguageModel"/> that the tier names.</returns>
+    MorganaLanguageModel GetLanguageModel(Records.LLMTier tier);
 
     /// <summary>
     /// The tier that Morgana's own actors (Guard, Classifier, Presenter, ChannelAdapter) run on through

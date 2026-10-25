@@ -38,7 +38,7 @@ public class MorganaAgentAdapter
     /// tier its <c>[RequiresLLMTier]</c> attribute declares. There is no single process-wide
     /// chat client here anymore — each agent resolves its own tier at creation time.
     /// </summary>
-    protected readonly ILLMService llmService;
+    protected readonly ILanguageModelService llmService;
 
     /// <summary>
     /// Service for discovering custom MorganaTool implementations via [ProvidesToolForIntent] attribute.
@@ -117,7 +117,7 @@ public class MorganaAgentAdapter
     /// <param name="configuration">Application configuration, read for the peer-consultation budget and timeout</param>
     /// <param name="logger">Logger instance for diagnostics</param>
     public MorganaAgentAdapter(
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IPromptComposerService promptComposerService,
         IToolRegistryService toolRegistryService,
@@ -287,7 +287,7 @@ public class MorganaAgentAdapter
         // under, so a ledger grouped by prefix keeps every charge of one installation together.
         string dustRole = $"{Constants.Morgana} ({char.ToUpperInvariant(intent[0])}{intent[1..]}/{tierAttribute.Tier})";
         IChatClient tierChatClient = llmService.GetChatClient(tierAttribute.Tier);
-        Records.MagicDustPricing tierPricing = llmService.GetPricing(tierAttribute.Tier);
+        Records.MagicDustPricing tierPricing = llmService.GetMorganaDust(tierAttribute.Tier);
         IChatClient agentChatClient =
             new DustAccountingChatClient(tierChatClient, dustLimitService, tierPricing, dustRole, conversationId);
 

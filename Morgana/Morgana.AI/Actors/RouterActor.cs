@@ -54,7 +54,7 @@ public class RouterActor : MorganaActor
     /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
     public RouterActor(
         string conversationId,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IAgentRegistryService agentResolverService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)

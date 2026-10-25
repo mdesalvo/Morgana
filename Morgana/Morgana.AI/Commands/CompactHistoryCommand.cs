@@ -26,7 +26,7 @@ public sealed class CompactHistoryCommand : ICommand
     private readonly IAgentRegistryService agentRegistryService;
 
     /// <summary>Supplies the client the summarization call runs on.</summary>
-    private readonly ILLMService llmService;
+    private readonly ILanguageModelService llmService;
 
     /// <summary>Builds the reducer from the deployment's own history settings, the same one a turn would use.</summary>
     private readonly HistoryReducerService historyReducerService;
@@ -44,7 +44,7 @@ public sealed class CompactHistoryCommand : ICommand
     public CompactHistoryCommand(
         IConversationPersistenceService persistenceService,
         IAgentRegistryService agentRegistryService,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         HistoryReducerService historyReducerService,
         IDustLimitService dustLimitService,
         IChannelService channelService,
@@ -186,7 +186,7 @@ public sealed class CompactHistoryCommand : ICommand
         return new DustAccountingChatClient(
             llmService.GetChatClient(tier),
             dustLimitService,
-            llmService.GetPricing(tier),
+            llmService.GetMorganaDust(tier),
             $"{Constants.Morgana} ({char.ToUpperInvariant(agent[0])}{agent[1..]}/{tier})",
             conversationId);
     }

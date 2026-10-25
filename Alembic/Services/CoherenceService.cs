@@ -41,7 +41,7 @@ public class CoherenceService : ICoherenceService
     private const string KindsPlaceholder = "((kinds))";
 
     private readonly IAlembicPromptService alembicPromptService;
-    private readonly ILLMService llmService;
+    private readonly ILanguageModelService llmService;
     private readonly ILogger logger;
 
     /// <summary>
@@ -52,7 +52,7 @@ public class CoherenceService : ICoherenceService
     /// <param name="logger">Used to record parse and provider failures — both surface to the caller too.</param>
     public CoherenceService(
         IAlembicPromptService alembicPromptService,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         ILogger logger)
     {
         this.alembicPromptService = alembicPromptService;

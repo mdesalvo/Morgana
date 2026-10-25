@@ -76,7 +76,7 @@ public class ConversationSupervisorActor : MorganaActor
     /// </summary>
     public ConversationSupervisorActor(
         string conversationId,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IChannelService channelService,
         IChannelMetadataStore channelMetadataStore,

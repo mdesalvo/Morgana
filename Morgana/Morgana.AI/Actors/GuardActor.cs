@@ -27,7 +27,7 @@ public class GuardActor : MorganaActor
     /// <param name="configuration">Morgana configuration (layered by ASP.NET).</param>
     public GuardActor(
         string conversationId,
-        ILLMService llmService,
+        ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IGuardRailService guardRailService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)

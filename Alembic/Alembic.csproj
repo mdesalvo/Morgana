@@ -5,7 +5,7 @@
        <RootNamespace>Alembic</RootNamespace>
        <AssemblyName>Alembic</AssemblyName>
        <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
-       <!-- Same UserSecretsId as Morgana.Web and PromptHarness: it reads the same Morgana:LLM section. -->
+       <!-- Same UserSecretsId as Morgana.Web and PromptHarness: it reads the same Morgana:LanguageModels section. -->
        <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
     </PropertyGroup>
 
@@ -20,6 +20,10 @@
 
     <ItemGroup>
        <ProjectReference Include="..\Morgana\Morgana.AI\Morgana.AI.csproj" />
+       <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\Anthropic\Morgana.AI.LanguageModels.Anthropic.csproj" />
+       <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\OpenAI\Morgana.AI.LanguageModels.OpenAI.csproj" />
+       <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\Ollama\Morgana.AI.LanguageModels.Ollama.csproj" />
+       <ProjectReference Include="..\Morgana\Morgana.AI.LanguageModels\Google\Morgana.AI.LanguageModels.Google.csproj" />
     </ItemGroup>
 
 </Project>
