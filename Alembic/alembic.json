@@ -106,7 +106,7 @@
               "Parameters": [
                 {
                   "Name": "name",
-                  "Description": "A single bare lowercase word, no spaces or punctuation (e.g. 'billing', 'appointments'). It becomes a C# attribute argument and a prompt ID. 'other' is reserved for the classifier's fallback and will be refused.",
+                  "Description": "A single bare lowercase word, no spaces or punctuation (e.g. 'billing', 'appointments'). It becomes a C# attribute argument and a prompt ID. 'other' is reserved for the classifier's fallback and the names of Morgana's own prompts (morgana, classifier, guard, presentation, channeladapter) are hers: both will be refused.",
                   "Required": true
                 },
                 {

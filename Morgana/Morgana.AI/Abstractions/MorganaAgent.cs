@@ -707,7 +707,7 @@ public class MorganaAgent : MorganaActor
     /// made no such declaration and so stays in service.</returns>
     protected bool GetTurnEndingFromContext(AgentSession session)
     {
-        object? ctxTurnEnding = aiContextProvider.GetVariable(session, Constants.ContextKeys.TurnEnding);
+        object? ctxTurnEnding = aiContextProvider.GetFrameworkKeyValue(session, Constants.ContextKeys.TurnEnding);
         return ctxTurnEnding switch
         {
             bool ending => ending,
@@ -750,7 +750,7 @@ public class MorganaAgent : MorganaActor
         }
         #endregion
 
-        object? ctxQuickReplies = aiContextProvider.GetVariable(session, Constants.ContextKeys.QuickReplies);
+        object? ctxQuickReplies = aiContextProvider.GetFrameworkKeyValue(session, Constants.ContextKeys.QuickReplies);
         return ctxQuickReplies switch
         {
             string ctxQuickRepliesJson when !string.IsNullOrEmpty(ctxQuickRepliesJson) => GetQuickReplies(ctxQuickRepliesJson),
@@ -791,7 +791,7 @@ public class MorganaAgent : MorganaActor
         }
         #endregion
 
-        object? ctxRichCard = aiContextProvider.GetVariable(session, Constants.ContextKeys.RichCard);
+        object? ctxRichCard = aiContextProvider.GetFrameworkKeyValue(session, Constants.ContextKeys.RichCard);
         return ctxRichCard switch
         {
             string ctxRichCardJson when !string.IsNullOrEmpty(ctxRichCardJson) => GetRichCard(ctxRichCardJson),

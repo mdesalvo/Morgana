@@ -11,15 +11,6 @@ namespace Alembic.Services;
 public class DraftValidationService : IDraftValidationService
 {
     /// <summary>
-    /// The framework's own prompt IDs. A domain intent named like one of these makes
-    /// <c>ConfigurationPromptResolverService.ResolveAsync</c> throw on a <c>SingleOrDefault</c>
-    /// over two matches — deliberately loud, because the alternative is one of the two prompts
-    /// becoming permanently unreachable in silence.
-    /// </summary>
-    private static readonly string[] FrameworkPromptIds =
-        ["Morgana", "Classifier", "Guard", "Presentation", "ChannelAdapter"];
-
-    /// <summary>
     /// The base tools every agent receives from <c>morgana.json</c>. A domain tool sharing one of
     /// these names would be registered twice against the same agent.
     /// </summary>
@@ -135,10 +126,11 @@ public class DraftValidationService : IDraftValidationService
                     "Two intents carry this name.",
                     "Prompt IDs are matched case-insensitively, so two intents differing only in case are one intent to Morgana."));
 
-            if (FrameworkPromptIds.Contains(intent.Name, StringComparer.OrdinalIgnoreCase))
+            // Morgana refuses at startup an intent named after one of her own prompts.
+            if (Constants.Prompts.All.Contains(intent.Name, StringComparer.OrdinalIgnoreCase))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                     $"'{intent.Name}' is one of the framework's own prompt IDs.",
-                    "ConfigurationPromptResolverService resolves prompts with SingleOrDefault across both layers: a domain ID colliding with a framework one throws at resolution rather than silently shadowing it."));
+                    "Morgana refuses at startup a domain intent or agent prompt that takes the id of one of the framework's own prompts, since an agent's prompt is looked up by its intent's name in the same registry."));
 
             if (string.IsNullOrWhiteSpace(intent.Description))
                 findings.Add(new ValidationFinding(FindingSeverity.Warning, where,

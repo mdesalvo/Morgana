@@ -9,9 +9,10 @@ namespace Morgana.AI.Services;
 
 /// <summary>
 /// SQLite-based sliding-window rate limiter: per-minute/hour/day caps, one row per accepted
-/// request in the SAME per-conversation database conversation persistence uses (table
-/// <c>rate_limit_log</c>). Each check cleans up requests older than 24h, counts each configured
-/// window and— only if every window is under its cap — records the request, all in one transaction.
+/// request in the conversation's own database (table <c>rate_limit_log</c>), which it opens
+/// through <see cref="SQLiteConversationPersistenceService"/>. Each check cleans up requests older
+/// than 24h, counts each configured window and records the request only if every window is under
+/// its cap, all in one transaction.
 /// </summary>
 public class SQLiteRateLimitService : IRateLimitService
 {
@@ -28,29 +29,20 @@ public class SQLiteRateLimitService : IRateLimitService
     private readonly RateLimitOptions options;
 
     /// <summary>
-    /// Persistence configuration, read only for <c>StoragePath</c>: <c>rate_limit_log</c> lives in
-    /// the conversation's own database, not in one of its own.
-    /// </summary>
-    private readonly ConversationPersistenceOptions persistenceOptions;
-
-    /// <summary>
-    /// Owner of the database file. Delegated to for schema creation, since the rate check runs
+    /// Owner of the database file. Opens it at the current schema, since the rate check runs
     /// before any agent has had the chance to create the conversation's database.
     /// </summary>
-    private readonly IConversationPersistenceService persistenceService;
+    private readonly SQLiteConversationPersistenceService persistenceService;
 
     /// <param name="options">Rate limit configuration (<c>Morgana:RateLimiting</c>): enable flag, the three window caps and the error message templates.</param>
-    /// <param name="persistenceOptions">Persistence configuration, read only for <c>StoragePath</c> — the log lives in the same per-conversation database.</param>
-    /// <param name="persistenceService">Owner of the database file; delegated to for schema creation, since a rate check can run before any agent has saved a session.</param>
+    /// <param name="persistenceService">Owner of the database file: this service keeps its table in the conversation's own database and opens it through the persistence service that owns it, since a rate check can run before any agent has saved a session.</param>
     /// <param name="logger">Logger for allow/deny decisions and fail-open diagnostics.</param>
     public SQLiteRateLimitService(
         IOptions<RateLimitOptions> options,
-        IOptions<ConversationPersistenceOptions> persistenceOptions,
-        IConversationPersistenceService persistenceService,
+        SQLiteConversationPersistenceService persistenceService,
         ILogger<SQLiteRateLimitService> logger)
     {
         this.options = options.Value;
-        this.persistenceOptions = persistenceOptions.Value;
         this.persistenceService = persistenceService;
         this.logger = logger;
 
@@ -83,16 +75,9 @@ public class SQLiteRateLimitService : IRateLimitService
 
         try
         {
-            // Rate limiting runs BEFORE any agent executes, so the database may not exist yet —
-            // it's normally created lazily the first time an agent saves its session. Calling this
-            // here too, on-demand, avoids a FileNotFoundException on a brand-new conversation.
-            await persistenceService.EnsureDatabaseInitializedAsync(conversationId);
-
-            // The conversation's own database, which is also what scopes the limit: a caller opening a
-            // second conversation is counted separately, by design.
-            string sqliteConnectionString = GetConnectionString(conversationId);
-            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
-            await sqliteConnection.OpenAsync();
+            // Rate limiting runs before any agent executes, so the database may not exist yet; opening it creates it.
+            // It is also what scopes the limit: a caller opening a second conversation is counted separately, by design.
+            await using SqliteConnection sqliteConnection = await persistenceService.OpenDatabaseAsync(conversationId);
 
             // Cleanup + count + record all share one transaction so a second request for the same
             // conversation arriving mid-check can't interleave with this one and both slip past
@@ -168,9 +153,8 @@ public class SQLiteRateLimitService : IRateLimitService
     {
         try
         {
-            string sqliteConnectionString = GetConnectionString(conversationId);
-            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
-            await sqliteConnection.OpenAsync();
+            // The reset addresses the conversation's own database, which already exists for any conversation that was limited.
+            await using SqliteConnection sqliteConnection = await persistenceService.OpenDatabaseAsync(conversationId);
 
             // The whole log, not a window of it: this hands the conversation back its full allowance.
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
@@ -327,38 +311,6 @@ public class SQLiteRateLimitService : IRateLimitService
         sqliteCommand.Parameters.AddWithValue("@timestamp", utcNowIso);
 
         await sqliteCommand.ExecuteNonQueryAsync();
-    }
-
-    #endregion
-
-    #region Helper Methods
-
-    /// <summary>
-    /// Gets the SQLite connection string for a conversation database.
-    /// Reuses the same database file as conversation persistence.
-    /// </summary>
-    /// <param name="conversationId">Conversation whose database is addressed.</param>
-    /// <returns>Connection string pointing at that conversation's SQLite file.</returns>
-    private string GetConnectionString(string conversationId)
-    {
-        string sqliteDbPath = GetDatabasePath(conversationId);
-        return $"Data Source={sqliteDbPath}";
-    }
-
-    /// <summary>
-    /// Gets the database file path for a conversation.
-    /// Same pattern as SQLiteConversationPersistenceService.
-    /// </summary>
-    /// <param name="conversationId">Client-supplied conversation id; sanitised here before it touches a path.</param>
-    /// <returns><c>{StoragePath}/morgana-{sanitizedId}.db</c> — the same physical file persistence resolves for that id.</returns>
-    private string GetDatabasePath(string conversationId)
-    {
-        // conversationId is client-supplied (arrives via the REST API), so it's split on every
-        // character the OS forbids in a file name and rejoined with "_" before it ever touches a
-        // path — the same sanitisation SQLiteConversationPersistenceService applies to the exact
-        // same id, so both services always agree on which physical file backs a given conversation.
-        string sanitized = string.Join("_", conversationId.Split(Path.GetInvalidFileNameChars()));
-        return Path.Combine(persistenceOptions.StoragePath, $"morgana-{sanitized}.db");
     }
 
     #endregion

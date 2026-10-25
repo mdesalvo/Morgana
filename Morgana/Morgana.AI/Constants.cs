@@ -14,9 +14,9 @@ public static class Constants
 
     /// <summary>
     /// IDs of the framework prompts in <c>morgana.json</c>, resolved through
-    /// <c>IPromptResolverService</c>. They name framework actors rather than domain concepts, which
-    /// is why a domain intent never collides with one. The framework layer's own prompt is not here:
-    /// it is filed under the system's name itself, <see cref="Morgana"/>.
+    /// <c>IPromptResolverService</c>. They name framework actors rather than domain concepts: a domain
+    /// intent or prompt taking one of them is refused at startup. The framework layer's own prompt is filed under the
+    /// system's name itself, <see cref="Morgana"/>, which only <see cref="All"/> lists beside them.
     /// </summary>
     public static class Prompts
     {
@@ -31,6 +31,9 @@ public static class Constants
 
         /// <summary>The rewrite prompt that degrades rich output for a limited channel.</summary>
         public const string ChannelAdapter = "ChannelAdapter";
+
+        /// <summary>Every id under which a framework prompt is filed, the system's own included: a domain may take none of them.</summary>
+        public static readonly string[] All = [Morgana, Classifier, Guard, Presentation, ChannelAdapter];
     }
 
     /// <summary>

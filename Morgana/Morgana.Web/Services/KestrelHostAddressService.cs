@@ -58,13 +58,13 @@ public class KestrelHostAddressService : IHostAddressService
         if (configuration[PublicAddressKey] is { } declaredPublicAddress && !string.IsNullOrWhiteSpace(declaredPublicAddress))
             return declaredPublicAddress.Trim().TrimEnd('/');
 
+        // Nothing is bound before Kestrel starts listening: the question is asked again once it has.
         ICollection<string>? boundAddresses = server.Features.Get<IServerAddressesFeature>()?.Addresses;
 
+        // Without a bound address there is no interface to publish yet. That is the ordinary state while the
+        // cards are projected before Kestrel listens, so the caller alone judges whether the absence is a fault.
         if (boundAddresses is null || boundAddresses.Count == 0)
-        {
-            logger.LogWarning("The server reports no bound address yet: agents of this instance cannot publish a callable A2A interface");
             return null;
-        }
 
         // https first when both are bound: a card advertising the plaintext endpoint of an instance
         // that also serves TLS would have callers downgrade for no reason.

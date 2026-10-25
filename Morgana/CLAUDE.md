@@ -92,14 +92,13 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 
 | Folder | Purpose |
 |---|---|
-| `Abstractions/` | `MorganaActor`, `MorganaAgent`, `MorganaLanguageModel`, `MorganaTool`, `MorganaHostedAgent` (the `AIAgent` publishing an intent over A2A) |
+| `Abstractions/` | `MorganaActor`, `MorganaAgent`, `MorganaLanguageModel`, `MorganaTool`, `MorganaHostedAgent` (the `AIAgent` publishing an intent over A2A, with its session and the session store that decides which conversation an inbound A2A request is served on) |
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
 | `ChatClients/` | `IChatClient` decorators: `DustAccountingChatClient` |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
 | `Providers/` | `MorganaAIContextProvider` (context variables plus the shared registry), `MorganaChatHistoryProvider` |
-| `SessionStores/` | `MorganaHostedAgentSessionStore` — which conversation an inbound A2A request is served on |
 | `Telemetry/` | `MorganaTelemetry`, holding its own span and attribute glossary |
 | `Records.cs` | Every immutable record: actor messages, configuration, DTOs |
 | `Constants.cs` | The glossary: **every literal that is a contract between two parties who cannot see each other**, `PromptProperties` included. Deliberately absent: log text, prompt prose, `IConfiguration` keys. The test is a *resolver*, not a mention |
@@ -231,7 +230,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json`, domain from `agents.json`. Throws if one ID is declared in both |
 | `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads: the fenced two-layer prompt, tool descriptions, the per-turn held-context declaration, the colleagues declaration, a colleague's question |
 | `ConfigurationAgentDirectoryService` | `IAgentDirectoryService` | Both halves of A2A discovery, plus `ValidateTrustConfiguration` and `ValidatePublishedAddress` |
-| `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Merges every plugin's `agents.json`. Refuses a duplicated intent or prompt id and the reserved names `other` and `Morgana`. Its refusals are fatal |
+| `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Merges every plugin's `agents.json`. Refuses a duplicated intent or prompt id, `other` and the five framework prompt ids. Its refusals are fatal |
 | `HandlesIntentAgentRegistryService` | `IAgentRegistryService` | Discovers agents by attribute; bidirectional intent validation; validates `[ConsultsAgent]` |
 | `ConfigurationLanguageModelService` | `ILanguageModelService` | Builds the three tiers, each on the registered provider it names; the framework actors run on `ActorSystem:Tier` |
 | `ProvidesToolForIntentRegistryService` | `IToolRegistryService` | Discovers tools; warns on orphans; errors on duplicates |
@@ -442,7 +441,7 @@ fails or opens, silently.**
 3. Every `[ConsultsAgent]` names a reachable colleague and no two fold to one function name
 4. Tools: warn on orphans, error on duplicates for one intent
 5. Plugin `agents.json` files merge with no duplicated intent or prompt id and none declares `other`
-   or `Morgana`
+   or a framework prompt id
 6. All three tiers declared, each naming a registered provider and carrying a `Connection`, none with a provider, model or used connection field left on its placeholder, each tier's model priced by its provider, no provider registered twice, `ActorSystem:Tier` naming a tier
 7. Every admitted issuer — channel, partner and the ring alike — carries a name and a key of at least 256 bits and no name is admitted twice
 8. `ValidateTrustConfiguration`: each `Partners[]` entry names somebody once, does something, is coherent per open direction and carries a key that can sign

@@ -120,6 +120,11 @@ public class InterviewTools
             return $"Nothing recorded: '{ReservedFallbackIntent}' is reserved. It is the intent the classifier "
                    + "falls back to when it cannot place a message and no agent may claim it. Call this again with a name from the domain.";
 
+        // An intent named after a framework prompt is refused by Morgana at startup, so it is refused here while it costs nothing.
+        if (Constants.Prompts.All.Contains(cleanName, StringComparer.OrdinalIgnoreCase))
+            return $"Nothing recorded: '{cleanName}' is the name of one of Morgana's own prompts and an agent's prompt is found "
+                   + "by its intent's name, so Morgana would refuse to start. Call this again with a name from the domain.";
+
         if (draftStateService.Current?.Intents.Any(i =>
                 string.Equals(i.Name, cleanName, StringComparison.OrdinalIgnoreCase)) == true)
             return $"Nothing recorded: '{cleanName}' is already an intent of this domain, written before today. "

@@ -121,6 +121,13 @@ public class MorganaAIContextProvider : AIContextProvider
     }
 
     /// <summary>
+    /// Reads the value of one of the framework's own context keys; <c>null</c> when the session does not hold it.
+    /// </summary>
+    /// <remarks>Read without the per-variable access line: the agent and the consultation adapter ask it on every turn.</remarks>
+    public object? GetFrameworkKeyValue(AgentSession session, string frameworkKey)
+        => sessionState.GetOrInitializeState(session).Variables.GetValueOrDefault(frameworkKey);
+
+    /// <summary>
     /// Writes a variable to the session's conversation context.
     /// If the variable is declared as shared, <see cref="OnSharedContextUpdate"/> is invoked
     /// to persist the value into the conversation-scoped <c>shared_context</c> registry where

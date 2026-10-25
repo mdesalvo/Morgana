@@ -20,6 +20,7 @@ namespace Morgana.AI.Services;
 /// classifier's own prompt: the name is reserved. A domain declaring it is refused here rather
 /// than quietly corrected — the same way a partner is refused the name of this installation's own
 /// ring.</para>
+/// <para>Nor may a domain take the id of a framework prompt, since both layers are resolved in one registry.</para>
 /// </remarks>
 public class EmbeddedAgentConfigurationService : IAgentConfigurationService
 {
@@ -76,7 +77,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
     /// Deserialization errors logged per-assembly; searching continues to next assembly.
     /// </summary>
     /// <returns>The merged domain (empty when nothing was found)</returns>
-    /// <exception cref="InvalidOperationException">Two assemblies claim one intent or one prompt id.</exception>
+    /// <exception cref="InvalidOperationException">Two assemblies claim one intent or one prompt id. A domain takes a reserved name.</exception>
     private AgentConfiguration LoadAgentConfiguration()
     {
         logger.LogInformation("Searching for agents.json in loaded assemblies...");
@@ -156,6 +157,16 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                                     + "Rename the intent.");
                             }
 
+                            // An agent's prompt is looked up by its intent's name in the registry that holds the
+                            // framework's prompts: the agent would be served the framework's prompt instead of its own.
+                            if (Constants.Prompts.All.Contains(intent.Name, StringComparer.OrdinalIgnoreCase))
+                            {
+                                // Startup stops here, since the intent would be answered with a framework prompt.
+                                throw new InvalidOperationException(
+                                    $"Plugin '{declaringAssembly}' declares the intent '{intent.Name}', which is reserved: it is the id of one of the framework's prompts "
+                                    + "and an agent's prompt is looked up by its intent's name in the same registry. Rename the intent.");
+                            }
+
                             if (declaringAssemblyByIntent.TryGetValue(intent.Name, out string? firstAssembly))
                             {
                                 throw new InvalidOperationException(
@@ -173,6 +184,15 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
 
                         foreach (Records.Prompt prompt in config.Agents)
                         {
+                            // A prompt under a framework id would collide with the framework's own prompt in the one registry that resolves both.
+                            if (Constants.Prompts.All.Contains(prompt.ID, StringComparer.OrdinalIgnoreCase))
+                            {
+                                // Startup stops here, since the two prompts could not both be resolved by that id.
+                                throw new InvalidOperationException(
+                                    $"Plugin '{declaringAssembly}' declares the agent prompt '{prompt.ID}', which is reserved: it is the id of one of the framework's prompts "
+                                    + "and the two would collide in one registry. Rename the prompt.");
+                            }
+
                             // Two prompts under one id would leave which agent answers to the order the
                             // assemblies happened to load in.
                             if (declaringAssemblyByPrompt.TryGetValue(prompt.ID, out string? firstAssembly))

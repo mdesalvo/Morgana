@@ -51,7 +51,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     }
 
     /// <summary>
-    /// Scans every loaded assembly for <see cref="MorganaAgent"/> subclasses declaring an intent
+    /// Scans every loaded assembly for public <see cref="MorganaAgent"/> subclasses declaring an intent
     /// and returns the intent-to-type map, without validating it.
     /// </summary>
     /// <returns>Intent to agent type, case-insensitive; agents without <c>[HandlesIntent]</c> are skipped.</returns>
@@ -80,7 +80,9 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             })
             // Concrete agents only. An abstract base is scaffolding a domain author shares between
             // agents, never an agent that answers.
-            .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaAgent)));
+            .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaAgent)))
+            // Published agents only: a plugin offers its agents as public classes
+            .Where(t => t.IsVisible);
 
         foreach (Type? morganaAgentType in morganaAgentTypes)
         {

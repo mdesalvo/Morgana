@@ -77,11 +77,33 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
     /// <inheritdoc/>
     public async Task EnsureDatabaseInitializedAsync(string conversationId)
     {
-        string connectionString = GetConnectionString(conversationId);
-        await using SqliteConnection connection = new SqliteConnection(connectionString);
-        await connection.OpenAsync();
+        // Opening the database is what creates it and brings it to the current version.
+        await using SqliteConnection sqliteConnection = await OpenDatabaseAsync(conversationId);
+    }
 
-        await EnsureDatabaseInitializedAsync(connection);
+    /// <summary>Opens the conversation's database at the current schema version, creating it when absent; the caller disposes the connection.</summary>
+    public async Task<SqliteConnection> OpenDatabaseAsync(string conversationId)
+    {
+        // The file is named by the one rule that keeps a client-supplied id inside the storage folder.
+        SqliteConnection sqliteConnection = new SqliteConnection($"Data Source={GetDatabasePath(conversationId)}");
+
+        try
+        {
+            // Opening the connection creates the file when the conversation has none yet.
+            await sqliteConnection.OpenAsync();
+
+            // Every caller receives a database already at the current version; a current one pays one pragma read.
+            await EnsureDatabaseInitializedAsync(sqliteConnection);
+        }
+        catch
+        {
+            // A connection that failed to open or migrate is of no use to the caller, who never receives it to dispose.
+            await sqliteConnection.DisposeAsync();
+            throw;
+        }
+
+        // The caller owns the open connection from here.
+        return sqliteConnection;
     }
 
     /// <inheritdoc/>
@@ -114,13 +136,7 @@ public class SQLiteConversationPersistenceService : IConversationPersistenceServ
 
             // One database per conversation, so every agent of it writes to the same file and nothing
             // here has to filter by conversation.
-            string sqliteConnectionString = GetConnectionString(conversationId);
-            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
-            await sqliteConnection.OpenAsync();
-
-            // Cheap on the common path: a pragma read decides, so an already-initialized database
-            // pays one query rather than a schema script.
-            await EnsureDatabaseInitializedAsync(sqliteConnection);
+            await using SqliteConnection sqliteConnection = await OpenDatabaseAsync(conversationId);
 
             // Read and write are one step: a command may be rewriting this row while the agent's turn runs
             await using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
@@ -231,22 +247,16 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
 
             string conversationId = agentIdentifierParts[1];
 
-            // Get database connection
-            string sqliteConnectionString = GetConnectionString(conversationId);
-            string sqliteDbPath = GetDatabasePath(conversationId);
-
-            // Check if database file exists
-            if (!File.Exists(sqliteDbPath))
+            // A conversation never saved has no database: its agent starts from an empty session and nothing is created here.
+            if (!await ConversationExistsAsync(conversationId))
             {
                 logger.LogInformation("Conversation SQLite database for {AgentIdentifier} not found, returning null", agentIdentifier);
                 return null;
             }
 
-            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
-            await sqliteConnection.OpenAsync();
-
-            // A conversation opened before the dirty flag existed gains its column before the read clears it
-            await EnsureDatabaseInitializedAsync(sqliteConnection);
+            // The database is opened only after it is known to exist, so this lookup never creates one;
+            // a conversation opened before the dirty flag existed gains its column before the read clears it.
+            await using SqliteConnection sqliteConnection = await OpenDatabaseAsync(conversationId);
 
             // Reading the row is what brings the agent back in line with it, so the flag is cleared by the same
             // statement: no rewrite can land between the read and the clearing and go unnoticed
@@ -300,17 +310,15 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
     {
         try
         {
-            string sqliteConnectionString = GetConnectionString(conversationId);
-            string sqliteDbPath = GetDatabasePath(conversationId);
-
-            if (!File.Exists(sqliteDbPath))
+            // A conversation never saved has no active agent. The lookup must not create its database.
+            if (!await ConversationExistsAsync(conversationId))
             {
                 logger.LogInformation("SQLite database for conversation {ConversationId} not found", conversationId);
                 return null;
             }
 
-            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
-            await sqliteConnection.OpenAsync();
+            // The active agent is read from this conversation's database, which exists by now.
+            await using SqliteConnection sqliteConnection = await OpenDatabaseAsync(conversationId);
 
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             // The agent a resumed conversation wakes up on: active means it left a turn incomplete and
@@ -340,20 +348,15 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
     {
         try
         {
-            // Both paths are derived from the conversation id: the connection string opens the database and the path tells whether it was ever created.
-            string sqliteConnectionString = GetConnectionString(conversationId);
-            string sqliteDbPath = GetDatabasePath(conversationId);
-
             // A conversation never saved has no row to switch off. The call must not create its database.
-            if (!File.Exists(sqliteDbPath))
+            if (!await ConversationExistsAsync(conversationId))
             {
                 logger.LogInformation("SQLite database for conversation {ConversationId} not found", conversationId);
                 return;
             }
 
             // The row is switched off in this conversation's database, which exists by now.
-            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
-            await sqliteConnection.OpenAsync();
+            await using SqliteConnection sqliteConnection = await OpenDatabaseAsync(conversationId);
 
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             // Only is_active changes: the session and the messages are the agent's own and stay as it wrote them.
@@ -381,18 +384,15 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
 
         try
         {
-            string sqliteConnectionString = GetConnectionString(conversationId);
-            string sqliteDbPath = GetDatabasePath(conversationId);
-
-            // Early return if database doesn't exist
-            if (!File.Exists(sqliteDbPath))
+            // A conversation never saved has no transcript to redraw.
+            if (!await ConversationExistsAsync(conversationId))
             {
                 logger.LogInformation("SQLite database for conversation {ConversationId} not found, returning empty history", conversationId);
                 return [];
             }
 
-            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
-            await sqliteConnection.OpenAsync();
+            // The database is opened only once it is known to exist, so a history read never creates one.
+            await using SqliteConnection sqliteConnection = await OpenDatabaseAsync(conversationId);
 
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             sqliteCommand.CommandText = "SELECT agent_name, agent_session, is_active FROM morgana ORDER BY creation_date ASC;";
@@ -452,13 +452,9 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
 
         try
         {
-            string sqliteConnectionString = GetConnectionString(conversationId);
-            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
-            await sqliteConnection.OpenAsync();
-
-            // The orchestrator speaks before any agent does — the welcome opens the conversation —
+            // The orchestrator speaks before any agent does, since the welcome opens the conversation,
             // so this may be the first write the database ever receives.
-            await EnsureDatabaseInitializedAsync(sqliteConnection);
+            await using SqliteConnection sqliteConnection = await OpenDatabaseAsync(conversationId);
 
             // Read and write are one step: the user's phrase arrives on one path while an answer
             // leaves on another. Either losing the other's line would tear a hole in the dialogue.
@@ -516,11 +512,11 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
     public async Task<IReadOnlyList<ChatMessage>> LoadParticipantMessagesAsync(string conversationId, string agentName)
     {
         // A conversation nobody has spoken in has no database, which is not a failure to report
-        if (!ConversationExists(conversationId))
+        if (!await ConversationExistsAsync(conversationId))
             return [];
 
-        await using SqliteConnection sqliteConnection = new SqliteConnection(GetConnectionString(conversationId));
-        await sqliteConnection.OpenAsync();
+        // The participant's row lives in the conversation's own database.
+        await using SqliteConnection sqliteConnection = await OpenDatabaseAsync(conversationId);
 
         await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
 
@@ -548,11 +544,9 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
 
         try
         {
-            await using SqliteConnection sqliteConnection = new SqliteConnection(GetConnectionString(conversationId));
-            await sqliteConnection.OpenAsync();
-
-            // A conversation opened before the dirty flag existed gains its column before the rewrite raises it
-            await EnsureDatabaseInitializedAsync(sqliteConnection);
+            // The participant's row is rewritten in the conversation's own database, which gains
+            // the dirty column first when it was opened before the flag existed.
+            await using SqliteConnection sqliteConnection = await OpenDatabaseAsync(conversationId);
 
             // Read and write are one step: the agent this row belongs to may be writing its own turn
             await using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
@@ -627,13 +621,9 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
     {
         try
         {
-            string sqliteConnectionString = GetConnectionString(conversationId);
-            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
-            await sqliteConnection.OpenAsync();
-
-            // First-writer pattern: channel handshake may precede any agent execution,
-            // so we must guarantee the schema exists before the upsert.
-            await EnsureDatabaseInitializedAsync(sqliteConnection);
+            // The handshake goes to the conversation's own database, created on first write: it may
+            // precede any agent execution, so the schema has to exist before the upsert.
+            await using SqliteConnection sqliteConnection = await OpenDatabaseAsync(conversationId);
 
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             sqliteCommand.CommandText =
@@ -689,16 +679,15 @@ ON CONFLICT(id) DO UPDATE SET
     {
         try
         {
-            string sqliteDbPath = GetDatabasePath(conversationId);
-            if (!File.Exists(sqliteDbPath))
+            // A conversation never started has no handshake on record.
+            if (!await ConversationExistsAsync(conversationId))
             {
                 logger.LogInformation("SQLite database for conversation {ConversationId} not found, no persisted channel metadata", conversationId);
                 return null;
             }
 
-            string sqliteConnectionString = GetConnectionString(conversationId);
-            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
-            await sqliteConnection.OpenAsync();
+            // The handshake is the conversation's single channel row, read from its own database.
+            await using SqliteConnection sqliteConnection = await OpenDatabaseAsync(conversationId);
 
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             sqliteCommand.CommandText =
@@ -755,13 +744,9 @@ WHERE id = 1;
     {
         try
         {
-            string sqliteConnectionString = GetConnectionString(conversationId);
-            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
-            await sqliteConnection.OpenAsync();
-
-            // First-writer pattern: a shared variable can be written before the agent has saved
-            // its first session, so the schema must be guaranteed before the upsert.
-            await EnsureDatabaseInitializedAsync(sqliteConnection);
+            // The variable is written to the conversation's own database: it can be written before the agent
+            // has saved its first session, so the schema has to exist before the upsert.
+            await using SqliteConnection sqliteConnection = await OpenDatabaseAsync(conversationId);
 
             // Serialize the value as JSON, then encrypt for at-rest parity with agent_session.
             // Shared variables are typically short strings (e.g. customerCode), so the overhead is
@@ -806,16 +791,13 @@ WHERE id = 1;
     {
         try
         {
-            string sqliteConnectionString = GetConnectionString(conversationId);
-            string sqliteDbPath = GetDatabasePath(conversationId);
-
             // No DB → no shared variables. The conversation may simply have not started yet;
             // the channel handshake may also be the only thing that has run so far.
-            if (!File.Exists(sqliteDbPath))
+            if (!await ConversationExistsAsync(conversationId))
                 return [];
 
-            await using SqliteConnection sqliteConnection = new SqliteConnection(sqliteConnectionString);
-            await sqliteConnection.OpenAsync();
+            // The registry lives in the conversation's own database, which exists by now.
+            await using SqliteConnection sqliteConnection = await OpenDatabaseAsync(conversationId);
 
             await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
             sqliteCommand.CommandText = "SELECT variable_name, variable_value FROM shared_context;";
@@ -863,18 +845,6 @@ WHERE id = 1;
 
     #region Utilities
 
-    /// <summary>
-    /// Constructs the SQLite connection string for a conversation database.
-    /// Simple configuration for single-writer scenario (one agent at a time).
-    /// </summary>
-    /// <param name="conversationId">Conversation identifier</param>
-    /// <returns>SQLite connection string</returns>
-    private string GetConnectionString(string conversationId)
-    {
-        string sqliteDbPath = GetDatabasePath(conversationId);
-        return $"Data Source={sqliteDbPath}";
-    }
-
     /// <inheritdoc />
     public async Task<bool> IsDirtyAsync(string agentIdentifier)
     {
@@ -883,14 +853,12 @@ WHERE id = 1;
             throw new ArgumentException($"Invalid agent_identifier format: '{agentIdentifier}'. Expected format: '{{agent_name}}-{{conversation_id}}'");
 
         // An agent whose conversation has no database has no row that anybody could have rewritten
-        if (!ConversationExists(agentIdentifierParts[1]))
+        if (!await ConversationExistsAsync(agentIdentifierParts[1]))
             return false;
 
-        await using SqliteConnection sqliteConnection = new SqliteConnection(GetConnectionString(agentIdentifierParts[1]));
-        await sqliteConnection.OpenAsync();
-
-        // A conversation opened before the dirty flag existed gains its column, clean, before it is asked
-        await EnsureDatabaseInitializedAsync(sqliteConnection);
+        // The conversation's database exists by the check above; one opened before the dirty flag existed
+        // gains its column, clean, before it is asked.
+        await using SqliteConnection sqliteConnection = await OpenDatabaseAsync(agentIdentifierParts[1]);
 
         await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
         sqliteCommand.CommandText = "SELECT is_dirty FROM morgana WHERE agent_identifier = @agent_identifier;";
@@ -901,8 +869,9 @@ WHERE id = 1;
     }
 
     /// <inheritdoc/>
-    public bool ConversationExists(string conversationId)
-        => File.Exists(GetDatabasePath(conversationId));
+    public Task<bool> ConversationExistsAsync(string conversationId)
+        // On SQLite the conversation is its database file, which a lookup on the local disk answers.
+        => Task.FromResult(File.Exists(GetDatabasePath(conversationId)));
 
     /// <summary>
     /// Constructs the full file path for a conversation database.

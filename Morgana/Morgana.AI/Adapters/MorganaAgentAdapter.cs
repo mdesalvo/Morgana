@@ -742,7 +742,7 @@ public class MorganaAgentAdapter
 
         // A colleague may not consult a colleague of its own: the chain stops at one hop, so the call
         // graph cannot contain a cycle and no caller chain has to travel with the request.
-        if (contextProvider.GetVariable(callerSession, Constants.ContextKeys.ServingConsultation) is not null)
+        if (contextProvider.GetFrameworkKeyValue(callerSession, Constants.ContextKeys.ServingConsultation) is not null)
         {
             logger.LogWarning("Agent '{CallerIntent}' attempted to consult '{PeerIntent}' while itself answering a colleague", callerIntent, peerIntent);
             return RefusalEnvelope("You are currently answering a colleague and a colleague may not consult a further colleague. Answer with what you know.");
@@ -790,7 +790,7 @@ public class MorganaAgentAdapter
     /// <see cref="JsonElement"/> form a value takes once its session has been persisted and reloaded.
     /// </summary>
     private static int ReadConsultationRounds(AgentSession callerSession, MorganaAIContextProvider contextProvider)
-        => contextProvider.GetVariable(callerSession, Constants.ContextKeys.ConsultationRounds) switch
+        => contextProvider.GetFrameworkKeyValue(callerSession, Constants.ContextKeys.ConsultationRounds) switch
         {
             int rounds => rounds,
             JsonElement { ValueKind: JsonValueKind.Number } element => element.GetInt32(),
