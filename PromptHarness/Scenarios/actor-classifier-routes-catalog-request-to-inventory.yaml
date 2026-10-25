@@ -1,4 +1,4 @@
-id: classifier-routes-catalog-request-to-inventory
+id: actor-classifier-routes-catalog-request-to-inventory
 description: >-
   The classifier reads nothing but `name (Description)` for every intent, joined into one line, so
   a word that belongs to one desk and appears in another desk's description is not documentation —

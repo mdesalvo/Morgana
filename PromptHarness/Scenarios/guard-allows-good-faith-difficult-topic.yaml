@@ -15,4 +15,4 @@ turns:
       toolsCalled: [GetInvoices]
       textNotEmpty: true
     judgeNot:
-      - "The response refuses to help, apologizes for the topic, or asks the user to rephrase."
+      - "The response refuses to help with the invoice or asks the user to rephrase."

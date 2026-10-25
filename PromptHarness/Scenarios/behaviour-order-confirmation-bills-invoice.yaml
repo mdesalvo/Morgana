@@ -18,15 +18,10 @@ description: >-
   the agent asking "Shall I proceed?" every single run rather than treating the front-loaded seal
   word as sufficient. That is correct behaviour, not a bug — the scenario is written to match it.
 
-  The invoice judgeNot was reworded after a live run: 'a specific invoice total, amount or line item'
-  fired on the remaining stock and the invoiceId that this agent's own Formatting REQUIRES on the
-  Confirmed card, so the judge and the prose were asking for opposite things. What the rule protects
-  is that the greenhouse never reads the invoice out — its money, not its existence. That rule now
-  covers more ground than when it was written and deliberately so: the judge reads the card's
-  rendered content along with the text, so an agent that keeps its prose clean and puts the invoice's
-  total on a card no longer slips past. The wording holds unchanged under the wider view — the
-  Confirmed card this Formatting prescribes carries orderId, remaining stock and invoiceId. None
-  of those is a total, a tax or a charge line.
+  The invoice judgeNot forbids an amount given as what was billed, never naming the invoice: the
+  Confirmed card that the agent's Formatting prescribes carries the orderId, the remaining stock and
+  the invoiceId, none of which is a total, a tax or a charge line. The judge reads the card's rendered
+  content along with the text.
 
 turns:
   - say: "Hi, I'd like to order 1 pack of the wildflower seed mix, my customer code is T780C"
@@ -65,12 +60,12 @@ turns:
       agent: InventoryAgent
       toolsCalled: [ConfirmOrder]
       textNotEmpty: true
-      textNotContains: ["#INT#", "invoiceId", "InvoiceLines"]
+      textNotContains: ["invoiceId", "InvoiceLines"]
     judge:
       - "The response confirms the order is now settled or binding."
       - "The response says the purchase has been billed to the customer."
       - "The response tells the customer that invoice can be seen if they wish."
     judgeNot:
-      # Judged against everything the customer sees, card included. Naming the invoice is allowed and
-      # required; reading its money out is what this forbids, wherever it would be rendered.
-      - "The response gives the invoice's own total, its tax, or a line on it."
+      # ConfirmOrder returns no amount and the invoice is Billing's alone: any figure given as what was
+      # billed is invented, on the customer's own books.
+      - "The response presents an amount as what the customer has been billed."

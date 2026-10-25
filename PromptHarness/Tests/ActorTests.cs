@@ -18,12 +18,12 @@ public sealed class ActorTests
     public ActorTests(MorganaHostFixture fixture) => this.fixture = fixture;
 
     [Theory]
-    [InlineData("classifier-routes-unambiguous-billing-request")]
-    [InlineData("classifier-routes-catalog-request-to-inventory")]
+    [InlineData("actor-classifier-routes-unambiguous-billing-request")]
+    [InlineData("actor-classifier-routes-catalog-request-to-inventory")]
     [InlineData("actor-complement-reintroduces-morgana")]
-    [InlineData("classifier-disambiguates-colliding-billing-contract")]
+    [InlineData("actor-classifier-disambiguates-colliding-billing-contract")]
     [InlineData("actor-classifier-routes-off-domain-to-other")]
-    [InlineData("channeladapter-degrades-invoice-card")]
+    [InlineData("actor-channeladapter-degrades-invoice-card")]
     public async Task Actor_scenario_holds(string scenarioId)
     {
         ScenarioOutcome outcome = await fixture.Runner.RunAsync(scenarioId);
