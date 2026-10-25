@@ -117,7 +117,7 @@
     <!-- Input Area -->
     <div class="input-container">
         <textarea
-            @bind="inputText"
+            @bind="ChatStateService.ComposerText"
             @bind:event="oninput"
             @onkeyup="HandleKeyPressAsync"
             aria-label="Message input"
@@ -146,11 +146,6 @@
     // =========================================================================
     // LOCAL UI STATE (not shared across components)
     // =========================================================================
-
-    /// <summary>
-    /// Current text input from the user (two-way bound to textarea).
-    /// </summary>
-    private string inputText = string.Empty;
 
     /// <summary>
     /// Landing message (waiting for Morgana presentation).
@@ -272,22 +267,26 @@
     /// <returns>Task representing the async send operation</returns>
     private async Task SendMessageAsync()
     {
+        await SendTurnAsync(null);
+    }
+
+    /// <summary>
+    /// Sends the composer's words as a turn; <paramref name="pressedOffering"/> is the message whose quick reply the turn presses, null for a typed turn.
+    /// </summary>
+    private async Task SendTurnAsync(ChatMessage? pressedOffering)
+    {
         // Validate input
-        if (string.IsNullOrWhiteSpace(inputText) || ChatStateService.IsSending || !ChatStateService.IsConnected)
+        if (string.IsNullOrWhiteSpace(ChatStateService.ComposerText) || ChatStateService.IsSending || !ChatStateService.IsConnected)
             return;
 
         // Captured and cleared up front, so the box is empty the moment the user hits send
         // rather than after the round-trip completes.
-        string messageText = inputText.Trim();
-        inputText = string.Empty;
-        ChatStateService.IsSending = true;
+        string messageText = ChatStateService.ComposerText.Trim();
+        ChatStateService.ComposerText = string.Empty;
 
-        // Add user message to UI
-        ChatStateService.AddUserMessage(messageText);
-
-        // Shown immediately: the real answer arrives over SignalR, so without this the UI
-        // would sit inert for the whole time the agent is thinking.
-        ChatStateService.AddTypingIndicator();
+        // The screen takes the turn at once: the send flag, the visitor's own message echoed
+        // and the typing indicator shown while the answer comes over SignalR.
+        ChatStateService.BeginTurn(messageText, pressedOffering);
         StateHasChanged();
 
         // Only a failure needs a re-render here: the success path is repainted by the
@@ -502,8 +501,8 @@
 
         // The reply's Value is what gets sent, not its Label: the button text is for the
         // user, the value is the phrasing Morgana expects back.
-        inputText = reply.Value;
-        await SendMessageAsync();
+        ChatStateService.ComposerText = reply.Value;
+        await SendTurnAsync(message);
     }
 
     /// <summary>
@@ -561,7 +560,7 @@
     private bool IsSendButtonDisabled =>
         !ChatStateService.IsConnected ||
         ChatStateService.IsSending ||
-        string.IsNullOrWhiteSpace(inputText) ||
+        string.IsNullOrWhiteSpace(ChatStateService.ComposerText) ||
         !ChatStateService.IsInitialized ||
         ChatStateService.HasActiveQuickReplies() ||
         ChatStateService.HasTypingIndicator() ||

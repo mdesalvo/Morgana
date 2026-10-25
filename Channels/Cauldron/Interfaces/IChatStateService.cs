@@ -71,9 +71,20 @@ public interface IChatStateService
     void NoteDelivered(DateTime morganaTimestamp);
 
     /// <summary>
-    /// Adds a user message to the chat.
+    /// The words in the composer, held as chat state so that a withdrawn turn can give them back.
     /// </summary>
-    void AddUserMessage(string text);
+    string ComposerText { get; set; }
+
+    /// <summary>
+    /// Opens a turn on the screen: raises the send flag and adds the user's message and the typing indicator.
+    /// <paramref name="pressedOffering"/> is the message whose quick reply the turn presses, null for a typed turn.
+    /// </summary>
+    void BeginTurn(string text, ChatMessage? pressedOffering = null);
+
+    /// <summary>
+    /// Undoes the turn that <see cref="BeginTurn"/> opened, leaving the screen as it was before the send. Does nothing when no turn is open.
+    /// </summary>
+    void WithdrawTurn();
 
     /// <summary>
     /// Adds a typing indicator for the current agent.

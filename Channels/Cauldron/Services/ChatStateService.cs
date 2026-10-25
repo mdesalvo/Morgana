@@ -84,20 +84,66 @@ public class ChatStateService : IChatStateService
     // MESSAGE OPERATIONS
     // =========================================================================
 
+    /// <inheritdoc />
+    public string ComposerText { get; set; } = string.Empty;
+
     /// <summary>
-    /// Adds a user message to the chat.
+    /// What a turn put on the screen and the words it took from the composer, kept so that the turn can be undone.
     /// </summary>
-    public void AddUserMessage(string text)
+    private sealed record OpenTurn(ChatMessage UserMessage, ChatMessage? PressedOffering, string WordsToGiveBack);
+
+    /// <summary>
+    /// The turn that <see cref="BeginTurn"/> opened and nothing has closed yet, null while none is open.
+    /// </summary>
+    private OpenTurn? openTurn;
+
+    /// <inheritdoc />
+    public void BeginTurn(string text, ChatMessage? pressedOffering = null)
     {
+        // A press sends the button's value, which is not the user's words: only a typed turn has words to give back
+        string wordsToGiveBack = pressedOffering != null ? string.Empty : text;
+
+        // One turn at a time: the composer stays shut until the answer arrives or the turn is withdrawn
+        IsSending = true;
+
         // Echoed locally and immediately: the user sees their own words without waiting
         // for the server, which never sends them back.
-        ChatMessages.Add(new ChatMessage
+        ChatMessage userMessage = new ChatMessage
         {
             ConversationId = ConversationId,
             Text = text,
             Type = MessageType.User,
             Timestamp = DateTime.UtcNow
-        });
+        };
+        ChatMessages.Add(userMessage);
+
+        // Shown immediately: the real answer arrives over SignalR, so without this the UI
+        // would sit inert for the whole time the agent is thinking.
+        AddTypingIndicator();
+
+        // What a refusal of this turn would have to undo, until the next turn replaces it
+        openTurn = new OpenTurn(userMessage, pressedOffering, wordsToGiveBack);
+    }
+
+    /// <inheritdoc />
+    public void WithdrawTurn()
+    {
+        // No turn is open, so there is nothing to undo
+        if (openTurn == null)
+            return;
+
+        // The user's bubble and the indicator go away: Morgana recorded neither
+        ChatMessages.Remove(openTurn.UserMessage);
+        RemoveTypingIndicator();
+
+        // The row of buttons that the press answered becomes pressable again
+        if (openTurn.PressedOffering != null)
+            openTurn.PressedOffering.SelectedQuickReplyId = null;
+
+        // Typed words return to the composer so the user does not retype them
+        ComposerText = openTurn.WordsToGiveBack;
+        IsSending = false;
+        openTurn = null;
     }
 
     /// <summary>

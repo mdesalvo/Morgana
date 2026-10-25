@@ -304,6 +304,17 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
 
             if (!response.IsSuccessStatusCode)
             {
+                // A limit was hit and Morgana has already told the user why over the channel: Cauldron adds nothing of its own
+                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    _logger.LogWarning("SendMessage refused on a limit: {StatusCode}", response.StatusCode);
+
+                    // Morgana refused the turn on a limit and recorded nothing: the screen goes back to how it
+                    // was before the send, with the user's words in the composer.
+                    _chatStateService.WithdrawTurn();
+                    return false;
+                }
+
                 _logger.LogError("SendMessage failed: {StatusCode}", response.StatusCode);
                 _chatStateService.RemoveTypingIndicator();
                 _chatStateService.AddChatError($"Message not sent: {response.StatusCode}. Please try again.", "send_message_http_error");
