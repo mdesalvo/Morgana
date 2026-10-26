@@ -56,7 +56,7 @@ Activated when the user says things like:
    - Guard (`GuardTests` — `Harness__EnableGuardrail=true`)
    - Conversation persistence (`ConversationPersistenceTests` — `Harness__EnableGuardrail=true`, the same knob as the guard group but its own invocation: it stages one refused turn among the five it drives and follows the database after each one)
    - Summarizer (`SummarizationTests` — `Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4`)
-   - Dust (`DustTests` — `Harness__DustBudgetPerConversation=15`; 3 and 8 both let one turn jump past 90% straight into exhaustion, which reads as "90% never appeared")
+   - Dust (`DustTests` — `Harness__DustBudgetPerConversation=100`; the test measures one turn on the tier under test and places the gauge below each threshold itself, so any budget of at least twenty turns works whatever provider serves the tier; a tier priced at zero skips it)
    - Federation (`FederationTests` — `Harness__FederatedPeer=true`, which stands a **second Morgana** up and **replaces the whole domain** of the instance under test with one toolless agent. Every other group would find its own agents missing, so this one never shares an invocation with anything)
 
    Plus `HarnessSmokeTests`, which is not a choice: step 4 runs it regardless.
@@ -123,7 +123,7 @@ Activated when the user says things like:
    # Boot-flagged — one knob each, never together
    Harness__EnableGuardrail=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~GuardTests"
    Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~SummarizationTests"
-   Harness__DustBudgetPerConversation=15 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~DustTests"
+   Harness__DustBudgetPerConversation=100 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~DustTests"
    Harness__FederatedPeer=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"
    Harness__EnableGuardrail=true dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ConversationPersistenceTests"
    ```
