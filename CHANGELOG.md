@@ -27,7 +27,6 @@ A request that no agent claims is answered with the same menu, so the user alway
 - The LLM configuration moves to `Morgana:LanguageModels:Tiers`: one entry per tier with its own `Provider`, `Connection` and `Options`, while Morgana's own actors run on the tier that `Morgana:ActorSystem:Tier` names. `MagicDust` leaves the configuration: a tier's dust follows from its model's price
 - A tier on Azure OpenAI or Ollama runs only with its own `Pricing`: their models are named by the customer, so their plugins ship no price list
 - An agent stays in service by default and hands the conversation back by calling `SetTurnEnding` when the user takes their leave, instead of calling `SetTurnContinuation` to stay
-- `agents.json` is lighter: the section labels (`[TARGET]`, `[PERSONALITY]`, `[INSTRUCTIONS]`, `[FORMATTING]`) are written by the framework, `Type` and `SubType` are gone and `ConsultMeFor` is renamed `Territory`
 
 ### 🐛 Fixed
 - On Claude 5.5 models the answer that an agent wrote before closing its turn never reached the user, hidden by the provider as reasoning
