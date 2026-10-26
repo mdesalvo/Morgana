@@ -6,6 +6,7 @@ using Microsoft.FluentUI.AspNetCore.Components;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.LanguageModels.Anthropic;
+using Morgana.AI.LanguageModels.AzureOpenAI;
 using Morgana.AI.LanguageModels.Google;
 using Morgana.AI.LanguageModels.Ollama;
 using Morgana.AI.LanguageModels.OpenAI;
@@ -80,9 +81,10 @@ builder.Services.AddSingleton<IAssetPackageService, AssetPackageService>();
 
 // The workbench registers every provider so that a tier chooses any of them in configuration alone.
 builder.Services.AddSingleton<MorganaLanguageModel, AnthropicLanguageModel>();
-builder.Services.AddSingleton<MorganaLanguageModel, OpenAILanguageModel>();
-builder.Services.AddSingleton<MorganaLanguageModel, OllamaLanguageModel>();
+builder.Services.AddSingleton<MorganaLanguageModel, AzureOpenAILanguageModel>();
 builder.Services.AddSingleton<MorganaLanguageModel, GoogleLanguageModel>();
+builder.Services.AddSingleton<MorganaLanguageModel, OllamaLanguageModel>();
+builder.Services.AddSingleton<MorganaLanguageModel, OpenAILanguageModel>();
 
 // The tiers are read from the user secrets that Morgana shares.
 builder.Services.AddSingleton<ILanguageModelService>(sp =>

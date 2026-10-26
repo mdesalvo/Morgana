@@ -25,9 +25,10 @@ COPY ["Alembic/Alembic.csproj", "Alembic/"]
 COPY ["Alembic/Directory.Build.props", "Alembic/"]
 COPY ["Morgana/Morgana.AI/Morgana.AI.csproj", "Morgana/Morgana.AI/"]
 COPY ["Morgana/Morgana.AI.LanguageModels/Anthropic/Morgana.AI.LanguageModels.Anthropic.csproj", "Morgana/Morgana.AI.LanguageModels/Anthropic/"]
-COPY ["Morgana/Morgana.AI.LanguageModels/OpenAI/Morgana.AI.LanguageModels.OpenAI.csproj", "Morgana/Morgana.AI.LanguageModels/OpenAI/"]
-COPY ["Morgana/Morgana.AI.LanguageModels/Ollama/Morgana.AI.LanguageModels.Ollama.csproj", "Morgana/Morgana.AI.LanguageModels/Ollama/"]
+COPY ["Morgana/Morgana.AI.LanguageModels/AzureOpenAI/Morgana.AI.LanguageModels.AzureOpenAI.csproj", "Morgana/Morgana.AI.LanguageModels/AzureOpenAI/"]
 COPY ["Morgana/Morgana.AI.LanguageModels/Google/Morgana.AI.LanguageModels.Google.csproj", "Morgana/Morgana.AI.LanguageModels/Google/"]
+COPY ["Morgana/Morgana.AI.LanguageModels/Ollama/Morgana.AI.LanguageModels.Ollama.csproj", "Morgana/Morgana.AI.LanguageModels/Ollama/"]
+COPY ["Morgana/Morgana.AI.LanguageModels/OpenAI/Morgana.AI.LanguageModels.OpenAI.csproj", "Morgana/Morgana.AI.LanguageModels/OpenAI/"]
 COPY ["Morgana/Morgana.Contracts/Morgana.Contracts.csproj", "Morgana/Morgana.Contracts/"]
 COPY ["Morgana/Directory.Build.props", "Morgana/"]
 
@@ -38,9 +39,10 @@ RUN dotnet restore "Alembic/Alembic.csproj"
 COPY Alembic/ Alembic/
 COPY Morgana/Morgana.AI/ Morgana/Morgana.AI/
 COPY Morgana/Morgana.AI.LanguageModels/Anthropic/ Morgana/Morgana.AI.LanguageModels/Anthropic/
-COPY Morgana/Morgana.AI.LanguageModels/OpenAI/ Morgana/Morgana.AI.LanguageModels/OpenAI/
-COPY Morgana/Morgana.AI.LanguageModels/Ollama/ Morgana/Morgana.AI.LanguageModels/Ollama/
+COPY Morgana/Morgana.AI.LanguageModels/AzureOpenAI/ Morgana/Morgana.AI.LanguageModels/AzureOpenAI/
 COPY Morgana/Morgana.AI.LanguageModels/Google/ Morgana/Morgana.AI.LanguageModels/Google/
+COPY Morgana/Morgana.AI.LanguageModels/Ollama/ Morgana/Morgana.AI.LanguageModels/Ollama/
+COPY Morgana/Morgana.AI.LanguageModels/OpenAI/ Morgana/Morgana.AI.LanguageModels/OpenAI/
 COPY Morgana/Morgana.Contracts/ Morgana/Morgana.Contracts/
 
 # Build application in Release mode — InsideDockerBuild skips

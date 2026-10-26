@@ -57,7 +57,7 @@ Morgana/
   Morgana/                 # working directory
     Morgana.Contracts/     # zero-dependency wire contracts (NuGet)
     Morgana.AI/            # core framework library (NuGet)
-    Morgana.AI.LanguageModels/  # LLM providers, one plugin each (NuGet): Anthropic, OpenAI, Ollama, Google
+    Morgana.AI.LanguageModels/  # LLM providers, one plugin each (NuGet): Anthropic, AzureOpenAI, Google, Ollama, OpenAI
     Morgana.Web/           # ASP.NET Core host
     Directory.Build.props  # shared build settings, version, dependencies
   Channels/                # Cauldron (Blazor), Grimoire (rich TTY), Rune (poor TTY)

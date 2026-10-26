@@ -4,9 +4,10 @@ using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.LanguageModels.Anthropic;
-using Morgana.AI.LanguageModels.OpenAI;
+using Morgana.AI.LanguageModels.AzureOpenAI;
 using Morgana.AI.LanguageModels.Google;
 using Morgana.AI.LanguageModels.Ollama;
+using Morgana.AI.LanguageModels.OpenAI;
 using Morgana.AI.Services;
 using PromptHarness.Infrastructure;
 using Xunit;
@@ -285,6 +286,37 @@ public sealed class LanguageModelTests
         Assert.Contains(configured, refusal.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void LanguageModel_An_AzureOpenAI_tier_without_its_own_Pricing_is_refused()
+    {
+        // Azure serves deployments that the customer names, so its pricing.json lists nothing and a tier must price its own.
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(() => Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "AzureOpenAI"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "https://acme.openai.azure.com"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "acme-gpt54-prod"))));
+
+        Assert.Contains("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("acme-gpt54-prod", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("AzureOpenAI", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LanguageModel_An_AzureOpenAI_tier_runs_its_deployment_on_the_Pricing_that_it_declares()
+    {
+        // The deployment name is the ModelId and the contract's price is the tier's own.
+        ILanguageModelService llm = Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "AzureOpenAI"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "https://acme.openai.azure.com"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "acme-gpt54-prod"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:InputUsdPerMillion", "2.75"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:OutputUsdPerMillion", "16.50"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheReadUsdPerMillion", "0.275"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheWriteUsdPerMillion", "2.75")));
+
+        Assert.Equal("acme-gpt54-prod", MetadataOf(llm, Records.LLMTier.Economy).DefaultModelId);
+        Assert.Equal(5455, llm.GetMorganaDust(Records.LLMTier.Economy).InputTokensPerDustUnit);
+    }
+
     [Theory]
     [InlineData("Economy", Records.LLMTier.Economy)]
     [InlineData("efficiency", Records.LLMTier.Efficiency)]
@@ -329,7 +361,7 @@ public sealed class LanguageModelTests
                 values.Remove(key);
 
         IConfiguration configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
-        MorganaLanguageModel[] providers = [new AnthropicLanguageModel(), new OpenAILanguageModel(), new OllamaLanguageModel(), new GoogleLanguageModel()];
+        MorganaLanguageModel[] providers = [new AnthropicLanguageModel(), new AzureOpenAILanguageModel(), new GoogleLanguageModel(), new OllamaLanguageModel(), new OpenAILanguageModel()];
         // The service reads Morgana's own prompt and no domain prompt, so the domain declares nothing.
         ConfigurationPromptResolverService promptResolver = new ConfigurationPromptResolverService(new ScriptedDomain());
         return new ConfigurationLanguageModelService(configuration, duplicateProvider is null ? providers : [.. providers, duplicateProvider], promptResolver);

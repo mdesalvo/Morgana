@@ -15,8 +15,8 @@ maintenance: vendors add models, change prices, end promotions and retire models
 | Plugin | File | Official sources |
 |---|---|---|
 | Anthropic | `Morgana/Morgana.AI.LanguageModels/Anthropic/pricing.json` | https://platform.claude.com/docs/en/about-claude/pricing · https://platform.claude.com/docs/en/about-claude/models/overview · https://platform.claude.com/docs/en/about-claude/model-deprecations |
-| OpenAI | `Morgana/Morgana.AI.LanguageModels/OpenAI/pricing.json` | https://developers.openai.com/api/docs/pricing · https://developers.openai.com/api/docs/deprecations |
 | Google | `Morgana/Morgana.AI.LanguageModels/Google/pricing.json` | https://ai.google.dev/gemini-api/docs/pricing · https://ai.google.dev/gemini-api/docs/models · https://ai.google.dev/gemini-api/docs/deprecations |
+| OpenAI | `Morgana/Morgana.AI.LanguageModels/OpenAI/pricing.json` | https://developers.openai.com/api/docs/pricing · https://developers.openai.com/api/docs/deprecations |
 
 Ollama is out of scope: it serves whatever model a deployment installs, so it ships with
 `"Models": []` and a tier running an Ollama model declares its own `Pricing`. The same holds for any

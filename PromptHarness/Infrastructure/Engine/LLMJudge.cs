@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.LanguageModels.Anthropic;
+using Morgana.AI.LanguageModels.AzureOpenAI;
 using Morgana.AI.LanguageModels.Google;
 using Morgana.AI.LanguageModels.Ollama;
 using Morgana.AI.LanguageModels.OpenAI;
@@ -75,9 +76,10 @@ public sealed class LLMJudge
         MorganaLanguageModel[] languageModels =
         [
             new AnthropicLanguageModel(loggerFactory),
-            new OpenAILanguageModel(loggerFactory),
+            new AzureOpenAILanguageModel(loggerFactory),
+            new GoogleLanguageModel(loggerFactory),
             new OllamaLanguageModel(loggerFactory),
-            new GoogleLanguageModel(loggerFactory)
+            new OpenAILanguageModel(loggerFactory)
         ];
         ILanguageModelService llmService = new ConfigurationLanguageModelService(configuration, languageModels, promptResolverService, loggerFactory);
 
