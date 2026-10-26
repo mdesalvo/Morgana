@@ -41,8 +41,8 @@ public sealed class LanguageModelTests
         // Three different providers, so the metadata that each client reports can only differ if each
         // tier was built by its own.
         ILanguageModelService llm = Build(Configuration(
-            ("Morgana:LanguageModels:Tiers:Efficiency:Provider", "Ollama"),
-            ("Morgana:LanguageModels:Tiers:Efficiency:Connection:Endpoint", "http://localhost:11434"),
+            ("Morgana:LanguageModels:Tiers:Efficiency:Provider", "Google"),
+            ("Morgana:LanguageModels:Tiers:Efficiency:Options:ModelId", "gemini-3.5-flash-lite"),
             ("Morgana:LanguageModels:Tiers:Performance:Provider", "OpenAI"),
             ("Morgana:LanguageModels:Tiers:Performance:Options:ModelId", "gpt-6-astra")));
 
@@ -51,7 +51,7 @@ public sealed class LanguageModelTests
         ChatClientMetadata performance = MetadataOf(llm, Records.LLMTier.Performance);
 
         Assert.Equal("claude-haiku-5-5", economy.DefaultModelId);
-        Assert.Equal("claude-sonnet-5-5", efficiency.DefaultModelId);
+        Assert.Equal("gemini-3.5-flash-lite", efficiency.DefaultModelId);
         Assert.Equal("gpt-6-astra", performance.DefaultModelId);
         Assert.Equal(3, new[] { economy.ProviderName, efficiency.ProviderName, performance.ProviderName }.Distinct().Count());
     }
@@ -155,14 +155,13 @@ public sealed class LanguageModelTests
     [Fact]
     public void LanguageModel_A_field_the_provider_does_not_use_may_stay_empty()
     {
-        // Ollama reaches a local server: it has an endpoint and no key, so the key left on its
-        // placeholder is nobody's concern.
+        // OpenAI reads only its key, its retries and its timeout, so an endpoint left on its placeholder is nobody's concern.
         ILanguageModelService llm = Build(Configuration(
-            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
-            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "http://localhost:11434"),
-            ("Morgana:LanguageModels:Tiers:Economy:Connection:ApiKey", SecurePlaceholder)));
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "OpenAI"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "gpt-5.4"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", SecurePlaceholder)));
 
-        Assert.Equal("claude-haiku-5-5", MetadataOf(llm, Records.LLMTier.Economy).DefaultModelId);
+        Assert.Equal("gpt-5.4", MetadataOf(llm, Records.LLMTier.Economy).DefaultModelId);
     }
 
     [Fact]
@@ -200,13 +199,31 @@ public sealed class LanguageModelTests
     }
 
     [Fact]
-    public void LanguageModel_An_Ollama_tier_is_accepted_and_costs_no_dust()
+    public void LanguageModel_An_Ollama_tier_without_its_own_Pricing_is_refused()
     {
-        // Ollama serves whatever model is installed and a local model is free.
+        // Ollama ships an empty pricing.json, so a tier without its own Pricing has no model to run on.
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(() => Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "http://localhost:11434"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "llama-local"))));
+
+        Assert.Contains("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("llama-local", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Ollama", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LanguageModel_An_Ollama_tier_runs_on_the_Pricing_that_it_declares()
+    {
+        // A local model priced at zero by its tier: the tier starts and is charged no dust.
         ILanguageModelService llm = Build(Configuration(
             ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
             ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "http://localhost:11434"),
-            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "llama-local")));
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "phi4-mini"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:InputUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:OutputUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheReadUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheWriteUsdPerMillion", "0")));
 
         Records.MagicDustPricing dust = llm.GetMorganaDust(Records.LLMTier.Economy);
 
@@ -214,6 +231,58 @@ public sealed class LanguageModelTests
         Assert.Equal(0, dust.OutputTokensPerDustUnit);
         Assert.Equal(0.0, dust.CachedInputWeight, 1e-9);
         Assert.Equal(0.0, dust.CacheCreationWeight, 1e-9);
+    }
+
+    [Fact]
+    public void LanguageModel_The_Pricing_of_a_tier_prevails_over_its_providers_own()
+    {
+        // Sonnet 5.5 is listed at 2, 10, 0.10 and 4 dollars: a negotiated 1, 5, 0.05 and 2 is what the tier is charged.
+        Records.MagicDustPricing dust = Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Efficiency:Pricing:InputUsdPerMillion", "1.00"),
+            ("Morgana:LanguageModels:Tiers:Efficiency:Pricing:OutputUsdPerMillion", "5.00"),
+            ("Morgana:LanguageModels:Tiers:Efficiency:Pricing:CacheReadUsdPerMillion", "0.05"),
+            ("Morgana:LanguageModels:Tiers:Efficiency:Pricing:CacheWriteUsdPerMillion", "2.00"))).GetMorganaDust(Records.LLMTier.Efficiency);
+
+        Assert.Equal(15000, dust.InputTokensPerDustUnit);
+        Assert.Equal(3000, dust.OutputTokensPerDustUnit);
+        Assert.Equal(0.05, dust.CachedInputWeight, 1e-9);
+        Assert.Equal(2.0, dust.CacheCreationWeight, 1e-9);
+    }
+
+    [Theory]
+    [InlineData("InputUsdPerMillion")]
+    [InlineData("OutputUsdPerMillion")]
+    [InlineData("CacheReadUsdPerMillion")]
+    [InlineData("CacheWriteUsdPerMillion")]
+    public void LanguageModel_Construction_is_refused_when_a_declared_Pricing_lacks_a_price(string missingField)
+    {
+        // A direction left out would be charged nothing, so the refusal names the price to add.
+        (string Key, string Value)[] prices = new[] { "InputUsdPerMillion", "OutputUsdPerMillion", "CacheReadUsdPerMillion", "CacheWriteUsdPerMillion" }
+            .Where(field => field != missingField)
+            .Select(field => ($"Morgana:LanguageModels:Tiers:Economy:Pricing:{field}", "1"))
+            .ToArray();
+
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(() => Build(Configuration(prices)));
+
+        Assert.Contains($"Morgana:LanguageModels:Tiers:Economy:Pricing:{missingField}", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("free")]
+    [InlineData("-1")]
+    [InlineData("1,50")]
+    [InlineData(FunctionalPlaceholder)]
+    public void LanguageModel_Construction_is_refused_when_a_price_is_not_an_amount(string configured)
+    {
+        // A price is a non-negative amount written with a dot, whatever the host's culture.
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(() => Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:InputUsdPerMillion", configured),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:OutputUsdPerMillion", "1"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheReadUsdPerMillion", "1"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheWriteUsdPerMillion", "1"))));
+
+        Assert.Contains("Morgana:LanguageModels:Tiers:Economy:Pricing:InputUsdPerMillion", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains(configured, refusal.Message, StringComparison.Ordinal);
     }
 
     [Theory]

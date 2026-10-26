@@ -42,4 +42,8 @@
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="$(MicrosoftExtensionsAIVersion)" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="pricing.json" />
+  </ItemGroup>
+
 </Project>

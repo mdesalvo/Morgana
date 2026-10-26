@@ -82,6 +82,8 @@ public class ConfigurationLanguageModelService : ILanguageModelService
     /// </param>
     /// <exception cref="InvalidOperationException">
     /// A tier is missing, carries a placeholder in a field that its provider uses or declares no positive <c>MaxOutputTokens</c>.
+    /// Thrown as well when a tier declares a Pricing that lacks a price or carries one that is not a non-negative amount.
+    /// Thrown as well when a tier's model is priced neither by its provider nor by its Pricing.
     /// Thrown as well when a tier names a provider that is not registered or when two registered providers share a name.
     /// Thrown as well when <c>Morgana:ActorSystem:Tier</c> is missing or names no tier.
     /// </exception>
@@ -146,6 +148,32 @@ public class ConfigurationLanguageModelService : ILanguageModelService
             // The ceiling bounds what one answer may cost: zero or a sign would remove or invert the bound.
             if (!int.TryParse(maxOutputTokens, NumberStyles.None, CultureInfo.InvariantCulture, out int ceiling) || ceiling <= 0)
                 throw new InvalidOperationException($"Morgana:LanguageModels:Tiers:{tier}:Options:MaxOutputTokens must be a positive integer but is '{maxOutputTokens}'.");
+
+            // A tier may price its own model, over its provider's pricing.json or where that file does not list it.
+            // Checked here because a missing price would bind as a free direction and a malformed one fails inside the binder naming no key.
+            IConfigurationSection pricingSection = tierSection.GetSection("Pricing");
+            if (pricingSection.Exists())
+            {
+                foreach (string priceField in new[]
+                         {
+                             nameof(Records.ModelPricing.InputUsdPerMillion),
+                             nameof(Records.ModelPricing.OutputUsdPerMillion),
+                             nameof(Records.ModelPricing.CacheReadUsdPerMillion),
+                             nameof(Records.ModelPricing.CacheWriteUsdPerMillion)
+                         })
+                {
+                    // All four prices are required: a direction left out would be charged nothing without anybody deciding so.
+                    string? price = pricingSection[priceField];
+                    if (string.IsNullOrWhiteSpace(price))
+                        throw new InvalidOperationException(
+                            $"Morgana:LanguageModels:Tiers:{tier}:Pricing:{priceField} is missing. A tier that declares Pricing declares all four prices.");
+
+                    // A price is a plain non-negative amount written with a dot whatever the host's culture: a placeholder or a sign fails here too.
+                    if (!decimal.TryParse(price, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out _))
+                        throw new InvalidOperationException(
+                            $"Morgana:LanguageModels:Tiers:{tier}:Pricing:{priceField} must be a non-negative amount in US dollars per million tokens written with a dot, but is '{price}'.");
+                }
+            }
         }
 
         // Every key is now known to be present and well formed, so the binder cannot fail on a missing one.
@@ -187,12 +215,15 @@ public class ConfigurationLanguageModelService : ILanguageModelService
                 throw new InvalidOperationException($"Morgana:LanguageModels:Tiers:{tier}:Connection:{ex.Message}", ex);
             }
 
-            // A model with no price would run with its dust uncounted.
-            Records.MagicDustPricing? morganaDust = languageModel.ConvertToMorganaDust(definition.Options.ModelId);
-            // A model that the provider does not price is refused at startup.
+            // The tier's own Pricing prevails over the provider's pricing.json: it is the deployment's price for this model, listed there or not.
+            Records.MagicDustPricing? morganaDust = definition.Pricing is not null
+                ? languageModel.ConvertToMorganaDust(definition.Pricing)
+                : languageModel.ConvertToMorganaDust(definition.Options.ModelId);
+            // A model priced neither by its provider nor by its tier would run with its dust uncounted, so it is refused at startup.
             if (morganaDust is null)
                 throw new InvalidOperationException(
-                    $"Morgana:LanguageModels:Tiers:{tier}:Options:ModelId '{definition.Options.ModelId}' has no pricing in provider '{languageModel.Provider}': a tier runs only a model whose provider prices it.");
+                    $"Morgana:LanguageModels:Tiers:{tier}:Options:ModelId '{definition.Options.ModelId}' has no pricing in provider '{languageModel.Provider}' " +
+                    $"and the tier declares no Pricing: a tier runs only a model that its provider prices or whose tier declares its own Pricing.");
 
             // The tier's chain, outermost first: the defaults layer sees (and only fills in, never overrides) the
             // ChatOptions that every caller above sent, Microsoft.Agents.AI for domain agents and

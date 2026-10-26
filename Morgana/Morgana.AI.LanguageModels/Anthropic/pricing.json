@@ -1,0 +1,18 @@
+{
+  "Models": [
+    { "Name": "claude-fable-5-1", "Pricing": { "InputUsdPerMillion": 10.00, "OutputUsdPerMillion": 50.00, "CacheReadUsdPerMillion": 0.25, "CacheWriteUsdPerMillion": 20.00 } },
+    { "Name": "claude-fable-5", "Pricing": { "InputUsdPerMillion": 10.00, "OutputUsdPerMillion": 50.00, "CacheReadUsdPerMillion": 1.00, "CacheWriteUsdPerMillion": 20.00 } },
+    { "Name": "claude-opus-5-5", "Pricing": { "InputUsdPerMillion": 4.00, "OutputUsdPerMillion": 20.00, "CacheReadUsdPerMillion": 0.20, "CacheWriteUsdPerMillion": 8.00 } },
+    { "Name": "claude-opus-5", "Pricing": { "InputUsdPerMillion": 5.00, "OutputUsdPerMillion": 25.00, "CacheReadUsdPerMillion": 0.50, "CacheWriteUsdPerMillion": 10.00 } },
+    { "Name": "claude-opus-4-8", "Pricing": { "InputUsdPerMillion": 5.00, "OutputUsdPerMillion": 25.00, "CacheReadUsdPerMillion": 0.50, "CacheWriteUsdPerMillion": 10.00 } },
+    { "Name": "claude-opus-4-7", "Pricing": { "InputUsdPerMillion": 5.00, "OutputUsdPerMillion": 25.00, "CacheReadUsdPerMillion": 0.50, "CacheWriteUsdPerMillion": 10.00 } },
+    { "Name": "claude-opus-4-6", "Pricing": { "InputUsdPerMillion": 5.00, "OutputUsdPerMillion": 25.00, "CacheReadUsdPerMillion": 0.50, "CacheWriteUsdPerMillion": 10.00 } },
+    { "Name": "claude-opus-4-5", "Pricing": { "InputUsdPerMillion": 5.00, "OutputUsdPerMillion": 25.00, "CacheReadUsdPerMillion": 0.50, "CacheWriteUsdPerMillion": 10.00 } },
+    { "Name": "claude-sonnet-5-5", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 4.00 } },
+    { "Name": "claude-sonnet-5", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.20, "CacheWriteUsdPerMillion": 4.00 } },
+    { "Name": "claude-sonnet-4-6", "Pricing": { "InputUsdPerMillion": 3.00, "OutputUsdPerMillion": 15.00, "CacheReadUsdPerMillion": 0.30, "CacheWriteUsdPerMillion": 6.00 } },
+    { "Name": "claude-sonnet-4-5", "Pricing": { "InputUsdPerMillion": 3.00, "OutputUsdPerMillion": 15.00, "CacheReadUsdPerMillion": 0.30, "CacheWriteUsdPerMillion": 6.00 } },
+    { "Name": "claude-haiku-5-5", "Pricing": { "InputUsdPerMillion": 0.10, "OutputUsdPerMillion": 0.50, "CacheReadUsdPerMillion": 0.01, "CacheWriteUsdPerMillion": 0.20 } },
+    { "Name": "claude-haiku-4-5", "Pricing": { "InputUsdPerMillion": 1.00, "OutputUsdPerMillion": 5.00, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 2.00 } }
+  ]
+}

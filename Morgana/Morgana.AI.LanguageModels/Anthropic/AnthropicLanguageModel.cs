@@ -11,7 +11,9 @@ namespace Morgana.AI.LanguageModels.Anthropic;
 /// Supports Claude models (claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5, ...)
 /// </summary>
 /// <remarks>
-/// Requires ApiKey on the tier's connection.
+/// Requires ApiKey on the tier's connection. The embedded pricing.json carries Anthropic's standard processing prices:
+/// its cache write is the 1-hour write because <see cref="MorganaAnthropicClient"/> asks for a cache that lives an hour,
+/// while Claude Haiku 5.5 is priced at its band for prompts up to 100,000 tokens.
 /// </remarks>
 /// <param name="loggerFactory">
 /// Optional logger factory used by <see cref="MorganaAnthropicClient"/> and by the <see cref="AttemptLoggingHandler"/> that writes one line per attempt on the wire. When <c>null</c>, the guard's
@@ -22,41 +24,6 @@ public class AnthropicLanguageModel(ILoggerFactory? loggerFactory = null) : Morg
     /// <inheritdoc />
     // The name a tier writes in its Provider key: it must stay stable whatever the class is called.
     public override string Provider => "Anthropic";
-
-    /// <inheritdoc />
-    public override bool IsContentFilterRefusal(Exception exception) =>
-        // No refusal of this provider is known to reach the framework as an exception.
-        false;
-
-    /// <summary>What each model of this provider costs in US dollars per million tokens.</summary>
-    // Anthropic's standard processing prices. The cache write is the 1-hour write because MorganaAnthropicClient asks for a cache that lives an hour.
-    // Claude Haiku 5.5 is priced at its band for prompts up to 100,000 tokens.
-    private static readonly Dictionary<string, Records.ModelPricing> ModelPrices = new Dictionary<string, Records.ModelPricing>(StringComparer.Ordinal)
-    {
-        // FABLE
-        ["claude-fable-5-1"]  = new Records.ModelPricing(10.00m, 50.00m, 0.25m, 20.00m),
-        ["claude-fable-5"]    = new Records.ModelPricing(10.00m, 50.00m, 1.00m, 20.00m),
-        // OPUS
-        ["claude-opus-5-5"]   = new Records.ModelPricing(4.00m, 20.00m, 0.20m, 8.00m),
-        ["claude-opus-5"]     = new Records.ModelPricing(5.00m, 25.00m, 0.50m, 10.00m),
-        ["claude-opus-4-8"]   = new Records.ModelPricing(5.00m, 25.00m, 0.50m, 10.00m),
-        ["claude-opus-4-7"]   = new Records.ModelPricing(5.00m, 25.00m, 0.50m, 10.00m),
-        ["claude-opus-4-6"]   = new Records.ModelPricing(5.00m, 25.00m, 0.50m, 10.00m),
-        ["claude-opus-4-5"]   = new Records.ModelPricing(5.00m, 25.00m, 0.50m, 10.00m),
-        // SONNET
-        ["claude-sonnet-5-5"] = new Records.ModelPricing(2.00m, 10.00m, 0.10m, 4.00m),
-        ["claude-sonnet-5"]   = new Records.ModelPricing(2.00m, 10.00m, 0.20m, 4.00m),
-        ["claude-sonnet-4-6"] = new Records.ModelPricing(3.00m, 15.00m, 0.30m, 6.00m),
-        ["claude-sonnet-4-5"] = new Records.ModelPricing(3.00m, 15.00m, 0.30m, 6.00m),
-        // HAIKU
-        ["claude-haiku-5-5"]  = new Records.ModelPricing(0.10m, 0.50m, 0.01m, 0.20m),
-        ["claude-haiku-4-5"]  = new Records.ModelPricing(1.00m, 5.00m, 0.10m, 2.00m)
-    };
-
-    /// <inheritdoc />
-    protected override Records.ModelPricing? GetModelPricing(string modelId) =>
-        // A model absent from the table is one that this provider does not price.
-        ModelPrices.GetValueOrDefault(modelId);
 
     /// <inheritdoc />
     protected override void ValidateConnection(AnthropicTierConnection connection) =>

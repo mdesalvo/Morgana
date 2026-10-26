@@ -197,9 +197,18 @@ public static class Records
     /// <param name="CacheWriteUsdPerMillion">Price of a prompt token written into the provider's cache, at the lifetime that the provider's client asks for.</param>
     public record ModelPricing(decimal InputUsdPerMillion, decimal OutputUsdPerMillion, decimal CacheReadUsdPerMillion, decimal CacheWriteUsdPerMillion);
 
+    /// <summary>The <c>pricing.json</c> that every provider plugin embeds: the models that the provider prices for any tier that declares no Pricing of its own.</summary>
+    /// <param name="Models">Every priced model. An empty list prices nothing, so a tier on this provider runs only on the Pricing that it declares itself.</param>
+    public record ProviderPricing(List<PricedModel> Models);
+
+    /// <summary>One model that a provider prices.</summary>
+    /// <param name="Name">The value that a tier writes in its <c>Options:ModelId</c>, matched with its exact casing.</param>
+    /// <param name="Pricing">What the model costs.</param>
+    public record PricedModel(string Name, ModelPricing Pricing);
+
     /// <summary>
     /// What one dust unit is worth on a tier: tokens per unit for each direction and the cost weights of cached input.
-    /// A zero on either axis makes that direction free. It is derived from a provider's <see cref="ModelPricing"/> by
+    /// A zero on either axis makes that direction free. It is derived from a <see cref="ModelPricing"/>, listed by the provider or declared by the tier, by
     /// <c>MorganaLanguageModel.ConvertToMorganaDust</c> and never configured.
     /// Check BudgetPerConversation against the heaviest agent's calls per turn in dust_usage_log, not against nominal turn counts.
     /// </summary>
@@ -291,10 +300,12 @@ public static class Records
     /// Declared under Morgana:LanguageModels:Tiers:{tier} as a JSON object keyed by name rather than an array, so that overrides of
     /// different configuration layers merge by key. The Connection section is not bound here: the provider that the tier
     /// names binds it, because only that provider knows its shape.
+    /// Pricing, when declared, is what the tier's model costs: it prevails over the provider's pricing.json and prices a model that the file does not list.
     /// </summary>
     public record TierDefinition(
         string Provider,
-        TierConfiguration Options);
+        TierConfiguration Options,
+        ModelPricing? Pricing = null);
 
     /// <summary>
     /// The part of <see cref="ChatOptions"/> that a deployer sets per tier: the model and the output ceiling, nothing else.

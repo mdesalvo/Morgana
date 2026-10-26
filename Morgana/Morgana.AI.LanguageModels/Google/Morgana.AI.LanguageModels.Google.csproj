@@ -42,4 +42,8 @@
     <PackageReference Include="Google.GenAI" Version="1.27.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="pricing.json" />
+  </ItemGroup>
+
 </Project>

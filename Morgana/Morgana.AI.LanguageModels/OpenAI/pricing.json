@@ -1,0 +1,27 @@
+{
+  "Models": [
+    { "Name": "gpt-6.1-sol", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 2.50 } },
+    { "Name": "gpt-6-astra", "Pricing": { "InputUsdPerMillion": 10.00, "OutputUsdPerMillion": 50.00, "CacheReadUsdPerMillion": 1.00, "CacheWriteUsdPerMillion": 12.50 } },
+    { "Name": "gpt-6-sol", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.20, "CacheWriteUsdPerMillion": 2.50 } },
+    { "Name": "gpt-6-luna", "Pricing": { "InputUsdPerMillion": 0.10, "OutputUsdPerMillion": 0.50, "CacheReadUsdPerMillion": 0.01, "CacheWriteUsdPerMillion": 0.125 } },
+    { "Name": "gpt-5.6-sol", "Pricing": { "InputUsdPerMillion": 4.00, "OutputUsdPerMillion": 20.00, "CacheReadUsdPerMillion": 0.40, "CacheWriteUsdPerMillion": 5.00 } },
+    { "Name": "gpt-5.6-terra", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 12.00, "CacheReadUsdPerMillion": 0.20, "CacheWriteUsdPerMillion": 2.50 } },
+    { "Name": "gpt-5.6-luna", "Pricing": { "InputUsdPerMillion": 0.20, "OutputUsdPerMillion": 1.20, "CacheReadUsdPerMillion": 0.02, "CacheWriteUsdPerMillion": 0.25 } },
+    { "Name": "gpt-5.5", "Pricing": { "InputUsdPerMillion": 5.00, "OutputUsdPerMillion": 30.00, "CacheReadUsdPerMillion": 0.50, "CacheWriteUsdPerMillion": 5.00 } },
+    { "Name": "gpt-5.4", "Pricing": { "InputUsdPerMillion": 2.50, "OutputUsdPerMillion": 15.00, "CacheReadUsdPerMillion": 0.25, "CacheWriteUsdPerMillion": 2.50 } },
+    { "Name": "gpt-5.4-mini", "Pricing": { "InputUsdPerMillion": 0.75, "OutputUsdPerMillion": 4.50, "CacheReadUsdPerMillion": 0.075, "CacheWriteUsdPerMillion": 0.75 } },
+    { "Name": "gpt-5.4-nano", "Pricing": { "InputUsdPerMillion": 0.20, "OutputUsdPerMillion": 1.25, "CacheReadUsdPerMillion": 0.02, "CacheWriteUsdPerMillion": 0.20 } },
+    { "Name": "gpt-5.2", "Pricing": { "InputUsdPerMillion": 1.75, "OutputUsdPerMillion": 14.00, "CacheReadUsdPerMillion": 0.175, "CacheWriteUsdPerMillion": 1.75 } },
+    { "Name": "gpt-5.1", "Pricing": { "InputUsdPerMillion": 1.25, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.125, "CacheWriteUsdPerMillion": 1.25 } },
+    { "Name": "gpt-5", "Pricing": { "InputUsdPerMillion": 1.25, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.125, "CacheWriteUsdPerMillion": 1.25 } },
+    { "Name": "gpt-5-mini", "Pricing": { "InputUsdPerMillion": 0.25, "OutputUsdPerMillion": 2.00, "CacheReadUsdPerMillion": 0.025, "CacheWriteUsdPerMillion": 0.25 } },
+    { "Name": "gpt-5-nano", "Pricing": { "InputUsdPerMillion": 0.05, "OutputUsdPerMillion": 0.40, "CacheReadUsdPerMillion": 0.005, "CacheWriteUsdPerMillion": 0.05 } },
+    { "Name": "gpt-4.1", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 8.00, "CacheReadUsdPerMillion": 0.50, "CacheWriteUsdPerMillion": 2.00 } },
+    { "Name": "gpt-4.1-mini", "Pricing": { "InputUsdPerMillion": 0.40, "OutputUsdPerMillion": 1.60, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 0.40 } },
+    { "Name": "gpt-4.1-nano", "Pricing": { "InputUsdPerMillion": 0.10, "OutputUsdPerMillion": 0.40, "CacheReadUsdPerMillion": 0.025, "CacheWriteUsdPerMillion": 0.10 } },
+    { "Name": "gpt-4o", "Pricing": { "InputUsdPerMillion": 2.50, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 1.25, "CacheWriteUsdPerMillion": 2.50 } },
+    { "Name": "gpt-4o-mini", "Pricing": { "InputUsdPerMillion": 0.15, "OutputUsdPerMillion": 0.60, "CacheReadUsdPerMillion": 0.075, "CacheWriteUsdPerMillion": 0.15 } },
+    { "Name": "o3", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 8.00, "CacheReadUsdPerMillion": 0.50, "CacheWriteUsdPerMillion": 2.00 } },
+    { "Name": "o4-mini", "Pricing": { "InputUsdPerMillion": 1.10, "OutputUsdPerMillion": 4.40, "CacheReadUsdPerMillion": 0.275, "CacheWriteUsdPerMillion": 1.10 } }
+  ]
+}

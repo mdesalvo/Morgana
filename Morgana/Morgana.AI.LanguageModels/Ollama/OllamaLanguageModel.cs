@@ -12,7 +12,8 @@ namespace Morgana.AI.LanguageModels.Ollama;
 /// <remarks>
 /// Requires Endpoint on the tier's connection (e.g., http://localhost:11434). Choose a model with solid function calling
 /// support (e.g., gpt-oss:20b, phi4-mini) because Morgana relies heavily on tool calling. Before starting Morgana,
-/// verify your model is already loaded via "ollama ps".
+/// verify your model is already loaded via "ollama ps". The plugin ships an empty pricing.json: a tier running an Ollama
+/// model declares its own Pricing.
 /// </remarks>
 /// <param name="loggerFactory">Optional logger factory for the <see cref="AttemptLoggingHandler"/> that writes one line per attempt on the wire; <c>null</c> writes nothing.</param>
 public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : MorganaLanguageModel<OllamaTierConnection>
@@ -20,16 +21,6 @@ public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
     /// <inheritdoc />
     // The name a tier writes in its Provider key: it must stay stable whatever the class is called.
     public override string Provider => "Ollama";
-
-    /// <inheritdoc />
-    public override bool IsContentFilterRefusal(Exception exception) =>
-        // No refusal of this provider is known to reach the framework as an exception.
-        false;
-
-    /// <inheritdoc />
-    protected override Records.ModelPricing? GetModelPricing(string modelId) =>
-        // A local model costs nothing and Ollama serves whatever model is installed.
-        new Records.ModelPricing(0m, 0m, 0m, 0m);
 
     /// <inheritdoc />
     protected override void ValidateConnection(OllamaTierConnection connection) =>

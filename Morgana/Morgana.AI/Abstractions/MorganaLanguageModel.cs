@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Net;
+using System.Reflection;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -32,29 +34,39 @@ public abstract class MorganaLanguageModel
 
     /// <summary>Tells whether an exception thrown by this provider's client is the provider refusing the content itself, a refusal that no retry would pass.</summary>
     /// <param name="exception">The failure that the client of a tier threw.</param>
-    public abstract bool IsContentFilterRefusal(Exception exception);
+    public virtual bool IsContentFilterRefusal(Exception exception) => false;
 
-    /// <summary>What a model costs in US dollars; <c>null</c> when this provider does not know the model. A provider author declares here the prices of the models it serves.</summary>
-    /// <param name="modelId">The model that a tier names in its <c>Options:ModelId</c>.</param>
-    protected abstract Records.ModelPricing? GetModelPricing(string modelId);
+    /// <summary>What one dust unit is worth in US dollars on the tiers that this provider serves; a provider overrides it to give its dust a different value.</summary>
+    public virtual decimal UsdPerDustUnit => 0.015m;
 
-    /// <summary>One dust unit is worth this many US dollars: the one place where that value exists.</summary>
-    private const decimal UsdPerDustUnit = 0.015m;
+    /// <summary>What each model of this provider costs, as its <c>pricing.json</c> declares it, keyed by the ModelId that a tier writes.</summary>
+    protected readonly Dictionary<string, Records.ModelPricing> modelPrices;
 
-    /// <summary>Tokens in the million that a price is quoted per.</summary>
-    private const decimal TokensPerPricedMillion = 1_000_000m;
+    /// <summary>Reads the <c>pricing.json</c> that the provider's plugin embeds.</summary>
+    /// <exception cref="InvalidOperationException">The plugin embeds no <c>pricing.json</c> or declares in it a model that is malformed or priced twice.</exception>
+    protected MorganaLanguageModel() =>
+        // The concrete provider's assembly is its plugin: the prices travel with the DLL that serves the models.
+        modelPrices = ReadPricing(GetType().Assembly);
 
-    /// <summary>Converts the price of a model into Morgana's dust, the one conversion for every provider; <c>null</c> when <see cref="GetModelPricing"/> does not know the model.</summary>
+    /// <summary>Converts the price of a model into Morgana's dust, the one conversion for every provider; <c>null</c> when the provider's <c>pricing.json</c> does not name the model.</summary>
     /// <param name="modelId">The model that a tier names in its <c>Options:ModelId</c>.</param>
     public Records.MagicDustPricing? ConvertToMorganaDust(string modelId)
     {
-        // The provider alone knows what its models cost.
-        Records.ModelPricing? modelPricing = GetModelPricing(modelId);
+        // The provider's own pricing.json alone says what its models cost.
+        Records.ModelPricing? modelPricing = modelPrices.GetValueOrDefault(modelId);
 
         // A model that the provider does not price has no dust.
         if (modelPricing is null)
             return null;
 
+        // A listed price converts like a price that a tier declares.
+        return ConvertToMorganaDust(modelPricing);
+    }
+
+    /// <summary>Converts a price into Morgana's dust at this provider's <see cref="UsdPerDustUnit"/>, whether its pricing.json lists it or a tier declares it.</summary>
+    /// <param name="modelPricing">What the model costs in US dollars per million tokens.</param>
+    public Records.MagicDustPricing ConvertToMorganaDust(Records.ModelPricing modelPricing)
+    {
         // Tokens that one dust unit buys in each direction; a free direction keeps 0, which means "not charged".
         // Cache weights are relative to a fresh input token and stay 0 while the input is free.
         return new Records.MagicDustPricing
@@ -67,11 +79,58 @@ public abstract class MorganaLanguageModel
     }
 
     /// <summary>Tokens that one dust unit buys at a price per million tokens; 0 for a free direction.</summary>
-    private static int TokensPerDustUnit(decimal usdPerMillion) =>
+    private int TokensPerDustUnit(decimal usdPerMillion) =>
         // A free direction must not divide by zero: 0 is the meaning of "not charged".
         usdPerMillion == 0m
             ? 0
-            : (int)Math.Round(TokensPerPricedMillion * UsdPerDustUnit / usdPerMillion, MidpointRounding.AwayFromZero);
+            : (int)Math.Round(1_000_000m * UsdPerDustUnit / usdPerMillion, MidpointRounding.AwayFromZero);
+
+    /// <summary>Reads the <c>pricing.json</c> embedded in <paramref name="providerAssembly"/> into the price of each model that it names.</summary>
+    private static Dictionary<string, Records.ModelPricing> ReadPricing(Assembly providerAssembly)
+    {
+        // Every refusal names the plugin, so the deployer knows which DLL to rebuild.
+        string pluginName = providerAssembly.GetName().Name ?? providerAssembly.ToString();
+
+        // The file is mandatory even when it prices nothing: a plugin without it was built without its contract.
+        string? resourceName = providerAssembly.GetManifestResourceNames()
+                                               .FirstOrDefault(name => name.EndsWith(".pricing.json", StringComparison.Ordinal));
+        if (resourceName is null)
+            throw new InvalidOperationException($"Provider plugin '{pluginName}' embeds no pricing.json: every provider plugin embeds one, with an empty Models array when it ships no price.");
+
+        // The resource name was just listed by the same assembly, so its stream exists.
+        using Stream pricingStream = providerAssembly.GetManifestResourceStream(resourceName)!;
+
+        // A file that does not parse is refused like a missing one: either way no tier can be priced on it.
+        Records.ProviderPricing? providerPricing;
+        try
+        {
+            providerPricing = JsonSerializer.Deserialize<Records.ProviderPricing>(pricingStream, Records.DefaultJsonSerializerOptions);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"Provider plugin '{pluginName}' embeds a pricing.json that is not valid JSON: {ex.Message}", ex);
+        }
+
+        // An absent Models array is a file written wrong, unlike an empty one, which prices nothing on purpose.
+        if (providerPricing?.Models is null)
+            throw new InvalidOperationException($"Provider plugin '{pluginName}' embeds a pricing.json without a Models array.");
+
+        // The ModelId goes on the wire as the tier wrote it, so its casing is part of the match.
+        Dictionary<string, Records.ModelPricing> pricesByModel = new Dictionary<string, Records.ModelPricing>(StringComparer.Ordinal);
+        foreach (Records.PricedModel pricedModel in providerPricing.Models)
+        {
+            // An entry without a name matches no tier and one without a price would let its tier run uncounted.
+            if (string.IsNullOrWhiteSpace(pricedModel.Name) || pricedModel.Pricing is null)
+                throw new InvalidOperationException($"Provider plugin '{pluginName}' declares in its pricing.json a model without Name or Pricing.");
+
+            // A model priced twice would leave its dust to whichever entry happened to come last.
+            if (!pricesByModel.TryAdd(pricedModel.Name, pricedModel.Pricing))
+                throw new InvalidOperationException($"Provider plugin '{pluginName}' prices the model '{pricedModel.Name}' twice in its pricing.json.");
+        }
+
+        // Every model that the file names, each with its single price.
+        return pricesByModel;
+    }
 
     /// <summary>Refuses a value that is missing, empty or still a placeholder, naming <paramref name="field"/> first.</summary>
     protected static void RequireField(string? value, string field)
