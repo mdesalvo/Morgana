@@ -41,7 +41,6 @@ A request that no agent claims is answered with the same menu, so the user alway
 
 ### 📦 Dependencies
 - Updated `A2A` to 1.0.0-preview3
-- Updated `Markdig` to 1.5
 - Updated `Microsoft.Agents.AI` to 1.26.0
 - Updated `Microsoft.Extensions.AI` to 10.11.0
 - Updated `ModelContextProtocol.Core` to 2.3.0
