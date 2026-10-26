@@ -5,6 +5,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.0.0-beta1] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Multi-vendor LLM tiers
+No more vendor lock-in: **each LLM tier now brings its own provider**, so Morgana can think with Anthropic, Azure OpenAI, Google, Ollama and OpenAI at once.
+A new **Economy** tier joins Efficiency and Performance, taking over Morgana's own pipeline so that the premium models are spent only where an agent needs them.
+### 🎯 Major Feature: LLM providers as plugins
+Morgana's core no longer knows any LLM vendor: **each provider is a plugin**, dropped into `plugins/` beside the domain agents. A tier picks it by name.
+Anthropic, Azure OpenAI, Google, Ollama and OpenAI ship as **`Morgana.AI.LanguageModels`** packages. Any other vendor offering a `Microsoft.Extensions.AI` client can join the same way, without touching the framework.
+Each plugin carries the official **price list** of its vendor's models, from which Morgana derives the dust of every tier. A deployment can **overlay its own price** on a tier: for a model the list does not hold (an Azure deployment, an Ollama model, a model released after Morgana) or for a negotiated discount.
+### 🎯 Major Feature: Google Gemini gets in
+Morgana starts supporting **Google Gemini** models.
+### 🎯 Major Feature: Agents that present themselves
+Morgana's welcome works like a phone menu: her buttons are the intents themselves, written by code: pressing one takes the user straight to that agent, which presents what it can do with its own buttons.
+A request that no agent claims is answered with the same menu, so the user always knows where to go next.
+
+### ✨ Added
+- **`Pricing`** on a tier — the deployment's own price for the tier's model, prevailing over the provider's price list or pricing a model the list does not hold
+
+### 🔄 Changed
+- The LLM configuration moves to `Morgana:LanguageModels:Tiers`: one entry per tier with its own `Provider`, `Connection` and `Options`, while Morgana's own actors run on the tier that `Morgana:ActorSystem:Tier` names. `MagicDust` leaves the configuration: a tier's dust follows from its model's price
+- A tier on Azure OpenAI or Ollama runs only with its own `Pricing`: their models are named by the customer, so their plugins ship no price list
+- An agent stays in service by default and hands the conversation back by calling `SetTurnEnding` when the user takes their leave, instead of calling `SetTurnContinuation` to stay
+- `agents.json` is lighter: the section labels (`[TARGET]`, `[PERSONALITY]`, `[INSTRUCTIONS]`, `[FORMATTING]`) are written by the framework, `Type` and `SubType` are gone and `ConsultMeFor` is renamed `Territory`
+
+### 🐛 Fixed
+- On Claude 5.5 models the answer that an agent wrote before closing its turn never reached the user, hidden by the provider as reasoning
+- An intent configured without an agent went unnoticed until the first request routed to it
+- Ending an unknown conversation brought its actors to life just to stop them and to answer OK
+- The history of a conversation where nobody had spoken yet was answered with 404, as if the conversation did not exist
+- After an agent's turn failed, a restart of Morgana handed the conversation back to that agent, although its farewell had already told the user that Morgana was taking over again
+- **Cauldron (1)**
+  - A message that Morgana refused on a rate or dust limit stayed in the conversation as if it had been sent and the words typed were lost
+- **Grimoire (1)**
+  - Backspace, Delete and the arrow keys split an emoji typed at the prompt in half, leaving a broken character behind
+
+### 📦 Dependencies
+- Updated `A2A` to 1.0.0-preview3
+- Updated `Markdig` to 1.5
+- Updated `Microsoft.Agents.AI` to 1.26.0
+- Updated `Microsoft.Extensions.AI` to 10.11.0
+- Updated `ModelContextProtocol.Core` to 2.3.0
+- Updated `OllamaSharp` to 5.5.0
+- Updated `OpenTelemetry` to 1.20.1
+
+### 🚀 Future Enablement
+- **Hybrid local and cloud deployments**: with a vendor per tier, Morgana's own pipeline can stay on a local Ollama model while only the agents that need it reach the cloud
+- **Models from any hosting portal**: a tier can price its own model, so a provider for a portal where customers name their deployments needs no catalogue of its own
+
+
 ## [0.32.0] - 2026-09-26
 ### 🎯 Major Feature: Terminal Command System
 Grimoire and Rune now support **commands**: type `/` at the prompt and a palette opens listing everything this installation offers, beside the channel's own `/new` and `/exit`. It filters as you type and Enter runs the highlighted one. A command is not prose: it never reaches any agents, so it costs no reasoning and interrupts nothing the conversation was doing.
