@@ -27,15 +27,17 @@ For production hotfixes, activated when the user says:
 ## Procedure
 
 1. **Extract current version** from `<repo root>/Morgana/Directory.Build.props`
-   - Extract the value of `<Version>X.Y.Z</Version>`
+   - It is split in `<VersionPrefix>X.Y.Z</VersionPrefix>` and `<VersionSuffix>betaN</VersionSuffix>`
+   - The full version is `X.Y.Z-betaN`. `AssemblyVersion` and `FileVersion` stay `$(VersionPrefix)`, because an assembly version cannot carry a suffix
 
-2. **Increment the version** using Semantic Versioning
-   - **Default behavior (new development cycle)**: Increment the minor version (Y)
-     - X.Y.Z → X.(Y+1).0
-     - Example: 0.25.0 → 0.26.0
-   - **Hotfix behavior**: Increment the patch version (Z)
-     - X.Y.Z → X.Y.(Z+1)
-     - Example: 0.25.0 → 0.25.1
+2. **Increment the version**
+   - **Default behavior (new development cycle)**: increment the beta number (N), prefix untouched
+     - 1.0.0-betaN → 1.0.0-beta(N+1)
+     - Example: 1.0.0-beta1 → 1.0.0-beta2
+   - **Hotfix behavior**: append a patch counter to the suffix
+     - 1.0.0-betaN → 1.0.0-betaN.1
+     - Example: 1.0.0-beta1 → 1.0.0-beta1.1
+   - Leaving beta (1.0.0 final) is the user's decision, never this skill's: then `VersionSuffix` is removed
 
 3. **Update all version files** in the following paths:
    - `<repo root>/Morgana/Directory.Build.props`
@@ -44,12 +46,13 @@ For production hotfixes, activated when the user says:
    - `<repo root>/Channels/Grimoire/Directory.Build.props`
    - `<repo root>/Examples/Examples.csproj`
    - `<repo root>/PromptHarness/PromptHarness.csproj`
+   - `<repo root>/PromptHarness/FederationPlugin/FederationPlugin.csproj`
    - `<repo root>/Alembic/Directory.Build.props`
 
 4. **Add new section in CHANGELOG.md**
    - Read `<repo root>/CHANGELOG.md`
    - Insert a new section right after the header and preamble
-   - **For normal version bumps** (Y increment):
+   - **For normal version bumps** (beta number increment):
    ```
    ## [X.Y.Z] - UNDER DEVELOPMENT
    ### ✨ Added
@@ -63,20 +66,20 @@ For production hotfixes, activated when the user says:
    ### 🚀 Future Enablement
 
    ```
-   - **For hotfixes** (Z increment):
+   - **For hotfixes** (patch counter on the suffix):
    ```
    ## [X.Y.Z] - UNDER DEVELOPMENT
    ### 🐛 Fixed
 
    ```
-   - Replace `X.Y.Z` with the newly calculated version
+   - Replace `X.Y.Z` with the newly calculated full version (e.g. `1.0.0-beta2`)
 
 5. **Communicate the result** to the user with details of the updated version
 
 ## Notes
 
 - The skill operates idempotently: running it twice does not create duplicates
-- Morgana convention: increment **minor (Y)** for new development cycles, **patch (Z)** for hotfixes only
+- Morgana convention: the beta number counts development cycles, the patch counter on the suffix counts hotfixes
 - All solution projects are updated atomically
 - The empty CHANGELOG section is ready to be filled with change details
-- Regular development cycles always reset patch to 0 (e.g., 0.25.1 → 0.26.0, or 0.25.0 → 0.26.0)
+- Regular development cycles always drop the hotfix counter (e.g., 1.0.0-beta1.1 → 1.0.0-beta2)

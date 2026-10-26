@@ -10,7 +10,8 @@
     <Title>FederationPlugin</Title>
     <OutputType>Library</OutputType>
     <EnableDynamicLoading>true</EnableDynamicLoading>
-    <Version>1.0.0</Version>
+    <VersionPrefix>1.0.0</VersionPrefix>
+    <VersionSuffix>beta1</VersionSuffix>
     <IsPackable>false</IsPackable>
 
     <Description>
