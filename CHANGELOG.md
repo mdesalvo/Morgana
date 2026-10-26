@@ -12,8 +12,9 @@ A new **Economy** tier joins Efficiency and Performance, taking over Morgana's o
 ### 🎯 Major Feature: LLM providers as plugins
 Morgana's core no longer knows any LLM vendor: **each provider is a plugin**, dropped into `plugins/` beside the domain agents. A tier picks it by name.
 Anthropic, Azure OpenAI, Google, Ollama and OpenAI ship as **`Morgana.AI.LanguageModels`** packages. Any other vendor offering a `Microsoft.Extensions.AI` client can join the same way, without touching the framework.
-Each plugin carries the official **price list** of its vendor's models, from which Morgana derives the dust of every tier. A deployment can **overlay its own price** on a tier: for a model the list does not hold (an Azure deployment, an Ollama model, a model released after Morgana) or for a negotiated discount.
-### 🎯 Major Feature: Google Gemini gets in
+Each plugin carries the official **price list** of its vendor's models, from which Morgana derives the dust of every tier.
+A deployment can **overlay its own price** on a tier: for a model the list does not hold (an Azure deployment, an Ollama model, a model released after Morgana) or for a negotiated discount.
+### 🎯 Major Feature: Support for Google Gemini
 Morgana starts supporting **Google Gemini** models.
 ### 🎯 Major Feature: Agents that present themselves
 Morgana's welcome works like a phone menu: her buttons are the intents themselves, written by code: pressing one takes the user straight to that agent, which presents what it can do with its own buttons.
