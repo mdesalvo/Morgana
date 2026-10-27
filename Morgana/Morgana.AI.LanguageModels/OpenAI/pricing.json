@@ -1,6 +1,7 @@
 {
   "Models": [
     { "Name": "gpt-6.1-sol", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 2.50 } },
+    { "Name": "gpt-6.1-terra", "Pricing": { "InputUsdPerMillion": 1.00, "OutputUsdPerMillion": 5.00, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 2.50 } },
     { "Name": "gpt-6-astra", "Pricing": { "InputUsdPerMillion": 10.00, "OutputUsdPerMillion": 50.00, "CacheReadUsdPerMillion": 1.00, "CacheWriteUsdPerMillion": 12.50 } },
     { "Name": "gpt-6-sol", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.20, "CacheWriteUsdPerMillion": 2.50 } },
     { "Name": "gpt-6-luna", "Pricing": { "InputUsdPerMillion": 0.10, "OutputUsdPerMillion": 0.50, "CacheReadUsdPerMillion": 0.01, "CacheWriteUsdPerMillion": 0.125 } },
