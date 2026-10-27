@@ -33,7 +33,7 @@
     <Product>Morgana</Product>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
-    <PackageTags>actor-model akka-actors agents-ai ai ai-assistant chatbot intent-classification mcp multiagent</PackageTags>
+    <PackageTags>actor-model agents-ai ai-assistant semantic-routing mcp a2a opentelemetry witch</PackageTags>
 
     <!-- Repository Information -->
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -42,14 +42,12 @@
     
     <!-- Common Description -->
     <Description>
-    Morgana is a modern and flexible conversational AI framework designed to handle
-    complex customer service scenarios through a sophisticated multi-agent architecture.
-    Built on cutting-edge .NET 10 and leveraging the actor model via Akka.NET,
-    Morgana orchestrates specialized AI agents that collaborate to understand,
+    Morgana is a modern and flexible conversational AI framework designed to handle complex scenarios
+    through a sophisticated multi-agent, semantic-routing architecture. Built on .NET 10 and leveraging
+    the actor model via Akka.NET, Morgana orchestrates specialized AI agents that collaborate to understand,
     classify and resolve customer inquiries with precision and context awareness.
-    The system is powered by Microsoft.Agents.AI framework, enabling seamless
-    integration with Large Language Models (LLMs) while maintaining strict governance
-    through guard rails, policy enforcement and comprehensive conversation archival.
+    The system is powered by Microsoft.Agents.AI, enabling seamless integration with Large Language Models (LLMs)
+    while maintaining strict governance through guard rails and policy enforcement.
     </Description>
 
   </PropertyGroup>
