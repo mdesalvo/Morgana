@@ -420,7 +420,11 @@ public sealed class MorganaChatReducer : IChatReducer
             }
 
             // Last, not first: this is the instruction about the transcript above and it reads as one.
-            yield return new ChatMessage(ChatRole.System, summarizationPrompt);
+            // It speaks as the user because the request must end on the user's side: a provider lifts
+            // system messages out of the turns, which would leave the last summarized assistant message
+            // closing the request. Gemini refuses a request that ends on the model's turn. The call is
+            // never stored, so no record ever shows these words as the user's.
+            yield return new ChatMessage(ChatRole.User, summarizationPrompt);
         }
 
         /// <summary>
