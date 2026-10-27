@@ -123,10 +123,19 @@ Activated when the user says things like:
    # Boot-flagged — one knob each, never together
    Harness__EnableGuardrail=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~GuardTests"
    Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~SummarizationTests"
-   Harness__DustBudgetPerConversation=100 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~DustTests"
+   dotnet build PromptHarness/PromptHarness.csproj
+   (cd PromptHarness/bin/Debug/net10.0 && Harness__DustBudgetPerConversation=100 Harness__HostLogLevel=Debug Harness__EchoHostOutput=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M ./PromptHarness -class PromptHarness.Tests.DustTests)
    Harness__FederatedPeer=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"
    Harness__EnableGuardrail=true dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ConversationPersistenceTests"
    ```
+
+   **Dust runs through the xUnit executable, with the host's log echoed.** A dust red says only that
+   a threshold did not appear; the reason is in the host's log, which `DustTests` never prints. At
+   `Harness__HostLogLevel=Debug` the host writes one `Charged … dust to … (role=…)` line per charge,
+   so every turn's cost is readable, together with any error that kept a turn from charging at all.
+   `Harness__EchoHostOutput=true` copies that log to the console but only the executable lets it
+   through: under `dotnet test` VSTest keeps the test process's console to itself. Its summary line
+   reads `Total: N, Errors: E, Failed: F`.
 
    **Read the test count in every summary line, not only the pass/fail verdict.** A filter matching
    no class is not an error: the run exits 0 having executed nothing. A group reported green having
