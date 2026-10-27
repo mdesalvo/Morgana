@@ -9,7 +9,7 @@ public interface IAgentRegistryService
 {
     /// <summary>
     /// Resolves agent type for intent name from [HandlesIntent] registry. Returns Type if found, null otherwise.
-    /// Allows RouterActor to provide user-friendly error messages on null (unrecognized intents).
+    /// On null RouterActor answers the request itself, with Morgana's presentation.
     /// </summary>
     Type? ResolveAgentFromIntent(string intent);
 

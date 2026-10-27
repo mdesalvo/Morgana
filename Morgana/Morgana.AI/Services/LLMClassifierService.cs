@@ -76,7 +76,7 @@ public class LLMClassifierService : IClassifierService
             agentConfigService.GetIntentsAsync().GetAwaiter().GetResult();
 
         // An empty domain is legal, so this line is the only warning an operator gets that every turn
-        // will fall through to the unrecognized-intent answer.
+        // will fall through to Morgana's presentation.
         logger.LogInformation(
             intents.Count == 0
                 ? $"{nameof(LLMClassifierService)}: no intents loaded — Morgana seems to be running in 'agentless' configuration"

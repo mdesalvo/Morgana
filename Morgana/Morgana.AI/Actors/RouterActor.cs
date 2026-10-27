@@ -86,7 +86,7 @@ public class RouterActor : MorganaActor
         // - Creates agent on-demand if not yet created
         // - Forwards request to appropriate agent
         // - Receives both streaming chunks and final response via Tell
-        // - Returns error messages for missing/unrecognized intents
+        // - Answers an intent with no agent with Morgana's presentation, or the classification error
         ReceiveAsync<Records.AgentRequest>(RouteToAgentAsync);
         Receive<Records.AgentResponse>(HandleAgentResponseDirect);
 
@@ -153,14 +153,14 @@ public class RouterActor : MorganaActor
         // No [HandlesIntent] agent is registered for this intent: Morgana answers it herself
         if (selectedAgent == null)
         {
-            // Both wordings Morgana answers with here come from the classifier's prompt, in her own voice.
-            Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Classifier);
-
             // A classification marked as a failure must not push a menu at a user whose request may have been perfectly legitimate.
             if (req.Classification.Metadata.ContainsKey(Constants.ClassificationMetadata.Error))
             {
+                // The classification-error wording comes from the classifier's prompt, in Morgana's own voice.
+                Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Classifier);
+
                 // The fallback was technical: the classification-error wording alone answers it, with no menu.
-                string classificationError =classifierPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.ClassificationError);
+                string classificationError = classifierPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.ClassificationError);
                 originalSender.Tell(new Records.AgentResponse(classificationError, true));
             }
             else
@@ -172,10 +172,9 @@ public class RouterActor : MorganaActor
                 // The presentation is cached per channel: showing it again costs no model call.
                 Records.PresentationResult presentation = await presenterService.GenerateAsync(intentCollection.GetDisplayableIntents(), conversationId);
 
-                // Morgana first says that nothing here answers the request, then the reintroduction, which holds no
-                // greeting since the user is already in the conversation, with every intent's button.
-                string unrecognizedIntentError = classifierPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.UnrecognizedIntentError);
-                originalSender.Tell(new Records.AgentResponse($"{unrecognizedIntentError}\n\n{presentation.Reintroduction}", true, presentation.QuickReplies));
+                // The reintroduction alone answers it: it holds no greeting since the user is already in the
+                // conversation and closes on every intent's button.
+                originalSender.Tell(new Records.AgentResponse(presentation.Reintroduction, true, presentation.QuickReplies));
             }
             return;
         }

@@ -200,13 +200,10 @@
       "Version": "1",
       "AdditionalProperties": [
         {
-          "UnrecognizedIntentError": "The shadows remain silent. Your words lack the catalysts needed to awaken the correct incantation within these pages."
-        },
-        {
           "ClassificationError": "The mists clouded my sight for a moment and I could not read your request. Cast it again."
         },
         {
-          "DisambiguationMessage": "You've lit more than one candle with those words andI can't tell which lights your way. Which is it?"
+          "DisambiguationMessage": "You've lit more than one candle with those words and I can't tell which lights your way. Which is it?"
         },
         {
           "ComplementIntentDescription": "any other topic not expressly intercepted by known intents"

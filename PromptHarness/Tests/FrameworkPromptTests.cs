@@ -144,7 +144,6 @@ public sealed class FrameworkPromptTests
     [InlineData("Morgana", "AgentExitMessage")]
     [InlineData("Presentation", "FallbackMessage")]
     [InlineData("Presentation", "NoAgentsMessage")]
-    [InlineData("Classifier", "UnrecognizedIntentError")]
     [InlineData("Classifier", "ClassificationError")]
     [InlineData("Classifier", "DisambiguationMessage")]
     [InlineData("Classifier", "ComplementIntentDescription")]

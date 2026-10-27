@@ -142,8 +142,8 @@ Actor naming: `/user/{suffix}-{conversationId}`. Agent identifier: `{agent_name}
 3. **AwaitingClassification** — LLM classification, falling back to `"other"`. *Skipped when an
    active agent exists.* Candidates colliding within `IntentCollisionThreshold` divert here: a
    disambiguation quick reply goes straight to the user and the turn returns to Idle. A request no
-   agent claims is answered by the router with `UnrecognizedIntentError`, then Morgana's presentation
-   without greeting and every intent's button
+   agent claims is answered by the router with Morgana's presentation without greeting and every
+   intent's button
 4. **AwaitingAgentResponse / AwaitingFollowUpResponse** — the agent runs its tool loop and streams.
    The wait here is a budget on **silence**, not on the turn: every chunk renews it and so does
    `AgentStillWorking` on updates carrying no text — without it a consultation reads as a dead agent

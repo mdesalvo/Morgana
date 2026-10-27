@@ -156,9 +156,6 @@ public static class Constants
         /// </summary>
         public const string AgentExitMessage = "AgentExitMessage";
 
-        /// <summary>What the user is told when a request lands on an intent no agent handles, ahead of Morgana's presentation.</summary>
-        public const string UnrecognizedIntentError = "UnrecognizedIntentError";
-
         /// <summary>What the user is told when the classifier fails and its classification is only a fallback.</summary>
         public const string ClassificationError = "ClassificationError";
 
@@ -343,9 +340,8 @@ public static class Constants
         /// <summary>
         /// The complement of whatever domain is deployed: what a request matching no modelled agent
         /// is. No agent handles it, it is never offered as a quick reply and never counts as a
-        /// collision candidate. Routed all the same: the router answers a genuine complement with the
-        /// unrecognized-intent message and Morgana's presentation, a classification failure with the
-        /// classification-error message.
+        /// collision candidate. Routed all the same: the router answers a genuine complement with
+        /// Morgana's presentation, a classification failure with the classification-error message.
         /// </summary>
         /// <remarks>
         /// The classifier's own and no domain's: the name is here because three parties compare it,

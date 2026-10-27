@@ -151,8 +151,8 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         // is described in its prompt, so no domain declares it and none has to be excused for it.
         HashSet<string> classifierIntents = [.. configuredIntents.Select(intent => intent.Name)];
 
-        // Offered to the classifier with nobody behind it: the router would answer its
-        // unrecognized-intent fallback for a request the domain claims to serve.
+        // Offered to the classifier with nobody behind it: the router would answer with Morgana's
+        // presentation a request the domain claims to serve.
         List<string> unhandledIntents = [.. classifierIntents.Except(registeredIntents)];
         if (unhandledIntents.Count > 0)
             errors.Add($"There are intents not handled by any Morgana agent: {string.Join(", ", unhandledIntents)}");
