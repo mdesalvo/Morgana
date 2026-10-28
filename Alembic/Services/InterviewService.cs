@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Alembic.Interfaces;
-using Alembic.Model;
+using Alembic.Models;
+using Alembic.Tools;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Morgana.AI;
@@ -42,8 +43,7 @@ public class InterviewService : IInterviewService
         [InterviewStep.AgentToolkit] = "AgentToolkit",
         [InterviewStep.AgentTerritory] = "AgentTerritory",
         [InterviewStep.AgentInstructions] = "AgentInstructions",
-        [InterviewStep.AgentFormatting] = "AgentFormatting",
-        [InterviewStep.DomainColleagues] = "DomainColleagues"
+        [InterviewStep.AgentFormatting] = "AgentFormatting"
     };
 
     /// <summary>
@@ -64,9 +64,7 @@ public class InterviewService : IInterviewService
         [InterviewStep.AgentInstructions] = "This step settles its Instructions, which give it how it goes "
                                           + "about the work.",
         [InterviewStep.AgentFormatting] = "This last step settles its Formatting, which gives it how what it "
-                                         + "finds reaches the person reading it.",
-        [InterviewStep.DomainColleagues] = "This closing step settles which of them may put a question to another, "
-                                         + "which is the one thing that could not be asked while they were being written."
+                                         + "finds reaches the person reading it."
     };
 
     /// <summary>
@@ -207,15 +205,6 @@ public class InterviewService : IInterviewService
     /// </remarks>
     private async Task<InterviewState> StartCoreAsync(CancellationToken cancellationToken)
     {
-        // A sitting saved on the colleagues step is a finished interview: the colleagues are a form now.
-        if (draftStateService.Current is { Sitting.Pass: InterviewStep.DomainColleagues } spent)
-        {
-            spent.Sitting = null;
-            draftStateService.Set(spent);
-            Current = null;
-            return new InterviewState();
-        }
-
         Current = new InterviewState();
 
         // An interview brought back in a save file resumes where it stopped and resumes the way a
@@ -232,7 +221,6 @@ public class InterviewService : IInterviewService
             // into the domain as freshly authored, at the end of the list, over C# facts it arrived
             // with — the three things the revision exists to get right.
             Current.Revision = sitting.Revision;
-            Current.Colleagues.AddRange(sitting.Colleagues);
 
             // A correction saved half-done comes back with the interview it set aside.
             if (sitting.Resume is { } frontier)
@@ -497,7 +485,7 @@ public class InterviewService : IInterviewService
         // from how this loop got here), but the walk from one settled pass to the next is the same
         // walk either way: the point of an edit is that a change to one section forces the model to
         // recheck every section after it, not to settle one and stop.
-        while (interviewState is { ReadyForReview: true, Error: null, Pass: not (InterviewStep.AgentFormatting or InterviewStep.DomainColleagues) })
+        while (interviewState is { ReadyForReview: true, Error: null, Pass: not InterviewStep.AgentFormatting })
         {
             // A correction of the agent in hand stops where the interview stood: from there on the
             // agent was never written, so there is nothing left to correct.
@@ -515,16 +503,6 @@ public class InterviewService : IInterviewService
                 interviewState.At = 0;
 
             await EnterPassAsync(interviewState, interviewState.Pass + 1, cancellationToken);
-        }
-
-        // The closing step is the one pass whose own agreement ends the interview. There is nothing
-        // waiting to be let into the domain the way a finished agent is — the agents are all in it
-        // already — so the gesture that would let it in does not exist and what settles the set of
-        // colleagues writes it and puts the client on their finished domain.
-        if (interviewState is { ReadyForReview: true, Error: null, Pass: InterviewStep.DomainColleagues })
-        {
-            CommitColleagues(interviewState);
-            Abandon();
         }
 
         return interviewState;
@@ -690,16 +668,6 @@ public class InterviewService : IInterviewService
             case InterviewStep.DomainMapper:
                 return false;
 
-            // Behind the closing step is the last entry of the map, whose agent is in the domain
-            // already: it comes back out and into the client's hands exactly as stepping between two
-            // entries does. The edges declared so far survive — they are this step's own working set,
-            // not that agent's and re-entering reads them back.
-            case InterviewStep.DomainColleagues when interviewState.Map.Count > 0:
-                interviewState.At = interviewState.Map.Count - 1;
-                Uncommit(interviewState);
-                await EnterPassAsync(interviewState, InterviewStep.AgentFormatting, cancellationToken, revisiting: true);
-                return true;
-
             // An edit is one agent and no map: the client opened it from the walk at its Target and
             // behind that first pass is that screen rather than a step of anything. Where they came
             // in is where they leave and the walk's own way back is what takes them.
@@ -787,8 +755,7 @@ public class InterviewService : IInterviewService
         Map = [.. interviewState.Map],
         Agent = interviewState.Agent,
         Example = interviewState.Example,
-        Revision = interviewState.Revision,
-        Colleagues = [.. interviewState.Colleagues]
+        Revision = interviewState.Revision
     };
 
     /// <summary>
@@ -807,7 +774,6 @@ public class InterviewService : IInterviewService
         };
 
         interviewState.Map.AddRange(sitting.Map);
-        interviewState.Colleagues.AddRange(sitting.Colleagues);
 
         return interviewState;
     }
@@ -834,87 +800,6 @@ public class InterviewService : IInterviewService
 
         draftStateService.Set(draft);
     }
-
-    /// <summary>
-    /// Writes the declared colleagues into the domain, edges and reconciled prose together.
-    /// </summary>
-    /// <remarks>
-    /// Together, because either alone is a defect: the attribute without the prose hands an agent a
-    /// function its own Instructions forbid it to use and the prose without the attribute licenses
-    /// a question it has no function to ask. This is the one write of the interview that lands on
-    /// agents already in the configuration, which is why it happens once, at the client's word and
-    /// never as each edge is proposed.
-    /// </remarks>
-    private void CommitColleagues(InterviewState interviewState)
-    {
-        if (draftStateService.Current is not { } draft)
-            return;
-
-        foreach (ConsultationDraft edge in interviewState.Colleagues)
-        {
-            AgentDraft? asking = Named(draft, edge.Asking);
-            AgentDraft? asked = Named(draft, edge.Asked);
-
-            // Both ends have to be there. An agent the client removed from the walk between the
-            // declaration and the word that commits it leaves an edge naming nothing and a
-            // [ConsultsAgent] onto an intent no agent handles is startup-fatal. A colleague at an
-            // instance has no second end here at all, which is why it is declared where a developer
-            // finalizes the domain rather than in a conversation with its author.
-            if (asking is null || asked is null)
-                continue;
-
-            Morgana.AI.Records.PeerReference colleague = new Morgana.AI.Records.PeerReference(edge.Asked);
-
-            if (!asking.Code.Consults.Any(declared => PeerNaming.Same(declared, colleague)))
-                asking.Code.Consults.Add(colleague);
-
-            Reconcile(asking, edge.AskingInstructions, edge.AskingTarget);
-            Reconcile(asked, edge.AskedInstructions, null);
-        }
-
-        // The interview is over and an interview nobody is having is not something to resume into.
-        draft.Sitting = null;
-        draftStateService.Set(draft);
-    }
-
-    /// <summary>
-    /// Replaces the prose an edge rewrote and says so in the agent's provenance.
-    /// </summary>
-    /// <remarks>
-    /// Both sections, because a boundary is written in either: the Instructions carry how the agent
-    /// goes about the subject and the Target carries whether the subject is its at all; an edge
-    /// contradicted by one is contradicted whichever of the two states it.
-    /// <para>
-    /// An imported agent whose prose this step rewrote becomes Revised: the migration report's whole
-    /// job is naming which of the agents the client brought were touched and an edge that changed a
-    /// sentence of one of them touched it.
-    /// </para>
-    /// </remarks>
-    private static void Reconcile(AgentDraft agent, string? instructions, string? target)
-    {
-        bool moved = false;
-
-        if (!string.IsNullOrWhiteSpace(instructions) && !string.Equals(agent.Instructions, instructions, StringComparison.Ordinal))
-        {
-            agent.Instructions = instructions;
-            moved = true;
-        }
-
-        if (!string.IsNullOrWhiteSpace(target) && !string.Equals(agent.Target, target, StringComparison.Ordinal))
-        {
-            agent.Target = target;
-            moved = true;
-        }
-
-        if (moved && agent.Origin == Provenance.Imported)
-            agent.Origin = Provenance.Revised;
-    }
-
-    /// <summary>
-    /// The domain's agent for an intent name, matched the way Morgana matches a prompt ID.
-    /// </summary>
-    private static AgentDraft? Named(DomainDraft draft, string intentName) =>
-        draft.Agents.FirstOrDefault(a => string.Equals(a.ID, intentName, StringComparison.OrdinalIgnoreCase));
 
     /// <inheritdoc />
     public void Abandon()
@@ -1010,14 +895,6 @@ public class InterviewService : IInterviewService
     {
         if (interviewPass == InterviewStep.DomainMapper)
             return BootstrapMessages[interviewPass] + Known(interviewState);
-
-        // The closing step stands on the domain rather than on an entry of the map, so the sentence
-        // that places every other step — entry n of m, this intent, what is written on it — has
-        // nothing to say here. What it is standing on is the whole list and it reads that for
-        // itself: the agents are in the configuration, whole and GetDomainAgents hands them back.
-        if (interviewPass == InterviewStep.DomainColleagues)
-            return "Every entry of the map has its agent and the domain is complete. "
-                   + BootstrapMessages[interviewPass] + Known(interviewState);
 
         // Which of the two jobs this is and it is stated as a FACT rather than as an instruction:
         // what to do about each is one rule in the shared layer, read by every pass and repeating it
@@ -1292,10 +1169,6 @@ public class InterviewService : IInterviewService
             [nameof(InterviewTools.RecallAgent)] = tools.RecallAgent,
             [nameof(InterviewTools.SetTraits)] = tools.SetTraits,
             [nameof(InterviewTools.GetExistingIntents)] = tools.GetExistingIntents,
-            [nameof(InterviewTools.GetDomainAgents)] = tools.GetDomainAgents,
-            [nameof(InterviewTools.GetConsultations)] = tools.GetConsultations,
-            [nameof(InterviewTools.DeclareConsultation)] = tools.DeclareConsultation,
-            [nameof(InterviewTools.DropConsultation)] = tools.DropConsultation,
             [nameof(InterviewTools.GetComposedPrompt)] = tools.GetComposedPrompt,
             [nameof(InterviewTools.GetFindings)] = tools.GetFindings,
             [nameof(InterviewTools.SetPassCompleted)] = tools.SetPassCompleted

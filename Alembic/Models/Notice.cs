@@ -1,4 +1,4 @@
-namespace Alembic.Model;
+namespace Alembic.Models;
 
 /// <summary>
 /// What a notice tells the client, in the same three states the validation checks are drawn in.

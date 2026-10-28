@@ -1,5 +1,6 @@
 using Alembic.Interfaces;
-using Alembic.Model;
+using Alembic.Models;
+using Alembic.Tools;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Morgana.AI;

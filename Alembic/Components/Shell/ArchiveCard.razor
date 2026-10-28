@@ -103,8 +103,29 @@
                                              Message="@(touched && !IsAbsoluteHttpUri(row.Url) ? "An absolute http(s) address" : null)" />
                         </FluentGridItem>
                         <FluentGridItem Xs="8">
-                            <FluentButton Appearance="ButtonAppearance.Transparent" IconOnly="true" Color="var(--alembic-error)"
-                                          Title="Remove this server" Disabled="running" OnClick="() => RemoveMcpAsync(agent, row)">✕</FluentButton>
+                            <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px">
+                                <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Small" Title="Open a session with this server and list its tools"
+                                              Disabled="@(running || row.Trying || !IsAbsoluteHttpUri(row.Url))" OnClick="() => TryMcpAsync(row)">⇄ Try</FluentButton>
+
+                                @if (row.Trying)
+                                {
+                                    <FluentSpinner Size="SpinnerSize.Tiny" />
+                                }
+                                else if (row.TriedUrl == row.Url)
+                                {
+                                    @if (row.ToolCount is { } toolCount)
+                                    {
+                                        <FluentBadge Appearance="BadgeAppearance.Tint" Color="BadgeColor.Success">@toolCount @(toolCount == 1 ? "tool" : "tools") exposed</FluentBadge>
+                                    }
+                                    else
+                                    {
+                                        <FluentBadge Appearance="BadgeAppearance.Tint" Color="BadgeColor.Warning" title="@row.Failure">no answer</FluentBadge>
+                                    }
+                                }
+
+                                <FluentButton Appearance="ButtonAppearance.Transparent" IconOnly="true" Color="var(--alembic-error)"
+                                              Title="Remove this server" Disabled="running" OnClick="() => RemoveMcpAsync(agent, row)">✕</FluentButton>
+                            </FluentStack>
                         </FluentGridItem>
                     }
 
@@ -295,6 +316,18 @@
     {
         /// <summary>The address.</summary>
         public string Url { get; set; } = string.Empty;
+
+        /// <summary>Whether a try is in flight.</summary>
+        public bool Trying { get; set; }
+
+        /// <summary>The address the last try was made against; its outcome is stale once <see cref="Url"/> differs.</summary>
+        public string? TriedUrl { get; set; }
+
+        /// <summary>The tools the server listed; <c>null</c> when the try failed.</summary>
+        public int? ToolCount { get; set; }
+
+        /// <summary>Why the try got no answer; <c>null</c> when it succeeded.</summary>
+        public string? Failure { get; set; }
     }
 
     /// <summary>
@@ -473,6 +506,41 @@
     {
         McpRows(agent).Remove(row);
         await SyncMcpAsync(agent);
+    }
+
+    /// <summary>
+    /// Opens a real session to the row's server with the framework's own client and reports what it lists; a snapshot that is never stored.
+    /// </summary>
+    private async Task TryMcpAsync(McpRow row)
+    {
+        row.Trying = true;
+        row.TriedUrl = row.Url;
+        row.ToolCount = null;
+        row.Failure = null;
+
+        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
+
+        try
+        {
+            await using Morgana.AI.Services.MCPClient client = await Morgana.AI.Services.MCPClient.ConnectAsync(
+                new Morgana.AI.Attributes.UsesMCPServerAttribute(row.Url.Trim()), Logger, timeout.Token);
+
+            row.ToolCount = (await client.DiscoverToolsAsync(timeout.Token)).Count;
+        }
+        catch (Exception failure)
+        {
+            // An unreachable server is an outcome to show: a server down today may be up tomorrow and nothing is blocked.
+            Exception innermost = failure;
+
+            while (innermost.InnerException is { } inner)
+                innermost = inner;
+
+            row.Failure = timeout.IsCancellationRequested ? "no answer within 10 seconds" : innermost.Message;
+        }
+        finally
+        {
+            row.Trying = false;
+        }
     }
 
     /// <summary>

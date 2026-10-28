@@ -1,4 +1,4 @@
-namespace Alembic.Model;
+namespace Alembic.Models;
 
 /// <summary>
 /// The card an agent presents to whoever might consult it, projected from the Draft in hand.

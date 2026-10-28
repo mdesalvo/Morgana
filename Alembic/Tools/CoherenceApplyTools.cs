@@ -1,7 +1,7 @@
-using Alembic.Model;
+using Alembic.Models;
 using Morgana.AI;
 
-namespace Alembic.Services;
+namespace Alembic.Tools;
 
 /// <summary>
 /// The tools Alembic calls while applying one coherence finding.

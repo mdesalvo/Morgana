@@ -1,6 +1,6 @@
 using Morgana.AI;
 
-namespace Alembic.Model;
+namespace Alembic.Models;
 
 /// <summary>
 /// The on-disk shape of an <c>agents.json</c>: an intent list and an agent-prompt list.

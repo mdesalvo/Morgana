@@ -1,5 +1,5 @@
 using Alembic.Interfaces;
-using Alembic.Model;
+using Alembic.Models;
 using Morgana.AI;
 using Morgana.AI.Interfaces;
 

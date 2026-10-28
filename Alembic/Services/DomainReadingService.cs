@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Alembic.Interfaces;
-using Alembic.Model;
+using Alembic.Models;
 using Microsoft.Extensions.AI;
 using Morgana.AI;
 using Morgana.AI.Interfaces;

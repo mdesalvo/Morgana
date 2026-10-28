@@ -1,4 +1,4 @@
-namespace Alembic.Model;
+namespace Alembic.Models;
 
 /// <summary>
 /// What has been written down about the agent in hand, in the order it gets written.

@@ -1,4 +1,4 @@
-namespace Alembic.Model;
+namespace Alembic.Models;
 
 /// <summary>
 /// What reading an uploaded domain yielded.

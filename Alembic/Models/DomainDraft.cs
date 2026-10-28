@@ -1,6 +1,6 @@
 using Morgana.AI;
 
-namespace Alembic.Model;
+namespace Alembic.Models;
 
 /// <summary>
 /// The whole Morgana domain under construction: the single artifact the interview fills, the
@@ -175,68 +175,9 @@ public sealed class InterviewSitting
     public AgentRevision? Revision { get; set; }
 
     /// <summary>
-    /// The colleagues declared so far by the closing step, none of which is in the domain yet.
-    /// </summary>
-    /// <remarks>
-    /// They are settled together and committed together — an edge is only correct next to the other
-    /// edges, the way a map entry is only correct next to the other entries — so between the first
-    /// declaration and the client's agreement they live nowhere but here and a tab closed in
-    /// between must not lose them.
-    /// </remarks>
-    public List<ConsultationDraft> Colleagues { get; set; } = [];
-
-    /// <summary>
     /// The interview a correction set aside, so a tab closed mid-correction does not lose the rest of the map.
     /// </summary>
     public InterviewSitting? Resume { get; set; }
-}
-
-/// <summary>
-/// One agent's licence to put a question to another: the edge and the boundary prose that changes
-/// with it.
-/// </summary>
-/// <remarks>
-/// The prose travels with the edge because without it the edge is a defect. An agent whose
-/// Instructions say a subject belongs to another bench and stops there is being told, in the same
-/// prompt, that it may ask and that it may not, where the imperative sentence wins. So the tool that
-/// declares an edge takes the asking agent's reconciled Instructions in the same call and the two
-/// land in the domain together or not at all.
-/// </remarks>
-public sealed class ConsultationDraft
-{
-    /// <summary>The intent of the agent that gains the <c>[ConsultsAgent]</c> declaration.</summary>
-    public string Asking { get; set; } = string.Empty;
-
-    /// <summary>The intent of the colleague it may put a question to.</summary>
-    /// <remarks>
-    /// Always an agent of this domain. A colleague published by an instance is outside everything this
-    /// interview can see — its intent cannot be checked, its <c>Territory</c> cannot be read and
-    /// its prose is not ours to reconcile — so it is declared on the emit page, where the hand on the
-    /// keyboard is a developer's and not the domain author's.
-    /// </remarks>
-    public string Asked { get; set; } = string.Empty;
-
-    /// <summary>The asking agent's Instructions, rewritten so its own boundary admits the colleague.</summary>
-    public string AskingInstructions { get; set; } = string.Empty;
-
-    /// <summary>
-    /// The asking agent's Target, rewritten where the boundary that fights the edge is stated there
-    /// rather than in its Instructions. <c>null</c> whenever it stands as it is.
-    /// </summary>
-    /// <remarks>
-    /// A Target is where a boundary belongs by doctrine — what this agent does and, existentially,
-    /// what it does not — so it is the first place a refusal of the colleague's subject is written
-    /// and, left alone, it goes on refusing what a function of this agent's own can now answer.
-    /// </remarks>
-    public string? AskingTarget { get; set; }
-
-    /// <summary>
-    /// The colleague's Instructions, rewritten only where its own prose would have it refuse what it
-    /// is now being asked for. <c>null</c> whenever they stand as they are, which is the ordinary
-    /// case: answering a colleague is a turn the framework already governs and a refusal to say
-    /// something to a *user* is not one to reopen here.
-    /// </summary>
-    public string? AskedInstructions { get; set; }
 }
 
 /// <summary>

@@ -1,4 +1,4 @@
-namespace Alembic.Model;
+namespace Alembic.Models;
 
 /// <summary>
 /// How a declared colleague is named to a reader — the client, the model conducting the interview

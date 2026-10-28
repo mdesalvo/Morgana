@@ -1,4 +1,4 @@
-namespace Alembic.Model;
+namespace Alembic.Models;
 
 /// <summary>
 /// A place on the shell's track: the map, one moment of one agent or one moment of the domain.
@@ -61,7 +61,6 @@ public readonly record struct ShellPoint(int Entry, int Rail) : IComparable<Shel
     public static ShellPoint FrontierOf(InterviewState interview) => interview switch
     {
         { Pass: InterviewStep.DomainMapper } => Map,
-        { Pass: InterviewStep.DomainColleagues } => new ShellPoint(-1, CollaborationRail),
         { Pass: InterviewStep.AgentFormatting, ReadyForReview: true } => new ShellPoint(interview.At, AcceptanceRail),
         _ => new ShellPoint(interview.At, (int)interview.Pass)
     };

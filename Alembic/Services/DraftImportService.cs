@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Alembic.Interfaces;
-using Alembic.Model;
+using Alembic.Models;
 using Morgana.AI;
 
 namespace Alembic.Services;
