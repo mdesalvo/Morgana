@@ -46,7 +46,7 @@ For production hotfixes, activated when the user says:
    - `<repo root>/Channels/Grimoire/Directory.Build.props`
    - `<repo root>/Examples/Examples.csproj`
    - `<repo root>/PromptHarness/PromptHarness.csproj`
-   - `<repo root>/PromptHarness/FederationPlugin/FederationPlugin.csproj`
+   - `<repo root>/PromptHarness/Plugins/FederationPlugin/FederationPlugin.csproj`
    - `<repo root>/Alembic/Directory.Build.props`
 
 4. **Add new section in CHANGELOG.md**

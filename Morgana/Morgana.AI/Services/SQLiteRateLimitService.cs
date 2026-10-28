@@ -233,7 +233,8 @@ public class SQLiteRateLimitService : IRateLimitService
             {
                 return new RateLimitResult(
                     IsAllowed: false,
-                    ViolatedLimit: $"MaxMessagesPerMinute ({options.MaxMessagesPerMinute})",
+                    ViolatedWindow: RateLimitWindow.PerMinute,
+                    ViolatedCap: options.MaxMessagesPerMinute,
                     RetryAfterSeconds: 60);
             }
         }
@@ -248,7 +249,8 @@ public class SQLiteRateLimitService : IRateLimitService
             {
                 return new RateLimitResult(
                     IsAllowed: false,
-                    ViolatedLimit: $"MaxMessagesPerHour ({options.MaxMessagesPerHour})",
+                    ViolatedWindow: RateLimitWindow.PerHour,
+                    ViolatedCap: options.MaxMessagesPerHour,
                     RetryAfterSeconds: 3600);
             }
         }
@@ -263,7 +265,8 @@ public class SQLiteRateLimitService : IRateLimitService
             {
                 return new RateLimitResult(
                     IsAllowed: false,
-                    ViolatedLimit: $"MaxMessagesPerDay ({options.MaxMessagesPerDay})",
+                    ViolatedWindow: RateLimitWindow.PerDay,
+                    ViolatedCap: options.MaxMessagesPerDay,
                     RetryAfterSeconds: 86400);
             }
         }

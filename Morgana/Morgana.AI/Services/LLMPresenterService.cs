@@ -127,7 +127,7 @@ public class LLMPresenterService : IPresenterService
             {
                 ConversationId = $"{channelName}-presentation-cache",
                 Text = presentationResult.Message,
-                MessageType = Constants.MessageTypes.Presentation,
+                MessageType = ChannelMessageTypes.Presentation,
                 QuickReplies = presentationResult.QuickReplies,
                 AgentName = Constants.Morgana,
                 AgentCompleted = false
@@ -140,7 +140,7 @@ public class LLMPresenterService : IPresenterService
             {
                 ConversationId = $"{channelName}-presentation-reintroduction-cache",
                 Text = presentationResult.Reintroduction,
-                MessageType = Constants.MessageTypes.Presentation,
+                MessageType = ChannelMessageTypes.Presentation,
                 QuickReplies = presentationResult.QuickReplies,
                 AgentName = Constants.Morgana,
                 AgentCompleted = true
@@ -250,6 +250,6 @@ public class LLMPresenterService : IPresenterService
     /// <param name="displayableIntents">The intents the presentation offers.</param>
     private static List<QuickReply> BuildIntentButtons(IReadOnlyList<Records.IntentDefinition> displayableIntents)
         // The id names the intent that a press chooses and the supervisor reads it back to land the turn on that agent.
-        // Label falls back to the intent name and value to a generic "Help me with X", so the button always carries a usable payload.
-        => [.. displayableIntents.Select(intent => new QuickReply(intent.Name, intent.Label ?? intent.Name, intent.DefaultValue ?? $"Help me with {intent.Name}"))];
+        // Label and value are worded as the domain authored them: startup refuses an intent that lacks either.
+        => [.. displayableIntents.Select(intent => new QuickReply(intent.Name, intent.Label, intent.DefaultValue))];
 }

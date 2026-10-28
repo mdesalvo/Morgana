@@ -332,7 +332,7 @@ public class ConversationSupervisorActor : MorganaActor
             {
                 ConversationId = conversationId,
                 Text = ctx.Message,
-                MessageType = Constants.MessageTypes.Presentation,
+                MessageType = ChannelMessageTypes.Presentation,
                 QuickReplies = quickReplies,
                 AgentName = Constants.Morgana,
                 AgentCompleted = false,
@@ -1151,7 +1151,7 @@ public class ConversationSupervisorActor : MorganaActor
             allIntents.ToDictionary(intent => intent.Name, StringComparer.OrdinalIgnoreCase);
 
         // One QuickReply per colliding intent, most-confident first. Value is the intent's own
-        // DefaultValue sample phrase (same fallback the Presenter uses) — tapping the button
+        // DefaultValue sample phrase as the domain authored it — tapping the button
         // sends that phrase as the user's next message, which lands on that intent's agent.
         List<QuickReply> quickReplies =
         [
@@ -1162,8 +1162,8 @@ public class ConversationSupervisorActor : MorganaActor
                     Records.IntentDefinition intent = intentsByName[name];
                     return new QuickReply(
                         intent.Name,
-                        intent.Label ?? intent.Name,
-                        intent.DefaultValue ?? $"Help me with {intent.Name}");
+                        intent.Label,
+                        intent.DefaultValue);
                 })
         ];
 

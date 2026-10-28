@@ -1,0 +1,10 @@
+{
+  "Intents": [
+    {
+      "Name": "unlabelled",
+      "Description": "requests that exist only to prove that an intent without a Label is refused at startup",
+      "DefaultValue": "Hello"
+    }
+  ],
+  "Agents": []
+}

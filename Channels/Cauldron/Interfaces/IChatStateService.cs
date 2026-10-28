@@ -156,7 +156,7 @@ public interface IChatStateService
 
     /// <summary>
     /// True when the conversation is terminally spent: a dust-exhaustion banner
-    /// (ErrorReason <c>"dust_budget_exhausted"</c>) is on screen. The conversation is
+    /// (ErrorReason <c>ChannelErrorReasons.DustBudgetExhausted</c>) is on screen. The conversation is
     /// dead and the only way forward is a brand-new one, so the "New Conversation"
     /// button must stay reachable even when the usual connection/history/init gates
     /// would otherwise hide it.

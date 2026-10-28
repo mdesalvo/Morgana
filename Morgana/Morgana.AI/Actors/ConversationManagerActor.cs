@@ -294,7 +294,7 @@ public class ConversationManagerActor : MorganaActor
             {
                 ConversationId = conversationId,
                 Text = response.Response,
-                MessageType = Constants.MessageTypes.Assistant,
+                MessageType = ChannelMessageTypes.Assistant,
                 QuickReplies = response.QuickReplies,
                 AgentName = response.AgentName ?? Constants.Morgana,
                 AgentCompleted = response.AgentCompleted,
@@ -341,7 +341,7 @@ public class ConversationManagerActor : MorganaActor
                 {
                     ConversationId = conversationId,
                     Text = "An error occurred while sending the response.",
-                    MessageType = "assistant",
+                    MessageType = ChannelMessageTypes.Assistant,
                     ErrorReason = $"delivery_error: {ex.Message}",
                     AgentName = Constants.Morgana,
                     AgentCompleted = false
@@ -356,7 +356,7 @@ public class ConversationManagerActor : MorganaActor
 
     /// <summary>
     /// Checks the dust-budget warning thresholds and, for any threshold newly crossed,
-    /// emits a one-shot advisory <c>system_warning</c> message. The 70% / 90% one-shot
+    /// emits a one-shot advisory <c>ChannelMessageTypes.SystemWarning</c> message. The 70% / 90% one-shot
     /// flags are owned and atomically marked by <see cref="IDustLimitService"/>, so this
     /// never re-sends the same warning. Best-effort: failures are logged, never thrown.
     /// </summary>
@@ -390,8 +390,8 @@ public class ConversationManagerActor : MorganaActor
             {
                 ConversationId = conversationId,
                 Text = FormatDustMessage(template, remaining),
-                MessageType = Constants.MessageTypes.SystemWarning,
-                ErrorReason = send90 ? "dust_budget_low_90" : "dust_budget_low_70",
+                MessageType = ChannelMessageTypes.SystemWarning,
+                ErrorReason = send90 ? ChannelErrorReasons.DustBudgetLow90 : ChannelErrorReasons.DustBudgetLow70,
                 AgentName = Constants.Morgana,
                 AgentCompleted = false,
                 ConversationMetadata = new ConversationMetadata(remaining)
@@ -425,8 +425,8 @@ public class ConversationManagerActor : MorganaActor
             {
                 ConversationId = conversationId,
                 Text = dustLimitingOptions.ErrorMessage,
-                MessageType = Constants.MessageTypes.Error,
-                ErrorReason = Constants.ErrorReasons.DustBudgetExhausted,
+                MessageType = ChannelMessageTypes.Error,
+                ErrorReason = ChannelErrorReasons.DustBudgetExhausted,
                 AgentName = Constants.Morgana,
                 AgentCompleted = false,
                 ConversationMetadata = new ConversationMetadata(0.0)

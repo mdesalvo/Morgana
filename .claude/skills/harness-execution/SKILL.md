@@ -58,6 +58,7 @@ Activated when the user says things like:
    - Summarizer (`SummarizationTests` — `Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4`)
    - Dust (`DustTests` — `Harness__DustBudgetPerConversation=100`; the test measures one turn on the tier under test and places the gauge below each threshold itself, so any budget of at least twenty turns works whatever provider serves the tier; a tier priced at zero skips it)
    - Federation (`FederationTests` — `Harness__FederatedPeer=true`, which stands a **second Morgana** up and **replaces the whole domain** of the instance under test with one toolless agent. Every other group would find its own agents missing, so this one never shares an invocation with anything)
+   - Plugin validation (`PluginValidationTests` — `Harness__MalformedDomain=unlabelled-intent`; deterministic, no model: it boots the real entry point with a harness plugin built to be wrong and expects the refusal; skipped without the knob, and its plugin stays loaded in the process, so it is its own invocation)
 
    Plus `HarnessSmokeTests`, which is not a choice: step 4 runs it regardless.
 
@@ -126,6 +127,7 @@ Activated when the user says things like:
    dotnet build PromptHarness/PromptHarness.csproj
    (cd PromptHarness/bin/Debug/net10.0 && Harness__DustBudgetPerConversation=100 Harness__HostLogLevel=Debug Harness__EchoHostOutput=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M ./PromptHarness -class PromptHarness.Tests.DustTests)
    Harness__FederatedPeer=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"
+   Harness__MalformedDomain=unlabelled-intent dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.PluginValidationTests"
    Harness__EnableGuardrail=true dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ConversationPersistenceTests"
    ```
 

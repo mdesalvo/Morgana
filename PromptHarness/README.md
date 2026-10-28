@@ -132,6 +132,9 @@ Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet tes
 # the rate limit group — deterministic, requires the boot-time limit, skipped without it
 Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateLimitTests"
 
+# the plugin validation group — deterministic, requires the malformed domain named at boot, skipped without it
+Harness__MalformedDomain=unlabelled-intent dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.PluginValidationTests"
+
 # one scenario — by DisplayName: the scenario id is a theory argument, not part of the FQN
 dotnet test … --filter "DisplayName~behaviour-rich-card"
 ```

@@ -339,8 +339,8 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("Morgana__ConversationPersistence__StoragePath", storagePath);
 
         // The shipped domain, deployed beside this suite rather than in the directory scanned by
-        // default: naming it here is what lets a run that swaps the domain leave it out, since an
-        // installation reads the first agents.json it finds and holds exactly one domain.
+        // default: naming it here is what lets a run that swaps the domain leave it out, since the
+        // default directory is always scanned and every domain found there is merged into the installation.
         Environment.SetEnvironmentVariable("Morgana__Plugins__Directories__0", "domain-plugins");
         Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableGuardrail", Options.EnableGuardrail ? "true" : "false");
 

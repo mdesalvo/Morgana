@@ -189,7 +189,11 @@
       "Formatting": "Respond ONLY with JSON in this exact format (no markdown, no preamble, nothing more than this JSON): {\"compliant\": true/false, \"violation\": \"your refusal from above, verbatim to the user, or null if compliant\"}.",
       "Language": "en-US",
       "Version": "1",
-      "AdditionalProperties": []
+      "AdditionalProperties": [
+        {
+          "ContentFilteredMessage": "That is a path closed to you and no phrasing will reopen it."
+        }
+      ]
     },
     {
       "ID": "Classifier",

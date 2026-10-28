@@ -98,6 +98,16 @@ public sealed class HarnessOptions
     public bool FederatedPeer { get; init; }
 
     /// <summary>
+    /// Names the malformed harness plugin that a <c>PluginValidationTests</c> invocation loads
+    /// (<c>unlabelled-intent</c> loads the <c>unlabelled-intent-plugins</c> directory); the fixture's own host never loads it.
+    /// </summary>
+    /// <remarks>
+    /// Process-wide and its own invocation, because a plugin once loaded stays in the process and every later boot in it would refuse:
+    /// <c>Harness__MalformedDomain=unlabelled-intent dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.PluginValidationTests"</c>
+    /// </remarks>
+    public string? MalformedDomain { get; init; }
+
+    /// <summary>
     /// Pins Examples' InventoryTool.GenerateSealWord() to this fixed value for the run instead of a
     /// fresh random one — see that method's own remarks. The harness DSL has no way to capture a
     /// value the model invents in one turn and replay it into a later turn's fixed <c>say:</c> text,

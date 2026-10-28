@@ -167,6 +167,15 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                                     + "and an agent's prompt is looked up by its intent's name in the same registry. Rename the intent.");
                             }
 
+                            // Every intent is offered as a welcome button, which needs both the text written on it
+                            // and the sentence that pressing it sends on the user's behalf.
+                            if (string.IsNullOrWhiteSpace(intent.Label) || string.IsNullOrWhiteSpace(intent.DefaultValue))
+                            {
+                                throw new InvalidOperationException(
+                                    $"Plugin '{declaringAssembly}' declares the intent '{intent.Name}' without a Label or a DefaultValue. "
+                                    + "Both are required: the welcome offers every intent as a button that shows its Label and sends its DefaultValue.");
+                            }
+
                             if (declaringAssemblyByIntent.TryGetValue(intent.Name, out string? firstAssembly))
                             {
                                 throw new InvalidOperationException(

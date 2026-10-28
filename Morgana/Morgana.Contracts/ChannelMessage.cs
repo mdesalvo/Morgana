@@ -32,12 +32,10 @@ public sealed class ChannelMessage
     public DateTime Timestamp { get; init; } = DateTime.UtcNow;
 
     /// <summary>
-    /// Type of message for UI rendering and styling.
-    /// Valid values: "assistant", "presentation", "system", "system_warning", "error"
-    /// Default: "assistant"
+    /// Type of message for UI rendering and styling: one of <see cref="ChannelMessageTypes"/>, an answer by default.
     /// </summary>
     [JsonPropertyName("messageType")]
-    public string MessageType { get; init; } = "assistant";
+    public string MessageType { get; init; } = ChannelMessageTypes.Assistant;
 
     /// <summary>
     /// Optional list of quick reply buttons for user interaction.
@@ -56,8 +54,8 @@ public sealed class ChannelMessage
     public RichCard? RichCard { get; init; }
 
     /// <summary>
-    /// Optional error reason code when MessageType is "error" or "system_warning".
-    /// Examples: "timeout", "rate_limit_exceeded", "guard_violation".
+    /// Why a notice was sent, one of <see cref="ChannelErrorReasons"/>, when MessageType is <see cref="ChannelMessageTypes.Error"/>
+    /// or <see cref="ChannelMessageTypes.SystemWarning"/>; a failed delivery reports its cause after <c>delivery_error:</c>.
     /// Null for non-error messages.
     /// </summary>
     [JsonPropertyName("errorReason")]

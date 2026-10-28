@@ -61,7 +61,7 @@
     /// styling that keeps it from reading as a transient warning.
     /// </summary>
     private bool IsTerminal =>
-        string.Equals(Message.ErrorReason, "dust_budget_exhausted", StringComparison.Ordinal);
+        string.Equals(Message.ErrorReason, ChannelErrorReasons.DustBudgetExhausted, StringComparison.Ordinal);
 
     protected override void OnInitialized()
     {
@@ -124,8 +124,8 @@
     {
         return Message.ErrorReason switch
         {
-            "rate_limit_exceeded" => "✋",
-            "dust_budget_exhausted" => "🪄",
+            ChannelErrorReasons.RateLimitExceeded => "✋",
+            ChannelErrorReasons.DustBudgetExhausted => "🪄",
             _ => "⚠️"
         };
     }
@@ -141,7 +141,7 @@
         if (IsTerminal)
             return "dust-exhausted";
 
-        return string.Equals(Message.MessageType, "error", StringComparison.OrdinalIgnoreCase) ? "error" : "";
+        return string.Equals(Message.MessageType, ChannelMessageTypes.Error, StringComparison.OrdinalIgnoreCase) ? "error" : "";
     }
 
     /// <summary>

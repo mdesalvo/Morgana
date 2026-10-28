@@ -29,6 +29,11 @@ public class LLMGuardRailService : IGuardRailService
     private readonly string guardSystemPrompt;
 
     /// <summary>
+    /// The refusal for a message that the provider's own content filter blocked, worded in the Guard prompt.
+    /// </summary>
+    private readonly string contentFilteredRefusal;
+
+    /// <summary>
     /// Initialises a new instance of <see cref="LLMGuardRailService"/>.
     /// Loads and builds the Guard system prompt eagerly.
     /// </summary>
@@ -55,6 +60,9 @@ public class LLMGuardRailService : IGuardRailService
             Records.Prompt.Labeled(Constants.SectionLabels.Target, guardPrompt.Target),
             Records.Prompt.Labeled(Constants.SectionLabels.Instructions, guardPrompt.Instructions),
             Records.Prompt.Labeled(Constants.SectionLabels.Formatting, guardPrompt.Formatting));
+
+        // The one refusal the guard words itself rather than the model: the provider blocked the message before any judgment.
+        contentFilteredRefusal = guardPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.ContentFilteredMessage);
     }
 
     /// <inheritdoc/>
@@ -98,7 +106,7 @@ public class LLMGuardRailService : IGuardRailService
 
             return new Records.GuardRailResult(
                 Compliant: false,
-                Violation: "That is a path closed to you and no phrasing will reopen it.");
+                Violation: contentFilteredRefusal);
         }
         catch (Exception ex)
         {

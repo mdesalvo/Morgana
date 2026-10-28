@@ -256,8 +256,7 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
     /// <summary>
     /// Reads the Anthropic-specific cache-creation token count from the response usage and emits it
     /// as a span tag. Complements MEAI's built-in cache_read tag, which has no counterpart for writes.
-    /// Non-streaming path only — see inline comments for why and for the tag-naming and lookup
-    /// choices.
+    /// Non-streaming path only — see inline comments for why and for the tag naming.
     /// </summary>
     private static void EmitCacheWriteTag(UsageDetails? usageDetails)
     {
@@ -271,21 +270,14 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
         if (current is null)
             return;
 
-        // The MEAI Anthropic adapter surfaces cache creation as an entry in AdditionalCounts, but the
-        // exact key can differ across SDK versions — match heuristically on any key naming both
-        // "cache" and "creation" rather than hardcoding e.g. "cache_creation_input_tokens". No match
-        // is a silent no-op: MEAI's own cache_read tag remains the primary signal either way.
-        foreach (KeyValuePair<string, long> kv in usageDetails.AdditionalCounts)
-        {
-            if (kv.Key.Contains("cache", StringComparison.OrdinalIgnoreCase)
-                 && kv.Key.Contains("creation", StringComparison.OrdinalIgnoreCase))
-            {
-                // No OTel semantic convention exists for the write side (only cache_read is
-                // standardised) — "cache_write" is our own choice, picked for symmetry with MEAI's tag.
-                current.SetTag("gen_ai.usage.cache_write.input_tokens", kv.Value);
-                return;
-            }
-        }
+        // The same count that the dust ledger prices, so the tag and the charge never disagree on the cache writes.
+        // A call that wrote nothing to the cache reports no count and tags nothing.
+        if (!usageDetails.AdditionalCounts.TryGetValue(Constants.UsageCounts.CacheCreationInputTokens, out long cacheCreationTokens))
+            return;
+
+        // No OTel semantic convention exists for the write side (only cache_read is
+        // standardised) — "cache_write" is our own choice, picked for symmetry with MEAI's tag.
+        current.SetTag("gen_ai.usage.cache_write.input_tokens", cacheCreationTokens);
     }
 
     /// <summary>

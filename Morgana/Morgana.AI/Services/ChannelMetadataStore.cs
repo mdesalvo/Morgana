@@ -87,8 +87,8 @@ public class ChannelMetadataStore : IChannelMetadataStore
     {
         // Only what was said counts as an answer, which a later one replaces: warnings, errors and command frames are notices
         // about the conversation and leave the last answer as it was.
-        if (string.Equals(deliveredMessage.MessageType, Constants.MessageTypes.Assistant, StringComparison.Ordinal)
-             || string.Equals(deliveredMessage.MessageType, Constants.MessageTypes.Presentation, StringComparison.Ordinal))
+        if (string.Equals(deliveredMessage.MessageType, ChannelMessageTypes.Assistant, StringComparison.Ordinal)
+             || string.Equals(deliveredMessage.MessageType, ChannelMessageTypes.Presentation, StringComparison.Ordinal))
         {
             lastAnswerByConversation[deliveredMessage.ConversationId] = deliveredMessage;
         }

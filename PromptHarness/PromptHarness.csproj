@@ -64,14 +64,14 @@
 
   <ItemGroup>
     <!--
-      The federation domain is a plugin, built and deployed as one. It sits inside this folder for
-      proximity and belongs to the project below it, never to this one: compiled in here it would be
-      a compile-time type, which is the one thing a plugin must never be to the harness.
+      The harness plugins are built and deployed as plugins. They sit inside this folder for
+      proximity and belong to the projects below it, never to this one: compiled in here they would be
+      compile-time types, which is the one thing a plugin must never be to the harness.
     -->
-    <Compile Remove="FederationPlugin\**" />
-    <None Remove="FederationPlugin\**" />
-    <EmbeddedResource Remove="FederationPlugin\**" />
-    <Content Remove="FederationPlugin\**" />
+    <Compile Remove="Plugins\**" />
+    <None Remove="Plugins\**" />
+    <EmbeddedResource Remove="Plugins\**" />
+    <Content Remove="Plugins\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -98,7 +98,10 @@
       own: the federation run loads that directory INSTEAD of plugins/, so its one agent is the whole
       domain of the asking instance and no other group ever sees the intent it declares.
     -->
-    <ProjectReference Include="FederationPlugin\FederationPlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="Plugins\FederationPlugin\FederationPlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
+
+    <!-- The malformed domain that proves the startup refusal of an intent without a Label, built the same way. -->
+    <ProjectReference Include="Plugins\UnlabelledIntentPlugin\UnlabelledIntentPlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -163,19 +166,34 @@
     <Copy SourceFiles="@(ExamplePluginAssembly)" DestinationFolder="$(OutDir)domain-plugins" SkipUnchangedFiles="true" />
   </Target>
 
+  <ItemGroup>
+    <!--
+      These plugins exist only for the harness: each lands in a folder of its own and is loaded only
+      by the run that names it, so no other group ever sees what it declares. Adding one is one line.
+    -->
+    <HarnessPlugin Include="Plugins\FederationPlugin\FederationPlugin.csproj" Folder="federation-plugins" />
+    <HarnessPlugin Include="Plugins\UnlabelledIntentPlugin\UnlabelledIntentPlugin.csproj" Folder="unlabelled-intent-plugins" />
+  </ItemGroup>
+
   <!--
-    The federation domain lands in a directory of its own, never in plugins/: the federation run
-    points the instance under test at this one alone, so the desk that holds a colleague abroad is
-    all that instance knows and every other run is the instance it was.
+    Each harness plugin lands in the directory its item names, never in plugins/: a run points the
+    instance under test at that directory alone, so every other run is the instance it was.
   -->
-  <Target Name="CopyFederationPluginToHarness" AfterTargets="Build">
-    <MSBuild Projects="FederationPlugin\FederationPlugin.csproj"
+  <Target Name="CopyHarnessPluginsToHarness" AfterTargets="Build">
+    <MSBuild Projects="$(MSBuildProjectFullPath)"
+             Targets="CopyHarnessPlugin"
+             Properties="HarnessPluginProject=%(HarnessPlugin.FullPath);HarnessPluginFolder=%(HarnessPlugin.Folder);HarnessPluginOutDir=$(OutDir)" />
+  </Target>
+
+  <!-- Builds the one plugin it is handed and copies its assembly into the folder it is handed. -->
+  <Target Name="CopyHarnessPlugin">
+    <MSBuild Projects="$(HarnessPluginProject)"
              Targets="GetTargetPath"
              Properties="Configuration=$(Configuration)">
-      <Output TaskParameter="TargetOutputs" ItemName="FederationPluginAssembly" />
+      <Output TaskParameter="TargetOutputs" ItemName="HarnessPluginAssembly" />
     </MSBuild>
-    <MakeDir Directories="$(OutDir)federation-plugins" Condition="!Exists('$(OutDir)federation-plugins')" />
-    <Copy SourceFiles="@(FederationPluginAssembly)" DestinationFolder="$(OutDir)federation-plugins" SkipUnchangedFiles="true" />
+    <MakeDir Directories="$(HarnessPluginOutDir)$(HarnessPluginFolder)" Condition="!Exists('$(HarnessPluginOutDir)$(HarnessPluginFolder)')" />
+    <Copy SourceFiles="@(HarnessPluginAssembly)" DestinationFolder="$(HarnessPluginOutDir)$(HarnessPluginFolder)" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

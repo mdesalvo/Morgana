@@ -18,9 +18,9 @@ judge — where what is under test is a wire document or a gate's status codes.
 
 **The example plugin deploys to `domain-plugins/`, not `plugins/`.** `plugins/` is always scanned on
 top of whatever configuration declares, so a domain deployed there can be added to but never left
-out — while an installation reads the **first** `agents.json` it finds and holds exactly one domain.
-The federation run needs to **swap** the domain rather than extend it, which is only possible while
-the implicit directory holds no domain. The LLM providers do land in `plugins/`: they are no domain
+out, since every domain an installation finds is merged into it. The federation run needs to **swap**
+the domain rather than extend it, which is only possible while the implicit directory holds no domain;
+a malformed domain extends it instead, from a directory of its own. The LLM providers do land in `plugins/`: they are no domain
 and every run, the federation one included, needs them.
 
 **Its own solution**, sibling of `../Morgana/` and `../Examples/`. Two project references reach the
@@ -32,8 +32,8 @@ project: every build setting lives in the `.csproj`, so it carries unchanged acr
 
 ## Commands
 
-Nineteen test classes. **Never combine filters**: six groups carry a process-wide boot knob the
-others must not see and two of those five share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
+Twenty test classes. **Never combine filters**: seven groups carry a process-wide boot knob the
+others must not see and two of those seven share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
 # the rig, before believing any scenario result
@@ -62,6 +62,7 @@ Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~Guard
 Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~SummarizationTests"
 Harness__DustBudgetPerConversation=100 dotnet test … --filter "FullyQualifiedName~DustTests"
 Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateLimitTests"    # deterministic, skipped without the knob
+Harness__MalformedDomain=unlabelled-intent dotnet test … --filter "FullyQualifiedName~PluginValidationTests"    # deterministic, skipped without the knob
 Harness__FederatedPeer=true dotnet test … --filter "FullyQualifiedName~FederationTests"
 Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~ConversationPersistenceTests"
 
@@ -98,6 +99,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `SummarizationTests` | — | The reducer's own prompt, unreachable at the default 21-message trigger |
 | `DustTests` | — | The budget thresholds, crossed in order. Evidence-driven rather than turn-pinned: how many turns it takes is a real token measurement |
 | `RateLimitTests` | none | The REST gate's rate limit: the 429 past the window, refused commands left uncounted, one window shared by messages and commands. No model is reached |
+| `PluginValidationTests` | none | A domain built to be wrong, a harness plugin beside the shipped one, stops the boot with the refusal that names the fault. A red: a malformed domain booted, so the refusal it names went missing. Its plugin lives in `Plugins/` and stays loaded in the process, so it is its own invocation. No model is reached |
 | `ConversationPersistenceTests` | — | Who owns each line of a conversation, how it is dated and in what order it is read back. The record is photographed after every exchange rather than at the end, because a transcript that reads correctly can still have been written by the wrong participant. Asserts nothing about wording: the oracle is what the channel was pushed and what the channel said. Shares the guard's knob, since a refused turn is one of the five it stages |
 | `TurnEndingTests` | none | What a presentation tool tells the model about the turn's words: the fact that nothing has reached the user yet, stated before any text and never after. The landing declaration reaches the model on the landing turn alone. A scripted model behind the real tool loop |
 | `FrameworkPromptTests` | none | The morgana.json shipped in Morgana.AI carries every entry that the framework fetches by name — policies, templates with their labels and placeholders, base tools, error answers, messages. No framework section carries a label of its own |

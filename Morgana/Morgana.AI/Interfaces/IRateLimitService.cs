@@ -42,7 +42,7 @@ public interface IRateLimitService
     /// <returns>
     /// RateLimitResult containing:
     /// - IsAllowed: true if request should proceed
-    /// - ViolatedLimit: which limit was exceeded (if any)
+    /// - ViolatedWindow and ViolatedCap: which limit was exceeded (if any)
     /// - RetryAfterSeconds: suggested wait time before retrying
     /// </returns>
     /// <remarks>
@@ -52,7 +52,7 @@ public interface IRateLimitService
     /// <para><strong>Return Values:</strong></para>
     /// <list type="bullet">
     /// <item>IsAllowed=true → Request proceeds, timestamp recorded</item>
-    /// <item>IsAllowed=false → Request denied, ViolatedLimit specifies which threshold</item>
+    /// <item>IsAllowed=false → Request denied, ViolatedWindow and ViolatedCap specify which threshold</item>
     /// </list>
     /// </remarks>
     Task<Records.RateLimitResult> CheckAndRecordAsync(string conversationId);

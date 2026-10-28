@@ -176,15 +176,37 @@ public static class Records
     }
 
     /// <summary>
+    /// The time windows a conversation's requests are counted over, each with its own cap and its own authored refusal.
+    /// </summary>
+    public enum RateLimitWindow
+    {
+        /// <summary>The last minute, capped by <c>MaxMessagesPerMinute</c>.</summary>
+        PerMinute,
+
+        /// <summary>The last hour, capped by <c>MaxMessagesPerHour</c>.</summary>
+        PerHour,
+
+        /// <summary>The last day, capped by <c>MaxMessagesPerDay</c>.</summary>
+        PerDay
+    }
+
+    /// <summary>
     /// Result of a rate limit check operation.
     /// </summary>
     /// <param name="IsAllowed">Whether the request is allowed to proceed</param>
-    /// <param name="ViolatedLimit">Description of which limit was exceeded (null if allowed)</param>
+    /// <param name="ViolatedWindow">The window whose cap was reached (null if allowed): it picks the refusal the user reads.</param>
+    /// <param name="ViolatedCap">The cap of that window (null if allowed), which the refusal may quote.</param>
     /// <param name="RetryAfterSeconds">Suggested wait time in seconds before retrying (null if allowed)</param>
     public record RateLimitResult(
         bool IsAllowed,
-        string? ViolatedLimit = null,
-        int? RetryAfterSeconds = null);
+        RateLimitWindow? ViolatedWindow = null,
+        int? ViolatedCap = null,
+        int? RetryAfterSeconds = null)
+    {
+        /// <summary>The violated limit as the log and the client read it, named after its setting, such as <c>MaxMessagesPerMinute (10)</c>.</summary>
+        public string? ViolatedLimit
+            => ViolatedWindow is { } window ? $"MaxMessages{window} ({ViolatedCap})" : null;
+    }
 
     // ==========================================================================
     // MAGIC DUST (TOKEN BUDGET)
@@ -934,13 +956,13 @@ public static class Records
     /// </summary>
     /// <param name="Name">Intent identifier (lowercase, e.g., "billing", "contract")</param>
     /// <param name="Description">Intent description for classifier LLM</param>
-    /// <param name="Label">User-facing label with emoji (e.g., "📄 Billing") for quick replies</param>
-    /// <param name="DefaultValue">Sample user message for this intent (used in quick reply value)</param>
+    /// <param name="Label">User-facing label with emoji (e.g., "📄 Billing") for quick replies; required</param>
+    /// <param name="DefaultValue">Sample user message for this intent (used in quick reply value); required</param>
     public record IntentDefinition(
         [property: JsonPropertyName("Name")] string Name,
         [property: JsonPropertyName("Description")] string Description,
-        [property: JsonPropertyName("Label")] string? Label,
-        [property: JsonPropertyName("DefaultValue")] string? DefaultValue = null);
+        [property: JsonPropertyName("Label")] string Label,
+        [property: JsonPropertyName("DefaultValue")] string DefaultValue);
 
     // ==========================================================================
     // INTENT CONFIGURATION RECORDS

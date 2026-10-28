@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Morgana\Morgana.AI\Morgana.AI.csproj" />
+    <ProjectReference Include="..\..\..\Morgana\Morgana.AI\Morgana.AI.csproj" />
   </ItemGroup>
 
 </Project>
