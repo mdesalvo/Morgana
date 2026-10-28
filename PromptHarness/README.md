@@ -149,7 +149,7 @@ failing runs, the judge's included: what each call was handed and what it answer
 there, never bought again with another run.
 
 **`P994E` is not an arbitrary string.** The example plugin models one shop, *The Greenhouse &
-Nursery*, on one SQLite system of record shipped as a seed (`Examples/Data/Examples.db`) and every
+Nursery*, on one SQLite system of record shipped as a seed (`Examples/Data/Examples.sqlite`) and every
 agent of that shop keys on the customer code: `P994E` is the seeded customer who has invoices, a
 Green Care Plan and past orders. A code nobody is registered under is refused by Billing, by the
 plan and by any attempt to raise an order — so a scenario that hands the agent an invented code is

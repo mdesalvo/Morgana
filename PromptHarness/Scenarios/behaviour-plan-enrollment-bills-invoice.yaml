@@ -11,7 +11,7 @@ description: >-
   one-time action per customer, so run 1 actually opening M455D's plan would make every later run in
   the same harness session see "already active" and take the refusal branch instead of the happy path
   being measured. Confirmed live: with a single fixed customer, run 1 passed and runs 2-5 failed on
-  exactly that refusal, 0/5 overall. Five seeded prospects (Data/Examples.db) cover five runs with room
+  exactly that refusal, 0/5 overall. Five seeded prospects (Data/Examples.sqlite) cover five runs with room
   to spare.
   Three turns, not two: ContractAgent's own doctrine for SubscribeToGreenCarePlan ("restate the terms
   GetPlanOverview already gave you and wait for an explicit yes before calling

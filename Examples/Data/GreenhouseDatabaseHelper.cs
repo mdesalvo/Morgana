@@ -37,7 +37,7 @@ internal static class GreenhouseDatabaseHelper
         }
     }
 
-    private static string DbPath => Path.Combine(StorageDirectory, "Examples.db");
+    private static string DbPath => Path.Combine(StorageDirectory, "Examples.sqlite");
 
     private static string ConnectionString => $"Data Source={DbPath}";
 
@@ -67,7 +67,7 @@ internal static class GreenhouseDatabaseHelper
                 return;
 
             // File.Exists is the ENTIRE "have we seeded yet" check — there is no separate flag
-            // or marker row anywhere. That is deliberate: the moment Examples.db exists on disk
+            // or marker row anywhere. That is deliberate: the moment Examples.sqlite exists on disk
             // at this path, whatever it contains (seed data, or years of live orders on top of
             // it) is the truth and we must never overwrite it just because the process restarted.
             if (!File.Exists(databasePath))
@@ -82,8 +82,8 @@ internal static class GreenhouseDatabaseHelper
                 string stagingPath = Path.Combine(StorageDirectory, $"Examples.{Guid.NewGuid():N}.tmp");
                 try
                 {
-                    using (Stream seedStream = typeof(GreenhouseDatabaseHelper).Assembly.GetManifestResourceStream("Examples.Data.Examples.db")
-                        ?? throw new InvalidOperationException("Embedded seed database 'Examples.Data.Examples.db' not found."))
+                    using (Stream seedStream = typeof(GreenhouseDatabaseHelper).Assembly.GetManifestResourceStream("Examples.Data.Examples.sqlite")
+                        ?? throw new InvalidOperationException("Embedded seed database 'Examples.Data.Examples.sqlite' not found."))
                     using (FileStream fileStream = new FileStream(stagingPath, FileMode.CreateNew, FileAccess.Write))
                     {
                         seedStream.CopyTo(fileStream);
@@ -195,7 +195,7 @@ internal static class GreenhouseDatabaseHelper
     /// Opens (and returns) a connection to <see cref="DbPath"/> with a busy timeout applied.
     /// </summary>
     /// <remarks>
-    /// Examples.db is a SHARED, live database: different conversations WILL try to write to it at
+    /// Examples.sqlite is a SHARED, live database: different conversations WILL try to write to it at
     /// the same instant (that is the whole point of this example). SQLite serializes writers with a
     /// single write lock and without a busy timeout the loser of that race throws "database is
     /// locked" immediately. PRAGMA busy_timeout instead makes it WAIT for the holder to commit and

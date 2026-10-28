@@ -76,7 +76,7 @@ is the exception and is described below, having none.
 ### Examples (the plugin, no `CLAUDE.md` of its own)
 
 **One organization, several agents**: not three unrelated demos but three roles inside one fictional
-shop, *The Greenhouse & Nursery*, on **one** SQLite system of record (`Data/Examples.db`, seeded and
+shop, *The Greenhouse & Nursery*, on **one** SQLite system of record (`Data/Examples.sqlite`, seeded and
 rebased onto the current month at deployment). Each agent writes only its own competence, yet the
 books stay consistent whichever agent closes a sale: `InventoryAgent`'s order confirmation and
 `ContractAgent`'s plan enrolment are the two dispositive actions and both bill through the identical

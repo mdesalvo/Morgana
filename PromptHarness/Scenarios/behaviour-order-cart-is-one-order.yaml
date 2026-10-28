@@ -1,0 +1,17 @@
+id: behaviour-order-cart-is-one-order
+description: >-
+  An order is a cart: every plant the customer asks for in one request goes into one quote, through
+  one CreatePurchaseOrder call carrying all of its lines. Guards the prose side of that shape: the
+  items parameter says every plant of the order goes in the one call, so a request for an aloe and
+  two roses must not come back as two parallel quotes with two seal words. Structural only: one call
+  is the whole contract, which no proposition needs to restate. A quote commits nothing and leaves
+  the stock untouched, so five runs never drain either plant.
+
+turns:
+  - say: "Hi, I'd like to order 1 aloe vera pot and 2 red rose bushes, my customer code is T780C"
+    expect:
+      agent: InventoryAgent
+      toolsCalledOnce: [CreatePurchaseOrder]
+      toolsNotCalled: [ConfirmOrder]
+      textNotEmpty: true
+      richCard: present
