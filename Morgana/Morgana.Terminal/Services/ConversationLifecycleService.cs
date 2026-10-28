@@ -54,6 +54,7 @@ public sealed class ConversationLifecycleService
         IConfiguration configuration,
         ChannelProfile profile)
     {
+        // The collaborators the conversation is driven through
         this.morganaClientService = morganaClientService;
         this.session = session;
         this.commandRegistry = commandRegistry;
@@ -62,6 +63,7 @@ public sealed class ConversationLifecycleService
         this.terminalUi = terminalUi;
         this.landingMessageService = landingMessageService;
 
+        // The wait for the presentation is the channel's own setting
         int startupTimeoutSeconds = configuration.GetValue<int?>(profile.SectionKey("StartupTimeoutSeconds")) ?? DefaultStartupTimeoutSeconds;
         startupTimeout = TimeSpan.FromSeconds(startupTimeoutSeconds > 0 ? startupTimeoutSeconds : DefaultStartupTimeoutSeconds);
     }
@@ -76,8 +78,10 @@ public sealed class ConversationLifecycleService
         // Something alive on screen while the handshake and the presentation are on their way
         AnsiConsole.MarkupLine($"[italic grey70]{Markup.Escape(landingMessageService.GetLandingMessage())}[/]");
 
+        // The first delivery is awaited from here on, before the handshake can possibly have been answered
         Task presentationArrived = RouteWebhookToUi();
 
+        // A conversation that cannot be opened leaves nothing to run
         if (!await OpenConversationAsync(stopping))
             return;
 
@@ -111,6 +115,7 @@ public sealed class ConversationLifecycleService
         TaskCompletionSource firstMessageArrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
         webhookReceiverService.OnMessage = message =>
         {
+            // The first delivery opens the gate of the handover to the live UI
             firstMessageArrived.TrySetResult();
             terminalUi.EnqueueIncoming(message);
         };
@@ -131,28 +136,34 @@ public sealed class ConversationLifecycleService
         {
             try
             {
+                // One attempt opens the conversation and makes it the one on screen
                 await session.OpenConversationAsync(stopping);
                 return true;
             }
             catch (OperationCanceledException) when (stopping.IsCancellationRequested)
             {
+                // The user quit while waiting: there is no conversation to run
                 return false;
             }
             catch (Exception ex) when (MorganaStartRetryPolicy.IsWorthRetrying(ex))
             {
+                // The pace of the retry grows with the attempts that failed
                 TimeSpan retryDelay = startRetryPolicy.NextRetryDelay(failedAttempts);
                 AnsiConsole.MarkupLine($"[grey70]Morgana is not answering ({Markup.Escape(ex.Message)}): trying again in {retryDelay.TotalSeconds:0}s, Ctrl+C to quit[/]");
                 try
                 {
+                    // The wait ends early when the user quits
                     await Task.Delay(retryDelay, stopping);
                 }
                 catch (OperationCanceledException)
                 {
+                    // The user quit while waiting: there is no conversation to run
                     return false;
                 }
             }
             catch (Exception ex)
             {
+                // A refusal that would repeat forever is told at once
                 AnsiConsole.MarkupLine($"[red]Failed to open conversation with Morgana:[/] {Markup.Escape(ex.Message)}");
                 return false;
             }
@@ -167,6 +178,7 @@ public sealed class ConversationLifecycleService
     {
         try
         {
+            // The wait is bounded by the startup timeout
             await presentationArrived.WaitAsync(startupTimeout);
         }
         catch (TimeoutException)

@@ -28,11 +28,13 @@ public static class CommandLineParser
         problem = null;
         Dictionary<string, string> options = new(StringComparer.OrdinalIgnoreCase);
 
+        // The name and the options share one line: the name ends at the first space
         string line = input.StartsWith('/') ? input[1..] : input;
         int nameEnd = line.IndexOf(' ');
         if (nameEnd < 0)
             return options;
 
+        // Each token is one option, with quoted values kept whole
         foreach (string token in SplitRespectingQuotes(line[(nameEnd + 1)..]))
         {
             // Only the first colon separates: a value is free to carry its own, as a Windows path or a URL does
@@ -45,13 +47,16 @@ public static class CommandLineParser
                 return options;
             }
 
+            // The text before the first colon names the option
             string name = token[..separator];
             string value = Unquote(token[(separator + 1)..]);
             if (value.Length == 0)
             {
+                // An option with nothing after its colon is refused
                 problem = $"option '{name}' was given no value";
                 return options;
             }
+            // A second value for the same option is refused
             if (!options.TryAdd(name, value))
             {
                 // Two values for one option leave no way to tell which the user meant
@@ -60,6 +65,7 @@ public static class CommandLineParser
             }
         }
 
+        // Every token was read: the options as written
         return options;
     }
 
@@ -70,8 +76,10 @@ public static class CommandLineParser
         StringBuilder token = new();
         bool insideQuotes = false;
 
+        // The line is read one character at a time to know whether a space is inside quotes
         foreach (char character in text)
         {
+            // A quote opens or closes a quoted stretch
             if (character == '"')
             {
                 // The quotes travel with the token and are dropped once the value is cut out of it
@@ -80,6 +88,7 @@ public static class CommandLineParser
             }
             else if (character == ' ' && !insideQuotes)
             {
+                // A space outside quotes ends the token, unless nothing was written since the last one
                 if (token.Length > 0)
                     tokens.Add(token.ToString());
                 token.Clear();
@@ -88,6 +97,7 @@ public static class CommandLineParser
                 token.Append(character);
         }
 
+        // The text after the last space is the last token
         if (token.Length > 0)
             tokens.Add(token.ToString());
         return tokens;

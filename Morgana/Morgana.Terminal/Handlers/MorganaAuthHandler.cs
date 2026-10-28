@@ -57,6 +57,7 @@ public class MorganaAuthHandler : DelegatingHandler
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        // Every call carries a token issued at that moment, so it can never have expired in flight
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken());
         return base.SendAsync(request, cancellationToken);
     }
@@ -78,6 +79,7 @@ public class MorganaAuthHandler : DelegatingHandler
                 SigningCredentials = credentials
             };
 
+        // The compact serialized token, ready for the Authorization header
         return tokenHandler.CreateToken(descriptor);
     }
 }

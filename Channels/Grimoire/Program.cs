@@ -1,266 +1,39 @@
-using System.Globalization;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Text.Json;
+using Morgana.Terminal;
+using Morgana.Terminal.Extensions;
 using Grimoire.Messages;
 using Grimoire.Services;
-using Morgana.Contracts;
-using Morgana.Terminal;
-using Morgana.Terminal.Handlers;
 using Morgana.Terminal.Interfaces;
-using Morgana.Terminal.Services;
-using Spectre.Console;
-
-// Invariant before anything else runs, so no thread inherits the host's locale: the terminal and
-// every export read the same on a workstation set to it-IT and in a container with no LANG at all.
-CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
-CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
-CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
-CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
-
-WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // ==============================================================================
 // GRIMOIRE - WEBHOOK CHANNEL FOR MORGANA
 // ==============================================================================
-// Grimoire is the rich-TTY reference channel for Morgana: a "textual Cauldron"
-// that consumes Morgana's full expressive surface (rich cards, quick replies,
-// streaming, markdown, no message-length cap) inside a Spectre.Console terminal
-// UI. Where Cauldron renders the full profile in HTML, Grimoire renders it as
-// ANSI primitives — content arrives integral, never degraded and is Spectrized
-// locally rather than rewritten by MorganaChannelAdapter.
+// Grimoire is the rich-TTY reference channel for Morgana: a "textual Cauldron" that consumes Morgana's full
+// expressive surface (rich cards, quick replies, streaming, markdown, no message-length cap) inside a
+// Spectre.Console terminal UI. Where Cauldron renders the full profile in HTML, Grimoire renders it as ANSI
+// primitives: content arrives integral, never degraded; it is Spectrized locally rather than rewritten by
+// MorganaChannelAdapter.
 //
-// Architecture: a Kestrel-hosted HTTPS listener on port 5004 receives inbound
-// ChannelMessage payloads at POST /morgana-hook (and incremental stream chunks
-// at POST /morgana-hook/chunk) and drives a Spectre.Console live display; user
-// input is captured from stdin and sent back to Morgana via the REST conversation
-// endpoints, authenticated with a self-issued JWT signed under iss=grimoire
-// (the matching entry must live in Morgana's Authentication:Issuers).
+// Architecture: a Kestrel-hosted HTTPS listener on port 5004 receives inbound ChannelMessage payloads at
+// POST /morgana-hook (and incremental stream chunks at POST /morgana-hook/chunk) and drives a Spectre.Console
+// live display; user input is captured from stdin and sent back to Morgana via the REST conversation endpoints,
+// authenticated with a self-issued JWT signed under iss=grimoire (the matching entry must live in Morgana's
+// Authentication:Issuers). Everything the two TTY channels do the same way lives in Morgana.Terminal; what is
+// Grimoire's own is its profile, its theme and the markdown and rich card rendering.
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+ChannelProfile profile = GrimoireChannelProfile.Instance;
 
-// ==============================================================================
-// 1. CONSOLE ENCODING - UTF-8 I/O
-// ==============================================================================
-// On Windows the default OutputEncoding is the OEM/ANSI code page (CP437/CP850/CP1252),
-// none of which covers the BMP glyphs Grimoire renders: the header arrow (→ U+2192),
-// the input prompt chevron (› U+203A), the conversation-id ellipsis (… U+2026) and
-// the courtesy dashes. Under those code pages the console falls back to the "symbol
-// for delete" glyph (␦), which looks like a tofu box to the user. Forcing both streams
-// to UTF-8 up front is idempotent on Linux/macOS (already UTF-8) and makes Spectre's
-// Unicode output render correctly on Windows without asking the user to chcp 65001.
-Console.OutputEncoding = Encoding.UTF8;
-Console.InputEncoding  = Encoding.UTF8;
-
-// ==============================================================================
-// 2. TTY GATE - FAIL CLOSED ON NON-INTERACTIVE TERMINALS
-// ==============================================================================
-// Spectre.Console's Live UI requires a real PTY: ANSI escape support and a blocking
-// Console.ReadKey. Non-interactive hosts (IDE run windows, CI, redirected or piped
-// output, headless processes) capture stdout but don't expose one, so Spectre
-// silently refuses to render and the user sees an empty screen. Detect this at
-// startup and exit with an actionable message instead of a blank terminal.
-if (!AnsiConsole.Profile.Capabilities.Interactive)
-{
-    Console.WriteLine("Grimoire requires an interactive TTY but the current output stream is not one. Launch it from a real terminal emulator (bash, zsh, pwsh, ...); if you are running it from an IDE, enable the equivalent of 'emulate terminal' on the run configuration.");
+// The process and the configuration are checked before anything else is built
+if (!builder.CanStartTerminalChannel(profile))
     return;
-}
 
-// ==============================================================================
-// 2b. CONFIGURATION GATE - THE THREE SETTINGS GRIMOIRE CANNOT RUN WITHOUT
-// ==============================================================================
-// Backend address, callback address and signing key are each fatal on their own:
-// without them Grimoire can neither reach Morgana, be reached back, nor be trusted.
-// Checked together up front so a fresh checkout is told exactly what is missing
-// while there is still a readable terminal — once the Live UI owns it, with
-// logging silenced, the same omission would surface as a bare stack trace.
-
-// An address Grimoire can actually dial: anything else (a bare host:port, a path, a scheme
-// nobody serves) is parsed happily and only fails once the first call is already on its way.
-static bool IsReachableUrl(string? value) =>
-    Uri.TryCreate(value, UriKind.Absolute, out Uri? url)
-    && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps);
-
-string?[] requiredSettings =
-[
-    IsReachableUrl(builder.Configuration["Grimoire:MorganaURL"])
-        ? null
-        : "Grimoire:MorganaURL must be Morgana's absolute http(s) base URL (for example https://localhost:5001).",
-    IsReachableUrl(builder.Configuration["Grimoire:CallbackURL"])
-        ? null
-        : "Grimoire:CallbackURL is required for webhook-based delivery and must be the absolute http(s) URL Morgana posts replies to (for example https://localhost:5004/morgana-hook).",
-    // The shipped value is a marker, not a key: left in place it buys a 401 from Morgana one
-    // handshake later, where the reason is far less obvious than it is here
-    builder.Configuration["Grimoire:Authentication:SymmetricKey"] is not { Length: > 0 } key || key == "_SECURE_OVERRIDE_"
-        ? "Grimoire:Authentication:SymmetricKey is required and must match Morgana's Authentication:Issuers entry for Name=grimoire. Supply it through user-secrets or an environment variable."
-        : null
-];
-if (requiredSettings.Any(problem => problem is not null))
-{
-    Console.WriteLine("Grimoire cannot start with the configuration it was given:");
-    foreach (string problem in requiredSettings.OfType<string>())
-        Console.WriteLine($"  - {problem}");
-    return;
-}
-
-// ==============================================================================
-// 3. LOGGING - KEEP THE TUI CLEAN
-// ==============================================================================
-// Spectre.Console renders over the terminal via Live, so any stray log line from
-// Kestrel/ASP.NET Core corrupts the layout. Drop all providers; errors still
-// surface through explicit UI messages (see ConsoleUiService's red system line).
-builder.Logging.ClearProviders();
-
-// ==============================================================================
-// 4. OUTBOUND TO MORGANA - JWT + HTTP CLIENT
-// ==============================================================================
-// The channel profile is the single statement of who Grimoire is and what it can render: the
-// shared terminal library reads its handshake, its token claims and its configuration root from here.
-builder.Services.AddSingleton(GrimoireChannelProfile.Instance);
-
-// MorganaAuthHandler self-issues short-lived JWTs with iss=grimoire on each request.
-// The named HttpClient "Morgana" targets the Morgana base URL from configuration
-// and runs through the handler so the Authorization header is set automatically.
-builder.Services.AddTransient<MorganaAuthHandler>();
-builder.Services.AddHttpClient("Morgana", client =>
-{
-    client.BaseAddress = new Uri(builder.Configuration["Grimoire:MorganaURL"]!);
-}).AddHttpMessageHandler<MorganaAuthHandler>();
-
-// ==============================================================================
-// 5. SERVICES
-// ==============================================================================
-// Morgana.Terminal hosts what both TTY channels do the same way; the rest is Grimoire's own.
-// MorganaClientService            : wraps start/send/command/end conversation lifecycle and the command catalogue.
-// TerminalSessionService          : names the conversation on screen and opens a fresh one, at startup or on /new.
-// TerminalCommandRegistryService  : discovers the terminal commands at startup and runs them; Morgana's join later.
-// CommandPaletteService           : the command dropdown under the prompt, dressed in Grimoire's palette theme.
-// CommandConfirmationService      : the Yes/No a command that cannot be taken back is held by, in the same theme.
-// CommandProgressService          : the bar a running command reports itself through, in the same theme.
-// CommandOptionPromptService      : the form asking for the values a command declares, in the same theme.
-// MorganaStartRetryPolicy         : paces the attempts to open the conversation while Morgana is unreachable.
-// ConversationLifecycleService    : opens the conversation, waits for the presentation, runs the UI and ends it.
-// WebhookReceiverService          : thin dispatcher invoked by the /morgana-hook endpoint.
-// ConsoleUiService                : Spectre.Console Live(Layout) with sticky header + REPL body.
-// LandingMessageService           : picks a random "warming up" line for the startup window.
-// TerminalCellService             : rune-safe terminal-cell-width wrap/truncate, shared by the three renderers below.
-// MarkdownTerminalRenderService   : renders a ChannelMessage's prose to Spectre rows via Markdig.
-// RichCardTerminalRenderService   : renders a RichCard to a bordered Spectre box.
-// QuickReplyTerminalRenderService : renders a turn's quick replies to the selectable prompt surface.
-builder.Services.AddSingleton<MorganaClientService>();
-builder.Services.AddSingleton<TerminalSessionService>();
-builder.Services.AddSingleton<TerminalCommandRegistryService>();
-builder.Services.AddSingleton<CommandPaletteService>();
-builder.Services.AddSingleton<CommandConfirmationService>();
-builder.Services.AddSingleton<CommandProgressService>();
-builder.Services.AddSingleton<CommandOptionPromptService>();
-builder.Services.AddSingleton(GrimoireCommandTheme.Instance);
-builder.Services.AddSingleton<MorganaStartRetryPolicy>();
-builder.Services.AddSingleton<ConversationLifecycleService>();
-builder.Services.AddSingleton<WebhookReceiverService>();
-builder.Services.AddSingleton<ITerminalUi, ConsoleUiService>();
-builder.Services.AddSingleton<LandingMessageService>();
-builder.Services.AddSingleton<TerminalCellService>();
+// The markdown renderer and the two it composes are registered first, so the shared registration keeps them
+// in place of the plain text renderer
 builder.Services.AddSingleton<MarkdownTerminalRenderService>();
 builder.Services.AddSingleton<RichCardTerminalRenderService>();
-builder.Services.AddSingleton<QuickReplyTerminalRenderService>();
+builder.Services.AddSingleton<IMessageRenderer, MarkdownMessageRenderService>();
 
-// ==============================================================================
-// 5a. VIEWPORT RESIZE WATCHER - PLATFORM-SPECIFIC STRATEGY
-// ==============================================================================
-// ConsoleUiService keeps a fixed-viewport history slice anchored to the current terminal
-// size. It needs a notification whenever the user resizes the host window so the
-// slice can be recomputed without polling on every keystroke. Two strategies:
-//   - POSIX (Linux + macOS): SIGWINCH delivered by the kernel — zero idle CPU.
-//   - Windows: no SIGWINCH equivalent at this layer, fall back to a 250 ms
-//     Console.Window* comparison loop.
-// The decision is made once, here and the chosen implementation is injected
-// into ConsoleUiService via DI so the UI itself stays platform-agnostic.
-if (OperatingSystem.IsWindows())
-    builder.Services.AddSingleton<IViewportResizeWatcher, PollingResizeWatcherService>();
-else
-    builder.Services.AddSingleton<IViewportResizeWatcher, SigWinchResizeWatcherService>();
-
+// The shared registration wires the services and keeps the markdown renderer registered above
+builder.AddTerminalChannel(profile, GrimoireTerminalTheme.Instance);
 WebApplication app = builder.Build();
-
-// ==============================================================================
-// 5b. SIGHUP HANDLER - GRACEFUL EXIT WHEN THE PARENT TTY DIES
-// ==============================================================================
-// .NET's WebApplication host already wires SIGTERM/SIGINT to ApplicationStopping
-// on every platform. On POSIX, closing the host terminal window also sends SIGHUP
-// to the foreground process group, but SIGHUP is *not* handled by default:
-// without this registration, the docker CLI dies, the Grimoire container keeps
-// running, --rm never fires and `compose down` then complains that
-// morgana-network is still in use. Hooking SIGHUP to StopApplication makes the
-// brutal-close case clean. Skipped on Windows because SIGHUP has no mapping
-// there — the equivalent (CTRL_CLOSE_EVENT on the console X button) is already
-// delivered as SIGTERM, which the host handles natively.
-PosixSignalRegistration? sighupRegistration = OperatingSystem.IsWindows()
-    ? null
-    : PosixSignalRegistration.Create(PosixSignal.SIGHUP, ctx =>
-    {
-        ctx.Cancel = true;
-        app.Lifetime.StopApplication();
-    });
-
-// ==============================================================================
-// 6. INBOUND WEBHOOK ENDPOINT
-// ==============================================================================
-// Morgana POSTs a serialized ChannelMessage here on every outbound turn (no JWT
-// today — trust model is asymmetric by design, matching the WebhookChannelService
-// convention). Bind the payload and hand it to the dispatcher. A delivery for another
-// conversation is refused with 404, so Morgana logs the misdelivery on its side.
-app.MapPost("/morgana-hook", async (HttpContext httpContext, WebhookReceiverService receiverService) =>
-{
-    ChannelMessage? message;
-    try
-    {
-        message = await httpContext.Request.ReadFromJsonAsync<ChannelMessage>();
-    }
-    catch (JsonException)
-    {
-        return Results.BadRequest();
-    }
-
-    if (message is null)
-        return Results.BadRequest();
-    return receiverService.Dispatch(message) ? Results.Ok() : Results.NotFound();
-});
-
-// Streaming chunk endpoint — counterpart of WebhookChannelService.SendStreamChunkAsync.
-// Each POST carries an incremental delta of the agent's response; the ConsoleUiService
-// accumulates them into a per-turn buffer rendered live, then commits to the transcript
-// when the final ChannelMessage lands on /morgana-hook.
-app.MapPost("/morgana-hook/chunk", async (HttpContext httpContext, WebhookReceiverService receiverService) =>
-{
-    StreamChunkRequest? chunk;
-    try
-    {
-        chunk = await httpContext.Request.ReadFromJsonAsync<StreamChunkRequest>();
-    }
-    catch (JsonException)
-    {
-        return Results.BadRequest();
-    }
-
-    if (chunk is null)
-        return Results.BadRequest();
-    return receiverService.DispatchChunk(chunk) ? Results.Ok() : Results.NotFound();
-});
-
-// ==============================================================================
-// 7. LIFECYCLE
-// ==============================================================================
-// Kestrel starts first so the listener is ready for Morgana's first delivery, then the
-// conversation runs on this thread, which the live UI needs. Whatever way it ends, the
-// SIGHUP hook is released and Kestrel stopped, so the process exits and docker's --rm
-// reclaims the container.
-await app.StartAsync();
-try
-{
-    await app.Services.GetRequiredService<ConversationLifecycleService>()
-                      .RunAsync(app.Lifetime.ApplicationStopping);
-}
-finally
-{
-    sighupRegistration?.Dispose();
-    await app.StopAsync();
-}
+app.MapMorganaHooks();
+await app.RunTerminalChannelAsync();

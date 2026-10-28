@@ -18,6 +18,7 @@ public sealed class TerminalSessionService
     /// <summary>Captures the REST client and the webhook dispatcher.</summary>
     public TerminalSessionService(MorganaClientService morganaClientService, WebhookReceiverService webhookReceiverService)
     {
+        // The collaborators the session opens conversations and routes deliveries through
         this.morganaClientService = morganaClientService;
         this.webhookReceiverService = webhookReceiverService;
     }

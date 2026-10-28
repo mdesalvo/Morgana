@@ -31,8 +31,8 @@ public sealed class TerminalStatusCommand : TerminalCommand
     /// <summary>Supplies the channel's identity and the capabilities it announced.</summary>
     private readonly ChannelProfile profile;
 
-    /// <summary>The channel's primary colour and progress glyphs, which draw the labels and the dust bar.</summary>
-    private readonly CommandTheme theme;
+    /// <summary>The channel's Morgana colour and progress glyphs, which draw the labels and the dust bar.</summary>
+    private readonly TerminalTheme theme;
 
     /// <summary>Measures and wraps every row to the width the UI's row budget counts on.</summary>
     private readonly TerminalCellService cells;
@@ -44,7 +44,7 @@ public sealed class TerminalStatusCommand : TerminalCommand
     private readonly TerminalSessionService session;
 
     /// <summary>Captures the channel's identity and look, the REST client and the session.</summary>
-    public TerminalStatusCommand(ChannelProfile profile, CommandTheme theme, TerminalCellService cells, MorganaClientService morganaClientService, TerminalSessionService session)
+    public TerminalStatusCommand(ChannelProfile profile, TerminalTheme theme, TerminalCellService cells, MorganaClientService morganaClientService, TerminalSessionService session)
     {
         this.profile = profile;
         this.theme = theme;
@@ -79,27 +79,31 @@ public sealed class TerminalStatusCommand : TerminalCommand
         List<Markup> rows = [];
 
         // The rule opens the panel in the channel's colour, as /help's does
-        rows.Add(cells.RenderPanelTitle($"{profile.DisplayName} status", width, theme.PrimaryColor));
+        rows.Add(cells.RenderPanelTitle($"{profile.DisplayName} status", width, theme.MorganaColor));
 
+        // Where Morgana is reached, shown without the trailing slash the base address carries
         string morganaAddress = morganaClientService.MorganaAddress?.ToString().TrimEnd('/') ?? "no address configured";
         AddField(rows, width, "Morgana", morganaHealthy
-            ? [($"{morganaAddress} · reachable", "default")]
-            : [($"{morganaAddress} · not answering", CriticalStyle)]);
+            ? [new($"{morganaAddress} · reachable", "default")]
+            : [new($"{morganaAddress} · not answering", CriticalStyle)]);
 
+        // The channel's identity, where its replies land and what it was promised at the handshake
         AddField(rows, width, "Channel",
         [
-            ($"{profile.ChannelName} · replies by webhook to {morganaClientService.CallbackUrl}", "default"),
-            (DescribeCapabilities(profile.Capabilities), DescriptionStyle)
+            new($"{profile.ChannelName} · replies by webhook to {morganaClientService.CallbackUrl}", "default"),
+            new(DescribeCapabilities(profile.Capabilities), DescriptionStyle)
         ]);
 
+        // The count is spelled for the singular
         string messages = status.MessageCount == 1 ? "1 message" : $"{status.MessageCount} messages";
         AddField(rows, width, "Conversation",
         [
-            (conversationId, "default"),
-            (openedAt is { } opened ? $"opened {opened:HH:mm} · {messages}" : messages, DescriptionStyle)
+            new(conversationId, "default"),
+            new(openedAt is { } opened ? $"opened {opened:HH:mm} · {messages}" : messages, DescriptionStyle)
         ]);
 
-        AddField(rows, width, "Talking to", [(status.Speaker, "default")]);
+        // Who holds the conversation now, as the header shows it
+        AddField(rows, width, "Talking to", [new(status.Speaker, "default")]);
         AddField(rows, width, "Magic dust", DescribeDust(status));
         return rows;
     }
@@ -125,45 +129,49 @@ public sealed class TerminalStatusCommand : TerminalCommand
     }
 
     /// <summary>The budget as a percentage and a bar in the header's colours, then what running out means.</summary>
-    private List<(string Text, string Style)> DescribeDust(TerminalSessionStatus status)
+    private List<StatusLine> DescribeDust(TerminalSessionStatus status)
     {
         if (status.Spent)
-            return [("spent", CriticalStyle), ("this conversation is over: /new starts a fresh one", DescriptionStyle)];
+            return [new("spent", CriticalStyle), new("this conversation is over: /new starts a fresh one", DescriptionStyle)];
 
         // Morgana reports the level with its first reply; until then, or on a Morgana limiting nothing, there is none
         if (status.DustLevel is not { } level)
-            return [("not reported yet", DescriptionStyle)];
+            return [new("not reported yet", DescriptionStyle)];
 
         // Truncated as the header truncates it, so the two never show different numbers; the bar alike, so a
         // budget already dented never draws as full
         int percent = Math.Clamp((int)(level * 100), 0, 100);
         int filledCells = (int)(Math.Clamp(level, 0, 1) * theme.ProgressWidth);
         string bar = new string(theme.ProgressFilledGlyph, filledCells) + new string(theme.ProgressEmptyGlyph, theme.ProgressWidth - filledCells);
-        string style = level > 0.30 ? theme.PrimaryColor : level > 0.10 ? LowStyle : CriticalStyle;
-        return [($"{percent}% left {bar}", style), ("at 0% this conversation stops: /new starts a fresh one", DescriptionStyle)];
+        string style = level > 0.30 ? theme.MorganaColor : level > 0.10 ? LowStyle : CriticalStyle;
+        return [new($"{percent}% left {bar}", style), new("at 0% this conversation stops: /new starts a fresh one", DescriptionStyle)];
     }
 
     /// <summary>Adds one field: its label in the channel's colour, then each value line wrapped under its own indent.</summary>
-    private void AddField(List<Markup> rows, int width, string label, IReadOnlyList<(string Text, string Style)> lines)
+    private void AddField(List<Markup> rows, int width, string label, IReadOnlyList<StatusLine> lines)
     {
         int valueWidth = width - LabelWidth - ColumnGap;
         bool besideLabel = valueWidth >= MinValueWidth;
-        string labelCell = $"[{theme.PrimaryColor} bold]{Markup.Escape(label.PadRight(LabelWidth + ColumnGap))}[/]";
+        string labelCell = $"[{theme.MorganaColor} bold]{Markup.Escape(label.PadRight(LabelWidth + ColumnGap))}[/]";
         string indent = new(' ', besideLabel ? LabelWidth + ColumnGap : ColumnGap);
 
         // A terminal too narrow for two columns gets the label on a row of its own and the values under it
         if (!besideLabel)
         {
-            rows.Add(new Markup($"[{theme.PrimaryColor} bold]{Markup.Escape(cells.Trunc(label, width))}[/]"));
+            // The label takes a row of its own
+            rows.Add(new Markup($"[{theme.MorganaColor} bold]{Markup.Escape(cells.Trunc(label, width))}[/]"));
             valueWidth = Math.Max(1, width - ColumnGap);
         }
 
+        // The label cell leads the first row of the field and the indent the others
         bool firstRow = besideLabel;
-        foreach ((string text, string style) in lines)
+        foreach (StatusLine line in lines)
         {
-            foreach (string piece in cells.WrapWords(text, valueWidth))
+            // Each line is wrapped at the spaces under the width left for values
+            foreach (string piece in cells.WrapWords(line.Text, valueWidth))
             {
-                rows.Add(new Markup($"{(firstRow ? labelCell : indent)}[{style}]{Markup.Escape(piece)}[/]"));
+                // Rows beside the label carry it only on the first row
+                rows.Add(new Markup($"{(firstRow ? labelCell : indent)}[{line.Style}]{Markup.Escape(piece)}[/]"));
                 firstRow = false;
             }
         }

@@ -6,8 +6,8 @@ namespace Morgana.Terminal.Services;
 /// <summary>
 /// POSIX implementation of <see cref="IViewportResizeWatcher"/>: hooks SIGWINCH,
 /// the signal the kernel delivers to the foreground process group every time the
-/// controlling terminal is resized. Zero polling, zero idle CPU — exactly one
-/// invocation per resize event, courtesy of the OS.
+/// controlling terminal is resized. One
+/// callback per resize event and no idle CPU.
 /// </summary>
 /// <remarks>
 /// <see cref="PosixSignal"/> does not expose a named constant for SIGWINCH, but
@@ -18,15 +18,13 @@ namespace Morgana.Terminal.Services;
 /// </remarks>
 public sealed class SigWinchResizeWatcherService : IViewportResizeWatcher
 {
-    /// <summary>Numeric value of SIGWINCH on Linux/macOS/BSD — see class remarks.</summary>
+    /// <summary>Numeric value of SIGWINCH on Linux, macOS and BSD.</summary>
     private const int SIGWINCH = 28;
 
     /// <inheritdoc />
     public IDisposable Subscribe(Action onResize)
     {
-        // PosixSignalRegistration returns an IDisposable that unregisters the
-        // handler on dispose — exactly the lifecycle contract our interface
-        // promises, so we just forward it to the caller.
+        // The registration unhooks the signal when disposed, which is the lifetime the interface promises the caller
         return PosixSignalRegistration.Create((PosixSignal)SIGWINCH, _ => onResize());
     }
 }

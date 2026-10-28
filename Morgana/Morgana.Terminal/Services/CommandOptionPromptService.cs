@@ -32,7 +32,7 @@ public sealed class CommandOptionPromptService
     private readonly TerminalCellService cells;
 
     /// <summary>The channel's colour, which names the command being filled in.</summary>
-    private readonly CommandTheme theme;
+    private readonly TerminalTheme theme;
 
     /// <summary>The command being filled in, null when the prompt is free.</summary>
     private CommandDescriptor? command;
@@ -47,7 +47,7 @@ public sealed class CommandOptionPromptService
     private string? refusedAnswerReason;
 
     /// <summary>Captures the cell measurement and the channel's theme.</summary>
-    public CommandOptionPromptService(TerminalCellService cells, CommandTheme theme)
+    public CommandOptionPromptService(TerminalCellService cells, TerminalTheme theme)
     {
         this.cells = cells;
         this.theme = theme;
@@ -62,7 +62,7 @@ public sealed class CommandOptionPromptService
     /// </summary>
     public static bool NeedsFillingIn(CommandDescriptor candidate, IReadOnlyDictionary<string, string> typedOptions) =>
         (candidate.Options ?? []).Any(option => option.Required
-            && !typedOptions.Keys.Any(given => string.Equals(given, option.Name, StringComparison.OrdinalIgnoreCase)));
+            && !typedOptions.Keys.Any(typedName => string.Equals(typedName, option.Name, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>
     /// Opens the form for <paramref name="candidate"/>, keeping the <paramref name="typedOptions"/> already
@@ -70,10 +70,12 @@ public sealed class CommandOptionPromptService
     /// </summary>
     public void Begin(CommandDescriptor candidate, IReadOnlyDictionary<string, string> typedOptions)
     {
+        // The form now belongs to this command
         command = candidate;
         gatheredOptions = new Dictionary<string, string>(typedOptions, StringComparer.OrdinalIgnoreCase);
         refusedAnswerReason = null;
 
+        // Nothing is left over from a form that was never answered
         pendingOptions.Clear();
         foreach (CommandOption option in candidate.Options ?? [])
         {
@@ -111,9 +113,10 @@ public sealed class CommandOptionPromptService
     /// </summary>
     public CommandInvocation? Accept(string value)
     {
-        if (command is not { } filledCommand || CurrentOption is not { } option)
+        if (command is not { } formCommand || CurrentOption is not { } option)
             return null;
 
+        // Spaces around the answer are the user's, not part of the value
         string answer = value.Trim();
 
         // A command cannot be run without what it declares it needs nor on a value it does not take, so the
@@ -129,10 +132,12 @@ public sealed class CommandOptionPromptService
             gatheredOptions[option.Name] = answer;
         pendingOptions.Dequeue();
 
+        // Options are still waiting: the form goes on asking
         if (pendingOptions.Count > 0)
             return null;
 
-        CommandInvocation invocation = new(filledCommand, gatheredOptions);
+        // Every option is answered: this is the run the form gathered
+        CommandInvocation invocation = new(formCommand, gatheredOptions);
         Cancel();
         return invocation;
     }
@@ -144,18 +149,19 @@ public sealed class CommandOptionPromptService
     /// </summary>
     public List<Markup> RenderPrompt(int width)
     {
-        if (command is not { } filledCommand || CurrentOption is not { } option)
+        if (command is not { } formCommand || CurrentOption is not { } option)
             return [];
 
         // A terminal reporting no width still gets one cell per row
         width = Math.Max(1, width);
 
         // The command is named on every row of the form, since the line that opened it is gone from the prompt
-        string title = $"/{filledCommand.Name} · {option.Name}{(option.Required ? string.Empty : " (optional)")}";
+        string title = $"/{formCommand.Name} · {option.Name}{(option.Required ? string.Empty : " (optional)")}";
 
+        // The title and the option's description come first
         List<Markup> rows =
         [
-            new Markup($"[{theme.PrimaryColor}]{Markup.Escape(cells.Trunc(SanitizeForTerminal(title), width))}[/]"),
+            new Markup($"[{theme.MorganaColor}]{Markup.Escape(cells.Trunc(SanitizeForTerminal(title), width))}[/]"),
             new Markup($"[{DescriptionStyle}]{Markup.Escape(cells.Trunc(SanitizeForTerminal($"  {option.Description}"), width))}[/]")
         ];
 

@@ -56,10 +56,12 @@ public sealed class TerminalExportCommand : TerminalCommand
     /// </summary>
     private static string DefaultFile()
     {
+        // The desktop is where a person looks for a file they asked for
         string folder = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
         if (string.IsNullOrEmpty(folder))
             folder = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
+        // The default file lives in the folder found above
         return Path.Combine(folder, "morgana-conversation.txt");
     }
 
@@ -75,6 +77,7 @@ public sealed class TerminalExportCommand : TerminalCommand
         // A long conversation takes a moment to come back over the wire, which is the first thing the user waits on
         ui.ShowProgress(new CommandProgress(Descriptor.Name, "reading the conversation", Completed: 0, Total: ProgressSteps));
 
+        // The history comes from Morgana's record, so it holds what was said even before this process started
         IReadOnlyList<MorganaChatMessage> messages = await morganaClientService.GetHistoryAsync(session.ConversationId, cancellationToken);
         if (messages.Count == 0)
         {
@@ -86,6 +89,7 @@ public sealed class TerminalExportCommand : TerminalCommand
         // A path this machine cannot accept is the user's to fix, so it is said before the work is done
         if (DescribePathProblem(options["path"], out string path) is { } pathProblem)
         {
+            // The path problem is said as the reason the export did not happen
             ui.ShowCommandOutcome($"cannot write there: {pathProblem}", isFailure: true);
             return;
         }
@@ -93,10 +97,12 @@ public sealed class TerminalExportCommand : TerminalCommand
         // The file is named in the frame: on a slow disk it is what the user is waiting for
         ui.ShowProgress(new CommandProgress(Descriptor.Name, $"writing {Path.GetFileName(path)}", Completed: 1, Total: ProgressSteps));
 
+        // The format picked decides the shape of the file
         string content = format == "json" ? RenderAsJson(messages) : RenderAsText(messages);
 
         try
         {
+            // The folder of the file is created when it does not exist yet
             if (Path.GetDirectoryName(path) is { Length: > 0 } directory)
                 Directory.CreateDirectory(directory);
             await File.WriteAllTextAsync(path, content, cancellationToken);
@@ -108,6 +114,7 @@ public sealed class TerminalExportCommand : TerminalCommand
             return;
         }
 
+        // The outcome tells how much was written and where
         ui.ShowCommandOutcome($"wrote {messages.Count} message{(messages.Count == 1 ? string.Empty : "s")} to {path}");
     }
 
@@ -124,13 +131,16 @@ public sealed class TerminalExportCommand : TerminalCommand
     /// <summary>The conversation as a file meant to be read by a person: who spoke, when, what was said.</summary>
     private static string RenderAsText(IReadOnlyList<MorganaChatMessage> messages)
     {
+        // The transcript is built line by line
         StringBuilder transcript = new();
         transcript.AppendLine(CultureInfo.InvariantCulture, $"# Conversation {messages[0].ConversationId}");
         transcript.AppendLine(CultureInfo.InvariantCulture, $"# Exported {DateTime.Now:yyyy-MM-dd HH:mm}");
         transcript.AppendLine();
 
+        // Each message becomes its own block of the file
         foreach (MorganaChatMessage message in messages)
         {
+            // The header of a block says when and by whom it was said
             transcript.AppendLine(CultureInfo.InvariantCulture, $"[{message.Timestamp:yyyy-MM-dd HH:mm:ss}] {message.AgentName}");
             transcript.AppendLine(message.Text);
 
@@ -141,35 +151,37 @@ public sealed class TerminalExportCommand : TerminalCommand
             transcript.AppendLine();
         }
 
+        // The text of the whole file
         return transcript.ToString();
     }
 
     /// <summary>
-    /// What is wrong with <paramref name="given"/> as a file to write on this machine, as a line the user can
+    /// What is wrong with <paramref name="typedPath"/> as a file to write on this machine, as a line the user can
     /// read; null when nothing is, in which case <paramref name="path"/> holds it as the file system spells it.
     /// </summary>
-    private static string? DescribePathProblem(string given, out string path)
+    private static string? DescribePathProblem(string typedPath, out string path)
     {
         path = string.Empty;
 
         // A leading ~ is the user's own way of naming their home, which no file API resolves for them. Both
         // separators are accepted after it, since a path is often carried over from another machine
-        string expanded = given.StartsWith('~')
-            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), given[1..].TrimStart('/', '\\'))
-            : given;
+        string candidatePath = typedPath.StartsWith('~')
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), typedPath[1..].TrimStart('/', '\\'))
+            : typedPath;
 
         // What one operating system allows in a name another refuses, so the refusal comes from this one
-        if (expanded.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+        if (candidatePath.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
             return "the name carries characters this system does not allow in a path";
 
         try
         {
             // The terminal's working directory is not where the user is looking, so a relative path is
             // anchored to it here — which is also where a malformed one is caught
-            path = Path.GetFullPath(expanded);
+            path = Path.GetFullPath(candidatePath);
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
+            // The message of the framework says what is wrong with the path
             return ex.Message;
         }
 
@@ -181,6 +193,7 @@ public sealed class TerminalExportCommand : TerminalCommand
         if (Path.GetFileName(path).Length == 0)
             return $"{path} names no file";
 
+        // Nothing is wrong with the path
         return null;
     }
 }

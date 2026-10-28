@@ -8,7 +8,7 @@ namespace Morgana.Terminal.Services;
 /// The Yes/No question that stands between a command declaring <see cref="CommandDescriptor.RequiresConfirmation"/>
 /// and its running: which command is waiting on an answer, which option is highlighted, what the keys mean and how
 /// the question is drawn. Every TTY channel asks it the same way, in its own
-/// <see cref="Messages.CommandTheme"/>, a channel with no quick replies included: the question is drawn by the
+/// <see cref="Messages.TerminalTheme"/>, a channel with no quick replies included: the question is drawn by the
 /// channel itself, never a capability it had to declare. It holds the pending question, so every call must come under the render lock of the UI.
 /// </summary>
 public sealed class CommandConfirmationService
@@ -16,7 +16,7 @@ public sealed class CommandConfirmationService
     /// <summary>Marks the question as the one thing the prompt is waiting on, in the same amber both channels warn in.</summary>
     private const string QuestionStyle = "orange1";
 
-    /// <summary>The option that is not highlighted, leaving the channel's primary colour to the one that is.</summary>
+    /// <summary>The option that is not highlighted, leaving the channel's Morgana colour to the one that is.</summary>
     private const string OptionColor = "white";
 
     /// <summary>Controls line: a terminal gives no cue that an answer is expected, so the keys are spelled out.</summary>
@@ -28,15 +28,16 @@ public sealed class CommandConfirmationService
     /// <summary>Measures and cuts every row to the width the UI's row budget counts on.</summary>
     private readonly TerminalCellService cells;
 
-    /// <summary>The channel's primary colour, which marks the highlighted answer.</summary>
-    private readonly CommandTheme theme;
+    /// <summary>The channel's Morgana colour, which marks the highlighted answer.</summary>
+    private readonly TerminalTheme theme;
 
     /// <summary>Whether the highlight sits on Yes; No holds it until the user moves it, so a stray Enter runs nothing.</summary>
     private bool yesHighlighted;
 
     /// <summary>Captures the cell measurement and the channel's theme.</summary>
-    public CommandConfirmationService(TerminalCellService cells, CommandTheme theme)
+    public CommandConfirmationService(TerminalCellService cells, TerminalTheme theme)
     {
+        // The theme comes right after the cell measurement it is drawn with
         this.cells = cells;
         this.theme = theme;
     }
@@ -65,6 +66,7 @@ public sealed class CommandConfirmationService
         if (!IsPending)
             return ConfirmationOutcome.Pending;
 
+        // Keys not listed here fall to the initials below
         switch (key.Key)
         {
             // Both axes are accepted so the user needs not guess how the two options are laid out
@@ -72,6 +74,7 @@ public sealed class CommandConfirmationService
                 yesHighlighted = !yesHighlighted;
                 return ConfirmationOutcome.Pending;
 
+            // Enter takes the answer that is highlighted
             case ConsoleKey.Enter:
                 return Close(yesHighlighted);
 
@@ -84,6 +87,7 @@ public sealed class CommandConfirmationService
         // answered; anything else typed is swallowed, since prose has no meaning against a Yes/No
         return char.ToLowerInvariant(key.KeyChar) switch
         {
+            // Y is a Yes outright
             'y' => Close(true),
             'n' => Close(false),
             _ => ConfirmationOutcome.Pending
@@ -112,10 +116,11 @@ public sealed class CommandConfirmationService
         // The name alone would not say what is about to happen to the conversation, so the command's own line comes with it
         string question = SanitizeForTerminal($"⚠ Run /{invocation.Command.Name}{values}? {invocation.Command.Description}");
 
-        // The highlighted answer wears the channel's primary inverted, the shape the palette's caret row already has
+        // The highlighted answer wears the channel's Morgana colour inverted, the shape the palette's caret row already has
         string yes = RenderAnswer("Yes", yesHighlighted);
         string no = RenderAnswer("No", !yesHighlighted);
 
+        // The question, the two answers and the controls line, one row each
         return
         [
             new Markup($"[{QuestionStyle}]{Markup.Escape(cells.Trunc(question, width))}[/]"),
@@ -125,14 +130,15 @@ public sealed class CommandConfirmationService
     }
 
     /// <summary>Draws one answer, padded so both read as buttons whether or not the highlight is on them.</summary>
-    private string RenderAnswer(string label, bool highlighted) =>
-        highlighted
-            ? $"[{theme.PrimaryColor} invert] {label} [/]"
+    private string RenderAnswer(string label, bool isHighlighted) =>
+        isHighlighted
+            ? $"[{theme.MorganaColor} invert] {label} [/]"
             : $"[{OptionColor}] {label} [/]";
 
     /// <summary>Closes the question, answering it with <paramref name="confirmed"/>.</summary>
     private ConfirmationOutcome Close(bool confirmed)
     {
+        // The question is gone from the prompt whatever the answer
         PendingInvocation = null;
         return confirmed ? ConfirmationOutcome.Confirmed : ConfirmationOutcome.Declined;
     }

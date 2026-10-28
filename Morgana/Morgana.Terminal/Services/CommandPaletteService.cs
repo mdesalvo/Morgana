@@ -8,7 +8,7 @@ namespace Morgana.Terminal.Services;
 /// <summary>
 /// The dropdown that opens under the prompt as soon as the line starts with <c>/</c>: which commands match,
 /// which one is highlighted, what Tab completes to, what Enter runs and how it is drawn. Every TTY channel
-/// gets the same palette in its own <see cref="CommandTheme"/>. It holds the highlight, so every call
+/// gets the same palette in its own <see cref="TerminalTheme"/>. It holds the highlight, so every call
 /// must come under the render lock of the UI that owns it.
 /// </summary>
 public sealed class CommandPaletteService
@@ -19,7 +19,7 @@ public sealed class CommandPaletteService
     /// <summary>Controls line: a terminal gives no cue that a list can be walked, so the keys are spelled out.</summary>
     private const string ControlsHint = "↑↓ move · Tab complete · Enter run · Esc cancel";
 
-    /// <summary>Names of the candidates that are not highlighted, leaving the channel's primary colour to the one that is.</summary>
+    /// <summary>Names of the candidates that are not highlighted, leaving the channel's Morgana colour to the one that is.</summary>
     private const string CandidateNameColor = "white";
 
     /// <summary>Descriptions in the de-emphasised grey the other TTY surfaces use.</summary>
@@ -34,8 +34,8 @@ public sealed class CommandPaletteService
     /// <summary>Measures and cuts every row to the width the UI's row budget counts on.</summary>
     private readonly TerminalCellService cells;
 
-    /// <summary>The channel's primary colour, which marks the highlighted candidate.</summary>
-    private readonly CommandTheme theme;
+    /// <summary>The channel's Morgana colour, which marks the highlighted candidate.</summary>
+    private readonly TerminalTheme theme;
 
     /// <summary>The line the highlight was placed against; any other line puts it back on the first match.</summary>
     private string highlightedForInput = string.Empty;
@@ -44,7 +44,7 @@ public sealed class CommandPaletteService
     private int highlightedCommandIndex;
 
     /// <summary>Captures the registry, the cell measurement and the channel's theme.</summary>
-    public CommandPaletteService(TerminalCommandRegistryService registry, TerminalCellService cells, CommandTheme theme)
+    public CommandPaletteService(TerminalCommandRegistryService registry, TerminalCellService cells, TerminalTheme theme)
     {
         this.registry = registry;
         this.cells = cells;
@@ -63,8 +63,8 @@ public sealed class CommandPaletteService
             return;
 
         // Moving up from the first command lands on the last one and down from the last on the first
-        int current = HighlightedIndexFor(input, matchingCommands.Count);
-        highlightedCommandIndex = ((current + rowOffset) % matchingCommands.Count + matchingCommands.Count) % matchingCommands.Count;
+        int currentIndex = HighlightedIndexFor(input, matchingCommands.Count);
+        highlightedCommandIndex = ((currentIndex + rowOffset) % matchingCommands.Count + matchingCommands.Count) % matchingCommands.Count;
 
     }
 
@@ -74,17 +74,19 @@ public sealed class CommandPaletteService
         // Tab completes to the highlighted row, the one the user sees selected, not necessarily the first
         IReadOnlyList<CommandDescriptor> matchingCommands = FindMatchingCommands(input, state);
 
+        // A line matching nothing completes to nothing
         if (matchingCommands.Count == 0)
             return null;
 
         // Only the name is rewritten: values already written stay as they were typed, while
         // a command that takes them leaves the caret past a space, where the first one goes
-        CommandDescriptor completed = matchingCommands[HighlightedIndexFor(input, matchingCommands.Count)];
+        CommandDescriptor highlightedCommand = matchingCommands[HighlightedIndexFor(input, matchingCommands.Count)];
         int optionsStart = input.IndexOf(' ');
         if (optionsStart >= 0)
-            return $"/{completed.Name}{input[optionsStart..]}";
+            return $"/{highlightedCommand.Name}{input[optionsStart..]}";
 
-        return completed.Options is { Count: > 0 } ? $"/{completed.Name} " : $"/{completed.Name}";
+        // A command that takes values leaves the caret past a space where the first one goes
+        return highlightedCommand.Options is { Count: > 0 } ? $"/{highlightedCommand.Name} " : $"/{highlightedCommand.Name}";
     }
 
     /// <summary>The command Enter runs for <paramref name="input"/>; null when nothing matches it.</summary>
@@ -98,8 +100,8 @@ public sealed class CommandPaletteService
         return matchingCommands[HighlightedIndexFor(input, matchingCommands.Count)];
     }
 
-    /// <summary>The colour of a match: the highlighted candidate and a typed line naming a command exactly, in the channel's primary.</summary>
-    public string MatchColor => theme.PrimaryColor;
+    /// <summary>The colour of a match: the highlighted candidate and a typed line naming a command exactly, in the channel's Morgana colour.</summary>
+    public string MatchColor => theme.MorganaColor;
 
     /// <summary>Tells whether <paramref name="input"/> names an available command exactly.</summary>
     public bool NamesCommandExactly(string input, TerminalConversationState state)
@@ -123,6 +125,7 @@ public sealed class CommandPaletteService
         // typing it again starts from the first command
         if (!IsCommandLine(input))
         {
+            // The highlight is forgotten together with the palette
             highlightedForInput = string.Empty;
             return [];
         }
@@ -133,9 +136,9 @@ public sealed class CommandPaletteService
             return [new Markup($"[{DescriptionStyle}]{Markup.Escape(cells.Trunc(SanitizeForTerminal($"no command matches {input}"), width))}[/]")];
 
         // The window ends on the highlight once it moves past the last visible row, so it is always on screen
-        int highlighted = HighlightedIndexFor(input, matchingCommands.Count);
+        int highlightedIndex = HighlightedIndexFor(input, matchingCommands.Count);
         int visibleCount = Math.Min(MaxVisibleCommands, matchingCommands.Count);
-        int windowStart = Math.Clamp(highlighted - visibleCount + 1, 0, matchingCommands.Count - visibleCount);
+        int windowStart = Math.Clamp(highlightedIndex - visibleCount + 1, 0, matchingCommands.Count - visibleCount);
 
         // Names line up in one column across the rows on screen, never wider than the row minus the caret
         int labelWidth = Math.Min(
@@ -146,10 +149,10 @@ public sealed class CommandPaletteService
         string typedCommandName = CommandLineParser.ParseName(input);
         List<Markup> rows = new(visibleCount + 1);
         for (int index = windowStart; index < windowStart + visibleCount; index++)
-            rows.Add(RenderCommandRow(matchingCommands[index], typedCommandName, index == highlighted, labelWidth, width));
+            rows.Add(RenderCommandRow(matchingCommands[index], typedCommandName, index == highlightedIndex, labelWidth, width));
 
         // Past the window the position tells the user how much of the list is off screen
-        string controls = matchingCommands.Count > visibleCount ? $"{ControlsHint} · {highlighted + 1}/{matchingCommands.Count}" : ControlsHint;
+        string controls = matchingCommands.Count > visibleCount ? $"{ControlsHint} · {highlightedIndex + 1}/{matchingCommands.Count}" : ControlsHint;
         rows.Add(new Markup($"[{HintStyle}]{Markup.Escape(cells.Trunc(controls, width))}[/]"));
         return rows;
     }
@@ -189,27 +192,29 @@ public sealed class CommandPaletteService
 
     /// <summary>
     /// Draws one command: the caret when highlighted, the name padded to <paramref name="labelWidth"/>,
-    /// then as much of the description as the row holds. The whole row wears the match colour when <paramref name="highlighted"/>.
+    /// then as much of the description as the row holds. The whole row wears the match colour when <paramref name="isHighlighted"/>.
     /// </summary>
-    private Markup RenderCommandRow(CommandDescriptor command, string typedCommandName, bool highlighted, int labelWidth, int width)
+    private Markup RenderCommandRow(CommandDescriptor command, string typedCommandName, bool isHighlighted, int labelWidth, int width)
     {
         // The caret column is two cells wide on every row, highlighted or not, so the names stay aligned
         StringBuilder row = new(width + 64);
-        row.Append(highlighted ? $"[{MatchColor}]❯[/] " : "  ");
+        row.Append(isHighlighted ? $"[{MatchColor}]❯[/] " : "  ");
 
         // The highlighted row wears the match colour from name to description; the other names stay plain white
         string label = cells.Trunc(CommandLabel(command), labelWidth);
-        AppendWithTypedFragmentInBold(row, label, typedCommandName, highlighted ? MatchColor : CandidateNameColor);
+        AppendWithTypedFragmentInBold(row, label, typedCommandName, isHighlighted ? MatchColor : CandidateNameColor);
         row.Append(' ', Math.Max(0, labelWidth - label.GetCellWidth()));
 
         // What is left after caret, name and a two-cell gap; a terminal this narrow shows names alone
-        int remaining = width - 2 - labelWidth - 2;
-        if (remaining > 0)
+        int remainingCells = width - 2 - labelWidth - 2;
+        if (remainingCells > 0)
         {
+            // The row carries only the name when the terminal is too narrow for a description
             row.Append("  ");
-            string description = cells.Trunc(SanitizeForTerminal(command.Description), remaining);
-            AppendWithTypedFragmentInBold(row, description, typedCommandName, highlighted ? MatchColor : DescriptionStyle);
+            string description = cells.Trunc(SanitizeForTerminal(command.Description), remainingCells);
+            AppendWithTypedFragmentInBold(row, description, typedCommandName, isHighlighted ? MatchColor : DescriptionStyle);
         }
+        // The row as one markup of at most the width
         return new Markup(row.ToString());
     }
 
@@ -220,10 +225,12 @@ public sealed class CommandPaletteService
         int fragmentStart = typedFragment.Length == 0 ? -1 : text.IndexOf(typedFragment, StringComparison.OrdinalIgnoreCase);
         if (fragmentStart < 0)
         {
+            // A fragment that does not occur leaves the whole text in the plain style
             AppendStyled(row, text, style);
             return;
         }
 
+        // The text before the match keeps the plain style
         AppendStyled(row, text[..fragmentStart], style);
         AppendStyled(row, text.Substring(fragmentStart, typedFragment.Length), $"bold {style}");
         AppendStyled(row, text[(fragmentStart + typedFragment.Length)..], style);
@@ -245,6 +252,7 @@ public sealed class CommandPaletteService
             ? " " + string.Join(' ', declared.Select(option => option.Required ? OptionSpelling(option) : $"[{OptionSpelling(option)}]"))
             : string.Empty;
 
+        // The label, cleaned of anything the terminal would obey
         return SanitizeForTerminal($"/{command.Name}{options}");
     }
 
@@ -267,6 +275,7 @@ public sealed class CommandPaletteService
         // keeps it where the arrows left it
         if (!string.Equals(input, highlightedForInput, StringComparison.Ordinal))
         {
+            // The highlight belongs to the line it was placed against
             highlightedForInput = input;
             highlightedCommandIndex = 0;
         }

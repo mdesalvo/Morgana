@@ -82,20 +82,22 @@ public sealed class MorganaClientService
     {
         HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
 
+        // The handshake proposes the id and declares what the channel is and can render
         StartConversationRequest body = new(
             ConversationId: candidateConversationId,
             ChannelMetadata: profile.BuildMetadata(callbackUrl));
 
+        // Morgana answers with the conversation it opened
         HttpResponseMessage response = await httpClient.PostAsJsonAsync(
             "/api/morgana/conversation/start", body, cancellationToken);
         response.EnsureSuccessStatusCode();
 
         // Fail-closed: a 2xx with an empty/missing id means the contract is broken —
         // refuse to run rather than leak an undefined conversation into the webhook loop.
-        StartConversationResponse? parsed = await response.Content.ReadFromJsonAsync<StartConversationResponse>(cancellationToken);
-        if (parsed is null || string.IsNullOrWhiteSpace(parsed.ConversationId))
+        StartConversationResponse? startResponse = await response.Content.ReadFromJsonAsync<StartConversationResponse>(cancellationToken);
+        if (startResponse is null || string.IsNullOrWhiteSpace(startResponse.ConversationId))
             throw new InvalidOperationException("Morgana did not return a conversation id.");
-        return parsed.ConversationId;
+        return startResponse.ConversationId;
     }
 
     /// <summary>Sends a user message on the given conversation.</summary>
@@ -117,6 +119,7 @@ public sealed class MorganaClientService
         if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
             return;
 
+        // A refused message is a failure to show; a 429 returned above is the one exception
         response.EnsureSuccessStatusCode();
     }
 
@@ -141,6 +144,7 @@ public sealed class MorganaClientService
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             return [];
 
+        // A refusal other than 404 is a failure to show
         response.EnsureSuccessStatusCode();
         ConversationHistoryResponse? history = await response.Content.ReadFromJsonAsync<ConversationHistoryResponse>(cancellationToken);
         return history?.Messages ?? [];
@@ -162,9 +166,11 @@ public sealed class MorganaClientService
         using CancellationTokenSource commandDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         commandDeadline.CancelAfter(commandTimeout);
 
+        // The answer to the command, or the deadline that called it off
         HttpResponseMessage response;
         try
         {
+            // Morgana runs the command and answers when it has finished
             response = await httpClient.PostAsJsonAsync(
                 $"/api/morgana/conversation/{conversationId}/command",
                 new ExecuteCommandRequest(name, confirmed, options, invocationId),
@@ -181,6 +187,7 @@ public sealed class MorganaClientService
         if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
             return;
 
+        // A refusal other than 429 is a failure to show
         response.EnsureSuccessStatusCode();
     }
 
@@ -189,6 +196,7 @@ public sealed class MorganaClientService
     {
         try
         {
+            // The client is pooled by the factory and carries the channel's token
             HttpClient httpClient = httpClientFactory.CreateClient("Morgana");
             await httpClient.PostAsync($"/api/morgana/conversation/{conversationId}/end",
                 content: null, cancellationToken);
