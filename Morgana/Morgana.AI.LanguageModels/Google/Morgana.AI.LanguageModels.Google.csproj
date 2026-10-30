@@ -39,7 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Google.GenAI" Version="1.27.0" />
+    <PackageReference Include="Google.GenAI" Version="1.28.0" />
   </ItemGroup>
 
   <ItemGroup>
