@@ -93,7 +93,7 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
     /// <summary>
     /// Converts a usageDetails report into dust via the per-provider dustPricing and charges it.
     /// No-op when the conversation id or usageDetails is absent, or when the computed dust is zero
-    /// (e.g. Ollama priced at 0 tokens-per-unit on both axes). Never throws.
+    /// (e.g. a local Ollama model priced at 0 tokens-per-unit on both axes). Never throws.
     /// </summary>
     /// <remarks>
     /// The Anthropic MEAI adapter reports <see cref="UsageDetails.InputTokenCount"/> as the

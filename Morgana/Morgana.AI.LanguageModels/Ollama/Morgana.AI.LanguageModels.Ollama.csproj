@@ -3,7 +3,7 @@
   <PropertyGroup>
     <Title>Morgana.AI.LanguageModels.Ollama</Title>
     <PackageId>Morgana.AI.LanguageModels.Ollama</PackageId>
-    <Description>Ollama provider for Morgana: serves a tier on local models.</Description>
+    <Description>Ollama provider for Morgana: serves a tier on local models or on the cloud models of ollama.com.</Description>
     <OutputType>Library</OutputType>
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <IncludeSymbols>true</IncludeSymbols>

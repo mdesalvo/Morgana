@@ -224,7 +224,7 @@ public static class Records
     public record ProviderPricing(List<PricedModel> Models);
 
     /// <summary>One model that a provider prices.</summary>
-    /// <param name="Name">The value that a tier writes in its <c>Options:ModelId</c>, matched with its exact casing.</param>
+    /// <param name="Name">The name under which the provider catalogues the model: a tier's <c>Options:ModelId</c> unless the provider reads it otherwise, matched with its exact casing.</param>
     /// <param name="Pricing">What the model costs.</param>
     public record PricedModel(string Name, ModelPricing Pricing);
 

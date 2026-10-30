@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Morgana.AI;
@@ -202,7 +203,7 @@ public sealed class LanguageModelTests
     [Fact]
     public void LanguageModel_An_Ollama_tier_without_its_own_Pricing_is_refused()
     {
-        // Ollama ships an empty pricing.json, so a tier without its own Pricing has no model to run on.
+        // Ollama catalogues only its cloud models, so a tier on a local model without its own Pricing has no model to run on.
         InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(() => Build(Configuration(
             ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
             ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "http://localhost:11434"),
@@ -232,6 +233,95 @@ public sealed class LanguageModelTests
         Assert.Equal(0, dust.OutputTokensPerDustUnit);
         Assert.Equal(0.0, dust.CachedInputWeight, 1e-9);
         Assert.Equal(0.0, dust.CacheCreationWeight, 1e-9);
+    }
+
+    [Fact]
+    public void LanguageModel_An_Ollama_tier_on_ollama_com_without_its_ApiKey_is_refused()
+    {
+        // ollama.com bills an account, so a tier reaching it without the account's key is refused at startup.
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(() => Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "https://ollama.com"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "gemma4")),
+            without: "Morgana:LanguageModels:Tiers:Economy:Connection:ApiKey"));
+
+        Assert.Contains("Morgana:LanguageModels:Tiers:Economy:Connection:ApiKey", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LanguageModel_A_local_Ollama_tier_needs_no_ApiKey()
+    {
+        // A local daemon carries its own sign-in, so the tier starts without a key.
+        ILanguageModelService llm = Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "http://localhost:11434"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "phi4-mini"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:InputUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:OutputUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheReadUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheWriteUsdPerMillion", "0")),
+            without: "Morgana:LanguageModels:Tiers:Economy:Connection:ApiKey");
+
+        Assert.Equal(0, llm.GetMorganaDust(Records.LLMTier.Economy).InputTokensPerDustUnit);
+    }
+
+    [Theory]
+    [InlineData("https://ollama.com", "mistral-large-4", "0.70", "2.10", "0.07", "0.70")]
+    [InlineData("https://ollama.com", "gemma4:cloud", "0.14", "0.40", "0.05", "0.14")]
+    [InlineData("http://localhost:11434", "mistral-large-4:cloud", "0.70", "2.10", "0.07", "0.70")]
+    [InlineData("http://localhost:11434", "gpt-oss:120b-cloud", "0.15", "0.60", "0.014", "0.15")]
+    public void LanguageModel_An_Ollama_cloud_model_is_priced_under_its_catalogue_name(
+        string endpoint, string modelId, string inputUsdPerMillion, string outputUsdPerMillion, string cacheReadUsdPerMillion, string cacheWriteUsdPerMillion)
+    {
+        // A cloud model costs what ollama.com bills for it, whichever endpoint serves it and whichever form its name takes.
+        ILanguageModelService llm = Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", endpoint),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", modelId)));
+        Records.MagicDustPricing expected = new OllamaLanguageModel().ConvertToMorganaDust(new Records.ModelPricing(
+            decimal.Parse(inputUsdPerMillion, CultureInfo.InvariantCulture),
+            decimal.Parse(outputUsdPerMillion, CultureInfo.InvariantCulture),
+            decimal.Parse(cacheReadUsdPerMillion, CultureInfo.InvariantCulture),
+            decimal.Parse(cacheWriteUsdPerMillion, CultureInfo.InvariantCulture)));
+
+        Records.MagicDustPricing dust = llm.GetMorganaDust(Records.LLMTier.Economy);
+
+        Assert.Equal(expected.InputTokensPerDustUnit, dust.InputTokensPerDustUnit);
+        Assert.Equal(expected.OutputTokensPerDustUnit, dust.OutputTokensPerDustUnit);
+        Assert.Equal(expected.CachedInputWeight, dust.CachedInputWeight, 1e-9);
+        Assert.Equal(expected.CacheCreationWeight, dust.CacheCreationWeight, 1e-9);
+    }
+
+    [Fact]
+    public void LanguageModel_A_local_Ollama_model_named_like_a_cloud_model_is_refused_without_its_own_Pricing()
+    {
+        // On a daemon gpt-oss:20b runs on the deployment's own hardware, so the cloud price never applies to it.
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(() => Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "http://localhost:11434"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "gpt-oss:20b"))));
+
+        Assert.Contains("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("gpt-oss:20b", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LanguageModel_A_local_Ollama_model_named_like_a_cloud_model_runs_on_its_own_Pricing()
+    {
+        // The tier's own price is the one that applies to a local model.
+        ILanguageModelService llm = Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "http://localhost:11434"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "gpt-oss:20b"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:InputUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:OutputUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheReadUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheWriteUsdPerMillion", "0")));
+
+        Records.MagicDustPricing dust = llm.GetMorganaDust(Records.LLMTier.Economy);
+
+        Assert.Equal(0, dust.InputTokensPerDustUnit);
+        Assert.Equal(0, dust.OutputTokensPerDustUnit);
     }
 
     [Fact]

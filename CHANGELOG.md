@@ -13,7 +13,7 @@ A new **Economy** tier joins Efficiency and Performance, taking over Morgana's o
 Morgana's core no longer knows any LLM vendor: **each provider is a plugin**, dropped into `plugins/` beside the domain agents. A tier picks it by name.
 Anthropic, Azure OpenAI, Google, Ollama and OpenAI ship as **`Morgana.AI.LanguageModels`** packages. Any other vendor offering a `Microsoft.Extensions.AI` client can join the same way, without touching the framework.
 Each plugin carries the official **price list** of its vendor's models, from which Morgana derives the dust of every tier.
-A deployment can **overlay its own price** on a tier: for a model the list does not hold (an Azure deployment, an Ollama model, a model released after Morgana) or for a negotiated discount.
+A deployment can **overlay its own price** on a tier: for a model the list does not hold (an Azure deployment, a local Ollama model, a model released after Morgana) or for a negotiated discount.
 ### 🎯 Major Feature: Support for Google Gemini
 Morgana starts supporting **Google Gemini** models.
 ### 🎯 Major Feature: Agents that present themselves
@@ -25,7 +25,7 @@ A request that no agent claims is answered with the same menu, so the user alway
 
 ### 🔄 Changed
 - The LLM configuration moves to `Morgana:LanguageModels:Tiers`: one entry per tier with its own `Provider`, `Connection` and `Options`, while Morgana's own actors run on the tier that `Morgana:ActorSystem:Tier` names. `MagicDust` leaves the configuration: a tier's dust follows from its model's price
-- A tier on Azure OpenAI or Ollama runs only with its own `Pricing`: their models are named by the customer, so their plugins ship no price list
+- A tier on Azure OpenAI or on a local Ollama model runs only with its own `Pricing`: those models are named by the customer, so no price list can hold them
 - An agent stays in service by default and hands the conversation back by calling `SetTurnEnding` when the user takes their leave, instead of calling `SetTurnContinuation` to stay
 
 ### 🐛 Fixed

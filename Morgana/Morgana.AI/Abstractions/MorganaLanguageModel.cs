@@ -39,7 +39,7 @@ public abstract class MorganaLanguageModel
     /// <summary>What one dust unit is worth in US dollars on the tiers that this provider serves; a provider overrides it to give its dust a different value.</summary>
     public virtual decimal UsdPerDustUnit => 0.015m;
 
-    /// <summary>What each model of this provider costs, as its <c>pricing.json</c> declares it, keyed by the ModelId that a tier writes.</summary>
+    /// <summary>What each model of this provider costs, as its <c>pricing.json</c> declares it, keyed by the name under which the provider catalogues the model.</summary>
     protected readonly Dictionary<string, Records.ModelPricing> modelPrices;
 
     /// <summary>Reads the <c>pricing.json</c> that the provider's plugin embeds.</summary>
@@ -48,12 +48,20 @@ public abstract class MorganaLanguageModel
         // The concrete provider's assembly is its plugin: the prices travel with the DLL that serves the models.
         modelPrices = ReadPricing(GetType().Assembly);
 
-    /// <summary>Converts the price of a model into Morgana's dust, the one conversion for every provider; <c>null</c> when the provider's <c>pricing.json</c> does not name the model.</summary>
+    /// <summary>Converts the price of the model that a tier runs into Morgana's dust, the one conversion for every provider; <c>null</c> when the provider's <c>pricing.json</c> prices no model under the name that the provider reads the tier's model by.</summary>
+    /// <param name="connectionSection">The <c>Connection</c> section of the tier, already validated by <see cref="ValidateConnection"/>.</param>
     /// <param name="modelId">The model that a tier names in its <c>Options:ModelId</c>.</param>
-    public Records.MagicDustPricing? ConvertToMorganaDust(string modelId)
+    public Records.MagicDustPricing? ConvertToMorganaDust(IConfigurationSection connectionSection, string modelId)
     {
+        // The provider names the catalogue entry that prices this model on this connection.
+        string? cataloguedModelId = CataloguedModelId(connectionSection, modelId);
+
+        // A model that the provider never catalogues is priced by its tier alone.
+        if (cataloguedModelId is null)
+            return null;
+
         // The provider's own pricing.json alone says what its models cost.
-        Records.ModelPricing? modelPricing = modelPrices.GetValueOrDefault(modelId);
+        Records.ModelPricing? modelPricing = modelPrices.GetValueOrDefault(cataloguedModelId);
 
         // A model that the provider does not price has no dust.
         if (modelPricing is null)
@@ -62,6 +70,11 @@ public abstract class MorganaLanguageModel
         // A listed price converts like a price that a tier declares.
         return ConvertToMorganaDust(modelPricing);
     }
+
+    /// <summary>The name under which the provider's <c>pricing.json</c> prices the model that a tier runs on its connection; <c>null</c> when the provider never prices that model from its catalogue.</summary>
+    /// <param name="connectionSection">The <c>Connection</c> section of the tier, already validated by <see cref="ValidateConnection"/>.</param>
+    /// <param name="modelId">The model that a tier names in its <c>Options:ModelId</c>.</param>
+    protected abstract string? CataloguedModelId(IConfigurationSection connectionSection, string modelId);
 
     /// <summary>Converts a price into Morgana's dust at this provider's <see cref="UsdPerDustUnit"/>, whether its pricing.json lists it or a tier declares it.</summary>
     /// <param name="modelPricing">What the model costs in US dollars per million tokens.</param>
@@ -160,6 +173,11 @@ public abstract class MorganaLanguageModel<TConnection> : MorganaLanguageModel
         // The client is built from the same typed connection that validation saw.
         CreateChatClient(Bind(connectionSection), options);
 
+    /// <inheritdoc />
+    protected sealed override string? CataloguedModelId(IConfigurationSection connectionSection, string modelId) =>
+        // The provider reads the model on the same typed connection that validation saw.
+        CataloguedModelId(Bind(connectionSection), modelId);
+
     /// <summary>Refuses a connection that lacks a field that this provider uses, naming the field first.</summary>
     /// <param name="connection">The connection of the tier as this provider reads it.</param>
     /// <exception cref="InvalidOperationException">A field that the provider uses is missing, empty or still a placeholder.</exception>
@@ -169,6 +187,13 @@ public abstract class MorganaLanguageModel<TConnection> : MorganaLanguageModel
     /// <param name="connection">How the tier reaches the provider.</param>
     /// <param name="options">The model that the tier runs.</param>
     protected abstract IChatClient CreateChatClient(TConnection connection, Records.TierConfiguration options);
+
+    /// <summary>The name under which this provider's <c>pricing.json</c> prices <paramref name="modelId"/> on <paramref name="connection"/>; <c>null</c> when only the tier's own Pricing can price it.</summary>
+    /// <param name="connection">The connection of the tier as this provider reads it.</param>
+    /// <param name="modelId">The model that the tier names in its <c>Options:ModelId</c>.</param>
+    protected virtual string? CataloguedModelId(TConnection connection, string modelId) =>
+        // A provider whose tiers write the catalogue name itself prices every model under its ModelId.
+        modelId;
 
     /// <summary>Reads the connection section into the shape that this provider declares.</summary>
     private static TConnection Bind(IConfigurationSection connectionSection) =>

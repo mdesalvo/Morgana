@@ -267,8 +267,8 @@ told apart from a failure.
 entry carries `Provider` (a registered provider's name, any casing), `Connection` (bound by that
 provider alone), `Options` — a deliberately narrow mirror of `ChatOptions` (`MaxOutputTokens`
 mandatory), see `Records.TierConfiguration`. An optional `Pricing` is the deployment's own price for
-the tier's model: it overlays the provider's `pricing.json` like any settings layer, which is how an
-Ollama model, a cloud-hosted deployment or a negotiated discount gets priced.
+the tier's model: it overlays the provider's `pricing.json` like any settings layer, which is how a
+local Ollama model, a cloud-hosted deployment or a negotiated discount gets priced.
 
 Two consumption modes: `CompleteWithSystemPromptAsync` (stateless, always on the framework tier) and
 `GetChatClient(tier)` / `GetMorganaDust(tier)` (an agent's own `[RequiresLLMTier]`).

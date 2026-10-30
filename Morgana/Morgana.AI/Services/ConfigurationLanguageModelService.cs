@@ -218,7 +218,7 @@ public class ConfigurationLanguageModelService : ILanguageModelService
             // The tier's own Pricing prevails over the provider's pricing.json: it is the deployment's price for this model, listed there or not.
             Records.MagicDustPricing? morganaDust = definition.Pricing is not null
                 ? languageModel.ConvertToMorganaDust(definition.Pricing)
-                : languageModel.ConvertToMorganaDust(definition.Options.ModelId);
+                : languageModel.ConvertToMorganaDust(connectionSection, definition.Options.ModelId);
             // A model priced neither by its provider nor by its tier would run with its dust uncounted, so it is refused at startup.
             if (morganaDust is null)
                 throw new InvalidOperationException(
