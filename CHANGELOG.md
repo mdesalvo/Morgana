@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [1.0.0-beta1] - UNDER DEVELOPMENT
+## [1.0.0-beta1] - 2026-10-30
 ### 🎯 Major Feature: Multi-vendor LLM tiers
 No more vendor lock-in: **each LLM tier now brings its own provider**, so Morgana can think with Anthropic, Azure OpenAI, Google, Ollama and OpenAI at once.
 A new **Economy** tier joins Efficiency and Performance, taking over Morgana's own pipeline so that the premium models are spent only where an agent needs them.
