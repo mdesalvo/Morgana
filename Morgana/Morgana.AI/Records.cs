@@ -818,6 +818,7 @@ public static class Records
     /// A colleague's answer, both as the actor reply and — serialized — as the tool result the
     /// asking agent's model reads, which is why every member carries an explicit JSON name.
     /// </summary>
+    /// <param name="Answer">The colleague's own words, as its turn wrote them for whoever asked.</param>
     /// <param name="ColleagueAwaitsYourReply">True when the colleague is waiting, i.e. the exchange is unfinished.</param>
     /// <param name="Options">Options offered, as data to choose from — never buttons to render.</param>
     /// <param name="Card">Structured data presented, as data to read — never a card to render.</param>
