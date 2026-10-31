@@ -494,6 +494,7 @@ public class MorganaAgent : MorganaActor
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnEnding);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ConsultationRounds);
                 aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.Landing);
+                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.QuarantinedTools);
             }
         }
     }

@@ -33,7 +33,7 @@ namespace PromptHarness.Infrastructure.Wiring;
 /// <para><strong>What the harness overrides</strong> on top of that inherited configuration:
 /// a throwaway SQLite storage path, telemetry exporters off (the in-process listener needs none),
 /// rate and dust limiting off (they would throttle a repeated-run suite), the guard rail per
-/// <c>Harness:EnableGuardrail</c> and a freshly-minted symmetric key for the <c>harness</c> issuer — so
+/// <c>Harness:EnableUserGuardrail</c> and a freshly-minted symmetric key for the <c>harness</c> issuer — so
 /// the channel's credentials live for the duration of one run and never touch disk.</para>
 /// </remarks>
 public sealed class MorganaHostFixture : IAsyncLifetime
@@ -342,7 +342,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // default: naming it here is what lets a run that swaps the domain leave it out, since the
         // default directory is always scanned and every domain found there is merged into the installation.
         Environment.SetEnvironmentVariable("Morgana__Plugins__Directories__0", "domain-plugins");
-        Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableGuardrail", Options.EnableGuardrail ? "true" : "false");
+        Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableUserGuardrail", Options.EnableUserGuardrail ? "true" : "false");
 
         // Every LLM span carries what the model was handed and answered, so a failing run keeps its own
         // evidence. The exporters are off, so none of it leaves the process.

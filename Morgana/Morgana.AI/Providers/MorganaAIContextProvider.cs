@@ -27,7 +27,8 @@ public class MorganaAIContextProvider : AIContextProvider
             Constants.ContextKeys.RichCard,
             Constants.ContextKeys.ServingConsultation,
             Constants.ContextKeys.ConsultationRounds,
-            Constants.ContextKeys.Landing
+            Constants.ContextKeys.Landing,
+            Constants.ContextKeys.QuarantinedTools
         ];
 
     /// <summary>Logger for provider-level diagnostics.</summary>

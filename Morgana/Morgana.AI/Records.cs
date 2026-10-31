@@ -612,7 +612,7 @@ public static class Records
         string Message);
 
     /// <summary>
-    /// Result of content moderation check from GuardActor.
+    /// The verdict in the JSON shape the Guard prompt asks the model for; read by <c>LLMGuardRailService</c> alone.
     /// </summary>
     /// <param name="Compliant">True if message passes policy checks, false if violation detected</param>
     /// <param name="Violation">Description of policy violation if Compliant is false</param>
@@ -621,13 +621,37 @@ public static class Records
         [property: JsonPropertyName("violation")] string? Violation);
 
     /// <summary>
-    /// IGuardRailService result: Compliant (true=passes all checks, false=violated). Violation: human-readable
-    /// description of violated rule. Public contract, intentionally decoupled from GuardCheckResponse (internal LLM wire-format DTO).
+    /// Which layer of a guard decided a verdict, carried so an operator can tell a judgment from an admission by default.
     /// </summary>
+    public enum GuardVerdictSource
+    {
+        /// <summary>The deterministic check decided, with no model involved.</summary>
+        Prefilter,
+
+        /// <summary>A model judged the text against its guard prompt.</summary>
+        Inspector,
+
+        /// <summary>The provider's own content filter refused the text before any judgment.</summary>
+        ProviderFilter,
+
+        /// <summary>No judgment could be reached and the text was admitted.</summary>
+        FailOpen,
+
+        /// <summary>The guard is switched off and the text was admitted unjudged.</summary>
+        Disabled
+    }
+
+    /// <summary>
+    /// The verdict of a guard: whether the text passes, the finding when it does not and which layer decided.
+    /// </summary>
+    /// <param name="Compliant">True if the text passes all checks</param>
+    /// <param name="Violation">Human-readable finding when Compliant is false</param>
+    /// <param name="Source">The layer that decided the verdict</param>
     public record GuardRailResult(
         bool Compliant,
-        string? Violation);
-    
+        string? Violation,
+        GuardVerdictSource Source);
+
     /// <summary>
     /// Sent by an agent back to the supervisor when the LLM provider rejects the request
     /// due to a content filter, as the provider of the agent's tier recognises it.

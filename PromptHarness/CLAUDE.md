@@ -32,7 +32,7 @@ project: every build setting lives in the `.csproj`, so it carries unchanged acr
 
 ## Commands
 
-Twenty test classes. **Never combine filters**: seven groups carry a process-wide boot knob the
+Twenty-two test classes. **Never combine filters**: seven groups carry a process-wide boot knob the
 others must not see and two of those seven share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
@@ -47,6 +47,8 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ConversationApiTes
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~LanguageModelTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~TurnEndingTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~FrameworkPromptTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ToolResultCheckTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~MCPToolAdmissionTests"
 
 # blocking
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ContextHandlingTests"
@@ -58,13 +60,13 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ActorTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ServedConsultationTests"
 
 # boot-flagged — one knob each, never together
-Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
+Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
 Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~SummarizationTests"
 Harness__DustBudgetPerConversation=100 dotnet test … --filter "FullyQualifiedName~DustTests"
 Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateLimitTests"    # deterministic, skipped without the knob
 Harness__MalformedDomain=unlabelled-intent dotnet test … --filter "FullyQualifiedName~PluginValidationTests"    # deterministic, skipped without the knob
 Harness__FederatedPeer=true dotnet test … --filter "FullyQualifiedName~FederationTests"
-Harness__EnableGuardrail=true dotnet test … --filter "FullyQualifiedName~ConversationPersistenceTests"
+Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~ConversationPersistenceTests"
 
 # one scenario — the id is a Theory argument, so match DisplayName, never the FQN, on at most its
 # first 50 characters: xUnit truncates the argument and a longer id matches nothing
@@ -103,6 +105,8 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `ConversationPersistenceTests` | — | Who owns each line of a conversation, how it is dated and in what order it is read back. The record is photographed after every exchange rather than at the end, because a transcript that reads correctly can still have been written by the wrong participant. Asserts nothing about wording: the oracle is what the channel was pushed and what the channel said. Shares the guard's knob, since a refused turn is one of the five it stages |
 | `TurnEndingTests` | none | What a presentation tool tells the model about the turn's words: the fact that nothing has reached the user yet, stated before any text and never after. The landing declaration reaches the model on the landing turn alone. A scripted model behind the real tool loop |
 | `FrameworkPromptTests` | none | The morgana.json shipped in Morgana.AI carries every entry that the framework fetches by name — policies, templates with their labels and placeholders, base tools, error answers, messages. No framework section carries a label of its own |
+| `ToolResultCheckTests` | none | The deterministic check on tool results: Morgana's own section labels and fences, chat-template tokens and text hidden in Unicode tag characters are withheld wherever they sit in a result, nested JSON included. What an honest datum may carry passes: lines that read like a role, wiki headings, zero-width and bidirectional characters, a flag emoji. No model is reached |
+| `MCPToolAdmissionTests` | none | An MCP tool enters an agent last: one taking the name of a tool of Morgana or of the domain, the colleagues' prefix or the name another MCP source already gave, in any case, is refused. A name that only begins like one of them is admitted. No server is reached |
 | `LanguageModelTests` | none | The three tiers built from configuration, each by the provider it declares; a missing tier, connection or framework tier, an unregistered or twice-registered provider and a placeholder in a field the provider uses refused. No model is reached |
 | `AgentCardTests` · `StartupValidationTests` · `PeerFederationTests` · `ConversationApiTests` | none | Wire contracts and boot refusals, asserted deterministically. **Every literal is spelled out in the test** rather than read from `Constants`: a test comparing a constant against itself asserts that a constant equals a constant, while the point is to notice a published document changing shape under whoever consumes it |
 | `FederationTests` | — | Two Morganas, one consulting the other — the only test where the card is written by a Morgana, read by a Morgana and the token one mints is proven by the other |
@@ -142,7 +146,7 @@ instructions read together — **fix the text, never lower the threshold**).
 The harness owns **no `Morgana:` configuration and no secrets**. It shares `Morgana.Web`'s
 `UserSecretsId`, resolves that project's settings plus the shared store and republishes the result
 to the host as environment variables. On top it overrides, per run: a throwaway storage path;
-exporters off; rate and dust limiting off; the guard rail per `Harness:EnableGuardrail`; a random key
+exporters off; rate and dust limiting off; the guard rail per `Harness:EnableUserGuardrail`; a random key
 for the `harness` issuer; one partner appended, admitted to a single agent.
 
 The repository must carry the `harness` entry under `Morgana:Authentication:Issuers` or the fixture

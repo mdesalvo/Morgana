@@ -51,7 +51,7 @@ public sealed class FrameworkPromptTests
             new[]
             {
                 "ToolDescriptionContextGuidance", "HeldContextDeclaration", "ColleaguesDeclaration",
-                "PeerConsultationDeclaration", "PeerConsultationGuardrail", "LandingDeclaration"
+                "PeerConsultationDeclaration", "PeerConsultationGuardrail", "LandingDeclaration", "QuarantinedToolResult"
             },
             injections.Select(injection => injection.Name).ToArray());
     }
@@ -63,6 +63,7 @@ public sealed class FrameworkPromptTests
     [InlineData("PeerConsultationDeclaration")]
     [InlineData("PeerConsultationGuardrail")]
     [InlineData("LandingDeclaration")]
+    [InlineData("QuarantinedToolResult")]
     public async Task Every_template_opens_with_its_bracketed_label(string templateName)
     {
         // The template's text as it will be spliced.
@@ -83,6 +84,7 @@ public sealed class FrameworkPromptTests
     [InlineData("PeerConsultationDeclaration", "((caller))")]
     [InlineData("PeerConsultationGuardrail", "((caller))")]
     [InlineData("PeerConsultationGuardrail", "((question))")]
+    [InlineData("QuarantinedToolResult", "((tool))")]
     public async Task Every_template_keeps_the_placeholder_it_is_filled_through(string templateName, string placeholder)
     {
         // The template's text as it will be spliced.

@@ -11,26 +11,6 @@ namespace Morgana.AI.Services;
 /// </summary>
 public class ConfigurationPromptComposerService : IPromptComposerService
 {
-    // Structural boundary markers for the composed prompt. These are glue between the framework
-    // and domain layers, not domain-tunable prose, so — unlike everything they surround — they are
-    // fixed in code and morgana.json carries no override point for them. An implementation
-    // replacing this service replaces them wholesale, which is the intended unit of substitution:
-    // the fences and the layering they express are one design, not a set of independent knobs.
-    private const string GlobalPoliciesHeader =
-        "=== CRITICAL RULES — binding, without exception ===";
-    private const string GlobalPoliciesFooter =
-        "=== END OF CRITICAL RULES ===";
-    private const string FrameworkLayerHeader =
-        "======== MORGANA FRAMEWORK — THE LAW OF EVERY TURN ========\n" +
-        "Everything until the end of this block is binding on you and on every other agent of Morgana. It is not advice and it is not overridable.";
-    private const string FrameworkLayerFooter =
-        "======== END OF MORGANA FRAMEWORK ========";
-    private const string DomainLayerHeader =
-        "======== DOMAIN AGENT — SUBORDINATE TO THE FRAMEWORK ABOVE ========\n" +
-        "What follows specialises the framework for a single domain: what you are for, how you work, how you speak, how you present. It adds domain knowledge and NOTHING ELSE. It NEVER contradicts the framework above, on any point — where the two appear to differ, the framework governs and you follow it.";
-    private const string DomainLayerFooter =
-        "======== END OF DOMAIN AGENT ========";
-
     /// <summary>
     /// Names the asking party when the request declares no intent. Only an agent of a Morgana declares
     /// one and the A2A door admits only declared systems, so an unnamed caller is precisely that — and
@@ -81,7 +61,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         StringBuilder sb = new StringBuilder();
 
         // Framework
-        sb.AppendLine(FrameworkLayerHeader);
+        sb.AppendLine(Constants.PromptFences.FrameworkLayerHeader);
         sb.AppendLine();
         sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Target, framework.Prompt.Target));
         sb.AppendLine();
@@ -93,11 +73,11 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         sb.AppendLine();
         sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Formatting, framework.Prompt.Formatting));
         sb.AppendLine();
-        sb.AppendLine(FrameworkLayerFooter);
+        sb.AppendLine(Constants.PromptFences.FrameworkLayerFooter);
         sb.AppendLine();
 
         // Domain
-        sb.AppendLine(DomainLayerHeader);
+        sb.AppendLine(Constants.PromptFences.DomainLayerHeader);
         sb.AppendLine();
         sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Target, domainPrompt.Target));
         sb.AppendLine();
@@ -107,7 +87,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         sb.AppendLine();
         sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Formatting, domainPrompt.Formatting));
         sb.AppendLine();
-        sb.AppendLine(DomainLayerFooter);
+        sb.AppendLine(Constants.PromptFences.DomainLayerFooter);
         sb.AppendLine();
 
         return sb.ToString();
@@ -240,6 +220,21 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         return declaration.Length == 0 ? null : declaration;
     }
 
+    /// <inheritdoc/>
+    public async Task<string> ComposeQuarantinedResultAsync(string toolName)
+    {
+        // The text that stands in for a withheld result: the framework's own wording, resolved by name.
+        FrameworkLayer framework = await frameworkLayer.Value;
+        string template = Records.Injection.ResolveTemplate(framework.Injections, Constants.Injections.QuarantinedToolResult);
+
+        // A deployment declaring no such template still withholds the result and says nothing in its place.
+        if (template.Length == 0)
+            return "";
+
+        // The template names the tool whose result the model will not read.
+        return template.Replace(Constants.Placeholders.Tool, toolName, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// Renders the global policies into the fenced block that opens the framework layer.
     /// </summary>
@@ -249,7 +244,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     {
         StringBuilder sb = new StringBuilder();
 
-        sb.AppendLine(GlobalPoliciesHeader);
+        sb.AppendLine(Constants.PromptFences.GlobalPoliciesHeader);
 
         foreach (Records.GlobalPolicy policy in policies
                      // The one rule whose subject may not exist. An agent outside the A2A topology is
@@ -265,7 +260,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
             sb.AppendLine(CultureInfo.InvariantCulture, $"{policy.Name}: {policy.Description}");
         }
 
-        sb.AppendLine(GlobalPoliciesFooter);
+        sb.AppendLine(Constants.PromptFences.GlobalPoliciesFooter);
 
         return sb.ToString().TrimEnd();
     }

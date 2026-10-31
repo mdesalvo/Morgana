@@ -223,7 +223,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | Service | Interface | Purpose |
 |---|---|---|
 | `LLMClassifierService` | `IClassifierService` | LLM intent classification; falls back to `"other"` at confidence 0, marked as a classification error |
-| `LLMGuardRailService` | `IGuardRailService` | LLM policy check. **Fails open** |
+| `LLMGuardRailService` | `IGuardRailService` | LLM policy check on the user's message, deterministic check on tool results. **Fails open** |
 | `LLMPresenterService` | `IPresenterService` | Welcome message and its reintroduction, in Morgana's personality; the buttons are the intents' own. Never throws |
 | `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
 | `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
@@ -299,7 +299,9 @@ every round trip. `Scope` still decides whether the *tool* gets its template.
 
 Parameter descriptions reach the model **only** through the JSON schema, via
 `AIJsonSchemaCreateOptions.ParameterDescriptionProvider`. MCP tools never pass through
-`MorganaToolAdapter`: they arrive carrying their server's schema and Morgana adapts nothing.
+`MorganaToolAdapter`: they arrive carrying their server's schema and Morgana adapts nothing. They
+enter last, so one whose name collides, in any case, with a tool of Morgana or of the domain, with
+the `consult_` prefix or with another MCP tool is refused.
 
 **What a tool RETURNS is prose too and it is the one layer with no declared precedence** — it
 arrives mid-turn from outside the composed prompt. So a return value states **facts** (what was
@@ -318,8 +320,8 @@ Two layers in `ComposeAgentInstructionsAsync`:
 composition shows `[TARGET]` twice with nothing saying which is which. **The labels are the
 composer's**: `Constants.SectionLabels` puts them in front of each section through
 `Records.Prompt.Labeled` wherever a prompt is composed, so no JSON writes them and none can be forgotten. The headers and footers are
-`const string` fields in `ConfigurationPromptComposerService`, **not** configuration: they are one
-design, substitutable only by replacing `IPromptComposerService` itself.
+`Constants.PromptFences`, **not** configuration: they are one design, substitutable only by
+replacing `IPromptComposerService` itself. The tool-result guard refuses a result forging them.
 
 **The domain layer's subordination is total, which is what makes it cheap.** An agent restating a
 framework rule is not reinforcement, it is a second voice claiming the same authority. A domain agent
@@ -344,10 +346,11 @@ entry is follows from the array it lives in**, never from a field inside it:
 - **`Injections`** — templates, not rules: prose with a single splice site each, never rendered among
   the policies where they would instruct against nothing. No `Priority`: each is fetched by name.
   `ToolDescriptionContextGuidance` (into a tool's own description), `HeldContextDeclaration` (per
-  turn, the variables the session holds — the one entry carrying a *fact* rather than a rule),
+  turn, the variables the session holds — a *fact* rather than a rule),
   `ColleaguesDeclaration` (closing a peer-capable agent's instructions),
   `PeerConsultationDeclaration` and `PeerConsultationGuardrail` (in front of a colleague's question),
-  `LandingDeclaration` (per turn, on the turn the user chose the agent by pressing Morgana's button).
+  `LandingDeclaration` (per turn, on the turn the user chose the agent by pressing Morgana's button),
+  `QuarantinedToolResult` (in place of a tool result the guard withheld — a fact as well).
 
 Every injection opens with a **bracketed all-caps label at the head of its first line** — the idiom
 the prompt layers already use for `[TARGET]`. A template arrives spliced into somebody else's text,
@@ -431,7 +434,10 @@ partner, then `OutboundPolicy.Enabled`, then `InboundPolicy.Enabled`.
 Spans `morgana.turn`, `morgana.guard`, `morgana.classifier`, `morgana.router`, `morgana.agent`, with
 `agent.tools_invoked` carrying tool names and **never** arguments. HTTP Activity context arrives as
 an `ActivityLink`. Metric `morgana.dust.consumed` tagged by role, beside MEAI's `gen_ai.usage.*`.
-Exporters configured under `Morgana:OpenTelemetry:Exporters`.
+Metric `morgana.security.events` counts what happens at every guarded door, tagged by door, outcome
+and the layer that decided (`GuardVerdictSource`), a fail-open included; a withheld tool result is
+also an event on the span of its turn. **Never a tool name on the metric**: an MCP server chooses its
+names. Exporters configured under `Morgana:OpenTelemetry:Exporters`.
 
 ## Startup Validation
 
@@ -459,7 +465,7 @@ fault reaches a user as a conversation that never answers, on a host that passed
 |---|---|
 | `Morgana:LanguageModels:Tiers` | The three tiers: provider, connection and model of each |
 | `Morgana:AgentToAgent` | `Enabled`, `MaxRoundsPerTurn`, `PublicUrl` (declared only where a binding cannot answer for the address), `Partners[]`. Consultation waits are one **ladder** derived from `ActorSystem:TimeoutSeconds`, stated once in `Records.PeerConsultationWaits` |
-| `Morgana:ActorSystem` | `Tier` (the framework actors' tier, mandatory), `TimeoutSeconds`, `EnableGuardrail`, `IntentCollisionThreshold` |
+| `Morgana:ActorSystem` | `Tier` (the framework actors' tier, mandatory), `TimeoutSeconds`, `EnableUserGuardrail`, `EnableToolGuardrail`, `IntentCollisionThreshold` |
 | `Morgana:AdaptiveMessaging` | `EnableStreamingResponse`, `RichFeaturesMinLength` |
 | `Morgana:ConversationPersistence` | `StoragePath`, `EncryptionKey` (AES-256, base64, 32 bytes) |
 | `Morgana:RateLimiting` · `:DustLimiting` | Limits and their authored error messages. A model's price lives in its provider plugin |

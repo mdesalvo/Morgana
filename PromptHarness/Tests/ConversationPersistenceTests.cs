@@ -35,7 +35,7 @@ namespace PromptHarness.Tests;
 /// reaches an agent and two the agent was waiting for. Morgana answers the first two herself, which is
 /// what puts her voice on record with no agent in the conversation at all.</para>
 ///
-/// <para><strong>Runs under <c>Harness__EnableGuardrail=true</c>, alone.</strong> The guard is off
+/// <para><strong>Runs under <c>Harness__EnableUserGuardrail=true</c>, alone.</strong> The guard is off
 /// everywhere else and a refused turn cannot be staged without it. Nothing is mocked to avoid the
 /// knob: a persistence group that wrote its own rows would assert against its own idea of what the
 /// pipeline stores, which is the one thing it exists to check.</para>

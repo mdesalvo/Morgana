@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
@@ -71,6 +72,12 @@ public class MorganaAgentAdapter
     protected readonly IAgentDirectoryService agentDirectoryService;
 
     /// <summary>
+    /// Screens every tool result the agent's model is about to read, keeping a result that conceals a
+    /// purpose against the assistant out of the tool loop and out of the session that would replay it.
+    /// </summary>
+    protected readonly IGuardRailService guardRailService;
+
+    /// <summary>
     /// Application configuration, read for the peer-consultation budget and timeout.
     /// </summary>
     protected readonly IConfiguration configuration;
@@ -114,6 +121,7 @@ public class MorganaAgentAdapter
     /// <param name="chatReducerService">Service for reducing context window sent to LLM</param>
     /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
     /// <param name="agentDirectoryService">Supplies the card of each declared colleague and resolves it into a callable agent</param>
+    /// <param name="guardRailService">Screens every tool result before the agent's model reads it</param>
     /// <param name="configuration">Application configuration, read for the peer-consultation budget and timeout</param>
     /// <param name="logger">Logger instance for diagnostics</param>
     public MorganaAgentAdapter(
@@ -125,6 +133,7 @@ public class MorganaAgentAdapter
         HistoryReducerService chatReducerService,
         IDustLimitService dustLimitService,
         IAgentDirectoryService agentDirectoryService,
+        IGuardRailService guardRailService,
         IConfiguration configuration,
         ILogger logger)
     {
@@ -136,6 +145,7 @@ public class MorganaAgentAdapter
         this.chatReducerService = chatReducerService;
         this.dustLimitService = dustLimitService;
         this.agentDirectoryService = agentDirectoryService;
+        this.guardRailService = guardRailService;
         this.configuration = configuration;
         this.logger = logger;
 
@@ -259,8 +269,10 @@ public class MorganaAgentAdapter
         //     design — a server that is down or misconfigured is logged per-server and skipped, never aborting
         //     agent creation (an MCP-only agent simply ends up with no tools rather than
         //     failing to exist). They stay apart from the native adapter because they need
-        //     nothing from it: each one arrives already an AIFunction.
-        List<AIFunction> mcpTools = await RegisterMCPToolsAsync(agentType);
+        //     nothing from it: each one arrives already an AIFunction. An MCP tool whose name collides
+        //     with a tool of Morgana, of the domain, with a colleague's prefix or with another MCP tool
+        //     is refused, since MCP tools enter last.
+        List<AIFunction> mcpTools = await RegisterMCPToolsAsync(agentType, intentAttribute.Intent, [.. agentTools.Select(tool => tool.Name)]);
 
         // 6c) Collect the colleagues this agent declares it may consult. Like MCP tools they arrive
         //     already AIFunctions and bypass the native adapter entirely — they are not declared in
@@ -328,6 +340,11 @@ public class MorganaAgentAdapter
                     Tools = [.. await morganaToolAdapter.CreateAllFunctionsAsync(), .. mcpTools, .. peerAgents]
                 }
             });
+
+        // 9b) Every tool result passes the guard before the model reads it. Switched off, the agent
+        //     is exactly the one assembled above.
+        if (ToolGuardrailEnabled)
+            aiAgent = GuardToolResults(aiAgent, agentType, intentAttribute.Intent, conversationId, sessionAccessor, morganaAIContextProvider);
 
         // 10) Return all three: the caller (MorganaAgent subclass) keeps the provider and
         //     history-provider handles to drive context/history across turns — the agent
@@ -525,6 +542,141 @@ public class MorganaAgentAdapter
     /// </remarks>
     private bool PeerConsultationEnabled
         => configuration.GetValue("Morgana:AgentToAgent:Enabled", true);
+
+    /// <summary>
+    /// True when tool results are screened before the agent's model reads them.
+    /// </summary>
+    private bool ToolGuardrailEnabled
+        => configuration.GetValue("Morgana:ActorSystem:EnableToolGuardrail", true);
+
+    /// <summary>
+    /// Wraps the agent so that every tool result but the base tools' and a local colleague's passes the
+    /// guard before the model reads it and a refused result is replaced by the fact of its quarantine.
+    /// </summary>
+    /// <param name="agent">The agent as assembled, whose tool loop is to be guarded.</param>
+    /// <param name="agentType">The agent's class, whose declared colleagues are exempt from the guard.</param>
+    /// <param name="agentIntent">The intent the agent serves, tagged on every security event it records.</param>
+    /// <param name="conversationId">The conversation the agent serves, named in the guard's findings.</param>
+    /// <param name="sessionAccessor">Hands back the agent's live session, where the quarantine is recorded.</param>
+    /// <param name="contextProvider">Reads and writes the quarantine on the live session.</param>
+    private AIAgent GuardToolResults(
+        AIAgent agent,
+        Type agentType,
+        string agentIntent,
+        string conversationId,
+        Func<AgentSession?> sessionAccessor,
+        MorganaAIContextProvider contextProvider)
+    {
+        // The base tools hand back values that already crossed a guarded door and a colleague of this
+        // installation answers from its own guarded tools: neither is screened again.
+        HashSet<string> unguardedToolNames =
+        [
+            .. morganaTools.Select(tool => tool.Name),
+            .. agentType.GetCustomAttributes<ConsultsAgentAttribute>()
+                .Where(attribute => attribute.Instance is null)
+                .Select(attribute => ToFunctionName(new Records.PeerReference(attribute.Intent, null)))
+        ];
+
+        // The guard joins the agent's tool loop through the agent framework's own function-invocation
+        // middleware, which wraps every call of every run, streamed or not.
+        return new AIAgentBuilder(agent)
+            .Use(async (_, invocation, next, cancellationToken) =>
+            {
+                // The function the model called.
+                string toolName = invocation.Function.Name;
+
+                // An unguarded tool runs and answers as it always did.
+                if (unguardedToolNames.Contains(toolName))
+                    return await next(invocation, cancellationToken);
+
+                // The session where this turn's quarantine is recorded; absent when the agent has none yet.
+                AgentSession? session = sessionAccessor();
+
+                // A tool already refused in this turn is not run again: whatever it would return is
+                // withheld the same way.
+                if (session is not null && ReadQuarantinedTools(session, contextProvider).Contains(toolName, StringComparer.Ordinal))
+                {
+                    logger.LogInformation(
+                        "Tool {ToolName} withheld without running for conversation {ConversationId}: its result was withheld earlier in this turn",
+                        toolName, conversationId);
+
+                    // Counts the tool that was kept from running: the model asked again for a result already refused.
+                    Telemetry.SecurityEvents.Add(1,
+                        new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.Tool),
+                        new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.WithheldWithoutRunning),
+                        new KeyValuePair<string, object?>(Telemetry.AgentIntent, agentIntent));
+
+                    // The event lands on the span current while the tool runs (the agent's own or a child of it)
+                    // so the trace of the turn shows what was withheld and why without the text itself.
+                    Activity.Current?.AddEvent(new ActivityEvent(
+                        Telemetry.EventToolWithheld,
+                        tags: new ActivityTagsCollection
+                        {
+                            [Telemetry.ToolName] = toolName,
+                            [Telemetry.SecurityOutcome] = Telemetry.SecurityOutcomes.WithheldWithoutRunning
+                        }));
+
+                    return await promptComposerService.ComposeQuarantinedResultAsync(toolName);
+                }
+
+                // The tool runs; an exception is the tool loop's to handle as it always was.
+                object? result = await next(invocation, cancellationToken);
+
+                // The tool loop hands results on as JSON (a native tool's string and a colleague's answer
+                // arrive as a JSON element and an MCP tool's as a content block) so the guard reads what
+                // the provider would.
+                string resultText = JsonSerializer.Serialize(result, AIJsonUtilities.DefaultOptions);
+
+                // The guard's verdict on what the tool returned.
+                Records.GuardRailResult verdict = await guardRailService.CheckToolResultAsync(conversationId, toolName, resultText);
+
+                // A compliant result reaches the model untouched.
+                if (verdict.Compliant)
+                {
+                    // A result the guard could not check was admitted by default: a guard failing open
+                    // again and again may be under attack.
+                    if (verdict.Source == Records.GuardVerdictSource.FailOpen)
+                        Telemetry.SecurityEvents.Add(1,
+                            new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.Tool),
+                            new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.FailedOpen),
+                            new KeyValuePair<string, object?>(Telemetry.SecuritySource, Records.GuardVerdictSource.FailOpen.ToString()),
+                            new KeyValuePair<string, object?>(Telemetry.AgentIntent, agentIntent));
+
+                    return result;
+                }
+
+                // Counts the refusal by the layer that decided it.
+                Telemetry.SecurityEvents.Add(1,
+                    new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.Tool),
+                    new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Withheld),
+                    new KeyValuePair<string, object?>(Telemetry.SecuritySource, verdict.Source.ToString()),
+                    new KeyValuePair<string, object?>(Telemetry.AgentIntent, agentIntent));
+
+                // The event lands on the span current while the tool runs (the agent's own or a child of it)
+                // so the trace of the turn shows what was withheld and why without the text itself.
+                Activity.Current?.AddEvent(new ActivityEvent(
+                    Telemetry.EventToolWithheld,
+                    tags: new ActivityTagsCollection
+                    {
+                        [Telemetry.ToolName] = toolName,
+                        [Telemetry.SecurityOutcome] = Telemetry.SecurityOutcomes.Withheld,
+                        [Telemetry.SecuritySource] = verdict.Source.ToString(),
+                        [Telemetry.SecurityFinding] = verdict.Violation ?? ""
+                    }));
+
+                // The tool is recorded as withheld for the rest of the turn.
+                if (session is not null)
+                {
+                    string[] quarantinedToolNames = [.. ReadQuarantinedTools(session, contextProvider), toolName];
+                    await contextProvider.SetVariableAsync(session, Constants.ContextKeys.QuarantinedTools, quarantinedToolNames);
+                }
+
+                // The model reads the fact of the quarantine in place of the result and the session
+                // keeps that fact, never the refused text.
+                return await promptComposerService.ComposeQuarantinedResultAsync(toolName);
+            })
+            .Build();
+    }
 
     /// <summary>
     /// Composes the agent's two-layer instructions and closes them with the colleagues it holds.
@@ -799,6 +951,20 @@ public class MorganaAgentAdapter
         };
 
     /// <summary>
+    /// Reads the tools withheld in this turn, tolerating the <see cref="JsonElement"/> form a value
+    /// takes once its session has been persisted and reloaded.
+    /// </summary>
+    private static string[] ReadQuarantinedTools(AgentSession session, MorganaAIContextProvider contextProvider)
+        => contextProvider.GetFrameworkKeyValue(session, Constants.ContextKeys.QuarantinedTools) switch
+        {
+            string[] toolNames => toolNames,
+            JsonElement { ValueKind: JsonValueKind.Array } element => [.. element.EnumerateArray()
+                .Where(item => item.ValueKind == JsonValueKind.String)
+                .Select(item => item.GetString() ?? "")],
+            _ => []
+        };
+
+    /// <summary>
     /// Takes what a colleague reports having spent off its answer and charges it home when that
     /// colleague was published elsewhere.
     /// </summary>
@@ -866,14 +1032,49 @@ public class MorganaAgentAdapter
         return $"{Constants.AgentToAgent.PeerFunctionNamePrefix}{new string([.. peerName.Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_')])}";
     }
 
+    /// <summary>Names why an MCP tool may not join the agent; null when its name is free.</summary>
+    /// <remarks>
+    /// An MCP tool enters last, after Morgana's own tools, the domain's and the colleagues', so it may
+    /// never take a name that one of them holds or may hold: a duplicate name would have the provider
+    /// refuse the agent's whole tool list and a borrowed name would inherit an exemption granted by name.
+    /// Case is ignored so a lookalike name is refused too. Public so the rule can be asserted without a
+    /// server, as <see cref="ToFunctionName"/> is public so a startup check derives the same name.
+    /// </remarks>
+    /// <param name="mcpToolName">Name the MCP server declares for the tool.</param>
+    /// <param name="agentToolNames">The names of the agent's tools from morgana.json and agents.json.</param>
+    /// <param name="admittedMCPToolNames">The MCP tools already admitted for this agent.</param>
+    /// <returns>The reason the name is refused; null when it is free.</returns>
+    public static string? FindMCPToolNameConflict(
+        string mcpToolName,
+        IReadOnlyCollection<string> agentToolNames,
+        IReadOnlyCollection<string> admittedMCPToolNames)
+    {
+        // First rule: a tool of Morgana or of the domain already holds the name.
+        if (agentToolNames.Contains(mcpToolName, StringComparer.OrdinalIgnoreCase))
+            return "takes the name of a tool of Morgana or of the agent's domain";
+
+        // Second rule: the prefix is reserved for the colleagues' functions.
+        if (mcpToolName.StartsWith(Constants.AgentToAgent.PeerFunctionNamePrefix, StringComparison.OrdinalIgnoreCase))
+            return "takes the prefix Morgana reserves for colleagues";
+
+        // Third rule: an MCP tool admitted earlier already holds the name.
+        if (admittedMCPToolNames.Contains(mcpToolName, StringComparer.OrdinalIgnoreCase))
+            return "takes the name of a tool another MCP source already gave the agent";
+
+        // The name collides with nothing.
+        return null;
+    }
+
     /// <summary>
     /// Discovers tools from every MCP server declared on the agent.
     /// Collects [UsesMCPServer] attributes and discovers tools from each.
     /// McpClientTool instances are already AIFunctions; no schema conversion applied.
     /// </summary>
     /// <param name="agentType">Agent type to inspect for [UsesMCPServer] attributes</param>
+    /// <param name="agentIntent">The intent the agent serves, tagged on the security event of a refused tool</param>
+    /// <param name="agentToolNames">Names of the agent's tools from morgana.json and agents.json, which an MCP tool may not take</param>
     /// <returns>Discovered tools as AIFunctions, empty if no servers declared</returns>
-    private async Task<List<AIFunction>> RegisterMCPToolsAsync(Type agentType)
+    private async Task<List<AIFunction>> RegisterMCPToolsAsync(Type agentType, string agentIntent, IReadOnlyCollection<string> agentToolNames)
     {
         // An agent may declare several [UsesMCPServer] (multiple servers, mixed
         // Http/Stdio) — collect them all, not just the first.
@@ -900,7 +1101,36 @@ public class MorganaAgentAdapter
             // server costs that server's tools, nothing more.
             try
             {
-                mcpTools.AddRange(await DiscoverMCPToolsFromServerAsync(attribute));
+                // The server's whole list, to be admitted tool by tool.
+                IList<AIFunction> serverTools = await DiscoverMCPToolsFromServerAsync(attribute);
+
+                foreach (AIFunction serverTool in serverTools)
+                {
+                    // The reason this tool's name collides with a tool that entered before it: null when free.
+                    string? conflictReason = FindMCPToolNameConflict(
+                        serverTool.Name,
+                        agentToolNames,
+                        [.. mcpTools.Select(admittedTool => admittedTool.Name)]);
+
+                    // A colliding tool is dropped alone: the rest of the server's list still serves the agent.
+                    if (conflictReason is not null)
+                    {
+                        logger.LogWarning(
+                            "MCP tool {McpToolName} from server {ServerCommand} refused for agent {AgentTypeName}: it {Reason}",
+                            serverTool.Name, attribute.Command, agentType.Name, conflictReason);
+
+                        // Counts the refusal without the tool's name: an MCP server chooses its names.
+                        // No span event: an agent is created outside any turn.
+                        Telemetry.SecurityEvents.Add(1,
+                            new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.MCPAdmission),
+                            new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Refused),
+                            new KeyValuePair<string, object?>(Telemetry.AgentIntent, agentIntent));
+                        continue;
+                    }
+
+                    // The name is free, so the tool joins the agent.
+                    mcpTools.Add(serverTool);
+                }
             }
             catch (Exception ex)
             {

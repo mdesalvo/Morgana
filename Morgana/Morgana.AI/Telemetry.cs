@@ -23,6 +23,7 @@ namespace Morgana.AI;
 ///   ├── Activity: morgana.router     ← agent selection marker (new requests only)
 ///   └── Activity: morgana.agent      ← agent execution (includes streaming)
 ///       event: "first_chunk"         ← TTFT marker
+///       event: "morgana.security.tool_withheld" ← a tool result kept from the model
 /// </code>
 ///
 /// <para><strong>Context Propagation:</strong></para>
@@ -67,6 +68,14 @@ public static class Telemetry
     /// <summary>Counts messages rejected by the guard.</summary>
     public static readonly Counter<long> GuardRejectionCounter =
         MorganaMeter.CreateCounter<long>("morgana.guard.rejections", description: "Number of messages rejected by content moderation");
+
+    /// <summary>
+    /// Counts security events at Morgana's doors: messages rejected, tool results withheld, MCP tools refused and checks that failed open.
+    /// Tagged by door, outcome, deciding layer and agent intent, never by tool name: an MCP server chooses its names
+    /// and a hostile one would multiply the metric's series without bound.
+    /// </summary>
+    public static readonly Counter<long> SecurityEvents =
+        MorganaMeter.CreateCounter<long>("morgana.security.events", description: "Security events at Morgana's doors: messages rejected, tool results withheld, MCP tools refused and checks that failed open");
 
     /// <summary>End-to-end turn duration in milliseconds (from UserMessage to response).</summary>
     public static readonly Histogram<double> TurnDuration =
@@ -141,6 +150,28 @@ public static class Telemetry
 
     /// <summary>Description of the policy violation when guard.compliant is false.</summary>
     public const string GuardViolation = "guard.violation";
+
+    /// <summary>The layer that decided the user's message.</summary>
+    public const string GuardSource = "guard.source";
+
+    // ==============================================================================
+    // ATTRIBUTE NAMES — SECURITY
+    // ==============================================================================
+
+    /// <summary>Where the event happened; one of <see cref="SecurityDoors"/>.</summary>
+    public const string SecurityDoor = "security.door";
+
+    /// <summary>What happened there; one of <see cref="SecurityOutcomes"/>.</summary>
+    public const string SecurityOutcome = "security.outcome";
+
+    /// <summary>The layer that decided.</summary>
+    public const string SecuritySource = "security.source";
+
+    /// <summary>The guard's clinical finding, never the text it judged.</summary>
+    public const string SecurityFinding = "security.finding";
+
+    /// <summary>The function the model called.</summary>
+    public const string ToolName = "tool.name";
 
     // ==============================================================================
     // ATTRIBUTE NAMES — CLASSIFIER
@@ -233,4 +264,42 @@ public static class Telemetry
 
     /// <summary>Event emitted on the agent activity when the first streaming chunk arrives.</summary>
     public const string EventFirstChunk = "first_chunk";
+
+    /// <summary>Event added to the span current when a tool's result is withheld.</summary>
+    public const string EventToolWithheld = "morgana.security.tool_withheld";
+
+    /// <summary>The values of <see cref="SecurityDoor"/>.</summary>
+    public static class SecurityDoors
+    {
+        /// <summary>The user's message.</summary>
+        public const string User = "user";
+
+        /// <summary>A tool result before the model reads it.</summary>
+        public const string Tool = "tool";
+
+        /// <summary>An MCP tool joining an agent.</summary>
+        public const string MCPAdmission = "mcp_admission";
+
+        /// <summary>The provider refusing an agent's own request.</summary>
+        public const string Agent = "agent";
+    }
+
+    /// <summary>The values of <see cref="SecurityOutcome"/>.</summary>
+    public static class SecurityOutcomes
+    {
+        /// <summary>A request refused: the user's message by the guard, an agent's own request by the provider.</summary>
+        public const string Rejected = "rejected";
+
+        /// <summary>A tool result kept from the model.</summary>
+        public const string Withheld = "withheld";
+
+        /// <summary>A tool not run because its result was withheld earlier in the turn.</summary>
+        public const string WithheldWithoutRunning = "withheld_without_running";
+
+        /// <summary>An MCP tool kept out of an agent.</summary>
+        public const string Refused = "refused";
+
+        /// <summary>A check that could not decide and admitted.</summary>
+        public const string FailedOpen = "failed_open";
+    }
 }

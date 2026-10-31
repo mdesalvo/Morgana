@@ -368,7 +368,7 @@ public class ConversationSupervisorActor : MorganaActor
         // The compliant-or-not verdict actually arriving from GuardActor — the two handlers
         // below (Status.Failure, ReceiveTimeout) cover the other ways this round-trip can end:
         // GuardActor throwing, or it simply never answering in time.
-        ReceiveAsync<Records.GuardCheckResponse>(async response => {
+        ReceiveAsync<Records.GuardRailResult>(async response => {
             // Cancels the guard-check window now that GuardActor actually answered — this
             // handler is about to Become() into AwaitingClassification, AwaitingFollowUpResponse
             // or Idle on rejection; each of those arms (or clears) its own timeout
@@ -378,6 +378,9 @@ public class ConversationSupervisorActor : MorganaActor
 
             // Close and dispose the guard span by tracking compliance and the eventually reported violation
             guardSpan?.SetTag(Telemetry.GuardCompliant, response.Compliant);
+
+            // Records which layer decided, so a trace tells a judgment from an admission by default.
+            guardSpan?.SetTag(Telemetry.GuardSource, response.Source.ToString());
             if (!response.Compliant && response.Violation != null)
                 guardSpan?.SetTag(Telemetry.GuardViolation, response.Violation);
             if (guardSpan is not null)
@@ -419,6 +422,12 @@ public class ConversationSupervisorActor : MorganaActor
                 // generic per-turn counter CloseTurnSpan emits below.
                 Telemetry.GuardRejectionCounter.Add(1);
 
+                // Counts the rejection at the user's door with the layer that decided it.
+                Telemetry.SecurityEvents.Add(1,
+                    new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.User),
+                    new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Rejected),
+                    new KeyValuePair<string, object?>(Telemetry.SecuritySource, response.Source.ToString()));
+
                 // Closes the turn span, tagging it with whatever intent ctx.Classification currently carries.
                 CloseTurnSpan(intent: ctx.Classification?.Intent, completed: false);
 
@@ -430,6 +439,14 @@ public class ConversationSupervisorActor : MorganaActor
             }
 
             actorLogger.Info("Message passed guard check");
+
+            // An admission the guard could not judge is evidence too: a guard failing open again
+            // and again may be under attack.
+            if (response.Source == Records.GuardVerdictSource.FailOpen)
+                Telemetry.SecurityEvents.Add(1,
+                    new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.User),
+                    new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.FailedOpen),
+                    new KeyValuePair<string, object?>(Telemetry.SecuritySource, Records.GuardVerdictSource.FailOpen.ToString()));
 
             // An active agent from a prior turn means this message is the next turn of an
             // ongoing exchange, not a new request to classify — classification is skipped
@@ -505,6 +522,12 @@ public class ConversationSupervisorActor : MorganaActor
                 guardSpan?.AddException(cause);
             guardSpan?.Dispose();
             guardSpan = null;
+
+            // Counts the admission the guard could not judge: an outage in moderation is a gap an attacker can use.
+            Telemetry.SecurityEvents.Add(1,
+                new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.User),
+                new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.FailedOpen),
+                new KeyValuePair<string, object?>(Telemetry.SecuritySource, Records.GuardVerdictSource.FailOpen.ToString()));
 
             // Failing open doesn't change the routing decision: an active agent from a prior turn
             // still means this message continues that follow-up exchange, exactly like the
@@ -1218,6 +1241,18 @@ public class ConversationSupervisorActor : MorganaActor
 
         // Counts this the same as a guard rejection: a content-policy block either way.
         Telemetry.GuardRejectionCounter.Add(1);
+
+        // The provider's shield fired on an agent's own request, which a poisoned tool result can
+        // provoke. The agent tag is passed only when an agent was active.
+        List<KeyValuePair<string, object?>> securityTags =
+        [
+            new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.Agent),
+            new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Rejected),
+            new KeyValuePair<string, object?>(Telemetry.SecuritySource, Records.GuardVerdictSource.ProviderFilter.ToString())
+        ];
+        if (activeAgentIntent != null)
+            securityTags.Add(new KeyValuePair<string, object?>(Telemetry.AgentIntent, activeAgentIntent));
+        Telemetry.SecurityEvents.Add(1, securityTags.ToArray());
 
         // Closes the turn span, tagged with whatever agent was active when the violation was flagged.
         CloseTurnSpan(intent: activeAgentIntent, completed: false);

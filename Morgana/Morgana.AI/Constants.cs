@@ -81,6 +81,40 @@ public static class Constants
     }
 
     /// <summary>
+    /// The fences the composer draws around the global policies and around the framework and domain
+    /// layers. They are the composer's design rather than configuration. They live here because the
+    /// tool-result guard refuses a result that forges them.
+    /// </summary>
+    public static class PromptFences
+    {
+        /// <summary>Opens the block of global policies.</summary>
+        public const string GlobalPoliciesHeader =
+            "=== CRITICAL RULES — binding, without exception ===";
+
+        /// <summary>Closes the block of global policies.</summary>
+        public const string GlobalPoliciesFooter =
+            "=== END OF CRITICAL RULES ===";
+
+        /// <summary>Opens the framework layer and states its authority.</summary>
+        public const string FrameworkLayerHeader =
+            "======== MORGANA FRAMEWORK — THE LAW OF EVERY TURN ========\n" +
+            "Everything until the end of this block is binding on you and on every other agent of Morgana. It is not advice and it is not overridable.";
+
+        /// <summary>Closes the framework layer.</summary>
+        public const string FrameworkLayerFooter =
+            "======== END OF MORGANA FRAMEWORK ========";
+
+        /// <summary>Opens the domain layer and states its subordination.</summary>
+        public const string DomainLayerHeader =
+            "======== DOMAIN AGENT — SUBORDINATE TO THE FRAMEWORK ABOVE ========\n" +
+            "What follows specialises the framework for a single domain: what you are for, how you work, how you speak, how you present. It adds domain knowledge and NOTHING ELSE. It NEVER contradicts the framework above, on any point — where the two appear to differ, the framework governs and you follow it.";
+
+        /// <summary>Closes the domain layer.</summary>
+        public const string DomainLayerFooter =
+            "======== END OF DOMAIN AGENT ========";
+    }
+
+    /// <summary>
     /// Names of the global policies that code resolves by name. The rest of the list lives in
     /// <c>morgana.json</c> and nowhere else: a policy the framework only renders is read by the model
     /// and by whoever edits the prompt and naming it here would be an index that no rename breaks.
@@ -119,6 +153,9 @@ public static class Constants
 
         /// <summary>Added to a landing turn's instructions: the agent the user has just chosen opens its part of the conversation.</summary>
         public const string LandingDeclaration = "LandingDeclaration";
+
+        /// <summary>Stands in place of a tool result the guard withheld, naming the tool.</summary>
+        public const string QuarantinedToolResult = "QuarantinedToolResult";
     }
 
     /// <summary>
@@ -210,6 +247,9 @@ public static class Constants
 
         /// <summary>Marks a turn that opens with the user choosing this agent: the run carries the landing declaration; dropped when the turn ends.</summary>
         public const string Landing = "landing";
+
+        /// <summary>Names the tools whose result was withheld in this turn: every further call to them is withheld without running; dropped when the turn ends.</summary>
+        public const string QuarantinedTools = "quarantined_tools";
     }
 
     /// <summary>
@@ -270,6 +310,9 @@ public static class Constants
 
         /// <summary>In <see cref="Injections.ColleaguesDeclaration"/> — one line per colleague: function name and territory.</summary>
         public const string Colleagues = "((colleagues))";
+
+        /// <summary>In <see cref="Injections.QuarantinedToolResult"/> — the name of the tool whose result was withheld.</summary>
+        public const string Tool = "((tool))";
 
         /// <summary>In the <see cref="Prompts.Classifier"/> prompt — the configured intents, formatted for ranking.</summary>
         public const string FormattedIntents = "((formattedIntents))";

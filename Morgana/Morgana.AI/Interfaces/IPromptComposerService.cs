@@ -99,4 +99,14 @@ public interface IPromptComposerService
     /// landing turn runs on the agent's own instructions alone.
     /// </returns>
     Task<string?> ComposeLandingDeclarationAsync();
+
+    /// <summary>
+    /// Produces what the model reads in place of a tool result the guard withheld.
+    /// </summary>
+    /// <param name="toolName">The function the model called.</param>
+    /// <returns>
+    /// The text standing in for the result; empty when the prompt layer declares no such template, in which
+    /// case the result is still withheld and nothing is said in its place.
+    /// </returns>
+    Task<string> ComposeQuarantinedResultAsync(string toolName);
 }
