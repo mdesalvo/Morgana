@@ -50,6 +50,7 @@ Activated when the user says things like:
    - Behavior (`BehaviourTests` — turn continuation, closure, rich cards)
    - Actors (`ActorTests` — classifier, channel adapter, presentation)
    - ToolGuard (`ToolGuardTests` — the ToolGuard prompt alone over `PromptHarness/Calibration/toolguard.yaml`, one live call per run on the framework tier and no judge. Every run of every case must hold, whatever threshold is chosen: the chosen run count still applies)
+   - PeerGuard (`PeerGuardTests` — the PeerGuard prompt alone over `PromptHarness/Calibration/peerguard.yaml`, one live call per run on the framework tier and no judge, no knob: it builds its own guard. Every run of every case must hold, whatever threshold is chosen)
    - Served consultation (`ServedConsultationTests` — this installation answering a partner: which conversation, what it cost, how many exchanges are admitted. Its refusals are decided before an agent is troubled and cost nothing; the rest runs a real model)
 
    *Boot-flagged — each needs a process-wide knob the other groups must NOT carry, so each is its own

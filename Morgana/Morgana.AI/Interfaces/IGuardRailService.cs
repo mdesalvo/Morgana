@@ -3,12 +3,12 @@ using Morgana.AI.Attributes;
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
-/// Service abstraction for content moderation and policy enforcement on what reaches Morgana's models: the user's message and the results of the tools her agents call.
+/// Service abstraction for content moderation and policy enforcement on what reaches Morgana's models: the user's message, the results of the tools her agents call and the questions partners put to her agents.
 /// It also examines what external sources offer (an MCP server's tools, a partner's card) before an agent may use them and answers whether a source is available and secure right now.
 /// Decouples guard-rail logic from the actor infrastructure. GuardActor delegates entirely
 /// to this service and is agnostic of the underlying implementation strategy.
 /// Default implementation: LLMGuardRailService provides LLM-based policy evaluation.
-/// Fail-safe contract: the user's message and a native tool's result fail open, so a transient error never blocks legitimate traffic; an external tool's result fails closed.
+/// Fail-safe contract: the user's message and a native tool's result fail open, so a transient error never blocks legitimate traffic; an external tool's result and a partner's question fail closed.
 /// An offer that cannot be judged is refused and the refusal is not remembered, so the next admission asks again.
 /// </summary>
 public interface IGuardRailService
@@ -41,6 +41,20 @@ public interface IGuardRailService
     /// </returns>
     /// <remarks>Never throws: a native tool's result that cannot be checked is admitted and an external result that cannot be judged is withheld.</remarks>
     Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult, bool externalSource);
+
+    /// <summary>
+    /// Judges the question a partner puts to an agent of this installation before the agent reads it.
+    /// </summary>
+    /// <param name="conversationId">The conversation the question is served on, for correlation and charging.</param>
+    /// <param name="partnerName">The partner asking, as the authentication gate proved it.</param>
+    /// <param name="agentIntent">The agent asked.</param>
+    /// <param name="agentTerritory">What the asked agent answers for, as its card publishes it.</param>
+    /// <param name="question">The partner's question in its own words.</param>
+    /// <returns>
+    /// Non-compliant when the question is to be declined, with the finding in <c>Violation</c> for an operator's log.
+    /// </returns>
+    /// <remarks>Never throws: a question that cannot be judged is declined, as every text from outside this installation is.</remarks>
+    Task<Records.GuardRailResult> CheckPeerQuestionAsync(string conversationId, string partnerName, string agentIntent, string agentTerritory, string question);
 
     /// <summary>
     /// Lists an MCP server and admits its tools to the agents that declare it.

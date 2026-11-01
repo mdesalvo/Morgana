@@ -127,11 +127,7 @@ public class CodeEmitService : ICodeEmitService
         sb.AppendLine("        ILogger logger,");
         sb.AppendLine("        MorganaAgentAdapter morganaAgentAdapter,");
         sb.AppendLine("        IConfiguration configuration)");
-        sb.AppendLine("        : base(conversationId, llmService, promptResolverService, conversationPersistenceService, logger, configuration)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        (aiAgent, aiContextProvider, aiChatHistoryProvider)");
-        sb.AppendLine("            = morganaAgentAdapter.CreateAgent(GetType(), conversationId, () => CurrentSession, OnSharedContextUpdate);");
-        sb.AppendLine("    }");
+        sb.AppendLine("        : base(conversationId, llmService, promptResolverService, conversationPersistenceService, logger, morganaAgentAdapter, configuration) { }");
         sb.AppendLine("}");
 
         return sb.ToString();

@@ -7,7 +7,6 @@ using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using PromptHarness.Infrastructure;
-using PromptHarness.Infrastructure.Engine;
 using Xunit;
 
 namespace PromptHarness.Tests;
@@ -406,54 +405,5 @@ public sealed class ToolResultCheckTests
         /// <summary>Never answers.</summary>
         public Records.LLMTier FrameworkTier
             => throw new InvalidOperationException("The deterministic check reached a model");
-    }
-
-    /// <summary>A language model service that answers the inspector with a scripted text and records the last call it received.</summary>
-    private sealed class ScriptedLanguageModelService : ILanguageModelService
-    {
-        /// <summary>What the inspector answers; may throw.</summary>
-        private readonly Func<string> answer;
-
-        /// <summary>Scripts the inspector's answer.</summary>
-        public ScriptedLanguageModelService(Func<string> answer) => this.answer = answer;
-
-        /// <summary>The system prompt of the last call.</summary>
-        public string? SystemPrompt { get; private set; }
-
-        /// <summary>The user prompt of the last call.</summary>
-        public string? UserPrompt { get; private set; }
-
-        /// <summary>The dust role of the last call.</summary>
-        public string? DustRole { get; private set; }
-
-        /// <summary>How many inspections were asked.</summary>
-        public int Calls { get; private set; }
-
-        /// <summary>Records the call and answers as scripted.</summary>
-        public Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt, string? dustRole = null)
-        {
-            // The last call is what a scenario asserts on.
-            SystemPrompt = systemPrompt;
-            UserPrompt = userPrompt;
-            DustRole = dustRole;
-            Calls++;
-
-            return Task.FromResult(answer());
-        }
-
-        /// <summary>The tier the inspection runs on.</summary>
-        public Records.LLMTier FrameworkTier => Records.LLMTier.Economy;
-
-        /// <summary>Never reached by the scenarios.</summary>
-        public IChatClient GetChatClient(Records.LLMTier tier)
-            => throw new InvalidOperationException("The scripted model serves no chat client");
-
-        /// <summary>Never reached by the scenarios.</summary>
-        public Records.MagicDustPricing GetMorganaDust(Records.LLMTier tier)
-            => throw new InvalidOperationException("The scripted model serves no dust");
-
-        /// <summary>Reached only by the filter that asks whether a failure is a content refusal, where the throw makes the filter false.</summary>
-        public MorganaLanguageModel GetLanguageModel(Records.LLMTier tier)
-            => throw new InvalidOperationException("no provider");
     }
 }

@@ -95,6 +95,7 @@ On top of that it overrides, per run:
 | `OpenTelemetry:Exporters[*]:Enabled` → false | the in-process listener needs no collector |
 | `RateLimiting:Enabled`, `DustLimiting:Enabled` → false | a repeated-run suite would throttle itself |
 | `ActorSystem:EnableUserGuardrail` → `Harness:EnableUserGuardrail` | off by default: no scenario asserts moderation and every guarded turn is an extra LLM call |
+| `ActorSystem:EnablePeerGuardrail` → `Harness:EnablePeerGuardrail` | off by default: the groups that consult this installation measure the answering agent itself and every guarded question is an extra LLM call. `PeerGuardTests` builds its own guard and needs no knob |
 | `Authentication:Issuers[harness]` → appended | name and key both declared per run, the key minted fresh and never written to disk: an instrument's channel identity is not something a deployed installation should carry in its own configuration |
 | `AgentToAgent:Partners[harness-peer]` → appended | a partner admitted to `inventory` and to no other agent, declared per run rather than shipped: it exists to be turned away, which is the only way `AgentCardTests` can observe that the A2A gate is shut *selectively* and not merely shut. Its key, its reach and its ceiling are one entry |
 

@@ -288,12 +288,15 @@ public static class Telemetry
 
         /// <summary>The description of a partner's card examined before its colleague is offered.</summary>
         public const string PartnerCard = "partner_card";
+
+        /// <summary>A partner's question before an agent of this installation reads it.</summary>
+        public const string Peer = "peer";
     }
 
     /// <summary>The values of <see cref="SecurityOutcome"/>.</summary>
     public static class SecurityOutcomes
     {
-        /// <summary>A request refused: the user's message by the guard, an agent's own request by the provider.</summary>
+        /// <summary>A request refused: the user's message or a partner's question by its guard, an agent's own request by the provider.</summary>
         public const string Rejected = "rejected";
 
         /// <summary>A tool result kept from the model.</summary>

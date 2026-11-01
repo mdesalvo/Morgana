@@ -2,10 +2,12 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Akka.Actor;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Attributes;
+using Morgana.AI.Providers;
 using Morgana.Contracts;
 
 namespace Morgana.AI;
@@ -362,13 +364,16 @@ public static class Records
         public double BudgetPerConversation { get; set; }
 
         /// <summary>One-shot advisory shown when consumption crosses 70%.</summary>
-        public string Warning70Message { get; set; }
+        public string Warning70Message { get; set; } =
+            "🧙‍♀️ The magic dust in the cauldron is running low ({percent}% left)...";
 
         /// <summary>One-shot advisory shown when consumption crosses 90%.</summary>
-        public string Warning90Message { get; set; }
+        public string Warning90Message { get; set; } =
+            "🧙‍♀️ The cauldron is almost empty — wrap up soon, the dust is nearly gone ({percent}% left).";
 
         /// <summary>Blocking message shown when the budget is exhausted (100%).</summary>
-        public string ErrorMessage { get; set; }
+        public string ErrorMessage { get; set; } =
+            "🧙‍♀️ The magic dust from this conversation has run out. This conversation is now complete — start a new one to keep going.";
     }
 
     // ==========================================================================
@@ -655,6 +660,20 @@ public static class Records
         [property: JsonPropertyName("parameters")] JsonElement? Parameters);
 
     /// <summary>
+    /// What the PeerGuard reads: the partner asking, the agent asked, what that agent answers for and the question, as a JSON object.
+    /// </summary>
+    /// <remarks>The four JSON names are a contract with the PeerGuard prompt's Target sentence.</remarks>
+    /// <param name="Partner">The partner asking, as the authentication gate proved it.</param>
+    /// <param name="Agent">The agent asked.</param>
+    /// <param name="Territory">What the asked agent answers for, as its card publishes it.</param>
+    /// <param name="Question">The partner's question in its own words.</param>
+    public record PeerGuardSubject(
+        [property: JsonPropertyName("partner")] string Partner,
+        [property: JsonPropertyName("agent")] string Agent,
+        [property: JsonPropertyName("territory")] string Territory,
+        [property: JsonPropertyName("question")] string Question);
+
+    /// <summary>
     /// The tools an agent may hold from one MCP server and the verdict they were admitted or refused under.
     /// </summary>
     /// <param name="Tools">The admitted tools; empty unless <paramref name="Verdict"/> is compliant.</param>
@@ -856,6 +875,14 @@ public static class Records
     /// <c>null</c> for an agent of this one. Two colleagues handling the same intent at two
     /// installations are two colleagues, which is why the pair and not the intent is the name.</param>
     public record PeerReference(string Intent, string? Instance = null);
+
+    /// <summary>
+    /// What MorganaAgentAdapter builds for one agent: the agent that runs its turns and the two providers those turns read and write.
+    /// </summary>
+    /// <param name="Agent">Agent that runs the turns.</param>
+    /// <param name="ContextProvider">Provider holding the session variables and the shared-context write callback.</param>
+    /// <param name="HistoryProvider">Provider exposing the chat history of the session.</param>
+    public record CreatedAgent(AIAgent Agent, MorganaAIContextProvider ContextProvider, MorganaChatHistoryProvider HistoryProvider);
 
     /// <summary>
     /// Whether a partner may open one more exchange here and what it is told when it may not.
@@ -1125,10 +1152,12 @@ public static class Records
         {
             foreach (Dictionary<string, object> additionalProperties in AdditionalProperties ?? [])
             {
-                if (additionalProperties.TryGetValue(additionalPropertyName, out object value))
+                // A declared property arrives as the JSON element the prompt file holds for it.
+                if (additionalProperties.TryGetValue(additionalPropertyName, out object? value) && value is JsonElement element)
                 {
-                    JsonElement element = (JsonElement)value;
-                    return element.Deserialize<T>();
+                    // A property declared as null is a defect of the prompt file, reported like a missing one.
+                    return element.Deserialize<T>()
+                        ?? throw new InvalidOperationException($"AdditionalProperty with key '{additionalPropertyName}' is null in the prompt with id='{ID}'");
                 }
             }
             throw new KeyNotFoundException($"AdditionalProperty with key '{additionalPropertyName}' was not found in the prompt with id='{ID}'");
@@ -1162,9 +1191,10 @@ public static class Records
         {
             foreach (Dictionary<string, object> additionalProperties in AdditionalProperties ?? [])
             {
-                if (additionalProperties.TryGetValue(additionalPropertyName, out object value))
+                // A declared property arrives as the JSON element the prompt file holds for it.
+                if (additionalProperties.TryGetValue(additionalPropertyName, out object? value) && value is JsonElement element)
                 {
-                    JsonElement element = (JsonElement)value;
+                    // A property declared as null counts as one left out.
                     return element.Deserialize<T>() ?? defaultValue;
                 }
             }

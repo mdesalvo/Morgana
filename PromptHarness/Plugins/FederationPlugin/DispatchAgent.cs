@@ -33,9 +33,5 @@ public class DispatchAgent : MorganaAgent
         ILogger logger,
         MorganaAgentAdapter adapter,
         IConfiguration configuration)
-        : base(conversationId, llmService, promptResolverService, persistenceService, logger, configuration)
-    {
-        (aiAgent, aiContextProvider, aiChatHistoryProvider) =
-            adapter.CreateAgent(GetType(), conversationId, () => CurrentSession, OnSharedContextUpdate);
-    }
+        : base(conversationId, llmService, promptResolverService, persistenceService, logger, adapter, configuration) { }
 }

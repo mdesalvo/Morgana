@@ -19,9 +19,5 @@ public class InventoryAgent : MorganaAgent
         IConversationPersistenceService conversationPersistenceService,
         ILogger logger,
         MorganaAgentAdapter morganaAgentAdapter,
-        IConfiguration configuration) : base(conversationId, llmService, promptResolverService, conversationPersistenceService, logger, configuration)
-    {
-        (aiAgent, aiContextProvider, aiChatHistoryProvider)
-            = morganaAgentAdapter.CreateAgent(GetType(), conversationId, () => CurrentSession, OnSharedContextUpdate);
-    }
+        IConfiguration configuration) : base(conversationId, llmService, promptResolverService, conversationPersistenceService, logger, morganaAgentAdapter, configuration) { }
 }

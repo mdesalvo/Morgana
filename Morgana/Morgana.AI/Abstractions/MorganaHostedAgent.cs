@@ -68,6 +68,12 @@ public sealed class MorganaHostedAgent : AIAgent
     /// </summary>
     private readonly IConversationPersistenceService persistenceService;
 
+    /// <summary>Judges a partner's question before any agent here reads it.</summary>
+    private readonly IGuardRailService guardRailService;
+
+    /// <summary>Whether a partner's question is judged at all: an installation may serve its partners unscreened.</summary>
+    private readonly bool peerGuardEnabled;
+
     /// <summary>Logger for inbound-request diagnostics.</summary>
     private readonly ILogger logger;
 
@@ -87,6 +93,8 @@ public sealed class MorganaHostedAgent : AIAgent
     /// <param name="dustLimitService">Ledger consulted for what the served turn cost.</param>
     /// <param name="peerAdmissionService">Weighs a system opening a conversation it has not opened before.</param>
     /// <param name="persistenceService">Owner of the conversation's storage, opened before the turn runs.</param>
+    /// <param name="guardRailService">Judges a partner's question before the agent reads it.</param>
+    /// <param name="peerGuardEnabled">Whether the PeerGuard is switched on for this installation.</param>
     /// <param name="logger">Records requests that name no conversation, no agent, or that go unanswered.</param>
     public MorganaHostedAgent(
         string intent,
@@ -98,6 +106,8 @@ public sealed class MorganaHostedAgent : AIAgent
         IDustLimitService dustLimitService,
         IPeerAdmissionService peerAdmissionService,
         IConversationPersistenceService persistenceService,
+        IGuardRailService guardRailService,
+        bool peerGuardEnabled,
         ILogger logger)
     {
         this.intent = intent;
@@ -109,6 +119,8 @@ public sealed class MorganaHostedAgent : AIAgent
         this.dustLimitService = dustLimitService;
         this.peerAdmissionService = peerAdmissionService;
         this.persistenceService = persistenceService;
+        this.guardRailService = guardRailService;
+        this.peerGuardEnabled = peerGuardEnabled;
         this.logger = logger;
     }
 
@@ -202,6 +214,35 @@ public sealed class MorganaHostedAgent : AIAgent
                     intent, callerIntent, hostedAgentSession.ConversationId);
 
                 return BuildAgentResponseFromMessage($"The agent for '{intent}' has no budget left on this conversation. Proceed without it.");
+            }
+
+            // A partner's question reaches an agent with none of the guards a user's message passes, so it is
+            // judged here once admitted and covered by the budget. A colleague of this installation answers
+            // from the same ring and is not judged; a caller not proven as the ring is judged as a partner.
+            if (peerGuardEnabled
+                && !string.Equals(hostedAgentSession.CallerIssuer, Constants.AgentToAgent.IssuerName, StringComparison.OrdinalIgnoreCase))
+            {
+                // The name the gate proved is what the judgment and the counter read.
+                string partnerName = hostedAgentSession.CallerIssuer ?? "an undeclared system";
+
+                // The PeerGuard's verdict on the question.
+                Records.GuardRailResult peerQuestionVerdict = await guardRailService.CheckPeerQuestionAsync(
+                    hostedAgentSession.ConversationId, partnerName, intent, description, question);
+
+                // A declined question never reaches the agent.
+                if (!peerQuestionVerdict.Compliant)
+                {
+                    // Counts the refusal by the layer that decided it and by the partner.
+                    Telemetry.SecurityEvents.Add(1,
+                        new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.Peer),
+                        new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Rejected),
+                        new KeyValuePair<string, object?>(Telemetry.SecuritySource, peerQuestionVerdict.Source.ToString()),
+                        new KeyValuePair<string, object?>(Telemetry.ConsultationCaller, partnerName),
+                        new KeyValuePair<string, object?>(Telemetry.AgentIntent, intent));
+
+                    // The partner reads a plain answer in the envelope of every refusal of this door and no agent is disturbed.
+                    return BuildAgentResponseFromMessage($"The agent for '{intent}' declined this question. Proceed without it.");
+                }
             }
 
             // Resolve the actor system

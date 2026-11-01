@@ -29,6 +29,9 @@ public static class Constants
         /// <summary>The inspector's prompt for the results of tools answered from outside the installation.</summary>
         public const string ToolGuard = "ToolGuard";
 
+        /// <summary>The guard's prompt for the question a partner puts to an agent of this installation.</summary>
+        public const string PeerGuard = "PeerGuard";
+
         /// <summary>The welcome message and its quick replies.</summary>
         public const string Presentation = "Presentation";
 
@@ -36,7 +39,7 @@ public static class Constants
         public const string ChannelAdapter = "ChannelAdapter";
 
         /// <summary>Every id under which a framework prompt is filed, the system's own included: a domain may take none of them.</summary>
-        public static readonly string[] All = [Morgana, Classifier, UserGuard, ToolGuard, Presentation, ChannelAdapter];
+        public static readonly string[] All = [Morgana, Classifier, UserGuard, ToolGuard, PeerGuard, Presentation, ChannelAdapter];
     }
 
     /// <summary>

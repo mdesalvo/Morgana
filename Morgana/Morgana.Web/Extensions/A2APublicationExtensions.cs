@@ -41,6 +41,9 @@ public static class A2APublicationExtensions
         // gives up before the agent that asked, which gives up before the turn carrying them both.
         TimeSpan a2aRequestTimeout = Records.PeerConsultationWaits.From(builder.Configuration).Callee;
 
+        // Whether a partner's question is judged before an agent reads it; on unless the installation switches it off.
+        bool peerGuardEnabled = builder.Configuration.GetValue("Morgana:ActorSystem:EnablePeerGuardrail", true);
+
         // The session store has to know which system is asking and the hosting layer hands it only a
         // context id, so the request the gate proved is reached through the one thing that spans both.
         builder.Services.AddHttpContextAccessor();
@@ -66,6 +69,8 @@ public static class A2APublicationExtensions
                         serviceProvider.GetRequiredService<IDustLimitService>(),
                         serviceProvider.GetRequiredService<IPeerAdmissionService>(),
                         serviceProvider.GetRequiredService<IConversationPersistenceService>(),
+                        serviceProvider.GetRequiredService<IGuardRailService>(),
+                        peerGuardEnabled,
                         serviceProvider.GetRequiredService<ILogger>()))
 
                 // The session store is where a request's A2A context id becomes a Morgana conversation.

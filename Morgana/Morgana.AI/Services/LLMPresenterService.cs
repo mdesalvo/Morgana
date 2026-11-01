@@ -171,8 +171,8 @@ public class LLMPresenterService : IPresenterService
                 displayableIntents.Select(i => $"- {i.Name}: {i.Description}"));
 
             // The welcome is the first thing Morgana says, so it speaks in the voice her agents speak in.
-            // The UserGuard and the channel adapter borrow it too, since what they write reaches the user. The classifier
-            // and the ToolGuard never do: they answer the framework.
+            // The UserGuard and the channel adapter borrow it too, since what they write reaches the user. The classifier,
+            // the ToolGuard and the PeerGuard never do: they answer the framework.
             Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
 
             // The authored sections say how to welcome and Morgana's personality how it sounds; the

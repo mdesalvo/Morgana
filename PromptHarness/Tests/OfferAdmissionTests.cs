@@ -4,12 +4,10 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Morgana.AI;
-using Morgana.AI.Abstractions;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using PromptHarness.Infrastructure;
-using PromptHarness.Infrastructure.Engine;
 using Xunit;
 
 namespace PromptHarness.Tests;
@@ -85,7 +83,7 @@ public sealed class OfferAdmissionTests
     {
         // The inspector's answer waits until the test releases it, so every admission meets the examination in progress.
         TaskCompletionSource<string> inspectorAnswer = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        ScriptedLanguageModelService languageModel = new ScriptedLanguageModelService(() => inspectorAnswer.Task);
+        ScriptedLanguageModelService languageModel = ScriptedLanguageModelService.AnsweringLater(() => inspectorAnswer.Task);
 
         // A server that always lists the same tools.
         ScriptedMCPClientRegistryService registry = new ScriptedMCPClientRegistryService(() => Listing("Returns the plants in the catalogue."));
@@ -483,57 +481,4 @@ public sealed class OfferAdmissionTests
     /// <summary>The input schema of a tool that takes no argument.</summary>
     private static JsonElement EmptySchema()
         => JsonSerializer.Deserialize<JsonElement>("{\"type\":\"object\",\"properties\":{}}");
-
-    /// <summary>A language model service that answers the inspector with a scripted text and records the last call it received.</summary>
-    private sealed class ScriptedLanguageModelService : ILanguageModelService
-    {
-        /// <summary>What the inspector answers; may throw or wait.</summary>
-        private readonly Func<Task<string>> answer;
-
-        /// <summary>Scripts the inspector's answer.</summary>
-        public ScriptedLanguageModelService(Func<string> answer) => this.answer = () => Task.FromResult(answer());
-
-        /// <summary>Scripts an inspector whose answer arrives later.</summary>
-        public ScriptedLanguageModelService(Func<Task<string>> answer) => this.answer = answer;
-
-        /// <summary>The system prompt of the last call.</summary>
-        public string? SystemPrompt { get; private set; }
-
-        /// <summary>The user prompt of the last call.</summary>
-        public string? UserPrompt { get; private set; }
-
-        /// <summary>The dust role of the last call.</summary>
-        public string? DustRole { get; private set; }
-
-        /// <summary>How many inspections were asked.</summary>
-        public int Calls { get; private set; }
-
-        /// <summary>Records the call and answers as scripted.</summary>
-        public Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt, string? dustRole = null)
-        {
-            // The last call is what a scenario asserts on.
-            SystemPrompt = systemPrompt;
-            UserPrompt = userPrompt;
-            DustRole = dustRole;
-            Calls++;
-
-            // The scripted answer is what the inspector replies to this call: it may be ready now or arrive later.
-            return answer();
-        }
-
-        /// <summary>The tier the inspection runs on.</summary>
-        public Records.LLMTier FrameworkTier => Records.LLMTier.Economy;
-
-        /// <summary>Never reached by the scenarios.</summary>
-        public IChatClient GetChatClient(Records.LLMTier tier)
-            => throw new InvalidOperationException("The scripted model serves no chat client");
-
-        /// <summary>Never reached by the scenarios.</summary>
-        public Records.MagicDustPricing GetMorganaDust(Records.LLMTier tier)
-            => throw new InvalidOperationException("The scripted model serves no dust");
-
-        /// <summary>Reached only by the filter that asks whether a failure is a content refusal, where the throw makes the filter false.</summary>
-        public MorganaLanguageModel GetLanguageModel(Records.LLMTier tier)
-            => throw new InvalidOperationException("no provider");
-    }
 }

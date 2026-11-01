@@ -18,6 +18,12 @@ public sealed class HarnessOptions
     /// </summary>
     public bool EnableUserGuardrail { get; init; }
 
+    /// <summary>
+    /// Whether the PeerGuard stays enabled on the instance under test. Off by default: the groups that consult this
+    /// installation measure the answering agent itself and every guarded question costs one extra LLM round trip.
+    /// </summary>
+    public bool EnablePeerGuardrail { get; init; }
+
     /// <summary>Seconds to wait for the host to answer <c>GET /api/morgana/health</c> before giving up.</summary>
     public int StartupTimeoutSeconds { get; init; } = 180;
 

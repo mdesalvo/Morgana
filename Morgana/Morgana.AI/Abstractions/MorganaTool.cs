@@ -46,8 +46,7 @@ public class MorganaTool
     /// <param name="toolLogger">Logger for tool diagnostics.</param>
     /// <param name="getToolContext">
     /// Factory returning the <see cref="ToolContext"/> for the current turn.
-    /// Typically wired as <c>() =&gt; new ToolContext(aiContextProvider, CurrentSession!, conversationId)</c>
-    /// inside the concrete agent constructor.
+    /// Wired by <see cref="Adapters.MorganaAgentAdapter"/> when it builds the agent the tool serves.
     /// </param>
     public MorganaTool(
         ILogger toolLogger,

@@ -13,7 +13,8 @@ namespace Morgana.AI.Services;
 
 /// <summary>
 /// Default <see cref="IGuardRailService"/> implementation: the LLM policy check on the user's message, the
-/// deterministic check on every guarded tool result and the ToolGuard inspection of the results of external tools.
+/// deterministic check on every guarded tool result, the ToolGuard inspection of the results of external tools
+/// and the PeerGuard judgment of a partner's question.
 /// It also examines what MCP servers and partners offer and keeps, per external source, whether it is go or no-go.
 /// The user's message goes to <see cref="ILanguageModelService"/> with the UserGuard system prompt for detection of
 /// spam, phishing, violence, profanity and other policy violations.
@@ -67,6 +68,11 @@ public partial class LLMGuardRailService : IGuardRailService
     private readonly string toolGuardSystemPrompt;
 
     /// <summary>
+    /// Pre-computed PeerGuard system prompt, read before every question a partner puts to an agent of this installation.
+    /// </summary>
+    private readonly string peerGuardSystemPrompt;
+
+    /// <summary>
     /// Application configuration, read per call for the limit on an external result's length.
     /// </summary>
     private readonly IConfiguration configuration;
@@ -75,6 +81,11 @@ public partial class LLMGuardRailService : IGuardRailService
     /// The dust role of the inspection: the ledger reads it under its own name, apart from the pipeline's other framework calls.
     /// </summary>
     private static readonly string toolGuardDustRole = $"{Constants.Morgana} ({Constants.Prompts.ToolGuard})";
+
+    /// <summary>
+    /// The dust role of the PeerGuard's judgment: the ledger reads it under its own name, apart from the ToolGuard's.
+    /// </summary>
+    private static readonly string peerGuardDustRole = $"{Constants.Morgana} ({Constants.Prompts.PeerGuard})";
 
     /// <summary>
     /// The longest external result an inspection vouches for, in characters; read per call like the adapter reads its switches.
@@ -155,6 +166,16 @@ public partial class LLMGuardRailService : IGuardRailService
             Records.Prompt.Labeled(Constants.SectionLabels.Target, toolGuardPrompt.Target),
             Records.Prompt.Labeled(Constants.SectionLabels.Instructions, toolGuardPrompt.Instructions),
             Records.Prompt.Labeled(Constants.SectionLabels.Formatting, toolGuardPrompt.Formatting));
+
+        // The PeerGuard's prompt, resolved eagerly like the ToolGuard's: a partner's question is judged on the turn that meets it.
+        Records.Prompt peerGuardPrompt =
+            promptResolverService.ResolveAsync(Constants.Prompts.PeerGuard).GetAwaiter().GetResult();
+
+        // What the PeerGuard reads before every question of a partner; it has no placeholder to splice either.
+        peerGuardSystemPrompt = string.Join("\n",
+            Records.Prompt.Labeled(Constants.SectionLabels.Target, peerGuardPrompt.Target),
+            Records.Prompt.Labeled(Constants.SectionLabels.Instructions, peerGuardPrompt.Instructions),
+            Records.Prompt.Labeled(Constants.SectionLabels.Formatting, peerGuardPrompt.Formatting));
 
         // The one refusal the guard words itself rather than the model: the provider blocked the message before any judgment.
         contentFilteredRefusal = userGuardPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.ContentFilteredMessage);
@@ -274,6 +295,62 @@ public partial class LLMGuardRailService : IGuardRailService
         return await InspectToolResultAsync(conversationId, toolName, toolArguments, toolResult);
     }
 
+    /// <inheritdoc/>
+    public async Task<Records.GuardRailResult> CheckPeerQuestionAsync(string conversationId, string partnerName, string agentIntent, string agentTerritory, string question)
+    {
+        // What the question carries against the assistant; null when nothing in it does.
+        string? finding;
+
+        try
+        {
+            // The free check: a label, a fence, a template token or tag-character text is a forgery whoever writes it.
+            finding = FindForgery(question);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "LLMGuardRailService: check of the question of partner {PartnerName} failed for conversation {ConversationId}",
+                partnerName, conversationId);
+
+            // The question still goes to the PeerGuard, which reads it.
+            finding = null;
+        }
+
+        // A forgery declines the question. Only the finding is logged: the content stays out of every log.
+        if (finding != null)
+        {
+            logger.LogWarning(
+                "LLMGuardRailService: question of partner {PartnerName} to agent {AgentIntent} declined for conversation {ConversationId} — {Finding}",
+                partnerName, agentIntent, conversationId, finding);
+
+            return new Records.GuardRailResult(false, finding, Records.GuardVerdictSource.Prefilter);
+        }
+
+        // The limit on what a judgment vouches for, read once for this question.
+        int maxLength = MaxExternalToolResultLength;
+
+        // On a text that long a judgment is not a verdict to trust and an injection hides easily in its tail.
+        if (question.Length > maxLength)
+        {
+            logger.LogWarning(
+                "LLMGuardRailService: question of partner {PartnerName} to agent {AgentIntent} declined for conversation {ConversationId} — {Length} characters exceed the limit of {Limit}",
+                partnerName, agentIntent, conversationId, question.Length, maxLength);
+
+            return new Records.GuardRailResult(
+                false,
+                string.Create(CultureInfo.InvariantCulture, $"is longer than the {maxLength} characters an inspection vouches for"),
+                Records.GuardVerdictSource.Prefilter);
+        }
+
+        // The partner, the agent asked, what it answers for and the question, in the four fields the PeerGuard's prompt names.
+        Records.PeerGuardSubject subject = new Records.PeerGuardSubject(partnerName, agentIntent, agentTerritory, question);
+
+        // The PeerGuard reads the subject as one JSON document, in the same escaping as the ToolGuard.
+        string subjectJson = JsonSerializer.Serialize(subject, AIJsonUtilities.DefaultOptions);
+
+        // Nothing forged and within the limit: the PeerGuard reads what the free check cannot.
+        return await JudgeWithInspectorAsync(conversationId, peerGuardSystemPrompt, peerGuardDustRole, subjectJson, $"the question of partner {partnerName} to agent {agentIntent}");
+    }
 
     /// <inheritdoc/>
     public async Task<Records.MCPServerAdmission> AdmitMCPServerToolsAsync(UsesMCPServerAttribute serverAttribute)
@@ -440,7 +517,7 @@ public partial class LLMGuardRailService : IGuardRailService
         else
         {
             // Nothing forged and within the limit: the inspector reads what the free check cannot.
-            result = await JudgeWithInspectorAsync(OfferConversationId, offerText, $"the offer of {sourceKey}");
+            result = await JudgeWithInspectorAsync(OfferConversationId, toolGuardSystemPrompt, toolGuardDustRole, offerText, $"the offer of {sourceKey}");
         }
 
         // A refused offer shuts the source for every agent: only the finding is logged, never the offer itself.
@@ -480,25 +557,25 @@ public partial class LLMGuardRailService : IGuardRailService
         string subjectJson = JsonSerializer.Serialize(subject, AIJsonUtilities.DefaultOptions);
 
         // The result of an external tool is judged by the inspector under the name of the tool that returned it.
-        return await JudgeWithInspectorAsync(conversationId, subjectJson, $"the result of tool {toolName}");
+        return await JudgeWithInspectorAsync(conversationId, toolGuardSystemPrompt, toolGuardDustRole, subjectJson, $"the result of tool {toolName}");
     }
 
     /// <summary>
-    /// Has the ToolGuard inspector judge a subject serialized as JSON; a subject that cannot be judged is withheld.
+    /// Has a guard's prompt judge a subject serialized as JSON; a subject that cannot be judged is withheld.
     /// </summary>
-    private async Task<Records.GuardRailResult> JudgeWithInspectorAsync(string conversationId, string subjectJson, string subjectLabel)
+    private async Task<Records.GuardRailResult> JudgeWithInspectorAsync(string conversationId, string systemPrompt, string dustRole, string subjectJson, string subjectLabel)
     {
         // Any failure of the inspection withholds the subject: a source nobody vouches for is never read unjudged.
         try
         {
-            // The inspection runs on the framework tier and is charged under its own dust role.
+            // The judgment runs on the framework tier and is charged under the dust role of the guard that asks it.
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
-                toolGuardSystemPrompt,
+                systemPrompt,
                 subjectJson,
-                toolGuardDustRole);
+                dustRole);
 
-            // The verdict, in the shape the ToolGuard prompt's Formatting section asked for.
+            // The verdict, in the shape the guard prompt's Formatting section asked for.
             Records.GuardCheckResponse? inspectorVerdict = JsonSerializer.Deserialize<Records.GuardCheckResponse>(
                 response, Records.DefaultJsonSerializerOptions);
 

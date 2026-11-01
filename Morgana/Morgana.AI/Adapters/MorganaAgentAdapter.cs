@@ -166,7 +166,7 @@ public class MorganaAgentAdapter
     /// </param>
     /// <param name="sessionAccessor">
     /// Returns the agent's current <see cref="AgentSession"/> at tool-call time.
-    /// Wire as <c>() =&gt; CurrentSession</c> from the concrete <see cref="MorganaAgent"/> subclass.
+    /// Wired as <c>() =&gt; CurrentSession</c> by <see cref="MorganaAgent"/>.
     /// May return <c>null</c> at construction time; guaranteed non-null during actual tool execution.
     /// </param>
     /// <param name="sharedContextCallback">
@@ -176,10 +176,10 @@ public class MorganaAgentAdapter
     /// start of their next turn.
     /// </param>
     /// <returns>
-    /// A tuple of (AIAgent, MorganaAIContextProvider, MorganaChatHistoryProvider) —
+    /// The agent with its context and history providers —
     /// all three singletons for this agent instance.
     /// </returns>
-    public (AIAgent agent, MorganaAIContextProvider contextProvider, MorganaChatHistoryProvider historyProvider) CreateAgent(
+    public Records.CreatedAgent CreateAgent(
         Type agentType,
         string conversationId,
         Func<AgentSession?> sessionAccessor,
@@ -200,10 +200,10 @@ public class MorganaAgentAdapter
     /// </summary>
     /// <inheritdoc cref="CreateAgent" path="/param"/>
     /// <returns>
-    /// A tuple of (AIAgent, MorganaAIContextProvider, MorganaChatHistoryProvider) —
+    /// The agent with its context and history providers —
     /// all three singletons for this agent instance.
     /// </returns>
-    public async Task<(AIAgent agent, MorganaAIContextProvider contextProvider, MorganaChatHistoryProvider historyProvider)> CreateAgentAsync(
+    public async Task<Records.CreatedAgent> CreateAgentAsync(
         Type agentType,
         string conversationId,
         Func<AgentSession?> sessionAccessor,
@@ -348,10 +348,10 @@ public class MorganaAgentAdapter
         if (ToolGuardrailEnabled)
             aiAgent = GuardToolResults(aiAgent, agentType, intentAttribute.Intent, mcpToolServers, conversationId, sessionAccessor, morganaAIContextProvider);
 
-        // 10) Return all three: the caller (MorganaAgent subclass) keeps the provider and
+        // 10) Return all three: the caller (MorganaAgent) keeps the provider and
         //     history-provider handles to drive context/history across turns — the agent
         //     alone is not enough because providers are queried/mutated outside InvokeAsync.
-        return (aiAgent, morganaAIContextProvider, chatHistoryProvider);
+        return new Records.CreatedAgent(aiAgent, morganaAIContextProvider, chatHistoryProvider);
     }
 
     /// <summary>

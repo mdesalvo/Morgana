@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Morgana.AI;
 using Morgana.AI.Attributes;
 using Morgana.AI.Services;
+using PromptHarness.Infrastructure;
 using PromptHarness.Infrastructure.Engine;
 using PromptHarness.Infrastructure.Reporting;
 using PromptHarness.Infrastructure.Wiring;

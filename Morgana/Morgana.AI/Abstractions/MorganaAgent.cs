@@ -7,6 +7,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
@@ -30,9 +31,9 @@ public class MorganaAgent : MorganaActor
 {
     /// <summary>
     /// Underlying Microsoft.Agents.AI agent driving LLM interactions for this actor.
-    /// Created once in the subclass constructor and reused across turns.
+    /// Created once in the constructor of this class and reused across turns.
     /// </summary>
-    protected AIAgent aiAgent;
+    private readonly AIAgent aiAgent;
 
     /// <summary>
     /// Active <see cref="AgentSession"/> for the current conversation.
@@ -46,13 +47,13 @@ public class MorganaAgent : MorganaActor
     /// persists shared variables into the conversation-scoped registry. Tools read and write
     /// through this provider.
     /// </summary>
-    protected MorganaAIContextProvider aiContextProvider;
+    private readonly MorganaAIContextProvider aiContextProvider;
 
     /// <summary>
     /// Provider exposing the chat history of the current <see cref="aiAgentSession"/>.
     /// Consulted by tools that need conversation context (e.g. summarization, citations).
     /// </summary>
-    protected MorganaChatHistoryProvider aiChatHistoryProvider;
+    private readonly MorganaChatHistoryProvider aiChatHistoryProvider;
 
     /// <summary>
     /// Persistence service used to load, save and resume serialized <see cref="AgentSession"/>s
@@ -106,6 +107,7 @@ public class MorganaAgent : MorganaActor
     /// <param name="promptResolverService">Resolver for framework + domain prompts.</param>
     /// <param name="persistenceService">Persistence service used to load/save <see cref="AgentSession"/>.</param>
     /// <param name="agentLogger">Logger for the concrete agent subclass.</param>
+    /// <param name="morganaAgentAdapter">Builds the agent this actor runs, with its tools, colleagues and guards, from the concrete agent's own attributes.</param>
     /// <param name="configuration">Application configuration (streaming flags, etc.).</param>
     public MorganaAgent(
         string conversationId,
@@ -113,10 +115,19 @@ public class MorganaAgent : MorganaActor
         IPromptResolverService promptResolverService,
         IConversationPersistenceService persistenceService,
         ILogger agentLogger,
+        MorganaAgentAdapter morganaAgentAdapter,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
         this.persistenceService = persistenceService;
         this.agentLogger = agentLogger;
+
+        // The agent of the concrete class is built here (its attributes name intent, tier, tools and
+        // colleagues) so every field is assigned before the actor receives a message and no subclass
+        // has to remember to do it.
+        Records.CreatedAgent createdAgent = morganaAgentAdapter.CreateAgent(GetType(), conversationId, () => CurrentSession, OnSharedContextUpdate);
+        aiAgent = createdAgent.Agent;
+        aiContextProvider = createdAgent.ContextProvider;
+        aiChatHistoryProvider = createdAgent.HistoryProvider;
 
         // The user's turn, dispatched by the router once the supervisor has routed the intent here.
         ReceiveAsync<Records.AgentRequest>(ExecuteAgentAsync);

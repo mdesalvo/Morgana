@@ -32,7 +32,7 @@ project: every build setting lives in the `.csproj`, so it carries unchanged acr
 
 ## Commands
 
-Twenty-four test classes. **Never combine filters**: seven groups carry a process-wide boot knob the
+Twenty-six test classes. **Never combine filters**: seven groups carry a process-wide boot knob the
 others must not see and two of those seven share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
@@ -50,9 +50,13 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~FrameworkPromptTes
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ToolResultCheckTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~MCPToolAdmissionTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~OfferAdmissionTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.PeerQuestionCheckTests"
 
 # live, no judge — the ToolGuard over its calibration sets of results and offers, on the framework tier
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ToolGuardTests"
+
+# live, no judge — the PeerGuard over its calibration set of partners' questions, on the framework tier
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.PeerGuardTests"
 
 # blocking
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ContextHandlingTests"
@@ -111,7 +115,9 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `FrameworkPromptTests` | none | The morgana.json shipped in Morgana.AI carries every entry that the framework fetches by name — policies, templates with their labels and placeholders, base tools, error answers, messages. No framework section carries a label of its own |
 | `ToolResultCheckTests` | none | The deterministic check on tool results: Morgana's own section labels and fences, chat-template tokens and text hidden in Unicode tag characters are withheld wherever they sit in a result, nested JSON included. What an honest datum may carry passes: lines that read like a role, wiki headings, zero-width and bidirectional characters, a flag emoji. The ToolGuard inspection of an external result runs over a scripted model: its verdict, an unreadable answer and a failure that withholds, the length limit and a forgery that spare the inspection. No real model is reached |
 | `ToolGuardTests` | **every run** | The ToolGuard prompt on a live call of the framework tier, over `Calibration/toolguard.yaml` and `Calibration/toolguard-offers.yaml`: each red case (a result carrying one form of steering in its subtlest version or an offer hiding a decoy) must be withheld on the inspector's own verdict, each green case is an honest result or offer that resembles one and must be admitted. Every run of an offer meets a fresh guard, since a guard admits an offer it approved without inspecting it again. A withheld result with no verdict never counts as a catch. No judge and no conversation: one inspection per run, so it measures whichever provider `Morgana:ActorSystem:Tier` names. A red on a green case is petulance, a red on a red case is a hole: both go back to the prose |
+| `PeerGuardTests` | **every run** | The PeerGuard prompt on a live call of the framework tier, over `Calibration/peerguard.yaml`: each red case is a partner's question carrying one form of malice in its subtlest version and must be declined on the guard's own verdict, each green case is an honest question that resembles one and must be admitted. A declined question with no verdict never counts as a catch. No judge and no host traffic: one judgment per run, on whichever provider `Morgana:ActorSystem:Tier` names |
 | `OfferAdmissionTests` | none | What an external source offers, examined over a scripted inspector: an offer forging a label anywhere (a parameter name included) or over the length limit is refused without inspection; an approved offer is admitted again without a model call, however many ask at once; a changed offer or a new tool is examined again and a refusal shuts the source for every agent; an unreachable server yields no tools and keeps an earlier approval; an offer with no verdict is examined again next time. No real model or server is reached |
+| `PeerQuestionCheckTests` | none | A partner's question over a scripted PeerGuard: a forged label or a question over the length limit is declined without a model call; the guard's verdict is kept, an unreadable answer or a failure declines. No real model is reached |
 | `MCPToolAdmissionTests` | none | An MCP tool enters an agent last: one taking the name of a tool of Morgana or of the domain, the colleagues' prefix or the name another MCP source already gave, in any case, is refused. A name that only begins like one of them is admitted. No server is reached |
 | `LanguageModelTests` | none | The three tiers built from configuration, each by the provider it declares; a missing tier, connection or framework tier, an unregistered or twice-registered provider and a placeholder in a field the provider uses refused. No model is reached |
 | `AgentCardTests` · `StartupValidationTests` · `PeerFederationTests` · `ConversationApiTests` | none | Wire contracts and boot refusals, asserted deterministically. **Every literal is spelled out in the test** rather than read from `Constants`: a test comparing a constant against itself asserts that a constant equals a constant, while the point is to notice a published document changing shape under whoever consumes it |
@@ -152,7 +158,8 @@ instructions read together — **fix the text, never lower the threshold**).
 The harness owns **no `Morgana:` configuration and no secrets**. It shares `Morgana.Web`'s
 `UserSecretsId`, resolves that project's settings plus the shared store and republishes the result
 to the host as environment variables. On top it overrides, per run: a throwaway storage path;
-exporters off; rate and dust limiting off; the guard rail per `Harness:EnableUserGuardrail`; a random key
+exporters off; rate and dust limiting off; the guard rail per `Harness:EnableUserGuardrail` and the PeerGuard per
+`Harness:EnablePeerGuardrail`, both off by default; a random key
 for the `harness` issuer; one partner appended, admitted to a single agent.
 
 The repository must carry the `harness` entry under `Morgana:Authentication:Issuers` or the fixture

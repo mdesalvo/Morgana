@@ -222,7 +222,7 @@ public sealed class ConversationApiTests
 
         // Started and silent is a conversation with an empty transcript: only one never started is a 404.
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        ConversationHistoryResponse? history = await response.Content.ReadFromJsonAsync<ConversationHistoryResponse>();
+        ConversationHistoryResponse? history = await response.Content.ReadFromJsonAsync<ConversationHistoryResponse>(TestContext.Current.CancellationToken);
         Assert.NotNull(history);
         Assert.Empty(history.Messages);
     }
