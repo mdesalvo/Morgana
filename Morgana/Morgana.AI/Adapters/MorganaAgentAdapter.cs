@@ -271,8 +271,10 @@ public class MorganaAgentAdapter
         //     failing to exist). They stay apart from the native adapter because they need
         //     nothing from it: each one arrives already an AIFunction. An MCP tool whose name collides
         //     with a tool of Morgana, of the domain, with a colleague's prefix or with another MCP tool
-        //     is refused, since MCP tools enter last.
-        List<AIFunction> mcpTools = await RegisterMCPToolsAsync(agentType, intentAttribute.Intent, [.. agentTools.Select(tool => tool.Name)]);
+        //     is refused, since MCP tools enter last. With the tool guard on, the tools are the ones
+        //     the guard admitted from each server's current offer.
+        Dictionary<string, UsesMCPServerAttribute> mcpToolServers = [];
+        List<AIFunction> mcpTools = await RegisterMCPToolsAsync(agentType, intentAttribute.Intent, [.. agentTools.Select(tool => tool.Name)], mcpToolServers);
 
         // 6c) Collect the colleagues this agent declares it may consult. Like MCP tools they arrive
         //     already AIFunctions and bypass the native adapter entirely — they are not declared in
@@ -344,7 +346,7 @@ public class MorganaAgentAdapter
         // 9b) Every tool result passes the guard before the model reads it. Switched off, the agent
         //     is exactly the one assembled above.
         if (ToolGuardrailEnabled)
-            aiAgent = GuardToolResults(aiAgent, agentType, intentAttribute.Intent, [.. mcpTools.Select(tool => tool.Name)], conversationId, sessionAccessor, morganaAIContextProvider);
+            aiAgent = GuardToolResults(aiAgent, agentType, intentAttribute.Intent, mcpToolServers, conversationId, sessionAccessor, morganaAIContextProvider);
 
         // 10) Return all three: the caller (MorganaAgent subclass) keeps the provider and
         //     history-provider handles to drive context/history across turns — the agent
@@ -556,7 +558,7 @@ public class MorganaAgentAdapter
     /// <param name="agent">The agent as assembled, whose tool loop is to be guarded.</param>
     /// <param name="agentType">The agent's class, whose declared colleagues are exempt from the guard.</param>
     /// <param name="agentIntent">The intent the agent serves, tagged on every security event it records.</param>
-    /// <param name="mcpToolNames">The MCP tools the agent was given, answered from outside the installation.</param>
+    /// <param name="mcpToolServers">The MCP tools the agent was given with the server each came from; they are answered from outside the installation and only while their server is available and secure.</param>
     /// <param name="conversationId">The conversation the agent serves, named in the guard's findings.</param>
     /// <param name="sessionAccessor">Hands back the agent's live session, where the quarantine is recorded.</param>
     /// <param name="contextProvider">Reads and writes the quarantine on the live session.</param>
@@ -564,7 +566,7 @@ public class MorganaAgentAdapter
         AIAgent agent,
         Type agentType,
         string agentIntent,
-        IReadOnlyCollection<string> mcpToolNames,
+        IReadOnlyDictionary<string, UsesMCPServerAttribute> mcpToolServers,
         string conversationId,
         Func<AgentSession?> sessionAccessor,
         MorganaAIContextProvider contextProvider)
@@ -579,14 +581,20 @@ public class MorganaAgentAdapter
                 .Select(attribute => ToFunctionName(new Records.PeerReference(attribute.Intent, null)))
         ];
 
+        // The partners' colleagues by the function name the model calls them under, for the go/no-go read before each call.
+        Dictionary<string, Records.PeerReference> partnerToolPeers = agentType.GetCustomAttributes<ConsultsAgentAttribute>()
+            .Where(attribute => attribute.Instance is not null)
+            .Select(attribute => new Records.PeerReference(attribute.Intent, attribute.Instance))
+            .ToDictionary(ToFunctionName, peer => peer);
+
         // An MCP server and a partner answer from outside the installation, so their results are inspected as well.
-        HashSet<string> externalToolNames =
-        [
-            .. mcpToolNames,
-            .. agentType.GetCustomAttributes<ConsultsAgentAttribute>()
-                .Where(attribute => attribute.Instance is not null)
-                .Select(attribute => ToFunctionName(new Records.PeerReference(attribute.Intent, attribute.Instance)))
-        ];
+        HashSet<string> externalToolNames = [.. mcpToolServers.Keys, .. partnerToolPeers.Keys];
+
+        // Whether the source behind an external tool currently holds a completed approval of its offer.
+        bool SourceIsAvailableAndSecure(string toolName)
+            => mcpToolServers.TryGetValue(toolName, out UsesMCPServerAttribute? server)
+                ? guardRailService.IsServerAvailableAndSecure(server)
+                : partnerToolPeers.TryGetValue(toolName, out Records.PeerReference? peer) && guardRailService.IsPeerAvailableAndSecure(peer);
 
         // The guard joins the agent's tool loop through the agent framework's own function-invocation
         // middleware, which wraps every call of every run, streamed or not.
@@ -628,6 +636,33 @@ public class MorganaAgentAdapter
                         }));
 
                     return await promptComposerService.ComposeQuarantinedResultAsync(toolName);
+                }
+
+                // An agent may still hold the snapshot of a source that has since been refused: its call is not sent.
+                if (externalToolNames.Contains(toolName) && !SourceIsAvailableAndSecure(toolName))
+                {
+                    logger.LogWarning(
+                        "Tool {ToolName} not sent for conversation {ConversationId}: its source is not available and secure",
+                        toolName, conversationId);
+
+                    // Counts the call that was kept from leaving.
+                    Telemetry.SecurityEvents.Add(1,
+                        new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.Tool),
+                        new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.NotSent),
+                        new KeyValuePair<string, object?>(Telemetry.AgentIntent, agentIntent));
+
+                    // The event lands on the span current while the tool would have run, without the arguments.
+                    Activity.Current?.AddEvent(new ActivityEvent(
+                        Telemetry.EventToolWithheld,
+                        tags: new ActivityTagsCollection
+                        {
+                            [Telemetry.ToolName] = toolName,
+                            [Telemetry.SecurityOutcome] = Telemetry.SecurityOutcomes.NotSent
+                        }));
+
+                    // The call fails as a call to an unreachable server fails: the model reads the tool loop's own
+                    // error and no text of ours. The arguments, which may carry the user's data, never leave.
+                    throw new InvalidOperationException($"The source of {toolName} is not available and secure.");
                 }
 
                 // The tool runs; an exception is the tool loop's to handle as it always was.
@@ -805,6 +840,22 @@ public class MorganaAgentAdapter
             {
                 logger.LogWarning("Agent {AgentTypeName} cannot reach declared colleague '{PeerIntent}'; it will run without it", agentType.Name, attribute.Intent);
                 return null;
+            }
+
+            // A partner's card is text from outside that the model reads as instructions: its description is examined first.
+            if (ToolGuardrailEnabled && peer.Instance is not null)
+            {
+                // The verdict on the description under the function name the model would call.
+                Records.GuardRailResult cardVerdict = await guardRailService.AdmitPartnerCardAsync(peer, ToFunctionName(peer), peerCard.Description);
+
+                // A refused partner is not offered: no function and no territory line.
+                if (!cardVerdict.Compliant)
+                {
+                    logger.LogWarning(
+                        "Agent {AgentTypeName} will run without colleague '{PeerIntent}': its partner's card was refused — {Violation}",
+                        agentType.Name, attribute.Intent, cardVerdict.Violation);
+                    return null;
+                }
             }
 
             // The A2A context identifier is the conversation, bound once here rather than left to a
@@ -1088,8 +1139,9 @@ public class MorganaAgentAdapter
     /// <param name="agentType">Agent type to inspect for [UsesMCPServer] attributes</param>
     /// <param name="agentIntent">The intent the agent serves, tagged on the security event of a refused tool</param>
     /// <param name="agentToolNames">Names of the agent's tools from morgana.json and agents.json, which an MCP tool may not take</param>
+    /// <param name="mcpToolServers">Filled with the server each admitted MCP tool came from, for the go/no-go read before every call</param>
     /// <returns>Discovered tools as AIFunctions, empty if no servers declared</returns>
-    private async Task<List<AIFunction>> RegisterMCPToolsAsync(Type agentType, string agentIntent, IReadOnlyCollection<string> agentToolNames)
+    private async Task<List<AIFunction>> RegisterMCPToolsAsync(Type agentType, string agentIntent, IReadOnlyCollection<string> agentToolNames, Dictionary<string, UsesMCPServerAttribute> mcpToolServers)
     {
         // An agent may declare several [UsesMCPServer] (multiple servers, mixed
         // Http/Stdio) — collect them all, not just the first.
@@ -1145,6 +1197,9 @@ public class MorganaAgentAdapter
 
                     // The name is free, so the tool joins the agent.
                     mcpTools.Add(serverTool);
+
+                    // The tool's server is remembered so its availability is read before each call.
+                    mcpToolServers[serverTool.Name] = attribute;
                 }
             }
             catch (Exception ex)
@@ -1157,9 +1212,9 @@ public class MorganaAgentAdapter
     }
 
     /// <summary>
-    /// Discovers tools from a single MCP server. Tools retain server-declared names and schema
-    /// untouched and survive the server ending its session for the whole life of the agent, which
-    /// discovers them only once, at creation.
+    /// Discovers tools from a single MCP server: the ones the guard admitted when the tool guard is on and the registry's listing otherwise.
+    /// Tools retain server-declared names and schema untouched and survive the server ending its session
+    /// for the whole life of the agent, which discovers them only once, at creation.
     /// </summary>
     /// <param name="serverAttribute">Attribute declaring the MCP server (transport, command, args)</param>
     /// <returns>Server's tools as AIFunctions</returns>
@@ -1167,11 +1222,14 @@ public class MorganaAgentAdapter
     {
         logger.LogInformation("Registering MCP tools from server: {ServerAttributeCommand}", serverAttribute.Command);
 
-        IList<AIFunction> mcpTools = await imcpClientRegistryService.DiscoverResilientToolsAsync(serverAttribute);
+        // With the tool guard on, the server's offer is examined before any of its tools reaches the agent.
+        IList<AIFunction> mcpTools = ToolGuardrailEnabled
+            ? [.. (await guardRailService.AdmitMCPServerToolsAsync(serverAttribute)).Tools]
+            : await imcpClientRegistryService.DiscoverResilientToolsAsync(serverAttribute);
 
         // A reachable server that advertises zero tools is not an error (it may expose
-        // none yet, or only prompts/resources): warn for visibility and return — there is
-        // simply nothing to bind and the agent keeps its base/native tools.
+        // none yet or only prompts/resources) and a refused or unlisted server yields none either:
+        // warn for visibility and return — there is simply nothing to bind and the agent keeps its base/native tools.
         if (mcpTools.Count == 0)
         {
             logger.LogWarning("No tools discovered from MCP server: {ServerAttributeCommand}", serverAttribute.Command);

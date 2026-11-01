@@ -1,10 +1,12 @@
 using System.Globalization;
+using System.Reflection;
 using Akka.Actor;
 using Akka.Actor.Setup;
 using Akka.DependencyInjection;
 using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
+using Morgana.AI.Attributes;
 using Morgana.AI.Commands;
 using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
@@ -363,6 +365,32 @@ _ = app.Services.GetRequiredService<IAgentRegistryService>().GetAllIntents();
 app.Services.GetRequiredService<ICommandRegistryService>();
 // Builds the three tiers at startup, so that a tier left unconfigured refuses the boot rather than the first turn.
 app.Services.GetRequiredService<ILanguageModelService>();
+
+// Morgana examines what every declared MCP server offers before the first conversation, as an antivirus does ahead
+// of use. A server unreachable now is examined at its first use with the same code and the admission never throws,
+// so a server cannot stop the boot.
+if (builder.Configuration.GetValue("Morgana:ActorSystem:EnableToolGuardrail", true))
+{
+    // The guard that keeps the go/no-go of every external source.
+    IGuardRailService startupGuardRailService = app.Services.GetRequiredService<IGuardRailService>();
+
+    // The registry that knows every agent type by intent.
+    IAgentRegistryService startupAgentRegistryService = app.Services.GetRequiredService<IAgentRegistryService>();
+
+    // Every server any agent declares, once each: the pool key is internal to Morgana.AI so the transport and the
+    // command, which it is made of, identify a server here.
+    List<UsesMCPServerAttribute> declaredMCPServers =
+    [
+        .. startupAgentRegistryService.GetAllIntents()
+            .Select(intent => startupAgentRegistryService.ResolveAgentFromIntent(intent))
+            .OfType<Type>()
+            .SelectMany(agentType => agentType.GetCustomAttributes<UsesMCPServerAttribute>())
+            .DistinctBy(attribute => (attribute.Transport, attribute.Command))
+    ];
+
+    // Every server is examined at once: the boot waits for the slowest rather than for the sum.
+    await Task.WhenAll(declaredMCPServers.Select(server => startupGuardRailService.AdmitMCPServerToolsAsync(server)));
+}
 
 app.UseCors("Channel");                 // Open CORS; trust gate is JWT, not origin
 app.UseHttpsRedirection();              // Redirect HTTP to HTTPS

@@ -7,6 +7,7 @@ using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using PromptHarness.Infrastructure;
+using PromptHarness.Infrastructure.Engine;
 using Xunit;
 
 namespace PromptHarness.Tests;
@@ -29,6 +30,7 @@ public sealed class ToolResultCheckTests
     private readonly LLMGuardRailService guard = new LLMGuardRailService(
         new UnreachableLanguageModelService(),
         new ConfigurationPromptResolverService(new ScriptedDomain()),
+        new ScriptedMCPClientRegistryService(() => []),
         new ConfigurationBuilder().Build(),
         NullLogger.Instance);
 
@@ -335,6 +337,7 @@ public sealed class ToolResultCheckTests
         return new LLMGuardRailService(
             languageModel,
             new ConfigurationPromptResolverService(new ScriptedDomain()),
+            new ScriptedMCPClientRegistryService(() => []),
             new ConfigurationBuilder().AddInMemoryCollection(settings).Build(),
             NullLogger.Instance);
     }

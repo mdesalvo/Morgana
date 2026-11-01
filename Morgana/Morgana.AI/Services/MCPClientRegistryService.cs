@@ -65,12 +65,11 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     }
 
     /// <summary>
-    /// Derives a stable pool key from a <see cref="UsesMCPServerAttribute"/>.
-    /// Http  → the URI string.
-    /// Stdio → "stdio:{command}" (args are intentionally excluded: same executable is expected to be registered once per agent).
+    /// The identity a server is pooled under and the identity the guard keeps its verdict under:
+    /// the URI over HTTP, "stdio:{command}" over stdio, where the arguments are left out because one executable is registered once per agent.
     /// </summary>
-    private static string PoolKey(UsesMCPServerAttribute attr) =>
-        attr.Transport == Records.MCPTransport.Stdio ? $"stdio:{attr.Command}" : attr.Command;
+    internal static string PoolKey(UsesMCPServerAttribute serverAttribute) =>
+        serverAttribute.Transport == Records.MCPTransport.Stdio ? $"stdio:{serverAttribute.Command}" : serverAttribute.Command;
 
     /// <summary>
     /// Gets an existing MCP client for the given server declaration, or creates and connects a new one.

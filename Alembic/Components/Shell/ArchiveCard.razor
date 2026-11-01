@@ -33,6 +33,14 @@
             <FluentDivider />
             <FluentText Class="panel-title">Classes, tier and MCP servers</FluentText>
 
+            @* A notice exists only when it tells what the screen does not show: the door is there only while a server is declared. *@
+            @if (Agents.Any(agent => McpRows(agent).Count > 0))
+            {
+                <FluentMessageBar Intent="MessageBarIntent.Warning" Layout="MessageBarLayout.MultiLine" AllowDismiss="false" Class="message-fits">
+                    An MCP server is a door Morgana cannot see behind. She reads what it offers and what it returns, never what it does with what her agents send it: declare only a server you trust with your users' data.
+                </FluentMessageBar>
+            }
+
             <FluentGrid Spacing="3">
                 @foreach (AgentDraft agent in Agents)
                 {

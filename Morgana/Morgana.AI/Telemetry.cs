@@ -282,6 +282,12 @@ public static class Telemetry
 
         /// <summary>The provider refusing an agent's own request.</summary>
         public const string Agent = "agent";
+
+        /// <summary>An MCP server's offer examined before agents may use it.</summary>
+        public const string MCPOffer = "mcp_offer";
+
+        /// <summary>The description of a partner's card examined before its colleague is offered.</summary>
+        public const string PartnerCard = "partner_card";
     }
 
     /// <summary>The values of <see cref="SecurityOutcome"/>.</summary>
@@ -296,8 +302,14 @@ public static class Telemetry
         /// <summary>A tool not run because its result was withheld earlier in the turn.</summary>
         public const string WithheldWithoutRunning = "withheld_without_running";
 
-        /// <summary>An MCP tool kept out of an agent.</summary>
+        /// <summary>An MCP tool, an MCP server's offer or a partner's card kept out of an agent.</summary>
         public const string Refused = "refused";
+
+        /// <summary>A source came back with an offer other than the one examined before.</summary>
+        public const string Changed = "changed";
+
+        /// <summary>A call not sent because its source is not available and secure.</summary>
+        public const string NotSent = "not_sent";
 
         /// <summary>A check that could not decide and admitted.</summary>
         public const string FailedOpen = "failed_open";

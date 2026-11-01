@@ -16,7 +16,10 @@ namespace PromptHarness.Infrastructure.Engine;
 public static class GuardRailServiceFactory
 {
     /// <summary>Builds the guard over the five providers by hand: the harness host has no plugin loader.</summary>
-    public static LLMGuardRailService Create(IConfiguration hostConfiguration, ILoggerFactory loggerFactory)
+    /// <param name="hostConfiguration">The configuration the host reads.</param>
+    /// <param name="loggerFactory">Logger factory that the providers write to.</param>
+    /// <param name="mcpClientRegistryService">The registry the guard lists an MCP server through.</param>
+    public static LLMGuardRailService Create(IConfiguration hostConfiguration, ILoggerFactory loggerFactory, IMCPClientRegistryService mcpClientRegistryService)
     {
         // The observer reads token usage off the telemetry spans and a failing run is diagnosed from what the model read.
         IConfiguration configuration = new ConfigurationBuilder()
@@ -45,6 +48,6 @@ public static class GuardRailServiceFactory
         ILanguageModelService languageModelService = new ConfigurationLanguageModelService(configuration, languageModels, promptResolver, loggerFactory);
 
         // The guard itself.
-        return new LLMGuardRailService(languageModelService, promptResolver, configuration, NullLogger.Instance);
+        return new LLMGuardRailService(languageModelService, promptResolver, mcpClientRegistryService, configuration, NullLogger.Instance);
     }
 }

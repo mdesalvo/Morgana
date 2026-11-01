@@ -223,7 +223,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | Service | Interface | Purpose |
 |---|---|---|
 | `LLMClassifierService` | `IClassifierService` | LLM intent classification; falls back to `"other"` at confidence 0, marked as a classification error |
-| `LLMGuardRailService` | `IGuardRailService` | LLM policy check on the user's message, deterministic check on tool results, `ToolGuard` inspection of MCP and partner results. **Fails open**, except on an external result, which **fails closed** |
+| `LLMGuardRailService` | `IGuardRailService` | LLM policy check on the user's message, deterministic check on tool results, `ToolGuard` inspection of MCP and partner results and of what they offer: an MCP server's tools (examined at startup and again whenever its listing changes) and a partner's card. Answers `IsServerAvailableAndSecure` and `IsPeerAvailableAndSecure` before every external call. **Fails open**, except on an external result or offer, which **fails closed** |
 | `LLMPresenterService` | `IPresenterService` | Welcome message and its reintroduction, in Morgana's personality; the buttons are the intents' own. Never throws |
 | `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
 | `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |

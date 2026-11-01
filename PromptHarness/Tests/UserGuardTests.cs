@@ -46,8 +46,8 @@ public sealed class UserGuardTests : IDisposable
         // Nothing is logged: the verdict and the refusal are the evidence.
         loggerFactory = LoggerFactory.Create(logging => logging.ClearProviders());
 
-        // The UserGuard itself.
-        guard = GuardRailServiceFactory.Create(fixture.Configuration, loggerFactory);
+        // The UserGuard itself, over a registry that lists nothing: a user's message reaches no server.
+        guard = GuardRailServiceFactory.Create(fixture.Configuration, loggerFactory, new ScriptedMCPClientRegistryService(() => []));
     }
 
     /// <summary>Drives one scenario through the whole pipeline with the guard rail on.</summary>

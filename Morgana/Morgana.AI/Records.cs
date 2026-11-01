@@ -633,6 +633,35 @@ public static class Records
         [property: JsonPropertyName("result")] JsonElement Result);
 
     /// <summary>
+    /// What the ToolGuard inspector reads when an external source offers tools: the source and the tools it offers, as a JSON object.
+    /// </summary>
+    /// <remarks>The JSON names are a contract with the ToolGuard prompt's Target sentence about the offer.</remarks>
+    /// <param name="Source">The server or partner that makes the offer.</param>
+    /// <param name="Tools">The tools the source offers.</param>
+    public record ToolGuardOffer(
+        [property: JsonPropertyName("source")] string Source,
+        [property: JsonPropertyName("tools")] IReadOnlyList<ToolGuardOfferedTool> Tools);
+
+    /// <summary>
+    /// One tool of an offer, as the source describes it.
+    /// </summary>
+    /// <remarks>The JSON names are a contract with the ToolGuard prompt's Target sentence about the offer.</remarks>
+    /// <param name="Name">The name under which the model would call the tool.</param>
+    /// <param name="Description">The description the source gives the tool.</param>
+    /// <param name="Parameters">The tool's input schema as the source sent it; null for a partner's function, whose schema is Morgana's own.</param>
+    public record ToolGuardOfferedTool(
+        [property: JsonPropertyName("name")] string Name,
+        [property: JsonPropertyName("description")] string Description,
+        [property: JsonPropertyName("parameters")] JsonElement? Parameters);
+
+    /// <summary>
+    /// The tools an agent may hold from one MCP server and the verdict they were admitted or refused under.
+    /// </summary>
+    /// <param name="Tools">The admitted tools; empty unless <paramref name="Verdict"/> is compliant.</param>
+    /// <param name="Verdict">The verdict on the server's current offer.</param>
+    public record MCPServerAdmission(IReadOnlyList<AIFunction> Tools, GuardRailResult Verdict);
+
+    /// <summary>
     /// Which layer of a guard decided a verdict, carried so an operator can tell a judgment from an admission by default.
     /// </summary>
     public enum GuardVerdictSource

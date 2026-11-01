@@ -1,10 +1,12 @@
-﻿using System.Globalization;
+﻿using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Services;
@@ -12,6 +14,7 @@ namespace Morgana.AI.Services;
 /// <summary>
 /// Default <see cref="IGuardRailService"/> implementation: the LLM policy check on the user's message, the
 /// deterministic check on every guarded tool result and the ToolGuard inspection of the results of external tools.
+/// It also examines what MCP servers and partners offer and keeps, per external source, whether it is go or no-go.
 /// The user's message goes to <see cref="ILanguageModelService"/> with the UserGuard system prompt for detection of
 /// spam, phishing, violence, profanity and other policy violations.
 /// </summary>
@@ -85,20 +88,44 @@ public partial class LLMGuardRailService : IGuardRailService
     private readonly string contentFilteredRefusal;
 
     /// <summary>
+    /// The MCP registry that lists a server again whenever an agent asks for its tools.
+    /// </summary>
+    private readonly IMCPClientRegistryService mcpClientRegistryService;
+
+    /// <summary>
+    /// The conversation an examination is charged under: an offer belongs to no conversation, as the presenter's welcome belongs to none.
+    /// </summary>
+    private const string OfferConversationId = "toolguard-offers";
+
+    /// <summary>
+    /// The offer of one source as last examined and its examination, shared by every caller that meets the same offer.
+    /// </summary>
+    private sealed record OfferAdmission(string OfferText, Lazy<Task<Records.GuardRailResult>> Examination);
+
+    /// <summary>
+    /// Per external source, the last offer examined; one entry per source, so it never grows with conversations.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, OfferAdmission> offerAdmissions = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Initialises a new instance of <see cref="LLMGuardRailService"/>.
     /// Loads and builds the UserGuard system prompt eagerly.
     /// </summary>
     /// <param name="llmService">LLM service used for the async policy check.</param>
     /// <param name="promptResolverService">Prompt resolver used to load UserGuard configuration.</param>
+    /// <param name="mcpClientRegistryService">MCP registry that lists a server whose offer is examined.</param>
     /// <param name="configuration">Application configuration holding the limit on an external result's length.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
     public LLMGuardRailService(
         ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
+        IMCPClientRegistryService mcpClientRegistryService,
         IConfiguration configuration,
         ILogger logger)
     {
         this.llmService = llmService;
+        // The registry lists a server again whenever an agent asks for its tools, so the offer is always read fresh.
+        this.mcpClientRegistryService = mcpClientRegistryService;
         this.configuration = configuration;
         this.logger = logger;
 
@@ -247,20 +274,223 @@ public partial class LLMGuardRailService : IGuardRailService
         return await InspectToolResultAsync(conversationId, toolName, toolArguments, toolResult);
     }
 
+
+    /// <inheritdoc/>
+    public async Task<Records.MCPServerAdmission> AdmitMCPServerToolsAsync(UsesMCPServerAttribute serverAttribute)
+    {
+        // What the server offers right now, as the registry lists it.
+        IList<AIFunction> listedTools;
+
+        try
+        {
+            // The listing is asked of the server every time, so a changed signature or a new tool is met here.
+            listedTools = await mcpClientRegistryService.DiscoverResilientToolsAsync(serverAttribute);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "LLMGuardRailService: MCP server {Server} could not be listed — no tools admitted",
+                serverAttribute.Command);
+
+            // Nothing was offered to judge: the agent gets no tools and an earlier approval of the server stands untouched.
+            return new Records.MCPServerAdmission(
+                [],
+                new Records.GuardRailResult(false, "the server could not be listed", Records.GuardVerdictSource.FailClosed));
+        }
+
+        // The offer in the shape the inspector reads: each tool with its name, description and input schema.
+        Records.ToolGuardOffer offer = new Records.ToolGuardOffer(
+            serverAttribute.Command,
+            [.. listedTools.Select(tool => new Records.ToolGuardOfferedTool(tool.Name, tool.Description, tool.JsonSchema))]);
+
+        // The verdict on this listing: remembered if the server offered it before and examined once otherwise.
+        Records.GuardRailResult verdict = await AdmitOfferAsync(MCPSourceKey(serverAttribute), offer, Telemetry.SecurityDoors.MCPOffer);
+
+        // Only an admitted offer reaches the agent.
+        return new Records.MCPServerAdmission(verdict.Compliant ? [.. listedTools] : [], verdict);
+    }
+
+    /// <inheritdoc/>
+    public async Task<Records.GuardRailResult> AdmitPartnerCardAsync(Records.PeerReference peer, string functionName, string? cardDescription)
+    {
+        // The card's description as the model would meet it: one function under the name the agent would call.
+        Records.ToolGuardOffer offer = new Records.ToolGuardOffer(
+            peer.Instance ?? "",
+            [new Records.ToolGuardOfferedTool(functionName, cardDescription ?? "", null)]);
+
+        // The verdict on this description: remembered if the card said it before and examined once otherwise.
+        return await AdmitOfferAsync(PartnerSourceKey(peer), offer, Telemetry.SecurityDoors.PartnerCard);
+    }
+
+    /// <inheritdoc/>
+    public bool IsServerAvailableAndSecure(UsesMCPServerAttribute serverAttribute)
+        => IsSourceAvailableAndSecure(MCPSourceKey(serverAttribute));
+
+    /// <inheritdoc/>
+    public bool IsPeerAvailableAndSecure(Records.PeerReference peer)
+        => IsSourceAvailableAndSecure(PartnerSourceKey(peer));
+
+    /// <summary>
+    /// The key an MCP server's verdict is kept under.
+    /// </summary>
+    private static string MCPSourceKey(UsesMCPServerAttribute serverAttribute)
+        => $"mcp:{MCPClientRegistryService.PoolKey(serverAttribute)}";
+
+    /// <summary>
+    /// The key a partner's colleague verdict is kept under.
+    /// </summary>
+    private static string PartnerSourceKey(Records.PeerReference peer)
+        => $"partner:{peer.Instance}/{peer.Intent}".ToLowerInvariant();
+
+    /// <summary>
+    /// True when the source's last examination completed with an admission.
+    /// </summary>
+    private bool IsSourceAvailableAndSecure(string sourceKey)
+        => offerAdmissions.TryGetValue(sourceKey, out OfferAdmission? admission)
+           && admission.Examination.IsValueCreated
+           && admission.Examination.Value.IsCompletedSuccessfully
+           && admission.Examination.Value.Result.Compliant;
+
+    /// <summary>
+    /// Admits an offer the source made before without a model call and examines any other offer once, however many callers ask at the same time.
+    /// </summary>
+    private async Task<Records.GuardRailResult> AdmitOfferAsync(string sourceKey, Records.ToolGuardOffer offer, string securityDoor)
+    {
+        // The same text is both what the inspector reads and what a later listing is compared with.
+        string offerText = JsonSerializer.Serialize(offer, AIJsonUtilities.DefaultOptions);
+
+        // The source keeps its admission while it offers the same text and gets a new one when the text differs.
+        OfferAdmission admission = offerAdmissions.AddOrUpdate(
+            sourceKey,
+            _ => NewAdmission(false),
+            (_, existingAdmission) => string.Equals(existingAdmission.OfferText, offerText, StringComparison.Ordinal)
+                ? existingAdmission
+                : NewAdmission(true));
+
+        // Every caller that met this offer waits for the one examination.
+        Records.GuardRailResult verdict = await admission.Examination.Value;
+
+        // No judgment was reached: the next admission asks again instead of keeping the source shut until a restart.
+        if (verdict.Source == Records.GuardVerdictSource.FailClosed)
+            offerAdmissions.TryRemove(new KeyValuePair<string, OfferAdmission>(sourceKey, admission));
+
+        // The verdict every caller of this offer reads.
+        return verdict;
+
+        // A discarded admission never starts its examination, so the change event lives inside the examination and runs once.
+        OfferAdmission NewAdmission(bool replacesAnotherOffer)
+            => new OfferAdmission(
+                offerText,
+                new Lazy<Task<Records.GuardRailResult>>(() => ExamineOfferAsync(sourceKey, offerText, securityDoor, replacesAnotherOffer)));
+    }
+
+    /// <summary>
+    /// Examines one offer: the free check, the limit on length and then the inspector; never throws.
+    /// </summary>
+    private async Task<Records.GuardRailResult> ExamineOfferAsync(string sourceKey, string offerText, string securityDoor, bool replacesAnotherOffer)
+    {
+        // A source that offers something other than what was examined before is worth an operator's attention.
+        if (replacesAnotherOffer)
+        {
+            logger.LogWarning("LLMGuardRailService: offer of {Source} changed — examining again", sourceKey);
+
+            // Counts the change itself: a source that rewrites what it offers after approval is how a rug pull begins.
+            Telemetry.SecurityEvents.Add(
+                1,
+                new KeyValuePair<string, object?>(Telemetry.SecurityDoor, securityDoor),
+                new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Changed));
+        }
+
+        // What the offer carries against the assistant; null when nothing in it does.
+        string? finding;
+
+        try
+        {
+            // The free check over every name and text of the offer: parameter names are covered too.
+            finding = FindForgery(offerText);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "LLMGuardRailService: check of the offer of {Source} failed", sourceKey);
+
+            // An offer whose free check fails still goes to the inspector like an external result.
+            finding = null;
+        }
+
+        // The limit on what an inspection vouches for, read once for this offer.
+        int maxLength = MaxExternalToolResultLength;
+
+        // The verdict on the offer, decided by the first layer that has something to say.
+        Records.GuardRailResult result;
+
+        // A forgery refuses outright and a text over the limit is not inspected; anything else goes to the inspector.
+        if (finding != null)
+        {
+            // A forgery refuses the offer without a model call.
+            result = new Records.GuardRailResult(false, finding, Records.GuardVerdictSource.Prefilter);
+        }
+        else if (offerText.Length > maxLength)
+        {
+            // On an offer that long an inspection is not a verdict to trust and an injection hides easily in its tail.
+            result = new Records.GuardRailResult(
+                false,
+                string.Create(CultureInfo.InvariantCulture, $"is longer than the {maxLength} characters an inspection vouches for"),
+                Records.GuardVerdictSource.Prefilter);
+        }
+        else
+        {
+            // Nothing forged and within the limit: the inspector reads what the free check cannot.
+            result = await JudgeWithInspectorAsync(OfferConversationId, offerText, $"the offer of {sourceKey}");
+        }
+
+        // A refused offer shuts the source for every agent: only the finding is logged, never the offer itself.
+        if (!result.Compliant)
+        {
+            logger.LogWarning(
+                "LLMGuardRailService: offer of {Source} refused — {Violation}",
+                sourceKey, result.Violation);
+
+            // Counts the refusal by the layer that decided it, under the door the offer came through.
+            Telemetry.SecurityEvents.Add(
+                1,
+                new KeyValuePair<string, object?>(Telemetry.SecurityDoor, securityDoor),
+                new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Refused),
+                new KeyValuePair<string, object?>(Telemetry.SecuritySource, result.Source.ToString()));
+        }
+        // An admitted offer opens the source to the agents that declare it.
+        else
+        {
+            logger.LogInformation("LLMGuardRailService: offer of {Source} admitted", sourceKey);
+        }
+
+        // The verdict that the source keeps until its offer changes.
+        return result;
+    }
+
     /// <summary>
     /// Has the ToolGuard inspector judge the result of an external tool; a result that cannot be judged is withheld.
     /// </summary>
     private async Task<Records.GuardRailResult> InspectToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult)
     {
+        // The tool, the arguments it was called with and what it returned, in the three fields the inspector's prompt names.
+        Records.ToolGuardSubject subject = new Records.ToolGuardSubject(toolName, ReadJsonElement(toolArguments), ReadJsonElement(toolResult));
+
+        // The inspector reads the subject as one JSON document, in the escaping the tool loop hands to the
+        // provider: accented letters and angle brackets stay readable instead of turning into escape codes.
+        string subjectJson = JsonSerializer.Serialize(subject, AIJsonUtilities.DefaultOptions);
+
+        // The result of an external tool is judged by the inspector under the name of the tool that returned it.
+        return await JudgeWithInspectorAsync(conversationId, subjectJson, $"the result of tool {toolName}");
+    }
+
+    /// <summary>
+    /// Has the ToolGuard inspector judge a subject serialized as JSON; a subject that cannot be judged is withheld.
+    /// </summary>
+    private async Task<Records.GuardRailResult> JudgeWithInspectorAsync(string conversationId, string subjectJson, string subjectLabel)
+    {
+        // Any failure of the inspection withholds the subject: a source nobody vouches for is never read unjudged.
         try
         {
-            // The tool, the arguments it was called with and what it returned, in the three fields the inspector's prompt names.
-            Records.ToolGuardSubject subject = new Records.ToolGuardSubject(toolName, ReadJsonElement(toolArguments), ReadJsonElement(toolResult));
-
-            // The inspector reads the subject as one JSON document, in the escaping the tool loop hands to the
-            // provider: accented letters and angle brackets stay readable instead of turning into escape codes.
-            string subjectJson = JsonSerializer.Serialize(subject, AIJsonUtilities.DefaultOptions);
-
             // The inspection runs on the framework tier and is charged under its own dust role.
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
@@ -276,15 +506,15 @@ public partial class LLMGuardRailService : IGuardRailService
             if (inspectorVerdict is null)
             {
                 logger.LogWarning(
-                    "LLMGuardRailService: inspector returned no readable verdict on the result of tool {ToolName} for conversation {ConversationId} — withholding",
-                    toolName, conversationId);
+                    "LLMGuardRailService: inspector returned no readable verdict on {Subject} for conversation {ConversationId} — withholding",
+                    subjectLabel, conversationId);
 
                 return new Records.GuardRailResult(false, "the inspector returned no readable verdict", Records.GuardVerdictSource.FailClosed);
             }
 
             logger.LogInformation(
-                "LLMGuardRailService: inspection of the result of tool {ToolName} — compliant={Compliant} for conversation {ConversationId}",
-                toolName, inspectorVerdict.Compliant, conversationId);
+                "LLMGuardRailService: inspection of {Subject} — compliant={Compliant} for conversation {ConversationId}",
+                subjectLabel, inspectorVerdict.Compliant, conversationId);
 
             // The inspector found nothing against the assistant: the result reaches the model.
             if (inspectorVerdict.Compliant)
@@ -292,8 +522,8 @@ public partial class LLMGuardRailService : IGuardRailService
 
             // The inspector judged the result hostile: only its finding is logged and never the content.
             logger.LogWarning(
-                "LLMGuardRailService: result of tool {ToolName} withheld for conversation {ConversationId} — {Violation}",
-                toolName, conversationId, inspectorVerdict.Violation);
+                "LLMGuardRailService: {Subject} withheld for conversation {ConversationId} — {Violation}",
+                subjectLabel, conversationId, inspectorVerdict.Violation);
 
             return new Records.GuardRailResult(
                 false,
@@ -304,8 +534,8 @@ public partial class LLMGuardRailService : IGuardRailService
         {
             // The provider refused the text before any judgment: a signal against the result, never an admission.
             logger.LogWarning(ex,
-                "LLMGuardRailService: provider-level content filter rejected the result of tool {ToolName} for conversation {ConversationId} — withholding",
-                toolName, conversationId);
+                "LLMGuardRailService: provider-level content filter rejected {Subject} for conversation {ConversationId} — withholding",
+                subjectLabel, conversationId);
 
             return new Records.GuardRailResult(false, "refused by the provider's content filter", Records.GuardVerdictSource.ProviderFilter);
         }
@@ -314,8 +544,8 @@ public partial class LLMGuardRailService : IGuardRailService
             // This includes a JsonException from an answer that is not JSON, which is how a framework tier
             // that is down answers (Morgana's error text): an external source is withheld rather than read unjudged.
             logger.LogError(ex,
-                "LLMGuardRailService: inspection of the result of tool {ToolName} failed for conversation {ConversationId} — withholding",
-                toolName, conversationId);
+                "LLMGuardRailService: inspection of {Subject} failed for conversation {ConversationId} — withholding",
+                subjectLabel, conversationId);
 
             return new Records.GuardRailResult(false, "no verdict could be reached on a source nobody here vouches for", Records.GuardVerdictSource.FailClosed);
         }

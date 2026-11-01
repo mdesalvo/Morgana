@@ -1,11 +1,15 @@
+using Morgana.AI.Attributes;
+
 namespace Morgana.AI.Interfaces;
 
 /// <summary>
 /// Service abstraction for content moderation and policy enforcement on what reaches Morgana's models: the user's message and the results of the tools her agents call.
+/// It also examines what external sources offer (an MCP server's tools, a partner's card) before an agent may use them and answers whether a source is available and secure right now.
 /// Decouples guard-rail logic from the actor infrastructure. GuardActor delegates entirely
 /// to this service and is agnostic of the underlying implementation strategy.
 /// Default implementation: LLMGuardRailService provides LLM-based policy evaluation.
 /// Fail-safe contract: the user's message and a native tool's result fail open, so a transient error never blocks legitimate traffic; an external tool's result fails closed.
+/// An offer that cannot be judged is refused and the refusal is not remembered, so the next admission asks again.
 /// </summary>
 public interface IGuardRailService
 {
@@ -37,4 +41,41 @@ public interface IGuardRailService
     /// </returns>
     /// <remarks>Never throws: a native tool's result that cannot be checked is admitted and an external result that cannot be judged is withheld.</remarks>
     Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult, bool externalSource);
+
+    /// <summary>
+    /// Lists an MCP server and admits its tools to the agents that declare it.
+    /// </summary>
+    /// <param name="serverAttribute">The server declaration carried by the agent class.</param>
+    /// <returns>The server's tools when its offer is admitted, none otherwise; the verdict says which.</returns>
+    /// <remarks>
+    /// A listing identical to the one approved before is admitted without a model call and any other listing is examined once however many callers ask at the same time.
+    /// A server that cannot be listed yields no tools and a FailClosed verdict that is not remembered; an earlier approval of it stands, since a session the server dropped says nothing about its offer.
+    /// Never throws.
+    /// </remarks>
+    Task<Records.MCPServerAdmission> AdmitMCPServerToolsAsync(UsesMCPServerAttribute serverAttribute);
+
+    /// <summary>
+    /// Examines the description a partner's card gives its colleague before the colleague is offered to an agent.
+    /// </summary>
+    /// <param name="peer">The colleague the card describes.</param>
+    /// <param name="functionName">The name under which the model would call the colleague.</param>
+    /// <param name="cardDescription">The description the card carries; null when it carries none.</param>
+    /// <returns>Non-compliant when the colleague is to be kept from the agent.</returns>
+    /// <remarks>The offer is remembered like an MCP server's: an unchanged description is admitted without a model call and an unjudgeable one is not remembered. Never throws.</remarks>
+    Task<Records.GuardRailResult> AdmitPartnerCardAsync(Records.PeerReference peer, string functionName, string? cardDescription);
+
+    /// <summary>
+    /// Whether Morgana holds a completed approval of the server's current offer.
+    /// </summary>
+    /// <param name="serverAttribute">The server declaration carried by the agent class.</param>
+    /// <returns>False while the offer was never approved or a changed one is being examined and after a refusal.</returns>
+    bool IsServerAvailableAndSecure(UsesMCPServerAttribute serverAttribute);
+
+    /// <summary>
+    /// Whether Morgana holds a completed approval of the partner's colleague.
+    /// </summary>
+    /// <param name="peer">The colleague a partner publishes.</param>
+    /// <returns>False while the card was never approved or a changed one is being examined and after a refusal.</returns>
+    /// <remarks>Asked only of a partner's colleague: a colleague of this installation is never examined, so nothing is held for it.</remarks>
+    bool IsPeerAvailableAndSecure(Records.PeerReference peer);
 }

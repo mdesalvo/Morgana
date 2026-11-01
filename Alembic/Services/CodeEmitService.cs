@@ -98,6 +98,11 @@ public class CodeEmitService : ICodeEmitService
         sb.AppendLine(CultureInfo.InvariantCulture, $"[HandlesIntent(\"{intentName}\")]");
         sb.AppendLine(CultureInfo.InvariantCulture, $"[RequiresLLMTier(LLMTier.{agent.Code.Tier ?? DefaultTier})]");
 
+        // Whoever reads the agent's code reads the door its servers open: Morgana's guard cannot see behind it.
+        if (agent.Code.MCPServers.Count > 0)
+            sb.AppendLine("// Morgana reads what these servers offer and return, never what they do with what they are sent: each one is trusted with the user's data.");
+
+        // One attribute per declared server, whose admitted tools the agent is handed when it is created.
         foreach (string server in agent.Code.MCPServers)
             sb.AppendLine(CultureInfo.InvariantCulture, $"[UsesMCPServer(\"{server}\")]");
 
