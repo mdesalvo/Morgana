@@ -157,6 +157,9 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <summary>Reader of the per-turn structural signals.</summary>
     public TurnObserver Observer { get; private set; } = null!;
 
+    /// <summary>The provider and model bound to each tier, recorded in every journey row.</summary>
+    public string LLMDescriptor { get; private set; } = string.Empty;
+
     /// <summary>Scenario engine bound to this host.</summary>
     public ScenarioRunner Runner { get; private set; } = null!;
 
@@ -249,7 +252,9 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             .AddInMemoryCollection([new KeyValuePair<string, string?>("Morgana:OpenTelemetry:EnableSensitiveData", "true")])
             .Build();
         Judge = LLMJudge.Create(judgeConfiguration, judgeLoggerFactory);
-        Runner = new ScenarioRunner(Channel, Observer, Judge, Options, DescribeLlm());
+        // The descriptor is read once so the scenario runner and the groups that write their own journey rows record the same models.
+        LLMDescriptor = DescribeLlm();
+        Runner = new ScenarioRunner(Channel, Observer, Judge, Options, LLMDescriptor);
     }
 
     /// <inheritdoc />

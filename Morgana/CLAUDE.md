@@ -102,7 +102,7 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 | `Records.cs` | Every immutable record: actor messages, configuration, DTOs |
 | `Constants.cs` | The glossary: **every literal that is a contract between two parties who cannot see each other**, `PromptProperties` included. Deliberately absent: log text, prompt prose, `IConfiguration` keys. The test is a *resolver*, not a mention |
 | `Telemetry.cs` | The activity source and the meter, holding their own span and attribute glossary |
-| `morgana.json` | Framework prompts: Morgana, Classifier, Guard, Presentation, ChannelAdapter |
+| `morgana.json` | Framework prompts: Morgana, Classifier, UserGuard, ToolGuard, Presentation, ChannelAdapter |
 
 ### Morgana.Web
 
@@ -223,14 +223,14 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | Service | Interface | Purpose |
 |---|---|---|
 | `LLMClassifierService` | `IClassifierService` | LLM intent classification; falls back to `"other"` at confidence 0, marked as a classification error |
-| `LLMGuardRailService` | `IGuardRailService` | LLM policy check on the user's message, deterministic check on tool results. **Fails open** |
+| `LLMGuardRailService` | `IGuardRailService` | LLM policy check on the user's message, deterministic check on tool results, `ToolGuard` inspection of MCP and partner results. **Fails open**, except on an external result, which **fails closed** |
 | `LLMPresenterService` | `IPresenterService` | Welcome message and its reintroduction, in Morgana's personality; the buttons are the intents' own. Never throws |
 | `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
 | `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
 | `ConfigurationPromptResolverService` | `IPromptResolverService` | Two-tier resolution: framework prompts from `morgana.json`, domain from `agents.json`. Throws if one ID is declared in both |
 | `ConfigurationPromptComposerService` | `IPromptComposerService` | Assembles everything the model reads: the fenced two-layer prompt, tool descriptions, the per-turn held-context declaration, the colleagues declaration, a colleague's question |
 | `ConfigurationAgentDirectoryService` | `IAgentDirectoryService` | Both halves of A2A discovery, plus `ValidateTrustConfiguration` and `ValidatePublishedAddress` |
-| `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Merges every plugin's `agents.json`. Refuses a duplicated intent or prompt id, `other` and the five framework prompt ids. Its refusals are fatal |
+| `EmbeddedAgentConfigurationService` | `IAgentConfigurationService` | Merges every plugin's `agents.json`. Refuses a duplicated intent or prompt id, `other` and the six framework prompt ids. Its refusals are fatal |
 | `HandlesIntentAgentRegistryService` | `IAgentRegistryService` | Discovers agents by attribute; bidirectional intent validation; validates `[ConsultsAgent]` |
 | `ConfigurationLanguageModelService` | `ILanguageModelService` | Builds the three tiers, each on the registered provider it names; the framework actors run on `ActorSystem:Tier` |
 | `ProvidesToolForIntentRegistryService` | `IToolRegistryService` | Discovers tools; warns on orphans; errors on duplicates |
@@ -363,8 +363,10 @@ invoking the tool, a tool description when it weighs the tool, the per-turn inje
 is weighed at all — which is where an agent activated mid-conversation would otherwise fail.
 
 The other framework prompts: **Classifier** (JSON `{intents:[{intent,confidence}]}`, ranked; owns the
-`other` complement, which no domain declares), **Guard** (`{compliant, violation}`),
-**Presentation**, **ChannelAdapter**.
+`other` complement, which no domain declares), **UserGuard** (`{compliant, violation}`),
+**ToolGuard** (same shape, on an external tool's result), **Presentation**, **ChannelAdapter**. The two guards
+share one doctrine of malice verbatim and differ only in the forms of their attack vector, the user or
+the agents and tools; `FrameworkPromptTests` keeps the shared sentences identical.
 
 ## Channel Abstraction
 
@@ -465,7 +467,7 @@ fault reaches a user as a conversation that never answers, on a host that passed
 |---|---|
 | `Morgana:LanguageModels:Tiers` | The three tiers: provider, connection and model of each |
 | `Morgana:AgentToAgent` | `Enabled`, `MaxRoundsPerTurn`, `PublicUrl` (declared only where a binding cannot answer for the address), `Partners[]`. Consultation waits are one **ladder** derived from `ActorSystem:TimeoutSeconds`, stated once in `Records.PeerConsultationWaits` |
-| `Morgana:ActorSystem` | `Tier` (the framework actors' tier, mandatory), `TimeoutSeconds`, `EnableUserGuardrail`, `EnableToolGuardrail`, `IntentCollisionThreshold` |
+| `Morgana:ActorSystem` | `Tier` (the framework actors' tier, mandatory), `TimeoutSeconds`, `EnableUserGuardrail`, `EnableToolGuardrail`, `MaxExternalToolResultLength`, `IntentCollisionThreshold` |
 | `Morgana:AdaptiveMessaging` | `EnableStreamingResponse`, `RichFeaturesMinLength` |
 | `Morgana:ConversationPersistence` | `StoragePath`, `EncryptionKey` (AES-256, base64, 32 bytes) |
 | `Morgana:RateLimiting` · `:DustLimiting` | Limits and their authored error messages. A model's price lives in its provider plugin |
@@ -495,7 +497,7 @@ or environment variables.
 - Actor messages are immutable records in `Records.cs`; every cross-party literal is a `Constants` member
 - Actors use `Tell`, never `Ask` (streaming) and `Become()` for FSM transitions
 - Tool method names match the JSON `Name` exactly
-- Prompts resolve by ID: the five framework ids or an intent name
+- Prompts resolve by ID: the six framework ids or an intent name
 - Rich cards use polymorphic JSON with a `type` discriminator
 - Handing the conversation back is signalled out-of-band by a tool, never by a token inside the response text
 - Channel names are normalized to lowercase at ingress

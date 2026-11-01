@@ -88,11 +88,16 @@ public class MorganaChannelAdapter
         {
             Records.Prompt adapterPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.ChannelAdapter);
 
+            // A rewritten message still reaches the user as Morgana's, so the rewrite keeps the voice her agents speak in.
+            Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
+
             string capabilitiesJson = JsonSerializer.Serialize(
                 channelCapabilities, Records.DefaultJsonSerializerOptions);
 
+            // What the rewriting model reads: its task, Morgana's voice and the capabilities of the target channel.
             string systemPrompt = string.Join("\n\n",
                     Records.Prompt.Labeled(Constants.SectionLabels.Target, adapterPrompt.Target),
+                    Records.Prompt.Labeled(Constants.SectionLabels.Personality, morganaPrompt.Personality),
                     Records.Prompt.Labeled(Constants.SectionLabels.Instructions, adapterPrompt.Instructions),
                     Records.Prompt.Labeled(Constants.SectionLabels.Formatting, adapterPrompt.Formatting))
                 .Replace(Constants.Placeholders.ChannelCapabilities, capabilitiesJson);

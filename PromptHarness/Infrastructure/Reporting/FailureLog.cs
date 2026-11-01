@@ -136,6 +136,21 @@ public static class FailureLog
                 }
             }
 
+            // A run that has no turns, such as a calibration case, carries its calls directly:
+            // its failure is read on the guard's own evidence.
+            for (int callIndex = 0; callIndex < run.Calls.Count; callIndex++)
+            {
+                ModelCall call = run.Calls[callIndex];
+                report.AppendLine();
+                report.AppendLine(CultureInfo.InvariantCulture, $"[call {callIndex + 1}] {call.Usage}");
+                AppendNumbered(report, "instructions", call.Instructions, instructionTexts);
+                AppendNumbered(report, "tools", call.ToolDefinitions, toolTexts);
+                report.AppendLine("input:");
+                report.AppendLine(call.InputMessages ?? "(none recorded)");
+                report.AppendLine("output:");
+                report.AppendLine(call.OutputMessages ?? "(none recorded)");
+            }
+
             report.AppendLine();
         }
 

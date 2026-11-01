@@ -5,7 +5,7 @@ namespace Morgana.AI.Interfaces;
 /// Decouples guard-rail logic from the actor infrastructure. GuardActor delegates entirely
 /// to this service and is agnostic of the underlying implementation strategy.
 /// Default implementation: LLMGuardRailService provides LLM-based policy evaluation.
-/// Fail-safe contract: on transient errors returns a compliant result rather than blocking legitimate traffic.
+/// Fail-safe contract: the user's message and a native tool's result fail open, so a transient error never blocks legitimate traffic; an external tool's result fails closed.
 /// </summary>
 public interface IGuardRailService
 {
@@ -29,10 +29,12 @@ public interface IGuardRailService
     /// </summary>
     /// <param name="conversationId">Passed for correlation and logging.</param>
     /// <param name="toolName">The function the model called.</param>
+    /// <param name="toolArguments">The arguments the model called the tool with, serialized as a JSON object; only the inspector reads them, as the call the result is judged against.</param>
     /// <param name="toolResult">The result serialized as JSON, as the tool loop hands it to the provider.</param>
+    /// <param name="externalSource">True when the tool is answered from outside this installation (an MCP tool or a partner's agent), whose result is also read by the ToolGuard inspector.</param>
     /// <returns>
     /// Non-compliant when the result is to be withheld, with the finding in <c>Violation</c> for an operator's log.
     /// </returns>
-    /// <remarks>Never throws: an evaluation that fails admits the result.</remarks>
-    Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolResult);
+    /// <remarks>Never throws: a native tool's result that cannot be checked is admitted and an external result that cannot be judged is withheld.</remarks>
+    Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult, bool externalSource);
 }

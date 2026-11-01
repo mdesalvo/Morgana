@@ -621,6 +621,18 @@ public static class Records
         [property: JsonPropertyName("violation")] string? Violation);
 
     /// <summary>
+    /// What the ToolGuard inspector reads: the tool's name, the arguments the agent called it with and what it returned, as a JSON object.
+    /// </summary>
+    /// <remarks>The three JSON names are a contract with the ToolGuard prompt's Target sentence.</remarks>
+    /// <param name="Tool">The name of the tool that answered; together with "arguments" it is the call the result answers.</param>
+    /// <param name="Arguments">The arguments the agent called the tool with; for a partner consultation they are the question.</param>
+    /// <param name="Result">What the tool returned.</param>
+    public record ToolGuardSubject(
+        [property: JsonPropertyName("tool")] string Tool,
+        [property: JsonPropertyName("arguments")] JsonElement Arguments,
+        [property: JsonPropertyName("result")] JsonElement Result);
+
+    /// <summary>
     /// Which layer of a guard decided a verdict, carried so an operator can tell a judgment from an admission by default.
     /// </summary>
     public enum GuardVerdictSource
@@ -636,6 +648,9 @@ public static class Records
 
         /// <summary>No judgment could be reached and the text was admitted.</summary>
         FailOpen,
+
+        /// <summary>No judgment could be reached on a text nobody here vouches for and the text was withheld.</summary>
+        FailClosed,
 
         /// <summary>The guard is switched off and the text was admitted unjudged.</summary>
         Disabled
@@ -1053,7 +1068,7 @@ public static class Records
     /// Complete prompt definition (Target, Instructions, Personality, Formatting) with metadata and structured properties.
     /// Loaded from morgana.json (framework) or agents.json (domain, intent-keyed).
     /// </summary>
-    /// <param name="ID">Prompt identifier: framework="Morgana"/"Classifier"/"Guard"/"Presentation", domain=intent name</param>
+    /// <param name="ID">Prompt identifier: framework=one of <see cref="Constants.Prompts.All"/>, domain=intent name</param>
     /// <param name="Target">Core prompt text: role definition, capabilities statement, operational boundaries</param>
     /// <param name="Instructions">Behavioral rules, operational order, response constraints, tool-usage doctrine</param>
     /// <param name="Formatting">Output formatting rules: markdown usage, quick reply format, rich card rendering</param>

@@ -78,7 +78,7 @@ The harness channel declares the **full** capability profile with no length budg
 `MorganaChannelAdapter` short-circuits and most scenarios measure undegraded output. One scenario
 opts into a degraded profile instead (`ScenarioDefinition.DegradedChannel`, mirroring Rune's "poor
 but honest" capabilities under a distinct channel name) specifically to exercise the adapter's
-rewrite path — see `actor-channeladapter-degrades-invoice-card` and `GuardTests`/`ActorTests` below.
+rewrite path — see `actor-channeladapter-degrades-invoice-card` and `UserGuardTests`/`ActorTests` below.
 
 ## Configuration and secrets
 
@@ -121,7 +121,7 @@ dotnet test … --filter "FullyQualifiedName~ContextHandlingTests"
 dotnet test … --filter "FullyQualifiedName~BehaviourTests"
 
 # the guard group — requires the boot-time guardrail flag, off by default
-Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
+Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~UserGuardTests"
 
 # the rest of the actors group — classifier, channel adaptation, presentation
 dotnet test … --filter "FullyQualifiedName~ActorTests"
@@ -169,7 +169,7 @@ otherwise would mean measuring a configuration nobody runs. With the example plu
 |---|---|---|
 | `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand`, `behaviour-landing-presents-the-agent`, `behaviour-landing-only-on-a-press` | Billing, Contract | `Efficiency` |
 | `context-closed-vocabulary-monkeys` | Monkeys | `Efficiency` |
-| `actor-classifier-routes-unambiguous-billing-request`, `guard-rejects-abusive-message`, `guard-allows-good-faith-difficult-topic`, `actor-channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
+| `actor-classifier-routes-unambiguous-billing-request`, `userguard-rejects-abusive-message`, `userguard-allows-good-faith-difficult-topic`, `actor-channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
 | `behaviour-rich-card`, `context-no-invented-writes`, `actor-classifier-routes-catalog-request-to-inventory` | Inventory | `Efficiency` |
 | `actor-classifier-disambiguates-colliding-billing-contract`, `actor-classifier-routes-off-domain-to-other`, `actor-complement-reintroduces-morgana` | *(none — answered by Morgana)* | `Efficiency` (classifier only) |
 

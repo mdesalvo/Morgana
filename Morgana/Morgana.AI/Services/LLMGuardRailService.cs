@@ -1,16 +1,19 @@
-﻿using System.Text;
+﻿using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Default <see cref="IGuardRailService"/> implementation: the LLM policy check on the user's message and the
-/// deterministic check on tool results. The user's message goes to <see cref="ILanguageModelService"/>
-/// with the Guard system prompt for detection of spam, phishing, violence, profanity and other
-/// policy violations.
+/// Default <see cref="IGuardRailService"/> implementation: the LLM policy check on the user's message, the
+/// deterministic check on every guarded tool result and the ToolGuard inspection of the results of external tools.
+/// The user's message goes to <see cref="ILanguageModelService"/> with the UserGuard system prompt for detection of
+/// spam, phishing, violence, profanity and other policy violations.
 /// </summary>
 public partial class LLMGuardRailService : IGuardRailService
 {
@@ -51,45 +54,83 @@ public partial class LLMGuardRailService : IGuardRailService
     private readonly ILogger logger;
 
     /// <summary>
-    /// Pre-computed Guard system prompt.
+    /// Pre-computed UserGuard system prompt.
     /// </summary>
-    private readonly string guardSystemPrompt;
+    private readonly string userGuardSystemPrompt;
 
     /// <summary>
-    /// The refusal for a message that the provider's own content filter blocked, worded in the Guard prompt.
+    /// Pre-computed ToolGuard system prompt, read by the inspector of the results of external tools.
+    /// </summary>
+    private readonly string toolGuardSystemPrompt;
+
+    /// <summary>
+    /// Application configuration, read per call for the limit on an external result's length.
+    /// </summary>
+    private readonly IConfiguration configuration;
+
+    /// <summary>
+    /// The dust role of the inspection: the ledger reads it under its own name, apart from the pipeline's other framework calls.
+    /// </summary>
+    private static readonly string toolGuardDustRole = $"{Constants.Morgana} ({Constants.Prompts.ToolGuard})";
+
+    /// <summary>
+    /// The longest external result an inspection vouches for, in characters; read per call like the adapter reads its switches.
+    /// </summary>
+    private int MaxExternalToolResultLength
+        => configuration.GetValue("Morgana:ActorSystem:MaxExternalToolResultLength", 32000);
+
+    /// <summary>
+    /// The refusal for a message that the provider's own content filter blocked, worded in the UserGuard prompt.
     /// </summary>
     private readonly string contentFilteredRefusal;
 
     /// <summary>
     /// Initialises a new instance of <see cref="LLMGuardRailService"/>.
-    /// Loads and builds the Guard system prompt eagerly.
+    /// Loads and builds the UserGuard system prompt eagerly.
     /// </summary>
     /// <param name="llmService">LLM service used for the async policy check.</param>
-    /// <param name="promptResolverService">Prompt resolver used to load Guard configuration.</param>
+    /// <param name="promptResolverService">Prompt resolver used to load UserGuard configuration.</param>
+    /// <param name="configuration">Application configuration holding the limit on an external result's length.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
     public LLMGuardRailService(
         ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
+        IConfiguration configuration,
         ILogger logger)
     {
         this.llmService = llmService;
+        this.configuration = configuration;
         this.logger = logger;
 
         // Built once here, not per-call: unlike LLMClassifierService/EmbeddedAgentConfigurationService
-        // this isn't deferred behind a Lazy<> — the Guard prompt is needed on essentially every
+        // this isn't deferred behind a Lazy<> — the UserGuard prompt is needed on essentially every
         // turn (guard check gates every user message), so eager beats lazy for the common case.
-        Records.Prompt guardPrompt =
-            promptResolverService.ResolveAsync(Constants.Prompts.Guard).GetAwaiter().GetResult();
+        Records.Prompt userGuardPrompt =
+            promptResolverService.ResolveAsync(Constants.Prompts.UserGuard).GetAwaiter().GetResult();
 
-        // What the Guard reads before every user message. No placeholder to splice, unlike the
+        // A refusal is Morgana speaking to the user, so it is worded in the voice her agents speak in.
+        Records.Prompt morganaPrompt = promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
+
+        // What the UserGuard reads before every user message. No placeholder to splice, unlike the
         // classifier's: what is admissible is a policy of the framework, not of a domain.
-        guardSystemPrompt = string.Join("\n",
-            Records.Prompt.Labeled(Constants.SectionLabels.Target, guardPrompt.Target),
-            Records.Prompt.Labeled(Constants.SectionLabels.Instructions, guardPrompt.Instructions),
-            Records.Prompt.Labeled(Constants.SectionLabels.Formatting, guardPrompt.Formatting));
+        userGuardSystemPrompt = string.Join("\n",
+            Records.Prompt.Labeled(Constants.SectionLabels.Target, userGuardPrompt.Target),
+            Records.Prompt.Labeled(Constants.SectionLabels.Personality, morganaPrompt.Personality),
+            Records.Prompt.Labeled(Constants.SectionLabels.Instructions, userGuardPrompt.Instructions),
+            Records.Prompt.Labeled(Constants.SectionLabels.Formatting, userGuardPrompt.Formatting));
+
+        // The inspector's prompt, resolved eagerly like the UserGuard's: an external result is inspected on the turn that meets it.
+        Records.Prompt toolGuardPrompt =
+            promptResolverService.ResolveAsync(Constants.Prompts.ToolGuard).GetAwaiter().GetResult();
+
+        // What the inspector reads before every external result; it has no placeholder to splice either.
+        toolGuardSystemPrompt = string.Join("\n",
+            Records.Prompt.Labeled(Constants.SectionLabels.Target, toolGuardPrompt.Target),
+            Records.Prompt.Labeled(Constants.SectionLabels.Instructions, toolGuardPrompt.Instructions),
+            Records.Prompt.Labeled(Constants.SectionLabels.Formatting, toolGuardPrompt.Formatting));
 
         // The one refusal the guard words itself rather than the model: the provider blocked the message before any judgment.
-        contentFilteredRefusal = guardPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.ContentFilteredMessage);
+        contentFilteredRefusal = userGuardPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.ContentFilteredMessage);
     }
 
     /// <inheritdoc/>
@@ -101,10 +142,10 @@ public partial class LLMGuardRailService : IGuardRailService
             // and the whole pipeline, so nothing downstream runs until it has answered.
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
-                guardSystemPrompt,
+                userGuardSystemPrompt,
                 message);
 
-            // The verdict, in the shape the Guard prompt's Formatting section asked for. Nothing here
+            // The verdict, in the shape the UserGuard prompt's Formatting section asked for. Nothing here
             // is null when the model answered as instructed.
             Records.GuardCheckResponse? llmResult = JsonSerializer.Deserialize<Records.GuardCheckResponse>(
                 response, Records.DefaultJsonSerializerOptions);
@@ -148,34 +189,153 @@ public partial class LLMGuardRailService : IGuardRailService
     }
 
     /// <inheritdoc/>
-    public Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolResult)
+    public async Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult, bool externalSource)
     {
+        // What the result carries against the assistant; null when nothing in it does.
+        string? finding;
+
         try
         {
-            // What the result carries against the assistant; null when nothing in it does.
-            string? finding = FindForgery(toolResult);
-
-            // A forgery withholds the result. Only the finding is logged: the content stays out of every log.
-            if (finding != null)
-            {
-                logger.LogWarning(
-                    "LLMGuardRailService: result of tool {ToolName} withheld for conversation {ConversationId} — {Finding}",
-                    toolName, conversationId, finding);
-
-                return Task.FromResult(new Records.GuardRailResult(false, finding, Records.GuardVerdictSource.Prefilter));
-            }
-
-            // Nothing forged: the model reads the result as the tool returned it.
-            return Task.FromResult(new Records.GuardRailResult(true, null, Records.GuardVerdictSource.Prefilter));
+            // The free check, which every guarded result pays for.
+            finding = FindForgery(toolResult);
         }
         catch (Exception ex)
         {
-            // Fail open: a check that cannot evaluate must not silence a legitimate tool.
             logger.LogError(ex,
-                "LLMGuardRailService: check of the result of tool {ToolName} failed for conversation {ConversationId} — failing open",
+                "LLMGuardRailService: check of the result of tool {ToolName} failed for conversation {ConversationId}",
                 toolName, conversationId);
 
-            return Task.FromResult(new Records.GuardRailResult(true, null, Records.GuardVerdictSource.FailOpen));
+            // A native tool's result that cannot be checked is admitted: a check that cannot evaluate must not silence a legitimate tool.
+            if (!externalSource)
+                return new Records.GuardRailResult(true, null, Records.GuardVerdictSource.FailOpen);
+
+            // An external result goes on to the inspector, which still reads it.
+            finding = null;
+        }
+
+        // A forgery withholds the result. Only the finding is logged: the content stays out of every log.
+        if (finding != null)
+        {
+            logger.LogWarning(
+                "LLMGuardRailService: result of tool {ToolName} withheld for conversation {ConversationId} — {Finding}",
+                toolName, conversationId, finding);
+
+            return new Records.GuardRailResult(false, finding, Records.GuardVerdictSource.Prefilter);
+        }
+
+        // A native tool runs code its plugin answers for: the free check is all it pays for.
+        if (!externalSource)
+            return new Records.GuardRailResult(true, null, Records.GuardVerdictSource.Prefilter);
+
+        // The limit on what an inspection vouches for, read once for this result.
+        int maxLength = MaxExternalToolResultLength;
+
+        // On a text that long an inspection is not a verdict to trust and an injection hides easily in its tail.
+        if (toolResult.Length > maxLength)
+        {
+            logger.LogWarning(
+                "LLMGuardRailService: result of tool {ToolName} withheld for conversation {ConversationId} — {Length} characters exceed the limit of {Limit}",
+                toolName, conversationId, toolResult.Length, maxLength);
+
+            return new Records.GuardRailResult(
+                false,
+                string.Create(CultureInfo.InvariantCulture, $"is longer than the {maxLength} characters an inspection vouches for"),
+                Records.GuardVerdictSource.Prefilter);
+        }
+
+        // Nothing forged and within the limit: the inspector reads what the free check cannot.
+        return await InspectToolResultAsync(conversationId, toolName, toolArguments, toolResult);
+    }
+
+    /// <summary>
+    /// Has the ToolGuard inspector judge the result of an external tool; a result that cannot be judged is withheld.
+    /// </summary>
+    private async Task<Records.GuardRailResult> InspectToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult)
+    {
+        try
+        {
+            // The tool, the arguments it was called with and what it returned, in the three fields the inspector's prompt names.
+            Records.ToolGuardSubject subject = new Records.ToolGuardSubject(toolName, ReadJsonElement(toolArguments), ReadJsonElement(toolResult));
+
+            // The inspector reads the subject as one JSON document, in the escaping the tool loop hands to the
+            // provider: accented letters and angle brackets stay readable instead of turning into escape codes.
+            string subjectJson = JsonSerializer.Serialize(subject, AIJsonUtilities.DefaultOptions);
+
+            // The inspection runs on the framework tier and is charged under its own dust role.
+            string response = await llmService.CompleteWithSystemPromptAsync(
+                conversationId,
+                toolGuardSystemPrompt,
+                subjectJson,
+                toolGuardDustRole);
+
+            // The verdict, in the shape the ToolGuard prompt's Formatting section asked for.
+            Records.GuardCheckResponse? inspectorVerdict = JsonSerializer.Deserialize<Records.GuardCheckResponse>(
+                response, Records.DefaultJsonSerializerOptions);
+
+            // An inspector that does not answer in its shape may have been talked to by the very text it was reading.
+            if (inspectorVerdict is null)
+            {
+                logger.LogWarning(
+                    "LLMGuardRailService: inspector returned no readable verdict on the result of tool {ToolName} for conversation {ConversationId} — withholding",
+                    toolName, conversationId);
+
+                return new Records.GuardRailResult(false, "the inspector returned no readable verdict", Records.GuardVerdictSource.FailClosed);
+            }
+
+            logger.LogInformation(
+                "LLMGuardRailService: inspection of the result of tool {ToolName} — compliant={Compliant} for conversation {ConversationId}",
+                toolName, inspectorVerdict.Compliant, conversationId);
+
+            // The inspector found nothing against the assistant: the result reaches the model.
+            if (inspectorVerdict.Compliant)
+                return new Records.GuardRailResult(true, null, Records.GuardVerdictSource.Inspector);
+
+            // The inspector judged the result hostile: only its finding is logged and never the content.
+            logger.LogWarning(
+                "LLMGuardRailService: result of tool {ToolName} withheld for conversation {ConversationId} — {Violation}",
+                toolName, conversationId, inspectorVerdict.Violation);
+
+            return new Records.GuardRailResult(
+                false,
+                inspectorVerdict.Violation ?? "judged hostile by the inspector",
+                Records.GuardVerdictSource.Inspector);
+        }
+        catch (Exception ex) when (llmService.GetLanguageModel(llmService.FrameworkTier).IsContentFilterRefusal(ex))
+        {
+            // The provider refused the text before any judgment: a signal against the result, never an admission.
+            logger.LogWarning(ex,
+                "LLMGuardRailService: provider-level content filter rejected the result of tool {ToolName} for conversation {ConversationId} — withholding",
+                toolName, conversationId);
+
+            return new Records.GuardRailResult(false, "refused by the provider's content filter", Records.GuardVerdictSource.ProviderFilter);
+        }
+        catch (Exception ex)
+        {
+            // This includes a JsonException from an answer that is not JSON, which is how a framework tier
+            // that is down answers (Morgana's error text): an external source is withheld rather than read unjudged.
+            logger.LogError(ex,
+                "LLMGuardRailService: inspection of the result of tool {ToolName} failed for conversation {ConversationId} — withholding",
+                toolName, conversationId);
+
+            return new Records.GuardRailResult(false, "no verdict could be reached on a source nobody here vouches for", Records.GuardVerdictSource.FailClosed);
+        }
+    }
+
+    /// <summary>
+    /// Reads a serialized text as the element the inspector sees; a text that is not JSON becomes one string.
+    /// </summary>
+    private static JsonElement ReadJsonElement(string serializedText)
+    {
+        try
+        {
+            // The text as the tool loop serialized it, cloned so it outlives the document.
+            using JsonDocument serializedDocument = JsonDocument.Parse(serializedText);
+            return serializedDocument.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            // A text that is not JSON is one string, handed over whole.
+            return JsonSerializer.SerializeToElement(serializedText);
         }
     }
 

@@ -32,7 +32,7 @@ project: every build setting lives in the `.csproj`, so it carries unchanged acr
 
 ## Commands
 
-Twenty-two test classes. **Never combine filters**: seven groups carry a process-wide boot knob the
+Twenty-three test classes. **Never combine filters**: seven groups carry a process-wide boot knob the
 others must not see and two of those seven share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
@@ -50,6 +50,9 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~FrameworkPromptTes
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ToolResultCheckTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~MCPToolAdmissionTests"
 
+# live, no judge — the ToolGuard over its calibration set, on the framework tier
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ToolGuardTests"
+
 # blocking
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ContextHandlingTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ConsultingTests"
@@ -60,7 +63,7 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ActorTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ServedConsultationTests"
 
 # boot-flagged — one knob each, never together
-Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~GuardTests"
+Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~UserGuardTests"
 Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet test … --filter "FullyQualifiedName~SummarizationTests"
 Harness__DustBudgetPerConversation=100 dotnet test … --filter "FullyQualifiedName~DustTests"
 Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateLimitTests"    # deterministic, skipped without the knob
@@ -95,7 +98,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `ContextHandlingTests` | **5/5, blocking** | The context cycle, the closed vocabulary, non-revelation. Failure is **silent**: an agent re-asking for what it knows still looks like it works |
 | `ConsultingTests` | **4/4, blocking** | A colleague reached on demand for a datum only it holds; an exchange leaving the conversation as it found it. Silent the same way. Also depends on a **topology**, so a failure here has a second meaning: check the `[ConsultsAgent]` attributes first |
 | `BehaviourTests` | 5/4 | Visible presentation: buttons, cards, closure |
-| `GuardTests` | 5/5 | Moderation. A false negative is safety-adjacent, so it sits with the blocking reasoning rather than with presentation |
+| `UserGuardTests` | 5/5 · **every run** | The UserGuard prompt, rudeness and malice in what a user writes. Its scenarios drive whole conversations and judge the refusal as the user reads it, at 5/5: a false negative is safety-adjacent. Its calibration cases, over `Calibration/userguard.yaml`, call the guard directly on the framework tier: each red case is rude or carries one form of malice and must be refused on the guard's own verdict, each green case is an honest message that resembles one and must pass, in every run. An admitted message with no verdict never counts as a pass |
 | `ActorTests` | mixed | The framework prompts nothing else exercises: classifier, channel adaptation, presentation (a one-shot check, since the presenter caches process-wide by channel name) |
 | `ServedConsultationTests` | — | This installation answering a partner: which conversation, what it cost, how many exchanges are admitted |
 | `SummarizationTests` | — | The reducer's own prompt, unreachable at the default 21-message trigger |
@@ -105,7 +108,8 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `ConversationPersistenceTests` | — | Who owns each line of a conversation, how it is dated and in what order it is read back. The record is photographed after every exchange rather than at the end, because a transcript that reads correctly can still have been written by the wrong participant. Asserts nothing about wording: the oracle is what the channel was pushed and what the channel said. Shares the guard's knob, since a refused turn is one of the five it stages |
 | `TurnEndingTests` | none | What a presentation tool tells the model about the turn's words: the fact that nothing has reached the user yet, stated before any text and never after. The landing declaration reaches the model on the landing turn alone. A scripted model behind the real tool loop |
 | `FrameworkPromptTests` | none | The morgana.json shipped in Morgana.AI carries every entry that the framework fetches by name — policies, templates with their labels and placeholders, base tools, error answers, messages. No framework section carries a label of its own |
-| `ToolResultCheckTests` | none | The deterministic check on tool results: Morgana's own section labels and fences, chat-template tokens and text hidden in Unicode tag characters are withheld wherever they sit in a result, nested JSON included. What an honest datum may carry passes: lines that read like a role, wiki headings, zero-width and bidirectional characters, a flag emoji. No model is reached |
+| `ToolResultCheckTests` | none | The deterministic check on tool results: Morgana's own section labels and fences, chat-template tokens and text hidden in Unicode tag characters are withheld wherever they sit in a result, nested JSON included. What an honest datum may carry passes: lines that read like a role, wiki headings, zero-width and bidirectional characters, a flag emoji. The ToolGuard inspection of an external result runs over a scripted model: its verdict, an unreadable answer and a failure that withholds, the length limit and a forgery that spare the inspection. No real model is reached |
+| `ToolGuardTests` | **every run** | The ToolGuard prompt on a live call of the framework tier, over `Calibration/toolguard.yaml`: each red case carries one form of steering in its subtlest version and must be withheld on the inspector's own verdict, each green case is an honest result that resembles one and must be admitted. A withheld result with no verdict never counts as a catch. No judge and no conversation: one inspection per run, so it measures whichever provider `Morgana:ActorSystem:Tier` names. A red on a green case is petulance, a red on a red case is a hole: both go back to the prose |
 | `MCPToolAdmissionTests` | none | An MCP tool enters an agent last: one taking the name of a tool of Morgana or of the domain, the colleagues' prefix or the name another MCP source already gave, in any case, is refused. A name that only begins like one of them is admitted. No server is reached |
 | `LanguageModelTests` | none | The three tiers built from configuration, each by the provider it declares; a missing tier, connection or framework tier, an unregistered or twice-registered provider and a placeholder in a field the provider uses refused. No model is reached |
 | `AgentCardTests` · `StartupValidationTests` · `PeerFederationTests` · `ConversationApiTests` | none | Wire contracts and boot refusals, asserted deterministically. **Every literal is spelled out in the test** rather than read from `Constants`: a test comparing a constant against itself asserts that a constant equals a constant, while the point is to notice a published document changing shape under whoever consumes it |

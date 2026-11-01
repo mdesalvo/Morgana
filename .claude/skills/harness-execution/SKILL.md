@@ -49,11 +49,12 @@ Activated when the user says things like:
    *Behavioural — billed, judged.*
    - Behavior (`BehaviourTests` — turn continuation, closure, rich cards)
    - Actors (`ActorTests` — classifier, channel adapter, presentation)
+   - ToolGuard (`ToolGuardTests` — the ToolGuard prompt alone over `PromptHarness/Calibration/toolguard.yaml`, one live call per run on the framework tier and no judge. Every run of every case must hold, whatever threshold is chosen: the chosen run count still applies)
    - Served consultation (`ServedConsultationTests` — this installation answering a partner: which conversation, what it cost, how many exchanges are admitted. Its refusals are decided before an agent is troubled and cost nothing; the rest runs a real model)
 
    *Boot-flagged — each needs a process-wide knob the other groups must NOT carry, so each is its own
    invocation. This is the whole reason filters are never combined.*
-   - Guard (`GuardTests` — `Harness__EnableUserGuardrail=true`)
+   - UserGuard (`UserGuardTests` — `Harness__EnableUserGuardrail=true`. Its scenarios drive whole conversations; its calibration cases over `PromptHarness/Calibration/userguard.yaml` call the guard directly and must hold in every run)
    - Conversation persistence (`ConversationPersistenceTests` — `Harness__EnableUserGuardrail=true`, the same knob as the guard group but its own invocation: it stages one refused turn among the five it drives and follows the database after each one)
    - Summarizer (`SummarizationTests` — `Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4`)
    - Dust (`DustTests` — `Harness__DustBudgetPerConversation=100`; the test measures one turn on the tier under test and places the gauge below each threshold itself, so any budget of at least twenty turns works whatever provider serves the tier; a tier priced at zero skips it)
@@ -122,7 +123,7 @@ Activated when the user says things like:
    Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ServedConsultationTests"
 
    # Boot-flagged — one knob each, never together
-   Harness__EnableUserGuardrail=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~GuardTests"
+   Harness__EnableUserGuardrail=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~UserGuardTests"
    Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~SummarizationTests"
    dotnet build PromptHarness/PromptHarness.csproj
    (cd PromptHarness/bin/Debug/net10.0 && Harness__DustBudgetPerConversation=100 Harness__HostLogLevel=Debug Harness__EchoHostOutput=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M ./PromptHarness -class PromptHarness.Tests.DustTests)

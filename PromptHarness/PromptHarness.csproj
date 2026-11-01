@@ -133,6 +133,7 @@
     <Content Include="..\Morgana\Morgana.Web\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="appsettings.Harness.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Scenarios\**\*.yaml" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Calibration\*.yaml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!--

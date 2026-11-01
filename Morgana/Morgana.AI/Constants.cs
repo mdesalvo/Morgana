@@ -23,8 +23,11 @@ public static class Constants
         /// <summary>The intent classifier's prompt.</summary>
         public const string Classifier = "Classifier";
 
-        /// <summary>The guard rail's compliance-check prompt.</summary>
-        public const string Guard = "Guard";
+        /// <summary>The user's guard: rudeness and malice in what a user writes.</summary>
+        public const string UserGuard = "UserGuard";
+
+        /// <summary>The inspector's prompt for the results of tools answered from outside the installation.</summary>
+        public const string ToolGuard = "ToolGuard";
 
         /// <summary>The welcome message and its quick replies.</summary>
         public const string Presentation = "Presentation";
@@ -33,7 +36,7 @@ public static class Constants
         public const string ChannelAdapter = "ChannelAdapter";
 
         /// <summary>Every id under which a framework prompt is filed, the system's own included: a domain may take none of them.</summary>
-        public static readonly string[] All = [Morgana, Classifier, Guard, Presentation, ChannelAdapter];
+        public static readonly string[] All = [Morgana, Classifier, UserGuard, ToolGuard, Presentation, ChannelAdapter];
     }
 
     /// <summary>

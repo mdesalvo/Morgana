@@ -13,13 +13,18 @@ namespace PromptHarness.Infrastructure.Engine;
 /// <param name="Transcript">Per-turn rendering of what happened, attached to failing runs.</param>
 /// <param name="Tokens">Token usage summed over the run's turns. Judge calls are excluded: they are the harness's cost, not Morgana's.</param>
 /// <param name="Turns">Every turn played, kept whole so a failing run's model calls can be written out.</param>
+/// <param name="ModelCalls">The LLM calls of a run made of no turns, as a calibration case that asks a guard directly; a run made of turns carries its calls on each turn instead.</param>
 public sealed record RunOutcome(
     int Index,
     IReadOnlyList<string> Failures,
     IReadOnlyList<string> Transcript,
     TokenUsage Tokens,
-    IReadOnlyList<TurnResult> Turns)
+    IReadOnlyList<TurnResult> Turns,
+    IReadOnlyList<ModelCall>? ModelCalls = null)
 {
+    /// <summary>The LLM calls of a run that has no turns, never null.</summary>
+    public IReadOnlyList<ModelCall> Calls => ModelCalls ?? [];
+
     /// <summary>Whether every expectation of every turn held.</summary>
     public bool Passed => Failures.Count == 0;
 }

@@ -344,7 +344,7 @@ public class MorganaAgentAdapter
         // 9b) Every tool result passes the guard before the model reads it. Switched off, the agent
         //     is exactly the one assembled above.
         if (ToolGuardrailEnabled)
-            aiAgent = GuardToolResults(aiAgent, agentType, intentAttribute.Intent, conversationId, sessionAccessor, morganaAIContextProvider);
+            aiAgent = GuardToolResults(aiAgent, agentType, intentAttribute.Intent, [.. mcpTools.Select(tool => tool.Name)], conversationId, sessionAccessor, morganaAIContextProvider);
 
         // 10) Return all three: the caller (MorganaAgent subclass) keeps the provider and
         //     history-provider handles to drive context/history across turns — the agent
@@ -551,11 +551,12 @@ public class MorganaAgentAdapter
 
     /// <summary>
     /// Wraps the agent so that every tool result but the base tools' and a local colleague's passes the
-    /// guard before the model reads it and a refused result is replaced by the fact of its quarantine.
+    /// guard before the model reads it (an external source's is inspected as well) and a refused result is replaced by the fact of its quarantine.
     /// </summary>
     /// <param name="agent">The agent as assembled, whose tool loop is to be guarded.</param>
     /// <param name="agentType">The agent's class, whose declared colleagues are exempt from the guard.</param>
     /// <param name="agentIntent">The intent the agent serves, tagged on every security event it records.</param>
+    /// <param name="mcpToolNames">The MCP tools the agent was given, answered from outside the installation.</param>
     /// <param name="conversationId">The conversation the agent serves, named in the guard's findings.</param>
     /// <param name="sessionAccessor">Hands back the agent's live session, where the quarantine is recorded.</param>
     /// <param name="contextProvider">Reads and writes the quarantine on the live session.</param>
@@ -563,6 +564,7 @@ public class MorganaAgentAdapter
         AIAgent agent,
         Type agentType,
         string agentIntent,
+        IReadOnlyCollection<string> mcpToolNames,
         string conversationId,
         Func<AgentSession?> sessionAccessor,
         MorganaAIContextProvider contextProvider)
@@ -575,6 +577,15 @@ public class MorganaAgentAdapter
             .. agentType.GetCustomAttributes<ConsultsAgentAttribute>()
                 .Where(attribute => attribute.Instance is null)
                 .Select(attribute => ToFunctionName(new Records.PeerReference(attribute.Intent, null)))
+        ];
+
+        // An MCP server and a partner answer from outside the installation, so their results are inspected as well.
+        HashSet<string> externalToolNames =
+        [
+            .. mcpToolNames,
+            .. agentType.GetCustomAttributes<ConsultsAgentAttribute>()
+                .Where(attribute => attribute.Instance is not null)
+                .Select(attribute => ToFunctionName(new Records.PeerReference(attribute.Intent, attribute.Instance)))
         ];
 
         // The guard joins the agent's tool loop through the agent framework's own function-invocation
@@ -627,8 +638,12 @@ public class MorganaAgentAdapter
                 // the provider would.
                 string resultText = JsonSerializer.Serialize(result, AIJsonUtilities.DefaultOptions);
 
+                // The name-value pairs the model called the tool with, in the escaping the tool loop hands to the
+                // provider; the inspector judges the result against them.
+                string argumentsText = JsonSerializer.Serialize(new Dictionary<string, object?>(invocation.Arguments), AIJsonUtilities.DefaultOptions);
+
                 // The guard's verdict on what the tool returned.
-                Records.GuardRailResult verdict = await guardRailService.CheckToolResultAsync(conversationId, toolName, resultText);
+                Records.GuardRailResult verdict = await guardRailService.CheckToolResultAsync(conversationId, toolName, argumentsText, resultText, externalToolNames.Contains(toolName));
 
                 // A compliant result reaches the model untouched.
                 if (verdict.Compliant)

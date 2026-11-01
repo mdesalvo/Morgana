@@ -294,11 +294,12 @@ public class ConfigurationLanguageModelService : ILanguageModelService
     /// <param name="conversationId">Unique identifier of the conversation (used for logging)</param>
     /// <param name="systemPrompt">System prompt defining LLM behavior</param>
     /// <param name="userPrompt">User message to process</param>
+    /// <param name="dustRole">The role the call is charged under on the dust ledger; null charges it under the bare framework role.</param>
     /// <returns>
     /// LLM response text with markdown code fences removed.
     /// On error, returns user-friendly error message from Morgana prompt configuration.
     /// </returns>
-    public async Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt)
+    public async Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt, string? dustRole = null)
     {
         try
         {
@@ -309,11 +310,12 @@ public class ConfigurationLanguageModelService : ILanguageModelService
             // a domain agent, by contrast, is built by MorganaAgentAdapter against its own
             // declared tier via GetChatClient(tier)/GetMorganaDust(tier) and never touches this method.
             //
-            // Framework-actor calls are metered under the bare framework role, which is what tells a
-            // reader of the ledger that a charge belongs to the pipeline rather than to any agent.
+            // Framework-actor calls are metered under the role the caller names (the ToolGuard inspection
+            // does) and otherwise under the bare framework role, which tells a reader of the ledger
+            // that a charge belongs to the pipeline rather than to any agent.
             IChatClient frameworkChatClient = GetChatClient(FrameworkTier);
             IChatClient client = dustLimitService is not null && frameworkDust is not null
-                ? new DustAccountingChatClient(frameworkChatClient, dustLimitService, frameworkDust, Constants.Morgana)
+                ? new DustAccountingChatClient(frameworkChatClient, dustLimitService, frameworkDust, dustRole ?? Constants.Morgana)
                 : frameworkChatClient;
 
             // These two messages are the entire request: no history, no session, no tools and nothing
