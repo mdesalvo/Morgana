@@ -2,6 +2,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 using OllamaSharp;
+using OllamaSharp.Models;
 using System.Net.Http.Headers;
 
 namespace Morgana.AI.LanguageModels.Ollama;
@@ -21,6 +22,7 @@ namespace Morgana.AI.LanguageModels.Ollama;
 /// price. A cloud model written for a daemon (gemma4:cloud, gpt-oss:120b-cloud) is priced under its catalogue name on
 /// either endpoint. On a daemon a name without the cloud suffix is a local model, never priced from the catalogue: its
 /// tier declares its own Pricing.
+/// The tier's Connection may set ContextLength, the window Morgana asks for on every call (65536 when absent), which holds the prompt and the answer together.
 /// </remarks>
 /// <param name="loggerFactory">Optional logger factory for the <see cref="AttemptLoggingHandler"/> that writes one line per attempt on the wire; <c>null</c> writes nothing.</param>
 public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : MorganaLanguageModel<OllamaTierConnection>
@@ -76,7 +78,12 @@ public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", connection.ApiKey);
 
         // Ollama's client binds its model at construction, so each tier owns its HttpClient.
-        return new OllamaApiClient(httpClient, options.ModelId);
+        IChatClient ollamaClient = new OllamaApiClient(httpClient, options.ModelId);
+
+        // The window travels on every call so that the server never falls back to its own default and cuts the start of the prompt.
+        return new ChatClientBuilder(ollamaClient)
+            .ConfigureOptions(chatOptions => chatOptions.AddOllamaOption(OllamaOption.NumCtx, connection.ContextLength))
+            .Build();
     }
 
     /// <inheritdoc />
@@ -100,7 +107,9 @@ public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
 /// <param name="Endpoint">Address of the Ollama service.</param>
 /// <param name="ApiKey">Credential of the ollama.com account that pays for the cloud models; required and sent only when <paramref name="Endpoint"/> is ollama.com.</param>
 /// <param name="TimeoutSeconds">Ceiling of one call: of its whole response when it is not streamed, of the wait for the response headers when it is.</param>
+/// <param name="ContextLength">Context window in tokens that Morgana asks Ollama for on every call of the tier. It holds what the model reads plus what it writes, so it must be greater than the tier's MaxOutputTokens by at least the longest prompt that the tier's agents read.</param>
 public record OllamaTierConnection(
     string? Endpoint = null,
     string? ApiKey = null,
-    int TimeoutSeconds = 60);
+    int TimeoutSeconds = 60,
+    int ContextLength = 65536);

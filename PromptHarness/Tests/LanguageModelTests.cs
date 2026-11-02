@@ -1,4 +1,8 @@
 using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Morgana.AI;
@@ -265,6 +269,27 @@ public sealed class LanguageModelTests
         Assert.Equal(0, llm.GetMorganaDust(Records.LLMTier.Economy).InputTokensPerDustUnit);
     }
 
+    [Fact]
+    public async Task LanguageModel_An_Ollama_tier_asks_for_a_65536_token_window_by_default()
+    {
+        // A connection that declares no window gets the default one, next to the output ceiling that the tier declares.
+        JsonElement requestOptions = await RecordedOllamaOptionsAsync(contextLength: null);
+
+        // The default window and the tier's output ceiling both reached the daemon.
+        Assert.Equal(65536, requestOptions.GetProperty("num_ctx").GetInt32());
+        Assert.Equal(8192, requestOptions.GetProperty("num_predict").GetInt32());
+    }
+
+    [Fact]
+    public async Task LanguageModel_An_Ollama_tier_asks_for_the_window_it_declares()
+    {
+        // The window that the connection declares travels instead of the default one.
+        JsonElement requestOptions = await RecordedOllamaOptionsAsync(contextLength: "131072");
+
+        // The declared window reached the daemon.
+        Assert.Equal(131072, requestOptions.GetProperty("num_ctx").GetInt32());
+    }
+
     [Theory]
     [InlineData("https://ollama.com", "mistral-large-4", "0.70", "2.10", "0.07", "0.70")]
     [InlineData("https://ollama.com", "gemma4:cloud", "0.14", "0.40", "0.05", "0.14")]
@@ -436,6 +461,63 @@ public sealed class LanguageModelTests
             () => Build(Configuration(("Morgana:ActorSystem:Tier", configured))));
 
         Assert.Contains("Morgana:ActorSystem:Tier", refusal.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>Makes one call on a local Ollama Economy tier and returns the <c>options</c> object of the request that an in-process listener recorded.</summary>
+    private static async Task<JsonElement> RecordedOllamaOptionsAsync(string? contextLength)
+    {
+        // Binding port 0 asks the operating system for a free port, which is released before the listener takes it.
+        TcpListener portProbe = new TcpListener(IPAddress.Loopback, 0);
+        portProbe.Start();
+        int freePort = ((IPEndPoint)portProbe.LocalEndpoint).Port;
+        portProbe.Stop();
+
+        // The listener plays the Ollama daemon so that the request body can be read as it left the client.
+        string endpoint = $"http://127.0.0.1:{freePort}/";
+        using HttpListener ollamaDaemon = new HttpListener();
+        ollamaDaemon.Prefixes.Add(endpoint);
+        ollamaDaemon.Start();
+
+        // The daemon serves exactly one request and hands back what it read.
+        Task<string> recordedRequestBody = Task.Run(async () =>
+        {
+            HttpListenerContext daemonContext = await ollamaDaemon.GetContextAsync();
+
+            // The body is what the client sent to the model: the window must be in it.
+            using StreamReader requestReader = new StreamReader(daemonContext.Request.InputStream, Encoding.UTF8);
+            string requestBody = await requestReader.ReadToEndAsync();
+
+            // A complete one-line answer lets the client finish the call.
+            byte[] answerBytes = Encoding.UTF8.GetBytes(
+                "{\"model\":\"phi4-mini\",\"created_at\":\"2026-11-02T00:00:00Z\",\"message\":{\"role\":\"assistant\",\"content\":\"hi\"},\"done\":true,\"done_reason\":\"stop\"}\n");
+            daemonContext.Response.StatusCode = 200;
+            daemonContext.Response.ContentType = "application/x-ndjson";
+            daemonContext.Response.ContentLength64 = answerBytes.Length;
+            await daemonContext.Response.OutputStream.WriteAsync(answerBytes);
+            daemonContext.Response.Close();
+
+            return requestBody;
+        });
+
+        // A local model priced at zero by its tier, with the window left to the default unless the test declares one.
+        Dictionary<string, string?> tierConfiguration = Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", endpoint),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "phi4-mini"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:InputUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:OutputUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheReadUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheWriteUsdPerMillion", "0"));
+        if (contextLength is not null)
+            tierConfiguration["Morgana:LanguageModels:Tiers:Economy:Connection:ContextLength"] = contextLength;
+
+        // The call goes through the tier's whole chain exactly as an agent's would.
+        ILanguageModelService llm = Build(tierConfiguration);
+        await llm.GetChatClient(Records.LLMTier.Economy).GetResponseAsync("hello");
+
+        // The recorded body is parsed and its options object is returned, detached from the document that owns it.
+        using JsonDocument requestDocument = JsonDocument.Parse(await recordedRequestBody);
+        return requestDocument.RootElement.GetProperty("options").Clone();
     }
 
     /// <summary>The metadata that the client of a tier reports about the model that it runs.</summary>
