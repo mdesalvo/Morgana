@@ -40,7 +40,7 @@ public sealed class ToolGuardTests : IDisposable
         loggerFactory = LoggerFactory.Create(logging => logging.ClearProviders());
 
         // The inspector itself, over a registry that lists nothing: the result cases reach no server.
-        guard = GuardRailServiceFactory.Create(fixture.Configuration, loggerFactory, new ScriptedMCPClientRegistryService(() => []));
+        guard = GuardRailServiceFactory.Create(fixture.Configuration, loggerFactory, new ScriptedMCPClientRegistryService(() => []), GuardRailServiceFactory.CreateChannelMetadataStore());
     }
 
     /// <summary>Replays one calibration case the configured number of times and requires the expected verdict in every run.</summary>
@@ -191,7 +191,8 @@ public sealed class ToolGuardTests : IDisposable
             LLMGuardRailService offerGuard = GuardRailServiceFactory.Create(
                 fixture.Configuration,
                 loggerFactory,
-                new ScriptedMCPClientRegistryService(() => ToolGuardCalibration.OfferedTools(offerCase)));
+                new ScriptedMCPClientRegistryService(() => ToolGuardCalibration.OfferedTools(offerCase)),
+                GuardRailServiceFactory.CreateChannelMetadataStore());
 
             // The window of this run's inspection, so its token cost is read off the spans.
             int mark = fixture.Observer.ModelCallMark();

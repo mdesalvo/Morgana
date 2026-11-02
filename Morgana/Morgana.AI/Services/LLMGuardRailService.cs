@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
+using Morgana.Contracts;
 
 namespace Morgana.AI.Services;
 
@@ -16,14 +17,14 @@ namespace Morgana.AI.Services;
 /// deterministic check on every guarded tool result, the ToolGuard inspection of the results of external tools
 /// and the PeerGuard judgment of a partner's question.
 /// It also examines what MCP servers and partners offer and keeps, per external source, whether it is go or no-go.
-/// The user's message goes to <see cref="ILanguageModelService"/> with the UserGuard system prompt for detection of
+/// The user's message goes to <see cref="ILanguageModelService"/> beside the last answer the user received, with the UserGuard system prompt for detection of
 /// spam, phishing, violence, profanity and other policy violations.
 /// </summary>
 public partial class LLMGuardRailService : IGuardRailService
 {
     /// <summary>
     /// LLM used for the policy check. Consumed through the stateless completion path — each
-    /// message is judged on its own text, on the framework tier.
+    /// message is judged beside the last answer the user received, on the framework tier.
     /// </summary>
     private readonly ILanguageModelService llmService;
 
@@ -104,6 +105,11 @@ public partial class LLMGuardRailService : IGuardRailService
     private readonly IMCPClientRegistryService mcpClientRegistryService;
 
     /// <summary>
+    /// The channel store, which keeps the last answer each conversation received.
+    /// </summary>
+    private readonly IChannelMetadataStore channelMetadataStore;
+
+    /// <summary>
     /// The conversation an examination is charged under: an offer belongs to no conversation, as the presenter's welcome belongs to none.
     /// </summary>
     private const string OfferConversationId = "toolguard-offers";
@@ -125,20 +131,26 @@ public partial class LLMGuardRailService : IGuardRailService
     /// <param name="llmService">LLM service used for the async policy check.</param>
     /// <param name="promptResolverService">Prompt resolver used to load UserGuard configuration.</param>
     /// <param name="mcpClientRegistryService">MCP registry that lists a server whose offer is examined.</param>
+    /// <param name="channelMetadataStore">Channel store that keeps the last answer each conversation received.</param>
     /// <param name="configuration">Application configuration holding the limit on an external result's length.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
     public LLMGuardRailService(
         ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IMCPClientRegistryService mcpClientRegistryService,
+        IChannelMetadataStore channelMetadataStore,
         IConfiguration configuration,
         ILogger logger)
     {
         this.llmService = llmService;
-        // The registry lists a server again whenever an agent asks for its tools, so the offer is always read fresh.
-        this.mcpClientRegistryService = mcpClientRegistryService;
         this.configuration = configuration;
         this.logger = logger;
+
+        // The registry lists a server again whenever an agent asks for its tools, so the offer is always read fresh.
+        this.mcpClientRegistryService = mcpClientRegistryService;
+
+        // The last answer is read per message, so the guard needs the store itself and not a snapshot.
+        this.channelMetadataStore = channelMetadataStore;
 
         // Built once here, not per-call: unlike LLMClassifierService/EmbeddedAgentConfigurationService
         // this isn't deferred behind a Lazy<> — the UserGuard prompt is needed on essentially every
@@ -186,12 +198,29 @@ public partial class LLMGuardRailService : IGuardRailService
     {
         try
         {
+            // Nothing delivered yet in this process (a new conversation or the first message after a restart) means the message is judged alone.
+            ChannelMessage? lastAnswer = await channelMetadataStore.GetLastAnswerAsync(conversationId);
+
+            // The answer only tells what the message refers to; buttons travel as their labels because that is all the user saw of them.
+            Records.UserGuardAnswer? userGuardAnswer = lastAnswer is null
+                ? null
+                : new Records.UserGuardAnswer(
+                    lastAnswer.Text,
+                    lastAnswer.RichCard,
+                    lastAnswer.QuickReplies is { Count: > 0 }
+                        ? lastAnswer.QuickReplies.Select(quickReply => quickReply.Label).ToList()
+                        : null);
+
+            // The UserGuard reads the answer and the message as one JSON object whose names its prompt declares.
+            Records.UserGuardSubject userGuardSubject = new Records.UserGuardSubject(userGuardAnswer, message);
+            string userGuardSubjectJson = JsonSerializer.Serialize(userGuardSubject, AIJsonUtilities.DefaultOptions);
+
             // The first call of every turn, on the framework tier: it stands between the user
             // and the whole pipeline, so nothing downstream runs until it has answered.
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
                 userGuardSystemPrompt,
-                message);
+                userGuardSubjectJson);
 
             // The verdict, in the shape the UserGuard prompt's Formatting section asked for. Nothing here
             // is null when the model answered as instructed.

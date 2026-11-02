@@ -15,6 +15,7 @@ public interface IGuardRailService
 {
     /// <summary>
     /// Evaluates whether the given message complies with content and policy rules.
+    /// The message is judged beside the last answer this process delivered to the conversation and alone when there is none.
     /// </summary>
     /// <param name="conversationId">
     /// Unique identifier of the ongoing conversation.

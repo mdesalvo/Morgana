@@ -83,7 +83,7 @@ public class ChannelMetadataStore : IChannelMetadataStore
     }
 
     /// <inheritdoc/>
-    public void RecordDeliveredMessage(ChannelMessage deliveredMessage)
+    public ValueTask RecordDeliveredMessageAsync(ChannelMessage deliveredMessage)
     {
         // Only what was said counts as an answer, which a later one replaces: warnings, errors and command frames are notices
         // about the conversation and leave the last answer as it was.
@@ -92,12 +92,15 @@ public class ChannelMetadataStore : IChannelMetadataStore
         {
             lastAnswerByConversation[deliveredMessage.ConversationId] = deliveredMessage;
         }
+
+        // The copy is in memory, so the write has completed by the time the caller receives the task.
+        return ValueTask.CompletedTask;
     }
 
     /// <inheritdoc/>
-    public ChannelMessage? GetLastAnswer(string conversationId) =>
-        // Absent until the channel delivers an answer in this process.
-        lastAnswerByConversation.GetValueOrDefault(conversationId);
+    public ValueTask<ChannelMessage?> GetLastAnswerAsync(string conversationId) =>
+        // Absent until the channel delivers an answer in this process; the copy is in memory, so the result is ready at once.
+        ValueTask.FromResult(lastAnswerByConversation.GetValueOrDefault(conversationId));
 
     /// <inheritdoc/>
     public async ValueTask<ChannelMetadata> GetChannelMetadataAsync(string conversationId)

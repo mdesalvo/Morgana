@@ -1,7 +1,9 @@
 using System.Globalization;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Morgana.AI;
 using Morgana.AI.Services;
+using Morgana.Contracts;
 using PromptHarness.Infrastructure;
 using PromptHarness.Infrastructure.Engine;
 using PromptHarness.Infrastructure.Reporting;
@@ -26,7 +28,7 @@ namespace PromptHarness.Tests;
 ///
 /// <para>The calibration cases over <c>Calibration/userguard.yaml</c> call the guard directly on the framework tier, need no knob and are
 /// judged by the verdict alone: a red case is rude or malicious and must be refused by the UserGuard's own verdict with a refusal
-/// for the user, a green case is an honest message that must pass. Every run must hold. The wording of a refusal is judged by the scenarios.</para>
+/// for the user, a green case is an honest message that must pass. Every run must hold. A case may carry the answer the user received, which the UserGuard reads beside the message. The wording of a refusal is judged by the scenarios.</para>
 /// </remarks>
 public sealed class UserGuardTests : IDisposable
 {
@@ -39,6 +41,9 @@ public sealed class UserGuardTests : IDisposable
     /// <summary>The UserGuard under measurement, built over the tiers the host reads.</summary>
     private readonly LLMGuardRailService guard;
 
+    /// <summary>The channel store the UserGuard reads the last answer of each case from.</summary>
+    private readonly ChannelMetadataStore channelMetadataStore;
+
     /// <summary>Builds the UserGuard over the tiers the host reads.</summary>
     public UserGuardTests(MorganaHostFixture fixture)
     {
@@ -47,8 +52,11 @@ public sealed class UserGuardTests : IDisposable
         // Nothing is logged: the verdict and the refusal are the evidence.
         loggerFactory = LoggerFactory.Create(logging => logging.ClearProviders());
 
+        // The store a case records its answer on, which the UserGuard reads back.
+        channelMetadataStore = GuardRailServiceFactory.CreateChannelMetadataStore();
+
         // The UserGuard itself, over a registry that lists nothing: a user's message reaches no server.
-        guard = GuardRailServiceFactory.Create(fixture.Configuration, loggerFactory, new ScriptedMCPClientRegistryService(() => []));
+        guard = GuardRailServiceFactory.Create(fixture.Configuration, loggerFactory, new ScriptedMCPClientRegistryService(() => []), channelMetadataStore);
     }
 
     /// <summary>Drives one scenario through the whole pipeline with the guard rail on.</summary>
@@ -92,6 +100,21 @@ public sealed class UserGuardTests : IDisposable
     [InlineData("userguard-red-instructions-as-a-format")]
     [InlineData("userguard-red-language-and-instructions")]
     [InlineData("userguard-red-request-carrying-orders")]
+    [InlineData("userguard-red-rules-after-the-plan")]
+    [InlineData("userguard-red-disclosure-after-the-clauses")]
+    [InlineData("userguard-red-order-riding-a-clause")]
+    [InlineData("userguard-red-abuse-after-the-plan")]
+    [InlineData("userguard-red-promised-the-tools")]
+    [InlineData("userguard-red-grant-against-the-answer")]
+    [InlineData("userguard-red-instructions-as-a-recipe")]
+    [InlineData("userguard-red-rules-a-piece-at-a-time")]
+    [InlineData("userguard-red-allusion-to-the-text")]
+    [InlineData("userguard-red-flattery-and-urgency")]
+    [InlineData("userguard-red-neighbour-by-periphrasis")]
+    [InlineData("userguard-red-without-your-rules")]
+    [InlineData("userguard-red-sexually-explicit")]
+    [InlineData("userguard-red-racist-generalisation")]
+    [InlineData("userguard-red-pity-asks-for-a-side")]
     [InlineData("userguard-green-shorter-and-informal")]
     [InlineData("userguard-green-another-language")]
     [InlineData("userguard-green-heated-frustration")]
@@ -107,6 +130,19 @@ public sealed class UserGuardTests : IDisposable
     [InlineData("userguard-green-complaint-about-staff")]
     [InlineData("userguard-green-hypothetical-cancel")]
     [InlineData("userguard-green-role-of-the-user")]
+    [InlineData("userguard-green-first-clause-alone")]
+    [InlineData("userguard-green-clause-after-the-plan")]
+    [InlineData("userguard-green-button-typed")]
+    [InlineData("userguard-green-list-them")]
+    [InlineData("userguard-green-colleague-after-the-plan")]
+    [InlineData("userguard-green-promised-call-back")]
+    [InlineData("userguard-green-lemon-tree-at-war")]
+    [InlineData("userguard-green-honest-urgency")]
+    [InlineData("userguard-green-honest-flattery")]
+    [InlineData("userguard-green-what-you-cannot-do")]
+    [InlineData("userguard-green-reports-racism")]
+    [InlineData("userguard-green-orchid-pollination")]
+    [InlineData("userguard-green-feeling-low")]
     public async Task UserGuard_case_holds(string caseId)
     {
         // The case with the message the user wrote.
@@ -121,6 +157,30 @@ public sealed class UserGuardTests : IDisposable
         {
             // The window of this run's check, so its token cost is read off the spans.
             int mark = fixture.Observer.ModelCallMark();
+
+            // A case that carries an answer records it as the one the channel delivered, under this run's own conversation.
+            if (userGuardCase.Answer is not null)
+            {
+                // The card travels in the calibration file as JSON text and reaches the guard as the card the user saw.
+                RichCard? answerCard = userGuardCase.Answer.Card is null
+                    ? null
+                    : JsonSerializer.Deserialize<RichCard>(userGuardCase.Answer.Card);
+
+                // The buttons are labels in the file; the guard reads only their labels.
+                List<QuickReply>? answerQuickReplies = userGuardCase.Answer.Buttons?
+                    .Select((label, index) => new QuickReply($"button-{index}", label, label))
+                    .ToList();
+
+                // The channel hands every delivered message to the store, which keeps an assistant answer as the last one.
+                await channelMetadataStore.RecordDeliveredMessageAsync(new ChannelMessage
+                {
+                    ConversationId = $"{caseId}-{run}",
+                    Text = userGuardCase.Answer.Text,
+                    MessageType = ChannelMessageTypes.Assistant,
+                    RichCard = answerCard,
+                    QuickReplies = answerQuickReplies
+                });
+            }
 
             // The message is checked as the pipeline checks it at ingress.
             Records.GuardRailResult verdict = await guard.CheckUserMessageAsync($"{caseId}-{run}", userGuardCase.Message);

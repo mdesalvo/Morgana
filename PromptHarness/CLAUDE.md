@@ -32,7 +32,7 @@ project: every build setting lives in the `.csproj`, so it carries unchanged acr
 
 ## Commands
 
-Twenty-six test classes. **Never combine filters**: seven groups carry a process-wide boot knob the
+Twenty-seven test classes. **Never combine filters**: seven groups carry a process-wide boot knob the
 others must not see and two of those seven share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
@@ -51,6 +51,7 @@ dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ToolResultCheckTes
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~MCPToolAdmissionTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~OfferAdmissionTests"
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.PeerQuestionCheckTests"
+dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.UserMessageCheckTests"
 
 # live, no judge — the ToolGuard over its calibration sets of results and offers, on the framework tier
 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~ToolGuardTests"
@@ -103,7 +104,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `ContextHandlingTests` | **5/5, blocking** | The context cycle, the closed vocabulary, non-revelation. Failure is **silent**: an agent re-asking for what it knows still looks like it works |
 | `ConsultingTests` | **4/4, blocking** | A colleague reached on demand for a datum only it holds; an exchange leaving the conversation as it found it. Silent the same way. Also depends on a **topology**, so a failure here has a second meaning: check the `[ConsultsAgent]` attributes first |
 | `BehaviourTests` | 5/4 | Visible presentation: buttons, cards, closure |
-| `UserGuardTests` | 5/5 · **every run** | The UserGuard prompt, rudeness and malice in what a user writes. Its scenarios drive whole conversations and judge the refusal as the user reads it, at 5/5: a false negative is safety-adjacent. Its calibration cases, over `Calibration/userguard.yaml`, call the guard directly on the framework tier: each red case is rude or carries one form of malice and must be refused on the guard's own verdict, each green case is an honest message that resembles one and must pass, in every run. An admitted message with no verdict never counts as a pass |
+| `UserGuardTests` | 5/5 · **every run** | The UserGuard prompt, rudeness and malice in what a user writes. Its scenarios drive whole conversations and judge the refusal as the user reads it, at 5/5: a false negative is safety-adjacent. Its calibration cases, over `Calibration/userguard.yaml`, call the guard directly on the framework tier: each red case is rude or carries one form of malice and must be refused on the guard's own verdict, each green case is an honest message that resembles one and must pass, in every run. A case may carry the answer the user received, which the guard reads beside the message. An admitted message with no verdict never counts as a pass |
 | `ActorTests` | mixed | The framework prompts nothing else exercises: classifier, channel adaptation, presentation (a one-shot check, since the presenter caches process-wide by channel name) |
 | `ServedConsultationTests` | — | This installation answering a partner: which conversation, what it cost, how many exchanges are admitted |
 | `SummarizationTests` | — | The reducer's own prompt, unreachable at the default 21-message trigger |
@@ -118,6 +119,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `PeerGuardTests` | **every run** | The PeerGuard prompt on a live call of the framework tier, over `Calibration/peerguard.yaml`: each red case is a partner's question carrying one form of malice in its subtlest version and must be declined on the guard's own verdict, each green case is an honest question that resembles one and must be admitted. A declined question with no verdict never counts as a catch. No judge and no host traffic: one judgment per run, on whichever provider `Morgana:ActorSystem:Tier` names |
 | `OfferAdmissionTests` | none | What an external source offers, examined over a scripted inspector: an offer forging a label anywhere (a parameter name included) or over the length limit is refused without inspection; an approved offer is admitted again without a model call, however many ask at once; a changed offer or a new tool is examined again and a refusal shuts the source for every agent; an unreachable server yields no tools and keeps an earlier approval; an offer with no verdict is examined again next time. No real model or server is reached |
 | `PeerQuestionCheckTests` | none | A partner's question over a scripted PeerGuard: a forged label or a question over the length limit is declined without a model call; the guard's verdict is kept, an unreadable answer or a failure declines. No real model is reached |
+| `UserMessageCheckTests` | none | What the UserGuard is handed beside a user's message, over a scripted model: the last answer the channel delivered, with its card and the labels of its buttons; a notice never replaces it; before any answer, after an eviction or in another conversation the message is judged alone. No real model is reached |
 | `MCPToolAdmissionTests` | none | An MCP tool enters an agent last: one taking the name of a tool of Morgana or of the domain, the colleagues' prefix or the name another MCP source already gave, in any case, is refused. A name that only begins like one of them is admitted. No server is reached |
 | `LanguageModelTests` | none | The three tiers built from configuration, each by the provider it declares; a missing tier, connection or framework tier, an unregistered or twice-registered provider and a placeholder in a field the provider uses refused. No model is reached |
 | `AgentCardTests` · `StartupValidationTests` · `PeerFederationTests` · `ConversationApiTests` | none | Wire contracts and boot refusals, asserted deterministically. **Every literal is spelled out in the test** rather than read from `Constants`: a test comparing a constant against itself asserts that a constant equals a constant, while the point is to notice a published document changing shape under whoever consumes it |

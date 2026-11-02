@@ -66,7 +66,7 @@ public class AdaptingChannelService : IChannelService
 
         // The message as the user received it becomes the conversation's last answer, whose buttons a press of the
         // next message is recognised on. Kept only once the transport accepted it, so an undelivered message never counts.
-        channelMetadataStore.RecordDeliveredMessage(adaptedChannelMessage);
+        await channelMetadataStore.RecordDeliveredMessageAsync(adaptedChannelMessage);
     }
 
     /// <inheritdoc/>

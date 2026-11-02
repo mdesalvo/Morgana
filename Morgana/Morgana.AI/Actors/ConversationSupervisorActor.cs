@@ -238,7 +238,8 @@ public class ConversationSupervisorActor : MorganaActor
     {
         // The buttons on screen are those of the last answer the channel delivered, as the user received it;
         // after a restart none is held, so a press reaches the classifier as an ordinary request.
-        List<QuickReply>? offeredButtons = channelMetadataStore.GetLastAnswer(conversationId)?.QuickReplies;
+        ChannelMessage? lastAnswer = await channelMetadataStore.GetLastAnswerAsync(conversationId);
+        List<QuickReply>? offeredButtons = lastAnswer?.QuickReplies;
 
         // A last answer with no buttons leaves the message an ordinary request: a farewell offers none
         // and a channel that shows none receives none.

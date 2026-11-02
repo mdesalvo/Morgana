@@ -1,6 +1,8 @@
+using System.Security.Cryptography;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.LanguageModels.Anthropic;
@@ -19,7 +21,8 @@ public static class GuardRailServiceFactory
     /// <param name="hostConfiguration">The configuration the host reads.</param>
     /// <param name="loggerFactory">Logger factory that the providers write to.</param>
     /// <param name="mcpClientRegistryService">The registry the guard lists an MCP server through.</param>
-    public static LLMGuardRailService Create(IConfiguration hostConfiguration, ILoggerFactory loggerFactory, IMCPClientRegistryService mcpClientRegistryService)
+    /// <param name="channelMetadataStore">The channel store the guard reads the last answer of a conversation from.</param>
+    public static LLMGuardRailService Create(IConfiguration hostConfiguration, ILoggerFactory loggerFactory, IMCPClientRegistryService mcpClientRegistryService, IChannelMetadataStore channelMetadataStore)
     {
         // The observer reads token usage off the telemetry spans and a failing run is diagnosed from what the model read.
         IConfiguration configuration = new ConfigurationBuilder()
@@ -48,6 +51,22 @@ public static class GuardRailServiceFactory
         ILanguageModelService languageModelService = new ConfigurationLanguageModelService(configuration, languageModels, promptResolver, loggerFactory);
 
         // The guard itself.
-        return new LLMGuardRailService(languageModelService, promptResolver, mcpClientRegistryService, configuration, NullLogger.Instance);
+        return new LLMGuardRailService(languageModelService, promptResolver, mcpClientRegistryService, channelMetadataStore, configuration, NullLogger.Instance);
+    }
+
+    /// <summary>Builds the channel store the guard reads the last answer from; no handshake is ever registered on it.</summary>
+    public static ChannelMetadataStore CreateChannelMetadataStore()
+    {
+        // A throwaway storage with a key of its own: the store persists handshakes through it and none is ever registered here.
+        SQLiteConversationPersistenceService conversationPersistenceService = new SQLiteConversationPersistenceService(
+            Microsoft.Extensions.Options.Options.Create(new Records.ConversationPersistenceOptions
+            {
+                StoragePath = Path.Combine(Path.GetTempPath(), $"guard-channel-{Guid.NewGuid():N}"),
+                EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
+            }),
+            NullLogger.Instance);
+
+        // The store over that persistence; the empty configuration leaves every channel rule at its default.
+        return new ChannelMetadataStore(conversationPersistenceService, new ConfigurationBuilder().Build(), NullLogger.Instance);
     }
 }

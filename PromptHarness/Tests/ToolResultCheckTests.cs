@@ -7,6 +7,7 @@ using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using PromptHarness.Infrastructure;
+using PromptHarness.Infrastructure.Engine;
 using Xunit;
 
 namespace PromptHarness.Tests;
@@ -30,6 +31,7 @@ public sealed class ToolResultCheckTests
         new UnreachableLanguageModelService(),
         new ConfigurationPromptResolverService(new ScriptedDomain()),
         new ScriptedMCPClientRegistryService(() => []),
+        GuardRailServiceFactory.CreateChannelMetadataStore(),
         new ConfigurationBuilder().Build(),
         NullLogger.Instance);
 
@@ -337,6 +339,7 @@ public sealed class ToolResultCheckTests
             languageModel,
             new ConfigurationPromptResolverService(new ScriptedDomain()),
             new ScriptedMCPClientRegistryService(() => []),
+            GuardRailServiceFactory.CreateChannelMetadataStore(),
             new ConfigurationBuilder().AddInMemoryCollection(settings).Build(),
             NullLogger.Instance);
     }

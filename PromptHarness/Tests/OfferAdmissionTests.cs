@@ -8,6 +8,7 @@ using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using PromptHarness.Infrastructure;
+using PromptHarness.Infrastructure.Engine;
 using Xunit;
 
 namespace PromptHarness.Tests;
@@ -462,6 +463,7 @@ public sealed class OfferAdmissionTests
             languageModel,
             new ConfigurationPromptResolverService(new ScriptedDomain()),
             registry,
+            GuardRailServiceFactory.CreateChannelMetadataStore(),
             new ConfigurationBuilder().AddInMemoryCollection(settings).Build(),
             NullLogger.Instance);
     }

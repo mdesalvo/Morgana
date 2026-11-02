@@ -638,6 +638,27 @@ public static class Records
         [property: JsonPropertyName("result")] JsonElement Result);
 
     /// <summary>
+    /// What the UserGuard reads: the answer the user received last and the message they wrote after it, as a JSON object.
+    /// </summary>
+    /// <remarks>The two JSON names are a contract with the UserGuard prompt's Target sentence.</remarks>
+    /// <param name="Answer">The last answer the channel delivered to the conversation; left out when it is not at hand, since a null would read as a claim that nobody has spoken.</param>
+    /// <param name="Message">What the user wrote.</param>
+    public record UserGuardSubject(
+        [property: JsonPropertyName("answer")] UserGuardAnswer? Answer,
+        [property: JsonPropertyName("message")] string Message);
+
+    /// <summary>
+    /// The answer as the user saw it, which the UserGuard reads to tell what a message refers to.
+    /// </summary>
+    /// <param name="Text">The text of the answer.</param>
+    /// <param name="Card">The rich card the answer carried; omitted when there was none.</param>
+    /// <param name="Buttons">The labels of the buttons the user saw; null when the answer carried none.</param>
+    public record UserGuardAnswer(
+        [property: JsonPropertyName("text")] string Text,
+        [property: JsonPropertyName("card")] RichCard? Card,
+        [property: JsonPropertyName("buttons")] IReadOnlyList<string>? Buttons);
+
+    /// <summary>
     /// What the ToolGuard inspector reads when an external source offers tools: the source and the tools it offers, as a JSON object.
     /// </summary>
     /// <remarks>The JSON names are a contract with the ToolGuard prompt's Target sentence about the offer.</remarks>

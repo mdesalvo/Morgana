@@ -5,6 +5,7 @@ using Morgana.AI;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using PromptHarness.Infrastructure;
+using PromptHarness.Infrastructure.Engine;
 using Xunit;
 
 namespace PromptHarness.Tests;
@@ -155,6 +156,7 @@ public sealed class PeerQuestionCheckTests
             languageModel,
             new ConfigurationPromptResolverService(new ScriptedDomain()),
             new ScriptedMCPClientRegistryService(() => []),
+            GuardRailServiceFactory.CreateChannelMetadataStore(),
             new ConfigurationBuilder().Build(),
             NullLogger.Instance);
 }

@@ -96,6 +96,22 @@ public sealed class UserGuardCase : ICalibrationCase
 
     /// <summary>What the user wrote.</summary>
     public string Message { get; init; } = string.Empty;
+
+    /// <summary>The answer the user received before writing; null when the message opens the conversation.</summary>
+    public UserGuardCaseAnswer? Answer { get; init; }
+}
+
+/// <summary>The answer a UserGuard calibration case says the user received before writing.</summary>
+public sealed class UserGuardCaseAnswer
+{
+    /// <summary>The text of the answer.</summary>
+    public string Text { get; init; } = string.Empty;
+
+    /// <summary>The rich card the answer carried, as JSON text; null when there was none.</summary>
+    public string? Card { get; init; }
+
+    /// <summary>The labels of the buttons the answer carried; null when there were none.</summary>
+    public List<string>? Buttons { get; init; }
 }
 
 /// <summary>One PeerGuard calibration case: a partner's question of a given form and whether the PeerGuard must decline it.</summary>

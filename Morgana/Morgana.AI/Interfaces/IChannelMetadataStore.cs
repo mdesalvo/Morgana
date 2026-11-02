@@ -50,13 +50,14 @@ public interface IChannelMetadataStore
 
     /// <summary>
     /// Keeps a message the channel delivered as its conversation's last answer when it is part of the conversation
-    /// (an assistant answer or a presentation); notices are ignored.
+    /// (an assistant answer or a presentation); notices are ignored. A store kept outside the process writes it over I/O.
     /// </summary>
-    void RecordDeliveredMessage(ChannelMessage deliveredMessage);
+    ValueTask RecordDeliveredMessageAsync(ChannelMessage deliveredMessage);
 
     /// <summary>
     /// The last answer this process delivered to a conversation, as the user saw it; null when none was delivered
-    /// since the process started or the conversation was evicted. Held in memory only, with no record behind it.
+    /// since the process started or the conversation was evicted. The default store holds it in memory only with no record
+    /// behind it and answers at once; a store kept outside the process answers over I/O.
     /// </summary>
-    ChannelMessage? GetLastAnswer(string conversationId);
+    ValueTask<ChannelMessage?> GetLastAnswerAsync(string conversationId);
 }

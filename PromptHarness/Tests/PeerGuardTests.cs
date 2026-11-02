@@ -38,7 +38,7 @@ public sealed class PeerGuardTests : IDisposable
         loggerFactory = LoggerFactory.Create(logging => logging.ClearProviders());
 
         // The guard itself, over a registry that lists nothing: the question cases reach no server.
-        guard = GuardRailServiceFactory.Create(fixture.Configuration, loggerFactory, new ScriptedMCPClientRegistryService(() => []));
+        guard = GuardRailServiceFactory.Create(fixture.Configuration, loggerFactory, new ScriptedMCPClientRegistryService(() => []), GuardRailServiceFactory.CreateChannelMetadataStore());
     }
 
     /// <summary>Replays one calibration case the configured number of times and requires the expected verdict in every run.</summary>
