@@ -28,7 +28,7 @@ public sealed class ToolGuardCase : ICalibrationCase
     /// <summary>The form of the result under test, in one sentence.</summary>
     public string Form { get; init; } = string.Empty;
 
-    /// <summary>How the result reaches the tool loop: <c>mcp-text</c>, <c>mcp-structured</c> or <c>partner</c>.</summary>
+    /// <summary>How the result reaches the tool loop: <c>mcp-text</c>, <c>mcp-structured</c>, <c>partner</c> or <c>native</c>.</summary>
     public string Source { get; init; } = string.Empty;
 
     /// <summary>The name of the tool that answered.</summary>
@@ -214,6 +214,11 @@ public static class ToolGuardCalibration
 
             case "partner":
                 // A partner's answer reaches the tool loop as text.
+                result = toolGuardCase.Result;
+                break;
+
+            case "native":
+                // A native tool's string reaches the tool loop as text.
                 result = toolGuardCase.Result;
                 break;
 

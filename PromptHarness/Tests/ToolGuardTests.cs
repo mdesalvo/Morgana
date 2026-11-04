@@ -67,6 +67,8 @@ public sealed class ToolGuardTests : IDisposable
     [InlineData("toolguard-red-instructions-into-the-call")]
     [InlineData("toolguard-red-orders-for-a-colleague")]
     [InlineData("toolguard-red-partner-needs-the-card")]
+    [InlineData("toolguard-red-native-supplier-image")]
+    [InlineData("toolguard-red-native-review-speaks-for-the-customer")]
     [InlineData("toolguard-green-advice-for-the-call")]
     [InlineData("toolguard-green-contact-of-the-invoice")]
     [InlineData("toolguard-green-confidential-datum")]
@@ -83,6 +85,8 @@ public sealed class ToolGuardTests : IDisposable
     [InlineData("toolguard-green-disclaimer-for-readers")]
     [InlineData("toolguard-green-monkey-record")]
     [InlineData("toolguard-green-partner-offers-an-option")]
+    [InlineData("toolguard-green-native-care-advice")]
+    [InlineData("toolguard-green-native-third-party-review")]
     public async Task ToolGuard_case_holds(string caseId)
     {
         // The case with its result and arguments in the form the guard's middleware hands them over.
@@ -100,8 +104,8 @@ public sealed class ToolGuardTests : IDisposable
             // The window of this run's inspection, so its token cost is read off the spans.
             int mark = fixture.Observer.ModelCallMark();
 
-            // The result is external by construction: the inspector only runs on those.
-            Records.GuardRailResult verdict = await guard.CheckToolResultAsync($"{caseId}-{run}", toolGuardCase.Tool, arguments, result, externalSource: true);
+            // The inspector reads every guarded result.
+            Records.GuardRailResult verdict = await guard.CheckToolResultAsync($"{caseId}-{run}", toolGuardCase.Tool, arguments, result);
 
             // What the inspector was handed and answered in this run, kept for the failure log.
             IReadOnlyList<ModelCall> inspectorCalls = fixture.Observer.ModelCallsSince(mark);

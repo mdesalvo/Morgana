@@ -24,10 +24,8 @@ namespace Morgana.AI.Abstractions;
 /// A tool that needs the agent to behave a certain way is asking for a line of domain
 /// <c>Instructions</c>, or for a global policy where it holds for every domain. Free-text in tool
 /// output is also never a grant of capability: see the <c>ToolGrounding</c> policy in morgana.json.
-/// Every result of a domain tool passes the deterministic check of
-/// <c>IGuardRailService.CheckToolResultAsync</c>, which withholds a forgery of Morgana's own prompt, a
-/// chat-template token or text hidden in Unicode tag characters. Anything else a tool reads from its
-/// own store is trusted as its own, so a tool serving text that third parties wrote answers for that text.
+/// Every result of a domain tool is checked and then read by the ToolGuard inspector, since what a tool reads
+/// from its own store may have been written by third parties.
 /// </remarks>
 public class MorganaTool
 {

@@ -224,7 +224,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | Service | Interface | Purpose |
 |---|---|---|
 | `LLMClassifierService` | `IClassifierService` | LLM intent classification; falls back to `"other"` at confidence 0, marked as a classification error |
-| `LLMGuardRailService` | `IGuardRailService` | LLM policy check on the user's message, deterministic check on tool results, `ToolGuard` inspection of MCP and partner results and of what they offer: an MCP server's tools (examined at startup and again whenever its listing changes) and a partner's card. `PeerGuard` judgment of a partner's question. Answers `IsServerAvailableAndSecure` and `IsPeerAvailableAndSecure` before every external call. **Fails open**, except on an external result, an offer or a partner's question, which **fail closed** |
+| `LLMGuardRailService` | `IGuardRailService` | LLM policy check on the user's message, deterministic check on tool results, `ToolGuard` inspection of every tool result and of what MCP servers and partners offer: an MCP server's tools (examined at startup and again whenever its listing changes) and a partner's card. `PeerGuard` judgment of a partner's question. Answers `IsServerAvailableAndSecure` and `IsPeerAvailableAndSecure` before every external call. **Fails open** on the user's message; a tool result, an offer or a partner's question **fail closed** |
 | `LLMPresenterService` | `IPresenterService` | Welcome message and its reintroduction, in Morgana's personality; the buttons are the intents' own. Never throws |
 | `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
 | `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
@@ -469,7 +469,7 @@ fault reaches a user as a conversation that never answers, on a host that passed
 |---|---|
 | `Morgana:LanguageModels:Tiers` | The three tiers: provider, connection and model of each |
 | `Morgana:AgentToAgent` | `Enabled`, `MaxRoundsPerTurn`, `PublicUrl` (declared only where a binding cannot answer for the address), `Partners[]`. Consultation waits are one **ladder** derived from `ActorSystem:TimeoutSeconds`, stated once in `Records.PeerConsultationWaits` |
-| `Morgana:ActorSystem` | `Tier` (the framework actors' tier, mandatory), `TimeoutSeconds`, `EnableUserGuardrail`, `EnableToolGuardrail`, `EnablePeerGuardrail`, `MaxExternalToolResultLength`, `IntentCollisionThreshold` |
+| `Morgana:ActorSystem` | `Tier` (the framework actors' tier, mandatory), `TimeoutSeconds`, `EnableUserGuardrail`, `EnableToolGuardrail`, `EnablePeerGuardrail`, `MaxToolResultLength`, `IntentCollisionThreshold` |
 | `Morgana:AdaptiveMessaging` | `EnableStreamingResponse`, `RichFeaturesMinLength` |
 | `Morgana:ConversationPersistence` | `StoragePath`, `EncryptionKey` (AES-256, base64, 32 bytes) |
 | `Morgana:RateLimiting` · `:DustLimiting` | Limits and their authored error messages. A model's price lives in its provider plugin |

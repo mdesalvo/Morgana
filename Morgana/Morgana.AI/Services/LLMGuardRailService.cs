@@ -14,7 +14,7 @@ namespace Morgana.AI.Services;
 
 /// <summary>
 /// Default <see cref="IGuardRailService"/> implementation: the LLM policy check on the user's message, the
-/// deterministic check on every guarded tool result, the ToolGuard inspection of the results of external tools
+/// deterministic check and the ToolGuard inspection of every guarded tool result
 /// and the PeerGuard judgment of a partner's question.
 /// It also examines what MCP servers and partners offer and keeps, per external source, whether it is go or no-go.
 /// The user's message goes to <see cref="ILanguageModelService"/> beside the last answer the user received, with the UserGuard system prompt for detection of
@@ -64,7 +64,7 @@ public partial class LLMGuardRailService : IGuardRailService
     private readonly string userGuardSystemPrompt;
 
     /// <summary>
-    /// Pre-computed ToolGuard system prompt, read by the inspector of the results of external tools.
+    /// Pre-computed ToolGuard system prompt, read by the inspector of every guarded tool result.
     /// </summary>
     private readonly string toolGuardSystemPrompt;
 
@@ -74,7 +74,7 @@ public partial class LLMGuardRailService : IGuardRailService
     private readonly string peerGuardSystemPrompt;
 
     /// <summary>
-    /// Application configuration, read per call for the limit on an external result's length.
+    /// Application configuration, read per call for the limit on the length of what an inspection reads.
     /// </summary>
     private readonly IConfiguration configuration;
 
@@ -88,11 +88,10 @@ public partial class LLMGuardRailService : IGuardRailService
     /// </summary>
     private static readonly string peerGuardDustRole = $"{Constants.Morgana} ({Constants.Prompts.PeerGuard})";
 
-    /// <summary>
-    /// The longest external result an inspection vouches for, in characters; read per call like the adapter reads its switches.
-    /// </summary>
-    private int MaxExternalToolResultLength
-        => configuration.GetValue("Morgana:ActorSystem:MaxExternalToolResultLength", 32000);
+    /// <summary>The longest text an inspection vouches for, in characters.</summary>
+    private int MaxToolResultLength
+        // Read per call, like the adapter reads its switches.
+        => configuration.GetValue("Morgana:ActorSystem:MaxToolResultLength", 32000);
 
     /// <summary>
     /// The refusal for a message that the provider's own content filter blocked, worded in the UserGuard prompt.
@@ -132,7 +131,7 @@ public partial class LLMGuardRailService : IGuardRailService
     /// <param name="promptResolverService">Prompt resolver used to load UserGuard configuration.</param>
     /// <param name="mcpClientRegistryService">MCP registry that lists a server whose offer is examined.</param>
     /// <param name="channelMetadataStore">Channel store that keeps the last answer each conversation received.</param>
-    /// <param name="configuration">Application configuration holding the limit on an external result's length.</param>
+    /// <param name="configuration">Application configuration holding the limit on the length of what an inspection reads.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
     public LLMGuardRailService(
         ILanguageModelService llmService,
@@ -169,11 +168,11 @@ public partial class LLMGuardRailService : IGuardRailService
             Records.Prompt.Labeled(Constants.SectionLabels.Instructions, userGuardPrompt.Instructions),
             Records.Prompt.Labeled(Constants.SectionLabels.Formatting, userGuardPrompt.Formatting));
 
-        // The inspector's prompt, resolved eagerly like the UserGuard's: an external result is inspected on the turn that meets it.
+        // The inspector's prompt, resolved eagerly like the UserGuard's: a tool result is inspected on the turn that meets it.
         Records.Prompt toolGuardPrompt =
             promptResolverService.ResolveAsync(Constants.Prompts.ToolGuard).GetAwaiter().GetResult();
 
-        // What the inspector reads before every external result; it has no placeholder to splice either.
+        // What the inspector reads before every tool result; it has no placeholder to splice either.
         toolGuardSystemPrompt = string.Join("\n",
             Records.Prompt.Labeled(Constants.SectionLabels.Target, toolGuardPrompt.Target),
             Records.Prompt.Labeled(Constants.SectionLabels.Instructions, toolGuardPrompt.Instructions),
@@ -266,7 +265,7 @@ public partial class LLMGuardRailService : IGuardRailService
     }
 
     /// <inheritdoc/>
-    public async Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult, bool externalSource)
+    public async Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult)
     {
         // What the result carries against the assistant; null when nothing in it does.
         string? finding;
@@ -282,11 +281,7 @@ public partial class LLMGuardRailService : IGuardRailService
                 "LLMGuardRailService: check of the result of tool {ToolName} failed for conversation {ConversationId}",
                 toolName, conversationId);
 
-            // A native tool's result that cannot be checked is admitted: a check that cannot evaluate must not silence a legitimate tool.
-            if (!externalSource)
-                return new Records.GuardRailResult(true, null, Records.GuardVerdictSource.FailOpen);
-
-            // An external result goes on to the inspector, which still reads it.
+            // The result goes on to the inspector, which still reads it.
             finding = null;
         }
 
@@ -300,12 +295,8 @@ public partial class LLMGuardRailService : IGuardRailService
             return new Records.GuardRailResult(false, finding, Records.GuardVerdictSource.Prefilter);
         }
 
-        // A native tool runs code its plugin answers for: the free check is all it pays for.
-        if (!externalSource)
-            return new Records.GuardRailResult(true, null, Records.GuardVerdictSource.Prefilter);
-
         // The limit on what an inspection vouches for, read once for this result.
-        int maxLength = MaxExternalToolResultLength;
+        int maxLength = MaxToolResultLength;
 
         // On a text that long an inspection is not a verdict to trust and an injection hides easily in its tail.
         if (toolResult.Length > maxLength)
@@ -356,7 +347,7 @@ public partial class LLMGuardRailService : IGuardRailService
         }
 
         // The limit on what a judgment vouches for, read once for this question.
-        int maxLength = MaxExternalToolResultLength;
+        int maxLength = MaxToolResultLength;
 
         // On a text that long a judgment is not a verdict to trust and an injection hides easily in its tail.
         if (question.Length > maxLength)
@@ -519,12 +510,12 @@ public partial class LLMGuardRailService : IGuardRailService
         {
             logger.LogError(ex, "LLMGuardRailService: check of the offer of {Source} failed", sourceKey);
 
-            // An offer whose free check fails still goes to the inspector like an external result.
+            // An offer whose free check fails still goes to the inspector like a tool result.
             finding = null;
         }
 
         // The limit on what an inspection vouches for, read once for this offer.
-        int maxLength = MaxExternalToolResultLength;
+        int maxLength = MaxToolResultLength;
 
         // The verdict on the offer, decided by the first layer that has something to say.
         Records.GuardRailResult result;
@@ -574,7 +565,7 @@ public partial class LLMGuardRailService : IGuardRailService
     }
 
     /// <summary>
-    /// Has the ToolGuard inspector judge the result of an external tool; a result that cannot be judged is withheld.
+    /// Has the ToolGuard inspector judge a tool's result; a result that cannot be judged is withheld.
     /// </summary>
     private async Task<Records.GuardRailResult> InspectToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult)
     {
@@ -585,7 +576,7 @@ public partial class LLMGuardRailService : IGuardRailService
         // provider: accented letters and angle brackets stay readable instead of turning into escape codes.
         string subjectJson = JsonSerializer.Serialize(subject, AIJsonUtilities.DefaultOptions);
 
-        // The result of an external tool is judged by the inspector under the name of the tool that returned it.
+        // A tool's result is judged by the inspector under the name of the tool that returned it.
         return await JudgeWithInspectorAsync(conversationId, toolGuardSystemPrompt, toolGuardDustRole, subjectJson, $"the result of tool {toolName}");
     }
 
@@ -648,7 +639,7 @@ public partial class LLMGuardRailService : IGuardRailService
         catch (Exception ex)
         {
             // This includes a JsonException from an answer that is not JSON, which is how a framework tier
-            // that is down answers (Morgana's error text): an external source is withheld rather than read unjudged.
+            // that is down answers (Morgana's error text): what nobody could judge is withheld rather than read unjudged.
             logger.LogError(ex,
                 "LLMGuardRailService: inspection of {Subject} failed for conversation {ConversationId} — withholding",
                 subjectLabel, conversationId);

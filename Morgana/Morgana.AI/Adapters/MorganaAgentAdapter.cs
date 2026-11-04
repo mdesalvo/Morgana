@@ -552,8 +552,7 @@ public class MorganaAgentAdapter
         => configuration.GetValue("Morgana:ActorSystem:EnableToolGuardrail", true);
 
     /// <summary>
-    /// Wraps the agent so that every tool result but the base tools' and a local colleague's passes the
-    /// guard before the model reads it (an external source's is inspected as well) and a refused result is replaced by the fact of its quarantine.
+    /// Wraps the agent so that every tool result but the base tools' and a local colleague's passes the guard before the model reads it, a refused one replaced by the fact of its quarantine.
     /// </summary>
     /// <param name="agent">The agent as assembled, whose tool loop is to be guarded.</param>
     /// <param name="agentType">The agent's class, whose declared colleagues are exempt from the guard.</param>
@@ -587,7 +586,7 @@ public class MorganaAgentAdapter
             .Select(attribute => new Records.PeerReference(attribute.Intent, attribute.Instance))
             .ToDictionary(ToFunctionName, peer => peer);
 
-        // An MCP server and a partner answer from outside the installation, so their results are inspected as well.
+        // An MCP server and a partner answer from outside the installation: a call to them is sent only while their source is available and secure.
         HashSet<string> externalToolNames = [.. mcpToolServers.Keys, .. partnerToolPeers.Keys];
 
         // Whether the source behind an external tool currently holds a completed approval of its offer.
@@ -678,7 +677,7 @@ public class MorganaAgentAdapter
                 string argumentsText = JsonSerializer.Serialize(new Dictionary<string, object?>(invocation.Arguments), AIJsonUtilities.DefaultOptions);
 
                 // The guard's verdict on what the tool returned.
-                Records.GuardRailResult verdict = await guardRailService.CheckToolResultAsync(conversationId, toolName, argumentsText, resultText, externalToolNames.Contains(toolName));
+                Records.GuardRailResult verdict = await guardRailService.CheckToolResultAsync(conversationId, toolName, argumentsText, resultText);
 
                 // A compliant result reaches the model untouched.
                 if (verdict.Compliant)
