@@ -136,6 +136,12 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <summary>The one secret the two installations of a federation run share.</summary>
     public string FederationKey { get; private set; } = string.Empty;
 
+    /// <summary>The name the poisoned partners file this installation under, which their gate would expect in the token.</summary>
+    public const string PoisonedCallerName = "greenhouse";
+
+    /// <summary>The sources a hijacking run turns against the instance under test; <c>null</c> when the run serves none.</summary>
+    public PoisonedSourceHost? PoisonedSources { get; private set; }
+
     /// <summary>Port the other installation binds, reserved beside this instance's own.</summary>
     private int federatedPeerPort;
 
@@ -185,6 +191,10 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         Configuration = BuildHarnessConfiguration();
         Options = HarnessOptions.Load(Configuration);
 
+        // Both knobs replace the whole domain, so a run holding both would have two domains claiming the one slot.
+        if (Options.FederatedPeer && Options.PoisonedDomain)
+            throw new InvalidOperationException("Harness:FederatedPeer and Harness:PoisonedDomain each replace the domain of the instance under test and run in separate invocations.");
+
         // Step 2: mint per-run, disposable identity — a fresh JWT signing key (never written to
         // disk) and a scratch directory for the SQLite databases this run's conversations create.
         IssuerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
@@ -220,9 +230,19 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         if (Options.FederatedPeer)
             Peer = await FederatedPeerHost.StartAsync(federatedPeerPort, BuildFederatedPeerEnvironment(), Options.StartupTimeoutSeconds);
 
+        // Step 4c: on a hijacking run, the poisoned sources go up before the instance under test. Its
+        // startup examines what the MCP servers offer and what the partners' cards say, so they have
+        // to be answering by then.
+        if (Options.PoisonedDomain)
+            PoisonedSources = await PoisonedSourceHost.StartAsync();
+
         // The tee must be in place before the host constructs its logging stack, because the
         // console logger latches Console.Out once, when its provider is created.
         Output = HostOutputCapture.Install(Options.EchoHostOutput);
+
+        // The observer listens before the host boots: the startup examines the MCP servers' offers and
+        // a refusal there is counted once, at that moment, or never seen by a scenario asserting it.
+        Observer = new TurnObserver(Output, Options.LogDrainMilliseconds);
 
         // Step 5: launch the real Morgana.Web entry point on a background thread and block here
         // until it answers its health endpoint (or fails fast — see WaitForHealthyAsync).
@@ -230,10 +250,8 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
         await WaitForHealthyAsync();
 
-        // Step 6: now that the host is up, wire the read-only observers (spans + log tee) and the
-        // harness's own channel (a live webhook receiver + REST client) against it.
-        Observer = new TurnObserver(Output, Options.LogDrainMilliseconds);
-
+        // Step 6: now that the host is up, wire the harness's own channel (a live webhook receiver
+        // + REST client) against it.
         Channel = new HarnessChannel(
             BaseAddress,
             IssuerKey,
@@ -272,6 +290,10 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // be stopped from here. It has to be, along with the conversations it was asked to open.
         if (Peer is not null)
             await Peer.DisposeAsync();
+
+        // The poisoned sources hold fixed ports, so they have to be released for the next invocation.
+        if (PoisonedSources is not null)
+            await PoisonedSources.DisposeAsync();
 
         // The host runs on a background thread and stops with the test process; there is no
         // lifetime handle to signal from here. Only the throwaway databases are ours to clean up.
@@ -450,6 +472,10 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // there. Off, none of this is written and the instance is the one every other group drives.
         if (Options.FederatedPeer)
             ApplyFederationEnvironment();
+
+        // On a hijacking run the domain is replaced by the one agent that consults the poisoned sources.
+        if (Options.PoisonedDomain)
+            ApplyPoisonedDomainEnvironment();
 
 
         // Framework categories at Information, everything else quiet: the tool log lines the turn
@@ -655,6 +681,44 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
         // Past the entry just written, so a doomed-boot case still lands on a slot nobody declared.
         FreePartnerIndex = FederatedPartnerIndex + 1;
+    }
+
+    /// <summary>
+    /// Tells the instance under test that it holds one agent of its own and two partners that answer with an attempt at hijacking.
+    /// </summary>
+    /// <remarks>
+    /// The domain is <em>replaced</em> rather than added to, for the reason federation replaces it: the
+    /// one agent must be the only one that can answer, so what it does with each source is all there is to see.
+    /// </remarks>
+    private void ApplyPoisonedDomainEnvironment()
+    {
+        // The one domain this instance holds on this run, in place of the shipped one.
+        Environment.SetEnvironmentVariable("Morgana__Plugins__Directories__0", "poisoned-plugins");
+
+        // The two partners the plugin's attributes name: both answer at the sources' address and each
+        // carries a key of its own, since they are two installations as far as this one can tell.
+        int hedgerowPartnerIndex = FreePartnerIndex;
+        int quincePartnerIndex = FreePartnerIndex + 1;
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{hedgerowPartnerIndex}__Name", PoisonedSourceHost.HedgerowPartnerName);
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{hedgerowPartnerIndex}__Url", PoisonedSourceHost.SourcesAddress);
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{hedgerowPartnerIndex}__SymmetricKey", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{hedgerowPartnerIndex}__Enabled", "true");
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{hedgerowPartnerIndex}__OutboundPolicy__Enabled", "true");
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{hedgerowPartnerIndex}__OutboundPolicy__Issuer", PoisonedCallerName);
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{quincePartnerIndex}__Name", PoisonedSourceHost.QuincePartnerName);
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{quincePartnerIndex}__Url", PoisonedSourceHost.SourcesAddress);
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{quincePartnerIndex}__SymmetricKey", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{quincePartnerIndex}__Enabled", "true");
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{quincePartnerIndex}__OutboundPolicy__Enabled", "true");
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{quincePartnerIndex}__OutboundPolicy__Issuer", PoisonedCallerName);
+
+        // The scoped and metered partners are admitted to agents of the shipped domain that this one
+        // does not publish, which startup refuses: they are parked as federation parks them.
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__Enabled", "false");
+        Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__Enabled", "false");
+
+        // Past both entries just written, so a doomed-boot case still lands on a slot nobody declared.
+        FreePartnerIndex = quincePartnerIndex + 1;
     }
 
     /// <summary>

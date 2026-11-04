@@ -53,6 +53,19 @@ public sealed record ConsultationObservation(
     string? Question,
     string? Answer);
 
+/// <summary>One tool result the framework withheld from the model, read from the event it adds to the span of the turn.</summary>
+/// <param name="ToolName">The function the model called.</param>
+/// <param name="Outcome">What happened to the call: a result withheld or a call that was never sent.</param>
+/// <param name="Source">The layer that decided the withholding; null when the call was kept from running and nothing was judged.</param>
+/// <param name="Finding">The guard's clinical finding, never the text it judged; null when no judgment was made.</param>
+public sealed record WithheldToolObservation(string ToolName, string Outcome, string? Source, string? Finding);
+
+/// <summary>One count of Morgana's security counter: what happened at a guarded door.</summary>
+/// <param name="Door">Where the event happened.</param>
+/// <param name="Outcome">What happened there.</param>
+/// <param name="Source">The layer that decided; null when the event carries none.</param>
+public sealed record SecurityEventObservation(string Door, string Outcome, string? Source);
+
 /// <summary>One LLM call as the model saw it: its cost, its instructions, its tools, the messages it read and its answer.</summary>
 /// <remarks>The texts are the OpenTelemetry <c>gen_ai.*</c> content attributes, as JSON; null when the host records no content.</remarks>
 public sealed record ModelCall(
@@ -76,6 +89,7 @@ public sealed record ModelCall(
 /// <param name="LogLines">Raw host log captured for the turn, attached to failures for diagnosis.</param>
 /// <param name="GuardCompliant">Verdict from the <c>morgana.guard</c> span; null when the guard rail is disabled or no guard span was seen.</param>
 /// <param name="GuardViolation">Violation text from the same span when <paramref name="GuardCompliant"/> is false.</param>
+/// <param name="GuardSource">The layer that decided the verdict, from the same span; null when the guard rail is disabled or no guard span was seen.</param>
 /// <param name="ClassifierIntent">Intent from the <c>morgana.classifier</c> span; null on a follow-up turn, which skips classification entirely.</param>
 /// <param name="ClassifierConfidence">Confidence from the same span, parsed from its string tag.</param>
 /// <param name="Consultations">Consultations served during the turn, in the order they closed; empty on a turn that asked no colleague.</param>
@@ -89,6 +103,9 @@ public sealed record ModelCall(
 /// </param>
 /// <param name="ModelCalls">Every LLM call of the turn as the model saw it, classification included; the forensic record of a failing run.</param>
 /// <param name="JudgeModelCalls">The judge's own calls on this turn, kept apart so that the turn's cost stays Morgana's alone.</param>
+/// <param name="WithheldToolObservations">Tool results withheld during the turn, in the order they were; empty when none was.</param>
+/// <param name="SecurityEventWindow">Security events counted during the turn.</param>
+/// <param name="ProcessSecurityEvents">Every security event counted since the process started, which is where an offer refused at startup shows.</param>
 public sealed record TurnResult(
     string ConversationId,
     string UserMessage,
@@ -100,12 +117,16 @@ public sealed record TurnResult(
     IReadOnlyList<string> LogLines,
     bool? GuardCompliant = null,
     string? GuardViolation = null,
+    string? GuardSource = null,
     string? ClassifierIntent = null,
     double? ClassifierConfidence = null,
     IReadOnlyList<ConsultationObservation>? Consultations = null,
     IReadOnlyList<string>? CumulativeLogLines = null,
     IReadOnlyList<ModelCall>? ModelCalls = null,
-    IReadOnlyList<ModelCall>? JudgeModelCalls = null)
+    IReadOnlyList<ModelCall>? JudgeModelCalls = null,
+    IReadOnlyList<WithheldToolObservation>? WithheldToolObservations = null,
+    IReadOnlyList<SecurityEventObservation>? SecurityEventWindow = null,
+    IReadOnlyList<SecurityEventObservation>? ProcessSecurityEvents = null)
 {
     /// <summary>Consultations served during the turn, never null.</summary>
     public IReadOnlyList<ConsultationObservation> Consulted => Consultations ?? [];
@@ -118,6 +139,15 @@ public sealed record TurnResult(
 
     /// <summary>The judge's calls on the turn, never null; empty where the turn was not judged.</summary>
     public IReadOnlyList<ModelCall> JudgeCalls => JudgeModelCalls ?? [];
+
+    /// <summary>Tool results withheld during the turn, never null.</summary>
+    public IReadOnlyList<WithheldToolObservation> WithheldTools => WithheldToolObservations ?? [];
+
+    /// <summary>Security events counted during the turn, never null.</summary>
+    public IReadOnlyList<SecurityEventObservation> TurnSecurityEvents => SecurityEventWindow ?? [];
+
+    /// <summary>Every security event counted since the process started, never null.</summary>
+    public IReadOnlyList<SecurityEventObservation> AllSecurityEvents => ProcessSecurityEvents ?? [];
 
     /// <summary>The host's error and critical entries during the turn, each with its message and exception lines.</summary>
     public IReadOnlyList<string> HostErrors
@@ -163,10 +193,10 @@ public sealed record TurnResult(
     public string Describe()
         => $"""
             user: {UserMessage}
-            {(GuardCompliant is null ? "" : $"guard: compliant={GuardCompliant} | violation={GuardViolation ?? "(none)"}\n            ")}{(ClassifierIntent is null ? "" : $"classifier: intent={ClassifierIntent} | confidence={ClassifierConfidence?.ToString("F2", CultureInfo.InvariantCulture) ?? "(unknown)"}\n            ")}agent: {AgentName ?? "(no agent span)"} | completed={Message.AgentCompleted} | quickReplies={QuickReplies.Count} | richCard={(Message.RichCard is null ? "absent" : "present")}
+            {(GuardCompliant is null ? "" : $"guard: compliant={GuardCompliant} | source={GuardSource ?? "(none)"} | violation={GuardViolation ?? "(none)"}\n            ")}{(ClassifierIntent is null ? "" : $"classifier: intent={ClassifierIntent} | confidence={ClassifierConfidence?.ToString("F2", CultureInfo.InvariantCulture) ?? "(unknown)"}\n            ")}agent: {AgentName ?? "(no agent span)"} | completed={Message.AgentCompleted} | quickReplies={QuickReplies.Count} | richCard={(Message.RichCard is null ? "absent" : "present")}
             tools: {(ToolsInvoked.Count == 0 ? "(none)" : string.Join(", ", ToolsInvoked))}
             {(Consultations is not { Count: > 0 } ? "" : string.Join("\n            ", Consultations.Select(c => $"consulted {c.Target}: tools={(c.ToolsInvoked.Count == 0 ? "(none)" : string.Join("/", c.ToolsInvoked))} | awaitingReply={c.AwaitingReply}\n              asked: {c.Question}\n              replied: {c.Answer}")) + "\n            ")}
-            tokens: {Tokens}
+            {(WithheldTools.Count == 0 ? "" : string.Join("\n            ", WithheldTools.Select(w => $"withheld: tool={w.ToolName} | outcome={w.Outcome} | source={w.Source ?? "(none)"} | finding={w.Finding ?? "(none)"}")) + "\n            ")}{(TurnSecurityEvents.Count == 0 ? "" : string.Join("\n            ", TurnSecurityEvents.Select(e => $"security: door={e.Door} | outcome={e.Outcome} | source={e.Source ?? "(none)"}")) + "\n            ")}tokens: {Tokens}
             context: {(ContextAccesses.Count == 0 ? "(none)" : string.Join(", ", ContextAccesses.Select(a => $"{a.Operation}:{a.VariableName}")))}
             text: {Text}{(HostErrors.Count == 0 ? "" : "\nhost errors:\n" + string.Join("\n", HostErrors))}
             """;

@@ -11,7 +11,6 @@
     { "Name": "claude-sonnet-5-5", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 4.00 } },
     { "Name": "claude-sonnet-5", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.20, "CacheWriteUsdPerMillion": 4.00 } },
     { "Name": "claude-sonnet-4-6", "Pricing": { "InputUsdPerMillion": 3.00, "OutputUsdPerMillion": 15.00, "CacheReadUsdPerMillion": 0.30, "CacheWriteUsdPerMillion": 6.00 } },
-    { "Name": "claude-sonnet-4-5", "Pricing": { "InputUsdPerMillion": 3.00, "OutputUsdPerMillion": 15.00, "CacheReadUsdPerMillion": 0.30, "CacheWriteUsdPerMillion": 6.00 } },
     { "Name": "claude-haiku-5-5", "Pricing": { "InputUsdPerMillion": 0.10, "OutputUsdPerMillion": 0.50, "CacheReadUsdPerMillion": 0.01, "CacheWriteUsdPerMillion": 0.20 } },
     { "Name": "claude-haiku-4-5", "Pricing": { "InputUsdPerMillion": 1.00, "OutputUsdPerMillion": 5.00, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 2.00 } }
   ]

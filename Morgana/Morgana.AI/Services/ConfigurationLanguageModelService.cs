@@ -220,10 +220,13 @@ public class ConfigurationLanguageModelService : ILanguageModelService
                 ? languageModel.ConvertToMorganaDust(definition.Pricing)
                 : languageModel.ConvertToMorganaDust(connectionSection, definition.Options.ModelId);
             // A model priced neither by its provider nor by its tier would run with its dust uncounted, so it is refused at startup.
+            // The catalogue lists only the models its vendor serves: a model missing from it may have been retired or may be newer
+            // than this release, which Morgana cannot tell apart, so the refusal names both causes with the remedy of each.
             if (morganaDust is null)
                 throw new InvalidOperationException(
-                    $"Morgana:LanguageModels:Tiers:{tier}:Options:ModelId '{definition.Options.ModelId}' has no pricing in provider '{languageModel.Provider}' " +
-                    $"and the tier declares no Pricing: a tier runs only a model that its provider prices or whose tier declares its own Pricing.");
+                    $"Morgana:LanguageModels:Tiers:{tier}:Options:ModelId '{definition.Options.ModelId}' is not in the catalogue that provider '{languageModel.Provider}' ships with this release. " +
+                    $"If {languageModel.Provider} has retired it, choose a model that the catalogue lists. " +
+                    $"If it is newer than this release, declare its price under Morgana:LanguageModels:Tiers:{tier}:Pricing.");
 
             // The tier's chain, outermost first: the defaults layer sees (and only fills in, never overrides) the
             // ChatOptions that every caller above sent, Microsoft.Agents.AI for domain agents and

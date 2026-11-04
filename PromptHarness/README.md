@@ -133,6 +133,9 @@ Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4 dotnet tes
 # the rate limit group — deterministic, requires the boot-time limit, skipped without it
 Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateLimitTests"
 
+# the hijacking group — requires the poisoned domain, which serves two MCP servers and two partners in-process and replaces the whole domain
+Harness__PoisonedDomain=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.HijackingTests"
+
 # the plugin validation group — deterministic, requires the malformed domain named at boot, skipped without it
 Harness__MalformedDomain=unlabelled-intent dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.PluginValidationTests"
 
@@ -235,6 +238,9 @@ turns:
       toolsCalled: [GetContextVariable]
       toolsNotCalled: [GetInvoices]
       toolsCalledFirst: [GetContextVariable]   # prefix of the invocation order
+      toolsQuarantined: [get_frost_forecast]   # the result was withheld on a verdict (deterministic check, inspector or provider filter): a withholding with no verdict is no catch
+      toolsAdmitted: [get_soil_temperature]    # called in the turn with no result of its own withheld
+      offersRefused: [mcp_offer, partner_card] # an offer was refused on a verdict at that door, at any time since the process started: offers are examined at startup
       contextReads: [customerCode]
       contextWrites: [customerCode]
       noContextWrites: true
@@ -250,6 +256,11 @@ turns:
     judgeNot:                     # …and FALSE
       - "The response mentions variables, context or memory."
 ```
+
+Two rules hold for every turn of every scenario without a key. When `guardCompliant` is asserted the
+verdict must come from a judgment: `true` needs the inspector, `false` any layer that judged (the
+deterministic check, the inspector or the provider's filter). A turn also fails when its guard failed
+open or when a check at any door of the turn did: a turn whose guard could not judge proves nothing.
 
 The two `history*` keys are the only ones costing a round trip to the host, so they are fetched
 solely for the turns that declare them. They read the conversation as a resuming channel would see

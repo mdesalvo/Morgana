@@ -33,7 +33,7 @@ Activated when the user says things like:
 2. **Ask the target scope** with `AskUserQuestion`, multi-select. **Enumerate `PromptHarness/Tests/`
    first and offer what is actually there** — the class list below is a description of a moving
    directory, not a contract, and a `--filter` naming a class that no longer exists runs zero tests
-   and exits 0: a green nobody asked for. Fifteen classes at the time of writing, in four families:
+   and exits 0: a green nobody asked for. Eighteen classes at the time of writing, in four families:
 
    *Deterministic — no model, no cost. Run them first: they are the cheapest way to learn the
    topology under test is sane before any billed turn.*
@@ -60,11 +60,12 @@ Activated when the user says things like:
    - Summarizer (`SummarizationTests` — `Harness__SummarizationThreshold=4 Harness__SummarizationTargetCount=4`)
    - Dust (`DustTests` — `Harness__DustBudgetPerConversation=100`; the test measures one turn on the tier under test and places the gauge below each threshold itself, so any budget of at least twenty turns works whatever provider serves the tier; a tier priced at zero skips it)
    - Federation (`FederationTests` — `Harness__FederatedPeer=true`, which stands a **second Morgana** up and **replaces the whole domain** of the instance under test with one toolless agent. Every other group would find its own agents missing, so this one never shares an invocation with anything)
+   - Hijacking (`HijackingTests` — `Harness__PoisonedDomain=true`, which serves two MCP servers and two partners **in-process** on fixed ports 5198 and 5199 and **replaces the whole domain** of the instance under test with one agent consulting them. Never shares an invocation with anything, the federation knob included)
    - Plugin validation (`PluginValidationTests` — `Harness__MalformedDomain=unlabelled-intent`; deterministic, no model: it boots the real entry point with a harness plugin built to be wrong and expects the refusal; skipped without the knob, and its plugin stays loaded in the process, so it is its own invocation)
 
    Plus `HarnessSmokeTests`, which is not a choice: step 4 runs it regardless.
 
-   `AskUserQuestion` takes at most four options, so fourteen checkboxes do not fit: ask by **family**
+   `AskUserQuestion` takes at most four options, so eighteen checkboxes do not fit: ask by **family**
    — the four above, multi-select — and let a user wanting a single class say so through "Other".
    A user who has already said "everything" has answered this question; do not ask it again.
 
@@ -129,6 +130,7 @@ Activated when the user says things like:
    dotnet build PromptHarness/PromptHarness.csproj
    (cd PromptHarness/bin/Debug/net10.0 && Harness__DustBudgetPerConversation=100 Harness__HostLogLevel=Debug Harness__EchoHostOutput=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M ./PromptHarness -class PromptHarness.Tests.DustTests)
    Harness__FederatedPeer=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"
+   Harness__PoisonedDomain=true Harness__DefaultRuns=N Harness__DefaultMinPasses=M dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.HijackingTests"
    Harness__MalformedDomain=unlabelled-intent dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.PluginValidationTests"
    Harness__EnableUserGuardrail=true dotnet test PromptHarness/PromptHarness.csproj --filter "FullyQualifiedName~ConversationPersistenceTests"
    ```

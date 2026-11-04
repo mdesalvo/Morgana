@@ -11,6 +11,8 @@
     { "Name": "kimi-k3", "Pricing": { "InputUsdPerMillion": 3.00, "OutputUsdPerMillion": 15.00, "CacheReadUsdPerMillion": 0.30, "CacheWriteUsdPerMillion": 3.00 } },
     { "Name": "kimi-k2.7-code", "Pricing": { "InputUsdPerMillion": 0.95, "OutputUsdPerMillion": 4.00, "CacheReadUsdPerMillion": 0.19, "CacheWriteUsdPerMillion": 0.95 } },
     { "Name": "kimi-k2.6", "Pricing": { "InputUsdPerMillion": 0.95, "OutputUsdPerMillion": 4.00, "CacheReadUsdPerMillion": 0.16, "CacheWriteUsdPerMillion": 0.95 } },
+    { "Name": "mimo-v2.6-flash", "Pricing": { "InputUsdPerMillion": 0.14, "OutputUsdPerMillion": 0.28, "CacheReadUsdPerMillion": 0.0028, "CacheWriteUsdPerMillion": 0.14 } },
+    { "Name": "mimo-v2.6-pro", "Pricing": { "InputUsdPerMillion": 0.435, "OutputUsdPerMillion": 0.87, "CacheReadUsdPerMillion": 0.0036, "CacheWriteUsdPerMillion": 0.435 } },
     { "Name": "minimax-m3.1-flash", "Pricing": { "InputUsdPerMillion": 0.15, "OutputUsdPerMillion": 0.60, "CacheReadUsdPerMillion": 0.015, "CacheWriteUsdPerMillion": 0.15 } },
     { "Name": "minimax-m3", "Pricing": { "InputUsdPerMillion": 0.60, "OutputUsdPerMillion": 2.40, "CacheReadUsdPerMillion": 0.12, "CacheWriteUsdPerMillion": 0.60 } },
     { "Name": "minimax-m2.7", "Pricing": { "InputUsdPerMillion": 0.30, "OutputUsdPerMillion": 1.20, "CacheReadUsdPerMillion": 0.06, "CacheWriteUsdPerMillion": 0.30 } },

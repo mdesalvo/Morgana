@@ -241,17 +241,15 @@ public sealed class ScenarioRunner
                         ? await channel.GetHistoryAsync(conversationId)
                         : null;
 
-                // The structural layer runs first and is deterministic — no Expect block at all
-                // means nothing is checked and the turn cannot fail structurally.
-                IReadOnlyList<string> structural = turnDefinition.Expect is null
-                    ? []
-                    : ExpectationChecker.Check(turnDefinition.Expect, turn, history);
+                // The structural layer runs first and is deterministic. A turn with no Expect block still
+                // answers to the rules every turn answers to, so it is checked against an empty one.
+                IReadOnlyList<string> structuralFailures = ExpectationChecker.Check(turnDefinition.Expect ?? new ExpectSpec(), turn, history);
 
-                failures.AddRange(structural.Select(failure => $"turn {transcript.Count}: {failure}"));
+                failures.AddRange(structuralFailures.Select(failure => $"turn {transcript.Count}: {failure}"));
 
                 // The judge is skipped once the turn already failed structurally: the run is lost
                 // either way and judging costs a live LLM call.
-                if (structural.Count == 0)
+                if (structuralFailures.Count == 0)
                 {
                     // The judge's calls are windowed apart from the turn's, so a verdict is read on its evidence
                     // in the failure log without ever entering the turn's cost.

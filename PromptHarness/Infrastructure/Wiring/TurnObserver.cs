@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Morgana.AI;
@@ -106,6 +107,18 @@ public sealed class TurnObserver : IDisposable
     /// <summary>Guards <see cref="llmSpans"/>.</summary>
     private readonly Lock llmGate = new Lock();
 
+    /// <summary>Tool results the framework withheld, per conversation, in the order the events closed.</summary>
+    private readonly ConcurrentDictionary<string, List<WithheldToolObservation>> withheldTools = new ConcurrentDictionary<string, List<WithheldToolObservation>>();
+
+    /// <summary>Listener on Morgana's security counter, which counts what happens at every guarded door.</summary>
+    private readonly MeterListener securityListener;
+
+    /// <summary>Every security event counted since the process started, in the order it was counted: not keyed by conversation because the counter carries none.</summary>
+    private readonly List<SecurityEventObservation> securityEvents = [];
+
+    /// <summary>Guards <see cref="securityEvents"/>, which the counter's callers write from their own threads.</summary>
+    private readonly Lock securityGate = new Lock();
+
     /// <summary>Tee on the host's stdout.</summary>
     private readonly HostOutputCapture output;
 
@@ -128,6 +141,27 @@ public sealed class TurnObserver : IDisposable
         };
 
         ActivitySource.AddActivityListener(listener);
+
+        // The names are read before the listener exists: reading them is what makes Telemetry create its
+        // instruments. A listener already started would be told of them while that is still under way.
+        string meterName = Telemetry.MorganaMeter.Name;
+        string securityCounterName = Telemetry.SecurityEvents.Name;
+
+        // Only Morgana's security counter is of interest: it is the one place that records an offer refused at startup.
+        securityListener = new MeterListener
+        {
+            InstrumentPublished = (Instrument instrument, MeterListener meterListener) =>
+            {
+                if (instrument.Meter.Name == meterName && instrument.Name == securityCounterName)
+                    meterListener.EnableMeasurementEvents(instrument);
+            }
+        };
+
+        // The counter adds whole events, so a long measurement is all this listener ever receives.
+        securityListener.SetMeasurementEventCallback<long>(OnSecurityMeasurement);
+
+        // Started after the callback is set so that no event is counted before anything can record it.
+        securityListener.Start();
     }
 
     /// <summary>Opens an observation window for a turn about to be sent.</summary>
@@ -140,6 +174,11 @@ public sealed class TurnObserver : IDisposable
         lock (llmGate)
             llmMark = llmSpans.Count;
 
+        // The security events are process-wide like the LLM spans, so the turn's window starts at their count.
+        int securityEventMark;
+        lock (securityGate)
+            securityEventMark = securityEvents.Count;
+
         // Five independent marks — log line count, agent/guard/classifier span counts for this
         // conversation and global LLM-span count — each a watermark that CompleteTurnAsync will
         // read everything *past* to isolate what happened during this one turn specifically.
@@ -150,7 +189,9 @@ public sealed class TurnObserver : IDisposable
             guardSpans.TryGetValue(conversationId, out List<GuardSpan>? guards) ? guards.Count : 0,
             classifierSpans.TryGetValue(conversationId, out List<ClassifierSpan>? classifiers) ? classifiers.Count : 0,
             llmMark,
-            consultationSpans.TryGetValue(conversationId, out List<ConsultationObservation>? consultations) ? consultations.Count : 0);
+            consultationSpans.TryGetValue(conversationId, out List<ConsultationObservation>? consultations) ? consultations.Count : 0,
+            withheldTools.TryGetValue(conversationId, out List<WithheldToolObservation>? withheldObservations) ? withheldObservations.Count : 0,
+            securityEventMark);
     }
 
     /// <summary>
@@ -256,6 +297,23 @@ public sealed class TurnObserver : IDisposable
             modelCalls = [.. llmSpans.Skip(scope.LlmSpanCount)];
         TokenUsage usage = modelCalls.Aggregate(TokenUsage.Zero, (total, next) => total + next.Usage);
 
+        // Every tool result withheld during the turn, with the layer that decided it: a result the
+        // framework kept from the model leaves no other trace on the delivered message.
+        IReadOnlyList<WithheldToolObservation> withheldDuringTurn =
+            withheldTools.TryGetValue(scope.ConversationId, out List<WithheldToolObservation>? withheldList) && withheldList.Count > scope.WithheldToolCount
+                ? [.. withheldList.Skip(scope.WithheldToolCount)]
+                : [];
+
+        // The security events counted since the turn began and every one counted since the process
+        // started: an offer refused at startup belongs to no turn but is evidence all the same.
+        List<SecurityEventObservation> securityEventsDuringTurn;
+        List<SecurityEventObservation> securityEventsSinceStart;
+        lock (securityGate)
+        {
+            securityEventsDuringTurn = [.. securityEvents.Skip(scope.SecurityEventCount)];
+            securityEventsSinceStart = [.. securityEvents];
+        }
+
         return new TurnResult(
             scope.ConversationId,
             userMessage,
@@ -267,19 +325,110 @@ public sealed class TurnObserver : IDisposable
             lines,
             guard?.Compliant,
             guard?.Violation,
+            guard?.Source,
             classifier?.Intent,
             classifier?.Confidence,
             consulted,
             conversationLogMark is { } mark ? output.Since(mark) : [],
-            modelCalls);
+            modelCalls,
+            WithheldToolObservations: withheldDuringTurn,
+            SecurityEventWindow: securityEventsDuringTurn,
+            ProcessSecurityEvents: securityEventsSinceStart);
     }
 
     /// <inheritdoc />
-    public void Dispose() => listener.Dispose();
+    public void Dispose()
+    {
+        // Both listeners stop hearing the host together.
+        listener.Dispose();
+        securityListener.Dispose();
+    }
+
+    /// <summary>Records one measurement of the security counter with the door it happened at and what was decided there.</summary>
+    private void OnSecurityMeasurement(Instrument instrument, long measurement, ReadOnlySpan<KeyValuePair<string, object?>> tags, object? state)
+    {
+        string door = string.Empty;
+        string outcome = string.Empty;
+        string? source = null;
+
+        // The counter carries other tags too (the intent of the agent) which no check here reads.
+        foreach (KeyValuePair<string, object?> tag in tags)
+        {
+            switch (tag.Key)
+            {
+                case Telemetry.SecurityDoor:
+                    door = tag.Value as string ?? string.Empty;
+                    break;
+
+                case Telemetry.SecurityOutcome:
+                    outcome = tag.Value as string ?? string.Empty;
+                    break;
+
+                case Telemetry.SecuritySource:
+                    source = tag.Value as string;
+                    break;
+            }
+        }
+
+        // Counters of other threads write here at the same time, hence the gate.
+        lock (securityGate)
+            securityEvents.Add(new SecurityEventObservation(door, outcome, source));
+    }
+
+    /// <summary>Finds the conversation a span belongs to by walking up its parents until one carries the conversation id.</summary>
+    private static string? FindConversationId(Activity activity)
+    {
+        // A child of the agent span carries no conversation tag of its own: its parent does.
+        for (Activity? spanInChain = activity; spanInChain is not null; spanInChain = spanInChain.Parent)
+        {
+            if (spanInChain.GetTagItem(Telemetry.ConversationId) is string conversationId)
+                return conversationId;
+        }
+
+        return null;
+    }
+
+    /// <summary>Reads a string tag of an event; null when the event does not carry it.</summary>
+    private static string? ReadEventTag(ActivityEvent activityEvent, string tagName)
+    {
+        foreach (KeyValuePair<string, object?> tag in activityEvent.Tags)
+        {
+            if (tag.Key == tagName)
+                return tag.Value as string;
+        }
+
+        return null;
+    }
+
+    /// <summary>Records every tool-withheld event of a stopped span against the conversation it belongs to.</summary>
+    private void RecordWithheldTools(Activity activity)
+    {
+        foreach (ActivityEvent activityEvent in activity.Events)
+        {
+            // Only the event the framework adds when it keeps a tool result from the model is of interest.
+            if (!string.Equals(activityEvent.Name, Telemetry.EventToolWithheld, StringComparison.Ordinal))
+                continue;
+
+            // An event on a span outside every conversation cannot be attributed to a turn.
+            string? conversationId = FindConversationId(activity);
+            if (conversationId is null)
+                continue;
+
+            Append(withheldTools, conversationId, new WithheldToolObservation(
+                ReadEventTag(activityEvent, Telemetry.ToolName) ?? string.Empty,
+                ReadEventTag(activityEvent, Telemetry.SecurityOutcome) ?? string.Empty,
+                ReadEventTag(activityEvent, Telemetry.SecuritySource),
+                ReadEventTag(activityEvent, Telemetry.SecurityFinding)));
+        }
+    }
 
     /// <summary>Records a closed agent span against its conversation, or an LLM span's token usage.</summary>
     private void OnActivityStopped(Activity activity)
     {
+        // The withheld-tool event lands on whichever span was current when the tool ran, which may be
+        // a tool span of the LLM source, so it is read before the routing below discards that source.
+        RecordWithheldTools(activity);
+
         // This callback fires for every activity from either listened-to source (see the
         // constructor), so the first job is figuring out which kind just closed and routing
         // accordingly — the two branches below populate entirely different collections.
@@ -352,7 +501,8 @@ public sealed class TurnObserver : IDisposable
             case Telemetry.GuardActivity:
                 Append(guardSpans, conversationId, new GuardSpan(
                     activity.GetTagItem(Telemetry.GuardCompliant) as bool?,
-                    activity.GetTagItem(Telemetry.GuardViolation) as string));
+                    activity.GetTagItem(Telemetry.GuardViolation) as string,
+                    activity.GetTagItem(Telemetry.GuardSource) as string));
                 break;
 
             case Telemetry.ClassifierActivity:
@@ -406,7 +556,7 @@ public sealed class TurnObserver : IDisposable
     private sealed record AgentSpan(string? AgentName, IReadOnlyList<string> ToolsInvoked);
 
     /// <summary>What a closed <c>morgana.guard</c> span contributes to a turn result.</summary>
-    private sealed record GuardSpan(bool? Compliant, string? Violation);
+    private sealed record GuardSpan(bool? Compliant, string? Violation, string? Source);
 
     /// <summary>What a closed <c>morgana.classifier</c> span contributes to a turn result.</summary>
     private sealed record ClassifierSpan(string? Intent, double? Confidence);
@@ -455,4 +605,6 @@ public sealed record TokenUsage(
 /// <param name="ConsultationSpanCount">Consultation spans already recorded for the conversation.</param>
 /// <param name="ClassifierSpanCount">Classifier spans already recorded for the conversation.</param>
 /// <param name="LlmSpanCount">LLM spans already recorded, process-wide.</param>
-public sealed record TurnScope(string ConversationId, int LogMark, int SpanCount, int GuardSpanCount, int ClassifierSpanCount, int LlmSpanCount, int ConsultationSpanCount);
+/// <param name="WithheldToolCount">Withheld-tool events already recorded for the conversation.</param>
+/// <param name="SecurityEventCount">Security events already counted, process-wide.</param>
+public sealed record TurnScope(string ConversationId, int LogMark, int SpanCount, int GuardSpanCount, int ClassifierSpanCount, int LlmSpanCount, int ConsultationSpanCount, int WithheldToolCount, int SecurityEventCount);

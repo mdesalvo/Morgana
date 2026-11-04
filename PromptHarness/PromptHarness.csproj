@@ -80,6 +80,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.*" />
     <PackageReference Include="YamlDotNet" Version="18.*" />
     <PackageReference Include="WireMock.Net" Version="2.*" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.3.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -99,6 +100,12 @@
       domain of the asking instance and no other group ever sees the intent it declares.
     -->
     <ProjectReference Include="Plugins\FederationPlugin\FederationPlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
+
+    <!--
+      The poisoned domain, built the same way: its one agent names two MCP servers and two colleagues
+      that the hijacking run serves in-process, so it too is loaded in place of the shipped domain.
+    -->
+    <ProjectReference Include="Plugins\PoisonedPlugin\PoisonedPlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
 
     <!-- The malformed domain that proves the startup refusal of an intent without a Label, built the same way. -->
     <ProjectReference Include="Plugins\UnlabelledIntentPlugin\UnlabelledIntentPlugin.csproj" ReferenceOutputAssembly="false" Private="false" />
@@ -173,6 +180,7 @@
       by the run that names it, so no other group ever sees what it declares. Adding one is one line.
     -->
     <HarnessPlugin Include="Plugins\FederationPlugin\FederationPlugin.csproj" Folder="federation-plugins" />
+    <HarnessPlugin Include="Plugins\PoisonedPlugin\PoisonedPlugin.csproj" Folder="poisoned-plugins" />
     <HarnessPlugin Include="Plugins\UnlabelledIntentPlugin\UnlabelledIntentPlugin.csproj" Folder="unlabelled-intent-plugins" />
   </ItemGroup>
 

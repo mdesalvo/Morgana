@@ -104,6 +104,18 @@ public sealed class HarnessOptions
     public bool FederatedPeer { get; init; }
 
     /// <summary>
+    /// Whether this run serves the poisoned sources in-process and replaces the domain of the instance
+    /// under test with the one agent that consults them, which is what <c>HijackingTests</c> needs and
+    /// nothing else does.
+    /// </summary>
+    /// <remarks>
+    /// Off by default and process-wide when on, like <see cref="FederatedPeer"/>: the domain is replaced
+    /// so every other group would find its own agents missing. Run it on its own:
+    /// <c>Harness__PoisonedDomain=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.HijackingTests"</c>
+    /// </remarks>
+    public bool PoisonedDomain { get; init; }
+
+    /// <summary>
     /// Names the malformed harness plugin that a <c>PluginValidationTests</c> invocation loads
     /// (<c>unlabelled-intent</c> loads the <c>unlabelled-intent-plugins</c> directory); the fixture's own host never loads it.
     /// </summary>

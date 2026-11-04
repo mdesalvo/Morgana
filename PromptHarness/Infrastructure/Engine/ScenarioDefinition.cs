@@ -136,6 +136,22 @@ public sealed class ExpectSpec
     public List<string>? ToolsNotCalled { get; init; }
 
     /// <summary>
+    /// Tools whose result must have been withheld in the turn on a verdict: the layer that decided is the
+    /// deterministic check, a model's judgment or the provider's filter. A result withheld because no verdict
+    /// could be reached is no catch and never satisfies it.
+    /// </summary>
+    public List<string>? ToolsQuarantined { get; init; }
+
+    /// <summary>Tools that must have been called in the turn with no result of theirs withheld.</summary>
+    public List<string>? ToolsAdmitted { get; init; }
+
+    /// <summary>
+    /// Doors (<c>mcp_offer</c> or <c>partner_card</c>) at which an offer must have been refused on a verdict
+    /// since the process started: an offer is examined at startup and belongs to no turn.
+    /// </summary>
+    public List<string>? OffersRefused { get; init; }
+
+    /// <summary>
     /// Tools that must be called <em>before</em> the agent produces its answer for the first time —
     /// expressed as a prefix constraint on the invocation order.
     /// </summary>
