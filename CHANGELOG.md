@@ -59,7 +59,6 @@ A request that no agent claims is answered with the same menu, so the user alway
 - Updated `Microsoft.Agents.AI` to 1.26.0
 - Updated `Microsoft.Extensions.AI` to 10.11.0
 - Updated `ModelContextProtocol.Core` to 2.3.0
-- Updated `OllamaSharp` to 5.5.0
 - Updated `OpenTelemetry` to 1.20.1
 
 ### 🚀 Future Enablement
@@ -200,7 +199,6 @@ Framing itself is **closed by default** — a site may host the widget only once
 - Updated `Microsoft.Agents.AI` to 1.19.0
 - Updated `Microsoft.Extensions.AI` to 10.9.0
 - Updated `ModelContextProtocol.Core` to 2.2.0
-- Updated `OllamaSharp` to 5.4.30
 - Updated `OpenTelemetry` to 1.18.0
 
 ### 🚀 Future Enablement
@@ -295,7 +293,6 @@ A billing FAQ agent runs on the efficient model while a contract-analysis agent 
 ### 📦 Dependencies
 - Updated `Microsoft.Agents.AI` dependency to 1.13.0
 - Updated `ModelContextProtocol.Core` dependency to 1.4.1
-- Update `OllamaSharp` to 5.4.26
 
 ### 🚀 Future Enablement
 - **Per-intent LLM economics** — with tiers declared per agent and dust attributed per agent+tier, a deployment can now see **which domain costs what and rebalance** (e.g: promote a struggling agent, demote an overserved one) by touching just one attribute and one config entry
@@ -416,9 +413,9 @@ This release introduces **Rune**, a second reference channel that brings Morgana
 - Relocated reference channels under a dedicated `Channels/` root and co-located each project's `Dockerfile` with its source (`Morgana/Morgana.Dockerfile`, `Channels/Cauldron/Cauldron.Dockerfile`, `Channels/Rune/Rune.Dockerfile`), so the repo layout mirrors the channel abstraction and each container recipe lives next to what it builds; Docker build context stays at the repo root so internal COPY paths remain stable
 
 ### 🔄 Changed
-- **BREAKING**: The `Morgana:CauldronURL` setting has been removed from `appsettings.json`, `docker-compose.yml` and all references; the CORS policy (renamed from `AllowBlazor` to `Channel`) now uses `SetIsOriginAllowed(_ => true)` in place of a single-origin whitelist. JWT authentication is the sole trust boundary at the channel edge — any origin may reach Morgana, but only signed tokens from declared issuers are accepted
-- **BREAKING**: The `Morgana:Authentication:Enabled` toggle has been removed. Authentication is now unconditionally enforced: every request must carry a valid bearer token, there is no config flag to bypass it. Migration: delete the `Enabled` key from your `Morgana:Authentication` section; any deployment that relied on `Enabled: false` for development must now mint valid JWTs (or swap `IAuthenticationService` for a dev-only stub in DI)
-- **BREAKING**: JWT authentication now uses **per-issuer signing keys**. `Morgana:Authentication:SymmetricKey` and `Morgana:Authentication:ValidIssuers[]` have been replaced by `Morgana:Authentication:Issuers[]`, an array of `{ Name, SymmetricKey }` entries. `JWTAuthenticationService` peeks the `iss` claim, looks up the matching entry and validates the signature with that issuer's own key; unknown issuers are rejected outright. Migration: replace the flat `{ SymmetricKey, ValidIssuers: ["cauldron"] }` pair with `{ Issuers: [{ "Name": "cauldron", "SymmetricKey": "..." }] }`
+- The `Morgana:CauldronURL` setting has been removed from `appsettings.json`, `docker-compose.yml` and all references; the CORS policy (renamed from `AllowBlazor` to `Channel`) now uses `SetIsOriginAllowed(_ => true)` in place of a single-origin whitelist. JWT authentication is the sole trust boundary at the channel edge — any origin may reach Morgana, but only signed tokens from declared issuers are accepted
+- The `Morgana:Authentication:Enabled` toggle has been removed. Authentication is now unconditionally enforced: every request must carry a valid bearer token, there is no config flag to bypass it. Migration: delete the `Enabled` key from your `Morgana:Authentication` section; any deployment that relied on `Enabled: false` for development must now mint valid JWTs (or swap `IAuthenticationService` for a dev-only stub in DI)
+- JWT authentication now uses **per-issuer signing keys**. `Morgana:Authentication:SymmetricKey` and `Morgana:Authentication:ValidIssuers[]` have been replaced by `Morgana:Authentication:Issuers[]`, an array of `{ Name, SymmetricKey }` entries. `JWTAuthenticationService` peeks the `iss` claim, looks up the matching entry and validates the signature with that issuer's own key; unknown issuers are rejected outright. Migration: replace the flat `{ SymmetricKey, ValidIssuers: ["cauldron"] }` pair with `{ Issuers: [{ "Name": "cauldron", "SymmetricKey": "..." }] }`
 
 ### 🐛 Fixed
 - Race condition on conversation resume where `MorganaController` created the `ConversationSupervisorActor` directly in parallel to `ConversationManagerActor.HandleCreateConversationAsync`, causing an `InvalidActorNameException` ("Actor name supervisor-... is not unique"), killing the manager and leaving the conversation without registered channel metadata
@@ -435,7 +432,6 @@ This release introduces **Rune**, a second reference channel that brings Morgana
 - Updated `Microsoft.Agents.AI` dependency to 1.2.0
 - Updated `Microsoft.Extensions.AI` dependency to 10.5.0
 - Updated `ModelContextProtocol.Core` dependency to 1.2.0
-- Updated `OllamaSharp` dependency to v5.4.25
 
 ### 🚀 Future Enablement
 - **Custom channels (IVR, SMS, RCS, Twilio, WhatsApp, plain HTTP client, …)** — With the `IChannelService` abstraction, the `AdaptingChannelService` decorator and the persistence-backed capability handshake all in place, a new outbound channel can plug in declaring its own capability budget at conversation start and get automatic degradation of any rich message without any change to producers, actors or prompts
