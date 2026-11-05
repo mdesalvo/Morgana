@@ -43,7 +43,7 @@
     <!-- Services -->
     <PackageReference Include="Markdig" Version="1.6.*" />
     <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.*" />
-    <PackageReference Include="HtmlSanitizer" Version="9.2.*" />
+    <PackageReference Include="HtmlSanitizer" Version="10.0.*" />
   </ItemGroup>
 
 </Project>
