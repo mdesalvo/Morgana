@@ -177,9 +177,6 @@ public static class Constants
         /// <summary>The framework templates spliced where each has a referent (see <see cref="Constants.Injections"/>).</summary>
         public const string Injections = "Injections";
 
-        /// <summary>The callable tools a prompt declares, framework base tools and domain tools alike.</summary>
-        public const string Tools = "Tools";
-
         /// <summary>What the user is told when a turn fails, authored rather than hard-coded.</summary>
         public const string ErrorAnswers = "ErrorAnswers";
 

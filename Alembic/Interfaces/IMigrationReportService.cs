@@ -15,9 +15,8 @@ namespace Alembic.Interfaces;
 /// It exists because Alembic never sees the client's tree. It cannot know which C# is already
 /// there, cannot merge and must not pretend to: what it can do is name every change precisely
 /// enough that a human applies it in a minute. The signature section is the load-bearing one — a
-/// tool whose parameters changed still compiles on the generated side and fails at Morgana's
-/// startup in <c>MorganaToolAdapter.AddTool</c> and the client-owned half is exactly where that
-/// fix has to be made by hand.
+/// tool whose parameters changed makes the client-owned half stop compiling and that half is
+/// exactly where the fix has to be made by hand.
 /// </para>
 /// </remarks>
 public interface IMigrationReportService

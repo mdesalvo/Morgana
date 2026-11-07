@@ -34,7 +34,7 @@ public class MorganaToolAdapter
         this.promptComposerService = promptComposerService;
     }
 
-    /// <summary>Lists the tools a tool class declares: its own public instance methods, in declaration order.</summary>
+    /// <summary>Lists the tools a tool class declares: the public instance methods it writes or overrides, in declaration order.</summary>
     /// <param name="toolType">The tool class to read.</param>
     /// <returns>The methods that are tools, in the order the model reads them.</returns>
     public static IReadOnlyList<MethodInfo> GetToolMethods(Type toolType)
@@ -45,8 +45,23 @@ public class MorganaToolAdapter
         // The metadata token follows source order, which reflection alone does not promise
         // and the model reads the tools in that order.
         return [.. declaredMethods
-            .Where(method => !method.IsSpecialName && method.GetBaseDefinition().DeclaringType == method.DeclaringType)
+            .Where(method => !method.IsSpecialName && IsTool(method))
             .OrderBy(method => method.MetadataToken)];
+    }
+
+    /// <summary>Tells a tool from the other public methods a tool class declares.</summary>
+    private static bool IsTool(MethodInfo method)
+    {
+        // The definition the method overrides or the method itself where it overrides nothing.
+        MethodInfo baseDefinition = method.GetBaseDefinition();
+
+        // A method the class introduces is a tool, unless it is virtual: then it is an implementation
+        // the subclasses take up as a tool by overriding it, each with its own description.
+        if (baseDefinition.DeclaringType == method.DeclaringType)
+            return !method.IsVirtual || method.IsFinal;
+
+        // An override is the class's own tool, except one of object's members such as ToString.
+        return baseDefinition.DeclaringType != typeof(object);
     }
 
     /// <summary>Projects the tool definitions a tool class declares through its methods and their attributes.</summary>
@@ -115,6 +130,38 @@ public class MorganaToolAdapter
         ValidateToolDefinition(toolMethod, definition);
         toolDefinitions[toolName] = definition;
 
+        return this;
+    }
+
+    /// <summary>Binds each of the given definitions to the method of the tool instance that carries its name.</summary>
+    /// <param name="toolInstance">The tool instance containing the tool method implementations.</param>
+    /// <param name="toolDefinitions">The definitions specifying which methods to register from the instance.</param>
+    /// <returns>This adapter for method chaining</returns>
+    public MorganaToolAdapter AddTools(object toolInstance, IEnumerable<Records.ToolDefinition> toolDefinitions)
+    {
+        // Each definition names one method of the instance and becomes one registered tool.
+        foreach (Records.ToolDefinition definition in toolDefinitions)
+        {
+            // The definition was projected from this very method, so the method always exists.
+            MethodInfo method = toolInstance.GetType().GetMethod(definition.Name)!;
+
+            // Build a strongly-typed delegate whose exact Func<…> type is computed from
+            // the method's own ParameterInfo at runtime: tools are discovered on
+            // plugin classes and bound to implementations via reflection, so the
+            // concrete delegate type is unknowable at compile time.
+            Delegate implementation = Delegate.CreateDelegate(
+                System.Linq.Expressions.Expression.GetDelegateType(
+                [
+                    .. method.GetParameters().Select(p => p.ParameterType),
+                    method.ReturnType
+                ]),
+                toolInstance,
+                method);
+
+            AddTool(definition.Name, implementation, definition);
+        }
+
+        // Chained so a caller can bind several instances in one expression.
         return this;
     }
 

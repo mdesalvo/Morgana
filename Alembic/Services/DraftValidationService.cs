@@ -1,6 +1,8 @@
 using Alembic.Interfaces;
 using Alembic.Models;
 using Morgana.AI;
+using Morgana.AI.Adapters;
+using Morgana.AI.Tools;
 
 namespace Alembic.Services;
 
@@ -11,11 +13,12 @@ namespace Alembic.Services;
 public class DraftValidationService : IDraftValidationService
 {
     /// <summary>
-    /// The base tools every agent receives from <c>morgana.json</c>. A domain tool sharing one of
-    /// these names would be registered twice against the same agent.
+    /// The base tools every agent receives from <c>MorganaTool</c>, read off the class itself. A domain tool sharing one of
+    /// these names in any case is refused by Morgana at startup.
     /// </summary>
-    private static readonly string[] BaseToolNames =
-        ["GetContextVariable", "SetContextVariable", "SetTurnEnding", "SetQuickReplies", "SetRichCard"];
+    private static readonly HashSet<string> BaseToolNames = new(
+        MorganaToolAdapter.GetToolMethods(typeof(MorganaTool)).Select(method => method.Name),
+        StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The scopes a parameter may declare. A parameter carrying a value the model itself authors
@@ -342,7 +345,7 @@ public class DraftValidationService : IDraftValidationService
         {
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 "The tool has no name.",
-                "A tool's name must match its C# method name exactly; MorganaToolAdapter.AddTool pairs them by it."));
+                "A tool is addressed by its C# method name: it is the name the model calls."));
             return;
         }
 
@@ -351,10 +354,10 @@ public class DraftValidationService : IDraftValidationService
                 "This agent declares two tools with this name.",
                 "Tools are registered by name per agent, so the second registration replaces or collides with the first."));
 
-        if (BaseToolNames.Contains(tool.Name, StringComparer.Ordinal))
+        if (BaseToolNames.Contains(tool.Name))
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 $"'{tool.Name}' is one of the base tools every agent already receives.",
-                "morgana.json gives every agent GetContextVariable, SetContextVariable, SetTurnEnding, SetQuickReplies and SetRichCard; a domain tool cannot share a name with one."));
+                "MorganaTool gives every agent GetContextVariable, SetContextVariable, SetTurnEnding, SetQuickReplies and SetRichCard; a domain tool cannot share a name with one."));
 
         ValidateIdentifier(tool.Name, where, "tool name", findings);
 
@@ -374,7 +377,7 @@ public class DraftValidationService : IDraftValidationService
             {
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "The parameter has no name.",
-                    "A parameter's name must match the C# method's parameter name; the adapter validates the pair by name, not by position."));
+                    "A parameter is addressed by its C# parameter name: it is the name the model passes the value under."));
                 continue;
             }
 
@@ -386,9 +389,9 @@ public class DraftValidationService : IDraftValidationService
             ValidateIdentifier(parameter.Name, parameterWhere, "parameter name", findings);
 
             if (string.IsNullOrWhiteSpace(parameter.Description))
-                findings.Add(new ValidationFinding(FindingSeverity.Warning, parameterWhere,
+                findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "The parameter has no description.",
-                    "Parameter descriptions reach the model through the JSON schema and nowhere else; an undescribed parameter is emitted bare."));
+                    "Morgana refuses at startup a tool parameter without [Description]: it is what the model reads to know what to pass."));
 
             if (!string.IsNullOrWhiteSpace(parameter.Scope)
                 && !KnownScopes.Contains(parameter.Scope, StringComparer.OrdinalIgnoreCase))
@@ -398,14 +401,14 @@ public class DraftValidationService : IDraftValidationService
 
             if (parameter.Shared
                 && !string.Equals(parameter.Scope, Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
-                findings.Add(new ValidationFinding(FindingSeverity.Warning, parameterWhere,
+                findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "The parameter is Shared but not context-scoped.",
-                    "Shared publishes a resolved context variable to the conversation's shared_context registry, so it only means anything alongside Scope 'context'."));
+                    "Only a context value is shared: it is emitted as [ToolParameter(Records.ToolScope.SharedContext)], which a request or authored value cannot be."));
 
             if (parameter.Required && optionalSeen)
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "A required parameter follows an optional one.",
-                    "C# cannot declare that method signature and MorganaToolAdapter.AddTool validates the required/optional split against the delegate."));
+                    "C# cannot declare that method signature."));
 
             optionalSeen |= !parameter.Required;
         }

@@ -10,22 +10,10 @@ namespace Alembic.Services;
 /// own record types and projects it onto a <see cref="DomainDraft"/>.
 /// </summary>
 /// <remarks>
-/// The projection is deliberately lossless in both directions. Every field the framework models is
-/// mapped and every AdditionalProperties key it does not is carried through verbatim in
-/// <see cref="AgentDraft.UnmodelledProperties"/> — because the round-trip invariant (import then
-/// export returns an equivalent file) must not depend on Alembic having a use for what it reads.
+/// The import reads the agents' prose and carries every AdditionalProperties key through verbatim in <see cref="AgentDraft.UnmodelledProperties"/>; the toolkit is authored by the interview because the tool contracts live in the client's C#, which Alembic never sees.
 /// </remarks>
 public class DraftImportService : IDraftImportService
 {
-    /// <summary>
-    /// The key carrying an agent's toolkit, taken from Morgana's own glossary since the framework is
-    /// the party that reads it back. Compared ordinally, on purpose: <c>Records.Prompt</c> looks it
-    /// up in a plain <c>Dictionary&lt;string, object&gt;</c>, so a differently-cased key is invisible
-    /// to the framework and must stay invisible here too, rather than being silently promoted into
-    /// a toolkit Morgana would never load.
-    /// </summary>
-    private const string ToolsPropertyName = Constants.PromptProperties.Tools;
-
     /// <summary>
     /// Case-insensitive, mirroring how the framework itself reads <c>agents.json</c>: an author
     /// whose file loads in Morgana must find it loads here.
@@ -130,8 +118,7 @@ public class DraftImportService : IDraftImportService
     };
 
     /// <summary>
-    /// Projects an agent prompt onto its Draft element, splitting the toolkit out of
-    /// AdditionalProperties and keeping whatever else was in there untouched.
+    /// Projects an agent prompt onto its Draft element, keeping every AdditionalProperties entry untouched.
     /// </summary>
     /// <param name="prompt">One entry of the uploaded configuration's <c>Agents</c> array, in the
     /// framework's own record shape.</param>
@@ -140,21 +127,19 @@ public class DraftImportService : IDraftImportService
     /// unmodelled keys would otherwise be reported twice for one upload.</param>
     private AgentDraft ToAgentDraft(Records.Prompt prompt, List<string> notices)
     {
-        List<Records.ToolDefinition> tools =
-            prompt.GetAdditionalPropertyOrDefault<List<Records.ToolDefinition>>(ToolsPropertyName, []);
-
-        // Everything in AdditionalProperties other than the toolkit, kept as read. Entries that
-        // held nothing but Tools disappear rather than being written back empty.
+        // Every key is carried as read, since the toolkit no longer lives here. Entries that held
+        // nothing disappear rather than being written back empty.
         List<Dictionary<string, object>> unmodelled =
             [.. prompt.AdditionalProperties
-                      .Select(entry => entry.Where(pair => pair.Key != ToolsPropertyName)
-                                            .ToDictionary(pair => pair.Key, pair => pair.Value))
+                      .Select(entry => entry.ToDictionary(pair => pair.Key, pair => pair.Value))
                       .Where(entry => entry.Count > 0)];
 
+        // The client is told which keys travel through untouched because Alembic has no use for them.
         notices.AddRange(
             unmodelled.SelectMany(entry => entry.Keys)
                       .Select(key => $"Agent '{prompt.ID}' declares '{key}', which Alembic does not model. It will be written back exactly as it was read."));
 
+        // The toolkit is left empty: its contracts live in the client's C# and the interview authors them again.
         return new AgentDraft
         {
             ID = prompt.ID,
@@ -165,37 +150,18 @@ public class DraftImportService : IDraftImportService
             Personality = prompt.Personality,
             Language = prompt.Language,
             Version = prompt.Version,
-            Tools = [.. tools.Select(ToToolDraft)],
+            Tools = [],
             UnmodelledProperties = unmodelled,
-            Code = InferCodeFacts(prompt.ID, tools.Count > 0),
+            Code = InferCodeFacts(prompt.ID),
             Origin = Provenance.Imported
         };
     }
 
     /// <summary>
-    /// Projects a tool definition onto its Draft element.
-    /// </summary>
-    /// <param name="tool">One tool of an agent's toolkit, in the framework's own record shape.</param>
-    private static ToolDraft ToToolDraft(Records.ToolDefinition tool) => new()
-    {
-        Name = tool.Name,
-        Description = tool.Description,
-        Parameters = [.. tool.Parameters.Select(parameter => new ToolParameterDraft
-        {
-            Name = parameter.Name,
-            Description = parameter.Description,
-            Required = parameter.Required,
-            Scope = string.IsNullOrWhiteSpace(parameter.Scope) ? null : parameter.Scope,
-            Shared = parameter.Shared
-        })],
-        Origin = Provenance.Imported
-    };
-
-    /// <summary>
     /// Proposes the C# facts an <c>agents.json</c> cannot carry.
     /// </summary>
     /// <remarks>
-    /// Only the class names are proposed, from the framework's own naming convention. Namespace and
+    /// Only the agent class name is proposed, from the framework's own naming convention; the tool class falls back to it at emit. Namespace and
     /// tier are left null rather than guessed: they are not derivable from anything in the file and
     /// a confident-looking wrong value is worse than an empty one the interview will ask about.
     /// Everything here is flagged <see cref="AgentCodeFacts.Inferred"/> — a proposal for the client
@@ -203,14 +169,13 @@ public class DraftImportService : IDraftImportService
     /// </remarks>
     /// <param name="agentId">The intent name this agent answers — its <c>Prompt.ID</c>, the only thing
     /// the naming convention has to go on.</param>
-    /// <param name="hasTools">Whether the agent's toolkit is non-empty; a tool class is only proposed
-    /// when there would be one to hold.</param>
-    private static AgentCodeFacts InferCodeFacts(string agentId, bool hasTools)
+    private static AgentCodeFacts InferCodeFacts(string agentId)
     {
+        // The tool class stays unnamed: the emit falls back to the naming convention when it writes one.
         return new AgentCodeFacts
         {
             AgentClassName = AgentCodeFacts.ProposeClassName(agentId, "Agent"),
-            ToolClassName = hasTools ? AgentCodeFacts.ProposeClassName(agentId, "Tool") : null,
+            ToolClassName = null,
             Inferred = true
         };
     }

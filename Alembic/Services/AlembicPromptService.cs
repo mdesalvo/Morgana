@@ -35,9 +35,9 @@ public class AlembicPromptService : IAlembicPromptService
     /// <remarks>
     /// Writing a section that does not exist and correcting one that does are different work and a
     /// pass reads only the one it is doing. Kept as two rows of the same file rather than as two
-    /// files: everything else — the identity, the conducting rules, the voice, every tool
-    /// declaration — is the same in both and a second copy of it is the duplication this prompt was
-    /// already once rebuilt to remove.
+    /// files: everything else — the identity, the conducting rules and the voice — is the
+    /// same in both and a second copy of it is the duplication this prompt was already once rebuilt
+    /// to remove.
     /// </remarks>
     private const string ComposingPromptId = "Composing";
 

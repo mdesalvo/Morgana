@@ -134,16 +134,11 @@ public class CodeEmitService : ICodeEmitService
     }
 
     /// <summary>
-    /// The tool class's half that Alembic owns: the attribute, the constructor and one
-    /// <c>partial</c> signature per declared tool.
+    /// The tool class's half that Alembic owns: the attribute, the constructor and one attributed
+    /// <c>partial</c> declaration per declared tool.
     /// </summary>
     /// <remarks>
-    /// The signatures are the load-bearing part. They are generated from the same
-    /// <c>ToolDefinition</c> that goes into <c>agents.json</c>, so the pair
-    /// <c>MorganaToolAdapter.AddTool</c> validates at startup — parameter count, names,
-    /// required-versus-optional — is generated correct by construction. Because a partial method
-    /// declared here and unimplemented in the other half does not compile, a tool added to the
-    /// configuration cannot be silently forgotten in the code.
+    /// The declaration is the tool's whole contract: its description and each parameter's description and scope sit on attributes, which is where Morgana reads them.
     /// </remarks>
     private static string EmitToolSignatures(AgentDraft agent, string intentName, string ns, string toolClass)
     {
@@ -158,7 +153,9 @@ public class CodeEmitService : ICodeEmitService
         // .csproj already declares it project-wide.
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
+        sb.AppendLine("using System.ComponentModel;");
         sb.AppendLine("using Microsoft.Extensions.Logging;");
+        sb.AppendLine("using Morgana.AI;");
         sb.AppendLine("using Morgana.AI.Attributes;");
         sb.AppendLine("using Morgana.AI.Tools;");
         sb.AppendLine();
@@ -176,12 +173,11 @@ public class CodeEmitService : ICodeEmitService
         {
             sb.AppendLine();
 
-            // The description becomes the XML doc the client's IDE shows over the partial method
-            // they implement — the only place that description survives past agents.json.
-            foreach (string line in Wrap(tool.Description))
-                sb.AppendLine(CultureInfo.InvariantCulture, $"    /// {line}");
+            // The description is an attribute on the partial method: Morgana reads it from the
+            // declaration alone, so the client's half carries nothing but the implementation.
+            sb.AppendLine(CultureInfo.InvariantCulture, $"    [Description({Literal(tool.Description)})]");
 
-            sb.AppendLine(CultureInfo.InvariantCulture, $"    public partial Task<string> {tool.Name}({Signature(tool)});");
+            AppendDeclaration(sb, tool);
         }
 
         sb.AppendLine("}");
@@ -190,71 +186,109 @@ public class CodeEmitService : ICodeEmitService
     }
 
     /// <summary>
-    /// Renders one tool's parameter list, in the order the configuration declares it.
+    /// Appends one tool's <c>partial</c> method declaration with one attributed parameter per line.
     /// </summary>
     /// <remarks>
-    /// Declaration order, never sorted. The order in <c>agents.json</c> is the contract and
-    /// silently reordering here would emit C# that disagrees with the file it ships beside. A
-    /// required parameter behind an optional one therefore emits C# that does not compile — which is
-    /// correct and is why the emit is gated on the validator reporting no errors: that exact case is
-    /// one of its findings, raised while it still costs nothing to fix.
+    /// Declaration order, never sorted: a required parameter behind an optional one emits C# that does not compile, which is why the emit is gated on the validator reporting no errors.
     /// </remarks>
-    private static string Signature(ToolDraft tool) =>
-        string.Join(", ", tool.Parameters
-            .Where(p => !string.IsNullOrWhiteSpace(p.Name))
-            .Select(p => p.Required
-                ? $"{ParameterType} {p.Name}"
-                : $"{ParameterType}? {p.Name} = null"));
-
-    /// <summary>
-    /// Wraps a description into an XML doc comment, escaped.
-    /// </summary>
-    /// <remarks>
-    /// Escaping is XML-only, not Markdown: a description is authored prose, not C# and stray
-    /// <c>&lt;</c>/<c>&amp;</c> characters in it would otherwise be read as XML doc markup by any
-    /// tool that later parses the emitted file.
-    /// </remarks>
-    private static IEnumerable<string> Wrap(string? description)
+    private static void AppendDeclaration(StringBuilder sb, ToolDraft tool)
     {
-        // Line endings become spaces rather than being dropped: a description authored as several
-        // sentences on several lines must still read as one continuous <summary>, since XML doc
-        // comments have no paragraph break of their own short of a second <para>.
-        string text = (description ?? string.Empty)
-            .Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;")
-            .ReplaceLineEndings(" ")
-            .Trim();
+        // A parameter with no name is a Draft the client has not yet fixed and is skipped like a nameless tool.
+        List<string> parameters = [.. tool.Parameters
+            .Where(parameter => !string.IsNullOrWhiteSpace(parameter.Name))
+            .Select(DeclareParameter)];
 
-        yield return "<summary>";
+        // A tool without parameters keeps the one-line form: there is nothing to put on its own line.
+        if (parameters.Count == 0)
+        {
+            sb.AppendLine(CultureInfo.InvariantCulture, $"    public partial Task<string> {tool.Name}();");
+            return;
+        }
 
-        foreach (string line in Chunk(text, 96))
-            yield return line;
-
-        yield return "</summary>";
+        // Each parameter carries a description and possibly a scope attribute, so each takes its own line.
+        sb.AppendLine(CultureInfo.InvariantCulture, $"    public partial Task<string> {tool.Name}(");
+        sb.AppendLine(string.Join("," + Environment.NewLine, parameters.Select(parameter => $"        {parameter}")) + ");");
     }
 
     /// <summary>
-    /// Breaks text on word boundaries at a column width.
+    /// Renders one parameter with its description and scope attributes.
     /// </summary>
-    private static IEnumerable<string> Chunk(string text, int width)
+    private static string DeclareParameter(ToolParameterDraft parameter)
     {
-        StringBuilder line = new StringBuilder();
+        // The scope attribute is absent for a value the model authors: the parameter then carries only its description.
+        string scopeAttribute = ScopeOf(parameter) is { } scope
+            ? $" [ToolParameter(Records.ToolScope.{scope})]"
+            : string.Empty;
 
-        foreach (string word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        // The type stays a string and the optional form carries a default, as the validator expects.
+        string declaration = parameter.Required
+            ? $"{ParameterType} {parameter.Name}"
+            : $"{ParameterType}? {parameter.Name} = null";
+
+        return $"[Description({Literal(parameter.Description)})]{scopeAttribute} {declaration}";
+    }
+
+    /// <summary>
+    /// The <c>Records.ToolScope</c> member a parameter maps to or <c>null</c> for a value the model authors.
+    /// </summary>
+    private static string? ScopeOf(ToolParameterDraft parameter)
+    {
+        // A shared parameter is a context value published to every agent of the conversation.
+        if (string.Equals(parameter.Scope, Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
+            return parameter.Shared ? "SharedContext" : "Context";
+
+        // A request value is asked of the user on the turn it is needed.
+        if (string.Equals(parameter.Scope, Constants.Scopes.Request, StringComparison.OrdinalIgnoreCase))
+            return "Request";
+
+        // No scope: the model authors the value itself.
+        return null;
+    }
+
+    /// <summary>
+    /// Renders text as a C# regular string literal.
+    /// </summary>
+    private static string Literal(string? text)
+    {
+        // The opening quote starts the literal the closing one completes below.
+        StringBuilder literal = new StringBuilder("\"");
+
+        // An authored description may hold quotes and line breaks that would end or break the C# string.
+        foreach (char character in text ?? string.Empty)
         {
-            if (line.Length > 0 && line.Length + 1 + word.Length > width)
+            // Quote, backslash and the common control characters take their short escape; any other
+            // control character takes a four-digit hex escape; everything else is written as it is.
+            switch (character)
             {
-                yield return line.ToString();
-                line.Clear();
+                case '"':
+                    literal.Append("\\\"");
+                    break;
+                case '\\':
+                    literal.Append("\\\\");
+                    break;
+                case '\n':
+                    literal.Append("\\n");
+                    break;
+                case '\r':
+                    literal.Append("\\r");
+                    break;
+                case '\t':
+                    literal.Append("\\t");
+                    break;
+                case char controlCharacter when char.IsControl(controlCharacter):
+                    literal.Append(CultureInfo.InvariantCulture, $"\\u{(int)controlCharacter:x4}");
+                    break;
+                default:
+                    literal.Append(character);
+                    break;
             }
-
-            if (line.Length > 0)
-                line.Append(' ');
-
-            line.Append(word);
         }
 
-        if (line.Length > 0)
-            yield return line.ToString();
+        // The closing quote completes the literal the opening one started.
+        literal.Append('"');
+
+        // The finished literal goes straight into the attribute that carries the description.
+        return literal.ToString();
     }
 
     /// <summary>

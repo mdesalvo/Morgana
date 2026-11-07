@@ -1,13 +1,14 @@
-using System.Text.Json;
+using System.ComponentModel;
 using Alembic.Interfaces;
 using Alembic.Models;
-using Morgana.Contracts;
 using Morgana.AI;
+using Morgana.Contracts;
 
 namespace Alembic.Tools;
 
 /// <summary>
-/// The tools Alembic calls while conducting a pass.
+/// The interview the tools of every pass act on, with the tools all passes share and the ones a
+/// pass takes up by overriding.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -24,31 +25,21 @@ namespace Alembic.Tools;
 /// what it means: it is structure and structure is not left to a model remembering a rule.
 /// </para>
 /// <para>
-/// Which of these exist in a given pass is decided by <c>alembic.json</c>, not by prose. The
-/// functional pass has no tool for an agent's instructions or formatting, so it cannot write them
-/// — the constraint is the absence of a tool rather than a sentence asking for restraint.
+/// Which of these a pass holds is decided by its phase class, not by prose. The functional pass has no
+/// tool for an agent's instructions or formatting, so it cannot write them — the constraint is the
+/// absence of a tool rather than a sentence asking for restraint.
+/// </para>
+/// <para>
+/// A tool that serves a different purpose in different passes is virtual here and each pass that
+/// holds it overrides it with its own description. The phase class declares its tools in the order
+/// the model reads them: what stands, the writing, the checks, the screen from top to bottom and the
+/// close. The four tools that are the same in every pass are declared here once and follow them.
 /// </para>
 /// </remarks>
-public class InterviewTools
+public abstract class InterviewTool
 {
-    /// <summary>
-    /// The intent name the framework reserves for the classifier's fallback. No authored agent may
-    /// take it.
-    /// </summary>
-    private const string ReservedFallbackIntent = Constants.Intents.Other;
-
-    /// <summary>
-    /// The scope of a parameter Morgana resolves from the session's own context variables.
-    /// </summary>
-    private const string ContextScope = Constants.Scopes.Context;
-
-    /// <summary>
-    /// The scope of a parameter the agent obtains from the user in conversation.
-    /// </summary>
-    private const string RequestScope = Constants.Scopes.Request;
-
     /// <summary>The interview these tools write into — see the constructor.</summary>
-    private readonly InterviewState interviewState;
+    protected readonly InterviewState interviewState;
 
     /// <summary>
     /// Whether this pass has already been handed Morgana's own layer of the composed prompt.
@@ -60,7 +51,7 @@ public class InterviewTools
     private bool framework;
 
     /// <summary>The domain being built or evolved — see the constructor.</summary>
-    private readonly IDraftStateService draftStateService;
+    protected readonly IDraftStateService draftStateService;
 
     /// <summary>The deterministic checks — see the constructor.</summary>
     private readonly IDraftValidationService draftValidationService;
@@ -75,7 +66,7 @@ public class InterviewTools
     /// <param name="draftStateService">The domain being built or evolved.</param>
     /// <param name="draftValidationService">The deterministic checks.</param>
     /// <param name="recapService">Composes the prompt the authored agent will really read.</param>
-    public InterviewTools(
+    protected InterviewTool(
         InterviewState interviewState,
         IDraftStateService draftStateService,
         IDraftValidationService draftValidationService,
@@ -87,345 +78,16 @@ public class InterviewTools
         this.recapService = recapService;
     }
 
-    /// <summary>
-    /// Puts one kind of request on the domain map, or revises one already there.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The map is the interview's spine: one entry becomes one intent and one agent and the three
-    /// later passes run once down the list. Revising keeps the entry's place, because the order is
-    /// the order the client thought of their own business in and the interview walks it in that
-    /// order.
-    /// </para>
-    /// <para>
-    /// All four fields of an intent and the two that arrive later arrive here too. The button and
-    /// the sentence it sends are read by a user <em>beside every other intent's button</em>, exactly
-    /// as the descriptions are weighed beside every other description — so they are written where
-    /// the whole set is visible and not one at a time in an agent's own pass where nothing can be
-    /// compared to anything.
-    /// </para>
-    /// </remarks>
-    /// <param name="name">Bare lowercase word — becomes a C# attribute argument and a prompt ID.</param>
-    /// <param name="description">What routes here, weighed by the classifier against every other intent's.</param>
-    /// <param name="label">The quick-reply button text a user reads, if this call is also settling it.</param>
-    /// <param name="defaultValue">The sentence pressing that button sends, as if the user had typed it.</param>
-    public string DeclareIntent(string name, string description, string? label = null, string? defaultValue = null)
-    {
-        string cleanName = (name ?? string.Empty).Trim();
-
-        if (cleanName.Length == 0)
-            return "Nothing recorded: an intent must have a name — it becomes a C# attribute argument and a prompt ID.";
-
-        if (string.Equals(cleanName, ReservedFallbackIntent, StringComparison.OrdinalIgnoreCase))
-            return $"Nothing recorded: '{ReservedFallbackIntent}' is reserved. It is the intent the classifier "
-                   + "falls back to when it cannot place a message and no agent may claim it. Call this again with a name from the domain.";
-
-        // An intent named after a framework prompt is refused by Morgana at startup, so it is refused here while it costs nothing.
-        if (Constants.Prompts.All.Contains(cleanName, StringComparer.OrdinalIgnoreCase))
-            return $"Nothing recorded: '{cleanName}' is the name of one of Morgana's own prompts and an agent's prompt is found "
-                   + "by its intent's name, so Morgana would refuse to start. Call this again with a name from the domain.";
-
-        if (draftStateService.Current?.Intents.Any(i =>
-                string.Equals(i.Name, cleanName, StringComparison.OrdinalIgnoreCase)) == true)
-            return $"Nothing recorded: '{cleanName}' is already an intent of this domain, written before today. "
-                   + "Two agents answering the same intent is a startup failure. Name what is different about this one.";
-
-        IntentDraft? existing = interviewState.Map.FirstOrDefault(i =>
-            string.Equals(i.Name, cleanName, StringComparison.OrdinalIgnoreCase));
-
-        bool revision = existing is not null;
-        IntentDraft intent = existing ?? new IntentDraft { Origin = Provenance.Authored };
-
-        intent.Name = cleanName;
-        intent.Description = description?.Trim();
-
-        // Left alone when the call omits them, so declaring an entry early and giving it a button
-        // later is one entry revised twice rather than a button silently thrown away.
-        if (!string.IsNullOrWhiteSpace(label))
-            intent.Label = label.Trim();
-
-        if (!string.IsNullOrWhiteSpace(defaultValue))
-            intent.DefaultValue = defaultValue.Trim();
-
-        if (!revision)
-            interviewState.Map.Add(intent);
-
-        List<string> complaints = [];
-
-        if (!cleanName.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c)))
-            complaints.Add("But that is not a bare lowercase word and it becomes a C# attribute argument and a prompt ID. Call this again with one that is.");
-
-        if (string.IsNullOrWhiteSpace(description))
-            complaints.Add("It says nothing about what routes here, which is the sentence the classifier weighs against every other intent.");
-
-        if (string.IsNullOrWhiteSpace(intent.Label) || string.IsNullOrWhiteSpace(intent.DefaultValue))
-            complaints.Add("It has no button yet: the map is not settled until every entry carries the words a user reads and the sentence pressing them sends.");
-
-        return (revision ? $"'{cleanName}' revised on the map." : $"'{cleanName}' is on the map, in position {interviewState.Map.Count}.")
-               + (complaints.Count > 0 ? " " + string.Join(" ", complaints) : string.Empty);
-    }
-
-    /// <summary>
-    /// Takes a kind of request off the map.
-    /// </summary>
-    public string DropIntent(string name)
-    {
-        int removed = interviewState.Map.RemoveAll(i =>
-            string.Equals(i.Name, name?.Trim(), StringComparison.OrdinalIgnoreCase));
-
-        return removed > 0
-            ? $"'{name}' is off the map."
-            : $"Nothing dropped: '{name}' is not on the map.";
-    }
-
-    /// <summary>
-    /// Returns the domain map as it currently stands.
-    /// </summary>
-    /// <remarks>
-    /// Read back whole for the same reason the toolkit is: two descriptions overlap or they do not;
-    /// that is only visible side by side. It is the one defect no prose downstream repairs — the
-    /// user meets it as the wrong agent answering.
-    /// </remarks>
-    public string GetDomainMap()
-    {
-        if (interviewState.Map.Count == 0)
-            return "The map is empty: no kind of request has been named yet.";
-
-        return "The domain map as it stands. The descriptions are weighed against each other by the classifier, "
-               + "and the buttons are read side by side by a user:\n"
-               + string.Join("\n", interviewState.Map.Select((i, n) =>
-                   $"{n + 1}. {i.Name}: {i.Description ?? "(nothing said about what routes here)"}"
-                   + $"\n    button: {i.Label ?? "(none)"} → \"{i.DefaultValue ?? "(nothing)"}\""));
-    }
-
-    /// <summary>
-    /// Records the agent's Target section.
-    /// </summary>
-    /// <remarks>
-    /// Overwrites whatever was there — a pass may call this more than once as the client's answer
-    /// sharpens and the last call is the one that stands. The section is stored as written: its label
-    /// is the framework's to add when the prompt is composed. The returned sentence tells the model whether the prose it just wrote fits this section's shape — never blocking,
-    /// only informing, so the model can tighten a Target that ran long before moving on.
-    /// </remarks>
-    public string SetAgentTarget(string target)
-    {
-        interviewState.Agent.Target = target?.Trim();
-        return Shaped("Target", target, 2, 4);
-    }
-
-    /// <summary>
-    /// Records what a colleague reads before consulting this agent.
-    /// </summary>
-    /// <remarks>
-    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>. Written by the same pass and from the same scope, because it
-    /// is that scope addressed to a different reader: a colleague deciding whether a question is this
-    /// agent's. So it names a territory and never a list of what the agent can do — a caller handed an
-    /// inventory rules questions out instead of asking them. Short by nature, which is why the shape
-    /// it reports against is tighter than the Target's.
-    /// </remarks>
-    public string SetAgentTerritory(string territory)
-    {
-        interviewState.Agent.Territory = territory?.Trim();
-        return Shaped("Territory", territory, 1, 3);
-    }
-
-    /// <summary>
-    /// Records the agent's Personality section.
-    /// </summary>
-    /// <remarks>
-    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>. Only the <c>AgentPersonality</c> pass declares this tool,
-    /// so it is the one place in the interview a voice can be written.
-    /// </remarks>
-    public string SetAgentPersonality(string personality)
-    {
-        interviewState.Agent.Personality = personality?.Trim();
-        return Shaped("Personality", personality, 2, 3);
-    }
-
-    /// <summary>
-    /// Records the agent's Instructions section.
-    /// </summary>
-    /// <remarks>
-    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>. Declared only from the <c>AgentInstructions</c> pass on, once
-    /// the toolkit exists — Instructions speaks about the agent's tools, so nothing earlier may
-    /// write it.
-    /// <para>
-    /// The tightest shape of the five is the one the client feels: what a tool does, needs and
-    /// refuses belongs to that tool's own description, so a section running long is one holding a
-    /// line per tool — a second authority on each subject and, stated back on screen, a wall of
-    /// text where a sentence was owed.
-    /// </para>
-    /// </remarks>
-    public string SetAgentInstructions(string instructions)
-    {
-        interviewState.Agent.Instructions = instructions?.Trim();
-        return Shaped("Instructions", instructions, 2, 5);
-    }
-
-    /// <summary>
-    /// Records the agent's Formatting section.
-    /// </summary>
-    /// <remarks>
-    /// Same overwrite-and-report contract as <see cref="SetAgentTarget"/>. Declared only in the last pass, <c>AgentFormatting</c>, since
-    /// everything else about the agent — the toolkit included — is settled by the time it runs.
-    /// <para>
-    /// The upper bound is wider than a plain presentation rule would need, on purpose: this section
-    /// is also where a quick-reply payload or a per-tool card shape gets named exactly and a domain
-    /// with several tools each earning one runs well past a handful of sentences to say so precisely
-    /// — the alternative is a vaguer instruction the model has to improvise from at runtime, which is
-    /// exactly what naming the payload here exists to avoid.
-    /// </para>
-    /// </remarks>
-    public string SetAgentFormatting(string formatting)
-    {
-        interviewState.Agent.Formatting = formatting?.Trim();
-        return Shaped("Formatting", formatting, 2, 10);
-    }
-
-    /// <summary>
-    /// Opens a tool, or revises the description of one already open.
-    /// </summary>
-    /// <remarks>
-    /// Revising keeps the parameters. A tool's contract is settled in several turns (the name and
-    /// what it does come out of one answer, its inputs out of the next), so re-declaring it to
-    /// sharpen the description must not silently empty it.
-    /// </remarks>
-    public string DeclareTool(string name, string description)
-    {
-        string cleanName = (name ?? string.Empty).Trim();
-
-        if (cleanName.Length == 0)
-            return "No tool recorded: a tool must have a name, because the name is what pairs it with its C# method.";
-
-        ToolDraft? existing = Find(cleanName);
-        bool revision = existing is not null;
-
-        ToolDraft tool = existing ?? new ToolDraft { Name = cleanName, Origin = Provenance.Authored };
-        tool.Description = description?.Trim();
-
-        if (!revision)
-            interviewState.Agent.Tools.Add(tool);
-
-        // Reported, never rewritten: the name is domain vocabulary and a silent correction leaves
-        // Alembic telling the client one word while the configuration carries another.
-        string complaint = IdentifierComplaint(cleanName, "tool name", pascalCase: true);
-
-        return (revision ? $"'{cleanName}' revised." : $"'{cleanName}' declared.")
-               + (complaint.Length > 0 ? " " + complaint : string.Empty)
-               + (string.IsNullOrWhiteSpace(description)
-                   ? " It has no description and the description is what the model reads when it decides whether to call this tool at all."
-                   : string.Empty);
-    }
-
-    /// <summary>
-    /// Adds a parameter to a tool, or revises one already there.
-    /// </summary>
-    /// <remarks>
-    /// Revision is by name and in place, so the declaration order survives — which matters, because
-    /// that order becomes the C# method's parameter order and C# cannot declare a required
-    /// parameter after an optional one.
-    /// </remarks>
-    /// <param name="toolName">The already-declared tool this parameter belongs to.</param>
-    /// <param name="name">camelCase — becomes the C# method's parameter name, matched by name not position.</param>
-    /// <param name="description">What the model reads when deciding what to pass here.</param>
-    /// <param name="scope">
-    /// <c>"context"</c> if Morgana resolves it from the session, <c>"request"</c> if the agent must
-    /// obtain it in conversation, or empty/<c>"none"</c> for a value the agent authors itself.
-    /// </param>
-    /// <param name="required">Whether the call fails without it — required parameters must precede optional ones.</param>
-    /// <param name="shared">Whether a resolved context value is published for other agents to hydrate from; meaningful only with scope <c>"context"</c>.</param>
-    public string SetToolParameter(string toolName, string name, string description, string scope, bool required, bool shared)
-    {
-        if (Find(toolName) is not { } tool)
-            return $"No parameter recorded: no tool named '{toolName}' has been declared yet.";
-
-        string cleanName = (name ?? string.Empty).Trim();
-
-        if (cleanName.Length == 0)
-            return "No parameter recorded: a parameter must have a name, because the adapter pairs it with the C# method's parameter by name and not by position.";
-
-        // "none" is spelled out because a model asked for an empty string tends to send the word.
-        string cleanScope = (scope ?? string.Empty).Trim().ToLowerInvariant();
-        string? resolvedScope = cleanScope switch
-        {
-            ContextScope => ContextScope,
-            RequestScope => RequestScope,
-            "" or "none" or "null" => null,
-            _ => cleanScope
-        };
-
-        ToolParameterDraft? existing = tool.Parameters.FirstOrDefault(p =>
-            string.Equals(p.Name, cleanName, StringComparison.Ordinal));
-
-        bool revision = existing is not null;
-        ToolParameterDraft parameter = existing ?? new ToolParameterDraft { Name = cleanName };
-
-        parameter.Description = description?.Trim();
-        parameter.Scope = resolvedScope;
-        parameter.Required = required;
-        parameter.Shared = shared;
-
-        if (!revision)
-            tool.Parameters.Add(parameter);
-
-        List<string> complaints = [];
-
-        string identifier = IdentifierComplaint(cleanName, "parameter name", pascalCase: false);
-        if (identifier.Length > 0)
-            complaints.Add(identifier);
-
-        if (resolvedScope is not null and not ContextScope and not RequestScope)
-            complaints.Add($"'{cleanScope}' is not a scope: a parameter resolving an input declares '{ContextScope}' or '{RequestScope}' and one carrying a value you author yourself declares none.");
-
-        if (shared && resolvedScope != ContextScope)
-            complaints.Add($"Shared only means something alongside scope '{ContextScope}': it publishes a resolved context variable so other agents can hydrate from it.");
-
-        // The order is the signature, so an optional parameter followed by a required one is not a
-        // preference: MorganaToolAdapter.AddTool refuses the pair and C# could not declare it.
-        int firstOptional = tool.Parameters.FindIndex(p => !p.Required);
-        if (firstOptional >= 0 && tool.Parameters.Skip(firstOptional).Any(p => p.Required))
-            complaints.Add("A required parameter now sits after an optional one, which C# cannot declare. Reorder them by dropping and re-adding, or make the earlier one required.");
-
-        return $"'{cleanName}' recorded on {tool.Name}."
-               + (complaints.Count > 0 ? " " + string.Join(" ", complaints) : string.Empty);
-    }
-
-    /// <summary>
-    /// Removes a parameter from a tool.
-    /// </summary>
-    public string DropToolParameter(string toolName, string parameterName)
-    {
-        if (Find(toolName) is not { } tool)
-            return $"Nothing dropped: no tool named '{toolName}' has been declared.";
-
-        int removed = tool.Parameters.RemoveAll(p =>
-            string.Equals(p.Name, parameterName?.Trim(), StringComparison.Ordinal));
-
-        return removed > 0
-            ? $"'{parameterName}' dropped from {tool.Name}."
-            : $"Nothing dropped: {tool.Name} has no parameter named '{parameterName}'.";
-    }
-
-    /// <summary>
-    /// Removes a tool and everything on it.
-    /// </summary>
-    public string DropTool(string toolName)
-    {
-        int removed = interviewState.Agent.Tools.RemoveAll(t =>
-            string.Equals(t.Name, toolName?.Trim(), StringComparison.Ordinal));
-
-        return removed > 0
-            ? $"'{toolName}' dropped, with its parameters."
-            : $"Nothing dropped: no tool named '{toolName}' has been declared.";
-    }
+    /// <summary>What comes after this pass, said to the model once the pass is settled.</summary>
+    protected abstract string NextStep { get; }
 
     /// <summary>
     /// Returns the toolkit as it currently stands.
     /// </summary>
-    public string GetToolkit()
+    public virtual string GetToolkit()
     {
         if (interviewState.Agent.Tools.Count == 0)
-            return "This agent declares no tools yet. That is a legal end interviewState — an agent whose tools "
+            return "This agent declares no tools yet. That is a legal end state — an agent whose tools "
                    + "all arrive from an MCP server declares none here — but it must be a conclusion you reached by asking.";
 
         IEnumerable<string> rendered = interviewState.Agent.Tools.Select(t =>
@@ -450,7 +112,7 @@ public class InterviewTools
     /// interview in its context spends it re-litigating decisions already taken. What must carry
     /// over is the configuration and the configuration is exactly what this returns.
     /// </remarks>
-    public string GetAgentSoFar()
+    public virtual string GetAgentSoFar()
     {
         if (string.IsNullOrWhiteSpace(interviewState.Intent.Name))
             return "Nothing settled yet: this agent has no intent.";
@@ -474,40 +136,7 @@ public class InterviewTools
     }
 
     /// <summary>
-    /// Offers words for the agent's voice, to be picked from freely.
-    /// </summary>
-    /// <remarks>
-    /// Not buttons and the tool is separate for the same reason the shape is: a button is one whole
-    /// answer and these are taken several at a time, none of them an answer on its own. The words
-    /// come from the model because they have to be about this domain and this agent and to sit
-    /// inside Morgana's own voice, which it has read and a template has not.
-    /// </remarks>
-    public string SetTraits(string traits)
-    {
-        try
-        {
-            List<string>? parsed = JsonSerializer.Deserialize<List<string>>(
-                traits, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-            List<string> words = [.. (parsed ?? []).Select(w => w.Trim()).Where(w => w.Length > 0)];
-
-            if (words.Count == 0)
-                return "No words offered: the payload held none.";
-
-            interviewState.PendingTraits.Clear();
-            interviewState.PendingTraits.AddRange(words);
-
-            return $"{words.Count} words will be drawn under your question, to be picked from freely. "
-                   + "The text box stays open, so the answer may still come in the client's own words.";
-        }
-        catch (JsonException ex)
-        {
-            return $"No words offered: the payload is not a JSON array of words ({ex.Message}).";
-        }
-    }
-
-    /// <summary>
-    /// How much one agent, or the business itself, may hold on record before it has to be tidied.
+    /// How much one agent or the business itself may hold on record before it has to be tidied.
     /// </summary>
     /// <remarks>
     /// Not a storage limit: every step opens holding what is known about the agent in hand, so a
@@ -517,7 +146,7 @@ public class InterviewTools
     private const int MemoryCeiling = 14;
 
     /// <summary>
-    /// Where what is found out is kept: with the agent in hand, or with the business.
+    /// Where what is found out is kept: with the agent in hand or with the business.
     /// </summary>
     /// <remarks>
     /// The map stands on the whole domain, holding an agent nobody will write to — so what is
@@ -545,7 +174,11 @@ public class InterviewTools
     /// the wrong sentence is enough to find it. A reading taken off their upload is exactly the kind
     /// of thing that gets corrected here and it must go, rather than sit under the truth.
     /// </param>
-    public string NoteDomainFact(string subject, string fact, string? corrects = null)
+    [Description("Writes down one thing the client has just told you about how their work actually goes — not what you decided about it. Every step after this one opens holding what is on record for the agent in hand and for the business, so call it the moment an answer says something a later step would otherwise have to ask again: what they sell, who writes in and about what, what they open to answer it, what goes wrong, what they never do. One fact per call, in their own words. Never what you wrote into a section — that is already in the configuration and a second copy of it here is a second thing to keep true. Where what they just said contradicts something on record, say so in 'corrects' and the wrong one goes: a record nobody can correct is worse than no record, because every step after you will hold it and none of them can doubt it.")]
+    public string NoteDomainFact(
+        [Description("What this is about, in one or two of THEIR words — 'prices', 'deposits', 'custom cakes'. Facts about the same thing take the same subject: it is what another agent's step reads to decide whether to fetch this at all.")] string subject,
+        [Description("One short sentence about their work, in their vocabulary, never about the agent: 'the catalogue changes with the season', 'custom cakes are quoted at an appointment, never over the counter'. Standing on one entry of the map it is kept with that agent; drawing the map or closing the domain it is kept for the business as a whole.")] string fact,
+        [Description("Any part of the sentence already on record that this puts right, where they have just contradicted it — a reading taken off their upload most of all. Leave it out when nothing is being corrected.")] string? corrects = null)
     {
         string written = fact.Trim();
         string about = subject.Trim();
@@ -567,12 +200,12 @@ public class InterviewTools
         if (kept.Count >= MemoryCeiling)
             return $"Nothing written down: {kept.Count} facts already stand here, which is as many as "
                    + "are worth carrying into a question. Two of them have become the same fact in "
-                   + "different words — drop one with DropDomainFact, or say what this one corrects.";
+                   + "different words — drop one with DropDomainFact or say what this one corrects.";
 
         kept.Add(new KnownFact(about, written, Inferred: false));
 
         return $"Written down under '{about}'"
-               + (dropped > 0 ? $", and {dropped} thing(s) that said otherwise are gone" : string.Empty)
+               + (dropped > 0 ? $". {dropped} thing(s) that said otherwise are gone" : string.Empty)
                + $". {kept.Count} thing(s) now stand on record here.";
     }
 
@@ -586,7 +219,9 @@ public class InterviewTools
     /// one opens holding it and none of them has any way to doubt it.
     /// </remarks>
     /// <param name="fact">Any part of the sentence to remove, enough to tell it from the others.</param>
-    public string DropDomainFact(string fact)
+    [Description("Takes something off the record that is not true of their work. Use it the moment the client says otherwise. Use it on your own readings of their upload without hesitation too — nobody confirmed those. Left standing, a wrong fact is held by every step after this one and none of them has any way to doubt it.")]
+    public string DropDomainFact(
+        [Description("Any part of the sentence to remove or its subject, enough to tell it from the others on record.")] string fact)
     {
         string wrong = fact.Trim();
 
@@ -611,7 +246,9 @@ public class InterviewTools
     /// counter next door already takes deposits decides whether this one should.
     /// </remarks>
     /// <param name="intent">The agent's own intent name, as the opening message lists it.</param>
-    public string RecallAgent(string intent)
+    [Description("Hands back what is on record about one of the OTHER agents of this domain. You open holding what is known about the agent in hand and about the business. Of every other agent you hold only the subjects it keeps — a domain read whole would be forty sentences carried into every question, nearly all about counters this step will never touch. Call this when a subject listed against another agent bears on the question you are about to ask: whether the counter next door already takes deposits decides whether this one should.")]
+    public string RecallAgent(
+        [Description("The agent's own intent name, exactly as the opening message lists it.")] string intent)
     {
         string named = intent.Trim();
         DomainDraft draft = draftStateService.Current ?? new DomainDraft();
@@ -662,7 +299,9 @@ public class InterviewTools
     /// different moments and one block at one size is read as neither. It belongs to the turn a step
     /// lands on and to no confirmation or follow-up after it.
     /// </remarks>
-    public string SetStepPlacing(string placing)
+    [Description("States, over the question you are about to ask, what this step adds to the agent in hand. Call it in the turn a step lands on, before the question, every time without exception: a step that lands with nothing but a question leaves the client working out what this screen is for from the question alone. Call it in no other turn — a confirmation or a follow-up is not a landing and what stands there would say the interview had moved on when it has not. It is not room for anything else: never an answer to what they just said, never an apology, never a correction of your own last turn. Those belong in the question.")]
+    public string SetStepPlacing(
+        [Description("One short sentence in the second person, naming what THEY will be able to do once this step is settled, in the things their work is actually made of — the orders, the counter, the people who write in. Name neither the agent nor the step: both already stand lit on the screen. Where the sentence needs a subject it is the part of their work this agent stands for, in their own words. Two things it is never. One is a line about what software becomes able to do: 'this is where the catalogue stops being just words and becomes something you can really consult' is a brochure and tells a baker nothing. The other is a restatement of why this stage exists, which is written above for you and not for them. The test is simple: if the same sentence could open this step for a garage, a vet and a bank alike, it places nothing. Nor is it ever at the expense of the steps behind it: what those settled is already their configuration, so a step announcing that things now finally become real tells them the screens they have just filled in were a game.")] string placing)
     {
         string written = placing.Trim();
 
@@ -687,7 +326,7 @@ public class InterviewTools
     /// particular, which is the whole of what this interview is for.
     /// </remarks>
     /// <param name="written">The section's prose exactly as it now stands, with nothing added around it.</param>
-    public string ShowWhatIsWritten(string written)
+    public virtual string ShowWhatIsWritten(string written)
     {
         string prose = written.Trim();
 
@@ -713,7 +352,7 @@ public class InterviewTools
     /// emit. Written by the pass rather than fixed in the UI, so it is an answer somebody in the
     /// client's own trade might have given rather than a stranger's business quoted at them.
     /// </remarks>
-    public string SetExample(string example)
+    public virtual string SetExample(string example)
     {
         // The box holds it as the client's own text, so a pair of quotation marks around it is text
         // they would be sending. One at a single end is what a half-escaped payload leaves behind.
@@ -744,7 +383,7 @@ public class InterviewTools
     /// The id is Alembic's: nothing downstream tells two buttons apart when there is only one and
     /// asking for it would be a third string with no reader.
     /// </remarks>
-    public string SetChoice(string label, string value)
+    public virtual string SetChoice(string label, string value)
     {
         if (string.IsNullOrWhiteSpace(label) || string.IsNullOrWhiteSpace(value))
             return "No button attached: it needs both a label to read and the answer it sends.";
@@ -763,7 +402,7 @@ public class InterviewTools
     /// sittings or an uploaded configuration; what the map still holds is what this interview has
     /// promised to write next. A description only has to be told apart from both.
     /// </remarks>
-    public string GetExistingIntents()
+    public virtual string GetExistingIntents()
     {
         IEnumerable<string> written = (draftStateService.Current?.Intents ?? [])
             .Where(i => !string.Equals(i.Name, interviewState.Intent.Name, StringComparison.OrdinalIgnoreCase))
@@ -794,7 +433,7 @@ public class InterviewTools
     /// <summary>
     /// Returns the prompt this agent's model will really read.
     /// </summary>
-    public async Task<string> GetComposedPrompt()
+    public virtual async Task<string> GetComposedPrompt()
     {
         if (string.IsNullOrWhiteSpace(interviewState.Agent.Target))
             return "Nothing to compose yet: the agent has no target.";
@@ -819,44 +458,6 @@ public class InterviewTools
     }
 
     /// <summary>
-    /// Returns the card this agent will present to whoever might consult it.
-    /// </summary>
-    /// <remarks>
-    /// The last reading of a territory before it is published: a Morgana carries this card on the
-    /// A2A endpoint of every agent it holds; a colleague weighing a question reads its
-    /// description and nothing else. A sentence that reads as a list of functions, or one that never
-    /// left the routing phrase the classifier uses, is visible here and nowhere else in the
-    /// interview.
-    /// </remarks>
-    public string GetAgentCard()
-    {
-        return CardProjection.Render(interviewState.Intent, interviewState.Agent);
-    }
-
-    /// <summary>
-    /// Rewrites the routing description of the intent in hand, strengthened by what the territory
-    /// settled.
-    /// </summary>
-    /// <remarks>
-    /// The classifier reads this description against every other one, so it is the map's to write
-    /// and the map writes it before any agent exists. Once an agent has stated the competence it is
-    /// the one to answer for, the same subject is known in sharper words than the map could reach;
-    /// the routing that lands a user here can be said with them. Only this entry's own
-    /// description: every other one is settled and reading them back is what keeps this one distinct.
-    /// </remarks>
-    public string SetIntentDescription(string description)
-    {
-        string written = (description ?? string.Empty).Trim();
-
-        if (written.Length == 0)
-            return "Nothing changed: an intent with no description is one the classifier cannot route to.";
-
-        interviewState.Intent.Description = written;
-
-        return $"'{interviewState.Intent.Name}' now routes on: {written}";
-    }
-
-    /// <summary>
     /// Returns everything wrong with this agent that is decidable without a model.
     /// </summary>
     /// <remarks>
@@ -866,7 +467,7 @@ public class InterviewTools
     /// Findings about the client's other agents are filtered out: they are real, but they are not
     /// this pass's business and Alembic cannot fix them from here.
     /// </remarks>
-    public string GetFindings()
+    public virtual string GetFindings()
     {
         if (string.IsNullOrWhiteSpace(interviewState.Intent.Name))
             return "Nothing to check yet: the intent has no name.";
@@ -899,7 +500,7 @@ public class InterviewTools
     /// Believed only as far as the state machine can confirm it. Which fields are set is a fact
     /// and facts are not a model's to assert.
     /// </remarks>
-    public string SetPassCompleted()
+    public virtual string SetPassCompleted()
     {
         // Correcting, every section is written already, so each pass could settle the moment it
         // opened and the client would be walked through an edit that asked them nothing at all —
@@ -918,32 +519,11 @@ public class InterviewTools
 
         interviewState.ReadyForReview = true;
 
-        return "This pass is settled. Say it is done and what comes next: "
-               + interviewState.Pass switch
-               {
-                   InterviewStep.DomainMapper => $"the first of the {interviewState.Map.Count} kinds of request you mapped, taken one at a time until every one has its agent.",
-                   InterviewStep.AgentTarget => "how this agent should sound to the people who write in.",
-                   InterviewStep.AgentPersonality => "the toolkit — what this agent has to reach for outside the conversation.",
-                   InterviewStep.AgentToolkit => "what this agent is the one to be asked about, which is what another agent of theirs reads before it asks.",
-                   InterviewStep.AgentTerritory => "the agent's own instructions and the way it presents what its tools return.",
-                   _ => "the agent joins the domain and they can review or export it."
-               };
+        return $"This pass is settled. Say it is done and what comes next: {NextStep}";
     }
 
     /// <summary>
-    /// Finds a declared tool by exact name.
-    /// </summary>
-    /// <remarks>
-    /// Ordinal, because the name becomes a C# method name and <c>MorganaToolAdapter.AddTool</c>
-    /// pairs the two exactly. Two tools differing only in case are two tools here and one collision
-    /// at startup, which is a finding rather than something to paper over by matching loosely.
-    /// </remarks>
-    private ToolDraft? Find(string? toolName) =>
-        interviewState.Agent.Tools.FirstOrDefault(t =>
-            string.Equals(t.Name, toolName?.Trim(), StringComparison.Ordinal));
-
-    /// <summary>
-    /// Says what is wrong with a name that has to survive into C#, or nothing if it is fine.
+    /// Says what is wrong with a name that has to survive into C# or nothing if it is fine.
     /// </summary>
     /// <remarks>
     /// Shape only and deliberately not the compiler: the point is to catch what a domain
@@ -951,11 +531,11 @@ public class InterviewTools
     /// to change. The casing check is separate because it is a convention rather than a rule and it
     /// is worth stating: the generated method and the declaration have to read like the framework's
     /// own.
-    /// </remarks>
-    /// <remarks>
-    /// Internal rather than private: <see cref="CoherenceApplyTools"/> writes into agents that are
+    /// <para>
+    /// Internal rather than private: <see cref="CoherenceApplyTool"/> writes into agents that are
     /// no longer the one interview state under construction, but the identifier it writes still has
     /// to survive into the same C#, by the same rule.
+    /// </para>
     /// </remarks>
     internal static string IdentifierComplaint(string name, string what, bool pascalCase)
     {
@@ -974,8 +554,6 @@ public class InterviewTools
             : $"But the {what} should be {(pascalCase ? "PascalCase" : "camelCase")}, the way the framework's own are. Call again to fix it.";
     }
 
-
-
     /// <summary>
     /// Reports whether a section landed inside the size its doctrine gives it.
     /// </summary>
@@ -983,7 +561,7 @@ public class InterviewTools
     /// Recorded either way. The size is a shape, not a gate: a Target of five sentences is still
     /// better than no Target and Alembic is told so it can tighten rather than blocked so it must.
     /// </remarks>
-    private static string Shaped(string section, string? value, int minimum, int maximum)
+    protected static string Shaped(string section, string? value, int minimum, int maximum)
     {
         int sentences = CountSentences(value);
 

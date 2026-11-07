@@ -173,11 +173,16 @@ public class MigrationReportService : IMigrationReportService
 
             if (Signature(previous) != Signature(tool))
                 entries.Add(new MigrationEntry(MigrationKind.Signature, where, MigrationChange.SignatureChanged,
-                    $"`{Signature(previous)}` became `{Signature(tool)}`. Change your method to match: the generated declaration moves on its own and MorganaToolAdapter.AddTool refuses the pair at startup if it does not."));
+                    $"`{Signature(previous)}` became `{Signature(tool)}`. Change your method to match: the generated declaration moves on its own and the partial does not compile until your half matches it."));
+            // The description and every parameter's scope sit on the generated declaration, so a change
+            // to either is a replacement of the generated half with nothing to rewrite by hand.
             else if (!string.Equals(previous.Description, tool.Description, StringComparison.Ordinal)
-                     || previous.Parameters.Zip(tool.Parameters).Any(p => !string.Equals(p.First.Description, p.Second.Description, StringComparison.Ordinal)))
+                     || previous.Parameters.Zip(tool.Parameters).Any(pair =>
+                         !string.Equals(pair.First.Description, pair.Second.Description, StringComparison.Ordinal)
+                         || !string.Equals(pair.First.Scope ?? string.Empty, pair.Second.Scope ?? string.Empty, StringComparison.OrdinalIgnoreCase)
+                         || pair.First.Shared != pair.Second.Shared))
                 entries.Add(new MigrationEntry(MigrationKind.Tool, where, MigrationChange.Revised,
-                    "Description changed. It reaches the model through agents.json and the schema, so nothing needs rebuilding."));
+                    "Description or scope changed. Both live on the generated declaration, so replace the generated half and rebuild."));
         }
 
         entries.AddRange(
@@ -249,7 +254,7 @@ public class MigrationReportService : IMigrationReportService
         MigrationChange.Removed => "Removed — delete the code behind these",
         MigrationChange.SignatureChanged => "Signatures changed — edit the half you own",
         MigrationChange.Added => "New — this code does not exist in your tree yet",
-        _ => "Reworded — configuration only, nothing to rebuild"
+        _ => "Reworded — nothing to edit by hand"
     };
 
     /// <summary>

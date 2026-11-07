@@ -17,7 +17,7 @@ namespace Alembic.Services;
 /// <remarks>
 /// <para>
 /// Alembic is an agent of Morgana, so it is assembled the way one is — <c>MorganaToolAdapter</c>
-/// binds each tool's declaration in <c>alembic.json</c> to its delegate and materialises the
+/// binds each tool's attributes to its delegate and materialises the
 /// <c>AIFunction</c>s and <c>IChatClient.AsAIAgent</c> makes the agent. Not <c>MorganaAgent</c>
 /// via <c>MorganaAgentAdapter</c>, which belongs to the routed world of <c>agents.json</c>,
 /// <c>[HandlesIntent]</c>, base tools and per-conversation persistence: Alembic has none of that.
@@ -568,7 +568,7 @@ public class InterviewService : IInterviewService
             interviewState.Agent.Code.AgentClassName = AgentCodeFacts.ProposeClassName(interviewState.Intent.Name, "Agent");
 
             // An agent with no native tools gets no tool class and that is a legal shape rather than
-            // a gap: an MCP-only agent's tools arrive at runtime and never appear in agents.json.
+            // a gap: an MCP-only agent's tools arrive at runtime and never appear in a generated tool class.
             interviewState.Agent.Code.ToolClassName = interviewState.Agent.Tools.Count > 0
                 ? AgentCodeFacts.ProposeClassName(interviewState.Intent.Name, "Tool")
                 : null;
@@ -845,7 +845,7 @@ public class InterviewService : IInterviewService
         // needs, below, to tell "begin" from "reopen".
         bool correcting = interviewState.Revision is not null;
 
-        await BuildAgentAsync(interviewState, PassPromptIds[interviewPass], correcting);
+        await BuildAgentAsync(interviewState, interviewPass, correcting);
 
         // The opening question of the whole interview is nobody's to phrase but the client's own:
         // there is nothing yet for a model to be reading back, so a model asked for it is either
@@ -1117,71 +1117,52 @@ public class InterviewService : IInterviewService
     /// Assembles the agent for one pass: its prompt and only the tools that pass is allowed.
     /// </summary>
     /// <remarks>
-    /// The toolset comes from the pass's own <c>Tools</c> declaration in <c>alembic.json</c>, so
-    /// what a pass may write is settled by which tools exist rather than by a sentence asking it to
-    /// abstain. The functional pass has no tool for an agent's instructions or formatting and that
-    /// is the whole of the constraint.
-    /// <para>
-    /// The two jobs share every one of those tools and differ only in prose, which is why the mode
-    /// goes to <c>ComposeAsync</c> and not into this toolset: correcting a Toolkit and writing one
-    /// both come down to DeclareTool and DropTool and a pass that could not drop a tool while
-    /// correcting would be a pass that cannot do the one thing it was reopened for.
-    /// </para>
+    /// What a pass may write is settled by which tools its phase class holds rather than by a sentence
+    /// asking it to abstain, which is why the mode goes to <c>ComposeAsync</c> and never into the toolset.
     /// </remarks>
-    private async Task BuildAgentAsync(InterviewState interviewState, string interviewerId, bool correcting)
+    private async Task BuildAgentAsync(InterviewState interviewState, InterviewStep interviewPass, bool correcting)
     {
-        Records.Prompt interviewer = alembicPromptService.Resolve(interviewerId);
+        // The pass's prompt ID composes its instructions and names its agent and the tool calls it logs.
+        string interviewerId = PassPromptIds[interviewPass];
 
-        List<Records.ToolDefinition> definitions =
-            interviewer.GetAdditionalPropertyOrDefault<List<Records.ToolDefinition>>(Constants.PromptProperties.Tools, []);
-
-        InterviewTools tools = new InterviewTools(interviewState, draftStateService, draftValidationService, recapService);
-        MorganaToolAdapter toolAdapter = new MorganaToolAdapter(promptComposerService);
-
-        // The delegate map is the one place a tool's name, its declaration and its implementation
-        // meet. AddTool validates the pair (parameter count, names, required/optional) and throws
-        // on a mismatch, so a declaration that has drifted from its method fails here rather than
-        // reaching the model as a schema nothing can satisfy.
-        Dictionary<string, Delegate> implementations = new(StringComparer.Ordinal)
+        // Correcting a Toolkit and writing one both come down to DeclareTool and DropTool, so the
+        // toolset never depends on the mode: a pass that could not drop a tool while correcting could
+        // not do what it was reopened for. A step outside the seven interview passes holds no tools.
+        InterviewTool interviewTool = interviewPass switch
         {
-            [nameof(InterviewTools.DeclareIntent)] = tools.DeclareIntent,
-            [nameof(InterviewTools.DropIntent)] = tools.DropIntent,
-            [nameof(InterviewTools.GetDomainMap)] = tools.GetDomainMap,
-            [nameof(InterviewTools.SetAgentTarget)] = tools.SetAgentTarget,
-            [nameof(InterviewTools.SetAgentTerritory)] = tools.SetAgentTerritory,
-            [nameof(InterviewTools.SetIntentDescription)] = tools.SetIntentDescription,
-            [nameof(InterviewTools.GetAgentCard)] = tools.GetAgentCard,
-            [nameof(InterviewTools.SetAgentPersonality)] = tools.SetAgentPersonality,
-            [nameof(InterviewTools.SetAgentInstructions)] = tools.SetAgentInstructions,
-            [nameof(InterviewTools.SetAgentFormatting)] = tools.SetAgentFormatting,
-            [nameof(InterviewTools.DeclareTool)] = tools.DeclareTool,
-            [nameof(InterviewTools.SetToolParameter)] = tools.SetToolParameter,
-            [nameof(InterviewTools.DropToolParameter)] = tools.DropToolParameter,
-            [nameof(InterviewTools.DropTool)] = tools.DropTool,
-            [nameof(InterviewTools.GetToolkit)] = tools.GetToolkit,
-            [nameof(InterviewTools.GetAgentSoFar)] = tools.GetAgentSoFar,
-            [nameof(InterviewTools.SetChoice)] = tools.SetChoice,
-            [nameof(InterviewTools.SetExample)] = tools.SetExample,
-            [nameof(InterviewTools.SetStepPlacing)] = tools.SetStepPlacing,
-            [nameof(InterviewTools.ShowWhatIsWritten)] = tools.ShowWhatIsWritten,
-            [nameof(InterviewTools.NoteDomainFact)] = tools.NoteDomainFact,
-            [nameof(InterviewTools.DropDomainFact)] = tools.DropDomainFact,
-            [nameof(InterviewTools.RecallAgent)] = tools.RecallAgent,
-            [nameof(InterviewTools.SetTraits)] = tools.SetTraits,
-            [nameof(InterviewTools.GetExistingIntents)] = tools.GetExistingIntents,
-            [nameof(InterviewTools.GetComposedPrompt)] = tools.GetComposedPrompt,
-            [nameof(InterviewTools.GetFindings)] = tools.GetFindings,
-            [nameof(InterviewTools.SetPassCompleted)] = tools.SetPassCompleted
+            // Maps the domain into its kinds of request.
+            InterviewStep.DomainMapper => new DomainMapperTool(interviewState, draftStateService, draftValidationService, recapService),
+
+            // Writes an agent's Target.
+            InterviewStep.AgentTarget => new AgentTargetTool(interviewState, draftStateService, draftValidationService, recapService),
+
+            // Writes an agent's Personality.
+            InterviewStep.AgentPersonality => new AgentPersonalityTool(interviewState, draftStateService, draftValidationService, recapService),
+
+            // Declares an agent's tools.
+            InterviewStep.AgentToolkit => new AgentToolkitTool(interviewState, draftStateService, draftValidationService, recapService),
+
+            // Writes what a colleague reads before consulting an agent.
+            InterviewStep.AgentTerritory => new AgentTerritoryTool(interviewState, draftStateService, draftValidationService, recapService),
+
+            // Writes an agent's Instructions.
+            InterviewStep.AgentInstructions => new AgentInstructionsTool(interviewState, draftStateService, draftValidationService, recapService),
+
+            // Writes an agent's Formatting.
+            InterviewStep.AgentFormatting => new AgentFormattingTool(interviewState, draftStateService, draftValidationService, recapService),
+
+            // The step has no interview pass to hold tools for.
+            _ => throw new InvalidOperationException($"The step '{interviewPass}' is not an interview pass and holds no tools.")
         };
 
-        foreach (Records.ToolDefinition definition in definitions)
-        {
-            if (!implementations.TryGetValue(definition.Name, out Delegate? implementation))
-                throw new InvalidOperationException(
-                    $"alembic.json declares tool '{definition.Name}' for '{interviewerId}', but InterviewTools has no method by that name.");
+        // The composer gives each tool the description its attributes declare.
+        MorganaToolAdapter toolAdapter = new MorganaToolAdapter(promptComposerService);
 
-            toolAdapter.AddTool(definition.Name, implementation, definition);
-        }
+        // The pass's own tools first, in the order its phase class declares them.
+        toolAdapter.AddTools(interviewTool, MorganaToolAdapter.ProjectToolDefinitions(interviewTool.GetType()));
+
+        // Then the four that are the same in every pass, declared once on the base class.
+        toolAdapter.AddTools(interviewTool, MorganaToolAdapter.ProjectToolDefinitions(typeof(InterviewTool)));
 
         // Efficiency, resolved directly rather than through CompleteWithSystemPromptAsync, which
         // runs on the framework tier. Writing non-contradictory dispositive prose is the exact task

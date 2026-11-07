@@ -414,7 +414,7 @@ public class MorganaAgentAdapter
 
         // Every agent holds the base tools, an MCP-only or tool-less one included.
         MorganaTool baseTool = new MorganaTool(logger, toolContextFactory);
-        RegisterToolsInAdapter(morganaToolAdapter, baseTool, morganaTools);
+        morganaToolAdapter.AddTools(baseTool, morganaTools);
         logger.LogInformation("Registered {BaseToolsLength} base tools for intent '{Intent}'", morganaTools.Length, intent);
 
         // An agent with no tool class holds the base tools alone (MCP and colleagues aside).
@@ -446,41 +446,10 @@ public class MorganaAgentAdapter
 
         // Bind only the intent-specific definitions to the discovered instance (base tools
         // were already registered above against the base instance).
-        RegisterToolsInAdapter(morganaToolAdapter, customToolInstance, domainTools);
+        morganaToolAdapter.AddTools(customToolInstance, domainTools);
         logger.LogInformation("Registered {Length} custom tools for intent '{Intent}'", domainTools.Length, intent);
 
         return morganaToolAdapter;
-    }
-
-    /// <summary>Registers the methods of a tool instance that the given definitions describe into the MorganaToolAdapter.</summary>
-    /// <param name="morganaToolAdapter">Target adapter to register tools into</param>
-    /// <param name="toolInstance">The tool instance containing the tool method implementations.</param>
-    /// <param name="tools">Tool definitions specifying which methods to register from the toolInstance</param>
-    private void RegisterToolsInAdapter(
-        MorganaToolAdapter morganaToolAdapter,
-        MorganaTool toolInstance,
-        Records.ToolDefinition[] tools)
-    {
-        foreach (Records.ToolDefinition toolDefinition in tools)
-        {
-            // The definition was projected from this very method, so the method always exists.
-            MethodInfo method = toolInstance.GetType().GetMethod(toolDefinition.Name)!;
-
-            // Build a strongly-typed delegate whose exact Func<…> type is computed from
-            // the method's own ParameterInfo at runtime: tools are discovered on
-            // plugin classes and bound to implementations via reflection, so the
-            // concrete delegate type is unknowable at compile time.
-            Delegate toolImplementation = Delegate.CreateDelegate(
-                System.Linq.Expressions.Expression.GetDelegateType(
-                [
-                    .. method.GetParameters().Select(p => p.ParameterType),
-                    method.ReturnType
-                ]),
-                toolInstance,
-                method);
-
-            morganaToolAdapter.AddTool(toolDefinition.Name, toolImplementation, toolDefinition);
-        }
     }
 
     /// <summary>
