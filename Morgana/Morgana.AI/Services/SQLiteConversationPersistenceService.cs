@@ -1316,7 +1316,8 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         IDictionary<string, object?>? arguments,
         JsonSerializerOptions jsonSerializerOptions)
     {
-        if (arguments == null || !arguments.TryGetValue("quickReplies", out object? quickRepliesValue))
+        // A call recorded without its buttons leaves the replayed turn with none to show
+        if (arguments == null || !arguments.TryGetValue(Constants.Tools.QuickRepliesArgument, out object? quickRepliesValue))
             return null;
 
         try
@@ -1352,7 +1353,8 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         IDictionary<string, object?>? arguments,
         JsonSerializerOptions jsonSerializerOptions)
     {
-        if (arguments == null || !arguments.TryGetValue("richCard", out object? richCardsValue))
+        // A call recorded without its card leaves the replayed turn with none to show
+        if (arguments == null || !arguments.TryGetValue(Constants.Tools.RichCardArgument, out object? richCardsValue))
             return null;
 
         try

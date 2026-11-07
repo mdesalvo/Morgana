@@ -224,6 +224,12 @@ public static class Constants
 
         /// <summary>Attaches the turn's rich card.</summary>
         public const string SetRichCard = "SetRichCard";
+
+        /// <summary>The argument of a stored <see cref="SetQuickReplies"/> call, named after that tool's parameter.</summary>
+        public const string QuickRepliesArgument = "quickReplies";
+
+        /// <summary>The argument of a stored <see cref="SetRichCard"/> call, named after that tool's parameter.</summary>
+        public const string RichCardArgument = "richCard";
     }
 
     /// <summary>
