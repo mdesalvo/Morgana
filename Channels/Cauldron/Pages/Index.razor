@@ -4,6 +4,7 @@
 @inject IStreamingService StreamingService
 @inject SignalRService SignalRService
 @inject ILandingMessageService LandingMessageService
+@inject ITrustedImageDomainService TrustedImageDomains
 @inject NavigationManager NavigationManager
 @implements IAsyncDisposable
 
@@ -348,6 +349,10 @@
                 if (message.Timestamp <= ChatStateService.LatestDeliveredTimestamp)
                     return;
                 ChatStateService.NoteDelivered(message.Timestamp);
+
+                // Every reply passes here exactly once, pushed or recovered, while its rendering repeats at each
+                // typewriter tick: the images it carries from undeclared domains are counted here and nowhere else
+                TrustedImageDomains.ReportImagesFromUntrustedDomains(message);
 
                 // PATH 1: this message closes a response already typing itself out on screen
                 if (StreamingService.IsStreaming)

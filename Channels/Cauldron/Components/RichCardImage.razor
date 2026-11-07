@@ -1,14 +1,18 @@
 @namespace Cauldron.Components
 @inject IMarkdownRendererService MarkdownRenderer
+@inject ITrustedImageDomainService TrustedImageDomains
 
-@* Renders an image with optional caption. Lazy-loaded: cards may sit far up the history. *@
+@* Renders an image with optional caption. Lazy-loaded: cards may sit far up the history. An image outside the listed domains is not emitted and the caption stays. *@
 
 <div class="rich-card-image rich-card-image-@Component.Size.ToString().ToLower()">
-    <img src="@Component.Src" 
-         alt="@(Component.Alt ?? "Image")" 
-         class="rich-card-image-content"
-         loading="lazy" />
-    
+    @if (TrustedImageDomains.IsServedFromTrustedDomain(Component.Src))
+    {
+        <img src="@Component.Src"
+             alt="@(Component.Alt ?? "Image")"
+             class="rich-card-image-content"
+             loading="lazy" />
+    }
+
     @if (!string.IsNullOrEmpty(Component.Caption))
     {
         <p class="rich-card-image-caption">@MarkdownRenderer.ToInlineHtml(Component.Caption)</p>

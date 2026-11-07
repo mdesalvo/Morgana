@@ -1,3 +1,4 @@
+using AngleSharp.Html.Dom;
 using Cauldron.Interfaces;
 using Ganss.Xss;
 using Markdig;
@@ -6,8 +7,7 @@ using Microsoft.AspNetCore.Components;
 namespace Cauldron.Services;
 
 /// <summary>
-/// Converts message and rich-card text from Markdown to HTML for display, blocking the
-/// HTML-injection vectors that raw Markdown would otherwise let through untouched.
+/// Converts message and rich-card text from Markdown to HTML for display, blocking HTML injection and the images outside the listed domains.
 /// </summary>
 public class MarkdownRendererService : IMarkdownRendererService
 {
@@ -22,20 +22,14 @@ public class MarkdownRendererService : IMarkdownRendererService
     private readonly MarkdownPipeline pipeline;
 
     /// <summary>
-    /// Strips dangerous tags, attributes and URL schemes from the HTML Markdig produces —
-    /// script tags, event-handler attributes (onerror, onclick, ...), CSS-based vectors and
-    /// any link/image whose URL scheme falls outside the library's own default whitelist
-    /// (http, https, mailto, tel, callto, cid, xmpp — none of them script-executing or
-    /// origin-redirecting the way javascript:/data: are, so left as shipped rather than
-    /// narrowed). Reused across every render call: never reconfigured after construction, so
-    /// concurrent <c>Sanitize</c> calls from different circuits are safe.
+    /// Removes dangerous tags, attributes and schemes from the HTML Markdig produces and replaces with their alternative text the images outside the listed domains.
     /// </summary>
     private readonly HtmlSanitizer sanitizer = new HtmlSanitizer();
 
     /// <summary>
     /// Builds the Markdig pipeline once for reuse across every render call.
     /// </summary>
-    public MarkdownRendererService()
+    public MarkdownRendererService(ITrustedImageDomainService trustedImageDomains)
     {
         // Resolves :shortcode: emoji to real glyphs (:white_check_mark: → ✅), which a browser no
         // more expands on its own than a terminal does. Smileys stay off on purpose: converting
@@ -48,6 +42,19 @@ public class MarkdownRendererService : IMarkdownRendererService
             .UsePipeTables()
             .DisableHtml()
             .Build();
+
+        // The library's default scheme whitelist (http, https, mailto, tel, callto, cid, xmpp) is kept
+        // as shipped: none of them executes script the way javascript: or data: do. The handler holds
+        // no state of its own, so concurrent Sanitize calls from different circuits stay safe.
+        // An image outside the listed domains is replaced by its alternative text: the reader learns
+        // what was meant to be there and the browser gets no URL to load (the CSP would refuse it
+        // anyway and leave a broken icon).
+        sanitizer.PostProcessNode += (sender, nodeEvent) =>
+        {
+            // Only images are judged here: every other node passes through untouched
+            if (nodeEvent.Node is IHtmlImageElement image && !trustedImageDomains.IsServedFromTrustedDomain(image.GetAttribute("src")))
+                nodeEvent.ReplacementNodes.Add(nodeEvent.Document.CreateTextNode(image.AlternativeText ?? string.Empty));
+        };
     }
 
     /// <summary>

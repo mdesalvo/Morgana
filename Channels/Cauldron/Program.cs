@@ -1,8 +1,11 @@
 using System.Globalization;
+using Cauldron;
 using Cauldron.Handlers;
 using Cauldron.Interfaces;
 using Cauldron.Services;
 using Microsoft.AspNetCore.SignalR.Client;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 
 // Invariant before anything else runs, so no thread or circuit inherits the host's locale: the page
 // reads the same on a workstation set to it-IT and in a container with no LANG at all.
@@ -20,11 +23,12 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 // Cauldron is a modular web layer that talks with the Morgana conversational AI platform.
 
 // ============================================================================
-// 0. CONFIGURATION GATE - THE TWO SETTINGS CAULDRON CANNOT RUN WITHOUT
+// 0. CONFIGURATION GATE - THE FOUR CHECKS CAULDRON CANNOT RUN WITHOUT
 // ============================================================================
-// Backend address and signing key are each fatal on their own: without them
-// Cauldron serves a chat that can neither reach Morgana nor be trusted by it.
-// Refused here, both problems named at once, rather than one failed request at
+// Backend address, signing key, image domains and the OpenTelemetry endpoint (while the
+// exporter is on) are each fatal on their own: without the first two Cauldron serves a
+// chat that can neither reach Morgana nor be trusted by it.
+// Refused here, every problem named at once, rather than one failed request at
 // a time once visitors are already on the page. There is no callback address to
 // check: replies are pushed down the hub connection Cauldron itself opens.
 
@@ -35,6 +39,9 @@ static bool IsReachableUrl(string? value) =>
     Uri.TryCreate(value, UriKind.Absolute, out Uri? url)
     && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps);
 
+// The domains Cauldron shows images from: the gate refuses a malformed list before the CSP is built from it
+string[] trustedImageDomains = builder.Configuration.GetSection("Cauldron:TrustedImageDomains").Get<string[]>() ?? [];
+
 string?[] requiredSettings =
 [
     IsReachableUrl(builder.Configuration["Cauldron:MorganaURL"])
@@ -44,7 +51,15 @@ string?[] requiredSettings =
     // first conversation, where the reason is far less obvious than it is here
     builder.Configuration["Cauldron:Authentication:SymmetricKey"] is not { Length: > 0 } key || key == "_SECURE_OVERRIDE_"
         ? "Cauldron:Authentication:SymmetricKey is required and must match Morgana's Authentication:Issuers entry for Name=cauldron. Supply it through user-secrets or an environment variable."
-        : null
+        : null,
+    // An entry that is not a bare host would yield a malformed CSP or silently match no image at all
+    trustedImageDomains.All(domain => Uri.CheckHostName(domain) == UriHostNameType.Dns)
+        ? null
+        : "Cauldron:TrustedImageDomains must list bare host names (for example raw.githubusercontent.com), with no scheme, port or path.",
+    // The exporter has nowhere to send the image events without an endpoint it can dial
+    !builder.Configuration.GetValue<bool>("Cauldron:OpenTelemetry:Enabled") || IsReachableUrl(builder.Configuration["Cauldron:OpenTelemetry:OtlpEndpoint"])
+        ? null
+        : "Cauldron:OpenTelemetry:OtlpEndpoint must be the collector's absolute http(s) URL (for example http://localhost:4317) while Cauldron:OpenTelemetry:Enabled is true."
 ];
 if (requiredSettings.Any(problem => problem is not null))
 {
@@ -91,6 +106,23 @@ builder.Services.AddScoped(sp =>
 builder.Services.AddSingleton<ILogger>(sp =>
     sp.GetRequiredService<ILoggerFactory>().CreateLogger("Cauldron"));
 
+// ==============================================================================
+// 3.1 OPENTELEMETRY
+// ==============================================================================
+// Cauldron exports its own metrics, today the security events of the images it withheld,
+// to an OTLP collector. Switched off by Cauldron:OpenTelemetry:Enabled set to false.
+
+// Nothing is registered while the exporter is off, so the counter then records into the void
+if (builder.Configuration.GetValue<bool>("Cauldron:OpenTelemetry:Enabled"))
+{
+    // Metrics only: the one meter Cauldron owns goes to the collector the gate has already validated
+    builder.Services.AddOpenTelemetry()
+        .ConfigureResource(resource => resource.AddService(builder.Configuration["Cauldron:OpenTelemetry:ServiceName"] ?? "Cauldron"))
+        .WithMetrics(metrics => metrics
+            .AddMeter(Telemetry.CauldronMeter.Name)
+            .AddOtlpExporter(otlp => otlp.Endpoint = new Uri(builder.Configuration["Cauldron:OpenTelemetry:OtlpEndpoint"]!)));
+}
+
 // ============================================================================
 // 4. CUSTOM SERVICES
 // ============================================================================
@@ -108,6 +140,10 @@ builder.Services.AddSingleton<IRetryPolicy, MorganaHubRetryPolicy>();
 // Selects a random welcome message during the "magic sparkle" loading
 // Singleton: the message pool is configuration, identical for every visitor
 builder.Services.AddSingleton<ILandingMessageService, LandingMessageService>();
+
+// Decides which images Cauldron shows
+// Singleton: the list is configuration, identical for every visitor
+builder.Services.AddSingleton<ITrustedImageDomainService, TrustedImageDomainService>();
 
 // Converts message and rich-card Markdown to HTML, sanitizing away injected script/markup
 builder.Services.AddSingleton<IMarkdownRendererService, MarkdownRendererService>();
@@ -143,7 +179,7 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();              // Redirect HTTP → HTTPS
 
 // ============================================================================
-// 6. EMBEDDING CONTROL (frame-ancestors)
+// 6. CONTENT SECURITY POLICY (frame-ancestors, img-src)
 // ============================================================================
 // Widget puts this app in an <iframe> on third-party sites and nothing in
 // ASP.NET Core constrains framing by default — which for a chat surface is the wrong
@@ -152,15 +188,24 @@ app.UseHttpsRedirection();              // Redirect HTTP → HTTPS
 // Closed unless configured: with no origins listed, only Cauldron's own pages may frame it
 // ('self', which is what makes /widget/morgana.html work out of the box). Each origin an
 // operator adds to Cauldron:Widget:AllowedEmbedOrigins is a site allowed to host the widget.
+//
+// An image starts a request with no click, so a URL written by anyone who influenced the model's
+// reply would hand a third party whatever data was put in it. The browser therefore loads images
+// only from Cauldron and from Cauldron:TrustedImageDomains, whichever component emits them.
 string[] allowedEmbedOrigins = app.Configuration
     .GetSection("Cauldron:Widget:AllowedEmbedOrigins")
     .Get<string[]>() ?? [];
 string frameAncestors = allowedEmbedOrigins.Length > 0
     ? $"frame-ancestors 'self' {string.Join(' ', allowedEmbedOrigins)}"
     : "frame-ancestors 'self'";
+
+// Only Cauldron itself and the listed domains over https may serve an image
+string imageSources = string.Join(' ', ["img-src 'self'", .. trustedImageDomains.Select(domain => $"https://{domain}")]);
+// Both directives travel in the one header the browser enforces
+string contentSecurityPolicy = $"{frameAncestors}; {imageSources}";
 app.Use(async (context, next) =>
 {
-    context.Response.Headers.ContentSecurityPolicy = frameAncestors;
+    context.Response.Headers.ContentSecurityPolicy = contentSecurityPolicy;
     await next();
 });
 

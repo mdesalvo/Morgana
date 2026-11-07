@@ -137,6 +137,8 @@ collide with the widget's CSS or inherit into its shadow root.
 | `Cauldron:StreamingResponse:*` | `TypewriterTickMilliseconds` (15), `TypewriterTickChars` (1) |
 | `Cauldron:LandingMessages` | The "warming up" lines for the sparkle loader, picked at random per session |
 | `Cauldron:Widget:AllowedEmbedOrigins` | Origins allowed to frame Cauldron, emitted as CSP `frame-ancestors`. Empty (the default) means `'self'` only: **no external site can embed the widget until its origin is listed** |
+| `Cauldron:TrustedImageDomains` | Bare host names Cauldron shows images from, over https only, emitted as CSP `img-src` beside `'self'`. An image from anywhere else is not rendered: Markdown shows its alt text and a card keeps only its caption |
+| `Cauldron:OpenTelemetry:*` | `Enabled`, `ServiceName`, `OtlpEndpoint`. Metric `cauldron.security.events` counts each image withheld from a delivered reply, tagged by `security.door` (`markdown_image` or `card_image`) and `security.outcome`, never by domain: the host goes to the Warning log alone, never the whole URL |
 
 ## UI patterns
 
