@@ -182,11 +182,10 @@ public class AssetPackageService : IAssetPackageService
         configuration. You own the `.cs`: the bodies.
 
         The split is not enforced anywhere and does not need to be. A declaration without an
-        implementation does not compile and a tool whose signature stops matching its declaration
-        in `agents.json` fails Morgana's startup in `MorganaToolAdapter.AddTool` — loudly, before a
-        single conversation happens.
+        implementation does not compile and an implementation whose signature stops matching its
+        declaration does not compile either — loudly, before a single conversation happens.
 
-        Every parameter is a `string`, because `agents.json` carries no types: the schema the model
+        Every parameter is a `string`, because the configuration carries no types: the schema the model
         reads is generated from your method, so the type lives in the C# and only there. Narrow one
         where it should be narrower, in both halves.
 

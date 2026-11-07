@@ -19,12 +19,6 @@ namespace Alembic.Models;
 public static class DraftProjection
 {
     /// <summary>
-    /// The AdditionalProperties key carrying an agent's toolkit, matched ordinally — the way
-    /// <see cref="Records.Prompt.GetAdditionalProperty{T}"/> matches it.
-    /// </summary>
-    public const string ToolsPropertyName = "Tools";
-
-    /// <summary>
     /// Rebuilds an intent definition from its Draft element.
     /// </summary>
     public static Records.IntentDefinition ToIntentDefinition(IntentDraft intent) =>
@@ -34,30 +28,13 @@ public static class DraftProjection
             intent.DefaultValue ?? string.Empty);
 
     /// <summary>
-    /// Rebuilds an agent prompt from its Draft element, putting the toolkit back into
-    /// AdditionalProperties alongside whatever else was carried through.
+    /// Rebuilds an agent prompt from its Draft element, carrying through the unmodelled AdditionalProperties.
     /// </summary>
     /// <remarks>
-    /// The toolkit is written as its own entry, first and the unmodelled entries follow. This does
-    /// not necessarily reproduce the grouping a file arrived with — AdditionalProperties is a list
-    /// of dictionaries and the same content can be spread across it in several ways — which is
-    /// precisely why the round-trip invariant is stated as equivalence and not byte identity.
-    /// Morgana looks keys up across every entry, so the grouping is not information.
+    /// The toolkit is not written: Morgana reads a tool from the C# declaration and AdditionalProperties holds only what Alembic carries verbatim.
     /// </remarks>
-    public static Records.Prompt ToPrompt(AgentDraft agent)
-    {
-        List<Dictionary<string, object>> additionalProperties = [];
-
-        if (agent.Tools.Count > 0)
-            additionalProperties.Add(new Dictionary<string, object>
-            {
-                [ToolsPropertyName] = agent.Tools.Select(ToToolDefinition).ToList()
-            });
-
-        additionalProperties.AddRange(agent.UnmodelledProperties);
-
-        return new Records.Prompt(
-            agent.ID ?? string.Empty,
+    public static Records.Prompt ToPrompt(AgentDraft agent) =>
+        new(agent.ID ?? string.Empty,
             agent.Target ?? string.Empty,
             agent.Instructions ?? string.Empty,
             agent.Formatting ?? string.Empty,
@@ -65,8 +42,7 @@ public static class DraftProjection
             agent.Territory,
             agent.Language,
             agent.Version,
-            additionalProperties);
-    }
+            agent.UnmodelledProperties);
 
     /// <summary>
     /// Rebuilds a tool definition from its Draft element.
@@ -80,14 +56,12 @@ public static class DraftProjection
     /// Rebuilds a tool parameter from its Draft element.
     /// </summary>
     /// <remarks>
-    /// A parameter carrying a value the model itself authors declares no scope. The framework's
-    /// record types <c>Scope</c> as a non-nullable string, so "no scope" travels as the empty
-    /// string — which is what the importer read it back from.
+    /// A value the model itself authors has no scope.
     /// </remarks>
     public static Records.ToolParameter ToToolParameter(ToolParameterDraft parameter) =>
         new(parameter.Name ?? string.Empty,
             parameter.Description ?? string.Empty,
             parameter.Required,
-            parameter.Scope ?? string.Empty,
+            parameter.Scope,
             parameter.Shared);
 }

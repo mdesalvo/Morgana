@@ -1,5 +1,7 @@
 using Morgana.AI;
+using Morgana.AI.Adapters;
 using Morgana.AI.Services;
+using Morgana.AI.Tools;
 using PromptHarness.Infrastructure;
 using Xunit;
 
@@ -116,16 +118,15 @@ public sealed class FrameworkPromptTests
     }
 
     [Fact]
-    public async Task Morgana_prompt_declares_the_base_tools_of_every_agent()
+    public void Base_tools_are_the_five_every_agent_holds()
     {
-        // The base tools are the ones every agent receives ahead of its own.
-        Records.Prompt morgana = await resolver.ResolveAsync("Morgana");
-        List<Records.ToolDefinition> tools = morgana.GetAdditionalProperty<List<Records.ToolDefinition>>("Tools");
+        // The base tools are the ones every agent receives ahead of its own, in the order the model reads them.
+        string[] baseToolNames = [.. MorganaToolAdapter.ProjectToolDefinitions(typeof(MorganaTool)).Select(tool => tool.Name)];
 
         // A tool lost here is a tool no agent in the installation can call.
-        Assert.Equivalent(
-            new[] { "GetContextVariable", "SetContextVariable", "SetTurnEnding", "SetQuickReplies", "SetRichCard" },
-            tools.Select(tool => tool.Name).ToArray());
+        Assert.Equal(
+            ["GetContextVariable", "SetContextVariable", "SetTurnEnding", "SetQuickReplies", "SetRichCard"],
+            baseToolNames);
     }
 
     [Fact]

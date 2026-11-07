@@ -6,9 +6,9 @@ namespace Alembic.Interfaces;
 /// Builds the single archive a client downloads at the end: configuration, sources and the report.
 /// </summary>
 /// <remarks>
-/// One download and not several, because the pieces are only correct together. An
-/// <c>agents.json</c> whose toolkit has moved on from the C# beside it is a startup failure and
-/// two separate downloads is an invitation to take one of them.
+/// One download and not several, because the pieces are only correct together. The
+/// generated C# declares the toolkit and the <c>agents.json</c> beside it holds the prose, so two
+/// separate downloads are an invitation to take only one of them.
 /// </remarks>
 public interface IAssetPackageService
 {

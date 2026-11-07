@@ -1,6 +1,6 @@
 ﻿using System.Reflection;
 using Microsoft.Extensions.Logging;
-using Morgana.AI.Abstractions;
+using Morgana.AI.Tools;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 

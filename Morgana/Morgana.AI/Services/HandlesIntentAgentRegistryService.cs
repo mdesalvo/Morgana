@@ -1,9 +1,11 @@
-﻿using System.Reflection;
+﻿using System.ComponentModel;
+using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Adapters;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
+using Morgana.AI.Tools;
 
 namespace Morgana.AI.Services;
 
@@ -19,6 +21,9 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// intent it declares must be matched by a <c>[HandlesIntent]</c> agent and vice versa.
     /// </summary>
     private readonly IAgentConfigurationService agentConfigService;
+
+    /// <summary>Source of the tool classes, whose tools and parameters the startup check weighs.</summary>
+    private readonly IToolRegistryService toolRegistryService;
 
     /// <summary>
     /// Application configuration, read for the instances a consultation may name. Held here because a
@@ -36,13 +41,16 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
     /// <summary>Discovers agents and runs bidirectional intent↔agent validation (lazily — see field above).</summary>
     /// <param name="agentConfigService">Loads intent configuration from agents.json.</param>
+    /// <param name="toolRegistryService">Lists the registered tool classes to weigh.</param>
     /// <param name="configuration">Application configuration, read for the declared instances.</param>
     /// <exception cref="InvalidOperationException">Validation fails: missing agents or missing configuration.</exception>
     public HandlesIntentAgentRegistryService(
         IAgentConfigurationService agentConfigService,
+        IToolRegistryService toolRegistryService,
         IConfiguration configuration)
     {
         this.agentConfigService = agentConfigService;
+        this.toolRegistryService = toolRegistryService;
         this.configuration = configuration;
 
         // The scan must see every plugin assembly. DI construction order does not guarantee they have
@@ -119,7 +127,8 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         [
             .. ValidateIntentCoverage(registry, configuredIntents),
             .. ValidateDeclaredTiers(registry),
-            .. ValidatePeerDeclarations(registry)
+            .. ValidatePeerDeclarations(registry),
+            .. ValidateToolContracts()
         ];
 
         // One exception carrying every problem, so a deployment is fixed in one pass.
@@ -244,6 +253,77 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         }
 
         return errors;
+    }
+
+    /// <summary>Refuses a tool class whose tools or parameters are not declared completely.</summary>
+    /// <returns>One message per violation, empty when every tool class holds.</returns>
+    private List<string> ValidateToolContracts()
+    {
+        // Every tool class is weighed before anything is thrown, so one boot reports all of their faults.
+        List<string> errors = [];
+
+        // The names a domain tool may not take: the base tools sit ahead of every agent's own.
+        HashSet<string> baseToolNames = new HashSet<string>(
+            MorganaToolAdapter.GetToolMethods(typeof(MorganaTool)).Select(method => method.Name),
+            StringComparer.OrdinalIgnoreCase);
+
+        // The base tools are weighed like any tool class: a tool lost there is a tool no agent can call.
+        ValidateToolClass(typeof(MorganaTool), "the base tools", baseToolNames, false, errors);
+
+        // Every registered tool class is weighed under the intent it serves.
+        foreach ((string toolIntent, Type toolType) in toolRegistryService.GetAllRegisteredTools())
+            ValidateToolClass(toolType, $"intent '{toolIntent}'", baseToolNames, true, errors);
+
+        // The faults of every tool class, joined by the caller with those of the agents.
+        return errors;
+    }
+
+    /// <summary>Adds one message per way a tool class fails to declare its tools completely.</summary>
+    /// <param name="toolType">The tool class to weigh.</param>
+    /// <param name="owner">Who the class serves as the messages name it.</param>
+    /// <param name="baseToolNames">The names of the base tools.</param>
+    /// <param name="isDomainClass">Whether the class is a domain one whose tools may not take a base tool's name.</param>
+    /// <param name="errors">Receives the messages.</param>
+    private static void ValidateToolClass(Type toolType, string owner, HashSet<string> baseToolNames, bool isDomainClass, List<string> errors)
+    {
+        // The same methods the agent adapter projects, so what is weighed here is what the model reads.
+        IReadOnlyList<MethodInfo> toolMethods = MorganaToolAdapter.GetToolMethods(toolType);
+
+        // The model addresses a tool by its name: two methods folding to one name would reach the provider as a duplicate.
+        foreach (IGrouping<string, MethodInfo> sameNameMethods in toolMethods.GroupBy(method => method.Name, StringComparer.OrdinalIgnoreCase))
+        {
+            if (sameNameMethods.Count() > 1)
+                errors.Add($"Tool '{sameNameMethods.First().Name}' of {owner} is declared by more than one method of '{toolType.Name}': a tool name is unique");
+        }
+
+        // Each tool is weighed on its own, its parameters included.
+        foreach (MethodInfo toolMethod in toolMethods)
+        {
+            // The description is what the model reads to know what the tool does.
+            if (string.IsNullOrWhiteSpace(toolMethod.GetCustomAttribute<DescriptionAttribute>()?.Description))
+                errors.Add($"Tool '{toolMethod.Name}' of {owner} has no [Description]: the model reads it to know what the tool does");
+
+            // A domain tool named like a base tool would shadow it in the list the model reads.
+            if (isDomainClass && baseToolNames.Contains(toolMethod.Name))
+                errors.Add($"Tool '{toolMethod.Name}' of {owner} takes the name of a base tool");
+
+            // Each parameter reaches the model through the tool's schema, so each is weighed too.
+            foreach (ParameterInfo parameter in toolMethod.GetParameters())
+            {
+                // The description is what the model reads to know what to pass.
+                if (string.IsNullOrWhiteSpace(parameter.GetCustomAttribute<DescriptionAttribute>()?.Description))
+                    errors.Add($"Parameter '{parameter.Name}' of tool '{toolMethod.Name}' of {owner} has no [Description]: the model reads it to know what to pass");
+
+                // A parameter without [ToolParameter] holds a value the model authors: it has no scope to weigh.
+                ToolParameterAttribute? parameterDeclaration = parameter.GetCustomAttribute<ToolParameterAttribute>();
+                if (parameterDeclaration is null)
+                    continue;
+
+                // The context holds text only, so any other type could never be read back.
+                if (parameterDeclaration.Scope is Records.ToolScope.Context or Records.ToolScope.SharedContext && parameter.ParameterType != typeof(string))
+                    errors.Add($"Parameter '{parameter.Name}' of tool '{toolMethod.Name}' of {owner} is a context parameter of type '{parameter.ParameterType.Name}': the context holds text, so it is a string");
+            }
+        }
     }
 
     /// <summary>

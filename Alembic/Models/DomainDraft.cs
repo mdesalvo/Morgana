@@ -18,7 +18,7 @@ namespace Alembic.Models;
 /// </para>
 /// <para>
 /// <b>What survives that Alembic does not understand.</b> An uploaded <c>agents.json</c> may carry
-/// AdditionalProperties entries beyond <c>Tools</c>. They are kept verbatim in
+/// AdditionalProperties entries. They are kept verbatim in
 /// <see cref="AgentDraft.UnmodelledProperties"/> and written back untouched: the round-trip
 /// invariant must not depend on Alembic having a use for every key it meets.
 /// </para>
@@ -349,7 +349,7 @@ public sealed class AgentDraft
     public List<ToolDraft> Tools { get; set; } = [];
 
     /// <summary>
-    /// AdditionalProperties entries other than <c>Tools</c>, kept verbatim so a key Alembic has no
+    /// AdditionalProperties entries, kept verbatim so a key Alembic has no
     /// use for still survives a round trip. Values are <c>JsonElement</c>s and are written back as
     /// they were read.
     /// </summary>
@@ -372,8 +372,7 @@ public sealed class AgentDraft
 public sealed class ToolDraft
 {
     /// <summary>
-    /// Tool name. Must match the C# method name exactly — <c>MorganaToolAdapter.AddTool</c>
-    /// validates the pair and fails startup on a mismatch.
+    /// Tool name. It is emitted as the C# method name, which is the name the model calls.
     /// </summary>
     /// <remarks><c>null</c> until the <c>AgentToolkit</c> pass declares this tool via
     /// <c>DeclareTool</c>.</remarks>

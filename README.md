@@ -160,7 +160,7 @@ Prompts are not hardcoded strings in Morgana: they are **versioned, maintainable
 
 The system distinguishes between two prompt categories:
 - **System prompts** (`morgana.json`): Define actor behaviors, global policies and orchestration rules
-- **Domain prompts** (`agents.json`): Define agent personalities, instructions and tool configurations
+- **Domain prompts** (`agents.json`): Define agent personalities and instructions, while each tool is described by the `[Description]` attributes on its C# method
 
 A unique characteristic of Morgana is its **Layered Personality System**. Every interaction maintains a consistent global personality (Morgana's core character) while allowing agents to express domain-appropriate specializations:
 

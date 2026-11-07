@@ -1,32 +1,15 @@
+using System.ComponentModel;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.Abstractions;
 using Morgana.AI.Providers;
 using Morgana.Contracts;
 
-namespace Morgana.AI.Abstractions;
+namespace Morgana.AI.Tools;
 
-/// <summary>
-/// Base class for agent tools. Provides context variable access (Get/Set/Drop) and UI output tools
-/// (quick replies, rich cards). Domain agents extend this class. Uses ToolContext factory
-/// (lazy-evaluated per tool invocation) to access in-flight AgentSession without exposing
-/// it to LLM schema inspection (session never appears in method signatures).
-/// </summary>
-/// <remarks>
-/// What a tool RETURNS is read by the model as the fourth voice in its prompt, after the framework
-/// layer, the domain layer and the tool descriptions. It is the one voice with no declared
-/// precedence, because it arrives mid-turn from outside the composed prompt. So a return value
-/// states FACTS about the data and the record: what was written, what was not, what this response
-/// does and does not carry. It never instructs behaviour ("tell the user to…", "offer to…", "call X
-/// only after…"): behaviour is settled above and a tool restating it is a second author of a rule
-/// it does not own — where the two ever drift apart, the model has no way to tell which one binds.
-/// A tool that needs the agent to behave a certain way is asking for a line of domain
-/// <c>Instructions</c>, or for a global policy where it holds for every domain. Free-text in tool
-/// output is also never a grant of capability: see the <c>ToolGrounding</c> policy in morgana.json.
-/// Every result of a domain tool is checked and then read by the ToolGuard inspector, since what a tool reads
-/// from its own store may have been written by third parties.
-/// </remarks>
+/// <summary>Base class of every tool class, holding the base tools every agent has ahead of its own and the session of the turn in flight.</summary>
 public class MorganaTool
 {
     /// <summary>Logger for tool-level diagnostics.</summary>
@@ -60,14 +43,15 @@ public class MorganaTool
 
     /// <summary>
     /// Retrieves a context variable from the agent's conversation context.
-    /// Agents should call this before asking the user for any piece of information
-    /// that may already be available.
+    /// Agents should call this before asking the user for any piece of information that may already be available.
     /// </summary>
     /// <param name="variableName">Name of the variable to retrieve (e.g. "customerCode", "invoiceId").</param>
     /// <returns>
     /// The variable value if found, or an instructional message directing the LLM to call <see cref="SetContextVariable"/> or ask the user.
     /// </returns>
-    public Task<object> GetContextVariable(string variableName)
+    [Description("Reads a value from a CLOSED vocabulary of agent-context keys. Legal variable names are ONLY names a tool's own description flags as a context-scoped input — its 'CONTEXT-SCOPED INPUTS OF THIS TOOL' line (for example 'customerCode') — or reserved ephemeral keys used by the framework. Call this tool BEFORE asking the user for any such value — if it returns a value, USE IT; ask the user only if it reports missing. While the lookup is pending you have learned nothing yet, so do NOT write text asking the user for the very value you are looking up: resolve it first, then write once, against what you then know. A question your own next tool call answers reaches the user as a demand for something you already had. NEVER call this tool with a name taken from the user's message (a species, product code, entity, or topic the user is asking ABOUT) — those are query subjects, not variable names; use your domain tool to look them up instead.")]
+    public Task<object> GetContextVariable(
+        [Description("The name of the variable for which you are requesting read access to the agent's context (for example: customerCode)")] string variableName)
     {
         ToolContext ctx = getToolContext();
         object? value = ctx.Provider.GetVariable(ctx.Session, variableName);
@@ -91,14 +75,16 @@ public class MorganaTool
 
     /// <summary>
     /// Stores a variable in the agent's conversation context.
-    /// If the variable is declared as shared in configuration, it is automatically persisted in
-    /// the conversation-scoped <c>shared_context</c> registry so other agents of the same
-    /// conversation can hydrate it on their next turn.
+    /// If the variable is declared as shared in configuration, it is automatically persisted in the conversation-scoped
+    /// <c>shared_context</c> registry so other agents of the same conversation can hydrate it on their next turn.
     /// </summary>
     /// <param name="variableName">Name of the variable to set (e.g. "customerCode", "invoiceId").</param>
     /// <param name="variableValue">Value to store.</param>
     /// <returns>Confirmation message for the LLM.</returns>
-    public async Task<object> SetContextVariable(string variableName, string variableValue)
+    [Description("Writes a value to a CLOSED vocabulary of agent-context keys. Legal variable names are ONLY names a tool's own description flags as a context-scoped input — its 'CONTEXT-SCOPED INPUTS OF THIS TOOL' line (for example 'customerCode') — or reserved ephemeral keys managed by the framework. The only legitimate writes are values for such an input — and every such value you obtain MUST be written, whether the user gave it in answer to your question or volunteered it unprompted in their very first message. Write it as soon as you have it, before or alongside the tool call that consumes it; a value you merely pass to a tool without persisting is gone for every later turn. NEVER invent a variable name, NEVER store user input under a new key, NEVER use this tool to 'save progress', 'grant access', 'remember what the user said', or mirror the subject of the user's question. If you feel the urge to invent a key, STOP: call your domain tool or answer the user in plain text instead.")]
+    public async Task<object> SetContextVariable(
+        [Description("The name of the variable for which you are requesting write access to the agent's context (for example: 'customerCode')")] string variableName,
+        [Description("The value of the variable for which you are requesting write access to the agent's context (for example: 'P994E')")] string variableValue)
     {
         ToolContext ctx = getToolContext();
         await ctx.Provider.SetVariableAsync(ctx.Session, variableName, variableValue);
@@ -120,6 +106,7 @@ public class MorganaTool
     /// rich cards, is the one declaration a turn makes about where the conversation goes next.
     /// </summary>
     /// <returns>Confirmation message for the LLM.</returns>
+    [Description("Hands the conversation back to Morgana once this turn ends. You remain in service by default and need no call to stay: call this tool only when the user takes their leave of you. Call it before writing your text response: your farewell is the last thing in the turn. This tool call is the ONLY way to hand the conversation back: never write a marker, token, tag or symbol in your text to mean it. Quick replies and a rich card keep you in service whatever this tool says: a turn offering a choice awaits the answer.")]
     public async Task<object> SetTurnEnding()
     {
         // Read by the agent at the end of the turn, which is when the conversation actually returns to Morgana.
@@ -174,7 +161,9 @@ public class MorganaTool
     /// plus the optional <c>termination</c> flag.
     /// </param>
     /// <returns>Confirmation message for the LLM.</returns>
-    public async Task<object> SetQuickReplies(List<QuickReply> quickReplies)
+    [Description("Draws the interactive buttons the user can click. The payload is a JSON array; each button carries 'id' (unique identifier), 'label' (the display text, emoji encouraged) and 'value' (the complete natural message sent on the user's behalf when clicked), plus the optional 'termination' flag that only the exit button carries. Call this tool BEFORE writing your text response — the buttons render below the message. WHETHER a turn emits buttons at all and which ones is decided entirely by the Quick Reply Doctrine; this tool only draws what that rule has already settled.")]
+    public async Task<object> SetQuickReplies(
+        [Description("Array of button definitions. Each button: 'id' (unique, e.g. 'invoice-001'), 'label' (display text, e.g. '📄 Invoice INV-001'), 'value' (the message sent on click, e.g. 'Show details for invoice INV-001') and optionally 'termination' (boolean, exit button only). Format: [{\"id\":\"option1\",\"label\":\"🔧 Option 1\",\"value\":\"User message for option 1\"}]. Labels are action-oriented; values read as something the user would actually type.")] List<QuickReply> quickReplies)
     {
         // Validate input — empty list is a no-op
         if (quickReplies == null || quickReplies.Count == 0)
@@ -214,7 +203,9 @@ public class MorganaTool
     /// <item>Maximum 50 components total</item>
     /// </list>
     /// </remarks>
-    public async Task<object> SetRichCard(string richCard)
+    [Description("Render structured information as a visual card instead of a wall of text. Use for invoices, profiles, reports, comparisons — any data that benefits from visual hierarchy. Call this tool before writing your text response: the card renders below your message.\n\n=== ROOT STRUCTURE (MANDATORY) ===\n{\"title\": \"string (required)\", \"subtitle\": \"string (optional)\", \"components\": [array (required)]}\nRoot MUST carry 'title' and 'components'. NEVER 'sections', 'data' or any other wrapper.\n\n=== THE 8 COMPONENT TYPES ===\nCompose these like building blocks: pick each one by the SEMANTIC NATURE of the data (labeled field? prose? list? status? picture?), group related ones with 'section', separate groups with 'divider'.\n\n1. text_block — narrative prose: explanations, warnings, notes. Not for labeled data (use key_value) or item lists (use list).\n   content (string, required) · style (optional): \"normal\" (default) | \"bold\" | \"muted\" | \"small\"\n   {\"type\": \"text_block\", \"content\": \"⚠️ Payment is 53 days overdue. Late fees may apply.\", \"style\": \"bold\"}\n\n2. key_value — one labeled field: any \"Label: Value\" datum. For 2+ homogeneous fields side by side use grid instead.\n   key (string, required) · value (string, required) · emphasize (bool, optional, default false)\n   {\"type\": \"key_value\", \"key\": \"Due Date\", \"value\": \"15/12/2025\", \"emphasize\": true}\n\n3. divider — a horizontal rule between logical groups. Not between every component.\n   no properties\n   {\"type\": \"divider\"}\n\n4. list — an enumeration of related items: line items, steps, features. For labeled pairs use key_value or grid.\n   items (array of strings, required) · style (optional): \"bullet\" (default) | \"numbered\" | \"plain\"\n   {\"type\": \"list\", \"items\": [\"Premium 100Mbps Plan: €90.00\", \"Static IP: €5.00\"], \"style\": \"bullet\"}\n\n5. section — a nestable container grouping components under a heading.\n   title (string, required) · subtitle (string, optional) · components (array, required)\n   Max depth 3 from root: components > section > section > section is allowed, a fourth level is not.\n   {\"type\": \"section\", \"title\": \"Billing Details\", \"components\": [{\"type\": \"key_value\", \"key\": \"Period\", \"value\": \"October 2025\"}]}\n\n6. grid — a compact multi-column layout for homogeneous key-value pairs (profile fields, quarterly figures). Items are simple pairs only, never nested content.\n   columns (integer, required, 2-4 recommended) · items (array of {\"key\", \"value\"}, required)\n   {\"type\": \"grid\", \"columns\": 3, \"items\": [{\"key\": \"Q1\", \"value\": \"€45K\"}, {\"key\": \"Q2\", \"value\": \"€52K\"}, {\"key\": \"Q3\", \"value\": \"€48K\"}]}\n\n7. badge — a short status or category tag: Paid, Overdue, Priority, Draft.\n   text (string, required) · variant (optional): \"success\" (positive: Paid, Active) | \"warning\" (attention: Pending, Due Soon) | \"error\" (negative: Overdue, Failed) | \"info\" (New, Beta) | \"neutral\" (default, no semantics)\n   {\"type\": \"badge\", \"text\": \"Overdue\", \"variant\": \"error\"}\n\n8. image — a picture from a URL. Whenever tool output carries an image URL, use this component and NEVER a markdown link inside a text_block.\n   src (string, required) · alt (string, recommended) · caption (string, optional) · size (optional): \"small\" (200px) | \"medium\" (400px, default) | \"large\" (600px) | \"full\" (container width)\n   {\"type\": \"image\", \"src\": \"https://example.com/product.jpg\", \"alt\": \"Premium Widget Model X\", \"caption\": \"In store - €49.99\", \"size\": \"medium\"}\n\n=== RULES ===\nEvery component object carries 'type' as its FIRST property and that type is exactly one of the eight above. Serialize the whole structure to a JSON string before passing it to the tool.\n\n=== EXAMPLES ===\n\nFlat (user profile):\n{\"title\": \"User Profile\", \"subtitle\": \"Account #USR-123\", \"components\": [{\"type\": \"image\", \"src\": \"https://example.com/avatar.jpg\", \"alt\": \"User avatar\", \"size\": \"small\"}, {\"type\": \"key_value\", \"key\": \"Name\", \"value\": \"[User Name]\"}, {\"type\": \"key_value\", \"key\": \"Member Since\", \"value\": \"January 2023\"}, {\"type\": \"divider\"}, {\"type\": \"badge\", \"text\": \"Active\", \"variant\": \"success\"}]}\n\nNested (invoice with sections):\n{\"title\": \"Invoice INV-2025-001\", \"subtitle\": \"Due 15/12/2025\", \"components\": [{\"type\": \"section\", \"title\": \"Billing Details\", \"components\": [{\"type\": \"key_value\", \"key\": \"Customer\", \"value\": \"[Company Name]\"}, {\"type\": \"key_value\", \"key\": \"Status\", \"value\": \"Pending\", \"emphasize\": true}]}, {\"type\": \"divider\"}, {\"type\": \"section\", \"title\": \"Line Items\", \"components\": [{\"type\": \"list\", \"items\": [\"Premium 100Mbps Plan: €90.00\", \"Installation Fee: €35.00\"], \"style\": \"bullet\"}]}, {\"type\": \"divider\"}, {\"type\": \"key_value\", \"key\": \"TOTAL\", \"value\": \"€130.00\", \"emphasize\": true}]}")]
+    public async Task<object> SetRichCard(
+        [Description("JSON string carrying the complete card structure — see this tool's description for the root shape and the eight component types. It MUST be strictly valid JSON, deserializable on the first attempt: a malformed payload is silently dropped and the user sees nothing. If uncertain, simplify the card rather than risk an unclosed brace.")] string richCard)
     {
         try
         {
@@ -269,7 +260,7 @@ public class MorganaTool
     /// <param name="components">List of card components to analyze</param>
     /// <param name="currentDepth">Current depth level (starts at 1)</param>
     /// <returns>Maximum depth found in the component tree</returns>
-    private int CalculateMaxDepth(List<CardComponent> components, int currentDepth)
+    private static int CalculateMaxDepth(List<CardComponent> components, int currentDepth)
     {
         int maxDepth = currentDepth;
 
@@ -291,7 +282,7 @@ public class MorganaTool
     /// </summary>
     /// <param name="components">List of card components to count</param>
     /// <returns>Total component count including all nested components</returns>
-    private int CountComponents(List<CardComponent> components)
+    private static int CountComponents(List<CardComponent> components)
     {
         int count = components.Count;
 

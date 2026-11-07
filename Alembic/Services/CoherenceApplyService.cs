@@ -15,7 +15,7 @@ namespace Alembic.Services;
 /// </summary>
 /// <remarks>
 /// One <see cref="AIAgent"/> per call rather than a reused one: the tool set is rebuilt against
-/// this call's <see cref="DomainDraft"/> instance every time (<see cref="CoherenceApplyTools"/>
+/// this call's <see cref="DomainDraft"/> instance every time (<see cref="CoherenceApplyTool"/>
 /// closes over it) and a finding is a single, self-contained instruction with no turn after it to
 /// keep an agent alive for.
 /// </remarks>
@@ -34,7 +34,7 @@ public class CoherenceApplyService : ICoherenceApplyService
     /// <summary>
     /// Initializes the apply service.
     /// </summary>
-    /// <param name="alembicPromptService">Resolves the <c>CoherenceApplier</c> prompt and its tool declarations from <c>alembic.json</c>.</param>
+    /// <param name="alembicPromptService">Resolves the <c>CoherenceApplier</c> prompt from <c>alembic.json</c>.</param>
     /// <param name="promptComposerService">Passed through to <see cref="MorganaToolAdapter"/> — the framework's own tool-schema machinery.</param>
     /// <param name="llmService">Supplies the chat client, always on the Performance tier.</param>
     /// <param name="logger">Records a failed apply — the caller also sees it, via the returned result.</param>
@@ -62,37 +62,12 @@ public class CoherenceApplyService : ICoherenceApplyService
     public async Task<CoherenceApplyResult> ApplyAsync(DomainDraft draft, CoherenceFinding finding, CancellationToken cancellationToken = default)
     {
         Records.Prompt prompt = alembicPromptService.Resolve(PromptId);
-        List<Records.ToolDefinition> definitions =
-            prompt.GetAdditionalPropertyOrDefault<List<Records.ToolDefinition>>(Constants.PromptProperties.Tools, []);
 
-        CoherenceApplyTools tools = new CoherenceApplyTools(draft);
+        CoherenceApplyTool tools = new CoherenceApplyTool(draft);
         MorganaToolAdapter toolAdapter = new MorganaToolAdapter(promptComposerService);
 
-        // Maps each tool's name in alembic.json to the CoherenceApplyTools method that implements
-        // it. The lookup below turns a declaration with no matching method into a startup-time
-        // failure instead of a schema the model is offered and can never actually call.
-        Dictionary<string, Delegate> implementations = new(StringComparer.Ordinal)
-        {
-            [nameof(CoherenceApplyTools.GetAgent)] = tools.GetAgent,
-            [nameof(CoherenceApplyTools.SetAgentTarget)] = tools.SetAgentTarget,
-            [nameof(CoherenceApplyTools.SetAgentInstructions)] = tools.SetAgentInstructions,
-            [nameof(CoherenceApplyTools.SetAgentFormatting)] = tools.SetAgentFormatting,
-            [nameof(CoherenceApplyTools.SetIntentDescription)] = tools.SetIntentDescription,
-            [nameof(CoherenceApplyTools.DeclareTool)] = tools.DeclareTool,
-            [nameof(CoherenceApplyTools.SetToolParameter)] = tools.SetToolParameter,
-            [nameof(CoherenceApplyTools.DropToolParameter)] = tools.DropToolParameter,
-            [nameof(CoherenceApplyTools.DropTool)] = tools.DropTool,
-            [nameof(CoherenceApplyTools.ApplyCompleted)] = tools.ApplyCompleted
-        };
-
-        foreach (Records.ToolDefinition definition in definitions)
-        {
-            if (!implementations.TryGetValue(definition.Name, out Delegate? implementation))
-                throw new InvalidOperationException(
-                    $"alembic.json declares tool '{definition.Name}' for '{PromptId}', but CoherenceApplyTools has no method by that name.");
-
-            toolAdapter.AddTool(definition.Name, implementation, definition);
-        }
+        // The ten tools of the apply pass, each described by the attributes of the method that implements it.
+        toolAdapter.AddTools(tools, MorganaToolAdapter.ProjectToolDefinitions(typeof(CoherenceApplyTool)));
 
         IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 

@@ -258,6 +258,7 @@ public sealed class PeerFederationTests
         return new ConfigurationAgentDirectoryService(
             new UnreadAgentConfiguration(),
             new UnreadPromptResolver(),
+            new ProvidesToolForIntentRegistryService(NullLogger.Instance),
             configuration,
             new FixedHostAddress(),
             new PeerRingKeyService(),

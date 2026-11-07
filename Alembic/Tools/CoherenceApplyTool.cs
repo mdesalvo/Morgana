@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Alembic.Models;
 using Morgana.AI;
 
@@ -8,7 +9,7 @@ namespace Alembic.Tools;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Unlike <see cref="InterviewTools"/>, which writes into the single agent the current interview
+/// Unlike <see cref="InterviewTool"/>, which writes into the single agent the current interview
 /// pass has open, these write directly into agents already committed to the Draft — the ones the
 /// finding named in its <c>Where</c>. There is no client dialogue here: the finding's own
 /// <c>Fix</c> is the instruction, already read and accepted by pressing the button that started
@@ -21,7 +22,7 @@ namespace Alembic.Tools;
 /// reopened here any more than it is mid-interview, only its description may be sharpened.
 /// </para>
 /// </remarks>
-public class CoherenceApplyTools
+public class CoherenceApplyTool
 {
     private readonly DomainDraft draft;
 
@@ -33,7 +34,7 @@ public class CoherenceApplyTools
     /// <summary>
     /// Binds the toolset to the domain the finding was read against.
     /// </summary>
-    public CoherenceApplyTools(DomainDraft draft)
+    public CoherenceApplyTool(DomainDraft draft)
     {
         this.draft = draft;
     }
@@ -46,7 +47,9 @@ public class CoherenceApplyTools
     /// call naming a field it has not seen the rest of risks discarding what a sibling field
     /// depended on.
     /// </remarks>
-    public string GetAgent(string agentId)
+    [Description("Returns one agent's prose and toolkit as they stand, by its ID. Call it for every agent the finding names before changing anything.")]
+    public string GetAgent(
+        [Description("The agent's ID, exactly as the finding's Where names it.")] string agentId)
     {
         if (Find(agentId) is not { } agent)
             return $"No agent named '{agentId}' in this domain. The finding's Where names agents by their intent ID.";
@@ -72,7 +75,10 @@ public class CoherenceApplyTools
     /// <summary>
     /// Records an agent's Target section.
     /// </summary>
-    public string SetAgentTarget(string agentId, string target)
+    [Description("Replaces the named agent's whole Target section.")]
+    public string SetAgentTarget(
+        [Description("The agent's ID.")] string agentId,
+        [Description("The complete revised Target, addressed to the agent as 'you'. No section label; that is added for you.")] string target)
     {
         if (Find(agentId) is not { } agent)
             return $"Nothing recorded: no agent named '{agentId}'.";
@@ -85,7 +91,10 @@ public class CoherenceApplyTools
     /// <summary>
     /// Records an agent's Instructions section.
     /// </summary>
-    public string SetAgentInstructions(string agentId, string instructions)
+    [Description("Replaces the named agent's whole Instructions section.")]
+    public string SetAgentInstructions(
+        [Description("The agent's ID.")] string agentId,
+        [Description("The complete revised Instructions, addressed to the agent as 'you'. No section label; that is added for you.")] string instructions)
     {
         if (Find(agentId) is not { } agent)
             return $"Nothing recorded: no agent named '{agentId}'.";
@@ -98,7 +107,10 @@ public class CoherenceApplyTools
     /// <summary>
     /// Records an agent's Formatting section.
     /// </summary>
-    public string SetAgentFormatting(string agentId, string formatting)
+    [Description("Replaces the named agent's whole Formatting section.")]
+    public string SetAgentFormatting(
+        [Description("The agent's ID.")] string agentId,
+        [Description("The complete revised Formatting, addressed to the agent as 'you'. No section label; that is added for you.")] string formatting)
     {
         if (Find(agentId) is not { } agent)
             return $"Nothing recorded: no agent named '{agentId}'.";
@@ -115,7 +127,10 @@ public class CoherenceApplyTools
     /// Everything else about the map is out of reach on purpose: an overlapping-intents finding is
     /// resolved by telling two descriptions apart, never by adding, dropping or renaming an entry.
     /// </remarks>
-    public string SetIntentDescription(string intentName, string description)
+    [Description("Sharpens one intent's description — the only edit a coherence fix ever makes to the map itself.")]
+    public string SetIntentDescription(
+        [Description("The intent's name, exactly as it appears in the domain.")] string intentName,
+        [Description("The complete revised description, the classifier's whole basis for routing here.")] string description)
     {
         IntentDraft? intent = draft.Intents.FirstOrDefault(i =>
             string.Equals(i.Name, intentName?.Trim(), StringComparison.OrdinalIgnoreCase));
@@ -132,14 +147,18 @@ public class CoherenceApplyTools
     }
 
     /// <summary>
-    /// Opens a tool on the named agent, or revises the description of one already open.
+    /// Opens a tool on the named agent or revises the description of one already open.
     /// </summary>
     /// <remarks>
     /// Touches only the tool's name and description. Parameters are a separate concern reached
     /// through <see cref="SetToolParameter"/> — a revision here never disturbs a parameter list
     /// already recorded on the same tool, whether the tool is new or already existed.
     /// </remarks>
-    public string DeclareTool(string agentId, string name, string description)
+    [Description("Opens a tool on the named agent or revises the description of one already open.")]
+    public string DeclareTool(
+        [Description("The agent's ID.")] string agentId,
+        [Description("PascalCase, a verb the agent performs.")] string name,
+        [Description("What the tool does, what it returns and when to call it.")] string description)
     {
         if (Find(agentId) is not { } agent)
             return $"No tool recorded: no agent named '{agentId}'.";
@@ -158,20 +177,28 @@ public class CoherenceApplyTools
 
         MarkRevised(agent);
 
-        string complaint = InterviewTools.IdentifierComplaint(cleanName, "tool name", pascalCase: true);
+        string complaint = InterviewTool.IdentifierComplaint(cleanName, "tool name", pascalCase: true);
         return (revision ? $"'{cleanName}' revised on {agentId}." : $"'{cleanName}' declared on {agentId}.")
                + (complaint.Length > 0 ? " " + complaint : string.Empty);
     }
 
     /// <summary>
-    /// Adds a parameter to a declared tool of the named agent, or revises one already there.
+    /// Adds a parameter to a declared tool of the named agent or revises one already there.
     /// </summary>
     /// <remarks>
     /// Touches exactly the one parameter named — every other parameter already on the tool and
     /// the tool's own name and description, are left as they stand. The tool itself must already
     /// exist: this never creates one, since a coherence finding names a tool it has already read.
     /// </remarks>
-    public string SetToolParameter(string agentId, string toolName, string name, string description, string scope, bool required, bool shared)
+    [Description("Adds a parameter to a declared tool on the named agent or revises one already there by name and in place.")]
+    public string SetToolParameter(
+        [Description("The agent's ID.")] string agentId,
+        [Description("The exact name of a tool already declared on that agent.")] string toolName,
+        [Description("camelCase parameter name.")] string name,
+        [Description("What the value is and what a good one looks like.")] string description,
+        [Description("'request', 'context' or 'none'.")] string scope,
+        [Description("Whether the agent must supply this value on every call.")] bool required,
+        [Description("Whether the resolved value is published to the whole conversation. Only meaningful alongside scope 'context'.")] bool shared)
     {
         if (Find(agentId) is not { } agent)
             return $"No parameter recorded: no agent named '{agentId}'.";
@@ -218,7 +245,11 @@ public class CoherenceApplyTools
     /// <summary>
     /// Removes a parameter from a tool of the named agent.
     /// </summary>
-    public string DropToolParameter(string agentId, string toolName, string parameterName)
+    [Description("Removes a parameter from a tool on the named agent.")]
+    public string DropToolParameter(
+        [Description("The agent's ID.")] string agentId,
+        [Description("The exact name of the tool.")] string toolName,
+        [Description("The exact name of the parameter to remove.")] string parameterName)
     {
         if (Find(agentId) is not { } agent || FindTool(agent, toolName) is not { } tool)
             return $"Nothing dropped: no such tool on '{agentId}'.";
@@ -237,7 +268,10 @@ public class CoherenceApplyTools
     /// <summary>
     /// Removes a tool and everything on it from the named agent.
     /// </summary>
-    public string DropTool(string agentId, string toolName)
+    [Description("Removes a tool and every parameter on it from the named agent — for when a duplicated reach is resolved by keeping only one shape.")]
+    public string DropTool(
+        [Description("The agent's ID.")] string agentId,
+        [Description("The exact name of the tool to remove.")] string toolName)
     {
         if (Find(agentId) is not { } agent)
             return $"Nothing dropped: no agent named '{agentId}'.";
@@ -256,7 +290,9 @@ public class CoherenceApplyTools
     /// <summary>
     /// Declares the fix applied.
     /// </summary>
-    public string ApplyCompleted(string summary)
+    [Description("Declares the fix applied. Call exactly once, last.")]
+    public string ApplyCompleted(
+        [Description("One sentence, in the domain's own words, naming the field and the agent changed.")] string summary)
     {
         Summary = string.IsNullOrWhiteSpace(summary) ? "Applied." : summary.Trim();
         return "Recorded.";
