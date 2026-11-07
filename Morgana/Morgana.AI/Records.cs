@@ -1271,37 +1271,34 @@ public static class Records
     // TOOL CONFIGURATION RECORDS
     // ==========================================================================
 
-    /// <summary>
-    /// Tool definition specifying a callable tool method with parameters.
-    /// Loaded from agents.json and used by MorganaToolAdapter to create AIFunction instances.
-    /// </summary>
+    /// <summary>Where a tool parameter's value comes from.</summary>
+    public enum ToolScope
+    {
+        /// <summary>Asked of the user on the turn it is needed.</summary>
+        Request,
+
+        /// <summary>Held in this agent's context, looked up before the user is asked.</summary>
+        Context,
+
+        /// <summary>Held in the context every agent of the conversation reads, looked up before the user is asked.</summary>
+        SharedContext
+    }
+
+    /// <summary>A callable tool as projected from its method: name, description and parameters.</summary>
     /// <param name="Name">Tool method name (must match actual method name in MorganaTool class)</param>
     /// <param name="Description">Tool description for LLM understanding</param>
     /// <param name="Parameters">List of tool parameter definitions</param>
-    /// <param name="Reserved">
-    /// True for the five morgana.json base tools (GetContextVariable, SetContextVariable,
-    /// SetTurnEnding, SetQuickReplies, SetRichCard). Never set from configuration: a domain
-    /// tool declaring this in agents.json has it forced back to false by MorganaAgentAdapter —
-    /// it is stamped true only where MorganaAgentAdapter reads morgana.json's own Tools array,
-    /// so no JSON a plugin author writes can ever make it stick. Consumers (e.g. the reverse
-    /// guard-rail wrapper) use it to skip tools whose output the framework itself controls.
-    /// </param>
     public record ToolDefinition(
         string Name,
         string Description,
-        IReadOnlyList<ToolParameter> Parameters,
-        bool Reserved = false);
+        IReadOnlyList<ToolParameter> Parameters);
 
-    /// <summary>
-    /// Tool parameter: name (must match method param), description, Required flag. Scope: "context" (GetContextVariable)
-    /// or "request" (user input). Shared: whether to persist in conversation-scoped shared_context registry for
-    /// cross-agent hydration. Only applies when Scope="context". Default: false.
-    /// </summary>
+    /// <summary>A tool parameter as projected from its method: Scope is null for a value the model itself authors and Shared applies to a context parameter only.</summary>
     public record ToolParameter(
         string Name,
         string Description,
         bool Required,
-        string Scope,
+        string? Scope,
         bool Shared = false);
 
     // ==========================================================================

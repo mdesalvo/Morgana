@@ -2,9 +2,9 @@ using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
-using Morgana.AI.Abstractions;
 using Morgana.AI.Providers;
 using Morgana.AI.Services;
+using Morgana.AI.Tools;
 using PromptHarness.Infrastructure;
 using Xunit;
 

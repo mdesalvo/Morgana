@@ -14,6 +14,7 @@ using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 using Morgana.AI.Services;
+using Morgana.AI.Tools;
 
 namespace Morgana.AI.Adapters;
 
@@ -87,19 +88,7 @@ public class MorganaAgentAdapter
     /// </summary>
     protected readonly ILogger logger;
 
-    /// <summary>
-    /// Morgana framework prompt containing global policies, base tools and error message templates.
-    /// Loaded once during adapter initialization from morgana.json.
-    /// </summary>
-    protected readonly Records.Prompt morganaPrompt;
-
-    /// <summary>
-    /// The morgana.json base tools (GetContextVariable, SetContextVariable,
-    /// SetTurnEnding, SetQuickReplies, SetRichCard), stamped <c>Reserved = true</c> exactly
-    /// once here — the only place in the codebase that ever sets it true. Every other reader of a
-    /// ToolDefinition's Reserved flag (domain tools included) sees false by construction, never by
-    /// a check: see the Reserved remarks on Records.ToolDefinition.
-    /// </summary>
+    /// <summary>The base tools every agent holds ahead of its own, projected from <see cref="MorganaTool"/>.</summary>
     protected readonly Records.ToolDefinition[] morganaTools;
 
     /// <summary>
@@ -149,10 +138,8 @@ public class MorganaAgentAdapter
         this.configuration = configuration;
         this.logger = logger;
 
-        morganaPrompt = promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
-
-        morganaTools = [.. morganaPrompt.GetAdditionalProperty<Records.ToolDefinition[]>(Constants.PromptProperties.Tools)
-            .Select(t => t with { Reserved = true })];
+        // The base tools are the same for every agent: the methods of MorganaTool describe them, so they are read once here.
+        morganaTools = [.. MorganaToolAdapter.ProjectToolDefinitions(typeof(MorganaTool))];
     }
 
     /// <summary>
@@ -225,16 +212,15 @@ public class MorganaAgentAdapter
 
         logger.LogInformation("Creating agent for intent '{IntentAttributeIntent}' on tier '{Tier}'...", intentAttribute.Intent, tierAttribute.Tier);
 
-        // 2) Domain prompt for this intent (instructions/personality/formatting/tools),
+        // 2) Domain prompt for this intent (instructions/personality/formatting/territory),
         //    resolved from agents.json.
         Records.Prompt agentPrompt = await promptResolverService.ResolveAsync(intentAttribute.Intent);
 
-        // 3) Tool surface = framework base tools (morgana.json: GetContextVariable,
-        //    SetContextVariable, SetQuickReplies, SetRichCard) UNION the agent's domain
-        //    tools (agents.json). Union de-dups so a domain tool can't shadow a base one.
-        Records.ToolDefinition[] domainTools = [.. agentPrompt.GetAdditionalProperty<Records.ToolDefinition[]>(Constants.PromptProperties.Tools)
-            .Select(t => t with { Reserved = false })];
-        Records.ToolDefinition[] agentTools = [.. morganaTools.Union(domainTools)];
+        // 3) Tool surface = the base tools followed by the tools the intent's tool class declares.
+        //    A domain tool named like a base tool is refused at startup, so the two never overlap.
+        Type? toolType = toolRegistryService.FindToolTypeForIntent(intentAttribute.Intent);
+        Records.ToolDefinition[] domainTools = toolType is null ? [] : [.. MorganaToolAdapter.ProjectToolDefinitions(toolType)];
+        Records.ToolDefinition[] agentTools = [.. morganaTools, .. domainTools];
 
         // 4) Per-agent context provider (the variable store behind GetVariable/SetVariable);
         //    sharedContextCallback wires Shared:true writes into the cross-agent registry.
@@ -262,7 +248,8 @@ public class MorganaAgentAdapter
         //    layer on any [UsesMCPServer] tools discovered from external MCP servers.
         MorganaToolAdapter morganaToolAdapter = CreateToolAdapterForIntent(
             intentAttribute.Intent,
-            agentTools,
+            toolType,
+            domainTools,
             toolContextFactory);
 
         // 6b) Collect the tools of every [UsesMCPServer] on the agent. Best-effort by
@@ -277,8 +264,8 @@ public class MorganaAgentAdapter
         List<AIFunction> mcpTools = await RegisterMCPToolsAsync(agentType, intentAttribute.Intent, [.. agentTools.Select(tool => tool.Name)], mcpToolServers);
 
         // 6c) Collect the colleagues this agent declares it may consult. Like MCP tools they arrive
-        //     already AIFunctions and bypass the native adapter entirely — they are not declared in
-        //     agents.json, are not implemented by any MorganaTool and their prose is the colleague's
+        //     already AIFunctions and bypass the native adapter entirely — they are not declared
+        //     by any tool class, are not implemented by any MorganaTool and their prose is the colleague's
         //     own card rather than something this agent's author wrote.
         Dictionary<string, string> peerTerritories = [];
         List<AIFunction> peerAgents = await RegisterPeerAgentsAsync(
@@ -407,18 +394,16 @@ public class MorganaAgentAdapter
         return aiContextProvider;
     }
 
-    /// <summary>
-    /// Creates a <see cref="MorganaToolAdapter"/> with base tools always registered
-    /// and optional intent-specific custom tools registered when a matching
-    /// <see cref="MorganaTool"/> subclass is found in the tool registry.
-    /// </summary>
+    /// <summary>Binds the base tools and the intent's own tool class to the AIFunctions the agent's model calls.</summary>
     /// <param name="intent">Agent intent name.</param>
-    /// <param name="agentTools">Merged tool definitions from morgana.json and agents.json.</param>
+    /// <param name="toolType">The intent's tool class; null when the intent declares none.</param>
+    /// <param name="domainTools">The tool definitions projected from the intent's tool class.</param>
     /// <param name="toolContextFactory">Factory supplying the (provider, session) pair to tool constructors.</param>
     /// <returns>Configured MorganaToolAdapter with registered tool implementations</returns>
     private MorganaToolAdapter CreateToolAdapterForIntent(
         string intent,
-        Records.ToolDefinition[] agentTools,
+        Type? toolType,
+        Records.ToolDefinition[] domainTools,
         Func<MorganaTool.ToolContext> toolContextFactory)
     {
         // The adapter composes the description of each generated AIFunction through the composer,
@@ -427,48 +412,22 @@ public class MorganaAgentAdapter
         // MorganaToolAdapter.CreateFunctionAsync.
         MorganaToolAdapter morganaToolAdapter = new MorganaToolAdapter(promptComposerService);
 
-        // Split the merged set back into base (morgana.json, the `morganaTools` field) vs
-        // intent-specific (agents.json). Compare by Name only: the incoming `agentTools` array
-        // was produced by a Union that may carry distinct ToolDefinition instances for the same
-        // logical tool, so reference/value equality would wrongly classify a base tool as
-        // intent-specific. Name is the stable identity (tool method names are unique).
-        Records.ToolDefinition[] agentSpecificTools = [.. agentTools.Except(morganaTools, new ToolDefinitionNameComparer())];
-
-        // ALWAYS register base tools (GetContextVariable, SetContextVariable,
-        // SetQuickReplies, SetRichCard). They are implemented by the MorganaTool BASE
-        // class itself — no subclass needed — so every agent gets them unconditionally,
-        // even an MCP-only or tool-less one.
+        // Every agent holds the base tools, an MCP-only or tool-less one included.
         MorganaTool baseTool = new MorganaTool(logger, toolContextFactory);
         RegisterToolsInAdapter(morganaToolAdapter, baseTool, morganaTools);
         logger.LogInformation("Registered {BaseToolsLength} base tools for intent '{Intent}'", morganaTools.Length, intent);
 
-        // Base-tools-only agent: nothing domain-specific declared → done.
-        if (agentSpecificTools.Length == 0)
+        // An agent with no tool class holds the base tools alone (MCP and colleagues aside).
+        if (toolType is null)
         {
             logger.LogInformation("No intent-specific tools defined for intent '{Intent}' (agent has base tools only)", intent);
             return morganaToolAdapter;
         }
 
-        // Domain tools are declared in agents.json but their methods live in a
-        // [ProvidesToolForIntent] MorganaTool subclass discovered by reflection. Missing
-        // implementation is a WARNING, not fatal: the agent stays usable on its base (and
-        // any MCP) tools, degraded but not dead, while the ignored tools are named so the
-        // mismatch is diagnosable.
-        Type? toolType = toolRegistryService?.FindToolTypeForIntent(intent);
-        if (toolType == null)
-        {
-            logger.LogWarning(
-                $"Intent '{intent}' has {agentSpecificTools.Length} tool(s) defined in agents.json " +
-                $"but no MorganaTool implementation found. Tools will be ignored: " +
-                $"{string.Join(", ", agentSpecificTools.Select(t => t.Name))}");
-            return morganaToolAdapter;
-        }
-
         logger.LogInformation("Found custom native tool: {ToolTypeName} for intent '{Intent}' via ToolRegistry", toolType.Name, intent);
 
-        // The implementation WAS found but cannot be constructed → this IS fatal (unlike
-        // the missing-impl case above): a declared, discovered tool that can't instantiate
-        // is a hard authoring bug, almost always a constructor that does not match the
+        // A discovered tool class that cannot be constructed is fatal: it is a hard
+        // authoring bug, almost always a constructor that does not match the
         // required (ILogger, Func<MorganaTool.ToolContext>) signature. Fail loud with that
         // exact remediation rather than silently shipping an agent missing its domain tools.
         MorganaTool customToolInstance;
@@ -487,21 +446,15 @@ public class MorganaAgentAdapter
 
         // Bind only the intent-specific definitions to the discovered instance (base tools
         // were already registered above against the base instance).
-        RegisterToolsInAdapter(morganaToolAdapter, customToolInstance, agentSpecificTools);
-        logger.LogInformation("Registered {Length} custom tools for intent '{Intent}'", agentSpecificTools.Length, intent);
+        RegisterToolsInAdapter(morganaToolAdapter, customToolInstance, domainTools);
+        logger.LogInformation("Registered {Length} custom tools for intent '{Intent}'", domainTools.Length, intent);
 
         return morganaToolAdapter;
     }
 
-    /// <summary>
-    /// Registers tool methods from a MorganaTool instance into the MorganaToolAdapter.
-    /// Uses reflection to create delegates for each tool method and validates against tool definitions.
-    /// </summary>
+    /// <summary>Registers the methods of a tool instance that the given definitions describe into the MorganaToolAdapter.</summary>
     /// <param name="morganaToolAdapter">Target adapter to register tools into</param>
-    /// <param name="toolInstance">
-    /// MorganaTool instance containing the tool method implementations.
-    /// Can be a base MorganaTool (for base tools) or a derived class like BillingTool (for custom tools).
-    /// </param>
+    /// <param name="toolInstance">The tool instance containing the tool method implementations.</param>
     /// <param name="tools">Tool definitions specifying which methods to register from the toolInstance</param>
     private void RegisterToolsInAdapter(
         MorganaToolAdapter morganaToolAdapter,
@@ -510,16 +463,12 @@ public class MorganaAgentAdapter
     {
         foreach (Records.ToolDefinition toolDefinition in tools)
         {
-            MethodInfo? method = toolInstance.GetType().GetMethod(toolDefinition.Name);
-            if (method == null)
-            {
-                logger.LogWarning("Tool '{ToolDefinitionName}' declared in agents.json but not found in {Name}", toolDefinition.Name, toolInstance.GetType().Name);
-                continue;
-            }
+            // The definition was projected from this very method, so the method always exists.
+            MethodInfo method = toolInstance.GetType().GetMethod(toolDefinition.Name)!;
 
             // Build a strongly-typed delegate whose exact Func<…> type is computed from
-            // the method's own ParameterInfo at runtime: tool signatures are declared in
-            // JSON configuration and bound to implementations via reflection, so the
+            // the method's own ParameterInfo at runtime: tools are discovered on
+            // plugin classes and bound to implementations via reflection, so the
             // concrete delegate type is unknowable at compile time.
             Delegate toolImplementation = Delegate.CreateDelegate(
                 System.Linq.Expressions.Expression.GetDelegateType(
@@ -1106,7 +1055,7 @@ public class MorganaAgentAdapter
     /// server, as <see cref="ToFunctionName"/> is public so a startup check derives the same name.
     /// </remarks>
     /// <param name="mcpToolName">Name the MCP server declares for the tool.</param>
-    /// <param name="agentToolNames">The names of the agent's tools from morgana.json and agents.json.</param>
+    /// <param name="agentToolNames">The names of the agent's base tools and of its tool class's tools.</param>
     /// <param name="admittedMCPToolNames">The MCP tools already admitted for this agent.</param>
     /// <returns>The reason the name is refused; null when it is free.</returns>
     public static string? FindMCPToolNameConflict(
@@ -1137,7 +1086,7 @@ public class MorganaAgentAdapter
     /// </summary>
     /// <param name="agentType">Agent type to inspect for [UsesMCPServer] attributes</param>
     /// <param name="agentIntent">The intent the agent serves, tagged on the security event of a refused tool</param>
-    /// <param name="agentToolNames">Names of the agent's tools from morgana.json and agents.json, which an MCP tool may not take</param>
+    /// <param name="agentToolNames">Names of the agent's base tools and of its tool class's tools, which an MCP tool may not take</param>
     /// <param name="mcpToolServers">Filled with the server each admitted MCP tool came from, for the go/no-go read before every call</param>
     /// <returns>Discovered tools as AIFunctions, empty if no servers declared</returns>
     private async Task<List<AIFunction>> RegisterMCPToolsAsync(Type agentType, string agentIntent, IReadOnlyCollection<string> agentToolNames, Dictionary<string, UsesMCPServerAttribute> mcpToolServers)
@@ -1241,20 +1190,5 @@ public class MorganaAgentAdapter
         logger.LogInformation("Successfully registered {McpToolsCount} MCP tools from {ServerAttributeCommand}", mcpTools.Count, serverAttribute.Command);
 
         return [.. mcpTools];
-    }
-
-    private class ToolDefinitionNameComparer : IEqualityComparer<Records.ToolDefinition>
-    {
-        public bool Equals(Records.ToolDefinition? x, Records.ToolDefinition? y)
-        {
-            if (ReferenceEquals(x, y))
-                return true;
-            if (x is null || y is null)
-                return false;
-            return string.Equals(x.Name, y.Name, StringComparison.OrdinalIgnoreCase);
-        }
-
-        public int GetHashCode(Records.ToolDefinition obj) =>
-            obj.Name.GetHashCode(StringComparison.OrdinalIgnoreCase);
     }
 }

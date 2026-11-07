@@ -159,8 +159,8 @@ public class CodeEmitService : ICodeEmitService
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
         sb.AppendLine("using Microsoft.Extensions.Logging;");
-        sb.AppendLine("using Morgana.AI.Abstractions;");
         sb.AppendLine("using Morgana.AI.Attributes;");
+        sb.AppendLine("using Morgana.AI.Tools;");
         sb.AppendLine();
         sb.AppendLine(CultureInfo.InvariantCulture, $"namespace {ns}.Tools;");
         sb.AppendLine();

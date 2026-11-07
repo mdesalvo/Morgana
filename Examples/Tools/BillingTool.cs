@@ -1,9 +1,11 @@
+using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using Examples.Data;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
-using Morgana.AI.Abstractions;
+using Morgana.AI;
+using Morgana.AI.Tools;
 using Morgana.AI.Attributes;
 
 namespace Examples.Tools;
@@ -160,7 +162,10 @@ public class BillingTool : MorganaTool
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="count">Number of recent invoices to retrieve (1-10)</param>
     /// <returns>JSON array of invoice summaries</returns>
-    public async Task<string> GetInvoices(string customerCode, int count)
+    [Description("Retrieves the customer's recent nursery invoices as structured JSON. Returns: customerCode, totalCount and array of invoice summaries with invoiceId, period, dates, total, status (with icon) and daysOverdue if pending. A code the books hold nothing under comes back with an empty list and says so — that is an answer, not a failure. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Pay invoice', 'Dispute payment', ...).")]
+    public async Task<string> GetInvoices(
+        [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.SharedContext)] string customerCode,
+        [Description("Number of recent invoices to retrieve (1-10). Defaults to 3-4 if user doesn't specify. Use higher numbers (6-10) when user explicitly asks for 'all' or 'complete history'.")] [ToolParameter(Records.ToolScope.Request)] int count)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -218,7 +223,10 @@ public class BillingTool : MorganaTool
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="invoiceId">Specific invoice identifier (e.g., "INV-0512")</param>
     /// <returns>JSON object with complete invoice details</returns>
-    public async Task<string> GetInvoiceDetails(string customerCode, string invoiceId)
+    [Description("Retrieves complete invoice details as structured JSON including: invoice metadata, dates, status (with payment timeline), charge lines array (each with description, quantity, unit price, amount and the orderId the charge refers to, where it refers to one), amounts breakdown (subtotal, tax, total) and payment method. Only the invoices of that same customer are readable: any other invoiceId is reported as not found, with the list of the ones that are. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Pay invoice', 'Dispute payment', ...).")]
+    public async Task<string> GetInvoiceDetails(
+        [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.SharedContext)] string customerCode,
+        [Description("Unique alphanumeric identifier of the invoice to retrieve (e.g., 'INV-0512'). The user should specify which invoice they want to examine, or you should ask them to choose from the list of available invoices. Do NOT guess or assume which invoice the user wants.")] [ToolParameter(Records.ToolScope.Request)] string invoiceId)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -314,72 +322,15 @@ public class BillingTool : MorganaTool
     }
 
     /// <summary>
-    /// Sums what the customer still owes: the invoices left unpaid, oldest first.
-    /// </summary>
-    /// <param name="customerCode">Customer code (retrieved from context)</param>
-    /// <returns>JSON object with the outstanding total and the invoices making it up</returns>
-    public async Task<string> GetOutstandingBalance(string customerCode)
-    {
-        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
-
-        await using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = $"SELECT {InvoiceColumns} FROM Invoices WHERE CustomerCode = $customerCode COLLATE NOCASE AND Status <> 'Paid' AND Status <> 'Cancelled' ORDER BY DueDate";
-        command.Parameters.AddWithValue("$customerCode", customerCode);
-
-        List<Invoice> unpaid = [];
-        await using (SqliteDataReader reader = await command.ExecuteReaderAsync())
-        {
-            while (await reader.ReadAsync())
-                unpaid.Add(ReadInvoice(reader));
-        }
-
-        if (unpaid.Count == 0)
-        {
-            return JsonSerializer.Serialize(new
-            {
-                customerCode,
-                hasOutstanding = false,
-                totalDue = 0m,
-                message = "Nothing is outstanding under this customer code: either every invoice has been settled, or the books hold none."
-            }, GreenhouseDatabaseHelper.JsonOptions);
-        }
-
-        // The sum is computed here rather than left to whoever reads the list: money that a
-        // customer is told they owe is not a figure to be added up in prose and a total that
-        // disagrees with the invoices under it is worse than no total at all.
-        decimal totalDue = unpaid.Sum(invoice => invoice.Total);
-        int worstDaysOverdue = unpaid.Max(invoice => Math.Max(0, -(invoice.DueDate - DateTime.UtcNow).Days));
-
-        var result = new
-        {
-            customerCode,
-            hasOutstanding = true,
-            totalDue,
-            invoiceCount = unpaid.Count,
-            oldestDueDate = unpaid[0].DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-            daysOverdue = worstDaysOverdue > 0 ? worstDaysOverdue : (int?)null,
-            invoices = unpaid.Select(invoice => new
-            {
-                invoiceId = invoice.InvoiceId,
-                period = PeriodLabel(invoice.PeriodStart, invoice.PeriodEnd),
-                dueDate = invoice.DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
-                total = invoice.Total,
-                status = invoice.Status,
-                statusIcon = StatusIcon(invoice.Status),
-                daysOverdue = Math.Max(0, -(invoice.DueDate - DateTime.UtcNow).Days)
-            }).ToList()
-        };
-
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
-    }
-
-    /// <summary>
     /// Retrieves the payment history of a customer as structured JSON.
     /// </summary>
     /// <param name="customerCode">Customer code (retrieved from context)</param>
     /// <param name="months">Number of months of history to retrieve (1-12)</param>
     /// <returns>JSON object with payment history</returns>
-    public async Task<string> GetPaymentHistory(string customerCode, int months = 6)
+    [Description("Retrieves the payments the customer has actually made, as structured JSON including: summary statistics (totalPayments, totalAmount, averageMonthly) and payments array with invoice details. Unpaid invoices are not payments and never appear here. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Withdraw payment', ...).")]
+    public async Task<string> GetPaymentHistory(
+        [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.SharedContext)] string customerCode,
+        [Description("Number of months of payment history to retrieve (1-12). Defaults to 6 months if not specified. Use higher values (10-12) when user asks for 'complete' or 'full year' history.")] [ToolParameter(Records.ToolScope.Request)] int months = 6)
     {
         await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
 
@@ -429,6 +380,68 @@ public class BillingTool : MorganaTool
                 amount = payment.Total,
                 paidDate = payment.PaidDate!.Value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
                 paymentMethod = PaymentMethod(payment.PaymentType, payment.PaymentLastFour)
+            }).ToList()
+        };
+
+        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+    }
+
+    /// <summary>
+    /// Sums what the customer still owes: the invoices left unpaid, oldest first.
+    /// </summary>
+    /// <param name="customerCode">Customer code (retrieved from context)</param>
+    /// <returns>JSON object with the outstanding total and the invoices making it up</returns>
+    [Description("Retrieves what the customer still owes as structured JSON: hasOutstanding, totalDue (summed by this tool — never add invoice amounts up yourself), invoiceCount, oldestDueDate, daysOverdue and the unpaid invoices making up the total. Returns hasOutstanding=false when every invoice has been settled. This tool has only informative capabilities: you will NOT find here dispositive actions (e.g: 'Pay now', 'Agree a payment plan', ...).")]
+    public async Task<string> GetOutstandingBalance(
+        [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.SharedContext)] string customerCode)
+    {
+        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
+
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = $"SELECT {InvoiceColumns} FROM Invoices WHERE CustomerCode = $customerCode COLLATE NOCASE AND Status <> 'Paid' AND Status <> 'Cancelled' ORDER BY DueDate";
+        command.Parameters.AddWithValue("$customerCode", customerCode);
+
+        List<Invoice> unpaid = [];
+        await using (SqliteDataReader reader = await command.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+                unpaid.Add(ReadInvoice(reader));
+        }
+
+        if (unpaid.Count == 0)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                customerCode,
+                hasOutstanding = false,
+                totalDue = 0m,
+                message = "Nothing is outstanding under this customer code: either every invoice has been settled, or the books hold none."
+            }, GreenhouseDatabaseHelper.JsonOptions);
+        }
+
+        // The sum is computed here rather than left to whoever reads the list: money that a
+        // customer is told they owe is not a figure to be added up in prose and a total that
+        // disagrees with the invoices under it is worse than no total at all.
+        decimal totalDue = unpaid.Sum(invoice => invoice.Total);
+        int worstDaysOverdue = unpaid.Max(invoice => Math.Max(0, -(invoice.DueDate - DateTime.UtcNow).Days));
+
+        var result = new
+        {
+            customerCode,
+            hasOutstanding = true,
+            totalDue,
+            invoiceCount = unpaid.Count,
+            oldestDueDate = unpaid[0].DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+            daysOverdue = worstDaysOverdue > 0 ? worstDaysOverdue : (int?)null,
+            invoices = unpaid.Select(invoice => new
+            {
+                invoiceId = invoice.InvoiceId,
+                period = PeriodLabel(invoice.PeriodStart, invoice.PeriodEnd),
+                dueDate = invoice.DueDate.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture),
+                total = invoice.Total,
+                status = invoice.Status,
+                statusIcon = StatusIcon(invoice.Status),
+                daysOverdue = Math.Max(0, -(invoice.DueDate - DateTime.UtcNow).Days)
             }).ToList()
         };
 

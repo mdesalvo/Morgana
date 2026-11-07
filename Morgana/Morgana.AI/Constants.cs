@@ -434,7 +434,7 @@ public static class Constants
     public static class ObservableLogs
     {
         /// <summary>Emitter of the context-access lines, as it names itself in them.</summary>
-        public const string ToolName = nameof(Abstractions.MorganaTool);
+        public const string ToolName = nameof(global::Morgana.AI.Tools.MorganaTool);
 
         /// <summary>Emitter of the declaration line, as it names itself in it.</summary>
         public const string ContextProviderName = nameof(Providers.MorganaAIContextProvider);

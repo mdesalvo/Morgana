@@ -1,20 +1,12 @@
-﻿using System.Reflection;
+﻿using System.ComponentModel;
+using System.Reflection;
 using Microsoft.Extensions.AI;
+using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Adapters;
 
-/// <summary>
-/// Adapter for registering and managing tool implementations for AI agents.
-/// Bridges between Morgana tool definitions (from configuration) and Microsoft.Extensions.AI AIFunction system.
-/// </summary>
-/// <remarks>
-/// Bridges between Morgana tool definitions (from agents.json) and Microsoft.Extensions.AI AIFunction system.
-/// Manages registration of tool method delegates against their definitions, validates delegate signatures
-/// and converts them to AIFunction instances for LLM tool calling. Tool descriptions are assembled by
-/// <see cref="IPromptComposerService"/>; parameter descriptions are passed through as authored.
-/// Workflow: Create adapter → AddTool for each → CreateAllFunctions to generate AIFunction[] → pass to AIAgent.
-/// </remarks>
+/// <summary>Bridges the tool classes whose methods carry their own descriptions to the AIFunctions the model calls.</summary>
 public class MorganaToolAdapter
 {
     /// <summary>
@@ -40,6 +32,71 @@ public class MorganaToolAdapter
     public MorganaToolAdapter(IPromptComposerService promptComposerService)
     {
         this.promptComposerService = promptComposerService;
+    }
+
+    /// <summary>Lists the tools a tool class declares: its own public instance methods, in declaration order.</summary>
+    /// <param name="toolType">The tool class to read.</param>
+    /// <returns>The methods that are tools, in the order the model reads them.</returns>
+    public static IReadOnlyList<MethodInfo> GetToolMethods(Type toolType)
+    {
+        // The methods declared on the class itself: whatever a base class offers is infrastructure and no tool.
+        MethodInfo[] declaredMethods = toolType.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+
+        // The metadata token follows source order, which reflection alone does not promise
+        // and the model reads the tools in that order.
+        return [.. declaredMethods
+            .Where(method => !method.IsSpecialName && method.GetBaseDefinition().DeclaringType == method.DeclaringType)
+            .OrderBy(method => method.MetadataToken)];
+    }
+
+    /// <summary>Projects the tool definitions a tool class declares through its methods and their attributes.</summary>
+    /// <param name="toolType">The tool class to read.</param>
+    /// <returns>One definition per tool method, in declaration order.</returns>
+    public static IReadOnlyList<Records.ToolDefinition> ProjectToolDefinitions(Type toolType)
+    {
+        // Never throws: a missing description or an incoherent parameter projects as it is
+        // because refusing a malformed class is the startup check's job.
+        List<Records.ToolDefinition> toolDefinitions = [];
+
+        // One definition per tool method, in the order the model reads them.
+        foreach (MethodInfo toolMethod in GetToolMethods(toolType))
+        {
+            // The parameters in signature order, each described by its own attributes.
+            List<Records.ToolParameter> toolParameters = [];
+            foreach (ParameterInfo parameter in toolMethod.GetParameters())
+            {
+                // A parameter without [ToolParameter] holds a value the model itself authors: it has no scope.
+                ToolParameterAttribute? parameterDeclaration = parameter.GetCustomAttribute<ToolParameterAttribute>();
+                string? parameterScope = parameterDeclaration?.Scope switch
+                {
+                    // This agent's context or the conversation's shared one holds the value.
+                    Records.ToolScope.Context or Records.ToolScope.SharedContext => Constants.Scopes.Context,
+
+                    // The user is asked for the value.
+                    Records.ToolScope.Request => Constants.Scopes.Request,
+
+                    // No declaration: the model authors the value.
+                    _ => null
+                };
+
+                // A parameter with a default value is optional for the model; only a shared context value reaches the other agents.
+                toolParameters.Add(new Records.ToolParameter(
+                    parameter.Name ?? string.Empty,
+                    parameter.GetCustomAttribute<DescriptionAttribute>()?.Description ?? string.Empty,
+                    Required: !parameter.HasDefaultValue,
+                    Scope: parameterScope,
+                    Shared: parameterDeclaration?.Scope == Records.ToolScope.SharedContext));
+            }
+
+            // The tool as the model reads it: its name and description with the parameters just projected.
+            toolDefinitions.Add(new Records.ToolDefinition(
+                toolMethod.Name,
+                toolMethod.GetCustomAttribute<DescriptionAttribute>()?.Description ?? string.Empty,
+                toolParameters));
+        }
+
+        // The projection of the whole class.
+        return toolDefinitions;
     }
 
     /// <summary>

@@ -22,7 +22,7 @@ A conversational AI framework on **.NET 10**, **Akka.NET** (actor model) and **M
 It orchestrates specialized agents that classify, route and resolve user inquiries, with content
 moderation, shared context, tool calling and channel adaptation.
 
-Domain experts model agents **declaratively** — prompt and tool contracts in JSON, a thin C# class —
+Domain experts model agents **declaratively** — prompt in JSON, tool contracts on a thin C# class —
 package them as plugin DLLs and the framework handles orchestration, streaming, persistence, guard
 rails and observability.
 
@@ -92,13 +92,14 @@ acquired at runtime from an MCP server, with an empty context vocabulary.
 
 | Folder | Purpose |
 |---|---|
-| `Abstractions/` | `MorganaActor`, `MorganaAgent`, `MorganaLanguageModel`, `MorganaTool`, `MorganaHostedAgent` (the `AIAgent` publishing an intent over A2A, with its session and the session store that decides which conversation an inbound A2A request is served on) |
+| `Abstractions/` | `MorganaActor`, `MorganaAgent`, `MorganaLanguageModel`, `MorganaHostedAgent` (the `AIAgent` publishing an intent over A2A, with its session and the session store that decides which conversation an inbound A2A request is served on) |
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
 | `ChatClients/` | `IChatClient` decorators: `DustAccountingChatClient` |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
 | `Providers/` | `MorganaAIContextProvider` (context variables plus the shared registry), `MorganaChatHistoryProvider` |
+| `Tools/` | `MorganaTool`: the base class of every tool class and the base tools every agent holds ahead of its own |
 | `Records.cs` | Every immutable record: actor messages, configuration, DTOs |
 | `Constants.cs` | The glossary: **every literal that is a contract between two parties who cannot see each other**, `PromptProperties` included. Deliberately absent: log text, prompt prose, `IConfiguration` keys. The test is a *resolver*, not a mention |
 | `Telemetry.cs` | The activity source and the meter, holding their own span and attribute glossary |
@@ -278,22 +279,22 @@ Two consumption modes: `CompleteWithSystemPromptAsync` (stateless, always on the
 
 1. **Intent** in `agents.json`, Intents array: Name, Description, Label, DefaultValue
 2. **Prompt** in `agents.json`, Agents array: ID matching the intent, Target, Instructions,
-   Personality, Formatting, Territory, Tools
+   Personality, Formatting, Territory
 3. **Agent class** extending `MorganaAgent`, with `[HandlesIntent("x")]` **and** `[RequiresLLMTier]`
    (mandatory, validated at startup). The constructor only hands `MorganaAgentAdapter` to the base, which builds the agent
-4. **Tool class** (optional) extending `MorganaTool`, with `[ProvidesToolForIntent("x")]`. Method
-   names must match the JSON `Name` exactly. Constructor `(ILogger, Func<ToolContext>)`
+4. **Tool class** (optional) extending `MorganaTool`, with `[ProvidesToolForIntent("x")]`. Every public
+   method is a tool, `[Description]` on it and on each parameter. Constructor `(ILogger, Func<ToolContext>)`
 5. **Or MCP** — `[UsesMCPServer(...)]`, repeatable, tools discovered at runtime
 6. **Colleagues** — `[ConsultsAgent("otherintent")]`, once each, validated at startup
 7. **Package as a plugin DLL** into `plugins/`
 
 ## Tool System
 
-Every agent gets the **base tools** from `morgana.json` (`GetContextVariable`, `SetContextVariable`,
+Every agent gets the **base tools** of `Tools/MorganaTool` (`GetContextVariable`, `SetContextVariable`,
 `SetTurnEnding`, `SetQuickReplies`, `SetRichCard`) plus its domain tools.
 
-A parameter resolving an *input* declares a `Scope`: `context` (looked up before being asked) or
-`request` (asked of the user). A parameter carrying a value the model itself authors declares none.
+A parameter resolving an *input* declares a scope through `[ToolParameter]`: `Request` (asked of the user), `Context`
+(looked up before being asked) or `SharedContext` (the same, from the registry every agent reads). A parameter carrying a value the model itself authors declares none.
 **Neither scope carries a parameter-level template** — the lookup-before-asking rule lives in P0 and
 in `ToolDescriptionContextGuidance` and a per-parameter restatement is the only form of it paid on
 every round trip. `Scope` still decides whether the *tool* gets its template.
@@ -451,7 +452,7 @@ fails or opens, silently.**
 1. Every configured intent has an agent and every agent an intent
 2. Every agent declares `[RequiresLLMTier]`
 3. Every `[ConsultsAgent]` names a reachable colleague and no two fold to one function name
-4. Tools: warn on orphans, error on duplicates for one intent
+4. Tools: warn on orphans, error on duplicates for one intent; every tool and parameter carries its `[Description]`, a context parameter is a `string`, no domain tool takes a base tool's name
 5. Plugin `agents.json` files merge with no duplicated intent or prompt id and none declares `other`
    or a framework prompt id
 6. All three tiers declared, each naming a registered provider and carrying a `Connection`, none with a provider, model or used connection field left on its placeholder, each tier's model priced by its provider or by the tier's own complete `Pricing`, no provider registered twice, `ActorSystem:Tier` naming a tier
@@ -498,7 +499,7 @@ or environment variables.
 
 - Actor messages are immutable records in `Records.cs`; every cross-party literal is a `Constants` member
 - Actors use `Tell`, never `Ask` (streaming) and `Become()` for FSM transitions
-- Tool method names match the JSON `Name` exactly
+- A tool is a public method of its tool class and its attributes are its only declaration
 - Prompts resolve by ID: the seven framework ids or an intent name
 - Rich cards use polymorphic JSON with a `type` discriminator
 - Handing the conversation back is signalled out-of-band by a tool, never by a token inside the response text
