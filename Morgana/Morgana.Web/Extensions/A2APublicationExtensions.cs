@@ -1,6 +1,5 @@
 using Akka.Actor;
 using Microsoft.Agents.AI.Hosting;
-using Microsoft.Agents.AI.Hosting.A2A;
 using Morgana.AI;
 using Morgana.AI.Abstractions;
 using Morgana.AI.Interfaces;
@@ -8,11 +7,6 @@ using Morgana.AI.Services;
 using Morgana.Web.Filters;
 
 namespace Morgana.Web.Extensions;
-
-// Microsoft marks the A2A hosting run-mode API experimental (MEAI001). It is the documented way to
-// declare that an agent answers inline rather than as a background task, which is exactly what a
-// consultation is, so it is used deliberately — as MorganaAgentAdapter already does for IChatReducer.
-#pragma warning disable MEAI001
 
 /// <summary>
 /// Publishes this installation's agents over A2A: the hosted agents before the container is built,
@@ -87,9 +81,9 @@ public static class A2APublicationExtensions
                     ServiceLifetime.Singleton,
                     false)
 
-                // Runs the agent inline and answers with a Message rather than a Task: a consultation is a
-                // single question answered in full, which is what the published card advertises.
-                .AddA2AServer(options => options.AgentRunMode = AgentRunMode.ReturnMessage);
+                // A consultation is a single question answered in full by one message, which is the only
+                // answer the hosting gives and what the published card advertises.
+                .AddA2AServer();
         }
 
         // Handed back so this call can sit in a chain of registrations like every other Add* in the
