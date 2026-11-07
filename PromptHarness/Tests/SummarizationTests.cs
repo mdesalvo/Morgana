@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
 using Morgana.AI.Services;
 using Morgana.Contracts;
@@ -80,6 +82,56 @@ public sealed class SummarizationTests
             // Nothing more arrived: every delivery the command made is in the list
         }
         Assert.DoesNotContain(delivered, message => message.Progress is { Finished: true });
+    }
+
+    /// <summary>A /compact fold stays the agent's summary after the agent reads its rewritten row back, so its next turn summarizes nothing again.</summary>
+    [Fact]
+    public async Task Compact_fold_is_read_back_after_the_agent_reloads_its_row()
+    {
+        // The REST client that reaches the command endpoint the way a channel's palette does
+        ChannelApiClient api = new ChannelApiClient(fixture);
+
+        // Two billing turns give the agent a history long enough for a fold to have something to replace
+        (string conversationId, ChannelMessage _) = await fixture.Channel.StartConversationAsync(TimeSpan.FromSeconds(180));
+        await fixture.Channel.SendAsync(conversationId, "Vorrei vedere le mie fatture, il mio codice cliente è P994E", TimeSpan.FromSeconds(180));
+        await fixture.Channel.SendAsync(conversationId, "Quali risultano ancora da pagare?", TimeSpan.FromSeconds(180));
+
+        // The fold is stamped and written behind the agent, which marks its row to be read again
+        using HttpResponseMessage compactResponse = await api.SendCommandAsync(conversationId, """{"name":"compact"}""", TestContext.Current.CancellationToken);
+        compactResponse.EnsureSuccessStatusCode();
+
+        // The command reports over the channel; its last frame carries the outcome
+        ChannelMessage compactFrame;
+        do
+            compactFrame = await fixture.Channel.ReceiveAsync(conversationId, TimeSpan.FromSeconds(180));
+        while (compactFrame.Progress is not { Finished: true });
+
+        // Two billing turns always hold more than the kept window, so a fold that came to nothing is a rig fault
+        Assert.StartsWith("Compacted ", compactFrame.Text, StringComparison.Ordinal);
+
+        // Everything logged from here on belongs to the turn that reads the rewritten row back
+        int reloadMark = fixture.Output.Mark();
+
+        // The agent's next turn reads its row back, which is where the marker has to be recognised
+        await fixture.Channel.SendAsync(conversationId, "E quella di marzo a quanto ammonta?", TimeSpan.FromSeconds(180));
+        IReadOnlyList<string> reloadLog = fixture.Output.Since(reloadMark);
+
+        // Without a reload the marker was never put to the test
+        Assert.True(reloadLog.Any(line => line.Contains("Loaded existing conversation session", StringComparison.Ordinal)), "billing never read its rewritten row back, so nothing was proven.");
+
+        // A recognised marker leaves nothing to summarize: the reducer stays silent
+        Assert.False(reloadLog.Any(line => line.Contains("MorganaChatReducer summarizing", StringComparison.Ordinal)), "billing summarized its history again after the reload: the fold's marker was not recognised.");
+
+        // The provider logs how many messages the model was handed out of how many the row holds
+        Match reducedView = reloadLog
+            .Select(line => Regex.Match(line, @"PROVIDING reduced view \((\d+) → (\d+) messages\)"))
+            .FirstOrDefault(match => match.Success) ?? Match.Empty;
+        Assert.True(reducedView.Success, "billing's history provider logged no reduced view for the turn after the reload.");
+
+        // The fold's summary stands in for the history, so the model reads fewer messages than the row holds
+        int messagesInRow = int.Parse(reducedView.Groups[1].Value, CultureInfo.InvariantCulture);
+        int messagesForModel = int.Parse(reducedView.Groups[2].Value, CultureInfo.InvariantCulture);
+        Assert.True(messagesForModel < messagesInRow, "billing's model read its whole history after the reload instead of the fold's summary.");
     }
 
     /// <summary>

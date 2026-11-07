@@ -11,6 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### 🔄 Changed
 
 ### 🐛 Fixed
+- After `/compact` or a restart of Morgana an agent ignored the summary of its own history, so its model either read the whole history again or paid for summarizing it from the start
 
 ### 📦 Dependencies
 - Updated `A2A` to 1.0.0-preview4

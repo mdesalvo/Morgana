@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.Extensions;
 
 namespace Morgana.AI.Services;
 
@@ -272,7 +273,9 @@ public sealed class MorganaChatReducer : IChatReducer
                 // A message an earlier reduction stamped: it is the last one that reduction summarized.
                 // What it carries stands for itself together with everything before it. This is why
                 // the running summary travels inside the history rather than in a field of this class.
-                if (message.AdditionalProperties?.TryGetValue(SummaryKey, out string? storedSummary) == true)
+                // A marker read back from the record arrives as JSON and is still recognised, which is what
+                // lets a session resumed or rewritten by /compact keep its summary.
+                if (message.ReadTextProperty(SummaryKey) is string storedSummary)
                 {
                     // Everything gathered so far is already covered by that summary, so it goes: what
                     // survives a fold is the summary, never the messages behind it. A later marker

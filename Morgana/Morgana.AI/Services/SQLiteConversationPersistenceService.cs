@@ -8,6 +8,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Morgana.AI.Abstractions;
+using Morgana.AI.Extensions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Providers;
 using Morgana.Contracts;
@@ -1390,7 +1391,7 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
     private string ExtractTextFromMessage(ChatMessage chatMessage)
     {
         // What the user actually read, whole, when the turn recorded it.
-        string? turnText = TryGetRecordedTurnText(chatMessage);
+        string? turnText = chatMessage.ReadTextProperty(Constants.MessageProperties.TurnText);
         if (!string.IsNullOrWhiteSpace(turnText))
             return turnText;
 
@@ -1407,30 +1408,6 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 
         // Text alone, because that is what a transcript is. An image or a data part would need a shape
         // on MorganaChatMessage that no channel is asking for yet.
-    }
-
-    /// <summary>
-    /// Reads <see cref="Constants.MessageProperties.TurnText"/> off a message, or <c>null</c> when absent.
-    /// </summary>
-    /// <remarks>
-    /// A session's properties come back from the encrypted round trip as loosely-typed JSON, so the same
-    /// value has two shapes depending on whether the session was ever persisted.
-    /// </remarks>
-    private static string? TryGetRecordedTurnText(ChatMessage chatMessage)
-    {
-        // Absent on a user turn or on a session persisted before turn text was ever recorded.
-        if (chatMessage.AdditionalProperties?.TryGetValue(Constants.MessageProperties.TurnText, out object? value) != true)
-            return null;
-
-        // A session still in memory hands back what was stored; one reloaded from the database hands
-        // back JSON. Anything else is treated as absent rather than trusted, which leaves the caller on
-        // its own extraction path instead of on a value nobody wrote.
-        return value switch
-        {
-            string text => text,
-            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
-            _ => null
-        };
     }
 
     /// <summary>
