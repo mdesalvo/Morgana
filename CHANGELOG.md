@@ -9,6 +9,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### ✨ Added
 
 ### 🔄 Changed
+- **Cauldron (1)**
+  - Images are shown only from the domains listed in `Cauldron:TrustedImageDomains`: one from anywhere else is not rendered and is reported as a security event
 
 ### 🐛 Fixed
 - After `/compact` or a restart of Morgana an agent ignored the summary of its own history, so its model either read the whole history again or paid for summarizing it from the start
