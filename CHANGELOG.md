@@ -14,8 +14,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### 📦 Dependencies
 - Updated `A2A` to 1.0.0-preview4
-- Updated `Microsoft.Agents.AI` to 1.27.0
-- Updated `ModelContextProtocol.Core` to 2.3.1
+- Updated `Microsoft.Agents.AI` to 1.28.0
+- Updated `ModelContextProtocol.Core` to 2.4.0
 
 ### 🚀 Future Enablement
 
