@@ -1,4 +1,5 @@
 {
+  "LastUpdate": "2026-11-07T11:22:33Z",
   "Models": [
     { "Name": "claude-fable-5-1", "Pricing": { "InputUsdPerMillion": 10.00, "OutputUsdPerMillion": 50.00, "CacheReadUsdPerMillion": 0.25, "CacheWriteUsdPerMillion": 20.00 } },
     { "Name": "claude-fable-5", "Pricing": { "InputUsdPerMillion": 10.00, "OutputUsdPerMillion": 50.00, "CacheReadUsdPerMillion": 1.00, "CacheWriteUsdPerMillion": 20.00 } },

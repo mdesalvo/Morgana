@@ -1,4 +1,5 @@
 {
+  "LastUpdate": "2026-11-07T11:22:33Z",
   "Models": [
     { "Name": "gpt-6.1-sol", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 2.50 } },
     { "Name": "gpt-6.1-terra", "Pricing": { "InputUsdPerMillion": 1.00, "OutputUsdPerMillion": 5.00, "CacheReadUsdPerMillion": 0.05, "CacheWriteUsdPerMillion": 1.25 } },
@@ -14,13 +15,9 @@
     { "Name": "gpt-5.4-nano", "Pricing": { "InputUsdPerMillion": 0.20, "OutputUsdPerMillion": 1.25, "CacheReadUsdPerMillion": 0.02, "CacheWriteUsdPerMillion": 0.20 } },
     { "Name": "gpt-5.2", "Pricing": { "InputUsdPerMillion": 1.75, "OutputUsdPerMillion": 14.00, "CacheReadUsdPerMillion": 0.175, "CacheWriteUsdPerMillion": 1.75 } },
     { "Name": "gpt-5.1", "Pricing": { "InputUsdPerMillion": 1.25, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.125, "CacheWriteUsdPerMillion": 1.25 } },
-    { "Name": "gpt-5", "Pricing": { "InputUsdPerMillion": 1.25, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.125, "CacheWriteUsdPerMillion": 1.25 } },
-    { "Name": "gpt-5-mini", "Pricing": { "InputUsdPerMillion": 0.25, "OutputUsdPerMillion": 2.00, "CacheReadUsdPerMillion": 0.025, "CacheWriteUsdPerMillion": 0.25 } },
-    { "Name": "gpt-5-nano", "Pricing": { "InputUsdPerMillion": 0.05, "OutputUsdPerMillion": 0.40, "CacheReadUsdPerMillion": 0.005, "CacheWriteUsdPerMillion": 0.05 } },
     { "Name": "gpt-4.1", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 8.00, "CacheReadUsdPerMillion": 0.50, "CacheWriteUsdPerMillion": 2.00 } },
     { "Name": "gpt-4.1-mini", "Pricing": { "InputUsdPerMillion": 0.40, "OutputUsdPerMillion": 1.60, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 0.40 } },
     { "Name": "gpt-4o", "Pricing": { "InputUsdPerMillion": 2.50, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 1.25, "CacheWriteUsdPerMillion": 2.50 } },
-    { "Name": "gpt-4o-mini", "Pricing": { "InputUsdPerMillion": 0.15, "OutputUsdPerMillion": 0.60, "CacheReadUsdPerMillion": 0.075, "CacheWriteUsdPerMillion": 0.15 } },
-    { "Name": "o3", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 8.00, "CacheReadUsdPerMillion": 0.50, "CacheWriteUsdPerMillion": 2.00 } }
+    { "Name": "gpt-4o-mini", "Pricing": { "InputUsdPerMillion": 0.15, "OutputUsdPerMillion": 0.60, "CacheReadUsdPerMillion": 0.075, "CacheWriteUsdPerMillion": 0.15 } }
   ]
 }

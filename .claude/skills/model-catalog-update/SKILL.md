@@ -65,6 +65,16 @@ Each entry of `Models` is one line, in US dollars per million tokens:
 { "Name": "claude-sonnet-5-5", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 4.00 } }
 ```
 
+Beside `Models` the file carries `LastUpdate`: the UTC moment the file was last reconciled with its
+vendor's sources, written `yyyy-MM-ddTHH:mm:ssZ`.
+
+```json
+{
+  "LastUpdate": "2026-11-07T11:22:33Z",
+  "Models": [ … ]
+}
+```
+
 `Name` is matched against a tier's `ModelId` with its exact casing and appears once per file. The
 prices follow these rules:
 
@@ -97,7 +107,9 @@ cache-write column of that whole file changes with it and so do those remarks.
    - **leaving**: a catalogued model that the vendor has retired, has scheduled for retirement or
      no longer lists;
    - **not catalogued**: a model seen on the sources but excluded by the rules above, with the rule.
-4. Apply **new** and **repriced** to the files, keeping the vendor's family order. The `<remarks>`
+4. Apply **new** and **repriced** to the files, keeping the vendor's family order. Set `LastUpdate`
+   to the current UTC time in every file that was compared with its sources, whether or not its
+   models changed: it says when the catalogue was last known to match the vendor. The `<remarks>`
    of each plugin class must stay true (vendor, band, cache-write lifetime): where one changes, the
    edit follows the `code-commentation` skill.
 5. **Never remove a leaving model on your own.** Report each one with its retirement date and the
