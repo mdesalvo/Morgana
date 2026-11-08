@@ -682,11 +682,8 @@ public partial class LLMGuardRailService : IGuardRailService
             }
 
             // The first line of a fence anywhere in the text: enough to pose as the end of a layer.
-            foreach (string fenceFirstLine in fenceFirstLines)
-            {
-                if (text.Contains(fenceFirstLine, StringComparison.Ordinal))
-                    return "forges a fence of Morgana's prompt";
-            }
+            if (fenceFirstLines.Any(fenceFirstLine => text.Contains(fenceFirstLine, StringComparison.Ordinal)))
+                return "forges a fence of Morgana's prompt";
 
             // A token that a chat template uses to open or close a turn.
             if (ChatTemplateTokenPattern().IsMatch(text))
@@ -796,25 +793,26 @@ public partial class LLMGuardRailService : IGuardRailService
             // The character at this point of the text.
             int codePoint = codePoints[position];
 
-            // The black flag opens the one sequence of tag characters that may be innocent.
-            if (codePoint == blackFlag)
+            // Any other character is plain text and passes.
+            switch (codePoint)
             {
-                // The sequence is the flag followed by tag letters and closed by the cancel tag.
-                int cursor = position + 1;
-                while (cursor < codePoints.Count && codePoints[cursor] >= tagSpace && codePoints[cursor] <= tagTilde)
-                    cursor++;
-
-                // A closed sequence with at least one letter is skipped whole.
-                if (cursor > position + 1 && cursor < codePoints.Count && codePoints[cursor] == cancelTag)
+                // The black flag opens the one sequence of tag characters that may be innocent.
+                case blackFlag:
                 {
-                    position = cursor;
-                    continue;
+                    // The sequence is the flag followed by tag letters and closed by the cancel tag.
+                    int cursor = position + 1;
+                    while (cursor < codePoints.Count && codePoints[cursor] >= tagSpace && codePoints[cursor] <= tagTilde)
+                        cursor++;
+
+                    // A closed sequence with at least one letter is skipped whole.
+                    if (cursor > position + 1 && cursor < codePoints.Count && codePoints[cursor] == cancelTag)
+                        position = cursor;
+
+                    break;
                 }
-            }
-            else if (codePoint >= tagBlockStart && codePoint <= tagBlockEnd)
-            {
-                // A lone tag character: nothing honest puts one here.
-                return true;
+                case >= tagBlockStart and <= tagBlockEnd:
+                    // A lone tag character: nothing honest puts one here.
+                    return true;
             }
 
             // Any tag character after an unclosed flag is met on the next iteration and refused there.

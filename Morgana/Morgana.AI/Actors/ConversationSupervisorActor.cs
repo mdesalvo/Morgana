@@ -447,7 +447,7 @@ public class ConversationSupervisorActor : MorganaActor
                 Telemetry.SecurityEvents.Add(1,
                     new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.User),
                     new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.FailedOpen),
-                    new KeyValuePair<string, object?>(Telemetry.SecuritySource, Records.GuardVerdictSource.FailOpen.ToString()));
+                    new KeyValuePair<string, object?>(Telemetry.SecuritySource, nameof(Records.GuardVerdictSource.FailOpen)));
 
             // An active agent from a prior turn means this message is the next turn of an
             // ongoing exchange, not a new request to classify — classification is skipped
@@ -528,7 +528,7 @@ public class ConversationSupervisorActor : MorganaActor
             Telemetry.SecurityEvents.Add(1,
                 new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.User),
                 new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.FailedOpen),
-                new KeyValuePair<string, object?>(Telemetry.SecuritySource, Records.GuardVerdictSource.FailOpen.ToString()));
+                new KeyValuePair<string, object?>(Telemetry.SecuritySource, nameof(Records.GuardVerdictSource.FailOpen)));
 
             // Failing open doesn't change the routing decision: an active agent from a prior turn
             // still means this message continues that follow-up exchange, exactly like the
@@ -1249,7 +1249,7 @@ public class ConversationSupervisorActor : MorganaActor
         [
             new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.Agent),
             new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Rejected),
-            new KeyValuePair<string, object?>(Telemetry.SecuritySource, Records.GuardVerdictSource.ProviderFilter.ToString())
+            new KeyValuePair<string, object?>(Telemetry.SecuritySource, nameof(Records.GuardVerdictSource.ProviderFilter))
         ];
         if (activeAgentIntent != null)
             securityTags.Add(new KeyValuePair<string, object?>(Telemetry.AgentIntent, activeAgentIntent));

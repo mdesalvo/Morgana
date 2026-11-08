@@ -606,7 +606,7 @@ public class MorganaAgentAdapter
                         Telemetry.SecurityEvents.Add(1,
                             new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.Tool),
                             new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.FailedOpen),
-                            new KeyValuePair<string, object?>(Telemetry.SecuritySource, Records.GuardVerdictSource.FailOpen.ToString()),
+                            new KeyValuePair<string, object?>(Telemetry.SecuritySource, nameof(Records.GuardVerdictSource.FailOpen)),
                             new KeyValuePair<string, object?>(Telemetry.AgentIntent, agentIntent));
 
                     return result;

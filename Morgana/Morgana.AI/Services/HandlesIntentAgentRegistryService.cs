@@ -290,11 +290,11 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         IReadOnlyList<MethodInfo> toolMethods = MorganaToolAdapter.GetToolMethods(toolType);
 
         // The model addresses a tool by its name: two methods folding to one name would reach the provider as a duplicate.
-        foreach (IGrouping<string, MethodInfo> sameNameMethods in toolMethods.GroupBy(method => method.Name, StringComparer.OrdinalIgnoreCase))
-        {
-            if (sameNameMethods.Count() > 1)
-                errors.Add($"Tool '{sameNameMethods.First().Name}' of {owner} is declared by more than one method of '{toolType.Name}': a tool name is unique");
-        }
+        errors.AddRange(
+            from sameNameMethods 
+            in toolMethods.GroupBy(method => method.Name, StringComparer.OrdinalIgnoreCase)
+            where sameNameMethods.Count() > 1
+            select $"Tool '{sameNameMethods.First().Name}' of {owner} is declared by more than one method of '{toolType.Name}': a tool name is unique");
 
         // Each tool is weighed on its own, its parameters included.
         foreach (MethodInfo toolMethod in toolMethods)
@@ -316,11 +316,9 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
                 // A parameter without [ToolParameter] holds a value the model authors: it has no scope to weigh.
                 ToolParameterAttribute? parameterDeclaration = parameter.GetCustomAttribute<ToolParameterAttribute>();
-                if (parameterDeclaration is null)
-                    continue;
 
                 // The context holds text only, so any other type could never be read back.
-                if (parameterDeclaration.Scope is Records.ToolScope.Context or Records.ToolScope.SharedContext && parameter.ParameterType != typeof(string))
+                if (parameterDeclaration?.Scope is Records.ToolScope.Context or Records.ToolScope.SharedContext && parameter.ParameterType != typeof(string))
                     errors.Add($"Parameter '{parameter.Name}' of tool '{toolMethod.Name}' of {owner} is a context parameter of type '{parameter.ParameterType.Name}': the context holds text, so it is a string");
             }
         }

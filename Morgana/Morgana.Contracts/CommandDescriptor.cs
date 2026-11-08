@@ -56,7 +56,7 @@ public record CommandDescriptor(
         IReadOnlyList<CommandOption> declared = Options ?? [];
 
         // An option nobody declared is a typo or a memory of another command, never something to run on
-        if (options is not null && options.Keys.FirstOrDefault(
+        if (options?.Keys.FirstOrDefault(
                 given => !declared.Any(option => string.Equals(option.Name, given, StringComparison.OrdinalIgnoreCase))) is { } unknown)
             return $"/{Name} takes no option named '{unknown}'";
 

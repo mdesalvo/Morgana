@@ -145,9 +145,11 @@ public class PluginLoaderService
                         Assembly assembly = Assembly.LoadFrom(pluginAssembly);
 
                         // Concrete providers only: the abstract bases are the scaffolding that an author derives from.
-                        Type[] detectedLanguageModels = assembly.GetTypes()
-                            .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaLanguageModel)))
-                            .ToArray();
+                        Type[] detectedLanguageModels =
+                        [
+                            .. assembly.GetTypes()
+                                .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaLanguageModel)))
+                        ];
 
                         // An assembly with no provider is not counted: a vendor SDK sits beside the provider that uses it.
                         if (detectedLanguageModels.Length == 0)
