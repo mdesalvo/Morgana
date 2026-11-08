@@ -9,15 +9,17 @@ using static Morgana.AI.Records;
 namespace Examples.Agents;
 
 /// <summary>
-/// Example agent demonstrating MCP server integration via direct URI declaration.
-/// Retrieves information about monkeys from the public MonkeyMCP server.
+/// The head gardener of The Greenhouse &amp; Nursery, whose tools all come from the GardeningMCP server.
 /// </summary>
-[HandlesIntent("monkeys")]
-[RequiresLLMTier(LLMTier.Efficiency)]
-[UsesMCPServer("https://func-monkeymcp-3t4eixuap5dfm.azurewebsites.net/")]
-public class MonkeyAgent : MorganaAgent
+[HandlesIntent("gardening")]
+[RequiresLLMTier(LLMTier.Economy)]
+[UsesMCPServer(GardeningAgent.AlmanacServerAddress)]
+public class GardeningAgent : MorganaAgent
 {
-    public MonkeyAgent(
+    /// <summary>The address where the GardeningMCP server answers, shared by this agent and the server.</summary>
+    public const string AlmanacServerAddress = "http://localhost:5006/mcp";
+
+    public GardeningAgent(
         string conversationId,
         ILanguageModelService llmService,
         IPromptResolverService promptResolverService,

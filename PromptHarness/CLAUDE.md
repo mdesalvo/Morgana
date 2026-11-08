@@ -14,7 +14,7 @@ judge — where what is under test is a wire document or a gate's status codes.
 
 **The suite never becomes a build or CI gate.** On-demand only, because the expensive half cannot be.
 
-## Two things to know before touching the build
+## Three things to know before touching the build
 
 **The example plugin deploys to `domain-plugins/`, not `plugins/`.** `plugins/` is always scanned on
 top of whatever configuration declares, so a domain deployed there can be added to but never left
@@ -29,6 +29,10 @@ framework, one of them deliberately excluding the compiled assembly (`Examples`,
 exactly as a real deployment would discover it, never seen as a compile-time type. That is the
 black-box boundary made structural — which is also why there is no `Directory.Build.props` above this
 project: every build setting lives in the `.csproj`, so it carries unchanged across a move.
+
+**Port 5006 belongs to the gardening server.** On every run that serves the shipped domain the fixture
+starts `Examples/GardeningMCP` as a child process, before the host boots, at the fixed address that
+`GardeningAgent` names. A server started by hand on that port stops the fixture: stop it first.
 
 ## Commands
 
@@ -89,11 +93,12 @@ exactly like success.
 
 Start from `HarnessSmokeTests` whenever the suite fails wholesale: a broken observer reads exactly
 like a prompt regression, because an empty tool list looks the same whether the agent called nothing
-or the listener heard nothing.
+or the listener heard nothing. The smoke group checks the gardening server too, with no model reached:
+its three tools, the plant found from a customer's words and every plant that the almanac covers.
 
 **Cost discipline.** Every turn is a live call, multiplied by the run count (default 5), plus one
 judge call per proposition on structurally-passing turns. An agent's `[RequiresLLMTier]` decides its
-cost — the suite does not get to choose it — so every scenario of the example plugin runs on `Efficiency`. The judge runs on `Efficiency` too,
+cost — the suite does not get to choose it — so every scenario of the example plugin runs on `Efficiency`, the gardener's on `Economy`. The judge runs on `Efficiency`,
 whatever the framework tier, so a verdict never changes with the deployment under test.
 Before running anything, check
 whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harness/<id>.md` row.
@@ -117,7 +122,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `TurnEndingTests` | none | What a presentation tool tells the model about the turn's words: the fact that nothing has reached the user yet, stated before any text and never after. The landing declaration reaches the model on the landing turn alone. A scripted model behind the real tool loop |
 | `FrameworkPromptTests` | none | The morgana.json shipped in Morgana.AI carries every entry that the framework fetches by name — policies, templates with their labels and placeholders, base tools, error answers, messages. No framework section carries a label of its own |
 | `ToolResultCheckTests` | none | The deterministic check on tool results: Morgana's own section labels and fences, chat-template tokens and text hidden in Unicode tag characters are withheld wherever they sit in a result, nested JSON included. What an honest datum may carry passes: lines that read like a role, wiki headings, zero-width and bidirectional characters, a flag emoji. The ToolGuard inspection of every result runs over a scripted model: its verdict, an unreadable answer and a failure that withholds, the length limit and a forgery that spare the inspection. No real model is reached |
-| `ToolGuardTests` | **every run** | The ToolGuard prompt on a live call of the framework tier, over `Calibration/toolguard.yaml` and `Calibration/toolguard-offers.yaml`: each red case (a result carrying one form of steering in its subtlest version or an offer hiding a decoy) must be withheld on the inspector's own verdict, each green case is an honest result or offer that resembles one and must be admitted. Every run of an offer meets a fresh guard, since a guard admits an offer it approved without inspecting it again. A withheld result with no verdict never counts as a catch. No judge and no conversation: one inspection per run, so it measures whichever provider `Morgana:ActorSystem:Tier` names. A red on a green case is petulance, a red on a red case is a hole: both go back to the prose |
+| `ToolGuardTests` | **every run** | The ToolGuard prompt on a live call of the framework tier, over `Calibration/toolguard.yaml` and `Calibration/toolguard-offers.yaml`: each red case (a result carrying one form of steering in its subtlest version or an offer hiding a decoy) must be withheld on the inspector's own verdict, each green case is an honest result or offer that resembles one and must be admitted. Every run of an offer meets a fresh guard, since a guard admits an offer it approved without inspecting it again. A withheld result with no verdict never counts as a catch. The gardening server's own listing, read live, is one more green offer: refused, it leaves the shipped agent without tools from startup with no error anyone sees. No judge and no conversation: one inspection per run, so it measures whichever provider `Morgana:ActorSystem:Tier` names. A red on a green case is petulance, a red on a red case is a hole: both go back to the prose |
 | `PeerGuardTests` | **every run** | The PeerGuard prompt on a live call of the framework tier, over `Calibration/peerguard.yaml`: each red case is a partner's question carrying one form of malice in its subtlest version and must be declined on the guard's own verdict, each green case is an honest question that resembles one and must be admitted. A declined question with no verdict never counts as a catch. No judge and no host traffic: one judgment per run, on whichever provider `Morgana:ActorSystem:Tier` names |
 | `OfferAdmissionTests` | none | What an external source offers, examined over a scripted inspector: an offer forging a label anywhere (a parameter name included) or over the length limit is refused without inspection; an approved offer is admitted again without a model call, however many ask at once; a changed offer or a new tool is examined again and a refusal shuts the source for every agent; an unreachable server yields no tools and keeps an earlier approval; an offer with no verdict is examined again next time. No real model or server is reached |
 | `PeerQuestionCheckTests` | none | A partner's question over a scripted PeerGuard: a forged label or a question over the length limit is declined without a model call; the guard's verdict is kept, an unreadable answer or a failure declines. No real model is reached |

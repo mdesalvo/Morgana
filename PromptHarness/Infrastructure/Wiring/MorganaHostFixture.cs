@@ -142,6 +142,9 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <summary>The sources a hijacking run turns against the instance under test; <c>null</c> when the run serves none.</summary>
     public PoisonedSourceHost? PoisonedSources { get; private set; }
 
+    /// <summary>The server that the shipped GardeningAgent reads its tools from; <c>null</c> when the run replaces the shipped domain.</summary>
+    public GardeningServerHost? GardeningServer { get; private set; }
+
     /// <summary>Port the other installation binds, reserved beside this instance's own.</summary>
     private int federatedPeerPort;
 
@@ -236,6 +239,11 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         if (Options.PoisonedDomain)
             PoisonedSources = await PoisonedSourceHost.StartAsync();
 
+        // Step 4d: on a run that serves the shipped domain, the gardening server goes up before the instance
+        // under test, whose startup examines the server's offer. A run replacing the domain has no agent that would read it.
+        if (!Options.FederatedPeer && !Options.PoisonedDomain)
+            GardeningServer = await GardeningServerHost.StartAsync(Options.StartupTimeoutSeconds);
+
         // The tee must be in place before the host constructs its logging stack, because the
         // console logger latches Console.Out once, when its provider is created.
         Output = HostOutputCapture.Install(Options.EchoHostOutput);
@@ -294,6 +302,10 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // The poisoned sources hold fixed ports, so they have to be released for the next invocation.
         if (PoisonedSources is not null)
             await PoisonedSources.DisposeAsync();
+
+        // The gardening server holds the fixed port that the shipped agent names, so it has to be released for the next invocation.
+        if (GardeningServer is not null)
+            await GardeningServer.DisposeAsync();
 
         // The host runs on a background thread and stops with the test process; there is no
         // lifetime handle to signal from here. Only the throwaway databases are ours to clean up.

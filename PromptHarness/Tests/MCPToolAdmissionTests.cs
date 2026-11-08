@@ -72,7 +72,7 @@ public sealed class MCPToolAdmissionTests
 
     [Theory]
     [InlineData("search_bananas")]
-    [InlineData("get_monkey")]
+    [InlineData("GetPlantPage")]
     [InlineData("GetInvoiceHistory")]
     [InlineData("consultation_notes")]
     public void An_mcp_tool_with_a_free_name_is_admitted(string mcpToolName)

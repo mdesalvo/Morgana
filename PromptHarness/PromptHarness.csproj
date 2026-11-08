@@ -95,6 +95,12 @@
     <ProjectReference Include="..\Examples\Examples.csproj" ReferenceOutputAssembly="false" Private="false" />
 
     <!--
+      The server that the shipped GardeningAgent reads its tools from, built so the fixture can start it;
+      not referenced as an assembly, as the plugin is not.
+    -->
+    <ProjectReference Include="..\Examples\GardeningMCP\GardeningMCP.csproj" ReferenceOutputAssembly="false" Private="false" />
+
+    <!--
       The federation domain, built and copied beside the example plugin but into a directory of its
       own: the federation run loads that directory INSTEAD of plugins/, so its one agent is the whole
       domain of the asking instance and no other group ever sees the intent it declares.
@@ -129,6 +135,12 @@
     -->
     <AssemblyMetadata Include="MorganaWebEntryPoint"
                       Value="$(MSBuildThisFileDirectory)..\Morgana\Morgana.Web\bin\$(Configuration)\net10.0\Morgana.Web.dll" />
+
+    <!--
+      Where the gardening server is started from: its own output, which holds its runtime configuration and dependency manifest.
+    -->
+    <AssemblyMetadata Include="GardeningServerEntryPoint"
+                      Value="$(MSBuildThisFileDirectory)..\Examples\GardeningMCP\bin\$(Configuration)\net10.0\GardeningMCP.dll" />
   </ItemGroup>
 
   <ItemGroup>

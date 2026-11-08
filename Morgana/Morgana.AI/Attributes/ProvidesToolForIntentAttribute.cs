@@ -18,7 +18,7 @@ public class ProvidesToolForIntentAttribute : Attribute
     /// Must match the intent specified in HandlesIntentAttribute on the corresponding agent.
     /// </summary>
     /// <value>
-    /// Intent name (e.g., "billing", "contract", "monkeys")
+    /// Intent name (e.g., "billing", "contract", "gardening")
     /// </value>
     /// <remarks>
     /// Must match [HandlesIntent] on agent class and agents.json Name/ID (case-sensitive).

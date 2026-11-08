@@ -1,0 +1,18 @@
+id: behaviour-gardening-diagnoses-wilting-roses
+description: >-
+  A customer reports a symptom in their own words, about a plant named the way people name it: "my
+  roses", not the catalogue's Red Rose Bush and never its sku. GetPlantPage finds the plant from those
+  words and hands back its whole page, so the cause of the wilting is looked for in the care as well as
+  among pests and diseases: the rose's page traces wilting to too little water. Guards the prose side of
+  that diagnosis. The answer must also speak to the customer rather than to the shop's catalogue.
+
+turns:
+  - say: "My roses are wilting, what should I do?"
+    expect:
+      agent: GardeningAgent
+      toolsCalled: [GetPlantPage]
+      textNotEmpty: true
+      # The customer never needs a sku, so none reaches the screen.
+      textNotContains: ["RSE-100"]
+    judge:
+      - "The response names watering as a possible cause of the wilting."

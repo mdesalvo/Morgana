@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Morgana.AI;
 using Morgana.AI.Attributes;
@@ -83,7 +84,7 @@ public sealed class ToolGuardTests : IDisposable
     [InlineData("toolguard-green-failed-partner-task")]
     [InlineData("toolguard-green-italian-recipe")]
     [InlineData("toolguard-green-disclaimer-for-readers")]
-    [InlineData("toolguard-green-monkey-record")]
+    [InlineData("toolguard-green-plant-page")]
     [InlineData("toolguard-green-partner-offers-an-option")]
     [InlineData("toolguard-green-native-care-advice")]
     [InlineData("toolguard-green-native-third-party-review")]
@@ -160,7 +161,7 @@ public sealed class ToolGuardTests : IDisposable
         Assert.True(outcome.Passed, outcome.Report());
     }
 
-    /// <summary>Replays one offer case the configured number of times, each run on a guard that remembers nothing: the expected verdict is required in every run.</summary>
+    /// <summary>Replays one offer case of the calibration set.</summary>
     [Theory]
     [InlineData("offer-red-tone-for-every-answer")]
     [InlineData("offer-red-steers-another-tool")]
@@ -172,7 +173,7 @@ public sealed class ToolGuardTests : IDisposable
     [InlineData("offer-red-background-check")]
     [InlineData("offer-red-partner-asks-for-the-card")]
     [InlineData("offer-green-prescriptive-about-itself")]
-    [InlineData("offer-green-monkeys-listing")]
+    [InlineData("offer-green-birds-listing")]
     [InlineData("offer-green-broad-server")]
     [InlineData("offer-green-service-tool")]
     [InlineData("offer-green-own-limits")]
@@ -183,6 +184,13 @@ public sealed class ToolGuardTests : IDisposable
         // The case with the tools its source offers.
         ToolGuardOfferCase offerCase = CalibrationSet.Load<ToolGuardOfferCase>("toolguard-offers.yaml", caseId);
 
+        // Every run of the case must hold on a guard that remembers nothing.
+        await ReplayOfferCaseAsync(offerCase);
+    }
+
+    /// <summary>Replays one offer case the configured number of times, each run on a guard that remembers nothing: the expected verdict is required in every run.</summary>
+    private async Task ReplayOfferCaseAsync(ToolGuardOfferCase offerCase)
+    {
         // Every run must hold: the case is a contract and not a rate.
         int runs = fixture.Options.DefaultRuns;
         bool expectsRefused = string.Equals(offerCase.Expect, "fail", StringComparison.Ordinal);
@@ -258,7 +266,7 @@ public sealed class ToolGuardTests : IDisposable
         // The case as a scenario, so the journey and the failure log treat it like any other group.
         ScenarioDefinition definition = new ScenarioDefinition
         {
-            Id = caseId,
+            Id = offerCase.Id,
             Description = offerCase.Form,
             Runs = runs,
             MinPasses = runs
@@ -271,6 +279,32 @@ public sealed class ToolGuardTests : IDisposable
 
         // Every run must have held.
         Assert.True(outcome.Passed, outcome.Report());
+    }
+
+    /// <summary>Checks that the guard admits the listing of the gardening server that the example domain ships.</summary>
+    [Fact]
+    public async Task ToolGuard_admits_the_offer_of_the_shipped_gardening_server()
+    {
+        // The shipped domain is served only when the run replaces nothing.
+        Assert.NotNull(fixture.GardeningServer);
+
+        // The tools are listed exactly as Morgana lists them at startup.
+        await using MCPClientRegistryService registry = new MCPClientRegistryService(loggerFactory.CreateLogger<MCPClientRegistryService>());
+        IList<AIFunction> listedTools = await registry.DiscoverResilientToolsAsync(new UsesMCPServerAttribute(GardeningServerHost.Address), TestContext.Current.CancellationToken);
+
+        // A description that the guard refuses leaves the shipped agent without its tools at startup, with no error that a user would see.
+        ToolGuardOfferCase offerCase = new ToolGuardOfferCase
+        {
+            Id = "offer-green-shipped-gardening-server",
+            Expect = "pass",
+            Form = "the listing of the gardening server that the example domain ships",
+            Source = "mcp",
+            SourceName = "gardening",
+            Tools = [.. listedTools.Select(tool => new ToolGuardOfferedToolCase { Name = tool.Name, Description = tool.Description, Parameters = tool.JsonSchema.GetRawText() })]
+        };
+
+        // The listing is held to the same contract as every green offer of the calibration set.
+        await ReplayOfferCaseAsync(offerCase);
     }
 
     /// <summary>Releases the logger factory built for the inspector.</summary>

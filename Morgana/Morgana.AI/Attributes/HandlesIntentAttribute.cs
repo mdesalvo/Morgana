@@ -18,7 +18,7 @@ public class HandlesIntentAttribute : Attribute
     /// Must match the intent name in agents.json configuration.
     /// </summary>
     /// <value>
-    /// Intent name (e.g., "billing", "contract", "monkeys")
+    /// Intent name (e.g., "billing", "contract", "gardening")
     /// </value>
     public string Intent { get; }
 

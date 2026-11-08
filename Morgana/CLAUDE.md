@@ -54,16 +54,16 @@ the text; the text is what goes back.
 
 ```
 Morgana/
-  Morgana/                 # working directory
-    Morgana.Contracts/     # zero-dependency wire contracts (NuGet)
-    Morgana.AI/            # core framework library (NuGet)
+  Morgana/                      # working directory
+    Morgana.Contracts/          # zero-dependency wire contracts (NuGet)
+    Morgana.AI/                 # core framework library (NuGet)
     Morgana.AI.LanguageModels/  # LLM providers, one plugin each (NuGet): Anthropic, AzureOpenAI, Google, Ollama, OpenAI
-    Morgana.Web/           # ASP.NET Core host
-    Directory.Build.props  # shared build settings, version, dependencies
-  Channels/                # Cauldron (Blazor), Grimoire (rich TTY), Rune (poor TTY)
-  Examples/                # example plugin: Billing, Contract, Inventory, Monkey agents
-  PromptHarness/           # live non-regression harness (xUnit v3)
-  Alembic/                 # Blazor authoring workbench: AI interview to a whole domain
+    Morgana.Web/                # ASP.NET Core host
+    Directory.Build.props       # shared build settings, version, dependencies
+  Channels/                     # Cauldron (Blazor), Grimoire (rich TTY), Rune (poor TTY)
+  Examples/                     # example plugin: Billing, Contract, Inventory, Gardening agents and GardeningMCP
+  PromptHarness/                # live non-regression harness (xUnit v3)
+  Alembic/                      # Blazor authoring workbench: AI interview to a whole domain
 ```
 
 **Eight solutions, one per unit.** Only the framework's own projects live in `Morgana.slnx`; the
@@ -85,8 +85,11 @@ on its books was written by another agent.
 
 The plugin also exists to show two structural things: the agents **consult each other**
 (`Billing → Inventory`, `Contract → Billing`, deliberately a chain and not a triangle, so the
-refusal of a second hop is exercised too) and `MonkeyAgent` is the one agent whose tools are
-acquired at runtime from an MCP server, with an empty context vocabulary.
+refusal of a second hop is exercised too) and `GardeningAgent` is the one agent whose tools are
+acquired at runtime from an MCP server, with an empty context vocabulary. The server is
+`GardeningMCP`, a project of the same unit, reading the almanac from four tables of the same database
+grafted onto `Products` by `Sku`: a plant without a care sheet there has no page in the almanac. A page is
+found from the customer's own words for the plant, through the names it goes by; the sku is only a second door.
 
 ### Morgana.AI
 
@@ -484,12 +487,14 @@ or environment variables.
 
 - **Target**: .NET 10, C# latest (uses C# 14 `extension` blocks)
 - **Build**: `dotnet build` from the solution root
-- **Run**: `Morgana.Web` (https://localhost:5001) plus `Cauldron` (https://localhost:5002)
+- **Run**: `Morgana.Web` (https://localhost:5001) plus `Cauldron` (https://localhost:5002) and
+  `Examples/GardeningMCP` (http://localhost:5006), where `GardeningAgent` finds its tools
 - **Harness**: `dotnet test PromptHarness/PromptHarness.csproj` from the repo root — live LLM calls,
   on-demand only. Start from `--filter "FullyQualifiedName~HarnessSmokeTests"` to verify the rig
   before believing any scenario result. See `PromptHarness/CLAUDE.md`
 - **Alembic**: `dotnet run` from `Alembic/` (https://localhost:5005); needs no Morgana instance
-- **Docker**: `docker compose up` starts Morgana and Cauldron. The TTY channels are profile-gated
+- **Docker**: `docker compose up` starts Morgana, Cauldron and the gardening MCP server, which shares
+  Morgana's network namespace so the agent's `localhost` address holds there too. The TTY channels are profile-gated
   because Spectre.Console must own stdin and stdout — one at a time, via
   `docker compose run --rm --service-ports --use-aliases grimoire`. `--use-aliases` is mandatory: without it
   the webhook callback fails DNS resolution. Alembic is profile-gated too, for the unrelated reason

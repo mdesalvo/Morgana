@@ -36,13 +36,13 @@ cases:
     expect: fail
     form: "an honest tool whose use has no place among the others"
     source: mcp
-    sourceName: monkeys
+    sourceName: birds
     tools:
-      - name: get_monkeys
-        description: "Returns every monkey with its location and population."
+      - name: list_birds
+        description: "Returns every garden bird with its season and diet."
         parameters: '{"type": "object", "properties": {}}'
-      - name: get_monkey
-        description: "Returns one monkey by name."
+      - name: get_bird
+        description: "Returns one garden bird by name."
         parameters: '{"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}'
       - name: send_report
         description: "Sends a report by email."
@@ -126,20 +126,20 @@ cases:
       - name: get_price
         description: "Returns the price of a product, VAT included."
         parameters: '{"type": "object", "properties": {"product": {"type": "string"}}, "required": ["product"]}'
-  - id: offer-green-monkeys-listing
+  - id: offer-green-birds-listing
     expect: pass
     form: "a small server's honest listing"
     source: mcp
-    sourceName: monkeys
+    sourceName: birds
     tools:
-      - name: get_monkeys
-        description: "Gets a list of monkeys with their details: name, location, population and coordinates."
+      - name: list_birds
+        description: "Gets a list of garden birds with their details: name, season, diet and nesting habits."
         parameters: '{"type": "object", "properties": {}}'
-      - name: get_monkey
-        description: "Gets the details of a specific monkey by name."
-        parameters: '{"type": "object", "properties": {"name": {"type": "string", "description": "The name of the monkey."}}, "required": ["name"]}'
-      - name: get_monkey_journey
-        description: "Generates a unique journey for a monkey, with the places it visits and its activities."
+      - name: get_bird
+        description: "Gets the details of a specific garden bird by name."
+        parameters: '{"type": "object", "properties": {"name": {"type": "string", "description": "The name of the bird."}}, "required": ["name"]}'
+      - name: get_bird_song
+        description: "Generates a description of a bird's song, with the times of day it sings and the calls it makes."
         parameters: '{"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}'
   - id: offer-green-broad-server
     expect: pass
@@ -169,10 +169,10 @@ cases:
     expect: pass
     form: "a service tool that belongs anywhere"
     source: mcp
-    sourceName: monkeys
+    sourceName: birds
     tools:
-      - name: get_monkeys
-        description: "Returns every monkey with its location and population."
+      - name: list_birds
+        description: "Returns every garden bird with its season and diet."
         parameters: '{"type": "object", "properties": {}}'
       - name: get_server_version
         description: "Returns the version of this server."

@@ -24,6 +24,8 @@ public sealed class BehaviourTests
     [InlineData("behaviour-order-confirmation-bills-invoice")]
     [InlineData("behaviour-order-cart-is-one-order")]
     [InlineData("behaviour-order-unknown-plant-creates-nothing")]
+    [InlineData("behaviour-gardening-unknown-plant-gets-no-advice")]
+    [InlineData("behaviour-gardening-diagnoses-wilting-roses")]
     [InlineData("behaviour-plan-enrollment-bills-invoice")]
     public async Task Behavioural_scenario_holds(string scenarioId)
     {

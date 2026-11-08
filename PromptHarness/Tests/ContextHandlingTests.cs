@@ -27,7 +27,7 @@ public sealed class ContextHandlingTests
     [InlineData("context-cycle-on-miss")]
     [InlineData("context-cycle-on-hit")]
     [InlineData("context-cross-agent")]
-    [InlineData("context-closed-vocabulary-monkeys")]
+    [InlineData("context-closed-vocabulary-gardening")]
     [InlineData("context-no-invented-writes")]
     public async Task Context_handling_scenario_holds(string scenarioId)
     {

@@ -33,7 +33,7 @@ public sealed class AgentCardTests
     /// Every agent of the example domain, because the ring is raised whole: an installation publishes
     /// what it can answer, so an intent nobody here consults still serves a card.
     /// </summary>
-    public static TheoryData<string> PublishedIntents => ["billing", "contract", "inventory", "monkeys"];
+    public static TheoryData<string> PublishedIntents => ["billing", "contract", "gardening", "inventory"];
 
     [Theory]
     [MemberData(nameof(PublishedIntents))]
@@ -133,7 +133,7 @@ public sealed class AgentCardTests
     [Theory]
     [InlineData("billing")]
     [InlineData("contract")]
-    [InlineData("monkeys")]
+    [InlineData("gardening")]
     public async Task Agent_endpoint_refuses_a_partner_not_admitted_to_it(string closedAgent)
     {
         // Proven to be a colleague and still turned away: this run declares its partner as admitted

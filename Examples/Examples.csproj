@@ -7,6 +7,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
 
+    <!-- The sources of the GardeningMCP server sit inside this directory and must not be compiled into the plugin. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);GardeningMCP\**</DefaultItemExcludes>
+
     <Title>Examples</Title>
     <PackageId>Examples</PackageId>
     <OutputType>Library</OutputType>
@@ -25,9 +28,10 @@
     <Description>
     Examples is a showcase demostrating modeling of domain agents with Morgana.AI framework.
     It models one single organization, the fictional nursery "The Greenhouse &amp; Nursery", through 4 agents
-    serving the "inventory", "billing", "contract" and "monkeys" intents: the greenhouse ledger, the accounts
-    desk, the Green Care Plan and the naturalist's primate almanac. The first three share one SQLite system
-    of record (Data/Examples.sqlite). Each agent encodes its prompt defining target, personality and the
+    serving the "inventory", "billing", "contract" and "gardening" intents: the greenhouse ledger, the accounts
+    desk, the Green Care Plan and the head gardener's almanac. All four read one SQLite system of record
+    (Data/Examples.sqlite): the first three through their own tools, the gardener through the GardeningMCP
+    server beside this plugin. Each agent encodes its prompt defining target, personality and the
     available tools (see agents.json).
     </Description>
 
@@ -40,6 +44,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Morgana\Morgana.AI\Morgana.AI.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The GardeningMCP server reads the database through the plugin's own helpers. -->
+    <InternalsVisibleTo Include="GardeningMCP" />
   </ItemGroup>
 
   <!-- Copy plugin to Morgana.Web plugins directory after build -->

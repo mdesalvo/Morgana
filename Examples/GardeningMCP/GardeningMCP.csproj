@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <OutputType>Exe</OutputType>
+
+    <Title>GardeningMCP</Title>
+    <PackageId>GardeningMCP</PackageId>
+    <VersionPrefix>1.0.0</VersionPrefix>
+    <VersionSuffix>beta2</VersionSuffix>
+    <AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
+    <FileVersion>$(VersionPrefix)</FileVersion>
+    <Authors>Marco De Salvo</Authors>
+    <Company>Marco De Salvo</Company>
+    <Copyright>Marco De Salvo</Copyright>
+    <Product>Morgana</Product>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/mdesalvo/Morgana</PackageProjectUrl>
+
+    <Description>
+    GardeningMCP is the MCP server of the Examples plugin, serving the head gardener's almanac of The Greenhouse &amp; Nursery.
+    It answers only for the plants of the plugin's catalogue that the almanac covers.
+    </Description>
+
+    <!-- The store of Morgana.Web, so on a developer machine the server finds the catalogue under the same StoragePath as Morgana. -->
+    <UserSecretsId>374228be-4f26-4382-a3ef-7500a0b829dd</UserSecretsId>
+
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Examples.csproj" />
+  </ItemGroup>
+
+</Project>

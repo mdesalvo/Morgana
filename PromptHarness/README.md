@@ -21,17 +21,18 @@ Examples/                   the example plugin (Examples.slnx)
 PromptHarness/              this harness (PromptHarness.slnx)
 ```
 
-Everything it needs from the framework arrives by project reference and there are exactly two:
+Everything it needs from the framework and the example domain arrives by project reference:
 
 | Reference | Why | Assembly referenced |
 |---|---|---|
 | `..\Morgana\Morgana.Web` | the fixture boots its entry point in-process | yes |
 | `..\Examples` | the specimens under test, built into `plugins/` | **no** (`ReferenceOutputAssembly=false`) |
+| `..\Examples\GardeningMCP` | the MCP server of `GardeningAgent`, started by the fixture as a process of its own on port 5006 | **no** (`ReferenceOutputAssembly=false`) |
 
 The second is the black-box boundary made structural: the harness compiles without ever seeing an
 agent type, exactly as Morgana sees them — discovered from `plugins/` at startup.
 
-To point the suite at a **different** Morgana, redirect those two references (or drop the second and
+To point the suite at a **different** Morgana, redirect those references (or drop the last two and
 copy your own plugin into the output's `plugins/`) and give it scenarios that name your agents. There
 is no `Directory.Build.props` above this project: every build setting is stated in the `.csproj`, so
 it carries across a move.
@@ -145,7 +146,8 @@ dotnet test … --filter "DisplayName~behaviour-rich-card"
 
 Start with `HarnessSmokeTests` whenever the suite fails wholesale: a broken observer reads exactly
 like a prompt regression, because an empty tool list looks the same whether the agent called nothing
-or the listener heard nothing.
+or the listener heard nothing. The same holds for the gardening server, which the smoke group checks
+too: a server that lists the wrong tools or has lost a plant reads like an agent that ignored its almanac.
 
 **Cost.** Every turn is a live LLM call, multiplied by the scenario's run count, plus one judge call
 per proposition on structurally-passing turns. The default is 5 runs.
@@ -172,15 +174,15 @@ otherwise would mean measuring a configuration nobody runs. With the example plu
 | Scenario | Agent | Tier |
 |---|---|---|
 | `context-cycle-on-miss`, `context-cycle-on-hit`, `context-cross-agent`, `behaviour-conversation-closure`, `behaviour-turn-continuation-operand`, `behaviour-landing-presents-the-agent`, `behaviour-landing-only-on-a-press` | Billing, Contract | `Efficiency` |
-| `context-closed-vocabulary-monkeys` | Monkeys | `Efficiency` |
+| `context-closed-vocabulary-gardening`, `behaviour-gardening-unknown-plant-gets-no-advice`, `behaviour-gardening-diagnoses-wilting-roses`, `actor-classifier-routes-care-request-to-gardening` | Gardening | `Economy` |
 | `actor-classifier-routes-unambiguous-billing-request`, `userguard-rejects-abusive-message`, `userguard-allows-good-faith-difficult-topic`, `actor-channeladapter-degrades-invoice-card`, `summarization-preserves-invoice-details` | Billing | `Efficiency` |
 | `behaviour-rich-card`, `context-no-invented-writes`, `actor-classifier-routes-catalog-request-to-inventory` | Inventory | `Efficiency` |
 | `actor-classifier-disambiguates-colliding-billing-contract`, `actor-classifier-routes-off-domain-to-other`, `actor-complement-reintroduces-morgana` | *(none — answered by Morgana)* | `Efficiency` (classifier only) |
 
 Everything Morgana runs on its own account — guard, classifier, presenter — goes to the tier
 `Morgana:ActorSystem:Tier` names. The judge always goes to `Efficiency`, so a verdict never changes
-with the deployment under test. Every agent of the example plugin runs on `Efficiency`, so no
-scenario costs more than another for the tier it lands on.
+with the deployment under test. Every agent of the example plugin runs on `Efficiency` but the
+gardener, whose answers are lookups in the almanac and run on `Economy`.
 
 ## The journey
 

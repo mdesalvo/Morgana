@@ -13,7 +13,7 @@ turns:
   - say: "How can you help me?"
     expect:
       classifierIntent: other
-      quickReplyLabels: ["🧾 Invoices", "📜 Care Plan", "🐒 Primate Almanac", "🌿 Greenhouse"]
+      quickReplyLabels: ["🧾 Invoices", "📜 Care Plan", "🪴 Gardener's Almanac", "🌿 Greenhouse"]
       textNotEmpty: true
     judge:
       - "The response tells the user what Morgana can help with."

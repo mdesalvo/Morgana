@@ -284,7 +284,7 @@ A billing FAQ agent runs on the efficient model while a contract-analysis agent 
 - **`[RequiresLLMTier]` attribute** — mandatory on every `MorganaAgent`, declares the `LLMTier` (`Efficiency`/`Performance`) the agent runs on. Resolved once at agent creation.
 - **Per-provider tier catalog** — `Morgana:LLM:{Provider}:Tiers` is a JSON object keyed by tier name, each entry carrying the model/deployment `ModelId` and its own `MagicDust` pricing.
 - **`ILLMTierValidationService`** (default `RequiresLLMTierValidationService`) — new extension point validating at startup that every discovered agent declares `[RequiresLLMTier]` and that its tier exists in the active provider's catalog. No cross-tier fallback: an agent whose declared tier is not configured fails startup, full stop
-- **`InventoryAgent`** (4th example agent in `Morgana.Examples`, `Performance` tier) — the first *dispositive* domain agent (Billing/Contract/Monkeys are read-only informational agents): a greenhouse/nursery inventory backed by its own standalone SQLite database, deployed once from an embedded seed and independent of Morgana's per-conversation persistence, so stock and orders persist across restarts and across conversations.
+- **`InventoryAgent`** (4th example agent in `Morgana.Examples`, `Performance` tier) — the first *dispositive* domain agent (Billing/Contract are read-only informational agents): a greenhouse/nursery inventory backed by its own standalone SQLite database, deployed once from an embedded seed and independent of Morgana's per-conversation persistence, so stock and orders persist across restarts and across conversations.
 - Support **Azure AI Foundry v1** endpoints in AzureOpenAI provider
 
 ### 🔄 Changed
@@ -954,11 +954,6 @@ This release introduces **industrial-grade MCP support**, enabling agents to dyn
 - Mixed-type parameter support with automatic boxing for value types
 - Object array executor pattern enabling unlimited parameter counts
 - Type conversion layer ensuring JSON serialization compatibility with MCP servers
-
-**MonkeyAgent Example (Morgana.AI.Examples)**
-- Educational MCP integration example using MonkeyMCP server from Microsoft
-- 5 automatically acquired tools: `get_monkeys`, `get_monkey(name)`, `get_monkey_journey(name)`, `get_all_monkey_journeys`, `get_monkey_business` 🐵
-- Demonstrates transparent MCP tool usage alongside native tools
 
 **AgentAdapter Enhancement**
 - Automatic MCP tool registration during agent initialization via `RegisterMCPToolsFromServer()`

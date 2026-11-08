@@ -197,7 +197,7 @@ builder.Services.AddSingleton<ILanguageModelService>(sp => {
 // Storage Model: Each conversation stored as encrypted "morgana-{conversationId}.db" file
 // Configuration: Morgana:ConversationPersistence in appsettings.json
 
-// Plugin-owned stores outside DI (e.g. Examples' GreenhouseDatabaseHelper) read StoragePath
+// Plugin-owned stores outside DI (e.g. Examples' ExamplesDatabaseHelper) read StoragePath
 // from this OS environment variable rather than IConfiguration, because they have no access
 // to the DI container. A value that only ever came from appsettings.json or User Secrets would
 // never reach them otherwise, silently splitting "where conversations live" from "where the
@@ -382,14 +382,14 @@ if (builder.Configuration.GetValue("Morgana:ActorSystem:EnableToolGuardrail", tr
     List<UsesMCPServerAttribute> declaredMCPServers =
     [
         .. startupAgentRegistryService.GetAllIntents()
-            .Select(intent => startupAgentRegistryService.ResolveAgentFromIntent(intent))
+            .Select(startupAgentRegistryService.ResolveAgentFromIntent)
             .OfType<Type>()
             .SelectMany(agentType => agentType.GetCustomAttributes<UsesMCPServerAttribute>())
             .DistinctBy(attribute => (attribute.Transport, attribute.Command))
     ];
 
     // Every server is examined at once: the boot waits for the slowest rather than for the sum.
-    await Task.WhenAll(declaredMCPServers.Select(server => startupGuardRailService.AdmitMCPServerToolsAsync(server)));
+    await Task.WhenAll(declaredMCPServers.Select(startupGuardRailService.AdmitMCPServerToolsAsync));
 }
 
 app.UseCors("Channel");                 // Open CORS; trust gate is JWT, not origin

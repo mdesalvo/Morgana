@@ -1,0 +1,18 @@
+id: actor-classifier-routes-care-request-to-gardening
+description: >-
+  The other half of actor-classifier-routes-catalog-request-to-inventory. The classifier reads nothing
+  but `name (Description)` for every intent, so the line between the plants the nursery sells and the
+  way they are looked after is drawn by two descriptions alone: `inventory` owns catalog, stock and
+  orders, `gardening` owns light, watering, feeding, pruning and ailments. A plain pruning question about
+  a plant the nursery sells has a plausible second home in the desk that sells it and the wrong one
+  answers. Three runs rather than five: the property is a routing decision.
+runs: 3
+minPasses: 3
+
+turns:
+  # A plant of the catalogue, named as a customer names it, with nothing about price, stock or an order:
+  # the message is exactly the shape that only the two descriptions can tell apart.
+  - say: "How should I prune my hydrangea?"
+    expect:
+      agent: GardeningAgent
+      textNotEmpty: true

@@ -13,7 +13,7 @@ namespace Examples.Tools;
 /// <summary>
 /// The accounts agent of The Greenhouse &amp; Nursery: the invoices issued to a customer for plants
 /// bought from the catalog and for the Green Care Plan and the payments received against them.
-/// Reads the same shared database the greenhouse ledger writes (see <see cref="GreenhouseDatabaseHelper"/>),
+/// Reads the same shared database the greenhouse ledger writes (see <see cref="ExamplesDatabaseHelper"/>),
 /// which is what lets a detail line point at the very order that produced it. It only ever
 /// reads: nothing here charges, credits or settles anything.
 /// </summary>
@@ -24,7 +24,7 @@ public class BillingTool : MorganaTool
         ILogger toolLogger,
         Func<ToolContext> getToolContext) : base(toolLogger, getToolContext)
     {
-        GreenhouseDatabaseHelper.Ensure();
+        ExamplesDatabaseHelper.Ensure();
     }
 
     // =========================================================================
@@ -167,7 +167,7 @@ public class BillingTool : MorganaTool
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.SharedContext)] string customerCode,
         [Description("Number of recent invoices to retrieve (1-10). Defaults to 3-4 if user doesn't specify. Use higher numbers (6-10) when user explicitly asks for 'all' or 'complete history'.")] [ToolParameter(Records.ToolScope.Request)] int count)
     {
-        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
+        await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
         count = Math.Clamp(count, 1, 10);
 
@@ -191,7 +191,7 @@ public class BillingTool : MorganaTool
                 totalCount = 0,
                 invoices = Array.Empty<object>(),
                 note = NothingUnderThisCode
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            }, ExamplesDatabaseHelper.JsonOptions);
         }
 
         var result = new
@@ -214,7 +214,7 @@ public class BillingTool : MorganaTool
             }).ToList()
         };
 
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+        return JsonSerializer.Serialize(result, ExamplesDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
@@ -228,7 +228,7 @@ public class BillingTool : MorganaTool
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.SharedContext)] string customerCode,
         [Description("Unique alphanumeric identifier of the invoice to retrieve (e.g., 'INV-0512'). The user should specify which invoice they want to examine, or you should ask them to choose from the list of available invoices. Do NOT guess or assume which invoice the user wants.")] [ToolParameter(Records.ToolScope.Request)] string invoiceId)
     {
-        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
+        await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
         // Scoped to the customer, not merely looked up by id: one customer's invoice is never
         // readable by quoting its number in another customer's conversation and an invoice that
@@ -264,7 +264,7 @@ public class BillingTool : MorganaTool
                 requestedInvoiceId = invoiceId,
                 availableInvoices = invoiceIds,
                 note = invoiceIds.Count == 0 ? NothingUnderThisCode : null
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            }, ExamplesDatabaseHelper.JsonOptions);
         }
 
         List<InvoiceLine> lines = await GetInvoiceLinesAsync(connection, invoice.InvoiceId);
@@ -318,7 +318,7 @@ public class BillingTool : MorganaTool
             paymentMethod = PaymentMethod(invoice.PaymentType, invoice.PaymentLastFour)
         };
 
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+        return JsonSerializer.Serialize(result, ExamplesDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
@@ -332,7 +332,7 @@ public class BillingTool : MorganaTool
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.SharedContext)] string customerCode,
         [Description("Number of months of payment history to retrieve (1-12). Defaults to 6 months if not specified. Use higher values (10-12) when user asks for 'complete' or 'full year' history.")] [ToolParameter(Records.ToolScope.Request)] int months = 6)
     {
-        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
+        await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
         months = Math.Clamp(months, 1, 12);
         DateTime cutoffDate = DateTime.UtcNow.AddMonths(-months);
@@ -357,7 +357,7 @@ public class BillingTool : MorganaTool
                 months,
                 hasData = false,
                 message = $"No payment received in the last {months} months under this customer code."
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            }, ExamplesDatabaseHelper.JsonOptions);
         }
 
         decimal totalPaid = payments.Sum(payment => payment.Total);
@@ -383,7 +383,7 @@ public class BillingTool : MorganaTool
             }).ToList()
         };
 
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+        return JsonSerializer.Serialize(result, ExamplesDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
@@ -395,7 +395,7 @@ public class BillingTool : MorganaTool
     public async Task<string> GetOutstandingBalance(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.SharedContext)] string customerCode)
     {
-        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
+        await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = $"SELECT {InvoiceColumns} FROM Invoices WHERE CustomerCode = $customerCode COLLATE NOCASE AND Status <> 'Paid' AND Status <> 'Cancelled' ORDER BY DueDate";
@@ -416,7 +416,7 @@ public class BillingTool : MorganaTool
                 hasOutstanding = false,
                 totalDue = 0m,
                 message = "Nothing is outstanding under this customer code: either every invoice has been settled, or the books hold none."
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            }, ExamplesDatabaseHelper.JsonOptions);
         }
 
         // The sum is computed here rather than left to whoever reads the list: money that a
@@ -445,6 +445,6 @@ public class BillingTool : MorganaTool
             }).ToList()
         };
 
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+        return JsonSerializer.Serialize(result, ExamplesDatabaseHelper.JsonOptions);
     }
 }

@@ -20,6 +20,7 @@ public sealed class ActorTests
     [Theory]
     [InlineData("actor-classifier-routes-unambiguous-billing-request")]
     [InlineData("actor-classifier-routes-catalog-request-to-inventory")]
+    [InlineData("actor-classifier-routes-care-request-to-gardening")]
     [InlineData("actor-complement-reintroduces-morgana")]
     [InlineData("actor-classifier-disambiguates-colliding-billing-contract")]
     [InlineData("actor-classifier-routes-off-domain-to-other")]

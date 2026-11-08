@@ -104,10 +104,10 @@ Agents in Morgana are **domain specialists** that self-register through **declar
 [ConsultsAgent("shipping", "acme")] // A2A agent discovery (partner)
 public class BillingAgent : MorganaAgent { ... }
 
-[HandlesIntent("monkeys")]
-[RequiresLLMTier(LLMTier.Efficiency)]
-[UsesMCPServer("https://func-monkeymcp-3t4eixuap5dfm.azurewebsites.net/")] // MCP tool discovery
-public class MonkeyAgent : MorganaAgent { ... }
+[HandlesIntent("gardening")]
+[RequiresLLMTier(LLMTier.Economy)]
+[UsesMCPServer("http://localhost:5006/mcp")] // MCP tool discovery
+public class GardeningAgent : MorganaAgent { ... }
 ```
 
 At startup, Morgana automatically discovers all agents across configured assemblies and validates bidirectional consistency between declared intents and classifier configuration: **fail-fast guarantees** ensure errors are caught before reaching production.
@@ -313,7 +313,7 @@ docker compose --env-file .env --env-file .env.versions build
 <summary><b>🌐 Morgana on Cauldron</b>: <i>the browser channel and the stack everything else talks to</i></summary>
 
 ```bash
-# 🚀 Start the containers (Morgana + Cauldron)
+# 🚀 Start the containers (Morgana + Cauldron + the gardening MCP server)
 docker compose --env-file .env --env-file .env.versions up
 
 # ✅ Open your browser at http://localhost:5002

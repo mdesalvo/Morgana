@@ -14,7 +14,7 @@ namespace Examples.Tools;
 /// The Green Care Plan agent of The Greenhouse &amp; Nursery: the garden-care contract a customer
 /// signs alongside their plants — tending visits, coverage, plant-health guarantee, fees, clauses
 /// and termination. Reads the same shared database the greenhouse ledger writes (see
-/// <see cref="GreenhouseDatabaseHelper"/>): the plan's terms are the shop's, the schedule is the
+/// <see cref="ExamplesDatabaseHelper"/>): the plan's terms are the shop's, the schedule is the
 /// customer's and the monthly fee it sets is the one BillingTool's invoices charge. Reads for
 /// every existing plan; the one dispositive action it has is enrolling a customer in a NEW plan
 /// (see <see cref="SubscribeToGreenCarePlan"/>), which bills through the same shared backoffice
@@ -27,7 +27,7 @@ public class ContractTool : MorganaTool
         ILogger toolLogger,
         Func<ToolContext> getToolContext) : base(toolLogger, getToolContext)
     {
-        GreenhouseDatabaseHelper.Ensure();
+        ExamplesDatabaseHelper.Ensure();
     }
 
     // =========================================================================
@@ -199,7 +199,7 @@ public class ContractTool : MorganaTool
         error = "No care plan found",
         customerCode,
         note = "No Green Care Plan is held under this customer code: either none was ever opened under it, or the code is mistyped. This response carries nothing about what the plan offers or costs — no term, fee or figure of the plan can be read out of it. SubscribeToGreenCarePlan is the only tool that opens one."
-    }, GreenhouseDatabaseHelper.JsonOptions);
+    }, ExamplesDatabaseHelper.JsonOptions);
 
     // The only plan product the nursery currently offers. GetPlanProductAsync already reads any
     // PlanCode the schema might hold, so a second product would only need this constant to grow
@@ -233,7 +233,7 @@ public class ContractTool : MorganaTool
     public async Task<string> SubscribeToGreenCarePlan(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.SharedContext)] string customerCode)
     {
-        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
+        await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
         // One active (or renewing) plan per customer at a time: a domain rule about what a Green
         // Care Plan IS, not a gate on whether the customer code is real — see NoCarePlan's remark.
@@ -246,7 +246,7 @@ public class ContractTool : MorganaTool
                 existingContractId = existing.ContractId,
                 status = existing.Status,
                 note = "Only one Green Care Plan may be active per customer code at a time and this code already holds one: nothing was opened and nothing was billed. GetContractDetails reads the existing plan, GetTerminationProcedure describes how one is ended."
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            }, ExamplesDatabaseHelper.JsonOptions);
         }
 
         PlanProduct product = await GetPlanProductAsync(connection, DefaultPlanCode);
@@ -295,7 +295,7 @@ public class ContractTool : MorganaTool
             visitDays,
             invoiceId,
             note = "The plan is active and its first month has been billed to this invoice. This response carries the invoice identifier and nothing else about it: its total and its line items are not on these pages."
-        }, GreenhouseDatabaseHelper.JsonOptions);
+        }, ExamplesDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
@@ -309,7 +309,7 @@ public class ContractTool : MorganaTool
     [Description("Retrieves the Green Care Plan's own terms as structured JSON — planCode, name, visitFrequency, coverage, guarantee, monthlyFee, includedFeatures, noticePeriodDays, earlyTerminationFee. Needs no customer code and no existing schedule: this is the ONE tool that answers what the plan itself offers and costs, for a prospect who does not hold one yet as much as for a customer who already does. Never answer a 'what does it include / what does it cost' question from GetContractDetails, from memory, or from something you said earlier in this conversation — always call this tool first.")]
     public async Task<string> GetPlanOverview()
     {
-        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
+        await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
         PlanProduct product = await GetPlanProductAsync(connection, DefaultPlanCode);
         List<string> features = await GetFeaturesAsync(connection, DefaultPlanCode);
@@ -325,7 +325,7 @@ public class ContractTool : MorganaTool
             includedFeatures = features,
             noticePeriodDays = product.NoticePeriodDays,
             earlyTerminationFee = product.EarlyTerminationFee
-        }, GreenhouseDatabaseHelper.JsonOptions);
+        }, ExamplesDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
@@ -337,7 +337,7 @@ public class ContractTool : MorganaTool
     public async Task<string> GetContractDetails(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.SharedContext)] string customerCode)
     {
-        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
+        await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
         CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
@@ -415,7 +415,7 @@ public class ContractTool : MorganaTool
             }).ToList()
         };
 
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+        return JsonSerializer.Serialize(result, ExamplesDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
@@ -428,7 +428,7 @@ public class ContractTool : MorganaTool
         [Description("Clause number to retrieve (1-7). The user should specify which clause they want to read, or you should present the available clause topics and ask them to choose. Do NOT guess or assume which clause the user wants.")] [ToolParameter(Records.ToolScope.Request)] int clauseNumber)
     {
         // The clauses sit in the shop's one system of record beside every other agent's data.
-        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
+        await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
         // The clauses belong to the plan and not to a customer's contract: the plan's own code reads them
         // so a prospect and a customer are shown the same wording.
@@ -450,7 +450,7 @@ public class ContractTool : MorganaTool
                     clauseNumber = clause.ClauseNumber,
                     title = clause.Title
                 }).ToList()
-            }, GreenhouseDatabaseHelper.JsonOptions);
+            }, ExamplesDatabaseHelper.JsonOptions);
         }
 
         // A clause number is unique within the plan so the one row is the clause that was asked for.
@@ -475,7 +475,7 @@ public class ContractTool : MorganaTool
         };
 
         // Delivers the clause to the caller as JSON.
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+        return JsonSerializer.Serialize(result, ExamplesDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
@@ -489,7 +489,7 @@ public class ContractTool : MorganaTool
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.SharedContext)] string customerCode,
         [Description("Optional reason for considering termination (e.g., 'moving house', 'tending the garden myself', 'unhappy with the visits'). This is recorded for internal purposes but is not required. Ask the user if they'd like to provide a reason, but make it clear it's optional.")] [ToolParameter(Records.ToolScope.Request)] string? reason = null)
     {
-        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
+        await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
         CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
@@ -550,7 +550,7 @@ public class ContractTool : MorganaTool
             }
         };
 
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+        return JsonSerializer.Serialize(result, ExamplesDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
@@ -562,7 +562,7 @@ public class ContractTool : MorganaTool
     public async Task<string> GetVisitSchedule(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code.")] [ToolParameter(Records.ToolScope.SharedContext)] string customerCode)
     {
-        await using SqliteConnection connection = await GreenhouseDatabaseHelper.OpenConnectionAsync();
+        await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
         CarePlanSchedule? schedule = await FindScheduleAsync(connection, customerCode);
         if (schedule == null)
@@ -627,7 +627,7 @@ public class ContractTool : MorganaTool
             recentVisits = recent
         };
 
-        return JsonSerializer.Serialize(result, GreenhouseDatabaseHelper.JsonOptions);
+        return JsonSerializer.Serialize(result, ExamplesDatabaseHelper.JsonOptions);
     }
 
     /// <summary>

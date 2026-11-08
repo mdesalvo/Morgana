@@ -1,0 +1,20 @@
+id: behaviour-gardening-unknown-plant-gets-no-advice
+description: >-
+  The almanac's perimeter is the nursery's own plants: GetPlantPage finds a page only for a plant that
+  the almanac covers and GardeningAgent advises on those and on no other. Guards the prose side of that
+  perimeter. The customer asks about a plant that does not exist, so no name of the almanac fits it: the
+  agent must say it has no advice on it and must not fall back on what it knows about plants in general,
+  which is the failure the perimeter exists to stop. Which tools it calls to find out is left to the
+  agent.
+
+turns:
+  # An invented plant with no near namesake in the almanac: a rose, an orchid or a fern would let the
+  # agent offer the nursery's own as a substitute, which is a different behaviour from the one measured.
+  - say: "How do I look after a Burundi silver baobab?"
+    expect:
+      agent: GardeningAgent
+      textNotEmpty: true
+    judge:
+      - "The response declines to give advice on looking after this plant."
+    judgeNot:
+      - "The response gives advice on looking after this plant."

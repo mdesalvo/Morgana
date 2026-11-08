@@ -1,0 +1,23 @@
+id: context-closed-vocabulary-gardening
+description: >-
+  The anti-invention property. GardeningAgent declares no context-scoped parameter, since every tool it
+  holds comes from the GardeningMCP server, so its legal vocabulary is empty and any context access at
+  all is an invented name — typically the plant being asked about, mistaken for a variable. The plant
+  belongs to the almanac's tools, not to the registry.
+runs: 5
+minPasses: 5
+
+turns:
+  # A plant the almanac covers, named the way a customer names it: "moon orchid" is exactly the kind of
+  # string a confused model passes to GetContextVariable, so the anti-invention property is under real
+  # pressure here. GetPlantPage takes the plant in the customer's words, so nothing stands between the
+  # question and the page.
+  - say: "How should I look after my moon orchid?"
+    expect:
+      agent: GardeningAgent
+      # The whole property, stated deterministically: the plant reached the almanac's tool and the
+      # registry was never touched. There is no judge proposition here by design.
+      noContextAccess: true
+      toolsCalled: [GetPlantPage]
+      textNotEmpty: true
+      textNotContains: ["context variable", "context store", "database", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
