@@ -113,8 +113,8 @@ public class ToolMockService : IToolMockService
         if (authored.Length == 0)
             throw new InvalidOperationException(
                 $"The model returned no source for {className}: the whole response was "
-                + "reasoning and no text. That is what a MaxOutputTokens too small for a source file produces — Alembic's "
-                + "own tier declares a generous one for exactly this reason, so check what the deployment configures.");
+                + "reasoning and no text. That is what a MaxOutputTokens too small for a source file produces: "
+                + "the tier runs on its model's own ceiling unless the deployment lowers it, so check what the deployment configures.");
 
         // The constructor belongs to the generated half, which is where the tool's own dependencies
         // are taken and handed to the base class. One written here wins over it and takes neither, so

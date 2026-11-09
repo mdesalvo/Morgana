@@ -1,0 +1,23 @@
+{
+  "LastUpdate": "2026-11-09T18:58:51Z",
+  "Models": [
+    { "Options": { "ModelId": "gpt-6.1-sol", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 2.50 } },
+    { "Options": { "ModelId": "gpt-6.1-terra", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 1.00, "OutputUsdPerMillion": 5.00, "CacheReadUsdPerMillion": 0.05, "CacheWriteUsdPerMillion": 1.25 } },
+    { "Options": { "ModelId": "gpt-6-astra", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 10.00, "OutputUsdPerMillion": 50.00, "CacheReadUsdPerMillion": 1.00, "CacheWriteUsdPerMillion": 12.50 } },
+    { "Options": { "ModelId": "gpt-6-sol", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.20, "CacheWriteUsdPerMillion": 2.50 } },
+    { "Options": { "ModelId": "gpt-6-luna", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 0.10, "OutputUsdPerMillion": 0.50, "CacheReadUsdPerMillion": 0.01, "CacheWriteUsdPerMillion": 0.125 } },
+    { "Options": { "ModelId": "gpt-5.6-sol", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 4.00, "OutputUsdPerMillion": 20.00, "CacheReadUsdPerMillion": 0.40, "CacheWriteUsdPerMillion": 5.00 } },
+    { "Options": { "ModelId": "gpt-5.6-terra", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 12.00, "CacheReadUsdPerMillion": 0.20, "CacheWriteUsdPerMillion": 2.50 } },
+    { "Options": { "ModelId": "gpt-5.6-luna", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 0.20, "OutputUsdPerMillion": 1.20, "CacheReadUsdPerMillion": 0.02, "CacheWriteUsdPerMillion": 0.25 } },
+    { "Options": { "ModelId": "gpt-5.5", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 5.00, "OutputUsdPerMillion": 30.00, "CacheReadUsdPerMillion": 0.50, "CacheWriteUsdPerMillion": 5.00 } },
+    { "Options": { "ModelId": "gpt-5.4", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 2.50, "OutputUsdPerMillion": 15.00, "CacheReadUsdPerMillion": 0.25, "CacheWriteUsdPerMillion": 2.50 } },
+    { "Options": { "ModelId": "gpt-5.4-mini", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 0.75, "OutputUsdPerMillion": 4.50, "CacheReadUsdPerMillion": 0.075, "CacheWriteUsdPerMillion": 0.75 } },
+    { "Options": { "ModelId": "gpt-5.4-nano", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 0.20, "OutputUsdPerMillion": 1.25, "CacheReadUsdPerMillion": 0.02, "CacheWriteUsdPerMillion": 0.20 } },
+    { "Options": { "ModelId": "gpt-5.2", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 1.75, "OutputUsdPerMillion": 14.00, "CacheReadUsdPerMillion": 0.175, "CacheWriteUsdPerMillion": 1.75 } },
+    { "Options": { "ModelId": "gpt-5.1", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 1.25, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.125, "CacheWriteUsdPerMillion": 1.25 } },
+    { "Options": { "ModelId": "gpt-4.1", "MaxOutputTokens": 32768 }, "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 8.00, "CacheReadUsdPerMillion": 0.50, "CacheWriteUsdPerMillion": 2.00 } },
+    { "Options": { "ModelId": "gpt-4.1-mini", "MaxOutputTokens": 32768 }, "Pricing": { "InputUsdPerMillion": 0.40, "OutputUsdPerMillion": 1.60, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 0.40 } },
+    { "Options": { "ModelId": "gpt-4o", "MaxOutputTokens": 16384 }, "Pricing": { "InputUsdPerMillion": 2.50, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 1.25, "CacheWriteUsdPerMillion": 2.50 } },
+    { "Options": { "ModelId": "gpt-4o-mini", "MaxOutputTokens": 16384 }, "Pricing": { "InputUsdPerMillion": 0.15, "OutputUsdPerMillion": 0.60, "CacheReadUsdPerMillion": 0.075, "CacheWriteUsdPerMillion": 0.15 } }
+  ]
+}

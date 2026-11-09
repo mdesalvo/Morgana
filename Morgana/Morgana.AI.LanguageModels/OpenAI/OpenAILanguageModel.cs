@@ -12,7 +12,7 @@ namespace Morgana.AI.LanguageModels.OpenAI;
 /// Supports GPT models via the OpenAI Responses API (gpt-6-luna, gpt-6-sol, gpt-6-astra, ...)
 /// </summary>
 /// <remarks>
-/// Requires ApiKey on the tier's connection. The embedded pricing.json carries OpenAI's standard processing prices for
+/// Requires ApiKey on the tier's connection. The embedded models.json carries OpenAI's standard processing prices for
 /// prompts up to 272,000 tokens: its cache write is the 30-minute write where OpenAI bills one and plain input elsewhere.
 /// </remarks>
 /// <param name="loggerFactory">Optional logger factory for the <see cref="AttemptLoggingHandler"/> that writes one line per attempt on the wire; <c>null</c> writes nothing.</param>
@@ -27,7 +27,7 @@ public class OpenAILanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
         RequireField(connection.ApiKey, nameof(OpenAITierConnection.ApiKey));
 
     /// <inheritdoc />
-    protected override IChatClient CreateChatClient(OpenAITierConnection connection, Records.TierConfiguration options)
+    protected override IChatClient CreateChatClient(OpenAITierConnection connection, Records.ModelOptions options)
     {
         // A throttled call is retried a bounded number of times. NetworkTimeout bounds the wait for the
         // headers and each wait between two reads of the body; a streamed body that it cuts is not retried.

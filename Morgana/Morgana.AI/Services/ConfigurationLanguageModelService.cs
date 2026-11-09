@@ -80,13 +80,7 @@ public class ConfigurationLanguageModelService : ILanguageModelService
     /// Optional logger factory used to instrument the chat client with the MEAI OpenTelemetry
     /// decorator. Pass <c>null</c> to skip the decorator (test paths, unit tests).
     /// </param>
-    /// <exception cref="InvalidOperationException">
-    /// A tier is missing, carries a placeholder in a field that its provider uses or declares no positive <c>MaxOutputTokens</c>.
-    /// Thrown as well when a tier declares a Pricing that lacks a price or carries one that is not a non-negative amount.
-    /// Thrown as well when a tier's model is priced neither by its provider nor by its Pricing.
-    /// Thrown as well when a tier names a provider that is not registered or when two registered providers share a name.
-    /// Thrown as well when <c>Morgana:ActorSystem:Tier</c> is missing or names no tier.
-    /// </exception>
+    /// <exception cref="InvalidOperationException">A tier, the provider it names, its connection or the model it runs cannot be served or <c>Morgana:ActorSystem:Tier</c> names no tier.</exception>
     public ConfigurationLanguageModelService(
         IConfiguration configuration,
         IEnumerable<MorganaLanguageModel> languageModels,
@@ -109,144 +103,160 @@ public class ConfigurationLanguageModelService : ILanguageModelService
                 throw new InvalidOperationException($"The provider '{registeredLanguageModel.Provider}' is registered more than once.");
         }
 
-        // Checked before binding: the binder's own message for a record constructor parameter
-        // that finds no configuration does not name the key that the deployer has to add.
-        foreach (Records.LLMTier tier in Enum.GetValues<Records.LLMTier>())
+        // Each tier is served by the provider it names, so a deployment may mix providers across tiers.
+        foreach (Records.LLMTier llmTier in Enum.GetValues<Records.LLMTier>())
         {
-            // The section of this tier is located by its key, so that a missing one can be named in the refusal.
-            IConfigurationSection tierSection = configuration.GetSection($"Morgana:LanguageModels:Tiers:{tier}");
+            // The section of this tier is located by its key, so that every refusal can name the key a deployer writes.
+            IConfigurationSection tierSection = configuration.GetSection($"Morgana:LanguageModels:Tiers:{llmTier}");
 
-            // The three tiers are all mandatory: an agent or a framework actor may be served by any of them.
-            if (!tierSection.Exists())
-                throw new InvalidOperationException($"Morgana:LanguageModels:Tiers:{tier} is missing. All three tiers (Economy, Efficiency, Performance) must be declared.");
-
-            // The provider decides which client the tier is built on, so a tier without one cannot be served.
-            if (string.IsNullOrWhiteSpace(tierSection["Provider"]))
-                throw new InvalidOperationException($"Morgana:LanguageModels:Tiers:{tier}:Provider is missing.");
-
-            // Left on its placeholder the lookup would refuse it as an unknown provider, without saying it was never filled in.
-            if (Constants.SecretOverrides.All.Contains(tierSection["Provider"]!))
-                throw new InvalidOperationException(
-                    $"Morgana:LanguageModels:Tiers:{tier}:Provider is still the placeholder '{tierSection["Provider"]}'. " +
-                    $"Override it via User Secrets or environment variables before starting.");
-
-            // The connection is bound by the provider, so a tier without the section cannot be handed to one.
-            if (!tierSection.GetSection("Connection").Exists())
-                throw new InvalidOperationException($"Morgana:LanguageModels:Tiers:{tier}:Connection is missing.");
-
-            // Checked here because a placeholder in an int field would otherwise fail inside the binder with a message that names no key.
-            string? maxOutputTokens = tierSection["Options:MaxOutputTokens"];
-            if (string.IsNullOrWhiteSpace(maxOutputTokens))
-                throw new InvalidOperationException($"Morgana:LanguageModels:Tiers:{tier}:Options:MaxOutputTokens is missing.");
-
-            // A placeholder left in the ceiling would bind as nothing and let the tier run unbounded.
-            if (Constants.SecretOverrides.All.Contains(maxOutputTokens))
-                throw new InvalidOperationException(
-                    $"Morgana:LanguageModels:Tiers:{tier}:Options:MaxOutputTokens is still the placeholder '{maxOutputTokens}'. " +
-                    $"Override it via User Secrets or environment variables before starting.");
-
-            // The ceiling bounds what one answer may cost: zero or a sign would remove or invert the bound.
-            if (!int.TryParse(maxOutputTokens, NumberStyles.None, CultureInfo.InvariantCulture, out int ceiling) || ceiling <= 0)
-                throw new InvalidOperationException($"Morgana:LanguageModels:Tiers:{tier}:Options:MaxOutputTokens must be a positive integer but is '{maxOutputTokens}'.");
-
-            // A tier may price its own model, over its provider's pricing.json or where that file does not list it.
-            // Checked here because a missing price would bind as a free direction and a malformed one fails inside the binder naming no key.
-            IConfigurationSection pricingSection = tierSection.GetSection("Pricing");
-            if (pricingSection.Exists())
-            {
-                foreach (string priceField in new[]
-                         {
-                             nameof(Records.ModelPricing.InputUsdPerMillion),
-                             nameof(Records.ModelPricing.OutputUsdPerMillion),
-                             nameof(Records.ModelPricing.CacheReadUsdPerMillion),
-                             nameof(Records.ModelPricing.CacheWriteUsdPerMillion)
-                         })
-                {
-                    // All four prices are required: a direction left out would be charged nothing without anybody deciding so.
-                    string? price = pricingSection[priceField];
-                    if (string.IsNullOrWhiteSpace(price))
-                        throw new InvalidOperationException(
-                            $"Morgana:LanguageModels:Tiers:{tier}:Pricing:{priceField} is missing. A tier that declares Pricing declares all four prices.");
-
-                    // A price is a plain non-negative amount written with a dot whatever the host's culture: a placeholder or a sign fails here too.
-                    if (!decimal.TryParse(price, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out _))
-                        throw new InvalidOperationException(
-                            $"Morgana:LanguageModels:Tiers:{tier}:Pricing:{priceField} must be a non-negative amount in US dollars per million tokens written with a dot, but is '{price}'.");
-                }
-            }
+            // Who serves the tier, what model it runs and how the two are put together.
+            MorganaLanguageModel languageModel = ResolveLanguageModel(tierSection, languageModelsByProvider);
+            Records.ModelDefinition modelDefinition = ResolveModelDefinition(tierSection, languageModel);
+            servedTiers[llmTier] = BuildServedTier(tierSection.GetSection("Connection"), languageModel, modelDefinition);
         }
 
-        // Every key is now known to be present and well formed, so the binder cannot fail on a missing one.
-        Records.LLMTiers tiers = configuration.GetSection("Morgana:LanguageModels").Get<Records.LLMConfiguration>()!.Tiers;
+        // The framework's own actors run on the tier that the deployment names.
+        FrameworkTier = ResolveFrameworkTier();
+    }
 
-        // Each tier is built from its own declaration, on the provider that it names.
-        foreach (Records.LLMTier tier in Enum.GetValues<Records.LLMTier>())
+    /// <summary>Finds the provider that serves a tier and refuses a tier or a connection that it cannot be handed.</summary>
+    private static MorganaLanguageModel ResolveLanguageModel(IConfigurationSection tierSection, Dictionary<string, MorganaLanguageModel> languageModelsByProvider)
+    {
+        // The three tiers are all mandatory: an agent or a framework actor may be served by any of them.
+        if (!tierSection.Exists())
+            throw new InvalidOperationException($"{tierSection.Path} is missing. All three tiers (Economy, Efficiency, Performance) must be declared.");
+
+        // The provider decides which client the tier is built on, so a tier without one cannot be served.
+        string? provider = tierSection["Provider"];
+        if (string.IsNullOrWhiteSpace(provider))
+            throw new InvalidOperationException($"{tierSection.Path}:Provider is missing.");
+
+        // Left on its placeholder the lookup would refuse it as an unknown provider, without saying it was never filled in.
+        if (Constants.SecretOverrides.All.Contains(provider))
+            throw new InvalidOperationException($"{tierSection.Path}:Provider is still the placeholder '{provider}'. Override it via User Secrets or environment variables before starting.");
+
+        // An unknown name stops startup and the refusal names the tier that declared it and the names that exist.
+        if (!languageModelsByProvider.TryGetValue(provider, out MorganaLanguageModel? languageModel))
+            throw new InvalidOperationException($"{tierSection.Path}:Provider '{provider}' is not a registered provider. Registered: {string.Join(", ", languageModelsByProvider.Keys.Order(StringComparer.Ordinal))}.");
+
+        // The connection is bound by the provider, so a tier without the section cannot be handed to one.
+        IConfigurationSection connectionSection = tierSection.GetSection("Connection");
+        if (!connectionSection.Exists())
+            throw new InvalidOperationException($"{tierSection.Path}:Connection is missing.");
+
+        // A connection that cannot work is refused at startup rather than at the first user turn.
+        try
         {
-            // The tier as the deployer declared it: provider name and options.
-            Records.TierDefinition definition = tiers.For(tier);
-
-            // A tier left on its placeholder would otherwise bind and build just fine, then fail
-            // on its first call. This is the only point where the raw value is still visible, so a tier
-            // that nobody has requested yet cannot ship broken.
-            if (Constants.SecretOverrides.All.Contains(definition.Options.ModelId))
-                throw new InvalidOperationException(
-                    $"Morgana:LanguageModels:Tiers:{tier}:Options:ModelId is still the placeholder '{definition.Options.ModelId}'. " +
-                    $"Override it via User Secrets or environment variables before starting.");
-
-            // Each tier is served by the provider it names, so a deployment may mix providers across tiers.
-            // An unknown name stops startup and the refusal names the tier that declared it and the names that exist.
-            if (!languageModelsByProvider.TryGetValue(definition.Provider, out MorganaLanguageModel? languageModel))
-                throw new InvalidOperationException(
-                    $"Morgana:LanguageModels:Tiers:{tier}:Provider '{definition.Provider}' is not a registered provider. " +
-                    $"Registered: {string.Join(", ", languageModelsByProvider.Keys.Order(StringComparer.Ordinal))}.");
-
-            // The connection belongs to the provider that the tier names: the section is handed over unbound.
-            IConfigurationSection connectionSection = configuration.GetSection($"Morgana:LanguageModels:Tiers:{tier}:Connection");
-
-            // A connection that cannot work is refused at startup rather than at the first user turn.
-            try
-            {
-                // The provider checks the connection it was given and a refusal is passed on with the key of the tier.
-                languageModel.ValidateConnection(connectionSection);
-            }
-            catch (InvalidOperationException ex)
-            {
-                // The provider names the field and this class knows which tier it belongs to.
-                throw new InvalidOperationException($"Morgana:LanguageModels:Tiers:{tier}:Connection:{ex.Message}", ex);
-            }
-
-            // The tier's own Pricing prevails over the provider's pricing.json: it is the deployment's price for this model, listed there or not.
-            Records.MagicDustPricing? morganaDust = definition.Pricing is not null
-                ? languageModel.ConvertToMorganaDust(definition.Pricing)
-                : languageModel.ConvertToMorganaDust(connectionSection, definition.Options.ModelId);
-            // A model priced neither by its provider nor by its tier would run with its dust uncounted, so it is refused at startup.
-            // The catalogue lists only the models its vendor serves: a model missing from it may have been retired or may be newer
-            // than this release, which Morgana cannot tell apart, so the refusal names both causes with the remedy of each.
-            if (morganaDust is null)
-                throw new InvalidOperationException(
-                    $"Morgana:LanguageModels:Tiers:{tier}:Options:ModelId '{definition.Options.ModelId}' is not in the catalogue that provider '{languageModel.Provider}' ships with this release. " +
-                    $"If {languageModel.Provider} has retired it, choose a model that the catalogue lists. " +
-                    $"If it is newer than this release, declare its price under Morgana:LanguageModels:Tiers:{tier}:Pricing.");
-
-            // The tier's chain, outermost first: the defaults layer sees (and only fills in, never overrides) the
-            // ChatOptions that every caller above sent, Microsoft.Agents.AI for domain agents and
-            // CompleteWithSystemPromptAsync for framework actors alike.
-            // Provider SDKs disagree on null fields (the Anthropic adapter falls back to a 1024-token ceiling), hence both are filled.
-            ChatOptions tierDefaultOptions = definition.Options.ToChatOptions();
-            ChatClientBuilder tierBuilder = new ChatClientBuilder(languageModel.CreateChatClient(connectionSection, definition.Options))
-                .ConfigureOptions(callerOptions =>
-                {
-                    // The callback receives a copy, so the caller's reusable options stay unchanged.
-                    callerOptions.ModelId ??= tierDefaultOptions.ModelId;
-                    callerOptions.MaxOutputTokens ??= tierDefaultOptions.MaxOutputTokens;
-                });
-            UseTelemetryWhenEnabled(tierBuilder);
-            IChatClient client = tierBuilder.Build();
-
-            // The tier is served from here on: its client and the provider that built it and its price.
-            servedTiers[tier] = new Records.ServedTier(client, languageModel, morganaDust);
+            // The provider checks the connection it was given and a refusal is passed on with the key of the tier.
+            languageModel.ValidateConnection(connectionSection);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // The provider names the field and this class knows which tier it belongs to.
+            throw new InvalidOperationException($"{tierSection.Path}:Connection:{ex.Message}", ex);
         }
 
+        // The provider is known to serve this tier.
+        return languageModel;
+    }
+
+    /// <summary>Lays the tier over its provider's catalogue entry and refuses a model that cannot be run or priced.</summary>
+    private static Records.ModelDefinition ResolveModelDefinition(IConfigurationSection tierSection, MorganaLanguageModel languageModel)
+    {
+        // A model left blank cannot be asked for anything.
+        string? modelId = tierSection["Options:ModelId"];
+        if (string.IsNullOrWhiteSpace(modelId))
+            throw new InvalidOperationException($"{tierSection.Path}:Options:ModelId is missing.");
+
+        // A tier left on its placeholder would otherwise build just fine, then fail on its first call.
+        if (Constants.SecretOverrides.All.Contains(modelId))
+            throw new InvalidOperationException($"{tierSection.Path}:Options:ModelId is still the placeholder '{modelId}'. Override it via User Secrets or environment variables before starting.");
+
+        // The provider's entry for the model is what the tier overrides and the tier's own Pricing may stand without it.
+        IConfigurationSection? cataloguedModel = languageModel.GetCataloguedModel(tierSection.GetSection("Connection"), modelId);
+        IConfigurationSection tierPricingSection = tierSection.GetSection("Pricing");
+
+        // A model described neither by its provider nor by its tier would run with its dust uncounted, so it is refused at startup.
+        // The catalogue lists only the models its vendor serves: a model missing from it may have been retired or may be newer
+        // than this release, which Morgana cannot tell apart, so the refusal names both causes with the remedy of each.
+        if (cataloguedModel is null && !tierPricingSection.Exists())
+            throw new InvalidOperationException(
+                $"{tierSection.Path}:Options:ModelId '{modelId}' is not in the models.json that provider '{languageModel.Provider}' ships with this release. " +
+                $"If {languageModel.Provider} has retired it, choose a model that models.json lists. " +
+                $"If it is newer than this release, declare its price under {tierSection.Path}:Pricing.");
+
+        // The catalogue entry is laid under the tier's own keys, so the tier overrides it key by key and a binding error names the key a deployer writes.
+        IConfigurationSection modelSection = new ConfigurationBuilder()
+            .AddInMemoryCollection((cataloguedModel?.AsEnumerable(makePathsRelative: true) ?? [])
+                .Select(entry => new KeyValuePair<string, string?>($"{tierSection.Path}:{entry.Key}", entry.Value)))
+            .AddInMemoryCollection(tierSection.GetSection("Options").AsEnumerable().Concat(tierPricingSection.AsEnumerable()))
+            .Build()
+            .GetSection(tierSection.Path);
+
+        // The merged model is priced in every direction or the tier does not start.
+        foreach (string priceField in new[]
+                 {
+                     nameof(Records.ModelPricing.InputUsdPerMillion),
+                     nameof(Records.ModelPricing.OutputUsdPerMillion),
+                     nameof(Records.ModelPricing.CacheReadUsdPerMillion),
+                     nameof(Records.ModelPricing.CacheWriteUsdPerMillion)
+                 })
+        {
+            // All four prices are required: a direction left out would be charged nothing without anybody deciding so.
+            string? price = modelSection[$"Pricing:{priceField}"];
+            if (string.IsNullOrWhiteSpace(price))
+                throw new InvalidOperationException($"{tierSection.Path}:Pricing:{priceField} is missing: neither the tier nor the models.json of provider '{languageModel.Provider}' prices model '{modelId}' in that direction.");
+
+            // A price is a plain non-negative amount written with a dot whatever the host's culture: a placeholder or a sign fails here too.
+            if (!decimal.TryParse(price, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out _))
+                throw new InvalidOperationException($"{tierSection.Path}:Pricing:{priceField} must be a non-negative amount in US dollars per million tokens written with a dot, but is '{price}'.");
+        }
+
+        // Every key it needs is present and a value that does not convert fails naming its full key.
+        Records.ModelDefinition modelDefinition = modelSection.Get<Records.ModelDefinition>()!;
+
+        // The ceiling bounds what one answer may cost: zero or a sign would remove or invert the bound.
+        if (modelDefinition.Options.MaxOutputTokens is <= 0)
+            throw new InvalidOperationException($"{tierSection.Path}:Options:MaxOutputTokens must be a positive integer but is '{modelDefinition.Options.MaxOutputTokens}'.");
+
+        // The provider refuses the options it cannot serve, judged on the merged model rather than on one layer.
+        try
+        {
+            // The provider sees the options exactly as the tier will send them.
+            languageModel.ValidateOptions(modelDefinition.Options);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // The provider names the option and this class knows which tier it belongs to.
+            throw new InvalidOperationException($"{tierSection.Path}:Options:{ex.Message}", ex);
+        }
+
+        // The merged definition is what the tier runs and what it costs.
+        return modelDefinition;
+    }
+
+    /// <summary>Builds the client of a tier with the defaults of its model and its telemetry around the provider's own.</summary>
+    private Records.ServedTier BuildServedTier(IConfigurationSection connectionSection, MorganaLanguageModel languageModel, Records.ModelDefinition modelDefinition)
+    {
+        // The price of the model becomes the dust that every call on this tier is charged in.
+        Records.MagicDustPricing morganaDust = languageModel.ConvertToMorganaDust(modelDefinition.Pricing);
+
+        // The tier's chain, outermost first: the defaults layer sees (and only fills in, never overrides) the
+        // ChatOptions that every caller above sent, Microsoft.Agents.AI for domain agents and
+        // CompleteWithSystemPromptAsync for framework actors alike.
+        ChatClientBuilder tierBuilder = new ChatClientBuilder(languageModel.CreateChatClient(connectionSection, modelDefinition.Options))
+            .ConfigureOptions(modelDefinition.Options.FillUnsetOptions);
+
+        // Telemetry wraps the provider's client below the defaults layer.
+        UseTelemetryWhenEnabled(tierBuilder);
+
+        // The tier is served from here on: its client and the provider that built it and its price.
+        return new Records.ServedTier(tierBuilder.Build(), languageModel, morganaDust);
+    }
+
+    /// <summary>Reads the tier that the framework's own actors run on.</summary>
+    private Records.LLMTier ResolveFrameworkTier()
+    {
         // The framework's own actors (Guard, Classifier, Presenter, ChannelAdapter) run on the tier the
         // deployment names, never on one picked for it: a missing name refuses the startup, since the first
         // turn would otherwise reach a model nobody chose.
@@ -256,7 +266,7 @@ public class ConfigurationLanguageModelService : ILanguageModelService
                 "Morgana:ActorSystem:Tier is not configured. Name the tier Morgana's own actors run on: Economy, Efficiency or Performance.");
 
         // Only a tier's name is accepted: a number would parse as a tier just as well and say nothing to whoever reads the configuration.
-        FrameworkTier = Enum.GetValues<Records.LLMTier>()
+        return Enum.GetValues<Records.LLMTier>()
             .Where(tier => string.Equals(tier.ToString(), frameworkTierName.Trim(), StringComparison.OrdinalIgnoreCase))
             .Select(tier => (Records.LLMTier?)tier)
             .FirstOrDefault()

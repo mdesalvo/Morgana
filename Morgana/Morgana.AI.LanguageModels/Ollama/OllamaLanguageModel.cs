@@ -15,7 +15,7 @@ namespace Morgana.AI.LanguageModels.Ollama;
 /// Requires Endpoint on the tier's connection. A local daemon (e.g., http://localhost:11434) bills the cloud models to
 /// the account it signed in with; https://ollama.com bills the account of the ApiKey that it also requires. Choose a model
 /// with solid function calling support (e.g., gpt-oss:20b, phi4-mini) because Morgana relies heavily on tool calling.
-/// Before starting Morgana, verify that a local model is already loaded via "ollama ps". The embedded pricing.json
+/// Before starting Morgana, verify that a local model is already loaded via "ollama ps". The embedded models.json
 /// carries ollama.com's peak prices for its cloud models under the names that ollama.com answers to, cache write at the
 /// input price since ollama.com bills none. A model that the pricing page lists without a cached input price reads its
 /// cache at the input price. OllamaSharp reports no cached prompt tokens, so a cached prompt is charged at the input
@@ -63,7 +63,7 @@ public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
     }
 
     /// <inheritdoc />
-    protected override IChatClient CreateChatClient(OllamaTierConnection connection, Records.TierConfiguration options)
+    protected override IChatClient CreateChatClient(OllamaTierConnection connection, Records.ModelOptions options)
     {
         // The HTTP client carries the call's timeout and the attempt log. The client has
         // no retry of its own: the connection carries no retry count.

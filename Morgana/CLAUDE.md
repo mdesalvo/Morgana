@@ -264,16 +264,18 @@ plugin under `Morgana.AI.LanguageModels/`, carrying its SDK beside it in `plugin
 references none of them: it registers what `LoadLanguageModels` finds, so the providers an
 installation can name are the ones deployed. A host without the loader (Alembic, the harness) registers them by hand. What
 only a vendor knows stays in its plugin: the connection record it binds from the tier's `Connection`
-section, the prices of its models (the `pricing.json` it must embed, read and converted into dust by the base class alone) and
+section, the catalogue of its models (the `models.json` it must embed: each model's output ceiling and its price, which the base class alone converts into dust), `ValidateOptions` and
 `IsContentFilterRefusal`, the one place where a provider's own refusal of the content is
 told apart from a failure.
 
 `Morgana:LanguageModels:Tiers` is a JSON **object keyed by tier name**, so env-var overrides merge per tier. Each
 entry carries `Provider` (a registered provider's name, any casing), `Connection` (bound by that
-provider alone), `Options` — a deliberately narrow mirror of `ChatOptions` (`MaxOutputTokens`
-mandatory), see `Records.TierConfiguration`. An optional `Pricing` is the deployment's own price for
-the tier's model: it overlays the provider's `pricing.json` like any settings layer, which is how a
-local Ollama model, a cloud-hosted deployment or a negotiated discount gets priced.
+provider alone), `Options` and `Pricing`. Those two have **the shape of a `models.json` entry**,
+`Records.ModelDefinition`: the catalogue entry is laid under the tier's keys and the result is bound
+and validated once, so the tier inherits its model's price and ceiling and overrides any of them key
+by key. That is how a local Ollama model, a cloud-hosted deployment or a negotiated discount gets
+priced. `Options` mirrors the tunable part of `ChatOptions` (`Records.ModelOptions`, `ModelId` alone
+mandatory); provider-specific keys go in its `AdditionalProperties`.
 
 Two consumption modes: `CompleteWithSystemPromptAsync` (stateless, always on the framework tier) and
 `GetChatClient(tier)` / `GetMorganaDust(tier)` (an agent's own `[RequiresLLMTier]`).
@@ -458,7 +460,7 @@ fails or opens, silently.**
 4. Tools: warn on orphans, error on duplicates for one intent; every tool and parameter carries its `[Description]`, a context parameter is a `string`, no domain tool takes a base tool's name
 5. Plugin `agents.json` files merge with no duplicated intent or prompt id and none declares `other`
    or a framework prompt id
-6. All three tiers declared, each naming a registered provider and carrying a `Connection`, none with a provider, model or used connection field left on its placeholder, each tier's model priced by its provider or by the tier's own complete `Pricing`, no provider registered twice, `ActorSystem:Tier` naming a tier
+6. All three tiers declared, each naming a registered provider and carrying a `Connection`, none with a provider, model or used connection field left on its placeholder, each tier's model priced once its `models.json` entry and the tier's own `Pricing` are laid over each other, an Anthropic tier carrying an output ceiling, no provider registered twice, `ActorSystem:Tier` naming a tier
 7. Every admitted issuer — channel, partner and the ring alike — carries a name and a key of at least 256 bits and no name is admitted twice
 8. `ValidateTrustConfiguration`: each `Partners[]` entry names somebody once, does something, is coherent per open direction and carries a key that can sign
 9. `ValidatePublishedAddress`: `PublicUrl`, where declared, is absolute, on a bearer-carrying scheme and names one interface

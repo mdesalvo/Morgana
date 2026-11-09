@@ -29,8 +29,8 @@ public abstract class MorganaLanguageModel
 
     /// <summary>Builds the provider client that serves one tier, with no telemetry and no tier defaults around it.</summary>
     /// <param name="connectionSection">The <c>Connection</c> section of the tier: how it reaches the provider.</param>
-    /// <param name="options">The model that the tier runs.</param>
-    public abstract IChatClient CreateChatClient(IConfigurationSection connectionSection, Records.TierConfiguration options);
+    /// <param name="options">The model that the tier runs and its options.</param>
+    public abstract IChatClient CreateChatClient(IConfigurationSection connectionSection, Records.ModelOptions options);
 
     /// <summary>Tells whether an exception thrown by this provider's client is the provider refusing the content itself, a refusal that no retry would pass.</summary>
     /// <param name="exception">The failure that the client of a tier threw.</param>
@@ -39,44 +39,46 @@ public abstract class MorganaLanguageModel
     /// <summary>What one dust unit is worth in US dollars on the tiers that this provider serves; a provider overrides it to give its dust a different value.</summary>
     public virtual decimal UsdPerDustUnit => 0.015m;
 
-    /// <summary>What each model of this provider costs, as its <c>pricing.json</c> declares it, keyed by the name under which the provider catalogues the model.</summary>
-    protected readonly Dictionary<string, Records.ModelPricing> modelPrices;
+    /// <summary>Each model of this provider's <c>models.json</c> as the configuration entry that declares it, keyed by its <c>Options:ModelId</c>.</summary>
+    private readonly Dictionary<string, IConfigurationSection> cataloguedModels;
 
-    /// <summary>Reads the <c>pricing.json</c> that the provider's plugin embeds.</summary>
-    /// <exception cref="InvalidOperationException">The plugin embeds no <c>pricing.json</c> or declares in it a model that is malformed or priced twice.</exception>
+    /// <summary>Reads the <c>models.json</c> that the provider's plugin embeds.</summary>
+    /// <exception cref="InvalidOperationException">The plugin embeds no <c>models.json</c> or declares in it a model that is malformed or catalogued twice.</exception>
     protected MorganaLanguageModel() =>
-        // The concrete provider's assembly is its plugin: the prices travel with the DLL that serves the models.
-        modelPrices = ReadPricing(GetType().Assembly);
+        // The concrete provider's assembly is its plugin: the catalogue travels with the DLL that serves the models.
+        cataloguedModels = ReadModels(GetType().Assembly);
 
-    /// <summary>Converts the price of the model that a tier runs into Morgana's dust, the one conversion for every provider; <c>null</c> when the provider's <c>pricing.json</c> prices no model under the name that the provider reads the tier's model by.</summary>
+    /// <summary>The entry of the provider's <c>models.json</c> for the model that a tier runs; <c>null</c> when the provider's catalogue lists no model under the name that the provider reads the tier's model by.</summary>
     /// <param name="connectionSection">The <c>Connection</c> section of the tier, already validated by <see cref="ValidateConnection"/>.</param>
     /// <param name="modelId">The model that a tier names in its <c>Options:ModelId</c>.</param>
-    public Records.MagicDustPricing? ConvertToMorganaDust(IConfigurationSection connectionSection, string modelId)
+    public IConfigurationSection? GetCataloguedModel(IConfigurationSection connectionSection, string modelId)
     {
-        // The provider names the catalogue entry that prices this model on this connection.
+        // The provider names the catalogue entry that describes this model on this connection.
         string? cataloguedModelId = CataloguedModelId(connectionSection, modelId);
 
-        // A model that the provider never catalogues is priced by its tier alone.
+        // A model that the provider never catalogues is described by its tier alone.
         if (cataloguedModelId is null)
             return null;
 
-        // The provider's own pricing.json alone says what its models cost.
-        Records.ModelPricing? modelPricing = modelPrices.GetValueOrDefault(cataloguedModelId);
-
-        // A model that the provider does not price has no dust.
-        if (modelPricing is null)
-            return null;
-
-        // A listed price converts like a price that a tier declares.
-        return ConvertToMorganaDust(modelPricing);
+        // The provider's own models.json alone says what its models are and cost.
+        return cataloguedModels.GetValueOrDefault(cataloguedModelId);
     }
 
-    /// <summary>The name under which the provider's <c>pricing.json</c> prices the model that a tier runs on its connection; <c>null</c> when the provider never prices that model from its catalogue.</summary>
+    /// <summary>Refuses options that this provider cannot serve.</summary>
+    /// <remarks>The message opens with the name of the option so that the caller can put the key path of the tier in front of it.</remarks>
+    /// <param name="options">The model of the tier with the catalogue and the tier laid over each other.</param>
+    /// <exception cref="InvalidOperationException">An option that the provider needs is missing or unusable.</exception>
+    public virtual void ValidateOptions(Records.ModelOptions options)
+    {
+        // A provider that accepts every option refuses nothing.
+    }
+
+    /// <summary>The name under which the provider's <c>models.json</c> catalogues the model that a tier runs on its connection; <c>null</c> when the provider never catalogues that model.</summary>
     /// <param name="connectionSection">The <c>Connection</c> section of the tier, already validated by <see cref="ValidateConnection"/>.</param>
     /// <param name="modelId">The model that a tier names in its <c>Options:ModelId</c>.</param>
     protected abstract string? CataloguedModelId(IConfigurationSection connectionSection, string modelId);
 
-    /// <summary>Converts a price into Morgana's dust at this provider's <see cref="UsdPerDustUnit"/>, whether its pricing.json lists it or a tier declares it.</summary>
+    /// <summary>Converts a price into Morgana's dust at this provider's <see cref="UsdPerDustUnit"/>, whether it comes from the provider's models.json or from the tier or from both laid over each other.</summary>
     /// <param name="modelPricing">What the model costs in US dollars per million tokens.</param>
     public Records.MagicDustPricing ConvertToMorganaDust(Records.ModelPricing modelPricing)
     {
@@ -98,51 +100,53 @@ public abstract class MorganaLanguageModel
             ? 0
             : (int)Math.Round(1_000_000m * UsdPerDustUnit / usdPerMillion, MidpointRounding.AwayFromZero);
 
-    /// <summary>Reads the <c>pricing.json</c> embedded in <paramref name="providerAssembly"/> into the price of each model that it names.</summary>
-    private static Dictionary<string, Records.ModelPricing> ReadPricing(Assembly providerAssembly)
+    /// <summary>Reads the <c>models.json</c> embedded in <paramref name="providerAssembly"/> into the entry of each model that it catalogues.</summary>
+    private static Dictionary<string, IConfigurationSection> ReadModels(Assembly providerAssembly)
     {
         // Every refusal names the plugin, so the deployer knows which DLL to rebuild.
         string pluginName = providerAssembly.GetName().Name ?? providerAssembly.ToString();
 
-        // The file is mandatory even when it prices nothing: a plugin without it was built without its contract.
+        // The file is mandatory even when it catalogues nothing: a plugin without it was built without its contract.
         string? resourceName = providerAssembly.GetManifestResourceNames()
-                                               .FirstOrDefault(name => name.EndsWith(".pricing.json", StringComparison.Ordinal));
+                                               .FirstOrDefault(name => name.EndsWith(".models.json", StringComparison.Ordinal));
         if (resourceName is null)
-            throw new InvalidOperationException($"Provider plugin '{pluginName}' embeds no pricing.json: every provider plugin embeds one, with an empty Models array when it ships no price.");
+            throw new InvalidOperationException($"Provider plugin '{pluginName}' embeds no models.json: every provider plugin embeds one, with an empty Models array when it catalogues no model.");
 
         // The resource name was just listed by the same assembly, so its stream exists.
-        using Stream pricingStream = providerAssembly.GetManifestResourceStream(resourceName)!;
+        using Stream modelsStream = providerAssembly.GetManifestResourceStream(resourceName)!;
 
-        // A file that does not parse is refused like a missing one: either way no tier can be priced on it.
-        Records.ProviderPricing? providerPricing;
+        // A file that does not parse is refused like a missing one: either way no tier can be served on it.
+        IConfigurationRoot modelsConfiguration;
         try
         {
-            providerPricing = JsonSerializer.Deserialize<Records.ProviderPricing>(pricingStream, Records.DefaultJsonSerializerOptions);
+            modelsConfiguration = new ConfigurationBuilder().AddJsonStream(modelsStream).Build();
         }
-        catch (JsonException ex)
+        catch (Exception ex) when (ex is JsonException or FormatException)
         {
-            throw new InvalidOperationException($"Provider plugin '{pluginName}' embeds a pricing.json that is not valid JSON: {ex.Message}", ex);
+            throw new InvalidOperationException($"Provider plugin '{pluginName}' embeds a models.json that is not valid JSON: {ex.Message}", ex);
         }
 
-        // An absent Models array is a file written wrong, unlike an empty one, which prices nothing on purpose.
-        if (providerPricing?.Models is null)
-            throw new InvalidOperationException($"Provider plugin '{pluginName}' embeds a pricing.json without a Models array.");
+        // An absent Models array is a file written wrong, unlike an empty one, which catalogues nothing on purpose.
+        IConfigurationSection modelsSection = modelsConfiguration.GetSection("Models");
+        if (!modelsSection.Exists())
+            throw new InvalidOperationException($"Provider plugin '{pluginName}' embeds a models.json without a Models array.");
 
         // The ModelId goes on the wire as the tier wrote it, so its casing is part of the match.
-        Dictionary<string, Records.ModelPricing> pricesByModel = new Dictionary<string, Records.ModelPricing>(StringComparer.Ordinal);
-        foreach (Records.PricedModel pricedModel in providerPricing.Models)
+        Dictionary<string, IConfigurationSection> modelsById = new(StringComparer.Ordinal);
+        foreach (IConfigurationSection modelSection in modelsSection.GetChildren())
         {
-            // An entry without a name matches no tier and one without a price would let its tier run uncounted.
-            if (string.IsNullOrWhiteSpace(pricedModel.Name) || pricedModel.Pricing is null)
-                throw new InvalidOperationException($"Provider plugin '{pluginName}' declares in its pricing.json a model without Name or Pricing.");
+            // An entry without a name matches no tier.
+            string? modelId = modelSection["Options:ModelId"];
+            if (string.IsNullOrWhiteSpace(modelId))
+                throw new InvalidOperationException($"Provider plugin '{pluginName}' declares in its models.json a model without Options:ModelId.");
 
-            // A model priced twice would leave its dust to whichever entry happened to come last.
-            if (!pricesByModel.TryAdd(pricedModel.Name, pricedModel.Pricing))
-                throw new InvalidOperationException($"Provider plugin '{pluginName}' prices the model '{pricedModel.Name}' twice in its pricing.json.");
+            // A model catalogued twice would leave its options and price to whichever entry happened to come last.
+            if (!modelsById.TryAdd(modelId, modelSection))
+                throw new InvalidOperationException($"Provider plugin '{pluginName}' catalogues the model '{modelId}' twice in its models.json.");
         }
 
-        // Every model that the file names, each with its single price.
-        return pricesByModel;
+        // Every model that the file names, each with its single entry.
+        return modelsById;
     }
 
     /// <summary>Refuses a value that is missing, empty or still a placeholder, naming <paramref name="field"/> first.</summary>
@@ -169,7 +173,7 @@ public abstract class MorganaLanguageModel<TConnection> : MorganaLanguageModel
         ValidateConnection(Bind(connectionSection));
 
     /// <inheritdoc />
-    public sealed override IChatClient CreateChatClient(IConfigurationSection connectionSection, Records.TierConfiguration options) =>
+    public sealed override IChatClient CreateChatClient(IConfigurationSection connectionSection, Records.ModelOptions options) =>
         // The client is built from the same typed connection that validation saw.
         CreateChatClient(Bind(connectionSection), options);
 
@@ -185,10 +189,10 @@ public abstract class MorganaLanguageModel<TConnection> : MorganaLanguageModel
 
     /// <summary>Builds the provider client that serves one tier from its typed connection.</summary>
     /// <param name="connection">How the tier reaches the provider.</param>
-    /// <param name="options">The model that the tier runs.</param>
-    protected abstract IChatClient CreateChatClient(TConnection connection, Records.TierConfiguration options);
+    /// <param name="options">The model that the tier runs and its options.</param>
+    protected abstract IChatClient CreateChatClient(TConnection connection, Records.ModelOptions options);
 
-    /// <summary>The name under which this provider's <c>pricing.json</c> prices <paramref name="modelId"/> on <paramref name="connection"/>; <c>null</c> when only the tier's own Pricing can price it.</summary>
+    /// <summary>The name under which this provider's <c>models.json</c> catalogues <paramref name="modelId"/> on <paramref name="connection"/>; <c>null</c> when only the tier itself can describe it.</summary>
     /// <param name="connection">The connection of the tier as this provider reads it.</param>
     /// <param name="modelId">The model that the tier names in its <c>Options:ModelId</c>.</param>
     protected virtual string? CataloguedModelId(TConnection connection, string modelId) =>

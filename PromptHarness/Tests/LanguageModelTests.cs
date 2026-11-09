@@ -138,12 +138,17 @@ public sealed class LanguageModelTests
     }
 
     [Fact]
-    public void LanguageModel_Construction_is_refused_when_the_output_ceiling_is_missing()
+    public void LanguageModel_An_Anthropic_tier_without_an_output_ceiling_is_refused()
     {
-        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
-            () => Build(Configuration(), without: "Morgana:LanguageModels:Tiers:Efficiency:Options:MaxOutputTokens"));
+        // A model that neither the tier nor the catalogue gives a ceiling would be sent 1024 tokens by the Anthropic adapter.
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(() => Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "claude-unpriced-9"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:InputUsdPerMillion", "1"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:OutputUsdPerMillion", "1"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheReadUsdPerMillion", "1"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheWriteUsdPerMillion", "1"))));
 
-        Assert.Contains("Morgana:LanguageModels:Tiers:Efficiency:Options:MaxOutputTokens", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Morgana:LanguageModels:Tiers:Economy:Options:MaxOutputTokens", refusal.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -272,12 +277,27 @@ public sealed class LanguageModelTests
     [Fact]
     public async Task LanguageModel_An_Ollama_tier_asks_for_a_65536_token_window_by_default()
     {
-        // A connection that declares no window gets the default one, next to the output ceiling that the tier declares.
+        // A connection that declares no window gets the default one.
         JsonElement requestOptions = await RecordedOllamaOptionsAsync(contextLength: null);
 
-        // The default window and the tier's output ceiling both reached the daemon.
+        // The default window reached the daemon.
         Assert.Equal(65536, requestOptions.GetProperty("num_ctx").GetInt32());
+
+        // A local model that neither the tier nor the catalogue gives a ceiling is sent none.
+        Assert.False(requestOptions.TryGetProperty("num_predict", out _));
+    }
+
+    [Fact]
+    public async Task LanguageModel_An_Ollama_tier_sends_the_options_that_it_declares()
+    {
+        // The ceiling, the temperature and a key that only Ollama reads are declared on the tier.
+        JsonElement requestOptions = await RecordedOllamaOptionsAsync(
+            null, ("MaxOutputTokens", "8192"), ("Temperature", "0.2"), ("AdditionalProperties:num_gpu", "2"));
+
+        // Each declared option reached the daemon.
         Assert.Equal(8192, requestOptions.GetProperty("num_predict").GetInt32());
+        Assert.Equal(2, requestOptions.GetProperty("num_gpu").GetInt32());
+        Assert.Equal(0.2f, requestOptions.GetProperty("temperature").GetSingle(), 1e-6f);
     }
 
     [Fact]
@@ -350,6 +370,17 @@ public sealed class LanguageModelTests
     }
 
     [Fact]
+    public void LanguageModel_A_partial_Pricing_of_a_tier_overlays_its_providers_own()
+    {
+        // Only the input price is declared: the catalogued 10 dollars for the output still applies.
+        Records.MagicDustPricing dust = Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Efficiency:Pricing:InputUsdPerMillion", "1.00"))).GetMorganaDust(Records.LLMTier.Efficiency);
+
+        Assert.Equal(15000, dust.InputTokensPerDustUnit);
+        Assert.Equal(1500, dust.OutputTokensPerDustUnit);
+    }
+
+    [Fact]
     public void LanguageModel_The_Pricing_of_a_tier_prevails_over_its_providers_own()
     {
         // Sonnet 5.5 is listed at 2, 10, 0.10 and 4 dollars: a negotiated 1, 5, 0.05 and 2 is what the tier is charged.
@@ -373,9 +404,14 @@ public sealed class LanguageModelTests
     public void LanguageModel_Construction_is_refused_when_a_declared_Pricing_lacks_a_price(string missingField)
     {
         // A direction left out would be charged nothing, so the refusal names the price to add.
+        // The model is one that no catalogue lists, so no entry can fill the missing price.
         (string Key, string Value)[] prices = new[] { "InputUsdPerMillion", "OutputUsdPerMillion", "CacheReadUsdPerMillion", "CacheWriteUsdPerMillion" }
             .Where(field => field != missingField)
             .Select(field => ($"Morgana:LanguageModels:Tiers:Economy:Pricing:{field}", "1"))
+            .Concat([
+                ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "claude-unpriced-9"),
+                ("Morgana:LanguageModels:Tiers:Economy:Options:MaxOutputTokens", "8192")
+            ])
             .ToArray();
 
         InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(() => Build(Configuration(prices)));
@@ -404,7 +440,7 @@ public sealed class LanguageModelTests
     [Fact]
     public void LanguageModel_An_AzureOpenAI_tier_without_its_own_Pricing_is_refused()
     {
-        // Azure serves deployments that the customer names, so its pricing.json lists nothing and a tier must price its own.
+        // Azure serves deployments that the customer names, so its models.json lists nothing and a tier must price its own.
         InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(() => Build(Configuration(
             ("Morgana:LanguageModels:Tiers:Economy:Provider", "AzureOpenAI"),
             ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "https://acme.openai.azure.com"),
@@ -464,7 +500,7 @@ public sealed class LanguageModelTests
     }
 
     /// <summary>Makes one call on a local Ollama Economy tier and returns the <c>options</c> object of the request that an in-process listener recorded.</summary>
-    private static async Task<JsonElement> RecordedOllamaOptionsAsync(string? contextLength)
+    private static async Task<JsonElement> RecordedOllamaOptionsAsync(string? contextLength, params (string Key, string Value)[] tierOptions)
     {
         // Binding port 0 asks the operating system for a free port, which is released before the listener takes it.
         TcpListener portProbe = new TcpListener(IPAddress.Loopback, 0);
@@ -511,6 +547,10 @@ public sealed class LanguageModelTests
         if (contextLength is not null)
             tierConfiguration["Morgana:LanguageModels:Tiers:Economy:Connection:ContextLength"] = contextLength;
 
+        // The options that the test declares on the tier are the ones that must reach the daemon.
+        foreach ((string key, string value) in tierOptions)
+            tierConfiguration[$"Morgana:LanguageModels:Tiers:Economy:Options:{key}"] = value;
+
         // The call goes through the tier's whole chain exactly as an agent's would.
         ILanguageModelService llm = Build(tierConfiguration);
         await llm.GetChatClient(Records.LLMTier.Economy).GetResponseAsync("hello");
@@ -550,7 +590,6 @@ public sealed class LanguageModelTests
             values[$"Morgana:LanguageModels:Tiers:{tier}:Provider"] = "Anthropic";
             values[$"Morgana:LanguageModels:Tiers:{tier}:Connection:ApiKey"] = "test-key";
             values[$"Morgana:LanguageModels:Tiers:{tier}:Options:ModelId"] = AnthropicModels[tier];
-            values[$"Morgana:LanguageModels:Tiers:{tier}:Options:MaxOutputTokens"] = "8192";
         }
 
         foreach ((string key, string value) in replaced)

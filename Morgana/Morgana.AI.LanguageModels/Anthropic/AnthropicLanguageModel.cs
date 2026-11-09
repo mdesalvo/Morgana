@@ -11,7 +11,7 @@ namespace Morgana.AI.LanguageModels.Anthropic;
 /// Supports Claude models (claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5, ...)
 /// </summary>
 /// <remarks>
-/// Requires ApiKey on the tier's connection. The embedded pricing.json carries Anthropic's standard processing prices:
+/// Requires ApiKey on the tier's connection. The embedded models.json carries Anthropic's standard processing prices:
 /// its cache write is the 1-hour write because <see cref="MorganaAnthropicClient"/> asks for a cache that lives an hour,
 /// while Claude Haiku 5.5 is priced at its band for prompts up to 100,000 tokens.
 /// </remarks>
@@ -30,11 +30,19 @@ public class AnthropicLanguageModel(ILoggerFactory? loggerFactory = null) : Morg
         RequireField(connection.ApiKey, nameof(AnthropicTierConnection.ApiKey));
 
     /// <inheritdoc />
+    public override void ValidateOptions(Records.ModelOptions options)
+    {
+        // Without a ceiling the SDK adapter sends 1024 tokens and reasoning tokens count against them.
+        if (options.MaxOutputTokens is null)
+            throw new InvalidOperationException("MaxOutputTokens is missing: Anthropic needs an output ceiling on every call and neither the tier nor the provider's models.json declares one for this model.");
+    }
+
+    /// <inheritdoc />
     /// <remarks>
     /// The SDK adapter is wrapped in <see cref="MorganaAnthropicClient"/>, which ends every request on a role
     /// that Claude accepts and marks the leading system message for prompt caching.
     /// </remarks>
-    protected override IChatClient CreateChatClient(AnthropicTierConnection connection, Records.TierConfiguration options)
+    protected override IChatClient CreateChatClient(AnthropicTierConnection connection, Records.ModelOptions options)
     {
         // Left to its defaults the SDK retries a rate-limited or overloaded call on its own, with a
         // backoff nobody sees. The retry ceiling and the per-attempt timeout bound a throttled call and

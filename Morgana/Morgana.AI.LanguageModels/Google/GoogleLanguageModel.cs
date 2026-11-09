@@ -11,7 +11,7 @@ namespace Morgana.AI.LanguageModels.Google;
 /// Supports Gemini models through the Gemini API (gemini-3.5-flash-lite, gemini-3.8-flash, gemini-4-argon, ...)
 /// </summary>
 /// <remarks>
-/// Requires ApiKey on the tier's connection. The embedded pricing.json carries Google's standard processing prices for
+/// Requires ApiKey on the tier's connection. The embedded models.json carries Google's standard processing prices for
 /// prompts up to 200,000 tokens, the ones in force once each promotion ends: Gemini bills a cache write as plain input,
 /// so the write price equals the input price. Gemini reports a blocked prompt or answer inside the response, so none of
 /// its refusals reaches the framework as an exception.
@@ -28,7 +28,7 @@ public class GoogleLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
         RequireField(connection.ApiKey, nameof(GoogleTierConnection.ApiKey));
 
     /// <inheritdoc />
-    protected override IChatClient CreateChatClient(GoogleTierConnection connection, Records.TierConfiguration options)
+    protected override IChatClient CreateChatClient(GoogleTierConnection connection, Records.ModelOptions options)
     {
         // The SDK retries a throttled or failed attempt on its own and its count includes the first attempt.
         // Its Timeout stays unset: for a streamed answer it would bound the whole body, which only the caller's silence budget may end.

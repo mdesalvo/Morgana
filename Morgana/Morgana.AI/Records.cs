@@ -221,15 +221,6 @@ public static class Records
     /// <param name="CacheWriteUsdPerMillion">Price of a prompt token written into the provider's cache, at the lifetime that the provider's client asks for.</param>
     public record ModelPricing(decimal InputUsdPerMillion, decimal OutputUsdPerMillion, decimal CacheReadUsdPerMillion, decimal CacheWriteUsdPerMillion);
 
-    /// <summary>The <c>pricing.json</c> that every provider plugin embeds: the models that the provider prices for any tier that declares no Pricing of its own.</summary>
-    /// <param name="Models">Every priced model. An empty list prices nothing, so a tier on this provider runs only on the Pricing that it declares itself.</param>
-    public record ProviderPricing(List<PricedModel> Models);
-
-    /// <summary>One model that a provider prices.</summary>
-    /// <param name="Name">The name under which the provider catalogues the model: a tier's <c>Options:ModelId</c> unless the provider reads it otherwise, matched with its exact casing.</param>
-    /// <param name="Pricing">What the model costs.</param>
-    public record PricedModel(string Name, ModelPricing Pricing);
-
     /// <summary>
     /// What one dust unit is worth on a tier: tokens per unit for each direction and the cost weights of cached input.
     /// A zero on either axis makes that direction free. It is derived from a <see cref="ModelPricing"/>, listed by the provider or declared by the tier, by
@@ -293,62 +284,82 @@ public static class Records
         Performance
     }
 
-    /// <summary>The <c>Morgana:LanguageModels</c> section: the three tiers, each served by its own provider.</summary>
-    public record LLMConfiguration(LLMTiers Tiers);
-
-    /// <summary>The definitions of the three tiers, all of them mandatory.</summary>
-    public record LLMTiers(
-        TierDefinition Economy,
-        TierDefinition Efficiency,
-        TierDefinition Performance)
-    {
-        /// <summary>Returns the definition declared for <paramref name="tier"/>.</summary>
-        public TierDefinition For(LLMTier tier) => tier switch
-        {
-            // The cheapest tier takes the definition that the deployer declared for Economy.
-            LLMTier.Economy => Economy,
-            // The middle tier takes the definition that the deployer declared for Efficiency.
-            LLMTier.Efficiency => Efficiency,
-            // The most capable tier takes the definition that the deployer declared for Performance.
-            LLMTier.Performance => Performance,
-            // An unknown tier is refused, since every tier must be declared.
-            _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, null)
-        };
-    }
-
     /// <summary>A tier as it is served: its client, the provider that built the client and its dust.</summary>
     public record ServedTier(IChatClient Client, MorganaLanguageModel LanguageModel, MagicDustPricing MorganaDust);
 
-    /// <summary>
-    /// One tier with its own provider name and model.
-    /// Declared under Morgana:LanguageModels:Tiers:{tier} as a JSON object keyed by name rather than an array, so that overrides of
-    /// different configuration layers merge by key. The Connection section is not bound here: the provider that the tier
-    /// names binds it, because only that provider knows its shape.
-    /// Pricing, when declared, is what the tier's model costs: it prevails over the provider's pricing.json and prices a model that the file does not list.
-    /// </summary>
-    public record TierDefinition(
-        string Provider,
-        TierConfiguration Options,
-        ModelPricing? Pricing = null);
-
-    /// <summary>
-    /// The part of <see cref="ChatOptions"/> that a deployer sets per tier: the model and the output ceiling, nothing else.
-    /// The ceiling is mandatory on every tier: the Anthropic adapter falls back to 1024 when none is given
-    /// and reasoning tokens count against it. Sampling, reasoning and stop sequences are per-call parameters.
-    /// </summary>
-    public record TierConfiguration(
-        string ModelId,
-        int MaxOutputTokens)
+    /// <summary>The options of <see cref="ChatOptions"/> that a model carries, in a provider's <c>models.json</c> and on a tier alike.</summary>
+    /// <remarks>Tools, tool mode, instructions and response format are left out so that a deployment cannot force a tool call or rewrite what an agent was told.</remarks>
+    public record ModelOptions
     {
-        /// <summary>
-        /// Builds the <see cref="ChatOptions"/> that the tier's client fills into every call on this tier that leaves them unset.
-        /// </summary>
-        public ChatOptions ToChatOptions() => new()
+        /// <summary>The name under which the provider serves the model.</summary>
+        public required string ModelId { get; init; }
+
+        /// <summary>The output ceiling of one answer; the provider's models.json gives the model's own and a tier may lower it.</summary>
+        public int? MaxOutputTokens { get; init; }
+
+        /// <summary>The sampling temperature.</summary>
+        public float? Temperature { get; init; }
+
+        /// <summary>The nucleus sampling threshold.</summary>
+        public float? TopP { get; init; }
+
+        /// <summary>The number of most likely tokens that sampling is limited to.</summary>
+        public int? TopK { get; init; }
+
+        /// <summary>The penalty on tokens in proportion to how often they already appeared.</summary>
+        public float? FrequencyPenalty { get; init; }
+
+        /// <summary>The penalty on tokens that already appeared.</summary>
+        public float? PresencePenalty { get; init; }
+
+        /// <summary>The seed that makes sampling repeatable where the provider supports it.</summary>
+        public long? Seed { get; init; }
+
+        /// <summary>The reasoning effort and the form of its output.</summary>
+        public ReasoningOptions? Reasoning { get; init; }
+
+        /// <summary>The sequences that end generation.</summary>
+        public List<string>? StopSequences { get; init; }
+
+        /// <summary>The keys that only one provider reads.</summary>
+        public AdditionalPropertiesDictionary? AdditionalProperties { get; init; }
+
+        /// <summary>Fills into <paramref name="chatOptions"/> what this model declares and the call left unset.</summary>
+        public void FillUnsetOptions(ChatOptions chatOptions)
         {
-            ModelId = ModelId,
-            MaxOutputTokens = MaxOutputTokens
-        };
+            // The call's own choice wins over the tier for each scalar option.
+            chatOptions.ModelId ??= ModelId;
+            chatOptions.MaxOutputTokens ??= MaxOutputTokens;
+            chatOptions.Temperature ??= Temperature;
+            chatOptions.TopP ??= TopP;
+            chatOptions.TopK ??= TopK;
+            chatOptions.FrequencyPenalty ??= FrequencyPenalty;
+            chatOptions.PresencePenalty ??= PresencePenalty;
+            chatOptions.Seed ??= Seed;
+
+            // A copy is filled in, because a shared instance would leak one call's changes into the next.
+            if (chatOptions.Reasoning is null && Reasoning is not null)
+                chatOptions.Reasoning = new ReasoningOptions { Effort = Reasoning.Effort, Output = Reasoning.Output };
+
+            // A copy of the list for the same reason: the call may append to its own stop sequences.
+            if (chatOptions.StopSequences is null && StopSequences is not null)
+                chatOptions.StopSequences = [.. StopSequences];
+
+            // Provider-specific keys are merged one by one, so a call that sets one of them keeps its own value.
+            if (AdditionalProperties is not null)
+            {
+                // The call's dictionary is created when it has none, never shared with this record.
+                chatOptions.AdditionalProperties ??= new AdditionalPropertiesDictionary();
+                foreach (KeyValuePair<string, object?> additionalProperty in AdditionalProperties)
+                    chatOptions.AdditionalProperties.TryAdd(additionalProperty.Key, additionalProperty.Value);
+            }
+        }
     }
+
+    /// <summary>A model as a provider catalogues it and as a tier runs it.</summary>
+    /// <param name="Options">What the model is called and how it is asked.</param>
+    /// <param name="Pricing">What the model costs.</param>
+    public record ModelDefinition(ModelOptions Options, ModelPricing Pricing);
 
     /// <summary>
     /// Per-conversation lifetime dust budget (no sliding window, no reset). Orthogonal to RateLimitOptions.

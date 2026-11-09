@@ -1,32 +1,35 @@
 ---
 name: model-catalog-update
-description: Brings the model catalogue of Morgana's provider plugins up to date with the vendors' official lineups and prices. Use when the user says things like "update the model catalogue", "aggiorna il catalogo dei modelli", "refresh the model prices", "are our model prices current?".
+description: Brings the model catalogue of Morgana's provider plugins up to date with the vendors' official lineups, prices and output ceilings. Use when the user says things like "update the model catalogue", "aggiorna il catalogo dei modelli", "refresh the model prices", "are our model prices current?".
 ---
 
 # model-catalog-update
 
-Every provider plugin embeds a mandatory `pricing.json` listing the models it serves with their
-prices. `MorganaLanguageModel` reads it and turns those dollars into dust. A tier whose model is
-missing from its provider's `pricing.json` does not start. Keeping the files current is periodic
-maintenance: vendors add models, change prices, end promotions and retire models.
+Every provider plugin embeds a mandatory `models.json` listing the models it serves with their
+prices and their output ceiling. `MorganaLanguageModel` reads it, turns those dollars into dust and
+lays each entry under the tier that runs the model, so a tier inherits both and overrides them key by
+key. A tier whose model is priced neither by its provider's `models.json` nor by its own `Pricing` does
+not start. An Anthropic tier left without a ceiling does not start either. Keeping the files
+current is periodic maintenance: vendors add models, change prices and ceilings, end promotions and
+retire models.
 
 ## Scope
 
 | Plugin | File | Official sources |
 |---|---|---|
-| Anthropic | `Morgana/Morgana.AI.LanguageModels/Anthropic/pricing.json` | https://platform.claude.com/docs/en/about-claude/pricing · https://platform.claude.com/docs/en/about-claude/models/overview · https://platform.claude.com/docs/en/about-claude/model-deprecations |
-| Google | `Morgana/Morgana.AI.LanguageModels/Google/pricing.json` | https://ai.google.dev/gemini-api/docs/pricing · https://ai.google.dev/gemini-api/docs/models · https://ai.google.dev/gemini-api/docs/deprecations |
-| OpenAI | `Morgana/Morgana.AI.LanguageModels/OpenAI/pricing.json` | https://developers.openai.com/api/docs/pricing · https://developers.openai.com/api/docs/deprecations |
-| Ollama | `Morgana/Morgana.AI.LanguageModels/Ollama/pricing.json` | https://ollama.com/pricing · https://ollama.com/api/tags (the cloud lineup) · `POST https://ollama.com/api/show` with `{"model": "<name>"}` (the capabilities of one model) |
+| Anthropic | `Morgana/Morgana.AI.LanguageModels/Anthropic/models.json` | https://platform.claude.com/docs/en/about-claude/pricing · https://platform.claude.com/docs/en/about-claude/models/overview · https://platform.claude.com/docs/en/about-claude/model-deprecations · `GET https://api.anthropic.com/v1/models/<id>` (the ceiling) |
+| Google | `Morgana/Morgana.AI.LanguageModels/Google/models.json` | https://ai.google.dev/gemini-api/docs/pricing · https://ai.google.dev/gemini-api/docs/models · https://ai.google.dev/gemini-api/docs/deprecations · `GET https://generativelanguage.googleapis.com/v1beta/models/<id>` (the ceiling) |
+| OpenAI | `Morgana/Morgana.AI.LanguageModels/OpenAI/models.json` | https://developers.openai.com/api/docs/pricing · https://developers.openai.com/api/docs/deprecations · `https://developers.openai.com/api/docs/models/<id>` (the ceiling) |
+| Ollama | `Morgana/Morgana.AI.LanguageModels/Ollama/models.json` | https://ollama.com/pricing · https://ollama.com/api/tags (the cloud lineup) · `POST https://ollama.com/api/show` with `{"model": "<name>"}` (the capabilities of one model) |
 
 Ollama's catalogue holds only the **cloud models** that ollama.com hosts and bills per token. A local
 model costs nothing to Ollama's account, so it is never catalogued and a tier running one declares its own
 `Pricing`, zero or the deployment's hosting cost. The same holds for any provider that hosts models
 under names its customers choose (Azure OpenAI deployments, for instance). A deployment that needs a model before
 the next release catalogues it, or pays a negotiated price, declares `Pricing` on its tier too: the
-catalogue is the default that such a tier overlays. Where a source URL has moved, follow the vendor's redirect. Prices and
-model ids come only from these official pages, never from memory, third-party aggregators or
-gateways.
+catalogue is the default that such a tier overlays. Where a source URL has moved, follow the vendor's redirect. Prices,
+ceilings and model ids come only from these official sources, never from memory, third-party
+aggregators or gateways.
 
 ## What is catalogued
 
@@ -57,12 +60,13 @@ lists for that family (`mistral-large-3:675b`). Never the `:cloud` or `-cloud` f
 the plugin prices that form under the catalogue name by itself. Never a version tag either
 (`deepseek-v4-pro:0813`).
 
-## How a price is read
+## How an entry is written
 
-Each entry of `Models` is one line, in US dollars per million tokens:
+Each entry of `Models` is one line with the shape of a tier's own `Options` and `Pricing`, prices in
+US dollars per million tokens:
 
 ```json
-{ "Name": "claude-sonnet-5-5", "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 4.00 } }
+{ "Options": { "ModelId": "claude-sonnet-5-5", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 4.00 } }
 ```
 
 Beside `Models` the file carries `LastUpdate`: the UTC moment the file was last reconciled with its
@@ -75,8 +79,20 @@ vendor's sources, written `yyyy-MM-ddTHH:mm:ssZ`.
 }
 ```
 
-`Name` is matched against a tier's `ModelId` with its exact casing and appears once per file. The
-prices follow these rules:
+`Options:ModelId` is matched against a tier's `ModelId` with its exact casing and appears once per
+file. An entry carries no other option than `MaxOutputTokens`: sampling and reasoning are the
+deployment's choice. The ceiling is the model's own maximum output, as its vendor states it:
+
+- Anthropic: `max_tokens` of `GET /v1/models/<id>`;
+- Google: `outputTokenLimit` of `GET /v1beta/models/<id>`;
+- OpenAI: the "Max output tokens" of the model's page, since its models API carries no ceiling;
+- Ollama: none. Neither `/api/show` nor the pricing page states one and a model's output is bounded by
+  its window, so an Ollama entry never carries `MaxOutputTokens`.
+
+The two API calls are free and need a key of the vendor: read it from where the deployment keeps it
+and never print it.
+
+The prices follow these rules:
 
 - **standard processing**: never batch, flex, priority, fast or regional uplifts;
 - **the peak price** where the vendor discounts some hours: Ollama's `(Off-Peak)` rows are never
@@ -98,12 +114,13 @@ cache-write column of that whole file changes with it and so do those remarks.
 
 ## Procedure
 
-1. Read the current `pricing.json` of each plugin in scope.
-2. Fetch every official source above and build, per vendor, the list of models that qualify. For
-   Ollama, call `/api/show` once for every model that the pricing page lists: it needs no key.
+1. Read the current `models.json` of each plugin in scope.
+2. Fetch every official source above and build, per vendor, the list of models that qualify with
+   their prices and ceilings. For Ollama, call `/api/show` once for every model that the pricing
+   page lists: it needs no key.
 3. Compare the two and sort every difference into one of four groups:
    - **new**: a qualifying model missing from the file;
-   - **repriced**: a catalogued model whose price changed, including a promotion that ended;
+   - **repriced**: a catalogued model whose price or ceiling changed, including a promotion that ended;
    - **leaving**: a catalogued model that the vendor has retired, has scheduled for retirement or
      no longer lists;
    - **not catalogued**: a model seen on the sources but excluded by the rules above, with the rule.

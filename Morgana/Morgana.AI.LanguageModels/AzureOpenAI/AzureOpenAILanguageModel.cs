@@ -18,7 +18,7 @@ namespace Morgana.AI.LanguageModels.AzureOpenAI;
 /// Requires ApiKey and Endpoint on the tier's connection. Supports both classic Azure OpenAI endpoints (e.g., https://resource.openai.azure.com)
 /// and Azure AI Foundry v1 API endpoints (e.g., https://resource.services.ai.azure.com/api/projects/X/openai/v1).
 /// A tier's ModelId is the name of a deployment on that resource or project, which the customer chooses: the plugin ships
-/// an empty pricing.json, so a tier running on Azure declares its own Pricing.
+/// an empty models.json, so a tier running on Azure declares its own Pricing.
 /// </remarks>
 /// <param name="loggerFactory">Optional logger factory for the <see cref="AttemptLoggingHandler"/> that writes one line per attempt on the wire; <c>null</c> writes nothing.</param>
 public class AzureOpenAILanguageModel(ILoggerFactory? loggerFactory = null) : MorganaLanguageModel<AzureOpenAITierConnection>
@@ -40,7 +40,7 @@ public class AzureOpenAILanguageModel(ILoggerFactory? loggerFactory = null) : Mo
     }
 
     /// <inheritdoc />
-    protected override IChatClient CreateChatClient(AzureOpenAITierConnection connection, Records.TierConfiguration options)
+    protected override IChatClient CreateChatClient(AzureOpenAITierConnection connection, Records.ModelOptions options)
     {
         // The endpoint is required by ValidateConnection, so it is present when a client is built.
         Uri endpoint = new Uri(connection.Endpoint!);
