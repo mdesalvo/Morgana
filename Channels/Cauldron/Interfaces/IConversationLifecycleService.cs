@@ -45,7 +45,7 @@ public interface IConversationLifecycleService
 
     /// <summary>
     /// Raised, from a timer thread, when a turn in flight has gone silent for longer than
-    /// <c>Cauldron:ReplyTimeoutSeconds</c>. Nothing on screen has changed yet: the subscriber, which
+    /// the wait that Morgana reports. Nothing on screen has changed yet: the subscriber, which
     /// alone runs on the circuit, settles the turn by recovering its reply or abandoning it.
     /// </summary>
     event Action? OnReplyDeadlineExpired;

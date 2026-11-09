@@ -21,9 +21,7 @@ public record StartConversationResponse(
 /// <param name="Resumed">Always true on this path; present so the shape reads unambiguously.</param>
 /// <param name="ActiveAgent">Most recent active agent, or null when the conversation was last
 /// held by base Morgana — nullable because the persistence lookup legitimately finds nothing.</param>
-/// <param name="DustLevel">Remaining dust as a fraction of the conversation budget (fuel-gauge
-/// semantics: 1.0 = full, 0.0 = empty), floored to whole-percent steps. Null when dust limiting
-/// is disabled, in which case the client hides its gauge.</param>
+/// <param name="ConversationMetadata">The conversation as every pushed message describes it: the dust gauge and the channel's reply wait.</param>
 /// <param name="DustExhaustedMessage">Canonical terminal lockout message when the resumed
 /// conversation is already dust-dead, so the client can re-surface the banner up front instead
 /// of letting the user rediscover the wall by firing a message. Null otherwise.</param>
@@ -31,7 +29,7 @@ public record ResumeConversationResponse(
     string ConversationId,
     bool Resumed,
     string? ActiveAgent,
-    double? DustLevel,
+    ConversationMetadata ConversationMetadata,
     string? DustExhaustedMessage);
 
 /// <summary>
@@ -39,11 +37,10 @@ public record ResumeConversationResponse(
 /// </summary>
 /// <param name="Messages">Conversation messages in chronological order across all participating
 /// agents. Never empty on a 200: an empty history is reported as 404.</param>
-/// <param name="DustLevel">REMAINING dust as a fraction of the conversation's budget (1.0 = full,
-/// 0.0 = spent), the same level every pushed message carries. Null when dust limiting is disabled.</param>
+/// <param name="ConversationMetadata">The conversation as every pushed message describes it: the dust gauge and the channel's reply wait.</param>
 public record ConversationHistoryResponse(
     MorganaChatMessage[] Messages,
-    double? DustLevel = null);
+    ConversationMetadata ConversationMetadata);
 
 /// <summary>
 /// Response body of <c>GET /api/morgana/commands</c> (200 OK): every command Morgana executes on a

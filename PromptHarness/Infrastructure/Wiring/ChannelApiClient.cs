@@ -117,7 +117,7 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
             return;
 
         await using SqliteConnection connection = new SqliteConnection(
-            $"Data Source={Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.db")}");
+            $"Data Source={Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.sqlite")}");
         await connection.OpenAsync();
         await using SqliteCommand command = connection.CreateCommand();
 
@@ -139,7 +139,7 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
     public async Task<object?> QueryRecordAsync(string conversationId, string sql)
     {
         await using SqliteConnection connection = new SqliteConnection(
-            $"Data Source={Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.db")};Pooling=False");
+            $"Data Source={Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.sqlite")};Pooling=False");
         await connection.OpenAsync();
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = sql;
@@ -158,5 +158,5 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
 
     /// <summary>Whether the host keeps a record of the conversation: its own database in the run's storage path.</summary>
     public bool ConversationIsOnRecord(string conversationId) =>
-        File.Exists(Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.db"));
+        File.Exists(Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.sqlite"));
 }

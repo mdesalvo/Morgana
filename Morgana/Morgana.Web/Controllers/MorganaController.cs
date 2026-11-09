@@ -31,6 +31,9 @@ public class MorganaController : ControllerBase
     private readonly IDustLimitService dustLimitService;
     private readonly Records.DustLimitingOptions dustLimitingOptions;
 
+    /// <summary>Seconds that every channel is told to wait on a silent turn.</summary>
+    private readonly int replyTimeoutSeconds;
+
     /// <summary>
     /// Initializes controller with actor system, persistence, dust budget and channel factory.
     /// Validates channel metadata handshake and delivery mode at conversation start.
@@ -42,7 +45,8 @@ public class MorganaController : ControllerBase
         IChannelMetadataStore channelMetadataStore,
         IConversationPersistenceService conversationPersistenceService,
         IDustLimitService dustLimitService,
-        IOptions<Records.DustLimitingOptions> dustLimitingOptions)
+        IOptions<Records.DustLimitingOptions> dustLimitingOptions,
+        IConfiguration configuration)
     {
         this.actorSystem = actorSystem;
         this.logger = logger;
@@ -51,6 +55,9 @@ public class MorganaController : ControllerBase
         this.conversationPersistenceService = conversationPersistenceService;
         this.dustLimitService = dustLimitService;
         this.dustLimitingOptions = dustLimitingOptions.Value;
+
+        // The wait that every channel is told, read once from the ladder that orders every party's wait.
+        replyTimeoutSeconds = (int)Records.TurnWaits.From(configuration).Channel.TotalSeconds;
     }
 
     /// <summary>
@@ -216,7 +223,7 @@ public class MorganaController : ControllerBase
             ConversationId: conversationId,
             Resumed: true,
             ActiveAgent: lastActiveAgent,
-            DustLevel: dustLevel,
+            ConversationMetadata: new ConversationMetadata(dustLevel, replyTimeoutSeconds),
             DustExhaustedMessage: dustExhaustedMessage));
     }
 
@@ -243,11 +250,11 @@ public class MorganaController : ControllerBase
 
         logger.LogInformation("Retrieved {ChatMessagesLength} messages for conversation {ConversationId}", chatMessages.Length, conversationId);
 
-        // The gauge travels with the transcript: a client catching up on replies it missed
-        // redraws it as the pushes it missed would have
+        // The conversation's description travels with the transcript: a client catching up on replies it missed
+        // redraws the gauge and learns the wait as the pushes it missed would have told it
         return Ok(new ConversationHistoryResponse(
             chatMessages,
-            await dustLimitService.GetRemainingLevelAsync(conversationId)));
+            new ConversationMetadata(await dustLimitService.GetRemainingLevelAsync(conversationId), replyTimeoutSeconds)));
     }
 
     /// <summary>

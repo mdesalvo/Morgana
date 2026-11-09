@@ -56,6 +56,9 @@ public interface IChatStateService
     /// </summary>
     double? DustLevel { get; set; }
 
+    /// <summary>How long a turn may stay silent before it is given up on, as Morgana last reported it; null until she has.</summary>
+    TimeSpan? ReplyTimeout { get; set; }
+
     /// <summary>
     /// The latest timestamp Morgana wrote on a reply this client was given, pushed or recovered.
     /// It is what a catch-up compares the conversation's history with: both sides of the

@@ -148,7 +148,7 @@ public class ConfigurationAgentDirectoryService : IAgentDirectoryService, IDispo
 
         // The same ladder the answering side reads its own step off, so the two cannot disagree about
         // which of them is meant to give up first.
-        peerRequestTimeout = Records.PeerConsultationWaits.From(configuration).Caller;
+        peerRequestTimeout = Records.TurnWaits.From(configuration).Caller;
     }
 
     /// <inheritdoc />

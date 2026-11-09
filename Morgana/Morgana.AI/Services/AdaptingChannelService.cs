@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Morgana.AI.Adapters;
 using Morgana.AI.Interfaces;
 using Morgana.Contracts;
@@ -31,17 +32,25 @@ public class AdaptingChannelService : IChannelService
     /// </summary>
     private readonly MorganaChannelAdapter channelAdapter;
 
+    /// <summary>Seconds that every channel is told to wait on a silent turn.</summary>
+    private readonly int replyTimeoutSeconds;
+
     /// <param name="channelServiceFactory">Resolves the concrete transport for a conversation's <c>deliveryMode</c>.</param>
     /// <param name="channelMetadataStore">Leaf singleton holding the per-conversation handshake; injected rather than folded in, to keep the DI graph acyclic.</param>
     /// <param name="channelAdapter">Capability-driven degradation applied to every outbound <see cref="ChannelMessage"/>.</param>
+    /// <param name="configuration">Application configuration, read for the turn budget that the channels' wait derives from.</param>
     public AdaptingChannelService(
         IChannelServiceFactory channelServiceFactory,
         IChannelMetadataStore channelMetadataStore,
-        MorganaChannelAdapter channelAdapter)
+        MorganaChannelAdapter channelAdapter,
+        IConfiguration configuration)
     {
         this.channelServiceFactory = channelServiceFactory;
         this.channelMetadataStore = channelMetadataStore;
         this.channelAdapter = channelAdapter;
+
+        // The wait that every channel is told, read once from the ladder that orders every party's wait.
+        replyTimeoutSeconds = (int)Records.TurnWaits.From(configuration).Channel.TotalSeconds;
     }
 
     /// <inheritdoc/>
@@ -52,9 +61,16 @@ public class AdaptingChannelService : IChannelService
         // coordinates decide who carries it.
         ChannelMetadata registeredChannelMetadata = await channelMetadataStore.GetChannelMetadataAsync(channelMessage.ConversationId);
 
+        // Every message to a channel tells it how long to wait on its next turn whichever part of Morgana wrote
+        // the message and the dust level it already carries stays.
+        ChannelMessage stampedChannelMessage = channelMessage with
+        {
+            ConversationMetadata = (channelMessage.ConversationMetadata ?? new ConversationMetadata()) with { ReplyTimeoutSeconds = replyTimeoutSeconds }
+        };
+
         // Adapt before resolving the transport, never after: what the transport is handed must already
         // fit the channel and AdaptAsync short-circuits without I/O when it already does.
-        ChannelMessage adaptedChannelMessage = await channelAdapter.AdaptAsync(channelMessage, registeredChannelMetadata.Capabilities);
+        ChannelMessage adaptedChannelMessage = await channelAdapter.AdaptAsync(stampedChannelMessage, registeredChannelMetadata.Capabilities);
 
         // Resolved per send rather than held: the same decorator serves every conversation and each
         // announced its own delivery mode at the handshake.

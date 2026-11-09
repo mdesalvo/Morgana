@@ -204,12 +204,17 @@ public sealed class ConversationApiTests
         JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
 
         // What a returning client redraws from: the id it resumed, the agent the conversation was left
-        // talking to and the dust gauge (none: the harness runs with dust limiting off).
+        // talking to and the conversation as every push describes it, whose dust gauge is absent because
+        // the harness runs with dust limiting off.
         Assert.Equal(conversationId, body.GetProperty("conversationId").GetString());
         Assert.True(body.GetProperty("resumed").GetBoolean());
         Assert.Equal("billing", body.GetProperty("activeAgent").GetString());
-        Assert.Equal(JsonValueKind.Null, body.GetProperty("dustLevel").ValueKind);
+        JsonElement conversationMetadata = body.GetProperty("conversationMetadata");
+        Assert.Equal(JsonValueKind.Null, conversationMetadata.GetProperty("dustLevel").ValueKind);
         Assert.Equal(JsonValueKind.Null, body.GetProperty("dustExhaustedMessage").ValueKind);
+
+        // A resumed client may send before any push reaches it, so the wait it owes a turn travels here too
+        Assert.True(conversationMetadata.GetProperty("replyTimeoutSeconds").GetInt32() > 0);
     }
 
     [Fact]

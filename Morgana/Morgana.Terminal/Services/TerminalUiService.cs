@@ -16,9 +16,6 @@ namespace Morgana.Terminal.Services;
 /// </summary>
 public sealed class TerminalUiService : ITerminalUi
 {
-    /// <summary>Fallback for the channel's <c>ReplyTimeoutSeconds</c> when absent or non-positive.</summary>
-    private const int DefaultReplyTimeoutSeconds = 120;
-
     /// <summary>Fallback for the channel's <c>MaxInputLength</c> when absent or non-positive.</summary>
     private const int DefaultMaxInputLength = 500;
 
@@ -46,8 +43,8 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Everything Morgana delivers in the order it was produced, so a final message can never overtake a chunk that precedes it.</summary>
     private readonly Channel<InboundEvent> inbound = Channel.CreateUnbounded<InboundEvent>();
 
-    /// <summary>How long a turn may go without a sign of life before the prompt is handed back to the user.</summary>
-    private readonly TimeSpan replyTimeout;
+    /// <summary>How long a turn may stay silent before the prompt is handed back to the user, as Morgana last reported it; null until she has.</summary>
+    private TimeSpan? replyTimeout;
 
     /// <summary>Ends the countdown on the turn in flight; null when nothing is being waited for. Mutated only under <see cref="renderLock"/>.</summary>
     private CancellationTokenSource? replyWatchdog;
@@ -195,10 +192,6 @@ public sealed class TerminalUiService : ITerminalUi
         this.commandRegistry = commandRegistry;
         this.profile = profile;
         this.theme = theme;
-
-        // A non-positive wait would declare every turn lost the instant it is sent, so it falls back too
-        int replyTimeoutSeconds = configuration.GetValue<int?>(profile.SectionKey("ReplyTimeoutSeconds")) ?? DefaultReplyTimeoutSeconds;
-        replyTimeout = TimeSpan.FromSeconds(replyTimeoutSeconds > 0 ? replyTimeoutSeconds : DefaultReplyTimeoutSeconds);
 
         // A non-positive cap would lock the prompt shut, so it falls back as well
         maxInputLength = configuration.GetValue<int?>(profile.SectionKey("MaxInputLength")) ?? DefaultMaxInputLength;
@@ -436,6 +429,10 @@ public sealed class TerminalUiService : ITerminalUi
             dustGaugeMarkup = $"   [grey54]dust[/] [bold {dustColor}]{dustPercent}%[/]";
             reportedDustLevel = level;
         }
+
+        // Every message carries the wait Morgana allows, so the next turn waits as long as she does
+        if (message.ConversationMetadata?.ReplyTimeoutSeconds is { } replyTimeoutSeconds)
+            replyTimeout = TimeSpan.FromSeconds(replyTimeoutSeconds);
 
         // Morgana pushes the exhaustion notice at the end of the turn, so the user learns of it before wasting a
         // keystroke. The red banner above stays Morgana's word and the prompt shows the way on: /new or Esc
@@ -1407,6 +1404,9 @@ public sealed class TerminalUiService : ITerminalUi
         dustGaugeMarkup = string.Empty;
         reportedDustLevel = null;
 
+        // The new conversation learns its wait from its own first message
+        replyTimeout = null;
+
         // A fresh budget: the spent latch and any pending choice of the old conversation are gone
         conversationDead = false;
         quickReplyPrompt.Dismiss();
@@ -1419,13 +1419,18 @@ public sealed class TerminalUiService : ITerminalUi
     }
 
     /// <summary>
-    /// Gives the turn in flight <see cref="replyTimeout"/> of silence before the user gets the prompt back with an honest
+    /// Gives the turn in flight the silence that Morgana allows before the user gets the prompt back with an honest
     /// notice. Every sign of life arms it again from zero, so only a turn Morgana has abandoned expires.
     /// Must be called under <see cref="renderLock"/>.
     /// </summary>
     private void StartReplyWatchdog(LiveDisplayContext ctx)
     {
         CancelReplyWatchdog();
+
+        // Morgana states the wait on her first message and on resume, so a turn is never sent before it is known
+        if (replyTimeout is not { } silenceAllowed)
+            return;
+
         CancellationTokenSource watchdog = CancellationTokenSource.CreateLinkedTokenSource(uiStopping);
         replyWatchdog = watchdog;
 
@@ -1435,7 +1440,7 @@ public sealed class TerminalUiService : ITerminalUi
             try
             {
                 // The silence is measured from now
-                await Task.Delay(replyTimeout, watchdog.Token);
+                await Task.Delay(silenceAllowed, watchdog.Token);
             }
             catch (OperationCanceledException)
             {
@@ -1474,7 +1479,7 @@ public sealed class TerminalUiService : ITerminalUi
                 // The notice tells the user the turn may be lost
                 history.Add(new DisplayedMessage(
                     profile.ChannelName,
-                    $"no answer from Morgana after {replyTimeout.TotalSeconds:0}s — the turn may be lost, ask again or press Esc to quit",
+                    $"no answer from Morgana after {silenceAllowed.TotalSeconds:0}s — the turn may be lost, ask again or press Esc to quit",
                     TerminalTheme.ErrorColor,
                     ChannelMessageTypes.Error));
                 ReleaseTurn();

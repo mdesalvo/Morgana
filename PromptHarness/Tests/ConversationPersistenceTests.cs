@@ -469,7 +469,7 @@ public sealed class ConversationPersistenceTests
             fixture.Configuration["Morgana:ConversationPersistence:EncryptionKey"]!);
 
         using SqliteConnection connection = new SqliteConnection(
-            $"Data Source={Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.db")}");
+            $"Data Source={Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.sqlite")}");
         connection.Open();
 
         using SqliteCommand command = connection.CreateCommand();

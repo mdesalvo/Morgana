@@ -18,16 +18,6 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
     private readonly IStreamingService _streamingService;
     private readonly ILogger _logger;
 
-    /// <summary>Fallback for <c>Cauldron:ReplyTimeoutSeconds</c> when absent or non-positive.</summary>
-    private const int DefaultReplyTimeoutSeconds = 120;
-
-    /// <summary>
-    /// How long a turn may go completely silent before it is given up on. It measures silence, not
-    /// the length of the turn: every chunk pushes the deadline back, so a long answer still arriving
-    /// is never given up on. From <c>Cauldron:ReplyTimeoutSeconds</c>.
-    /// </summary>
-    private readonly TimeSpan _replyTimeout;
-
     /// <summary>Counts down the silence on the turn in flight; null when nothing is being waited for.</summary>
     private Timer? _replyDeadline;
 
@@ -47,7 +37,6 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         IConversationHistoryService history,
         IChatStateService chatState,
         IStreamingService streaming,
-        IConfiguration configuration,
         ILogger logger)
     {
         _http = http;
@@ -57,10 +46,6 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         _chatStateService = chatState;
         _streamingService = streaming;
         _logger = logger;
-
-        // A non-positive wait would give up on every turn the instant it is sent, so it falls back too
-        int replyTimeoutSeconds = configuration.GetValue<int?>("Cauldron:ReplyTimeoutSeconds") ?? DefaultReplyTimeoutSeconds;
-        _replyTimeout = TimeSpan.FromSeconds(replyTimeoutSeconds > 0 ? replyTimeoutSeconds : DefaultReplyTimeoutSeconds);
     }
 
     /// <summary>
@@ -179,7 +164,12 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
                 // widget reflects real residual dust immediately, not a pristine bar that
                 // only corrects itself after the first post-resume turn. Null leaves the
                 // indicator hidden (dust limiting disabled on Morgana).
-                _chatStateService.DustLevel = result?.DustLevel;
+                _chatStateService.DustLevel = result?.ConversationMetadata.DustLevel;
+
+                // A resumed page may send before any push reaches it, so the wait is taken from the resume answer.
+                _chatStateService.ReplyTimeout = result?.ConversationMetadata.ReplyTimeoutSeconds is { } replyTimeoutSeconds
+                    ? TimeSpan.FromSeconds(replyTimeoutSeconds)
+                    : null;
 
                 // The resumed conversation is already dust-dead: re-surface the canonical
                 // terminal banner up front (same ErrorReason as the live lockout, so the
@@ -345,7 +335,15 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         lock (_replyDeadlineLock)
         {
             _replyDeadline?.Dispose();
-            _replyDeadline = new Timer(_ => OnReplyDeadlineExpired?.Invoke(), null, _replyTimeout, Timeout.InfiniteTimeSpan);
+
+            // Morgana states the wait on her first message and on resume, so a turn is never sent before it is known.
+            if (_chatStateService.ReplyTimeout is not { } replyTimeout)
+            {
+                _replyDeadline = null;
+                return;
+            }
+
+            _replyDeadline = new Timer(_ => OnReplyDeadlineExpired?.Invoke(), null, replyTimeout, Timeout.InfiniteTimeSpan);
         }
     }
 
@@ -368,7 +366,7 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         _chatStateService.RemoveTypingIndicator();
         _chatStateService.IsSending = false;
         _chatStateService.AddChatError(
-            $"No answer from Morgana after {_replyTimeout.TotalSeconds:0} seconds. The turn may be lost — ask again.",
+            $"No answer from Morgana after {_chatStateService.ReplyTimeout?.TotalSeconds:0} seconds. The turn may be lost — ask again.",
             "reply_timeout");
     }
 
@@ -394,11 +392,11 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         if (missed.Length > 0)
             _logger.LogInformation("Recovered {Count} message(s) delivered while this client was away", missed.Length);
 
-        // The latest reply carries the dust gauge as it stands now, as its own push would have
+        // The latest reply carries the conversation's description as it stands now, as its own push would have
         return
         [
             .. missed.Select((message, index) => ToChannelMessage(
-                message, index == missed.Length - 1 ? new ConversationMetadata(history.DustLevel) : null))
+                message, index == missed.Length - 1 ? history.ConversationMetadata : null))
         ];
     }
 

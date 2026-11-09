@@ -71,6 +71,9 @@ public class ChatStateService : IChatStateService
     public double? DustLevel { get; set; }
 
     /// <inheritdoc />
+    public TimeSpan? ReplyTimeout { get; set; }
+
+    /// <inheritdoc />
     public DateTime LatestDeliveredTimestamp { get; private set; } = DateTime.MinValue;
 
     /// <inheritdoc />
@@ -341,6 +344,7 @@ public class ChatStateService : IChatStateService
         IsInitialized = false;
         HasCheckedStorage = false;
         DustLevel = null;
+        ReplyTimeout = null;
         LatestDeliveredTimestamp = DateTime.MinValue;
     }
 }

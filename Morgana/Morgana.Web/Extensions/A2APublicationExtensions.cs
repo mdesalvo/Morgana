@@ -33,7 +33,7 @@ public static class A2APublicationExtensions
         // Answering a colleague runs a real agent against a real model, so the wait is a turn's and
         // not a request timeout in disguise — but the innermost step of one: the agent that answers
         // gives up before the agent that asked, which gives up before the turn carrying them both.
-        TimeSpan a2aRequestTimeout = Records.PeerConsultationWaits.From(builder.Configuration).Callee;
+        TimeSpan a2aRequestTimeout = Records.TurnWaits.From(builder.Configuration).Callee;
 
         // Whether a partner's question is judged before an agent reads it; on unless the installation switches it off.
         bool peerGuardEnabled = builder.Configuration.GetValue("Morgana:ActorSystem:EnablePeerGuardrail", true);

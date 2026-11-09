@@ -321,6 +321,10 @@
                 if (message.ConversationMetadata?.DustLevel is { } dustLevel)
                     ChatStateService.DustLevel = dustLevel;
 
+                // Every message carries the wait Morgana allows, so the next turn waits as long as she does.
+                if (message.ConversationMetadata?.ReplyTimeoutSeconds is { } replyTimeoutSeconds)
+                    ChatStateService.ReplyTimeout = TimeSpan.FromSeconds(replyTimeoutSeconds);
+
                 // Temporary messages (system warnings, errors) - display as banners
                 if (string.Equals(message.MessageType, ChannelMessageTypes.SystemWarning, StringComparison.OrdinalIgnoreCase)
                     || string.Equals(message.MessageType, ChannelMessageTypes.Error, StringComparison.OrdinalIgnoreCase))

@@ -243,7 +243,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | `SQLiteConversationPersistenceService` | `IConversationPersistenceService` | Per-conversation SQLite: encrypted session BLOBs, the shared-context registry |
 | `SQLiteRateLimitService` | `IRateLimitService` | Sliding window per minute, hour and day. **Fails open** |
 | `SQLiteDustLimitService` | `IDustLimitService` | Owns **every** dust question asked anywhere — no caller does the arithmetic itself. Thresholds 70%, 90%, lockout. **Fails open** |
-| `SQLitePeerAdmissionService` | `IPeerAdmissionService` | Conversations a partner may open per hour. The one ledger that is not a conversation's (`morgana-peers.db`). **Fails closed** |
+| `SQLitePeerAdmissionService` | `IPeerAdmissionService` | Conversations a partner may open per hour. The one ledger that is not a conversation's (`morgana-peers.sqlite`). **Fails closed** |
 | `JWTAuthenticationService` | `IAuthenticationService` | HMAC-SHA256, issuer whitelist, audience, lifetime |
 | `HistoryReducerService` | *(factory)* | Builds `MorganaChatReducer` from config; `null` means "hand the LLM everything" |
 | `MorganaChatReducer` | `IChatReducer` | Replaces MEAI's summarizer, which drops every function-call message — so a tool-driven agent's summary reported, accurately for its view, that no tool ran |
@@ -408,7 +408,7 @@ LLM-guided rewrite, then a Markdig template fallback. Never throws.
 
 ## Persistence
 
-Per-conversation SQLite at `{StoragePath}/morgana-{conversationId}.db`, schema version in
+Per-conversation SQLite at `{StoragePath}/morgana-{conversationId}.sqlite`, schema version in
 `PRAGMA user_version` (currently 6), idempotent initialization.
 
 | Table | Purpose |

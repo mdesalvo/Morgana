@@ -864,20 +864,16 @@ public static class Records
     // ==========================================================================
 
     /// <summary>
-    /// How long each party to a consultation waits, as one ladder derived from the pipeline's own
-    /// turn budget.
+    /// How long each party to a turn waits, as one ladder derived from the pipeline's own turn budget.
     /// </summary>
     /// <remarks>
-    /// The parties cannot see each other, so the order is what makes a failure legible instead of
-    /// merely loud: the colleague gives up first and what comes back to the asking model is its
-    /// envelope; the asking agent gives up next and still has a turn left to answer the user in;
-    /// only then would the supervisor conclude nobody is coming. Stated once here because a party
-    /// deriving its own wait from the same setting would be free to derive it differently.
+    /// The parties cannot see each other, so the order makes a failure legible instead of merely loud: the colleague gives up first then the asking agent then the supervisor while the channel waits longest because it alone cannot see Morgana's phases.
     /// </remarks>
-    /// <param name="Turn">The pipeline's budget on one turn and the outermost of the three.</param>
+    /// <param name="Turn">The pipeline's budget on one turn and the outermost of the three that Morgana's own parties share.</param>
     /// <param name="Caller">Wait of the agent asking, on the wire.</param>
     /// <param name="Callee">Wait of the installation answering, on the actor that serves it.</param>
-    public record PeerConsultationWaits(TimeSpan Turn, TimeSpan Caller, TimeSpan Callee)
+    /// <param name="Channel">How long a channel waits on a silent turn before giving it up.</param>
+    public record TurnWaits(TimeSpan Turn, TimeSpan Caller, TimeSpan Callee, TimeSpan Channel)
     {
         /// <summary>Share of the turn left to the asking agent, the rest being what the turn keeps to answer with.</summary>
         private const double CallerShareOfTurn = 0.9;
@@ -885,17 +881,23 @@ public static class Records
         /// <summary>Share of the turn left to the answering installation, one step further in.</summary>
         private const double CalleeShareOfTurn = 0.8;
 
+        /// <summary>Phases that can pass before a channel sees the first word: the guard, the classifier and the agent can each spend a whole <c>Turn</c>.</summary>
+        private const int PhasesBeforeFirstWord = 3;
+
+        /// <summary>The time a webhook delivery is retried for, so a reply that Morgana is still delivering lands before the channel gives the turn up.</summary>
+        private static readonly TimeSpan DeliveryAllowance = TimeSpan.FromSeconds(30);
+
         /// <summary>
-        /// Reads the ladder off the pipeline's turn budget, which is the only thing configured: the
-        /// steps are proportions rather than subtracted seconds, so shortening the turn cannot
-        /// invert the order or leave a party waiting for no time at all.
+        /// Reads the whole ladder off the pipeline's turn budget, the only thing configured, as proportions and allowances rather than subtracted seconds.
         /// </summary>
         /// <param name="configuration">Application configuration, read for the turn budget.</param>
-        public static PeerConsultationWaits From(IConfiguration configuration)
+        public static TurnWaits From(IConfiguration configuration)
         {
+            // The turn budget is the one configured number every other rung derives from.
             TimeSpan turn = TimeSpan.FromSeconds(configuration.GetValue("Morgana:ActorSystem:TimeoutSeconds", 180));
 
-            return new PeerConsultationWaits(turn, turn * CallerShareOfTurn, turn * CalleeShareOfTurn);
+            // Callee and caller sit inside the turn while the channel sits outside it, so it always expires after Morgana and never together with her.
+            return new TurnWaits(turn, turn * CallerShareOfTurn, turn * CalleeShareOfTurn, turn * PhasesBeforeFirstWord + DeliveryAllowance);
         }
     }
 

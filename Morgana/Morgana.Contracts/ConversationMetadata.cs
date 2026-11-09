@@ -7,4 +7,5 @@ namespace Morgana.Contracts;
 /// </summary>
 /// <param name="DustLevel">REMAINING dust as a fraction of the budget, fuel-gauge
 /// semantics: 1.0 = full (nothing consumed), 0.0 = empty (budget spent or overshot).</param>
-public record ConversationMetadata(double? DustLevel = null);
+/// <param name="ReplyTimeoutSeconds">How long the channel waits on a silent turn before giving it up, in seconds, as Morgana computes it from her own deadlines; every chunk received starts the wait again.</param>
+public record ConversationMetadata(double? DustLevel = null, int? ReplyTimeoutSeconds = null);

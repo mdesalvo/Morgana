@@ -8,7 +8,7 @@ namespace Morgana.Contracts;
 /// text, quick replies, rich card, agent identity, error reason and rendering metadata
 /// (message type, fading duration).
 /// </summary>
-public sealed class ChannelMessage
+public sealed record ChannelMessage
 {
     /// <summary>
     /// Unique identifier of the conversation this message belongs to.

@@ -240,7 +240,7 @@ public sealed class ServedConsultationTests
     /// <summary>Where the database of one conversation of this run would be, whether or not it exists.</summary>
     /// <param name="conversationId">Conversation whose file is being looked for.</param>
     private string ConversationDatabase(string conversationId)
-        => Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.db");
+        => Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.sqlite");
 
     /// <summary>Reads the envelope whatever casing the answering side serialized its fields under.</summary>
     private static readonly JsonSerializerOptions EnvelopeFormat = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };

@@ -126,22 +126,14 @@ public class MorganaChannelAdapter
                     enforcedText.Length,
                     channelAdapterResponse.QuickReplies?.Count ?? 0);
 
-                return new ChannelMessage
+                // The rewrite replaces the text and the buttons the channel can show: everything else travels as it came
+                return channelMessage with
                 {
-                    ConversationId = channelMessage.ConversationId,
                     Text = enforcedText,
-                    Timestamp = channelMessage.Timestamp,
-                    MessageType = channelMessage.MessageType,
                     QuickReplies = channelCapabilities.SupportsQuickReplies
                         ? (channelAdapterResponse.QuickReplies ?? channelMessage.QuickReplies)
                         : null,
-                    RichCard = channelCapabilities.SupportsRichCards ? channelMessage.RichCard : null,
-                    ErrorReason = channelMessage.ErrorReason,
-                    AgentName = channelMessage.AgentName,
-                    AgentCompleted = channelMessage.AgentCompleted,
-                    FadingMessageDurationSeconds = channelMessage.FadingMessageDurationSeconds,
-                    ConversationMetadata = channelMessage.ConversationMetadata,
-                    Progress = channelMessage.Progress
+                    RichCard = channelCapabilities.SupportsRichCards ? channelMessage.RichCard : null
                 };
             }
 
@@ -240,23 +232,13 @@ public class MorganaChannelAdapter
 
         text = EnforceLengthBudget(text, channelCapabilities);
 
-        return new ChannelMessage
+        // Only the text and the features the channel lacks change: a command's frame stays one when its text is
+        // degraded, since its finished frame is how a channel matches the outcome to the command it is waiting on
+        return channelMessage with
         {
-            ConversationId = channelMessage.ConversationId,
             Text = text,
-            Timestamp = channelMessage.Timestamp,
-            MessageType = channelMessage.MessageType,
             QuickReplies = channelCapabilities.SupportsQuickReplies ? channelMessage.QuickReplies : null,
-            RichCard = channelCapabilities.SupportsRichCards ? channelMessage.RichCard : null,
-            ErrorReason = channelMessage.ErrorReason,
-            AgentName = channelMessage.AgentName,
-            AgentCompleted = channelMessage.AgentCompleted,
-            FadingMessageDurationSeconds = channelMessage.FadingMessageDurationSeconds,
-            ConversationMetadata = channelMessage.ConversationMetadata,
-
-            // A command's frame stays one when its text is degraded: its finished frame is how a channel
-            // matches the outcome to the command it is waiting on
-            Progress = channelMessage.Progress
+            RichCard = channelCapabilities.SupportsRichCards ? channelMessage.RichCard : null
         };
     }
 
