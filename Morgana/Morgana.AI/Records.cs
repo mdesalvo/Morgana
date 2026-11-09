@@ -288,7 +288,7 @@ public static class Records
     public record ServedTier(IChatClient Client, MorganaLanguageModel LanguageModel, MagicDustPricing MorganaDust);
 
     /// <summary>The options of <see cref="ChatOptions"/> that a model carries, in a provider's <c>models.json</c> and on a tier alike.</summary>
-    /// <remarks>Tools, tool mode, instructions and response format are left out so that a deployment cannot force a tool call or rewrite what an agent was told.</remarks>
+    /// <remarks>Each provider's adapter sends the fields that its vendor supports, while tools, tool mode, instructions and response format are left out so that a deployment cannot force a tool call or rewrite what an agent was told.</remarks>
     public record ModelOptions
     {
         /// <summary>The name under which the provider serves the model.</summary>
@@ -321,7 +321,7 @@ public static class Records
         /// <summary>The sequences that end generation.</summary>
         public List<string>? StopSequences { get; init; }
 
-        /// <summary>The keys that only one provider reads.</summary>
+        /// <summary>The options that only one provider reads, under the names that its own API gives them.</summary>
         public AdditionalPropertiesDictionary? AdditionalProperties { get; init; }
 
         /// <summary>Fills into <paramref name="chatOptions"/> what this model declares and the call left unset.</summary>

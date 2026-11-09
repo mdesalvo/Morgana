@@ -277,8 +277,8 @@ public sealed class LanguageModelTests
     [Fact]
     public async Task LanguageModel_An_Ollama_tier_asks_for_a_65536_token_window_by_default()
     {
-        // A connection that declares no window gets the default one.
-        JsonElement requestOptions = await RecordedOllamaOptionsAsync(contextLength: null);
+        // A tier that declares no window gets the default one.
+        JsonElement requestOptions = (await RecordedOllamaRequestAsync()).GetProperty("options");
 
         // The default window reached the daemon.
         Assert.Equal(65536, requestOptions.GetProperty("num_ctx").GetInt32());
@@ -290,24 +290,51 @@ public sealed class LanguageModelTests
     [Fact]
     public async Task LanguageModel_An_Ollama_tier_sends_the_options_that_it_declares()
     {
-        // The ceiling, the temperature and a key that only Ollama reads are declared on the tier.
-        JsonElement requestOptions = await RecordedOllamaOptionsAsync(
-            null, ("MaxOutputTokens", "8192"), ("Temperature", "0.2"), ("AdditionalProperties:num_gpu", "2"));
+        // The ceiling, the temperature and the keys that only Ollama reads are declared on the tier.
+        JsonElement request = await RecordedOllamaRequestAsync(
+            ("MaxOutputTokens", "8192"), ("Temperature", "0.2"), ("AdditionalProperties:num_gpu", "2"),
+            ("AdditionalProperties:use_mmap", "false"), ("AdditionalProperties:min_p", "0.05"), ("AdditionalProperties:keep_alive", "300"));
+        JsonElement requestOptions = request.GetProperty("options");
 
         // Each declared option reached the daemon.
         Assert.Equal(8192, requestOptions.GetProperty("num_predict").GetInt32());
         Assert.Equal(2, requestOptions.GetProperty("num_gpu").GetInt32());
         Assert.Equal(0.2f, requestOptions.GetProperty("temperature").GetSingle(), 1e-6f);
+
+        // A boolean and a decimal written in configuration reach the daemon in their own type whatever the culture.
+        Assert.False(requestOptions.GetProperty("use_mmap").GetBoolean());
+        Assert.Equal(0.05f, requestOptions.GetProperty("min_p").GetSingle(), 1e-6f);
+
+        // An option that Ollama's request options do not declare reaches the daemon as written.
+        Assert.Equal("300", request.GetProperty("keep_alive").GetString());
     }
 
     [Fact]
     public async Task LanguageModel_An_Ollama_tier_asks_for_the_window_it_declares()
     {
-        // The window that the connection declares travels instead of the default one.
-        JsonElement requestOptions = await RecordedOllamaOptionsAsync(contextLength: "131072");
+        // The window that the tier declares travels instead of the default one.
+        JsonElement requestOptions = (await RecordedOllamaRequestAsync(("AdditionalProperties:num_ctx", "131072"))).GetProperty("options");
 
         // The declared window reached the daemon.
         Assert.Equal(131072, requestOptions.GetProperty("num_ctx").GetInt32());
+    }
+
+    [Fact]
+    public void LanguageModel_An_Ollama_option_that_does_not_read_as_its_type_is_refused()
+    {
+        // A value Ollama could not read stops the startup instead of the first call.
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(() => Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "http://localhost:11434"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "phi4-mini"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:AdditionalProperties:use_mmap", "ture"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:InputUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:OutputUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheReadUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheWriteUsdPerMillion", "0"))));
+
+        Assert.Contains("Morgana:LanguageModels:Tiers:Economy:Options:AdditionalProperties:use_mmap", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("ture", refusal.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -499,8 +526,8 @@ public sealed class LanguageModelTests
         Assert.Contains("Morgana:ActorSystem:Tier", refusal.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>Makes one call on a local Ollama Economy tier and returns the <c>options</c> object of the request that an in-process listener recorded.</summary>
-    private static async Task<JsonElement> RecordedOllamaOptionsAsync(string? contextLength, params (string Key, string Value)[] tierOptions)
+    /// <summary>Makes one call on a local Ollama Economy tier and returns the whole request that an in-process listener recorded.</summary>
+    private static async Task<JsonElement> RecordedOllamaRequestAsync(params (string Key, string Value)[] tierOptions)
     {
         // Binding port 0 asks the operating system for a free port, which is released before the listener takes it.
         TcpListener portProbe = new TcpListener(IPAddress.Loopback, 0);
@@ -519,7 +546,7 @@ public sealed class LanguageModelTests
         {
             HttpListenerContext daemonContext = await ollamaDaemon.GetContextAsync();
 
-            // The body is what the client sent to the model: the window must be in it.
+            // The body is what the client sent to the model: the options must be in it.
             using StreamReader requestReader = new StreamReader(daemonContext.Request.InputStream, Encoding.UTF8);
             string requestBody = await requestReader.ReadToEndAsync();
 
@@ -535,7 +562,7 @@ public sealed class LanguageModelTests
             return requestBody;
         });
 
-        // A local model priced at zero by its tier, with the window left to the default unless the test declares one.
+        // A local model priced at zero by its tier, with the window left to the default unless the test declares one among the options.
         Dictionary<string, string?> tierConfiguration = Configuration(
             ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
             ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", endpoint),
@@ -544,8 +571,6 @@ public sealed class LanguageModelTests
             ("Morgana:LanguageModels:Tiers:Economy:Pricing:OutputUsdPerMillion", "0"),
             ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheReadUsdPerMillion", "0"),
             ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheWriteUsdPerMillion", "0"));
-        if (contextLength is not null)
-            tierConfiguration["Morgana:LanguageModels:Tiers:Economy:Connection:ContextLength"] = contextLength;
 
         // The options that the test declares on the tier are the ones that must reach the daemon.
         foreach ((string key, string value) in tierOptions)
@@ -555,9 +580,9 @@ public sealed class LanguageModelTests
         ILanguageModelService llm = Build(tierConfiguration);
         await llm.GetChatClient(Records.LLMTier.Economy).GetResponseAsync("hello");
 
-        // The recorded body is parsed and its options object is returned, detached from the document that owns it.
+        // The recorded body is parsed and returned whole, detached from the document that owns it.
         using JsonDocument requestDocument = JsonDocument.Parse(await recordedRequestBody);
-        return requestDocument.RootElement.GetProperty("options").Clone();
+        return requestDocument.RootElement.Clone();
     }
 
     /// <summary>The metadata that the client of a tier reports about the model that it runs.</summary>

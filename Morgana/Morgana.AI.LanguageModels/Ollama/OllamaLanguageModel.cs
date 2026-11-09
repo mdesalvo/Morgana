@@ -3,7 +3,10 @@ using Microsoft.Extensions.Logging;
 using Morgana.AI.Abstractions;
 using OllamaSharp;
 using OllamaSharp.Models;
+using System.Globalization;
 using System.Net.Http.Headers;
+using System.Reflection;
+using System.Text.Json.Serialization;
 
 namespace Morgana.AI.LanguageModels.Ollama;
 
@@ -22,7 +25,7 @@ namespace Morgana.AI.LanguageModels.Ollama;
 /// price. A cloud model written for a daemon (gemma4:cloud, gpt-oss:120b-cloud) is priced under its catalogue name on
 /// either endpoint. On a daemon a name without the cloud suffix is a local model, never priced from the catalogue: its
 /// tier declares its own Pricing.
-/// The tier's Connection may set ContextLength, the window Morgana asks for on every call (65536 when absent), which holds the prompt and the answer together.
+/// The tier's Options may set AdditionalProperties:num_ctx, the window Morgana asks for on every call (65536 when absent): it holds the prompt and the answer together, so it must exceed the tier's MaxOutputTokens by the longest prompt that the tier's agents read.
 /// </remarks>
 /// <param name="loggerFactory">Optional logger factory for the <see cref="AttemptLoggingHandler"/> that writes one line per attempt on the wire; <c>null</c> writes nothing.</param>
 public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : MorganaLanguageModel<OllamaTierConnection>
@@ -30,6 +33,18 @@ public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
     /// <inheritdoc />
     // The name a tier writes in its Provider key: it must stay stable whatever the class is called.
     public override string Provider => "Ollama";
+
+    // The window a tier asks for when it declares none, since Ollama's own default is small and silently cuts the start of a long prompt.
+    private const int DefaultContextLength = 65536;
+
+    // The type of every option that OllamaSharp sends inside a request's options, read from the library's own model so it follows the library.
+    private static readonly Dictionary<string, Type> RequestOptionTypes =
+        typeof(RequestOptions).GetProperties()
+        .Where(property => property.GetCustomAttribute<JsonPropertyNameAttribute>() is not null)
+        .ToDictionary(
+            property => property.GetCustomAttribute<JsonPropertyNameAttribute>()!.Name,
+            property => Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType,
+            StringComparer.Ordinal);
 
     // Host of Ollama's own service: the one endpoint that bills an account and so demands its key.
     private const string CloudHost = "ollama.com";
@@ -49,6 +64,58 @@ public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
 
         // Only the cloud host itself bills an account.
         return string.Equals(endpointUri.Host, CloudHost, StringComparison.Ordinal);
+    }
+
+    /// <summary>Turns an option written in configuration into the type that OllamaSharp sends it as.</summary>
+    private static object? ConvertOption(string optionName, object? optionValue)
+    {
+        // Only text from configuration needs converting and only an option that OllamaSharp types; anything else reaches Ollama as written.
+        if (optionValue is not string optionText || !RequestOptionTypes.TryGetValue(optionName, out Type? optionType))
+            return optionValue;
+
+        // A boolean option such as use_mmap is read as true or false.
+        if (optionType == typeof(bool))
+            return bool.Parse(optionText);
+
+        // An integer option such as num_ctx is read whatever the host's culture.
+        if (optionType == typeof(int))
+            return int.Parse(optionText, NumberStyles.Integer, CultureInfo.InvariantCulture);
+
+        // A decimal option such as min_p is read with a dot whatever the host's culture.
+        if (optionType == typeof(float))
+            return float.Parse(optionText, NumberStyles.Float, CultureInfo.InvariantCulture);
+
+        // A list option such as stop is written through ChatOptions.StopSequences and is left as it came.
+        return optionValue;
+    }
+
+    /// <inheritdoc />
+    public override void ValidateOptions(Records.ModelOptions options)
+    {
+        // A tier that declares no Ollama option has nothing to convert.
+        if (options.AdditionalProperties is null)
+            return;
+
+        // Every option that the tier declares is tried in the type that Ollama will receive it as.
+        foreach (KeyValuePair<string, object?> additionalProperty in options.AdditionalProperties)
+        {
+            try
+            {
+                // The conversion every call will make is tried once at startup, so a value Ollama cannot read stops Morgana instead of the first call.
+                ConvertOption(additionalProperty.Key, additionalProperty.Value);
+            }
+            catch (Exception ex) when (ex is FormatException or OverflowException)
+            {
+                // The lookup cannot fail because only a typed option can fail to convert.
+                Type optionType = RequestOptionTypes[additionalProperty.Key];
+
+                // The form named is the one the deployer must write.
+                string expectedForm = optionType == typeof(bool) ? "true or false" : optionType == typeof(int) ? "an integer" : "a number written with a dot";
+
+                // The message opens with the option's key so that the caller prefixes the tier's path.
+                throw new InvalidOperationException($"AdditionalProperties:{additionalProperty.Key} must be {expectedForm} but is '{additionalProperty.Value}'.", ex);
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -80,9 +147,21 @@ public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
         // Ollama's client binds its model at construction, so each tier owns its HttpClient.
         IChatClient ollamaClient = new OllamaApiClient(httpClient, options.ModelId);
 
-        // The window travels on every call so that the server never falls back to its own default and cuts the start of the prompt.
+        // Every option of the tier reaches OllamaSharp in the type it reads.
         return new ChatClientBuilder(ollamaClient)
-            .ConfigureOptions(chatOptions => chatOptions.AddOllamaOption(OllamaOption.NumCtx, connection.ContextLength))
+            .ConfigureOptions(chatOptions =>
+            {
+                // The tier may have filled in no option at all.
+                chatOptions.AdditionalProperties ??= new AdditionalPropertiesDictionary();
+
+                // Each option the tier filled in above is converted to the type that OllamaSharp reads.
+                foreach (KeyValuePair<string, object?> additionalProperty in chatOptions.AdditionalProperties.ToList())
+                    chatOptions.AdditionalProperties[additionalProperty.Key] = ConvertOption(additionalProperty.Key, additionalProperty.Value);
+
+                // The window travels on every call so that the server never falls back to its own default and cuts the start of the prompt;
+                // a window that a tier declared is left as it is.
+                chatOptions.AdditionalProperties.TryAdd(OllamaOption.NumCtx.Name, DefaultContextLength);
+            })
             .Build();
     }
 
@@ -107,9 +186,7 @@ public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
 /// <param name="Endpoint">Address of the Ollama service.</param>
 /// <param name="ApiKey">Credential of the ollama.com account that pays for the cloud models; required and sent only when <paramref name="Endpoint"/> is ollama.com.</param>
 /// <param name="TimeoutSeconds">Ceiling of one call: of its whole response when it is not streamed, of the wait for the response headers when it is.</param>
-/// <param name="ContextLength">Context window in tokens that Morgana asks Ollama for on every call of the tier. It holds what the model reads plus what it writes, so it must be greater than the tier's MaxOutputTokens by at least the longest prompt that the tier's agents read.</param>
 public record OllamaTierConnection(
     string? Endpoint = null,
     string? ApiKey = null,
-    int TimeoutSeconds = 60,
-    int ContextLength = 65536);
+    int TimeoutSeconds = 60);
