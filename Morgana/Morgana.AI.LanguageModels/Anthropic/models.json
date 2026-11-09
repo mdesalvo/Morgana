@@ -1,6 +1,7 @@
 {
   "LastUpdate": "2026-11-09T18:58:51Z",
   "Models": [
+    { "Options": { "ModelId": "claude-fable-5-2", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 8.00, "OutputUsdPerMillion": 40.00, "CacheReadUsdPerMillion": 0.20, "CacheWriteUsdPerMillion": 16.00 } },
     { "Options": { "ModelId": "claude-fable-5-1", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 10.00, "OutputUsdPerMillion": 50.00, "CacheReadUsdPerMillion": 0.25, "CacheWriteUsdPerMillion": 20.00 } },
     { "Options": { "ModelId": "claude-fable-5", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 10.00, "OutputUsdPerMillion": 50.00, "CacheReadUsdPerMillion": 1.00, "CacheWriteUsdPerMillion": 20.00 } },
     { "Options": { "ModelId": "claude-opus-5-5", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 4.00, "OutputUsdPerMillion": 20.00, "CacheReadUsdPerMillion": 0.20, "CacheWriteUsdPerMillion": 8.00 } },
