@@ -74,6 +74,33 @@ public sealed class LanguageModelTests
         Assert.Contains($"Morgana:LanguageModels:Tiers:{tier}", refusal.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("TimeoutSeconds")]
+    [InlineData("MaxRetries")]
+    public void LanguageModel_A_tier_that_declares_a_reliability_setting_is_refused(string setting)
+    {
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
+            () => Build(Configuration(($"Morgana:LanguageModels:Tiers:Efficiency:Connection:{setting}", "30"))));
+
+        Assert.Contains($"Morgana:LanguageModels:Tiers:Efficiency:Connection:{setting}", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains($"Morgana:LanguageModels:Reliability:{setting}", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("TimeoutSeconds", null)]
+    [InlineData("TimeoutSeconds", "0")]
+    [InlineData("MaxRetries", "-1")]
+    [InlineData("MaxRetries", "lots")]
+    public void LanguageModel_Construction_is_refused_when_a_reliability_setting_is_missing_or_malformed(string setting, string? value)
+    {
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(
+            () => value is null
+                ? Build(Configuration(), without: $"Morgana:LanguageModels:Reliability:{setting}")
+                : Build(Configuration(($"Morgana:LanguageModels:Reliability:{setting}", value))));
+
+        Assert.Contains($"Morgana:LanguageModels:Reliability:{setting}", refusal.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void LanguageModel_Construction_is_refused_when_a_tier_names_no_provider()
     {
@@ -609,6 +636,8 @@ public sealed class LanguageModelTests
     {
         Dictionary<string, string?> values = [];
         values["Morgana:ActorSystem:Tier"] = "Economy";
+        values["Morgana:LanguageModels:Reliability:TimeoutSeconds"] = "60";
+        values["Morgana:LanguageModels:Reliability:MaxRetries"] = "2";
 
         foreach (string tier in new[] { "Economy", "Efficiency", "Performance" })
         {

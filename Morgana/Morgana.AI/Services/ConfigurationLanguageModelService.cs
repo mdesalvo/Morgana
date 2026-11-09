@@ -80,7 +80,7 @@ public class ConfigurationLanguageModelService : ILanguageModelService
     /// Optional logger factory used to instrument the chat client with the MEAI OpenTelemetry
     /// decorator. Pass <c>null</c> to skip the decorator (test paths, unit tests).
     /// </param>
-    /// <exception cref="InvalidOperationException">A tier, the provider it names, its connection or the model it runs cannot be served or <c>Morgana:ActorSystem:Tier</c> names no tier.</exception>
+    /// <exception cref="InvalidOperationException">A tier, the provider it names, its connection, the model it runs or <c>Morgana:LanguageModels:Reliability</c> cannot be served or <c>Morgana:ActorSystem:Tier</c> names no tier.</exception>
     public ConfigurationLanguageModelService(
         IConfiguration configuration,
         IEnumerable<MorganaLanguageModel> languageModels,
@@ -103,23 +103,48 @@ public class ConfigurationLanguageModelService : ILanguageModelService
                 throw new InvalidOperationException($"The provider '{registeredLanguageModel.Provider}' is registered more than once.");
         }
 
+        // The reliability settings are shared by every tier, so they are read and checked once before the tiers.
+        IConfigurationSection reliabilitySection = ResolveReliability();
+
         // Each tier is served by the provider it names, so a deployment may mix providers across tiers.
         foreach (Records.LLMTier llmTier in Enum.GetValues<Records.LLMTier>())
         {
             // The section of this tier is located by its key, so that every refusal can name the key a deployer writes.
             IConfigurationSection tierSection = configuration.GetSection($"Morgana:LanguageModels:Tiers:{llmTier}");
 
-            // Who serves the tier, what model it runs and how the two are put together.
+            // Who serves the tier, how it is reached, what model it runs and how they are put together.
             MorganaLanguageModel languageModel = ResolveLanguageModel(tierSection, languageModelsByProvider);
-            Records.ModelDefinition modelDefinition = ResolveModelDefinition(tierSection, languageModel);
-            servedTiers[llmTier] = BuildServedTier(tierSection.GetSection("Connection"), languageModel, modelDefinition);
+            IConfigurationSection connectionSection = ResolveConnection(tierSection, reliabilitySection, languageModel);
+            Records.ModelDefinition modelDefinition = ResolveModelDefinition(tierSection, connectionSection, languageModel);
+            servedTiers[llmTier] = BuildServedTier(connectionSection, languageModel, modelDefinition);
         }
 
         // The framework's own actors run on the tier that the deployment names.
         FrameworkTier = ResolveFrameworkTier();
     }
 
-    /// <summary>Finds the provider that serves a tier and refuses a tier or a connection that it cannot be handed.</summary>
+    /// <summary>Reads the reliability settings that every tier's connection shares.</summary>
+    private IConfigurationSection ResolveReliability()
+    {
+        // The section is located by its key, so that every refusal can name the key a deployer writes.
+        IConfigurationSection reliabilitySection = configuration.GetSection("Morgana:LanguageModels:Reliability");
+
+        // Every provider reads both settings, so a missing one would leave a provider's own default deciding unseen.
+        // NumberStyles.None refuses a sign, so a negative or zero timeout fails here too.
+        string? timeoutSeconds = reliabilitySection["TimeoutSeconds"];
+        if (!int.TryParse(timeoutSeconds, NumberStyles.None, CultureInfo.InvariantCulture, out int timeoutValue) || timeoutValue <= 0)
+            throw new InvalidOperationException($"Morgana:LanguageModels:Reliability:TimeoutSeconds must be a positive integer but is '{timeoutSeconds}'.");
+
+        // Zero retries is a legitimate choice but a sign is not, so a negative count fails here.
+        string? maxRetries = reliabilitySection["MaxRetries"];
+        if (!int.TryParse(maxRetries, NumberStyles.None, CultureInfo.InvariantCulture, out _))
+            throw new InvalidOperationException($"Morgana:LanguageModels:Reliability:MaxRetries must be zero or a positive integer but is '{maxRetries}'.");
+
+        // The section is handed on to be laid under each tier's connection.
+        return reliabilitySection;
+    }
+
+    /// <summary>Finds the provider that serves a tier and refuses a tier that names none it can be handed to.</summary>
     private static MorganaLanguageModel ResolveLanguageModel(IConfigurationSection tierSection, Dictionary<string, MorganaLanguageModel> languageModelsByProvider)
     {
         // The three tiers are all mandatory: an agent or a framework actor may be served by any of them.
@@ -139,10 +164,34 @@ public class ConfigurationLanguageModelService : ILanguageModelService
         if (!languageModelsByProvider.TryGetValue(provider, out MorganaLanguageModel? languageModel))
             throw new InvalidOperationException($"{tierSection.Path}:Provider '{provider}' is not a registered provider. Registered: {string.Join(", ", languageModelsByProvider.Keys.Order(StringComparer.Ordinal))}.");
 
+        // The provider is known to serve this tier.
+        return languageModel;
+    }
+
+    /// <summary>Lays the shared reliability settings under a tier's connection and refuses a connection that the provider cannot use.</summary>
+    private static IConfigurationSection ResolveConnection(IConfigurationSection tierSection, IConfigurationSection reliabilitySection, MorganaLanguageModel languageModel)
+    {
         // The connection is bound by the provider, so a tier without the section cannot be handed to one.
-        IConfigurationSection connectionSection = tierSection.GetSection("Connection");
-        if (!connectionSection.Exists())
+        IConfigurationSection tierConnectionSection = tierSection.GetSection("Connection");
+        if (!tierConnectionSection.Exists())
             throw new InvalidOperationException($"{tierSection.Path}:Connection is missing.");
+
+        // A value on the tier would silently win over the shared one, so there would be two sources again.
+        foreach (string reliabilityKey in new[] { "TimeoutSeconds", "MaxRetries" })
+        {
+            // The key belongs under Reliability alone: the refusal names where to write it.
+            if (tierConnectionSection[reliabilityKey] is not null)
+                throw new InvalidOperationException($"{tierSection.Path}:Connection:{reliabilityKey} is declared on the tier. It is declared once for every tier under Morgana:LanguageModels:Reliability:{reliabilityKey}.");
+        }
+
+        // The shared settings are laid first and the tier's own keys over them, so the provider binds the merged section
+        // as its own connection and a binding error names the key under the tier's path.
+        IConfigurationSection connectionSection = new ConfigurationBuilder()
+            .AddInMemoryCollection(reliabilitySection.AsEnumerable(makePathsRelative: true)
+                .Select(reliabilitySetting => new KeyValuePair<string, string?>($"{tierConnectionSection.Path}:{reliabilitySetting.Key}", reliabilitySetting.Value)))
+            .AddInMemoryCollection(tierConnectionSection.AsEnumerable())
+            .Build()
+            .GetSection(tierConnectionSection.Path);
 
         // A connection that cannot work is refused at startup rather than at the first user turn.
         try
@@ -156,12 +205,12 @@ public class ConfigurationLanguageModelService : ILanguageModelService
             throw new InvalidOperationException($"{tierSection.Path}:Connection:{ex.Message}", ex);
         }
 
-        // The provider is known to serve this tier.
-        return languageModel;
+        // The merged connection is what the provider validates here and binds again to build its client.
+        return connectionSection;
     }
 
     /// <summary>Lays the tier over its provider's catalogue entry and refuses a model that cannot be run or priced.</summary>
-    private static Records.ModelDefinition ResolveModelDefinition(IConfigurationSection tierSection, MorganaLanguageModel languageModel)
+    private static Records.ModelDefinition ResolveModelDefinition(IConfigurationSection tierSection, IConfigurationSection connectionSection, MorganaLanguageModel languageModel)
     {
         // A model left blank cannot be asked for anything.
         string? modelId = tierSection["Options:ModelId"];
@@ -173,7 +222,7 @@ public class ConfigurationLanguageModelService : ILanguageModelService
             throw new InvalidOperationException($"{tierSection.Path}:Options:ModelId is still the placeholder '{modelId}'. Override it via User Secrets or environment variables before starting.");
 
         // The provider's entry for the model is what the tier overrides and the tier's own Pricing may stand without it.
-        IConfigurationSection? cataloguedModel = languageModel.GetCataloguedModel(tierSection.GetSection("Connection"), modelId);
+        IConfigurationSection? cataloguedModel = languageModel.GetCataloguedModel(connectionSection, modelId);
         IConfigurationSection tierPricingSection = tierSection.GetSection("Pricing");
 
         // A model described neither by its provider nor by its tier would run with its dust uncounted, so it is refused at startup.

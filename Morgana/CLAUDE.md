@@ -270,7 +270,7 @@ told apart from a failure.
 
 `Morgana:LanguageModels:Tiers` is a JSON **object keyed by tier name**, so env-var overrides merge per tier. Each
 entry carries `Provider` (a registered provider's name, any casing), `Connection` (bound by that
-provider alone), `Options` and `Pricing`. Those two have **the shape of a `models.json` entry**,
+provider alone, with `Morgana:LanguageModels:Reliability` laid under it: a tier declaring `TimeoutSeconds` or `MaxRetries` itself is refused), `Options` and `Pricing`. Those two have **the shape of a `models.json` entry**,
 `Records.ModelDefinition`: the catalogue entry is laid under the tier's keys and the result is bound
 and validated once, so the tier inherits its model's price and ceiling and overrides any of them key
 by key. That is how a local Ollama model, a cloud-hosted deployment or a negotiated discount gets
@@ -473,7 +473,7 @@ fault reaches a user as a conversation that never answers, on a host that passed
 
 | Section | Purpose |
 |---|---|
-| `Morgana:LanguageModels:Tiers` | The three tiers: provider, connection and model of each |
+| `Morgana:LanguageModels:Reliability` · `:Tiers` | `TimeoutSeconds` and `MaxRetries`, declared once and laid under every tier's connection; the three tiers: provider, connection and model of each |
 | `Morgana:AgentToAgent` | `Enabled`, `MaxRoundsPerTurn`, `PublicUrl` (declared only where a binding cannot answer for the address), `Partners[]`. Consultation waits are one **ladder** derived from `ActorSystem:TimeoutSeconds`, stated once in `Records.PeerConsultationWaits` |
 | `Morgana:ActorSystem` | `Tier` (the framework actors' tier, mandatory), `TimeoutSeconds`, `EnableUserGuardrail`, `EnableToolGuardrail`, `EnablePeerGuardrail`, `MaxToolResultLength`, `IntentCollisionThreshold` |
 | `Morgana:AdaptiveMessaging` | `EnableStreamingResponse`, `RichFeaturesMinLength` |
