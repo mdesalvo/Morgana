@@ -21,8 +21,8 @@ namespace Morgana.AI.Services;
 /// </remarks>
 public class SQLitePeerAdmissionService : IPeerAdmissionService
 {
-    /// <summary>Name of the ledger, kept apart from every <c>morgana-{conversation}.db</c> beside it.</summary>
-    private const string DatabaseFileName = "morgana-peers.db";
+    /// <summary>Name of the ledger, kept apart from every <c>morgana-{conversation}.sqlite</c> beside it.</summary>
+    private const string DatabaseFileName = "morgana-peers.sqlite";
 
     /// <summary>Length of the window a system's openings are counted over.</summary>
     private static readonly TimeSpan Window = TimeSpan.FromHours(1);

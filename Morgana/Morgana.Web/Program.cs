@@ -194,7 +194,7 @@ builder.Services.AddSingleton<ILanguageModelService>(sp => {
 // Encrypted file-based persistence for conversation state (AgentSession + Context)
 // Enables resuming conversations across application restarts
 //
-// Storage Model: Each conversation stored as encrypted "morgana-{conversationId}.db" file
+// Storage Model: Each conversation stored as encrypted "morgana-{conversationId}.sqlite" file
 // Configuration: Morgana:ConversationPersistence in appsettings.json
 
 // Plugin-owned stores outside DI (e.g. Examples' ExamplesDatabaseHelper) read StoragePath
@@ -225,7 +225,7 @@ builder.Services.AddSingleton<IConversationPersistenceService>(serviceProvider =
 // - Opens the conversation's database through it, which names the file and migrates the schema
 //
 // Configuration: Morgana:RateLimiting in appsettings.json
-// Storage: Reuses conversation SQLite databases (morgana-{conversationId}.db)
+// Storage: Reuses conversation SQLite databases (morgana-{conversationId}.sqlite)
 
 builder.Services.Configure<Records.RateLimitOptions>(
     builder.Configuration.GetSection("Morgana:RateLimiting"));

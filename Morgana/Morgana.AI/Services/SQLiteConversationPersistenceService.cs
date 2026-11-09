@@ -876,7 +876,7 @@ WHERE id = 1;
 
     /// <summary>
     /// Constructs the full file path for a conversation database.
-    /// Format: morgana-{conversationId}.db
+    /// Format: morgana-{conversationId}.sqlite
     /// </summary>
     /// <param name="conversationId">Conversation identifier</param>
     /// <returns>Full path to the database file</returns>
@@ -884,7 +884,7 @@ WHERE id = 1;
     {
         // Sanitize conversationId to prevent directory traversal attacks
         string sanitizedConversationId = string.Join("_", conversationId.Split(Path.GetInvalidFileNameChars()));
-        return Path.Combine(options.StoragePath, $"morgana-{sanitizedConversationId}.db");
+        return Path.Combine(options.StoragePath, $"morgana-{sanitizedConversationId}.sqlite");
     }
 
     /// <summary>
