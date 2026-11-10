@@ -1,5 +1,5 @@
 {
-  "LastUpdate": "2026-11-09T18:58:51Z",
+  "LastUpdate": "2026-11-10T19:59:07Z",
   "Models": [
     { "Options": { "ModelId": "beam" }, "Pricing": { "InputUsdPerMillion": 0.125, "OutputUsdPerMillion": 0.40, "CacheReadUsdPerMillion": 0.015, "CacheWriteUsdPerMillion": 0.125 } },
     { "Options": { "ModelId": "deepseek-v4.1-flash" }, "Pricing": { "InputUsdPerMillion": 0.30, "OutputUsdPerMillion": 1.20, "CacheReadUsdPerMillion": 0.006, "CacheWriteUsdPerMillion": 0.30 } },
@@ -18,11 +18,8 @@
     { "Options": { "ModelId": "mimo-v2.6-pro" }, "Pricing": { "InputUsdPerMillion": 0.435, "OutputUsdPerMillion": 0.87, "CacheReadUsdPerMillion": 0.0036, "CacheWriteUsdPerMillion": 0.435 } },
     { "Options": { "ModelId": "minimax-m3.1-flash" }, "Pricing": { "InputUsdPerMillion": 0.15, "OutputUsdPerMillion": 0.60, "CacheReadUsdPerMillion": 0.015, "CacheWriteUsdPerMillion": 0.15 } },
     { "Options": { "ModelId": "minimax-m3" }, "Pricing": { "InputUsdPerMillion": 0.60, "OutputUsdPerMillion": 2.40, "CacheReadUsdPerMillion": 0.12, "CacheWriteUsdPerMillion": 0.60 } },
-    { "Options": { "ModelId": "minimax-m2.7" }, "Pricing": { "InputUsdPerMillion": 0.30, "OutputUsdPerMillion": 1.20, "CacheReadUsdPerMillion": 0.06, "CacheWriteUsdPerMillion": 0.30 } },
     { "Options": { "ModelId": "mistral-large-4" }, "Pricing": { "InputUsdPerMillion": 0.70, "OutputUsdPerMillion": 2.10, "CacheReadUsdPerMillion": 0.07, "CacheWriteUsdPerMillion": 0.70 } },
-    { "Options": { "ModelId": "mistral-large-3:675b" }, "Pricing": { "InputUsdPerMillion": 0.50, "OutputUsdPerMillion": 1.50, "CacheReadUsdPerMillion": 0.50, "CacheWriteUsdPerMillion": 0.50 } },
     { "Options": { "ModelId": "muse-spark-open" }, "Pricing": { "InputUsdPerMillion": 1.25, "OutputUsdPerMillion": 4.25, "CacheReadUsdPerMillion": 0.15, "CacheWriteUsdPerMillion": 1.25 } },
-    { "Options": { "ModelId": "nemotron-3-nano:30b" }, "Pricing": { "InputUsdPerMillion": 0.06, "OutputUsdPerMillion": 0.24, "CacheReadUsdPerMillion": 0.06, "CacheWriteUsdPerMillion": 0.06 } },
     { "Options": { "ModelId": "nemotron-3-super" }, "Pricing": { "InputUsdPerMillion": 0.015, "OutputUsdPerMillion": 0.60, "CacheReadUsdPerMillion": 0.015, "CacheWriteUsdPerMillion": 0.015 } },
     { "Options": { "ModelId": "nemotron-3-ultra" }, "Pricing": { "InputUsdPerMillion": 0.10, "OutputUsdPerMillion": 3.00, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 0.10 } }
   ]

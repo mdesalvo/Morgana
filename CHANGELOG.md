@@ -6,20 +6,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 
 ## [1.0.0-beta2] - UNDER DEVELOPMENT
-### 🎯 Major Feature: All-in on guardrails
-Every door through which text from outside reaches an agent has its guard.
-The new ToolGuard reads every tool result before the agent's model does. A free check comes first and withholds a result that forges Morgana's own sections, carries chat-template tokens or hidden characters, or is too long to vouch for. A withheld result stays out for the rest of the turn.
-What an MCP server or a partner offers is inspected before any agent sees it, at startup and whenever it changes. A source that is refused is closed to every agent.
-The new PeerGuard reads a partner's question before the agent does. The UserGuard reads the user's message beside the answer the user last received.
-The three guards share one idea of what malice is. A tool result, an offer or a partner's question that cannot be judged is refused; the user's message is let through. Every guarded door is counted on `morgana.security.events`.
+### 🎯 Major Feature: Guardrails against hijacking
+Morgana guards every door through which outside text reaches her agents:
+- **ToolGuard** checks what tools, MCP servers and partners hand over before an agent reads it; a source caught trying to steer an agent is closed to every agent.
+- **PeerGuard** checks the questions that partners put to Morgana's agents, while the UserGuard reads the user's message in the light of Morgana's last answer.
 ### 🎯 Major Feature: Tools in Microsoft.Extensions.AI
-A domain tool is a public method of its tool class, described by its attributes alone. It runs in the tool loop of Microsoft.Extensions.AI as an `AIFunction` and its parameters reach the model through the JSON schema.
-The guards join that loop through the agent framework's own middleware, on every call of every run.
-### 🎯 Major Feature: MCP discovery owned by Morgana
-An agent names its MCP servers with `[UsesMCPServer]` and Morgana discovers their tools at runtime. It keeps the connections, replaces one that ends and refuses a tool whose name clashes with one it already has.
-The tools are examined again whenever a server's listing changes.
-The example `GardeningAgent` takes every tool it has from `GardeningMCP`.
+Tools are no longer declared in `morgana.json` or `agents.json`: they are annotated directly in code, where **Microsoft.Extensions.AI** reads their descriptions and runs them in its tool loop.
+
 ### ✨ Added
+- A new metric `morgana.security.events` counts door by door what the guards withhold or refuse and what they admit without a verdict
+- An Ollama tier now passes any option to the daemon through `Options:AdditionalProperties` configuration, in the name and type that Ollama reads (e.g.: "num_ctx":65536)
 
 ### 🔄 Changed
 - **Cauldron (1)**
@@ -27,6 +23,8 @@ The example `GardeningAgent` takes every tool it has from `GardeningMCP`.
 
 ### 🐛 Fixed
 - After `/compact` or a restart of Morgana an agent ignored the summary of its own history, so its model either read the whole history again or paid for summarizing it from the start
+- A turn whose wait ran out kept running behind the user's back: the provider billed it, its dust was charged for an answer nobody saw and its late answer could be taken for the next turn's
+- An Ollama tier that declared no context window was served at the daemon's default, which could silently cut the start of the prompt where Morgana's policies sit
 
 ### 📦 Dependencies
 - Updated `A2A` to 1.0.0-preview4
@@ -34,6 +32,8 @@ The example `GardeningAgent` takes every tool it has from `GardeningMCP`.
 - Updated `ModelContextProtocol.Core` to 2.4.0
 
 ### 🚀 Future Enablement
+- A stop button in every channel: a turn can be cancelled down to the model call, so letting the user stop an answer that is going nowhere is a message from the channel and nothing more
+- A security dashboard for every installation: every guarded door already reports on `morgana.security.events` what happened at the guardrail frontier, so watching attacks as they happen is a panel over a metric that exists
 
 
 ## [1.0.0-beta1] - 2026-10-30
