@@ -357,11 +357,12 @@ public class ConfigurationLanguageModelService : ILanguageModelService
     /// <param name="systemPrompt">System prompt defining LLM behavior</param>
     /// <param name="userPrompt">User message to process</param>
     /// <param name="dustRole">The role the call is charged under on the dust ledger; null charges it under the bare framework role.</param>
+    /// <param name="cancellationToken">Stops the call to the model once whoever asked for it stops waiting.</param>
     /// <returns>
     /// LLM response text with markdown code fences removed.
     /// On error, returns user-friendly error message from Morgana prompt configuration.
     /// </returns>
-    public async Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt, string? dustRole = null)
+    public async Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt, string? dustRole = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -393,12 +394,18 @@ public class ConfigurationLanguageModelService : ILanguageModelService
                 new ChatOptions
                 {
                     ConversationId = conversationId
-                });
+                },
+                cancellationToken);
 
             // Strip markdown code fences from JSON responses
             return response.Text
                 .Replace("```json", string.Empty)
                 .Replace("```", string.Empty);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // A stopped call is not a failure of the service: turned into the error text it would reach the caller as the model's answer.
+            throw;
         }
         catch (Exception ex) when (GetLanguageModel(FrameworkTier).IsContentFilterRefusal(ex))
         {

@@ -116,6 +116,16 @@ public sealed class HarnessOptions
     public bool PoisonedDomain { get; init; }
 
     /// <summary>
+    /// Whether this run points every tier at a fake model in this process that holds the calls a test chooses,
+    /// which is what <c>CancelledTurnTests</c> needs and nothing else does.
+    /// </summary>
+    /// <remarks>
+    /// Off by default and process-wide when on: every tier, the turn budget and the guards are rewritten, so it never shares an invocation with another knob:
+    /// <c>Harness__CancellableModel=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.CancelledTurnTests"</c>
+    /// </remarks>
+    public bool CancellableModel { get; init; }
+
+    /// <summary>
     /// Names the malformed harness plugin that a <c>PluginValidationTests</c> invocation loads
     /// (<c>unlabelled-intent</c> loads the <c>unlabelled-intent-plugins</c> directory); the fixture's own host never loads it.
     /// </summary>

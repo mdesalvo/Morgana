@@ -6,6 +6,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 
 ## [1.0.0-beta2] - UNDER DEVELOPMENT
+### 🎯 Major Feature: All-in on guardrails
+Every door through which text from outside reaches an agent has its guard.
+The new ToolGuard reads every tool result before the agent's model does. A free check comes first and withholds a result that forges Morgana's own sections, carries chat-template tokens or hidden characters, or is too long to vouch for. A withheld result stays out for the rest of the turn.
+What an MCP server or a partner offers is inspected before any agent sees it, at startup and whenever it changes. A source that is refused is closed to every agent.
+The new PeerGuard reads a partner's question before the agent does. The UserGuard reads the user's message beside the answer the user last received.
+The three guards share one idea of what malice is. A tool result, an offer or a partner's question that cannot be judged is refused; the user's message is let through. Every guarded door is counted on `morgana.security.events`.
+### 🎯 Major Feature: Tools in Microsoft.Extensions.AI
+A domain tool is a public method of its tool class, described by its attributes alone. It runs in the tool loop of Microsoft.Extensions.AI as an `AIFunction` and its parameters reach the model through the JSON schema.
+The guards join that loop through the agent framework's own middleware, on every call of every run.
+### 🎯 Major Feature: MCP discovery owned by Morgana
+An agent names its MCP servers with `[UsesMCPServer]` and Morgana discovers their tools at runtime. It keeps the connections, replaces one that ends and refuses a tool whose name clashes with one it already has.
+The tools are examined again whenever a server's listing changes.
+The example `GardeningAgent` takes every tool it has from `GardeningMCP`.
 ### ✨ Added
 
 ### 🔄 Changed

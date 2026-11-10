@@ -595,7 +595,7 @@ public class MorganaAgentAdapter
                 string argumentsText = JsonSerializer.Serialize(new Dictionary<string, object?>(invocation.Arguments), AIJsonUtilities.DefaultOptions);
 
                 // The guard's verdict on what the tool returned.
-                Records.GuardRailResult verdict = await guardRailService.CheckToolResultAsync(conversationId, toolName, argumentsText, resultText);
+                Records.GuardRailResult verdict = await guardRailService.CheckToolResultAsync(conversationId, toolName, argumentsText, resultText, cancellationToken);
 
                 // A compliant result reaches the model untouched.
                 if (verdict.Compliant)

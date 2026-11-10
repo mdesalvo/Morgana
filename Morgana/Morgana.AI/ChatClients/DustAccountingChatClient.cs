@@ -65,21 +65,27 @@ public sealed class DustAccountingChatClient : DelegatingChatClient
         ChatOptions? chatOptions = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        // Providers deliver streaming usage as a cumulative total (typically one final
-        // UsageContent), not per-chunk deltas — so we keep the LAST one seen and charge once
-        // when the stream completes. Summing would double-count.
+        // Providers deliver streaming usage as a cumulative total, not per-chunk deltas: the last
+        // one seen is the call's usage and summing them would double-count.
         UsageDetails? usageDetails = null;
 
-        await foreach (ChatResponseUpdate chatResponseUpdate in
-            base.GetStreamingResponseAsync(chatMessages, chatOptions, cancellationToken))
+        try
         {
-            foreach (UsageContent usageContent in chatResponseUpdate.Contents.OfType<UsageContent>())
-                usageDetails = usageContent.Details;
+            await foreach (ChatResponseUpdate chatResponseUpdate in
+                base.GetStreamingResponseAsync(chatMessages, chatOptions, cancellationToken))
+            {
+                foreach (UsageContent usageContent in chatResponseUpdate.Contents.OfType<UsageContent>())
+                    usageDetails = usageContent.Details;
 
-            yield return chatResponseUpdate;
+                yield return chatResponseUpdate;
+            }
         }
-
-        await ChargeAsync(ResolveConversationId(chatOptions), usageDetails);
+        finally
+        {
+            // The charge is made however the stream ends, since a turn being stopped may stop reading right
+            // after the usage arrived and the provider billed that call all the same.
+            await ChargeAsync(ResolveConversationId(chatOptions), usageDetails);
+        }
     }
 
     /// <summary>

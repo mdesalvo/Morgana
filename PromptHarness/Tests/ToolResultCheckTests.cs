@@ -383,7 +383,7 @@ public sealed class ToolResultCheckTests
     private sealed class UnreachableLanguageModelService : ILanguageModelService
     {
         /// <summary>Never answers.</summary>
-        public Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt, string? dustRole = null)
+        public Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt, string? dustRole = null, CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("The deterministic check reached a model");
 
         /// <summary>Never answers.</summary>

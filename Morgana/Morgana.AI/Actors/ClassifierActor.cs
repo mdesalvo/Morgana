@@ -55,7 +55,7 @@ public class ClassifierActor : MorganaActor
             // The classification strategy (LLM call, ranking, the confidence-gap collision check
             // that decides whether metadata carries "ambiguousIntents") lives behind this one call.
             Records.ClassificationResult classificationResult =
-                await classifierService.ClassifyAsync(msg.ConversationId, msg.Text);
+                await classifierService.ClassifyAsync(msg.ConversationId, msg.Text, msg.TurnCancellation);
 
             actorLogger.Info(
                 "Classification complete for conversation {0}: intent='{1}', confidence={2}",
@@ -66,6 +66,11 @@ public class ClassifierActor : MorganaActor
             // Replies the supervisor with the result of the classification, which includes the intents
             // ranked by descending score and the eventual collision metadata to support user-driven disambiguation.
             originalSender.Tell(classificationResult);
+        }
+        catch (OperationCanceledException) when (msg.TurnCancellation.IsCancellationRequested)
+        {
+            // The supervisor has already moved on and a late failure would be read as the failure of the phase it is in now.
+            actorLogger.Info("Classification stopped for conversation {0}: the supervisor no longer waits for it", msg.ConversationId);
         }
         catch (Exception ex)
         {

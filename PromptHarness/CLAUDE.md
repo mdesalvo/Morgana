@@ -36,8 +36,8 @@ starts `Examples/GardeningMCP` as a child process, before the host boots, at the
 
 ## Commands
 
-Twenty-eight test classes. **Never combine filters**: eight groups carry a process-wide boot knob the
-others must not see and two of those eight share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
+Twenty-nine test classes. **Never combine filters**: nine groups carry a process-wide boot knob the
+others must not see and two of those nine share the guard's. Never parallelise invocations either — they share one `bin`/`obj`.
 
 ```bash
 # the rig, before believing any scenario result
@@ -80,6 +80,7 @@ Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateL
 Harness__MalformedDomain=unlabelled-intent dotnet test … --filter "FullyQualifiedName~PluginValidationTests"    # deterministic, skipped without the knob
 Harness__FederatedPeer=true dotnet test … --filter "FullyQualifiedName~FederationTests"
 Harness__PoisonedDomain=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.HijackingTests"
+Harness__CancellableModel=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.CancelledTurnTests"    # deterministic, skipped without the knob
 Harness__EnableUserGuardrail=true dotnet test … --filter "FullyQualifiedName~ConversationPersistenceTests"
 
 # one scenario — the id is a Theory argument, so match DisplayName, never the FQN, on at most its
@@ -117,6 +118,7 @@ whether the answer is already recorded in `Harness/JOURNEY.md` or a prior `Harne
 | `SummarizationTests` | — | The reducer's own prompt, unreachable at the default 21-message trigger |
 | `DustTests` | — | The budget thresholds, crossed in order. Evidence-driven rather than turn-pinned: how many turns it takes is a real token measurement |
 | `RateLimitTests` | none | The REST gate's rate limit: the 429 past the window, refused commands left uncounted, one window shared by messages and commands. No model is reached |
+| `CancelledTurnTests` | none | Every flow Morgana can stop (the user's guard, the classifier, an agent's turn mid-stream, the tool guard, a partner's question, a colleague's answer) is held by a fake model until the wait on it runs out: the held call must be dropped by Morgana in time, no late answer may reach the channel, a stopped turn keeps the tool calls that ran and only completed calls are charged. No model is reached |
 | `PluginValidationTests` | none | A domain built to be wrong, a harness plugin beside the shipped one, stops the boot with the refusal that names the fault. A red: a malformed domain booted, so the refusal it names went missing. Its plugin lives in `Plugins/` and stays loaded in the process, so it is its own invocation. No model is reached |
 | `ConversationPersistenceTests` | — | Who owns each line of a conversation, how it is dated and in what order it is read back. The record is photographed after every exchange rather than at the end, because a transcript that reads correctly can still have been written by the wrong participant. Asserts nothing about wording: the oracle is what the channel was pushed and what the channel said. Shares the guard's knob, since a refused turn is one of the five it stages |
 | `TurnEndingTests` | none | What a presentation tool tells the model about the turn's words: the fact that nothing has reached the user yet, stated before any text and never after. The landing declaration reaches the model on the landing turn alone. A scripted model behind the real tool loop |

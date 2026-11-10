@@ -18,6 +18,7 @@ public interface IClassifierService
     /// between messages (each message is judged purely on its own text).
     /// </param>
     /// <param name="message">User message text to classify.</param>
+    /// <param name="cancellationToken">Stops the classification once whoever asked for it stops waiting.</param>
     /// <returns>
     /// A <see cref="Records.ClassificationResult"/> containing the top-ranked intent name and a
     /// metadata dictionary (at minimum a <c>"confidence"</c> key). On failure, implementations
@@ -26,5 +27,5 @@ public interface IClassifierService
     /// more close-scoring candidates read the metadata's <c>"ambiguousIntents"</c> key, present
     /// only when the implementation actually flags one.
     /// </returns>
-    Task<Records.ClassificationResult> ClassifyAsync(string conversationId, string message);
+    Task<Records.ClassificationResult> ClassifyAsync(string conversationId, string message, CancellationToken cancellationToken = default);
 }

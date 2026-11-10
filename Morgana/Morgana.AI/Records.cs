@@ -606,12 +606,14 @@ public static class Records
     /// <param name="Timestamp">Timestamp when the message was created</param>
     /// <param name="TurnContext">OpenTelemetry activity context for the current turn span.</param>
     /// <param name="CallerId">Authenticated caller identity, propagated from the HTTP layer for conversation ownership and audit.</param>
+    /// <param name="TurnCancellation">Stops the work of this request once whoever asked for it stops waiting.</param>
     public record UserMessage(
         string ConversationId,
         string Text,
         DateTime Timestamp,
         ActivityContext TurnContext = default,
-        string? CallerId = null);
+        string? CallerId = null,
+        CancellationToken TurnCancellation = default);
 
     // ==========================================================================
     // GUARD (CONTENT MODERATION) MESSAGES
@@ -623,9 +625,11 @@ public static class Records
     /// </summary>
     /// <param name="ConversationId">Unique identifier of the conversation</param>
     /// <param name="Message">User message to check for policy violations</param>
+    /// <param name="TurnCancellation">Stops the work of this request once whoever asked for it stops waiting.</param>
     public record GuardCheckRequest(
         string ConversationId,
-        string Message);
+        string Message,
+        CancellationToken TurnCancellation = default);
 
     /// <summary>
     /// The verdict in the JSON shape the Guard prompt asks the model for; read by <c>LLMGuardRailService</c> alone.
@@ -799,6 +803,14 @@ public static class Records
     /// (null for follow-up to active agents), TurnContext for OTel span, channel Capabilities (null→full capability).
     /// IsLanding marks the press of a button that Morgana offered to choose this agent: the turn opens with the agent presenting itself.
     /// </summary>
+    /// <param name="ConversationId">Conversation the request belongs to.</param>
+    /// <param name="Content">The user's message text; null for tool-only requests.</param>
+    /// <param name="Classification">The classified intent; null for a follow-up to the active agent.</param>
+    /// <param name="TurnContext">OpenTelemetry activity context of the current turn span.</param>
+    /// <param name="Capabilities">What the channel can show; null means full capability.</param>
+    /// <param name="ContentAlreadyStored">True when the user's phrase was already saved as Morgana's own.</param>
+    /// <param name="IsLanding">True when the turn opens with the agent presenting itself.</param>
+    /// <param name="TurnCancellation">Stops the work of this request once whoever asked for it stops waiting.</param>
     public record AgentRequest(
         string ConversationId,
         string? Content,
@@ -806,7 +818,8 @@ public static class Records
         ActivityContext TurnContext = default,
         ChannelCapabilities? Capabilities = null,
         bool ContentAlreadyStored = false,
-        bool IsLanding = false);
+        bool IsLanding = false,
+        CancellationToken TurnCancellation = default);
 
     /// <summary>
     /// Agent response: text, IsCompleted flag (true→idle, false→agent stays active),
@@ -937,11 +950,13 @@ public static class Records
     /// <param name="Question">The colleague's question, already carrying the declaration spliced in
     /// front of it, since the answering agent's prompt says nothing about serving a colleague.</param>
     /// <param name="TurnContext">OTel context of the user turn that triggered the consultation.</param>
+    /// <param name="TurnCancellation">Stops the work of this request once whoever asked for it stops waiting.</param>
     public record PeerConsultation(
         string ConversationId,
         string? CallerIntent,
         string Question,
-        ActivityContext TurnContext = default);
+        ActivityContext TurnContext = default,
+        CancellationToken TurnCancellation = default);
 
     /// <summary>
     /// A colleague's answer, both as the actor reply and — serialized — as the tool result the

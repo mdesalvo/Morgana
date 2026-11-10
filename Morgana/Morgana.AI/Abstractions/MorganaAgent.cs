@@ -198,10 +198,7 @@ public class MorganaAgent : MorganaActor
         await persistenceService.UpsertSharedVariableAsync(conversationId, key, value, AgentIntent);
     }
 
-    /// <summary>
-    /// Processes an incoming <see cref="Records.AgentRequest"/>, running the LLM turn
-    /// and streaming or batching the response back to the sender.
-    /// </summary>
+    /// <summary>Runs the user's turn on the model, forwarding its text as it streams where the channel shows chunks.</summary>
     /// <param name="req">Agent request containing the user's message, optional classification and OTel TurnContext</param>
     protected virtual async Task ExecuteAgentAsync(Records.AgentRequest req)
     {
@@ -217,6 +214,12 @@ public class MorganaAgent : MorganaActor
         agentSpan?.SetTag(Telemetry.ConversationId, conversationId);
         agentSpan?.SetTag(Telemetry.AgentName, GetType().Name);
         agentSpan?.SetTag(Telemetry.AgentIntent, AgentIntent);
+
+        // Every update of the run, which is what a stopped turn keeps its tool calls from.
+        List<AgentResponseUpdate> turnUpdates = [];
+
+        // History length before the turn, set once the session is loaded.
+        int historyBaseline = 0;
 
         try
         {
@@ -285,7 +288,7 @@ public class MorganaAgent : MorganaActor
             // History length before this turn runs: everything appended past this point belongs to
             // the turn, which is what agent.tools_invoked must report — the span is per-turn, so
             // reporting the whole session would attribute every past tool call to this one.
-            int historyBaseline = aiChatHistoryProvider.GetMessages(aiAgentSession).Count;
+            historyBaseline = aiChatHistoryProvider.GetMessages(aiAgentSession).Count;
 
             // The phrase enters the session before a single token is spent on it. The turn below runs
             // on the session alone, so nothing reaches the model twice. Written out too, because
@@ -301,100 +304,74 @@ public class MorganaAgent : MorganaActor
             if (req.IsLanding)
                 await aiContextProvider.SetVariableAsync(aiAgentSession, Constants.ContextKeys.Landing, true);
 
-            // Streaming is gated on two independent signals:
-            //   1. Global config flag (Morgana:AdaptiveMessaging:EnableStreamingResponse)
-            //   2. Channel capability — we don't even attach to the LLM streaming endpoint
-            //      when the outbound channel can't deliver chunks to the user. When Capabilities
-            //      is null (legacy/test paths) we assume the channel supports streaming.
+            // The model is always read as a stream, because the updates are what a stopped turn keeps.
+            // The two signals (the global flag and the channel's capability) decide only whether
+            // chunks are forwarded. When Capabilities is null (legacy/test paths) the channel is
+            // assumed to support streaming.
             bool streamingConfigEnabled = configuration.GetValue("Morgana:AdaptiveMessaging:EnableStreamingResponse", true);
             bool channelSupportsStreaming = req.Capabilities?.SupportsStreaming ?? true;
             bool useStreaming = streamingConfigEnabled && channelSupportsStreaming;
 
             if (!channelSupportsStreaming)
-                agentLogger.LogInformation("Agent '{AgentIntent}' bypassing LLM streaming: channel does not advertise SupportsStreaming", AgentIntent);
+                agentLogger.LogInformation("Agent '{AgentIntent}' forwarding no chunks: channel does not advertise SupportsStreaming", AgentIntent);
 
             StringBuilder fullResponse = new StringBuilder();
-            if (useStreaming)
+            Stopwatch firstChunkStopwatch = Stopwatch.StartNew();
+            bool firstChunkEmitted = false;
+            string? lastTextMessageId = null;
+
+            // The whole turn runs here — tool calls included, which surface as chunks carrying no text.
+            // The phrase being answered is the one already filed above, so nothing is handed in here.
+            // The run stops when the supervisor stops waiting for it.
+            await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(aiAgentSession, cancellationToken: req.TurnCancellation))
             {
-                Stopwatch firstChunkStopwatch = Stopwatch.StartNew();
-                bool firstChunkEmitted = false;
-                string? lastTextMessageId = null;
+                // Kept whole so that a stopped turn can rebuild the tool calls that already ran.
+                turnUpdates.Add(chunk);
 
-                // The whole turn runs here — tool calls included, which surface as chunks carrying no text.
-                // The phrase being answered is the one already filed above, so nothing is handed in here.
-                await foreach (AgentResponseUpdate chunk in aiAgent.RunStreamingAsync(aiAgentSession))
+                if (!string.IsNullOrEmpty(chunk.Text))
                 {
-                    if (!string.IsNullOrEmpty(chunk.Text))
+                    // Two text chunks with different MessageIds come from different messages and that
+                    // is where the separator belongs. Within one message the chunks are tokens and must
+                    // stay welded, so only text-carrying chunks update the id. A provider that never
+                    // sets MessageId reports no boundary and nothing is inserted.
+                    if (lastTextMessageId is not null
+                         && !string.Equals(chunk.MessageId, lastTextMessageId, StringComparison.Ordinal)
+                         && NeedsMessageSeparator(fullResponse, chunk.Text))
                     {
-                        // Two text chunks with different MessageIds come from different messages and that
-                        // is where the separator belongs. Within one message the chunks are tokens and must
-                        // stay welded, so only text-carrying chunks update the id. A provider that never
-                        // sets MessageId reports no boundary and nothing is inserted.
-                        if (lastTextMessageId is not null
-                             && !string.Equals(chunk.MessageId, lastTextMessageId, StringComparison.Ordinal)
-                             && NeedsMessageSeparator(fullResponse, chunk.Text))
-                        {
-                            fullResponse.Append(Constants.Markers.MessageSeparator);
-
-                            // Streamed too, so the live text matches the final one the client is about to
-                            // overwrite it with, instead of showing the weld for the rest of the turn.
-                            senderRef.Tell(new Records.AgentStreamChunk(Constants.Markers.MessageSeparator));
-                        }
-
-                        lastTextMessageId = chunk.MessageId;
-
-                        fullResponse.Append(chunk.Text);
-                        senderRef.Tell(new Records.AgentStreamChunk(chunk.Text));
-
-                        // Record time-to-first-token on the very first chunk
-                        if (!firstChunkEmitted)
-                        {
-                            firstChunkEmitted = true;
-                            long ttft = firstChunkStopwatch.ElapsedMilliseconds;
-                            firstChunkStopwatch.Stop();
-                            agentSpan?.AddEvent(new ActivityEvent(Telemetry.EventFirstChunk));
-                            agentSpan?.SetTag(Telemetry.AgentTtftMs, ttft);
-                            Telemetry.AgentTtftHistogram.Record(ttft);
-                        }
-                    }
-                    else
-                    {
-                        // The turn is advancing on something with no text in it — a tool being called
-                        // or a colleague being asked. The supervisor's wait counts silence and a
-                        // consultation is a whole turn at another agent: unannounced, it reads as an
-                        // agent that has died and the user's turn is abandoned while its answer is
-                        // still being written.
-                        senderRef.Tell(new Records.AgentStillWorking());
-                    }
-                }
-            }
-            else
-            {
-                Stopwatch responseStopwatch = Stopwatch.StartNew();
-                // Same turn as the streaming branch, answering the same already-filed phrase: nothing
-                // reaches the channel until the model and every tool it decided to call, are done.
-                AgentResponse response = await aiAgent.RunAsync(aiAgentSession);
-                responseStopwatch.Stop();
-
-                // Assembled message by message rather than through AgentResponse.Text, which is
-                // documented to concatenate every message's text and so produces exactly the weld
-                // Markers.MessageSeparator exists to prevent. Here every element is a whole message, so the
-                // boundary needs no detecting — unlike the streaming path above.
-                foreach (ChatMessage responseMessage in response.Messages)
-                {
-                    if (string.IsNullOrEmpty(responseMessage.Text))
-                        continue;
-
-                    if (NeedsMessageSeparator(fullResponse, responseMessage.Text))
                         fullResponse.Append(Constants.Markers.MessageSeparator);
 
-                    fullResponse.Append(responseMessage.Text);
-                }
+                        // Streamed too, so the live text matches the final one the client is about to
+                        // overwrite it with, instead of showing the weld for the rest of the turn.
+                        if (useStreaming)
+                            senderRef.Tell(new Records.AgentStreamChunk(Constants.Markers.MessageSeparator));
+                    }
 
-                long ttft = responseStopwatch.ElapsedMilliseconds;
-                agentSpan?.AddEvent(new ActivityEvent(Telemetry.EventFirstChunk));
-                agentSpan?.SetTag(Telemetry.AgentTtftMs, ttft);
-                Telemetry.AgentTtftHistogram.Record(ttft);
+                    lastTextMessageId = chunk.MessageId;
+
+                    fullResponse.Append(chunk.Text);
+                    if (useStreaming)
+                        senderRef.Tell(new Records.AgentStreamChunk(chunk.Text));
+
+                    // Record time-to-first-token on the very first chunk
+                    if (!firstChunkEmitted)
+                    {
+                        firstChunkEmitted = true;
+                        long ttft = firstChunkStopwatch.ElapsedMilliseconds;
+                        firstChunkStopwatch.Stop();
+                        agentSpan?.AddEvent(new ActivityEvent(Telemetry.EventFirstChunk));
+                        agentSpan?.SetTag(Telemetry.AgentTtftMs, ttft);
+                        Telemetry.AgentTtftHistogram.Record(ttft);
+                    }
+                }
+                else if (useStreaming)
+                {
+                    // The turn is advancing on something with no text in it — a tool being called
+                    // or a colleague being asked. The supervisor's wait counts silence and a
+                    // consultation is a whole turn at another agent: unannounced, it reads as an
+                    // agent that has died and the user's turn is abandoned while its answer is
+                    // still being written.
+                    senderRef.Tell(new Records.AgentStillWorking());
+                }
             }
 
             string llmResponseText = fullResponse.ToString().Trim();
@@ -475,6 +452,55 @@ public class MorganaAgent : MorganaActor
             senderRef.Tell(new Records.AgentResponse(
                 llmResponseText, isCompleted, quickReplies, richCard, finalAssistantMessage?.CreatedAt?.UtcDateTime));
         }
+        // The supervisor stopped waiting: the run was cut and what it had already done is kept.
+        catch (OperationCanceledException) when (req.TurnCancellation.IsCancellationRequested)
+        {
+            agentLogger.LogWarning("Turn of agent {AgentIntent} stopped for conversation {ConversationId}: the supervisor no longer waits for it", AgentIntent, conversationId);
+
+            // A turn stopped before its session was loaded has nothing to keep.
+            if (aiAgentSession is not null)
+            {
+                // The calls whose tool answered before the stop: the only ones a provider accepts in a history.
+                HashSet<string> answeredCallIds = [.. turnUpdates.SelectMany(update => update.Contents.OfType<FunctionResultContent>()).Select(result => result.CallId)];
+
+                // The updates rebuilt into the messages the run had produced when it was cut.
+                foreach (ChatMessage interruptedMessage in turnUpdates.ToAgentResponse().Messages)
+                {
+                    // The tool calls that ran are facts and stay with their results; the text is dropped because the
+                    // channel replaces what was streamed with Morgana's apology, so the next turn must not read as
+                    // said what the user never saw; a call whose tool never answered would be refused by the provider.
+                    List<AIContent> keptContents = [.. interruptedMessage.Contents.Where(content => content is FunctionResultContent || content is FunctionCallContent call && answeredCallIds.Contains(call.CallId))];
+
+                    // A message that held only text has nothing left to keep.
+                    if (keptContents.Count == 0)
+                        continue;
+
+                    // The message keeps only the facts of the calls that ran.
+                    interruptedMessage.Contents = keptContents;
+
+                    // Morgana's clock, which the history orders by, as on a completed turn.
+                    interruptedMessage.CreatedAt = DateTimeOffset.UtcNow;
+
+                    // Filed after the user's phrase that the turn answered, where the next turn's model reads it.
+                    aiChatHistoryProvider.AppendMessage(aiAgentSession, interruptedMessage);
+                }
+
+                // A consultation is cleared from a stopped turn as from a completed one.
+                StripPeerConsultations(aiAgentSession, historyBaseline);
+
+                // Dropped before the save, so the row holds none of the turn's ephemeral variables.
+                DropTurnVariables(aiAgentSession);
+
+                // The supervisor has dropped this agent for the conversation, so its row leaves active duty too and a restart does not bring it back.
+                await persistenceService.SaveAgentConversationAsync(AgentIdentifier, aiAgent, aiAgentSession, isCompleted: true);
+            }
+
+            // The turn ended without an answer to give.
+            agentSpan?.SetStatus(ActivityStatusCode.Error, "interrupted");
+            agentSpan?.Dispose();
+
+            // No reply to senderRef: the supervisor already answered the user and a late answer would be read as the answer of a later turn.
+        }
         // The provider of the agent's tier decides whether the failure is its own content refusal; the registry
         // refuses at startup an agent without [RequiresLLMTier], so the tier is always declared.
         catch (Exception ex) when (llmService.GetLanguageModel(GetType().GetCustomAttribute<RequiresLLMTierAttribute>()!.Tier).IsContentFilterRefusal(ex))
@@ -499,14 +525,7 @@ public class MorganaAgent : MorganaActor
         {
             // Safety net: ephemeral UI variables (rich card, quick replies, ...) must NEVER leak to the next turn.
             if (aiAgentSession is not null)
-            {
-                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.RichCard);
-                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.QuickReplies);
-                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.TurnEnding);
-                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.ConsultationRounds);
-                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.Landing);
-                aiContextProvider.DropVariable(aiAgentSession, Constants.ContextKeys.QuarantinedTools);
-            }
+                DropTurnVariables(aiAgentSession);
         }
     }
 
@@ -559,7 +578,8 @@ public class MorganaAgent : MorganaActor
             // streamed: the reader is an agent waiting for one whole answer, not a channel.
             AgentResponse response = await aiAgent.RunAsync(
                 new ChatMessage(ChatRole.User, consultation.Question) { CreatedAt = DateTimeOffset.UtcNow },
-                consultationSession);
+                consultationSession,
+                cancellationToken: consultation.TurnCancellation);
 
             // The colleague's presentation decisions are handed over as data rather than drained:
             // the asking agent reads the options it was offered and may come back having chosen one.
@@ -586,6 +606,16 @@ public class MorganaAgent : MorganaActor
                 awaitsReply,
                 quickReplies,
                 richCard));
+        }
+        catch (OperationCanceledException) when (consultation.TurnCancellation.IsCancellationRequested)
+        {
+            agentLogger.LogInformation("Agent '{AgentIntent}' stopped answering a consultation from '{CallerIntent}': the asker no longer waits", AgentIntent, consultation.CallerIntent);
+
+            // The consultation ended without an answer to give.
+            consultationSpan?.SetStatus(ActivityStatusCode.Error, "interrupted");
+            consultationSpan?.Dispose();
+
+            // No Tell: the asker has stopped waiting and nothing is persisted on this session by design.
         }
         catch (Exception ex)
         {
@@ -616,6 +646,27 @@ public class MorganaAgent : MorganaActor
         Records.ErrorAnswer? genericError = errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "GenericError", StringComparison.OrdinalIgnoreCase));
 
         failure.OriginalSender.Tell(new Records.AgentResponse(genericError?.Content ?? "An internal error occurred.", true, null));
+    }
+
+    /// <summary>Drops the variables that live for one turn so that they never reach the next.</summary>
+    /// <param name="session">The session whose context holds the turn's variables.</param>
+    private void DropTurnVariables(AgentSession session)
+    {
+        // Rich card and quick replies belong to the answer just given and would otherwise be shown again.
+        aiContextProvider.DropVariable(session, Constants.ContextKeys.RichCard);
+        aiContextProvider.DropVariable(session, Constants.ContextKeys.QuickReplies);
+
+        // The turn's own verdict on whether the agent hands the conversation back.
+        aiContextProvider.DropVariable(session, Constants.ContextKeys.TurnEnding);
+
+        // The rounds of consultation are counted per turn.
+        aiContextProvider.DropVariable(session, Constants.ContextKeys.ConsultationRounds);
+
+        // A landing opens one turn alone.
+        aiContextProvider.DropVariable(session, Constants.ContextKeys.Landing);
+
+        // The tools withheld by the guard are withheld for this turn alone.
+        aiContextProvider.DropVariable(session, Constants.ContextKeys.QuarantinedTools);
     }
 
     /// <summary>

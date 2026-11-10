@@ -23,11 +23,12 @@ public interface IGuardRailService
     /// per-conversation policies or to enrich audit trails.
     /// </param>
     /// <param name="message">User message text to evaluate.</param>
+    /// <param name="cancellationToken">Stops the judgment once whoever asked for it stops waiting.</param>
     /// <returns>
     /// A <see cref="Records.GuardRailResult"/> indicating whether the message is compliant
     /// and, when not, describing the violated rule.
     /// </returns>
-    Task<Records.GuardRailResult> CheckUserMessageAsync(string conversationId, string message);
+    Task<Records.GuardRailResult> CheckUserMessageAsync(string conversationId, string message, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Judges a tool result before the agent's model reads it.
@@ -36,11 +37,12 @@ public interface IGuardRailService
     /// <param name="toolName">The function the model called.</param>
     /// <param name="toolArguments">The arguments the model called the tool with, serialized as a JSON object; only the inspector reads them, as the call the result is judged against.</param>
     /// <param name="toolResult">The result serialized as JSON, as the tool loop hands it to the provider.</param>
+    /// <param name="cancellationToken">Stops the judgment once whoever asked for it stops waiting.</param>
     /// <returns>
     /// Non-compliant when the result is to be withheld, with the finding in <c>Violation</c> for an operator's log.
     /// </returns>
     /// <remarks>Never throws: a result that cannot be judged is withheld.</remarks>
-    Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult);
+    Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Judges the question a partner puts to an agent of this installation before the agent reads it.
@@ -50,11 +52,12 @@ public interface IGuardRailService
     /// <param name="agentIntent">The agent asked.</param>
     /// <param name="agentTerritory">What the asked agent answers for, as its card publishes it.</param>
     /// <param name="question">The partner's question in its own words.</param>
+    /// <param name="cancellationToken">Stops the judgment once whoever asked for it stops waiting.</param>
     /// <returns>
     /// Non-compliant when the question is to be declined, with the finding in <c>Violation</c> for an operator's log.
     /// </returns>
     /// <remarks>Never throws: a question that cannot be judged is declined, as every text from outside this installation is.</remarks>
-    Task<Records.GuardRailResult> CheckPeerQuestionAsync(string conversationId, string partnerName, string agentIntent, string agentTerritory, string question);
+    Task<Records.GuardRailResult> CheckPeerQuestionAsync(string conversationId, string partnerName, string agentIntent, string agentTerritory, string question, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Lists an MCP server and admits its tools to the agents that declare it.

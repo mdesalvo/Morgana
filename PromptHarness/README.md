@@ -137,6 +137,9 @@ Harness__RateLimitPerMinute=3 dotnet test … --filter "FullyQualifiedName~RateL
 # the hijacking group — requires the poisoned domain, which serves two MCP servers and two partners in-process and replaces the whole domain
 Harness__PoisonedDomain=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.HijackingTests"
 
+# the cancellation group — deterministic, requires the fake model that every tier answers from, skipped without it
+Harness__CancellableModel=true dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.CancelledTurnTests"
+
 # the plugin validation group — deterministic, requires the malformed domain named at boot, skipped without it
 Harness__MalformedDomain=unlabelled-intent dotnet test … --filter "FullyQualifiedName~PromptHarness.Tests.PluginValidationTests"
 

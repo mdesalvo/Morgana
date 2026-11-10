@@ -52,7 +52,7 @@ public class GuardActor : MorganaActor
             // permitting its eventual switch-off.
             Records.GuardRailResult result =
                 configuration.GetValue("Morgana:ActorSystem:EnableUserGuardrail", true)
-                    ? await guardRailService.CheckUserMessageAsync(req.ConversationId, req.Message)
+                    ? await guardRailService.CheckUserMessageAsync(req.ConversationId, req.Message, req.TurnCancellation)
                     : new Records.GuardRailResult(true, null, Records.GuardVerdictSource.Disabled);
 
             actorLogger.Info(
@@ -61,6 +61,11 @@ public class GuardActor : MorganaActor
 
             // The supervisor receives the service's verdict whole, its deciding layer included
             originalSender.Tell(result);
+        }
+        catch (OperationCanceledException) when (req.TurnCancellation.IsCancellationRequested)
+        {
+            // The supervisor has already moved on and a late failure would be read as the failure of the phase it is in now.
+            actorLogger.Info("Guard check stopped for conversation {0}: the supervisor no longer waits for it", req.ConversationId);
         }
         catch (Exception ex)
         {

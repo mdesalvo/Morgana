@@ -87,10 +87,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     public List<ChatMessage> GetMessages(AgentSession session) =>
         sessionState.GetOrInitializeState(session).Messages;
 
-    /// <summary>
-    /// Files the user's message into the history before the turn runs, so it can be persisted
-    /// ahead of the LLM instead of only once the turn closes.
-    /// </summary>
+    /// <summary>Files a message into the history outside a run of the agent: the user's phrase before the turn and the tool calls of a turn that was stopped.</summary>
     public void AppendMessage(AgentSession session, ChatMessage message)
     {
         MorganaHistoryState historyState = sessionState.GetOrInitializeState(session);
@@ -98,7 +95,7 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         sessionState.SaveState(session, historyState);
 
         logger.LogInformation(
-            $"{nameof(MorganaChatHistoryProvider)} FILED an inbound {{Role}} message ahead of the turn " +
+            $"{nameof(MorganaChatHistoryProvider)} FILED a {{Role}} message outside a run " +
             $"— total history: {{Count}} for agent '{{AgentIntent}}'",
             message.Role, historyState.Messages.Count, agentIntent);
     }

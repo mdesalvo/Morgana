@@ -38,7 +38,7 @@ public sealed class ScriptedLanguageModelService : ILanguageModelService
     public int Calls { get; private set; }
 
     /// <summary>Records the call and answers as scripted.</summary>
-    public Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt, string? dustRole = null)
+    public Task<string> CompleteWithSystemPromptAsync(string conversationId, string systemPrompt, string userPrompt, string? dustRole = null, CancellationToken cancellationToken = default)
     {
         // The last call is what a scenario asserts on.
         SystemPrompt = systemPrompt;

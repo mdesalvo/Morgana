@@ -81,12 +81,12 @@ public partial class LLMGuardRailService : IGuardRailService
     /// <summary>
     /// The dust role of the inspection: the ledger reads it under its own name, apart from the pipeline's other framework calls.
     /// </summary>
-    private static readonly string toolGuardDustRole = $"{Constants.Morgana} ({Constants.Prompts.ToolGuard})";
+    private const string toolGuardDustRole = $"{Constants.Morgana} ({Constants.Prompts.ToolGuard})";
 
     /// <summary>
     /// The dust role of the PeerGuard's judgment: the ledger reads it under its own name, apart from the ToolGuard's.
     /// </summary>
-    private static readonly string peerGuardDustRole = $"{Constants.Morgana} ({Constants.Prompts.PeerGuard})";
+    private const string peerGuardDustRole = $"{Constants.Morgana} ({Constants.Prompts.PeerGuard})";
 
     /// <summary>The longest text an inspection vouches for, in characters.</summary>
     private int MaxToolResultLength
@@ -107,11 +107,6 @@ public partial class LLMGuardRailService : IGuardRailService
     /// The channel store, which keeps the last answer each conversation received.
     /// </summary>
     private readonly IChannelMetadataStore channelMetadataStore;
-
-    /// <summary>
-    /// The conversation an examination is charged under: an offer belongs to no conversation, as the presenter's welcome belongs to none.
-    /// </summary>
-    private const string OfferConversationId = "toolguard-offers";
 
     /// <summary>
     /// The offer of one source as last examined and its examination, shared by every caller that meets the same offer.
@@ -193,7 +188,7 @@ public partial class LLMGuardRailService : IGuardRailService
     }
 
     /// <inheritdoc/>
-    public async Task<Records.GuardRailResult> CheckUserMessageAsync(string conversationId, string message)
+    public async Task<Records.GuardRailResult> CheckUserMessageAsync(string conversationId, string message, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -219,7 +214,8 @@ public partial class LLMGuardRailService : IGuardRailService
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
                 userGuardSystemPrompt,
-                userGuardSubjectJson);
+                userGuardSubjectJson,
+                cancellationToken: cancellationToken);
 
             // The verdict, in the shape the UserGuard prompt's Formatting section asked for. Nothing here
             // is null when the model answered as instructed.
@@ -239,6 +235,11 @@ public partial class LLMGuardRailService : IGuardRailService
             return llmResult != null
                 ? new Records.GuardRailResult(llmResult.Compliant, llmResult.Violation, Records.GuardVerdictSource.Inspector)
                 : new Records.GuardRailResult(Compliant: true, Violation: null, Source: Records.GuardVerdictSource.FailOpen);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // A check stopped by its caller is no verdict, so it must not fail open.
+            throw;
         }
         catch (Exception ex) when (llmService.GetLanguageModel(llmService.FrameworkTier).IsContentFilterRefusal(ex))
         {
@@ -265,7 +266,7 @@ public partial class LLMGuardRailService : IGuardRailService
     }
 
     /// <inheritdoc/>
-    public async Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult)
+    public async Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult, CancellationToken cancellationToken = default)
     {
         // What the result carries against the assistant; null when nothing in it does.
         string? finding;
@@ -312,11 +313,11 @@ public partial class LLMGuardRailService : IGuardRailService
         }
 
         // Nothing forged and within the limit: the inspector reads what the free check cannot.
-        return await InspectToolResultAsync(conversationId, toolName, toolArguments, toolResult);
+        return await InspectToolResultAsync(conversationId, toolName, toolArguments, toolResult, cancellationToken);
     }
 
     /// <inheritdoc/>
-    public async Task<Records.GuardRailResult> CheckPeerQuestionAsync(string conversationId, string partnerName, string agentIntent, string agentTerritory, string question)
+    public async Task<Records.GuardRailResult> CheckPeerQuestionAsync(string conversationId, string partnerName, string agentIntent, string agentTerritory, string question, CancellationToken cancellationToken = default)
     {
         // What the question carries against the assistant; null when nothing in it does.
         string? finding;
@@ -369,7 +370,7 @@ public partial class LLMGuardRailService : IGuardRailService
         string subjectJson = JsonSerializer.Serialize(subject, AIJsonUtilities.DefaultOptions);
 
         // Nothing forged and within the limit: the PeerGuard reads what the free check cannot.
-        return await JudgeWithInspectorAsync(conversationId, peerGuardSystemPrompt, peerGuardDustRole, subjectJson, $"the question of partner {partnerName} to agent {agentIntent}");
+        return await JudgeWithInspectorAsync(conversationId, peerGuardSystemPrompt, peerGuardDustRole, subjectJson, $"the question of partner {partnerName} to agent {agentIntent}", cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -427,6 +428,7 @@ public partial class LLMGuardRailService : IGuardRailService
     public bool IsPeerAvailableAndSecure(Records.PeerReference peer)
         => IsSourceAvailableAndSecure(PartnerSourceKey(peer));
 
+    #region Utilities
     /// <summary>
     /// The key an MCP server's verdict is kept under.
     /// </summary>
@@ -537,7 +539,7 @@ public partial class LLMGuardRailService : IGuardRailService
         else
         {
             // Nothing forged and within the limit: the inspector reads what the free check cannot.
-            result = await JudgeWithInspectorAsync(OfferConversationId, toolGuardSystemPrompt, toolGuardDustRole, offerText, $"the offer of {sourceKey}");
+            result = await JudgeWithInspectorAsync("toolguard-offers", toolGuardSystemPrompt, toolGuardDustRole, offerText, $"the offer of {sourceKey}");
         }
 
         // A refused offer shuts the source for every agent: only the finding is logged, never the offer itself.
@@ -567,7 +569,7 @@ public partial class LLMGuardRailService : IGuardRailService
     /// <summary>
     /// Has the ToolGuard inspector judge a tool's result; a result that cannot be judged is withheld.
     /// </summary>
-    private async Task<Records.GuardRailResult> InspectToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult)
+    private async Task<Records.GuardRailResult> InspectToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult, CancellationToken cancellationToken = default)
     {
         // The tool, the arguments it was called with and what it returned, in the three fields the inspector's prompt names.
         Records.ToolGuardSubject subject = new Records.ToolGuardSubject(toolName, ReadJsonElement(toolArguments), ReadJsonElement(toolResult));
@@ -577,13 +579,13 @@ public partial class LLMGuardRailService : IGuardRailService
         string subjectJson = JsonSerializer.Serialize(subject, AIJsonUtilities.DefaultOptions);
 
         // A tool's result is judged by the inspector under the name of the tool that returned it.
-        return await JudgeWithInspectorAsync(conversationId, toolGuardSystemPrompt, toolGuardDustRole, subjectJson, $"the result of tool {toolName}");
+        return await JudgeWithInspectorAsync(conversationId, toolGuardSystemPrompt, toolGuardDustRole, subjectJson, $"the result of tool {toolName}", cancellationToken);
     }
 
     /// <summary>
     /// Has a guard's prompt judge a subject serialized as JSON; a subject that cannot be judged is withheld.
     /// </summary>
-    private async Task<Records.GuardRailResult> JudgeWithInspectorAsync(string conversationId, string systemPrompt, string dustRole, string subjectJson, string subjectLabel)
+    private async Task<Records.GuardRailResult> JudgeWithInspectorAsync(string conversationId, string systemPrompt, string dustRole, string subjectJson, string subjectLabel, CancellationToken cancellationToken = default)
     {
         // Any failure of the inspection withholds the subject: a source nobody vouches for is never read unjudged.
         try
@@ -593,7 +595,8 @@ public partial class LLMGuardRailService : IGuardRailService
                 conversationId,
                 systemPrompt,
                 subjectJson,
-                dustRole);
+                dustRole,
+                cancellationToken);
 
             // The verdict, in the shape the guard prompt's Formatting section asked for.
             Records.GuardCheckResponse? inspectorVerdict = JsonSerializer.Deserialize<Records.GuardCheckResponse>(
@@ -626,6 +629,11 @@ public partial class LLMGuardRailService : IGuardRailService
                 false,
                 inspectorVerdict.Violation ?? "judged hostile by the inspector",
                 Records.GuardVerdictSource.Inspector);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // A judgment stopped by its caller is no verdict, so it must not withhold either.
+            throw;
         }
         catch (Exception ex) when (llmService.GetLanguageModel(llmService.FrameworkTier).IsContentFilterRefusal(ex))
         {
@@ -837,4 +845,5 @@ public partial class LLMGuardRailService : IGuardRailService
     /// </summary>
     [GeneratedRegex(@"<\|[a-z_]+\|>|\[/?INST\]|<</?SYS>>|</?(tool_call|tool_result|tool_response|function_calls|function_results)>")]
     private static partial Regex ChatTemplateTokenPattern();
+    #endregion
 }

@@ -69,6 +69,9 @@ public class ConversationSupervisorActor : MorganaActor
     /// <summary>OTel span covering the classification duration (opened before Tell, closed on response).</summary>
     private Activity? classifierSpan;
 
+    /// <summary>Stops the work of the phase that the supervisor is waiting on.</summary>
+    private CancellationTokenSource? phaseCancellation;
+
     /// <summary>
     /// Initializes a new instance of the ConversationSupervisorActor.
     /// Creates child actors (guard, classifier, router) and enters Idle state.
@@ -207,7 +210,8 @@ public class ConversationSupervisorActor : MorganaActor
                 turnContext,
                 turnCapabilities,
                 noActiveAgent,
-                IsLanding: true));
+                IsLanding: true,
+                TurnCancellation: StartPhaseCancellation()));
             return;
         }
 
@@ -226,7 +230,7 @@ public class ConversationSupervisorActor : MorganaActor
         Become(() => AwaitingGuardCheck(ctx));
 
         // Engage the guard actor with the utterance from the user
-        guard.Tell(new Records.GuardCheckRequest(msg.ConversationId, msg.Text));
+        guard.Tell(new Records.GuardCheckRequest(msg.ConversationId, msg.Text, TurnCancellation: StartPhaseCancellation()));
     }
 
     /// <summary>
@@ -466,7 +470,8 @@ public class ConversationSupervisorActor : MorganaActor
                     null,
                     ctx.TurnContext,          // propagate context to agent
                     ctx.ChannelCapabilities,
-                    ctx.UserMessageAlreadyStored));
+                    ctx.UserMessageAlreadyStored,
+                    TurnCancellation: StartPhaseCancellation()));
             }
             else
             {
@@ -484,7 +489,7 @@ public class ConversationSupervisorActor : MorganaActor
                 Become(() => AwaitingClassification(ctx));
 
                 // Engage the classifier with the utterance from the user (now that it passed guardrails)
-                classifier.Tell(ctx.OriginalMessage);
+                classifier.Tell(ctx.OriginalMessage with { TurnCancellation = StartPhaseCancellation() });
             }
         });
 
@@ -492,7 +497,13 @@ public class ConversationSupervisorActor : MorganaActor
         Receive<Status.Failure>(failure => FailOpen(failure.Cause.Message, failure.Cause));
 
         // Routes a stalled GuardActor (no response within the timeout above) to FailOpen.
-        Receive<ReceiveTimeout>(_ => FailOpen("receive timeout", null));
+        Receive<ReceiveTimeout>(_ =>
+        {
+            // The guard the supervisor stops waiting for is stopped too, down to its model call.
+            phaseCancellation?.Cancel();
+
+            FailOpen("receive timeout", null);
+        });
 
         RegisterCommonHandlers();
         return;
@@ -547,7 +558,8 @@ public class ConversationSupervisorActor : MorganaActor
                     ctx.Classification,
                     ctx.TurnContext,
                     ctx.ChannelCapabilities,
-                    ctx.UserMessageAlreadyStored));
+                    ctx.UserMessageAlreadyStored,
+                    TurnCancellation: StartPhaseCancellation()));
             }
             else
             {
@@ -566,7 +578,7 @@ public class ConversationSupervisorActor : MorganaActor
                 Become(() => AwaitingClassification(ctx));
 
                 // Sends the message to ClassifierActor for classification.
-                classifier.Tell(ctx.OriginalMessage);
+                classifier.Tell(ctx.OriginalMessage with { TurnCancellation = StartPhaseCancellation() });
             }
         }
         #endregion
@@ -640,14 +652,21 @@ public class ConversationSupervisorActor : MorganaActor
                 classification,
                 ctx.TurnContext,              // propagate context to router → agent
                 ctx.ChannelCapabilities,
-                ctx.UserMessageAlreadyStored));
+                ctx.UserMessageAlreadyStored,
+                TurnCancellation: StartPhaseCancellation()));
         });
 
         // Routes an explicit ClassifierActor failure (a thrown exception) to FallbackToOther.
         Receive<Status.Failure>(failure => FallbackToOther(failure.Cause.Message, failure.Cause));
 
         // Routes a stalled ClassifierActor (no response within the timeout above) to FallbackToOther.
-        Receive<ReceiveTimeout>(_ => FallbackToOther("receive timeout", null));
+        Receive<ReceiveTimeout>(_ =>
+        {
+            // The classification the supervisor stops waiting for is stopped too, down to its model call.
+            phaseCancellation?.Cancel();
+
+            FallbackToOther("receive timeout", null);
+        });
 
         RegisterCommonHandlers();
         return;
@@ -718,7 +737,8 @@ public class ConversationSupervisorActor : MorganaActor
                 fallbackClassification,
                 ctx.TurnContext,
                 ctx.ChannelCapabilities,
-                ctx.UserMessageAlreadyStored));
+                ctx.UserMessageAlreadyStored,
+                TurnCancellation: StartPhaseCancellation()));
         }
         #endregion
     }
@@ -740,6 +760,9 @@ public class ConversationSupervisorActor : MorganaActor
         // Fires if neither RouterActor, nor the domain agent it dispatches to, answer in time.
         Receive<ReceiveTimeout>(_ =>
         {
+            // The router and the agent the supervisor stops waiting for are stopped too, down to their model call.
+            phaseCancellation?.Cancel();
+
             actorLogger.Error($"Timeout waiting for agent response (classification: {ctx.Classification?.Intent})");
 
             // Turns off the timeout now that it has fired, so it doesn't fire again for whatever runs next.
@@ -962,6 +985,9 @@ public class ConversationSupervisorActor : MorganaActor
         // Fires if the already-active agent doesn't answer this follow-up in time.
         Receive<ReceiveTimeout>(_ =>
         {
+            // The agent the supervisor stops waiting for is stopped too, down to its model call.
+            phaseCancellation?.Cancel();
+
             actorLogger.Error($"Timeout waiting for follow-up response from active agent (intent: {activeAgentIntent})");
 
             // Turns off the timeout now that it has fired, so it doesn't fire again for whatever runs next.
@@ -1153,6 +1179,19 @@ public class ConversationSupervisorActor : MorganaActor
             turnSpan.Dispose();
             turnSpan = null;
         }
+    }
+
+    /// <summary>Opens the cancellation scope of the phase that is about to start and returns its token.</summary>
+    private CancellationToken StartPhaseCancellation()
+    {
+        // The previous phase has ended by the time a new one starts, so its source is released.
+        phaseCancellation?.Dispose();
+
+        // The new source is what a timeout of this phase cancels.
+        phaseCancellation = new CancellationTokenSource();
+
+        // The token travels with the request to whoever does the work of the phase.
+        return phaseCancellation.Token;
     }
 
     /// <summary>
@@ -1359,6 +1398,10 @@ public class ConversationSupervisorActor : MorganaActor
     /// </summary>
     protected override void PostStop()
     {
+        // A conversation that ends mid-turn stops the work still running for it.
+        phaseCancellation?.Cancel();
+        phaseCancellation?.Dispose();
+
         // Guard span, still open if the actor stopped before AwaitingGuardCheck ever got a response.
         if (guardSpan is not null)
         {

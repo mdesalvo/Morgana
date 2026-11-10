@@ -145,7 +145,8 @@ public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", connection.ApiKey);
 
         // Ollama's client binds its model at construction, so each tier owns its HttpClient.
-        IChatClient ollamaClient = new OllamaApiClient(httpClient, options.ModelId);
+        // The call is wrapped so that a stopped call ends at once.
+        IChatClient ollamaClient = new MorganaOllamaClient(new OllamaApiClient(httpClient, options.ModelId));
 
         // Every option of the tier reaches OllamaSharp in the type it reads.
         return new ChatClientBuilder(ollamaClient)

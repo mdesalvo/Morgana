@@ -107,7 +107,7 @@ public class LLMClassifierService : IClassifierService
     }
 
     /// <inheritdoc/>
-    public async Task<Records.ClassificationResult> ClassifyAsync(string conversationId, string message)
+    public async Task<Records.ClassificationResult> ClassifyAsync(string conversationId, string message, CancellationToken cancellationToken = default)
     {
         logger.LogInformation(
             "LLMClassifierService: classifying message '{Preview}...' for conversation {ConversationId}",
@@ -120,7 +120,8 @@ public class LLMClassifierService : IClassifierService
             string response = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
                 classifierSystemPrompt,
-                message);
+                message,
+                cancellationToken: cancellationToken);
 
             // The model answers in the shape the Classifier prompt's Formatting section asked for, so
             // anything unparseable here is that prompt drifting from this record.
@@ -193,6 +194,11 @@ public class LLMClassifierService : IClassifierService
             }
 
             return new Records.ClassificationResult(topIntentName, metadata);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // A classification stopped by its caller must not fall back to an answer.
+            throw;
         }
         catch (Exception ex)
         {

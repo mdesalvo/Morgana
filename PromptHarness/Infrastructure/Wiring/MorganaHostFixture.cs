@@ -142,6 +142,12 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <summary>The sources a hijacking run turns against the instance under test; <c>null</c> when the run serves none.</summary>
     public PoisonedSourceHost? PoisonedSources { get; private set; }
 
+    /// <summary>The turn budget in seconds that a cancellation run sets, short enough that a wait running out is seen quickly.</summary>
+    private const int CancellableTurnSeconds = 6;
+
+    /// <summary>The fake model every tier answers from on a cancellation run; <c>null</c> when the run reaches a real one.</summary>
+    public CancellableModelHost? CancellableModel { get; private set; }
+
     /// <summary>The server that the shipped GardeningAgent reads its tools from; <c>null</c> when the run replaces the shipped domain.</summary>
     public GardeningServerHost? GardeningServer { get; private set; }
 
@@ -198,6 +204,10 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         if (Options.FederatedPeer && Options.PoisonedDomain)
             throw new InvalidOperationException("Harness:FederatedPeer and Harness:PoisonedDomain each replace the domain of the instance under test and run in separate invocations.");
 
+        // The fake model replaces every tier, which a federation or a poisoned run configures on its own.
+        if (Options.CancellableModel && (Options.FederatedPeer || Options.PoisonedDomain))
+            throw new InvalidOperationException("Harness:CancellableModel rewrites every tier and runs in an invocation of its own, apart from Harness:FederatedPeer and Harness:PoisonedDomain.");
+
         // Step 2: mint per-run, disposable identity — a fresh JWT signing key (never written to
         // disk) and a scratch directory for the SQLite databases this run's conversations create.
         IssuerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
@@ -220,6 +230,13 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             federatedPeerPort = ReserveEphemeralPort();
             FederatedPeerAddress = $"http://127.0.0.1:{federatedPeerPort}";
             FederationKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        }
+
+        // The fake model must answer before the host boots, because the tiers are pointed at its address and the startup inspection of the gardening server's offer is a model call.
+        if (Options.CancellableModel)
+        {
+            // A held streamed call sends its next line two seconds after the turn budget, so the supervisor has already stopped the turn when it does.
+            CancellableModel = await CancellableModelHost.StartAsync(TimeSpan.FromSeconds(CancellableTurnSeconds + 2));
         }
 
         // Step 4: publish the resolved configuration (plus the harness's own overrides) as
@@ -302,6 +319,10 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // The poisoned sources hold fixed ports, so they have to be released for the next invocation.
         if (PoisonedSources is not null)
             await PoisonedSources.DisposeAsync();
+
+        // The fake model holds a port of the process, so it is released with the rest.
+        if (CancellableModel is not null)
+            await CancellableModel.DisposeAsync();
 
         // The gardening server holds the fixed port that the shipped agent names, so it has to be released for the next invocation.
         if (GardeningServer is not null)
@@ -489,11 +510,44 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         if (Options.PoisonedDomain)
             ApplyPoisonedDomainEnvironment();
 
+        // On a cancellation run every tier answers from the fake model and the waits are short enough to watch run out.
+        if (Options.CancellableModel)
+            ApplyCancellableModelEnvironment();
 
         // Framework categories at Information, everything else quiet: the tool log lines the turn
         // observer parses are Information-level and the rest is noise in the capture buffer.
         Environment.SetEnvironmentVariable("Logging__LogLevel__Default", "Warning");
         Environment.SetEnvironmentVariable("Logging__LogLevel__Morgana", Options.HostLogLevel);
+    }
+
+    /// <summary>
+    /// Points the three tiers at the fake model and sets the turn budget, the guards and the dust ledger that the cancellation group measures.
+    /// </summary>
+    private void ApplyCancellableModelEnvironment()
+    {
+        // Every tier answers from the fake model, whichever provider the inherited configuration names.
+        foreach (string tier in new[] { "Economy", "Efficiency", "Performance" })
+        {
+            Environment.SetEnvironmentVariable($"Morgana__LanguageModels__Tiers__{tier}__Provider", "Ollama");
+            Environment.SetEnvironmentVariable($"Morgana__LanguageModels__Tiers__{tier}__Connection__Endpoint", CancellableModel!.Address);
+            Environment.SetEnvironmentVariable($"Morgana__LanguageModels__Tiers__{tier}__Connection__ApiKey", "cancellable-model");
+            Environment.SetEnvironmentVariable($"Morgana__LanguageModels__Tiers__{tier}__Options__ModelId", "beam");
+
+            // A model on a local endpoint is never priced from the catalogue, so each tier declares the price that makes a completed call cost dust.
+            foreach (string priceKey in new[] { "InputUsdPerMillion", "OutputUsdPerMillion", "CacheReadUsdPerMillion", "CacheWriteUsdPerMillion" })
+                Environment.SetEnvironmentVariable($"Morgana__LanguageModels__Tiers__{tier}__Pricing__{priceKey}", "1");
+        }
+
+        // A turn budget short enough that a wait running out is seen in seconds.
+        Environment.SetEnvironmentVariable("Morgana__ActorSystem__TimeoutSeconds", CancellableTurnSeconds.ToString(CultureInfo.InvariantCulture));
+
+        // Both guards judge, since a held guard call is half of what the group stops.
+        Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableUserGuardrail", "true");
+        Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnablePeerGuardrail", "true");
+
+        // The ledger is on, with a budget no scripted conversation can reach, so that what is charged can be counted.
+        Environment.SetEnvironmentVariable("Morgana__DustLimiting__Enabled", "true");
+        Environment.SetEnvironmentVariable("Morgana__DustLimiting__BudgetPerConversation", "1000000");
     }
 
     /// <summary>

@@ -227,7 +227,7 @@ public sealed class MorganaHostedAgent : AIAgent
 
                 // The PeerGuard's verdict on the question.
                 Records.GuardRailResult peerQuestionVerdict = await guardRailService.CheckPeerQuestionAsync(
-                    hostedAgentSession.ConversationId, partnerName, intent, description, question);
+                    hostedAgentSession.ConversationId, partnerName, intent, description, question, cancellationToken);
 
                 // A declined question never reaches the agent.
                 if (!peerQuestionVerdict.Compliant)
@@ -263,15 +263,16 @@ public sealed class MorganaHostedAgent : AIAgent
             // ledger of its own — the difference is what isolates the answer's own cost.
             double dustBaseline = await dustLimitService.GetConsumedAsync(hostedAgentSession.ConversationId);
 
-            // Ask, where the pipeline's own convention is Tell. That convention exists for streaming,
-            // an actor pushing chunks to a channel as they come. There is no channel here: a
-            // colleague's answer is read whole, by a model, with a caller blocked on it. The timeout
-            // is the pipeline's own, so a silent actor lands in the catch below as an answer instead
-            // of hanging the user's turn.
+            // The wait is the pipeline's own: it ends when the caller stops or when the pipeline's budget runs out.
+            using CancellationTokenSource consultationWait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            consultationWait.CancelAfter(requestTimeout);
+
+            // Ask, where the pipeline's convention is Tell, because a colleague's answer is read whole by a caller
+            // blocked on it. When the wait runs out the colleague's turn is stopped too, landing in the catch
+            // below as an answer.
             Records.PeerConsultationResponse peerConsultationResponse = await agentActor.Ask<Records.PeerConsultationResponse>(
-                new Records.PeerConsultation(hostedAgentSession.ConversationId, callerIntent, declaredQuestion),
-                requestTimeout,
-                cancellationToken);
+                new Records.PeerConsultation(hostedAgentSession.ConversationId, callerIntent, declaredQuestion, TurnCancellation: consultationWait.Token),
+                consultationWait.Token);
 
             // What the answer cost travels back only to a caller that declared itself an agent of a
             // Morgana: anything else that speaks A2A has no ledger to charge it to and would carry a
