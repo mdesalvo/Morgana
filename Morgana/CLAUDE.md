@@ -11,10 +11,11 @@ retrofitting comments once somebody points at an uncommented body.
 ## Where the rationale lives
 
 This file is the map: what exists, where it is, what breaks if you get it wrong. It is deliberately
-not the argument. **Every design decision is argued in the XML doc of the type that carries it** —
-`Records.cs`, `Constants.cs`, each service, each actor, `Program.cs`'s numbered sections. Before
-changing something whose reason is not obvious, open that type and read its `<remarks>`: the reason
-is there, in more detail than this file could hold.
+not the argument. **Every design decision is argued in the code of the type that carries it**: the
+doc says what, the body says why — `Records.cs`, `Constants.cs`, each service, each actor,
+`Program.cs`'s numbered sections. Before changing something whose reason is not obvious, open that
+type and read the comment where the decision acts: the reason is there, in more detail than this
+file could hold.
 
 ## What is Morgana
 

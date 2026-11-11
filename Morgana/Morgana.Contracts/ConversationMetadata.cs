@@ -1,11 +1,7 @@
 namespace Morgana.Contracts;
 
-/// <summary>
-/// Conversation-level metadata carried by every outbound <see cref="ChannelMessage"/>.
-/// Holds dimensions that characterise the conversation itself, not the message content
-/// (remaining budget today; active agent, health, … as the framework grows).
-/// </summary>
-/// <param name="DustLevel">REMAINING dust as a fraction of the budget, fuel-gauge
-/// semantics: 1.0 = full (nothing consumed), 0.0 = empty (budget spent or overshot).</param>
-/// <param name="ReplyTimeoutSeconds">How long the channel waits on a silent turn before giving it up, in seconds, as Morgana computes it from her own deadlines; every chunk received starts the wait again.</param>
+/// <summary>Conversation-level metadata carried by every outbound <see cref="ChannelMessage"/>, describing the conversation rather than the message content.</summary>
+/// <param name="DustLevel">Remaining dust as a fraction of the budget, from 1.0 (nothing consumed) down to 0.0 (budget spent or overshot).</param>
+/// <param name="ReplyTimeoutSeconds">Seconds the channel waits on a silent turn before giving it up, as Morgana computes it from her own deadlines.</param>
+// Every chunk received starts the ReplyTimeoutSeconds wait again, so it bounds silence and not the whole turn.
 public record ConversationMetadata(double? DustLevel = null, int? ReplyTimeoutSeconds = null);
