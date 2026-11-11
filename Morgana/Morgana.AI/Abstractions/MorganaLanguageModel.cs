@@ -9,9 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Morgana.AI.Abstractions;
 
-/// <summary>
-/// One LLM provider: builds the chat client of a single tier from that tier's connection section and options.
-/// </summary>
+/// <summary>One LLM provider: builds the chat client of a single tier from that tier's connection section and options.</summary>
 public abstract class MorganaLanguageModel
 {
     /// <summary>The name that a tier writes in <c>Morgana:LanguageModels:Tiers:{tier}:Provider</c> to be served by this provider.</summary>
@@ -19,10 +17,8 @@ public abstract class MorganaLanguageModel
 
     /// <summary>
     /// Refuses a connection that lacks a field that this provider uses.
-    /// </summary>
-    /// <remarks>
     /// The message opens with the name of the field so that the caller can put the key path of the tier in front of it.
-    /// </remarks>
+    /// </summary>
     /// <param name="connectionSection">The <c>Connection</c> section of the tier, which exists when the provider is asked.</param>
     /// <exception cref="InvalidOperationException">A field that the provider uses is missing, empty or still a placeholder.</exception>
     public abstract void ValidateConnection(IConfigurationSection connectionSection);
@@ -48,7 +44,7 @@ public abstract class MorganaLanguageModel
         // The concrete provider's assembly is its plugin: the catalogue travels with the DLL that serves the models.
         cataloguedModels = ReadModels(GetType().Assembly);
 
-    /// <summary>The entry of the provider's <c>models.json</c> for the model that a tier runs; <c>null</c> when the provider's catalogue lists no model under the name that the provider reads the tier's model by.</summary>
+    /// <summary>The entry of the provider's <c>models.json</c> for the model that a tier runs; null when the catalogue lists none under the name the provider reads it by.</summary>
     /// <param name="connectionSection">The <c>Connection</c> section of the tier, already validated by <see cref="ValidateConnection"/>.</param>
     /// <param name="modelId">The model that a tier names in its <c>Options:ModelId</c>.</param>
     public IConfigurationSection? GetCataloguedModel(IConfigurationSection connectionSection, string modelId)
@@ -64,8 +60,10 @@ public abstract class MorganaLanguageModel
         return cataloguedModels.GetValueOrDefault(cataloguedModelId);
     }
 
-    /// <summary>Refuses options that this provider cannot serve.</summary>
-    /// <remarks>The message opens with the name of the option so that the caller can put the key path of the tier in front of it.</remarks>
+    /// <summary>
+    /// Refuses options that this provider cannot serve.
+    /// The message opens with the name of the option so that the caller can put the key path of the tier in front of it.
+    /// </summary>
     /// <param name="options">The model of the tier with the catalogue and the tier laid over each other.</param>
     /// <exception cref="InvalidOperationException">An option that the provider needs is missing or unusable.</exception>
     public virtual void ValidateOptions(Records.ModelOptions options)
@@ -73,12 +71,12 @@ public abstract class MorganaLanguageModel
         // A provider that accepts every option refuses nothing.
     }
 
-    /// <summary>The name under which the provider's <c>models.json</c> catalogues the model that a tier runs on its connection; <c>null</c> when the provider never catalogues that model.</summary>
+    /// <summary>The name under which the provider's <c>models.json</c> catalogues the model that a tier runs on its connection; null when it never catalogues that model.</summary>
     /// <param name="connectionSection">The <c>Connection</c> section of the tier, already validated by <see cref="ValidateConnection"/>.</param>
     /// <param name="modelId">The model that a tier names in its <c>Options:ModelId</c>.</param>
     protected abstract string? CataloguedModelId(IConfigurationSection connectionSection, string modelId);
 
-    /// <summary>Converts a price into Morgana's dust at this provider's <see cref="UsdPerDustUnit"/>, whether it comes from the provider's models.json or from the tier or from both laid over each other.</summary>
+    /// <summary>Converts a price into Morgana's dust at this provider's <see cref="UsdPerDustUnit"/>, from the catalogue, the tier or both laid over each other.</summary>
     /// <param name="modelPricing">What the model costs in US dollars per million tokens.</param>
     public Records.MagicDustPricing ConvertToMorganaDust(Records.ModelPricing modelPricing)
     {
@@ -109,6 +107,8 @@ public abstract class MorganaLanguageModel
         // The file is mandatory even when it catalogues nothing: a plugin without it was built without its contract.
         string? resourceName = providerAssembly.GetManifestResourceNames()
                                                .FirstOrDefault(name => name.EndsWith(".models.json", StringComparison.Ordinal));
+
+        // The plugin cannot serve a tier without its catalogue, so the host does not start on it.
         if (resourceName is null)
             throw new InvalidOperationException($"Provider plugin '{pluginName}' embeds no models.json: every provider plugin embeds one, with an empty Models array when it catalogues no model.");
 
@@ -119,24 +119,32 @@ public abstract class MorganaLanguageModel
         IConfigurationRoot modelsConfiguration;
         try
         {
+            // The catalogue is read with the same binder that reads the tiers it is laid under.
             modelsConfiguration = new ConfigurationBuilder().AddJsonStream(modelsStream).Build();
         }
         catch (Exception ex) when (ex is JsonException or FormatException)
         {
+            // The parser's own message says where the file broke.
             throw new InvalidOperationException($"Provider plugin '{pluginName}' embeds a models.json that is not valid JSON: {ex.Message}", ex);
         }
 
         // An absent Models array is a file written wrong, unlike an empty one, which catalogues nothing on purpose.
         IConfigurationSection modelsSection = modelsConfiguration.GetSection("Models");
+
+        // A file without the array cannot be told from one written for another contract, so it is refused.
         if (!modelsSection.Exists())
             throw new InvalidOperationException($"Provider plugin '{pluginName}' embeds a models.json without a Models array.");
 
         // The ModelId goes on the wire as the tier wrote it, so its casing is part of the match.
         Dictionary<string, IConfigurationSection> modelsById = new(StringComparer.Ordinal);
+
+        // Each entry is filed under its ModelId, the name a tier writes to run it.
         foreach (IConfigurationSection modelSection in modelsSection.GetChildren())
         {
             // An entry without a name matches no tier.
             string? modelId = modelSection["Options:ModelId"];
+
+            // A catalogue entry that no tier could name is a defect of the plugin.
             if (string.IsNullOrWhiteSpace(modelId))
                 throw new InvalidOperationException($"Provider plugin '{pluginName}' declares in its models.json a model without Options:ModelId.");
 
@@ -158,12 +166,8 @@ public abstract class MorganaLanguageModel
     }
 }
 
-/// <summary>
-/// A provider that binds the <c>Connection</c> section of its tier to <typeparamref name="TConnection"/>.
-/// </summary>
-/// <remarks>
-/// A provider author declares a connection record holding exactly the fields that the provider honours and never touches <see cref="IConfiguration"/>.
-/// </remarks>
+/// <summary>A provider that binds the <c>Connection</c> section of its tier to <typeparamref name="TConnection"/>.</summary>
+/// <remarks>A provider author declares a connection record holding exactly the fields that the provider honours and never touches <see cref="IConfiguration"/>.</remarks>
 /// <typeparam name="TConnection">The connection shape that only this provider knows.</typeparam>
 public abstract class MorganaLanguageModel<TConnection> : MorganaLanguageModel
 {
@@ -192,7 +196,7 @@ public abstract class MorganaLanguageModel<TConnection> : MorganaLanguageModel
     /// <param name="options">The model that the tier runs and its options.</param>
     protected abstract IChatClient CreateChatClient(TConnection connection, Records.ModelOptions options);
 
-    /// <summary>The name under which this provider's <c>models.json</c> catalogues <paramref name="modelId"/> on <paramref name="connection"/>; <c>null</c> when only the tier itself can describe it.</summary>
+    /// <summary>The name under which this provider's <c>models.json</c> catalogues <paramref name="modelId"/> on <paramref name="connection"/>; null when only the tier can describe it.</summary>
     /// <param name="connection">The connection of the tier as this provider reads it.</param>
     /// <param name="modelId">The model that the tier names in its <c>Options:ModelId</c>.</param>
     protected virtual string? CataloguedModelId(TConnection connection, string modelId) =>
@@ -205,9 +209,11 @@ public abstract class MorganaLanguageModel<TConnection> : MorganaLanguageModel
         connectionSection.Get<TConnection>()!;
 }
 
-/// <summary>Writes down every attempt that a provider's SDK puts on the wire.</summary>
-/// <remarks>It sits under the SDK's own retry loop so that a throttled or cut attempt is told apart from a slow model.
-/// It observes an attempt up to its response headers and never alters it: the SDK alone decides whether to try again.</remarks>
+/// <summary>
+/// Writes down every attempt that a provider's SDK puts on the wire.
+/// It sits under the SDK's own retry loop so that a throttled or cut attempt is told apart from a slow model.
+/// It observes an attempt up to its response headers and never alters it: the SDK alone decides whether to try again.
+/// </summary>
 /// <param name="logger">Receives one line per attempt; <c>null</c> writes nothing.</param>
 /// <param name="providerName">The provider's name as the lines show it.</param>
 public sealed class AttemptLoggingHandler(ILogger? logger, string providerName) : DelegatingHandler
@@ -222,6 +228,8 @@ public sealed class AttemptLoggingHandler(ILogger? logger, string providerName) 
     {
         // The attempt's clock starts before the wire is touched so that every elapsed time includes the wait for the headers.
         long startedAt = Stopwatch.GetTimestamp();
+
+        // The answer of the attempt, read below once the wire has given it.
         HttpResponseMessage response;
         try
         {
@@ -237,20 +245,20 @@ public sealed class AttemptLoggingHandler(ILogger? logger, string providerName) 
         }
 
         // The wait for the headers is what every line reports: the body that follows is read by the SDK, past this handler.
-        double elapsed = Stopwatch.GetElapsedTime(startedAt).TotalSeconds;
+        double elapsedSeconds = Stopwatch.GetElapsedTime(startedAt).TotalSeconds;
 
         // A throttled or overloaded answer is a warning because the SDK is about to wait and try again; any other answer is routine.
         if (response.StatusCode is HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError)
         {
             // The wait that the provider asks for is what the SDK honours before its next attempt.
-            string retryAfter = response.Headers.RetryAfter?.Delta is TimeSpan delta
-                ? $"{delta.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)}s"
+            string retryAfter = response.Headers.RetryAfter?.Delta is TimeSpan retryDelay
+                ? $"{retryDelay.TotalSeconds.ToString("0", CultureInfo.InvariantCulture)}s"
                 : "an unstated time";
             logger?.LogWarning("{Provider} refused a call with {Status} after {Elapsed:0.0}s and asks to wait {RetryAfter}; the client retries it if it has attempts left",
-                providerName, (int)response.StatusCode, elapsed, retryAfter);
+                providerName, (int)response.StatusCode, elapsedSeconds, retryAfter);
         }
         else
-            logger?.LogInformation("{Provider} answered {Status} after {Elapsed:0.0}s", providerName, (int)response.StatusCode, elapsed);
+            logger?.LogInformation("{Provider} answered {Status} after {Elapsed:0.0}s", providerName, (int)response.StatusCode, elapsedSeconds);
 
         // The response travels on untouched: the handler only observes the attempt.
         return response;

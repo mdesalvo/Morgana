@@ -1,62 +1,31 @@
 namespace Morgana.AI.Interfaces;
 
-/// <summary>
-/// Enforces per-conversation lifetime token budget (orthogonal to rate limiter).
-/// Rate limiter controls message frequency; dust limiter controls token consumption.
-/// Fixed budget per conversation; exhaustion is terminal (next turn blocked). All methods
-/// fail open — storage faults never block the user.
-/// </summary>
+/// <summary>Owns every question about a conversation's lifetime dust budget, from charging a call to the gauge that a channel shows.</summary>
+// The rate limiter bounds how often a conversation calls and this budget bounds what it consumes: exhaustion is terminal.
+// Every member fails open, because a fault of the ledger never blocks the user.
 public interface IDustLimitService
 {
-    /// <summary>
-    /// Records dust consumed by a single LLM call and appends an audit-log row.
-    /// </summary>
-    /// <param name="conversationId">Conversation whose budget is charged.</param>
-    /// <param name="dust">Dust units to add (computed by the caller from token counts and
-    /// per-provider pricing). Calls with <paramref name="dust"/> &lt;= 0 are no-ops.</param>
-    /// <param name="llmRole">Who burned it — <c>"Morgana"</c> for framework actors,
-    /// <c>"Morgana (Intent)"</c> for domain agents. Diagnostic only, not used for enforcement.</param>
+    /// <summary>Charges <paramref name="dust"/> to the conversation's budget and records the charge under <paramref name="llmRole"/>.</summary>
+    /// <param name="conversationId">The conversation whose budget is charged.</param>
+    /// <param name="dust">The dust to charge, computed from the call's tokens and its tier's price; nothing is charged when it is zero or less.</param>
+    /// <param name="llmRole">Who consumed it, <c>Morgana</c> for the framework actors and <c>Morgana (intent)</c> for an agent; read by the ledger only.</param>
     Task ChargeAsync(string conversationId, double dust, string llmRole);
 
-    /// <summary>
-    /// True when the conversation has consumed its full budget and the next turn must be
-    /// blocked. False (fail open) on storage errors or when dust limiting is disabled.
-    /// </summary>
+    /// <summary>Tells whether the conversation has spent its budget, so its next turn is blocked; false while unmetered or unread.</summary>
     Task<bool> IsOverBudgetAsync(string conversationId);
 
-    /// <summary>
-    /// Dust consumed so far by a conversation, in units. 0.0 when nothing was consumed, when dust
-    /// limiting is disabled, or on error — so a caller reading it as a delta under-reports rather
-    /// than invents. Distinct from the ratio below, which only makes sense against a budget.
-    /// </summary>
+    /// <summary>The dust that the conversation has consumed so far; 0 while unmetered or unread.</summary>
+    // A caller subtracting two readings under-reports on a fault rather than inventing a cost.
     Task<double> GetConsumedAsync(string conversationId);
 
-    /// <summary>
-    /// Dust consumed by a conversation since a <paramref name="baseline"/> a previous
-    /// <see cref="GetConsumedAsync"/> returned — what the work between the two reads cost.
-    /// Never negative and0.0 whenever the reading itself is unavailable.
-    /// </summary>
+    /// <summary>What the work since <paramref name="baseline"/>, an earlier reading of <see cref="GetConsumedAsync"/>, cost; never negative.</summary>
     Task<double> GetConsumedSinceAsync(string conversationId, double baseline);
 
-    /// <summary>
-    /// Ratio of consumed dust to the configured budget (0.0 to &gt;1.0).
-    /// 0.0 when the conversation has no usage yet, when dust limiting is disabled or on error.
-    /// 1.0 on a budget of zero, which is spent before anything is charged.
-    /// </summary>
-    Task<double> GetUsageRatioAsync(string conversationId);
-
-    /// <summary>
-    /// The level a channel's dust gauge shows: the fraction of the budget still available (1.0 =
-    /// full, 0.0 = spent), floored to whole-percent steps so 0.0 is exactly the over-budget state
-    /// <see cref="IsOverBudgetAsync"/> blocks on. Null when dust limiting is disabled, which tells a
-    /// channel to show no gauge at all.
-    /// </summary>
+    /// <summary>The fraction of the budget still available, from 1 down to 0, in whole-percent steps; null while unmetered.</summary>
+    // Floored so that 0 is exactly the state IsOverBudgetAsync blocks on. Null tells a channel to show no gauge at all.
     Task<double?> GetRemainingLevelAsync(string conversationId);
 
-    /// <summary>
-    /// Atomically checks the 70% and 90% thresholds against their one-shot flags, marking
-    /// any newly-crossed threshold so it never re-triggers. Returns which warnings the caller
-    /// should emit. (false, false) on error or when disabled.
-    /// </summary>
+    /// <summary>Which of the 70% and 90% warnings the conversation has just crossed, each reported once.</summary>
+    // Checks and marks in one step, so a threshold never triggers twice; neither is reported on a fault or while unmetered.
     Task<(bool Send70, bool Send90)> CheckAndMarkWarningsAsync(string conversationId);
 }

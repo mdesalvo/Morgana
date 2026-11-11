@@ -75,7 +75,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
     /// Gets an existing MCP client for the given server declaration, or creates and connects a new one.
     /// Thread-safe — uses ConcurrentDictionary to guarantee a single client per pool key.
     /// </summary>
-    public async Task<MCPClient> GetOrCreateClientAsync(UsesMCPServerAttribute serverAttribute)
+    private async Task<MCPClient> GetOrCreateClientAsync(UsesMCPServerAttribute serverAttribute)
     {
         ObjectDisposedException.ThrowIf(disposed, this);
 
@@ -285,33 +285,8 @@ public class MCPClientRegistryService : IMCPClientRegistryService
         }
     }
 
-    /// <summary>Disconnects and removes a specific MCP client from pool.</summary>
-    public async Task DisconnectClientAsync(UsesMCPServerAttribute serverAttribute)
-    {
-        // The same identity the connection was pooled under: this disconnects a server, never one
-        // agent's use of it.
-        string poolKey = PoolKey(serverAttribute);
-
-        // Taken out of the pool before it is closed, so exactly one caller ever closes it. A server that
-        // was never connected is not an error: nothing was holding it open.
-        if (mcpClients.TryRemove(poolKey, out MCPClient? disconnectedMCPClient))
-        {
-            try
-            {
-                // Closes the session for every agent that was sharing it, which is why nothing here
-                // consults who else declared this server.
-                await disconnectedMCPClient.DisposeAsync();
-                logger.LogInformation("Disconnected MCP client: {Key}", poolKey);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error disconnecting MCP client: {Key}", poolKey);
-            }
-        }
-    }
-
     /// <summary>Disconnects all MCP clients and clears the pool (idempotent).</summary>
-    public async Task DisconnectAllAsync()
+    private async Task DisconnectAllAsync()
     {
         logger.LogInformation("Disconnecting {McpClientsCount} MCP clients...", mcpClients.Count);
 

@@ -1,37 +1,19 @@
-﻿namespace Morgana.AI.Attributes;
+namespace Morgana.AI.Attributes;
 
-/// <summary>
-/// Marks a MorganaAgent class as the handler for a specific intent.
-/// Used by MorganaAgentAdapter and RouterActor to discover and route requests to the appropriate agent.
-/// </summary>
-/// <remarks>
-/// Establishes mapping between intent names (from classification) and agent implementations.
-/// RouterActor uses this to discover which agent should handle each intent at runtime.
-/// Intent name must match corresponding entry in agents.json. Only one agent can handle
-/// a specific intent.
-/// </remarks>
+/// <summary>Marks a <see cref="Abstractions.MorganaAgent"/> class as the one agent that handles an intent.</summary>
+// The intent must match an Intents entry in agents.json and at most one agent may claim it:
+// both directions are validated at startup.
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
 public class HandlesIntentAttribute : Attribute
 {
-    /// <summary>
-    /// Gets the intent name that this agent handles.
-    /// Must match the intent name in agents.json configuration.
-    /// </summary>
-    /// <value>
-    /// Intent name (e.g., "billing", "contract", "gardening")
-    /// </value>
+    /// <summary>The intent that this agent handles, matched ignoring case.</summary>
     public string Intent { get; }
 
-    /// <summary>
-    /// Initializes a new instance of the HandlesIntentAttribute.
-    /// </summary>
-    /// <param name="intent">Name of the intent this agent handles (must match agents.json)</param>
-    /// <remarks>
-    /// Intent name must match agents.json definition. Use lowercase, single words or hyphens.
-    /// Case-sensitive in routing logic.
-    /// </remarks>
+    /// <summary>Declares the intent that this agent handles.</summary>
+    /// <param name="intent">The intent's name as agents.json declares it.</param>
     public HandlesIntentAttribute(string intent)
     {
+        // The router reaches the agent through this name once the classifier has chosen it.
         Intent = intent;
     }
 }

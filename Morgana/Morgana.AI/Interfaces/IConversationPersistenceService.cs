@@ -5,33 +5,21 @@ using Morgana.Contracts;
 
 namespace Morgana.AI.Interfaces;
 
-/// <summary>
-/// Persistence abstraction for AgentSession state: SaveAgentConversationAsync saves session (message history, context variables);
-/// LoadAgentConversationAsync loads and restores a previously saved session (null if not found, indicating new conversation).
-/// SaveAgentConversationAsync handles serialization/encryption;
-/// LoadAgentConversationAsync handles deserialization/decryption plus reconnection of AI context providers.
-/// </summary>
+/// <summary>The record of a conversation: each participant's session, its channel, its shared context and the transcript built from them.</summary>
+// The one place that knows how a row encodes its messages, Morgana's own row included.
 public interface IConversationPersistenceService
 {
     /// <summary>
-    /// Saves the complete conversation state of the given agent to persistent storage.
-    /// Serializes the AgentSession including message history, context variables and metadata.
+    /// Saves an agent's session, its messages and context state, marking whether the agent handed the conversation back.
+    /// A row that SaveParticipantMessagesAsync rewrote behind the agent keeps that rewrite: an implementation appends only the
+    /// messages the agent added since, writes its context state as it stands and leaves the row dirty until the agent reads it.
+    /// A fault of I/O, encryption or serialization throws, because a session that silently failed to save would be lost.
     /// </summary>
-    /// <param name="agentIdentifier">Unique identifier for the agent's conversation</param>
-    /// <param name="agent">AIAgent instance corresponding to the running agent</param>
-    /// <param name="agentSession">AgentSession instance containing the complete conversation state</param>
-    /// <param name="isCompleted">Flag indicating if the agent is signalling completion of the conversation</param>
-    /// <param name="jsonSerializerOptions">JSON serialization options (optional, uses AgentAbstractionsJsonUtilities.DefaultOptions if null)</param>
-    /// <returns>Task representing the async save operation</returns>
-    /// <remarks>
-    /// <para><strong>Rewrites behind the agent:</strong></para>
-    /// <para>A row rewritten by <see cref="SaveParticipantMessagesAsync"/> since the agent last saved or read it
-    /// must keep that rewrite: implementations append only the messages the agent added since, write its
-    /// context state as it stands and leave the row dirty until <see cref="LoadAgentConversationAsync"/> reads it.</para>
-    /// <para><strong>Error Handling:</strong></para>
-    /// <para>Implementations should throw meaningful exceptions for I/O errors, encryption failures and
-    /// serialization errors to allow proper error handling by callers.</para>
-    /// </remarks>
+    /// <param name="agentIdentifier">The agent as its turns address it, <c>{agent_name}-{conversation_id}</c>.</param>
+    /// <param name="agent">The running agent whose session is saved.</param>
+    /// <param name="agentSession">The session to save.</param>
+    /// <param name="isCompleted">True when the agent signalled that it hands the conversation back.</param>
+    /// <param name="jsonSerializerOptions">The serializer options; null for the library's defaults.</param>
     Task SaveAgentConversationAsync(
         string agentIdentifier,
         AIAgent agent,
@@ -39,210 +27,99 @@ public interface IConversationPersistenceService
         bool isCompleted,
         JsonSerializerOptions? jsonSerializerOptions = null);
 
-    /// <summary>
-    /// Loads a previously saved agent's conversation state from persistent storage.
-    /// Deserializes the AgentSession and reconnects all AI context providers and callbacks.
-    /// </summary>
-    /// <param name="agentIdentifier">Unique identifier for the agent's conversation to load</param>
-    /// <param name="agent">MorganaAgent instance that will receive the deserialized session</param>
-    /// <param name="jsonSerializerOptions">JSON serialization options (optional, uses AgentAbstractionsJsonUtilities.DefaultOptions if null)</param>
-    /// <returns>Deserialized AgentSession if conversation exists, null if not found</returns>
-    /// <remarks>
-    /// <para><strong>Null Return Semantics:</strong></para>
-    /// <para>Returns null when the agentIdentifier has never been saved, indicating this is a new conversation.
-    /// Callers should create a new AgentSession in this case via agent.GetNewSessionAsync().</para>
-    /// <para><strong>Deserialization Process:</strong></para>
-    /// <list type="number">
-    /// <item>Read and decrypt (if applicable) the serialized session data</item>
-    /// <item>Deserialize JSON to JsonElement</item>
-    /// <item>Call agent.DeserializeSessionAsync() to reconstruct the full thread state</item>
-    /// <item>Return the fully restored AgentSession</item>
-    /// </list>
-    /// </remarks>
+    /// <summary>The agent's saved session, restored onto <paramref name="agent"/>; null when the agent never saved one, so a new session is started.</summary>
+    /// <param name="agentIdentifier">The agent as its turns address it, <c>{agent_name}-{conversation_id}</c>.</param>
+    /// <param name="agent">The agent that receives the restored session.</param>
+    /// <param name="jsonSerializerOptions">The serializer options; null for the library's defaults.</param>
     Task<AgentSession?> LoadAgentConversationAsync(
         string agentIdentifier,
         Abstractions.MorganaAgent agent,
         JsonSerializerOptions? jsonSerializerOptions = null);
 
-    /// <summary>
-    /// Gets the most recently active agent for a conversation.
-    /// Uses last_update timestamp to determine which agent was last engaged.
-    /// </summary>
-    /// <param name="conversationId">Conversation identifier</param>
-    /// <returns>Agent name (e.g., "billing") or null if conversation not found</returns>
+    /// <summary>The agent currently carrying the conversation, such as <c>billing</c>; null when none is.</summary>
     Task<string?> GetMostRecentActiveAgentAsync(string conversationId);
 
-    /// <summary>Takes an agent off active duty in a conversation, leaving its session and messages as they are, so the record names no agent the conversation has handed back from.</summary>
-    /// <param name="conversationId">Conversation identifier</param>
-    /// <param name="agentName">The agent as its row names it, such as "billing"</param>
-    /// <remarks>A row already inactive or missing is left as it is. A failure is logged and absorbed, as for <see cref="GetMostRecentActiveAgentAsync"/>, since the turn it follows has already been answered.</remarks>
+    /// <summary>
+    /// Takes an agent off active duty, leaving its session and messages as they are, so the record names no agent the conversation was handed back from.
+    /// A row already inactive or missing is left as it is. A failure is logged and absorbed, because the turn it follows has already been answered.
+    /// </summary>
+    /// <param name="conversationId">The conversation whose record is read or written.</param>
+    /// <param name="agentName">The agent as its row names it, such as <c>billing</c>.</param>
     Task DeactivateAgentAsync(string conversationId, string agentName);
 
     /// <summary>
-    /// Retrieves the complete conversation history across all agents for a given conversation.
-    /// Decrypts, deserializes and chronologically orders messages from all participating agents.
+    /// The transcript of the conversation across every participant, in chronological order; empty while nobody has spoken.
+    /// A row that cannot be read fails the whole call, so a channel never draws a transcript with silent gaps.
     /// </summary>
-    /// <param name="conversationId">Conversation identifier</param>
-    /// <param name="jsonSerializerOptions">JSON serialization options (optional, uses AgentAbstractionsJsonUtilities.DefaultOptions if null)</param>
-    /// <returns>Array of MorganaChatMessage ordered by creation timestamp, or empty array if conversation not found</returns>
-    /// <remarks>
-    /// <para><strong>Process Flow:</strong></para>
-    /// <list type="number">
-    /// <item>Load all agent rows from SQLite database for the conversation</item>
-    /// <item>For each agent: decrypt agent_session BLOB and deserialize to AgentSession JSON structure</item>
-    /// <item>Extract ChatMessage array from each AgentSession.Messages</item>
-    /// <item>Reconcile messages from all agents and sort by CreatedAt timestamp</item>
-    /// <item>Map each Microsoft.Agents.AI.ChatMessage to MorganaChatMessage record</item>
-    /// </list>
-    /// <para><strong>Failure Semantics:</strong></para>
-    /// <para>Fails fast on any deserialization error - no partial/incomplete history is returned.
-    /// This ensures UI always displays complete, consistent conversation state.</para>
-    /// </remarks>
+    /// <param name="conversationId">The conversation whose record is read or written.</param>
+    /// <param name="jsonSerializerOptions">The serializer options; null for the library's defaults.</param>
     Task<MorganaChatMessage[]> GetConversationHistoryAsync(
         string conversationId,
         JsonSerializerOptions? jsonSerializerOptions = null);
 
     /// <summary>
-    /// Appends messages to the orchestrator's own side of the conversation, creating it on first
-    /// write. What Morgana says in her own voice is filed here — the welcome, a refusal, a
-    /// disambiguation, the line handing a conversation back — beside the agents' own rows, so that
-    /// <see cref="GetConversationHistoryAsync"/> returns a dialogue with no gaps for a channel to
-    /// guess at. The user's phrase is saved here too, whenever no agent was active when it arrived.
+    /// Appends what Morgana says in her own voice to her row, creating it on the first write.
+    /// The welcome, a refusal, a disambiguation and the handing-back line are filed here, beside the agents' rows, so the transcript
+    /// has no gaps; the user's phrase is filed here too whenever no agent was active. This reaches Morgana's row only, because an
+    /// agent's row carries a live session that the agent restores itself from. Appends arrive concurrently, the user's phrase on
+    /// one path and an answer on another, so an implementation reads, extends and writes back as one step. The row is never active:
+    /// Morgana is not an agent a conversation can be resumed onto.
     /// </summary>
-    /// <param name="conversationId">Conversation whose orchestrator side is being appended to.</param>
-    /// <param name="messages">Messages to append, in the order they were spoken. An empty sequence writes nothing.</param>
-    /// <remarks>
-    /// <para>Deliberately not addressable by author: this reaches one row and only that row. An agent's
-    /// row carries a live agent session that the agent resurrects itself from, so messages appended to
-    /// it from outside would discard everything else that session holds. The orchestrator owns no
-    /// session and no model, which is what makes her row safe to append to from anywhere.</para>
-    /// <para>Concurrent appends are expected — the user's phrase arrives on one path while an answer
-    /// leaves on another — so implementations must read, extend and write back as one step.</para>
-    /// <para>The row is never left active: the orchestrator is not an agent a conversation can be
-    /// resumed onto. What reports the active agent must keep naming real agents only.</para>
-    /// </remarks>
+    /// <param name="conversationId">The conversation whose record is read or written.</param>
+    /// <param name="messages">The messages in the order they were spoken; an empty list writes nothing.</param>
     Task AppendOrchestratorMessagesAsync(
         string conversationId,
         IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> messages);
 
-    /// <summary>
-    /// Reads the messages an agent's row holds, as they were written, for work done on the record rather
-    /// than inside a turn. Empty when that agent has no row in this conversation.
-    /// </summary>
-    /// <param name="conversationId">Conversation the agent belongs to.</param>
-    /// <param name="agentName">The agent as its row names it, such as "billing".</param>
+    /// <summary>The messages of an agent's row as they were written, for work done on the record outside a turn; empty when the agent has no row.</summary>
+    /// <param name="conversationId">The conversation whose record is read or written.</param>
+    /// <param name="agentName">The agent as its row names it, such as <c>billing</c>.</param>
     Task<IReadOnlyList<Microsoft.Extensions.AI.ChatMessage>> LoadParticipantMessagesAsync(string conversationId, string agentName);
 
     /// <summary>
-    /// Writes <paramref name="messages"/> back as that agent's messages, leaving the rest of its row exactly
-    /// as it was: an agent's session carries context state beside its history, none of which is the caller's
-    /// to rewrite. Implementations must refuse a row that does not exist rather than create one, since a
-    /// agent with no row has no session to correct.
+    /// Writes <paramref name="messages"/> back as an agent's messages, leaving the rest of its row as it was.
+    /// The session carries context state beside its history, none of which is the caller's to rewrite. A row that does not exist
+    /// is refused rather than created, since an agent with no row has no session to correct. Messages that the agent appended past
+    /// messagesReadCount are kept as found, while a row that grew shorter is one the caller no longer describes and nothing is
+    /// written. A rewritten row is dirty for its agent until LoadAgentConversationAsync reads it again.
     /// </summary>
-    /// <param name="conversationId">Conversation the agent belongs to.</param>
+    /// <param name="conversationId">The conversation whose record is read or written.</param>
     /// <param name="agentName">The agent as its row names it.</param>
-    /// <param name="messages">The agent's messages, in order, as they are to stand on record.</param>
-    /// <param name="messagesReadCount">
-    /// How many messages the caller had when it composed <paramref name="messages"/>. An agent speaking
-    /// meanwhile appends to its own row, so whatever arrived past that point is kept as it is found; a row
-    /// that instead grew shorter is one the caller no longer describes, so nothing is written.
-    /// </param>
-    /// <returns>True when the row was rewritten; false when the agent left it in a state this caller cannot speak for.</returns>
-    /// <remarks>A row rewritten here turns dirty for its agent until <see cref="LoadAgentConversationAsync"/> reads it again.</remarks>
+    /// <param name="messages">The agent's messages in order, as they are to stand on record.</param>
+    /// <param name="messagesReadCount">How many messages the row held when the caller read it.</param>
+    /// <returns>True when the row was rewritten; false when the agent left it in a state that the caller cannot speak for.</returns>
     Task<bool> SaveParticipantMessagesAsync(
         string conversationId,
         string agentName,
         IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> messages,
         int messagesReadCount);
 
-    /// <summary>
-    /// Ensures the conversation database exists and is initialized with the latest schema.
-    /// Idempotent - safe to call multiple times (checks PRAGMA user_version).
-    /// </summary>
-    /// <param name="conversationId">Unique identifier of the conversation</param>
-    /// <returns>Task representing the async initialization operation</returns>
-    /// <remarks>
-    /// <para><strong>Use Cases:</strong></para>
-    /// <list type="bullet">
-    /// <item>Called by rate limiter before first message (if no agent executed yet)</item>
-    /// <item>Called by agent persistence before saving session</item>
-    /// <item>Ensures database exists even if user sends message before agent activation</item>
-    /// </list>
-    /// <para><strong>Schema Version Management:</strong></para>
-    /// <para>This method checks PRAGMA user_version and creates/migrates schema as needed.
-    /// Current version: 3 (adds channel_metadata table on top of v2's rate_limit_log).</para>
-    /// </remarks>
+    /// <summary>Creates the conversation's database with the current schema when it does not exist yet; calling it again changes nothing.</summary>
+    // A partner's exchange arrives with no handshake, so the hosted agent opens its record here before the turn spends anything.
     Task EnsureDatabaseInitializedAsync(string conversationId);
 
-    /// <summary>
-    /// Persists the channel metadata (channel name + capability budget) declared by the client
-    /// at conversation start. Stored as a single row in the <c>channel_metadata</c> table
-    /// (id = 1) of the per-conversation database. If no row exists this method writes one;
-    /// otherwise it replaces the existing row (clients are not expected to handshake more than
-    /// once, but the upsert keeps the operation idempotent).
-    /// </summary>
-    /// <param name="conversationId">Conversation identifier (used to locate the per-conversation DB).</param>
-    /// <param name="metadata">Metadata advertised by the originating channel.</param>
-    /// <remarks>
-    /// <para><strong>First-writer pattern:</strong></para>
-    /// <para>This method may be the very first persistence call for a brand-new conversation
-    /// (the channel handshake happens before any agent has executed). The implementation
-    /// MUST therefore call <see cref="EnsureDatabaseInitializedAsync(string)"/> internally so
-    /// that the database file and schema exist before the INSERT.</para>
-    /// </remarks>
+    /// <summary>Persists the channel that the conversation settled at its handshake, creating the conversation's database when needed.</summary>
+    // The handshake is the first write of a conversation started by a channel, so the database may not exist yet.
     Task SaveChannelMetadataAsync(string conversationId, ChannelMetadata metadata);
 
-    /// <summary>
-    /// Loads the channel metadata previously persisted for a conversation. Returns
-    /// <c>null</c> when the conversation database does not exist or contains no metadata
-    /// row (e.g. legacy conversations created before the channel handshake was introduced):
-    /// such a conversation has no channel on record and callers refuse to serve it.
-    /// </summary>
-    /// <param name="conversationId">Conversation identifier (used to locate the per-conversation DB).</param>
-    /// <returns>The persisted <see cref="ChannelMetadata"/>, or null if absent.</returns>
+    /// <summary>The channel persisted for the conversation; null when it has no database or no handshake, which callers refuse to serve.</summary>
     Task<ChannelMetadata?> LoadChannelMetadataAsync(string conversationId);
 
-    /// <summary>
-    /// Persists shared context variable into conversation-scoped shared_context registry for cross-agent access.
-    /// First-write-wins: implementations MUST ignore subsequent upserts with different values (SQLite: INSERT OR IGNORE).
-    /// May be invoked before agent's first save; implementations MUST call EnsureDatabaseInitializedAsync internally.
-    /// </summary>
+    /// <summary>Records a shared context variable in the conversation's registry for every agent to read, the first value written winning.</summary>
+    // A later write of another value is ignored rather than overwriting the first one. It may run before the agent's first save,
+    // so an implementation creates the database when needed.
     Task UpsertSharedVariableAsync(string conversationId, string variableName, object variableValue, string sourceAgentIntent);
 
-    /// <summary>
-    /// Loads all shared context variables that have been written to the conversation-scoped
-    /// <c>shared_context</c> registry up to this point. Called by every agent at the start of
-    /// each turn (after the agent's session is loaded/created) so that variables produced by
-    /// any sibling agent — including ones that no longer exist as live actors — are available
-    /// to the current agent's tools.
-    /// </summary>
-    /// <param name="conversationId">Conversation identifier (used to locate the per-conversation DB).</param>
-    /// <returns>
-    /// Dictionary of variable name → value. Empty dictionary when the conversation has no
-    /// shared variables yet (or when the database does not yet exist).
-    /// </returns>
-    /// <remarks>
-    /// The caller is expected to feed the returned dictionary into
-    /// <see cref="MorganaAIContextProvider.MergeSharedContext"/>, which itself enforces
-    /// first-write-wins on the agent-local side: variables already in the agent's own session
-    /// are not overwritten by the registry.
-    /// </remarks>
+    /// <summary>Every shared context variable written so far in the conversation; empty when there are none or no database exists.</summary>
+    // Every agent reads it at the start of each turn and merges it through MorganaAIContextProvider.MergeSharedContext, which
+    // keeps the values the agent's own session already holds.
     Task<Dictionary<string, object>> LoadSharedVariablesAsync(string conversationId);
 
-    /// <summary>
-    /// Reports whether conversation exists in store. Restore path uses this to distinguish
-    /// genuine existing conversations from stale identifiers never materialized.
-    /// Backend-agnostic: SQLite checks DB file, SQL/PostgreSQL probe table, blob-store probes object.
-    /// It is asynchronous because a store may answer it over the network.
-    /// </summary>
-    /// <param name="conversationId">Conversation identifier.</param>
-    /// <returns><c>true</c> if the conversation is present in the store, <c>false</c> otherwise.</returns>
+    /// <summary>Tells whether the conversation exists on record, telling a genuine conversation from an identifier never materialised.</summary>
+    // Asynchronous because a store other than SQLite may answer over the network.
     Task<bool> ConversationExistsAsync(string conversationId);
 
-    /// <summary>
-    /// Whether the agent's row was rewritten by <see cref="SaveParticipantMessagesAsync"/> since the agent
-    /// last read it through <see cref="LoadAgentConversationAsync"/>: its copy in memory is then behind its record.
-    /// </summary>
+    /// <summary>Tells whether SaveParticipantMessagesAsync rewrote the agent's row since the agent last read it, leaving its copy in memory behind the record.</summary>
     /// <param name="agentIdentifier">The agent as its turns address it, <c>{agent_name}-{conversation_id}</c>.</param>
     Task<bool> IsDirtyAsync(string agentIdentifier);
 }

@@ -1,67 +1,42 @@
-using System.Net;
-
 namespace Morgana.AI.Attributes;
 
-/// <summary>
-/// Declares a single MCP server dependency for an agent.
-/// Apply multiple times to declare multiple servers.
-/// </summary>
-/// <remarks>
-/// Usage: [UsesMCPServer("https://...")] for HTTP/HTTPS or
-/// [UsesMCPServer(MCPTransport.Stdio, "path/to/cmd", args)] for local stdio.
-/// MorganaAgentAdapter collects the attributes via reflection and hands the agent the tools that
-/// <see cref="Interfaces.IGuardRailService"/> admitted from each server; with the tool guard switched off, every tool the server lists.
-/// Declaring a server opens a door Morgana cannot see behind: the guard reads what the server offers and what it
-/// returns, never what it does with what it is sent. The declaration trusts the server with every argument an agent
-/// passes it, the user's data included.
-/// </remarks>
+/// <summary>Declares one MCP server whose tools the agent receives, repeatable for several servers.</summary>
+/// <remarks>Write <c>[UsesMCPServer("https://...")]</c> for a remote server and <c>[UsesMCPServer(MCPTransport.Stdio, "path/to/cmd", args)]</c> for a local process.</remarks>
+// The agent receives the tools that the tool guard admitted from the server; with that guard switched off
+// it receives every tool the server lists. Declaring a server opens a door Morgana cannot see behind: the guard reads what the server offers
+// and what it returns, never what it does with what it is sent. The declaration trusts the server with every
+// argument that an agent passes it, the user's data included.
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class UsesMCPServerAttribute : Attribute
 {
-    /// <summary>
-    /// Transport mechanism for this MCP server.
-    /// </summary>
+    /// <summary>How Morgana reaches the server.</summary>
     public Records.MCPTransport Transport { get; }
 
-    /// <summary>
-    /// For Http transport: the absolute URI of the remote MCP server.
-    /// For Stdio transport: the path to the local executable.
-    /// </summary>
+    /// <summary>The absolute URI of a remote server or the path of the executable of a local one.</summary>
     public string Command { get; }
 
-    /// <summary>
-    /// Arguments passed to the process. Only applicable for Stdio transport.
-    /// </summary>
+    /// <summary>The arguments of a local server's process; empty for a remote server.</summary>
     public string[] Args { get; }
 
-    /// <summary>
-    /// HTTP/HTTPS server — alias for the primary constructor with <see cref="WebRequestMethods.Http"/>.
-    /// </summary>
-    /// <param name="uri">Absolute http/https URI of the remote MCP server</param>
-    /// <exception cref="ArgumentException">Thrown if the URI is not a valid absolute http/https URI</exception>
+    /// <summary>Declares a remote server reached over HTTP or HTTPS.</summary>
+    /// <param name="uri">The absolute http or https URI of the server.</param>
+    /// <exception cref="ArgumentException">The URI is not an absolute http or https URI.</exception>
     public UsesMCPServerAttribute(string uri)
         : this(Records.MCPTransport.Http, uri) { }
 
-    /// <summary>
-    /// Primary constructor. Covers both Http and Stdio transports.
-    /// </summary>
-    /// <param name="transport">Transport mechanism to use</param>
-    /// <param name="command">
-    /// For <see cref="WebRequestMethods.Http"/>: absolute http/https URI of the remote server.<br/>
-    /// For <see cref="Records.MCPTransport.Stdio"/>: path to the local executable to spawn.
-    /// </param>
-    /// <param name="args">
-    /// Arguments passed to the process. Only used for <see cref="Records.MCPTransport.Stdio"/>.
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// Thrown if Http transport is used with an invalid absolute http/https URI.
-    /// </exception>
+    /// <summary>Declares a server reached over either transport.</summary>
+    /// <param name="transport">How Morgana reaches the server.</param>
+    /// <param name="command">The absolute http or https URI for <see cref="Records.MCPTransport.Http"/>; the path of the executable to spawn for <see cref="Records.MCPTransport.Stdio"/>.</param>
+    /// <param name="args">The arguments of the process, read only for <see cref="Records.MCPTransport.Stdio"/>.</param>
+    /// <exception cref="ArgumentException">An <see cref="Records.MCPTransport.Http"/> server is not named by an absolute http or https URI.</exception>
     public UsesMCPServerAttribute(Records.MCPTransport transport, string command, params string[] args)
     {
+        // A remote server is reached at its URI, so one that cannot be called fails where it is declared instead of at the first agent built.
         if (transport == Records.MCPTransport.Http)
         {
-            if (!Uri.TryCreate(command, UriKind.Absolute, out Uri? parsed) ||
-                (parsed.Scheme != "https" && parsed.Scheme != "http"))
+            // Only an absolute address on a web scheme names a server that the MCP client can call.
+            if (!Uri.TryCreate(command, UriKind.Absolute, out Uri? serverUri) ||
+                (serverUri.Scheme != "https" && serverUri.Scheme != "http"))
             {
                 throw new ArgumentException(
                     $"'{command}' is not a valid absolute http/https URI. " +
@@ -71,8 +46,11 @@ public class UsesMCPServerAttribute : Attribute
             }
         }
 
+        // The MCP registry keys its connection pool on the transport and the command.
         Transport = transport;
-        Command   = command;
-        Args      = args ?? [];
+        Command = command;
+
+        // A declaration that passes null explicitly is read as no arguments, so no reader of Args meets a null.
+        Args = args ?? [];
     }
 }

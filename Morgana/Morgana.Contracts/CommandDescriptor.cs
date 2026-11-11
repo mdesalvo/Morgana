@@ -1,16 +1,18 @@
 namespace Morgana.Contracts;
 
-/// <summary>A command a channel can offer its user, described the way a command palette lists it.</summary>
+/// <summary>
+/// A command a channel can offer its user, described the way a command palette lists it.
+/// Morgana publishes its own commands through GET /api/morgana/commands and a channel describes its local ones with the same shape,
+/// so its palette lists both without telling them apart. A command that RequiresConfirmation obliges the channel to obtain an
+/// explicit Yes/No answer before running it and Morgana refuses a run that does not carry one. A command that RequiresActiveAgent
+/// is offered only while an agent carries the conversation and refused otherwise, because what Morgana says in her own voice
+/// (a welcome, a refusal, a disambiguation) belongs to no agent and leaves such a command nothing to act on.
+/// </summary>
 /// <param name="Name">The command without its leading slash, lowercase: <c>new</c>, not <c>/New</c>.</param>
 /// <param name="Description">One line telling the user what the command does.</param>
 /// <param name="RequiresConfirmation">True when the command does something the user cannot take back.</param>
 /// <param name="Options">The values the command accepts at the prompt; null or empty when it takes none.</param>
 /// <param name="RequiresActiveAgent">True when the command acts on the agent carrying the conversation.</param>
-// Morgana publishes its own commands through GET /api/morgana/commands and a channel describes its local ones with the same shape,
-// so its palette lists both without telling them apart. A command that RequiresConfirmation obliges the channel to obtain an
-// explicit Yes/No answer before running it and Morgana refuses a run that does not carry one. A command that RequiresActiveAgent
-// is offered only while an agent carries the conversation and refused otherwise, because what Morgana says in her own voice
-// (a welcome, a refusal, a disambiguation) belongs to no agent and leaves such a command nothing to act on.
 public record CommandDescriptor(
     string Name,
     string Description,
@@ -41,8 +43,10 @@ public record CommandDescriptor(
         return null;
     }
 
-    /// <summary>What is wrong with <paramref name="options"/> for this command, as a line the user can read; null when nothing is.</summary>
-    // Both sides of the wire ask this, so an option is judged by one rule wherever it was typed.
+    /// <summary>
+    /// What is wrong with <paramref name="options"/> for this command, as a line the user can read; null when nothing is.
+    /// Both sides of the wire ask this, so an option is judged by one rule wherever it was typed.
+    /// </summary>
     public string? DescribeOptionProblem(IReadOnlyDictionary<string, string>? options)
     {
         // A command declaring no options is read as one with an empty list, so the checks below need no null case.
@@ -73,8 +77,10 @@ public record CommandDescriptor(
         return null;
     }
 
-    /// <summary><paramref name="options"/> as the command will read them: what the user gave plus the declared default of every option left out.</summary>
-    // Applied once before running, so no command has to remember its own defaults and every side of the wire runs on the same values.
+    /// <summary>
+    /// <paramref name="options"/> as the command will read them: what the user gave plus the declared default of every option left out.
+    /// Applied once before running, so no command has to remember its own defaults and every side of the wire runs on the same values.
+    /// </summary>
     public IReadOnlyDictionary<string, string> ApplyDefaults(IReadOnlyDictionary<string, string>? options)
     {
         // A copy matched ignoring case, so the caller's dictionary stays untouched and a default is never added under a second spelling of a given name.

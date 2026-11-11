@@ -139,40 +139,6 @@ public class SQLiteRateLimitService : IRateLimitService
         }
     }
 
-    /// <summary>
-    /// Clears all recorded request timestamps for the given conversation, effectively
-    /// resetting its rate limit windows.
-    /// </summary>
-    /// <param name="conversationId">Conversation whose rate limit log is cleared.</param>
-    /// <exception cref="Exception">
-    /// Rethrown from the underlying SQLite access after logging: unlike
-    /// <see cref="CheckAndRecordAsync"/>, an explicit reset that silently did nothing would be
-    /// worse than a visible failure, so this path does not fail open.
-    /// </exception>
-    public async Task ResetAsync(string conversationId)
-    {
-        try
-        {
-            // The reset addresses the conversation's own database, which already exists for any conversation that was limited.
-            await using SqliteConnection sqliteConnection = await persistenceService.OpenDatabaseAsync(conversationId);
-
-            // The whole log, not a window of it: this hands the conversation back its full allowance.
-            await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
-            sqliteCommand.CommandText = "DELETE FROM rate_limit_log;";
-
-            int rowsDeleted = await sqliteCommand.ExecuteNonQueryAsync();
-
-            // How much allowance came back, which is the only evidence the reset did anything.
-            logger.LogInformation(
-                "Rate limit reset for conversation {ConversationId} ({RowsDeleted} requests cleared)", conversationId, rowsDeleted);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to reset rate limit for conversation {ConversationId}", conversationId);
-            throw;
-        }
-    }
-
     #region Rate Limiting Logic
 
     /// <summary>

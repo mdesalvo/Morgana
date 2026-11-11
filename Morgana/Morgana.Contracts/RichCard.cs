@@ -2,12 +2,14 @@ using System.Text.Json.Serialization;
 
 namespace Morgana.Contracts;
 
-/// <summary>Rich card container for structured visual presentation of complex data such as invoices, profiles or reports.</summary>
+/// <summary>
+/// Rich card container for structured visual presentation of complex data such as invoices, profiles or reports.
+/// The model generates cards through the SetRichCard tool, which enforces a nesting depth of 3 levels and a maximum of 50 components in total.
+/// Components must come from the known dictionary because Cauldron falls back to text for an unknown type.
+/// </summary>
 /// <param name="Title">The heading of the card.</param>
 /// <param name="Subtitle">The line under the heading; null when there is none.</param>
 /// <param name="Components">The components of the card in the order they are drawn.</param>
-// The model generates cards through the SetRichCard tool, which enforces a nesting depth of 3 levels and a maximum of 50 components in total.
-// Components must come from the known dictionary because Cauldron falls back to text for an unknown type.
 public record RichCard(
     [property: JsonPropertyName("title")] string Title,
     [property: JsonPropertyName("subtitle")] string? Subtitle,
@@ -98,11 +100,13 @@ public record ListComponent(
     public override int EstimateCost() => Items.Sum(item => item.Length + ItemOverhead);
 }
 
-/// <summary>Section component that groups child components under a title and can nest other sections.</summary>
+/// <summary>
+/// Section component that groups child components under a title and can nest other sections.
+/// Nesting is limited to a depth of 3 levels, which the SetRichCard tool enforces.
+/// </summary>
 /// <param name="Title">The heading of the section.</param>
 /// <param name="Subtitle">The line under the heading; null when there is none.</param>
 /// <param name="Components">The components of the section in the order they are drawn.</param>
-// Nesting is limited to a depth of 3 levels, which the SetRichCard tool enforces.
 public record SectionComponent(
     [property: JsonPropertyName("title")] string Title,
     [property: JsonPropertyName("subtitle")] string? Subtitle,

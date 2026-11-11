@@ -1,31 +1,14 @@
 namespace Morgana.AI.Interfaces;
 
-/// <summary>
-/// Service abstraction for intent classification. Decouples logic from ClassifierActor which delegates entirely to this.
-/// Default implementation: LLMClassifierService using agents.json intents + Classifier prompt from morgana.json.
-/// Fail-safe contract: on failure return ClassificationResult with intent <see cref="Constants.Intents.Other"/>
-/// and confidence 0.0 (silent degradation);
-/// only throw on non-transient configuration failures at startup (fail-fast). Swappable via DI.
-/// </summary>
+/// <summary>Classifies a user's message against the domain's intents, on behalf of the classifier actor.</summary>
+// A failure never throws: the result names Constants.Intents.Other at confidence 0 and is marked as a classification error,
+// so the turn degrades to Morgana's own answer instead of stopping.
 public interface IClassifierService
 {
-    /// <summary>
-    /// Classifies the given user message and returns the detected intent with metadata.
-    /// </summary>
-    /// <param name="conversationId">
-    /// Unique identifier of the ongoing conversation. Passed for correlation and logging purposes
-    /// only — classification itself is stateless per call, with no per-conversation memory kept
-    /// between messages (each message is judged purely on its own text).
-    /// </param>
-    /// <param name="message">User message text to classify.</param>
-    /// <param name="cancellationToken">Stops the classification once whoever asked for it stops waiting.</param>
-    /// <returns>
-    /// A <see cref="Records.ClassificationResult"/> containing the top-ranked intent name and a
-    /// metadata dictionary (at minimum a <c>"confidence"</c> key). On failure, implementations
-    /// must return a fallback result with intent <see cref="Constants.Intents.Other"/> rather than throwing — see the
-    /// fail-safe contract above. Callers that need to detect a genuine collision between two or
-    /// more close-scoring candidates read the metadata's <c>"ambiguousIntents"</c> key, present
-    /// only when the implementation actually flags one.
-    /// </returns>
+    /// <summary>The intents that <paramref name="message"/> may express, ranked, with the top one named.</summary>
+    /// <param name="conversationId">The conversation the message belongs to, for correlation and logs only: each message is judged on its own text.</param>
+    /// <param name="message">The user's message.</param>
+    /// <param name="cancellationToken">Stops the classification once whoever asked for it stops waiting, which is the one case that throws.</param>
+    /// <returns>The result whose metadata carries at least <c>confidence</c>, plus <c>ambiguousIntents</c> when two candidates collide.</returns>
     Task<Records.ClassificationResult> ClassifyAsync(string conversationId, string message, CancellationToken cancellationToken = default);
 }

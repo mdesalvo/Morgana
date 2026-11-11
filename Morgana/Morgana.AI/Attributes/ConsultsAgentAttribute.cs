@@ -1,41 +1,33 @@
 namespace Morgana.AI.Attributes;
 
-/// <summary>
-/// Declares a colleague this agent may consult, exposed to its model as a callable function.
-/// Apply multiple times for several colleagues.
-/// </summary>
-/// <remarks>
-/// Declared rather than implicit so the topology is validated at startup and so an agent pays in
-/// prompt tokens only for the colleagues it needs. Read like <see cref="UsesMCPServerAttribute"/>.
-/// </remarks>
+/// <summary>Declares a colleague that this agent may consult, offered to its model as the function <c>consult_{intent}</c>.</summary>
+// Declared rather than implicit, so the topology is validated at startup and an agent pays in prompt tokens
+// only for the colleagues it needs.
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class ConsultsAgentAttribute : Attribute
 {
-    /// <summary>
-    /// Intent handled by the colleague, matching its <see cref="HandlesIntentAttribute"/>.
-    /// Validated at startup against the registry of discovered agents.
-    /// </summary>
+    /// <summary>The intent that the colleague handles, as its <see cref="HandlesIntentAttribute"/> names it.</summary>
     public string Intent { get; }
 
-    /// <summary>
-    /// Instance publishing the colleague, as named in <c>Morgana:AgentToAgent:Partners</c>, or
-    /// <c>null</c> when it is an agent of THIS installation. A name and not an address: whose agent to
-    /// call is the agent author's decision, where that agent runs is the deployment's.
-    /// </summary>
+    /// <summary>The partner publishing the colleague, as <c>Morgana:AgentToAgent:Partners</c> names it; null for an agent of this installation.</summary>
+    // A name and not an address: whose agent to call is the agent author's decision, where that agent runs is the deployment's.
     public string? Instance { get; }
 
-    /// <summary>Declares one consultable colleague, of this installation or of a declared instance.</summary>
-    /// <param name="intent">Intent the colleague handles; must be handled by a registered agent when it is local.</param>
-    /// <param name="instance">Instance publishing it, omitted for a colleague of this installation.</param>
-    /// <exception cref="ArgumentException">Thrown when the intent is null or blank.</exception>
+    /// <summary>Declares one colleague, of this installation or of a partner.</summary>
+    /// <param name="intent">The intent the colleague handles; a colleague of this installation must be handled by a registered agent.</param>
+    /// <param name="instance">The partner publishing the colleague, omitted for a colleague of this installation.</param>
+    /// <exception cref="ArgumentException">The intent is null or blank.</exception>
     public ConsultsAgentAttribute(string intent, string? instance = null)
     {
+        // A colleague without an intent names no agent at all, so the declaration fails where it is written.
         if (string.IsNullOrWhiteSpace(intent))
             throw new ArgumentException("A consulted agent must be declared by a non-empty intent name.", nameof(intent));
 
+        // The intent is checked against the registry of discovered agents at startup.
         Intent = intent;
-        // Trimmed rather than taken as typed: the name is matched against a configuration entry and
-        // a stray space is an instance nobody declared — an error whose cause is invisible on screen.
+
+        // The name is matched against a configuration entry and a stray space would name a partner nobody declared,
+        // an error whose cause is invisible on screen.
         Instance = string.IsNullOrWhiteSpace(instance) ? null : instance.Trim();
     }
 }

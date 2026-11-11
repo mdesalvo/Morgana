@@ -203,8 +203,8 @@ public class SQLiteDustLimitService : IDustLimitService
         return consumed > baseline ? consumed - baseline : 0.0;
     }
 
-    /// <inheritdoc/>
-    public async Task<double> GetUsageRatioAsync(string conversationId)
+    /// <summary>The ratio of consumed dust to the budget, 0 while unmetered or unread and 1 on a budget of zero.</summary>
+    private async Task<double> GetUsageRatioAsync(string conversationId)
     {
         // Unmetered: there is no proportion to report.
         if (!options.Enabled)

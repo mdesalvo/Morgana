@@ -1,44 +1,24 @@
 namespace Morgana.AI.Attributes;
 
-/// <summary>
-/// Marks a MorganaTool class as providing native tools for a specific intent.
-/// Used by MorganaAgentAdapter and IToolRegistryService to discover and instantiate tools at runtime.
-/// </summary>
-/// <remarks>
-/// Enables automatic tool discovery for intents. When MorganaAgentAdapter creates an agent
-/// for an intent, it queries IToolRegistryService to find the tool class decorated with this
-/// attribute for that intent. Intent name must match [HandlesIntent] on the corresponding agent and agents.json Name.
-/// Every public instance method the class declares is a tool, described by its [Description] and those of its parameters, which also carry [ToolParameter] when the user or the context supplies their value.
-/// </remarks>
+/// <summary>Marks a <see cref="Tools.MorganaTool"/> class as the domain tools of the agent that handles an intent.</summary>
+// Every public instance method that the class itself declares is a tool, described by its [Description] and by those of
+// its parameters; a parameter whose value the user or the context supplies also carries [ToolParameter].
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 public class ProvidesToolForIntentAttribute : Attribute
 {
-    /// <summary>
-    /// Gets the intent that this tool provides functionality for.
-    /// Must match the intent specified in HandlesIntentAttribute on the corresponding agent.
-    /// </summary>
-    /// <value>
-    /// Intent name (e.g., "billing", "contract", "gardening")
-    /// </value>
-    /// <remarks>
-    /// Must match [HandlesIntent] on agent class and agents.json Name/ID (case-sensitive).
-    /// </remarks>
+    /// <summary>The intent whose agent receives these tools, as <see cref="HandlesIntentAttribute"/> names it.</summary>
     public string Intent { get; }
 
-    /// <summary>
-    /// Initializes a new instance of the ProvidesToolForIntentAttribute.
-    /// </summary>
-    /// <param name="intent">Name of the intent this tool provides functionality for</param>
-    /// <exception cref="ArgumentException">Thrown if intent is null, empty, or whitespace</exception>
-    /// <remarks>
-    /// Validates intent is not null/empty (compile-time error prevention).
-    /// Use lowercase, single words or hyphens. Case-sensitive.
-    /// </remarks>
+    /// <summary>Declares the intent whose agent receives these tools.</summary>
+    /// <param name="intent">The intent's name as the agent's <see cref="HandlesIntentAttribute"/> declares it.</param>
+    /// <exception cref="ArgumentException">The intent is null or blank.</exception>
     public ProvidesToolForIntentAttribute(string intent)
     {
+        // Tools for no intent would reach no agent, so the declaration fails where it is written.
         if (string.IsNullOrWhiteSpace(intent))
             throw new ArgumentException("Intent cannot be null or empty", nameof(intent));
 
+        // The tool registry finds the class through this name when the agent is built.
         Intent = intent;
     }
 }

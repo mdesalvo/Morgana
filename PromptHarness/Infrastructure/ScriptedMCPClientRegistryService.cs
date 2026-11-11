@@ -1,7 +1,6 @@
 using Microsoft.Extensions.AI;
 using Morgana.AI.Attributes;
 using Morgana.AI.Interfaces;
-using Morgana.AI.Services;
 
 namespace PromptHarness.Infrastructure;
 
@@ -28,16 +27,6 @@ public sealed class ScriptedMCPClientRegistryService : IMCPClientRegistryService
         Listings++;
         return Task.FromResult(listing());
     }
-
-    /// <summary>No client exists in the harness.</summary>
-    public Task<MCPClient> GetOrCreateClientAsync(UsesMCPServerAttribute serverAttribute)
-        => throw new InvalidOperationException("no MCP connection in the harness");
-
-    /// <summary>Nothing is connected.</summary>
-    public Task DisconnectClientAsync(UsesMCPServerAttribute serverAttribute) => Task.CompletedTask;
-
-    /// <summary>Nothing is connected.</summary>
-    public Task DisconnectAllAsync() => Task.CompletedTask;
 
     /// <summary>Nothing is held.</summary>
     public void Dispose()

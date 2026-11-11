@@ -2,60 +2,23 @@ using Morgana.Contracts;
 
 namespace Morgana.AI.Interfaces;
 
-/// <summary>
-/// Factory that resolves the concrete <see cref="IChannelService"/> implementation for a given
-/// <c>deliveryMode</c> declared by the channel at the conversation-start handshake.
-/// </summary>
-/// <remarks>
-/// <para><strong>Why a factory:</strong></para>
-/// <para>Morgana serves multiple channel profiles (SignalR for rich UIs, HTTP webhook for
-/// plain-text clients, …). Each profile maps to a concrete <see cref="IChannelService"/>.
-/// Instead of hard-coding the mapping in a switch or tying dispatch to the free-form
-/// <see cref="ChannelCoordinates.ChannelName"/> (client-controlled, potentially infinite),
-/// the factory receives every transport at DI registration keyed on its <c>deliveryMode</c>
-/// and resolves the right one per-conversation via
-/// <see cref="ChannelCoordinates.DeliveryMode"/>.</para>
-///
-/// <para><strong>Finite-by-registration:</strong></para>
-/// <para>The set of valid <c>deliveryMode</c> keys is defined by what's registered in DI — not
-/// by an enum in the codebase. Adding a new transport means adding one registration; no contract
-/// file needs to move.</para>
-///
-/// <para><strong>Fail-loud:</strong></para>
-/// <para><see cref="Resolve"/> throws <see cref="InvalidOperationException"/> if the key is not
-/// registered. The start-conversation gate should consult <see cref="IsRegistered"/> first and
-/// reject unknown keys with a 400 — reaching <see cref="Resolve"/> with an unregistered key at
-/// send-time is an internal invariant violation.</para>
-/// </remarks>
+/// <summary>Resolves the transport registered under the <c>deliveryMode</c> that a channel declared at the handshake.</summary>
+// Dispatch follows DeliveryMode and never the free-form ChannelName, which the client controls and could name anything.
+// The valid keys are what DI registers rather than an enum, so a new transport is one registration and no contract moves.
 public interface IChannelServiceFactory
 {
     /// <summary>
-    /// Resolves the <see cref="IChannelService"/> registered under <paramref name="deliveryMode"/>.
-    /// The key is normalised (trimmed + lowercased) before lookup, matching the normalisation
-    /// applied by <c>ConversationManagerActor</c> at handshake ingress.
+    /// The transport registered under <paramref name="deliveryMode"/>, matched after trimming and lowercasing.
+    /// The start-conversation gate refuses an unregistered key with 400, so reaching this throw at send time is a broken invariant.
     /// </summary>
-    /// <param name="deliveryMode">The delivery-mode key declared by the channel.</param>
-    /// <returns>The concrete <see cref="IChannelService"/> registered for this mode.</returns>
-    /// <exception cref="InvalidOperationException">No implementation registered for this key.</exception>
+    /// <exception cref="InvalidOperationException">No transport is registered under the key.</exception>
     IChannelService Resolve(string deliveryMode);
 
-    /// <summary>
-    /// Returns <see langword="true"/> if a concrete <see cref="IChannelService"/> is registered
-    /// for <paramref name="deliveryMode"/>. Used by the start-conversation gate to reject
-    /// unknown delivery modes at the handshake with a 400 instead of letting the failure surface
-    /// at send-time.
-    /// </summary>
-    /// <param name="deliveryMode">The delivery-mode key to check.</param>
+    /// <summary>Tells whether a transport is registered under <paramref name="deliveryMode"/>, so the start-conversation gate refuses the others with 400.</summary>
     bool IsRegistered(string deliveryMode);
 }
 
-/// <summary>
-/// Binding of a concrete <see cref="IChannelService"/> to the <c>deliveryMode</c> key it serves.
-/// Each concrete channel implementation is registered in DI as one of these; the factory
-/// collects them all via <c>IEnumerable&lt;ChannelServiceRegistration&gt;</c> and builds its
-/// dispatch table.
-/// </summary>
-/// <param name="DeliveryMode">The delivery-mode key this service serves (e.g. <c>"signalr"</c>,
-/// <c>"webhook"</c>). Normalised (trimmed + lowercased) by the factory.</param>
-/// <param name="Service">The concrete channel service instance.</param>
+/// <summary>Binds a transport to the <c>deliveryMode</c> key it serves, one registration in DI for each transport.</summary>
+/// <param name="DeliveryMode">The key the transport serves, such as <c>signalr</c> or <c>webhook</c>, trimmed and lowercased by the factory.</param>
+/// <param name="Service">The transport that serves the key.</param>
 public record ChannelServiceRegistration(string DeliveryMode, IChannelService Service);

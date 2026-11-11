@@ -1,112 +1,56 @@
 namespace Morgana.AI.Interfaces;
 
-/// <summary>
-/// Assembles every piece of text destined for a domain agent's model: the composed system prompt
-/// (framework layer + domain layer, fenced), the tool descriptions and the per-turn declaration of
-/// held context variables. Sibling of <see cref="IPromptResolverService"/> — that one abstracts
-/// <em>where prompts come from</em>, this one abstracts <em>how they are assembled into what the
-/// model reads</em>.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Default implementation: <c>ConfigurationPromptComposerService</c>, which reads the framework
-/// layer and the injection templates from <c>morgana.json</c> through <see cref="IPromptResolverService"/>.
-/// </para>
-/// </remarks>
+/// <summary>Assembles every text that a domain agent's model reads, from its fenced two-layer prompt to the per-turn declarations.</summary>
+// Sibling of IPromptResolverService: that one hides where prompts come from, this one how they become what the model reads.
 public interface IPromptComposerService
 {
     /// <summary>
-    /// Composes an agent's full system prompt: the framework layer (target, personality, global
-    /// policies, instructions, formatting) followed by the domain layer, each inside its own fence.
-    /// The fences are load-bearing — both layers carry the same four section labels, so without
-    /// them the model sees each label twice with nothing marking which is which and the
-    /// framework's claim to precedence names a boundary the model cannot locate.
+    /// The agent's full system prompt: the framework layer then the domain layer, each inside its own fence.
+    /// The fences are load-bearing: both layers carry the same section labels, so without them the model reads each label
+    /// twice with nothing saying which is which and the framework's precedence names a boundary the model cannot find.
     /// </summary>
-    /// <param name="domainPrompt">The agent's own prompt, resolved from <c>agents.json</c>.</param>
-    /// <param name="peerCapable">
-    /// True when this agent consults a colleague or is itself consulted, which is what admits the
-    /// peer-consultation policy into the rendered rules. False leaves an agent outside the topology
-    /// reading exactly the prompt it read before peer consultation existed.
-    /// </param>
+    /// <param name="domainPrompt">The agent's own prompt from agents.json.</param>
+    /// <param name="peerCapable">True when the agent consults a colleague or is consulted, which admits the PeerConsultation policy among the rules.</param>
     /// <returns>The composed instructions, ready for <c>ChatOptions.Instructions</c>.</returns>
     Task<string> ComposeAgentInstructionsAsync(Records.Prompt domainPrompt, bool peerCapable = false);
 
-    /// <summary>
-    /// Produces the description a tool presents to the model. When the tool declares
-    /// context-scoped parameters, the <c>ToolDescriptionContextGuidance</c> injection template is
-    /// appended with its <c>((context_parameters))</c> placeholder resolved to those parameter
-    /// names; otherwise the authored description is returned unchanged.
-    /// </summary>
-    /// <param name="toolDefinition">The tool definition from <c>morgana.json</c> or <c>agents.json</c>.</param>
-    /// <returns>The description to expose on the generated <c>AIFunction</c>.</returns>
+    /// <summary>The description that a tool presents to the model, closed by <c>ToolDescriptionContextGuidance</c> when the tool takes context parameters.</summary>
+    /// <param name="toolDefinition">The tool's definition as its class declares it.</param>
     Task<string> ComposeToolDescriptionAsync(Records.ToolDefinition toolDefinition);
 
-    /// <summary>
-    /// Produces the description under which a colleague is offered as a callable function: the
-    /// colleague's own statement of what falls to it (its <c>Territory</c>, carried on the card as
-    /// its description), with nothing of the framework's added to it.
-    /// </summary>
-    /// <returns>The description to expose on the generated <c>AIFunction</c>.</returns>
+    /// <summary>The description under which a colleague is offered as a function: its own <c>Territory</c> as its card carries it, with nothing added.</summary>
     Task<string> ComposePeerDescriptionAsync(A2A.AgentCard peerCard);
 
     /// <summary>
-    /// Produces the block naming the colleagues an agent holds, spliced into its own instructions.
+    /// The block naming the colleagues that an agent holds, which closes its instructions; null when it has none or no template exists.
+    /// One rung above the colleague's own description and the rung that decides whether that one is ever read: a function's
+    /// description reaches the model only once it is weighing the function, which an agent about to answer "this is not on
+    /// my books" never does. Fixed for the agent's life, so it rides in the cached prefix instead of being sent every turn.
     /// </summary>
-    /// <remarks>
-    /// One rung above <see cref="ComposePeerDescriptionAsync"/> on the placement ladder and the rung
-    /// that decides whether the lower one is ever read: a colleague's own description reaches the
-    /// model only once it is already weighing that function, which is exactly what an agent about to
-    /// answer "this is not on my books" never does. Static for the agent's life, so it rides in the
-    /// cached prefix rather than being re-sent per turn like the held-context declaration.
-    /// </remarks>
-    /// <param name="colleagues">Function name to the colleague's own statement of what falls to it.</param>
-    /// <returns>The block to append, or <c>null</c> when there are no colleagues or no template.</returns>
+    /// <param name="colleagues">Each colleague's function name and its own statement of what falls to it.</param>
     Task<string?> ComposeColleaguesDeclarationAsync(IReadOnlyDictionary<string, string> colleagues);
 
-    /// <summary>
-    /// Produces the whole of what an answering agent reads on a turn serving a colleague: the note
-    /// telling it its reader is not the user, then the question inside the fence marking it as data.
-    /// </summary>
-    /// <param name="callerIntent">Intent of the asking agent; <c>null</c> when the caller named none,
-    /// which the composer renders as an unnamed caller rather than as a name.</param>
+    /// <summary>What an agent serving a colleague reads on that turn: the note that its reader is not the user, then the question fenced as data.</summary>
+    /// <param name="callerIntent">The asking agent's intent; null when the caller named none, rendered as an unnamed caller.</param>
     /// <param name="question">What the colleague asked, in its own words.</param>
-    /// <returns>The composed turn, falling back to the bare question where no template is declared.</returns>
+    /// <returns>The composed turn; the bare question where no template is declared.</returns>
     Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question);
 
     /// <summary>
-    /// Produces the per-turn declaration handing the session's currently-held context variables
-    /// directly to the model — name AND value, not just the name. This is the one composed fragment
-    /// carrying a <em>fact</em> rather than a rule: tool descriptions are built once at agent creation
-    /// and can only state the contract ("this tool takes a customerCode"), never the state
-    /// ("customerCode is T780C right now"). Handing over the value outright turns recall from a
-    /// discretionary tool call into a fact already in front of the model.
+    /// The per-turn declaration of the context variables that the session holds, names and values; null when it holds none or no template exists.
+    /// The one composed fragment carrying a fact rather than a rule: a tool description is built once and can state only the
+    /// contract, never that customerCode is T780C right now. Handing over the value turns recall into a fact already in view.
     /// </summary>
-    /// <param name="heldVariables">
-    /// The variables held by the session, framework-ephemeral keys already excluded.
-    /// </param>
-    /// <returns>
-    /// The declaration to inject, or <c>null</c> when nothing should be injected — either because
-    /// the session holds no variables or because the prompt layer declares no such template.
-    /// </returns>
+    /// <param name="heldVariables">The variables the session holds, without the framework's ephemeral keys.</param>
     Task<string?> ComposeHeldContextDeclarationAsync(IReadOnlyDictionary<string, object> heldVariables);
 
-    /// <summary>
-    /// Produces the declaration added to the instructions of a landing turn, in which the user has just
-    /// chosen the agent by pressing one of Morgana's buttons and the agent opens its part of the conversation.
-    /// </summary>
-    /// <returns>
-    /// The declaration to inject; <c>null</c> when the prompt layer declares no such template, in which case the
-    /// landing turn runs on the agent's own instructions alone.
-    /// </returns>
+    /// <summary>The declaration added on the turn on which the user chose the agent by pressing Morgana's button; null when no template exists.</summary>
     Task<string?> ComposeLandingDeclarationAsync();
 
     /// <summary>
-    /// Produces what the model reads in place of a tool result the guard withheld.
+    /// What the model reads in place of a tool result that the guard withheld; empty when no template exists.
+    /// The result is withheld either way: an empty text only means nothing is said in its place.
     /// </summary>
     /// <param name="toolName">The function the model called.</param>
-    /// <returns>
-    /// The text standing in for the result; empty when the prompt layer declares no such template, in which
-    /// case the result is still withheld and nothing is said in its place.
-    /// </returns>
     Task<string> ComposeQuarantinedResultAsync(string toolName);
 }

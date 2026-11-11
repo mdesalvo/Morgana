@@ -1,4 +1,4 @@
-    namespace Morgana.AI.Attributes;
+namespace Morgana.AI.Attributes;
 
 /// <summary>Declares where a tool parameter's value comes from: the user, this agent's context or the context every agent of the conversation shares.</summary>
 /// <remarks>A parameter whose value the model itself authors carries none.</remarks>

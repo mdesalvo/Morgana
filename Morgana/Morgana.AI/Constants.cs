@@ -212,6 +212,16 @@ public static class Constants
         public const string ComplementIntentDescription = "ComplementIntentDescription";
     }
 
+    /// <summary>The names of the <c>ErrorAnswers</c> that the Morgana prompt declares, which code picks by name.</summary>
+    public static class ErrorAnswers
+    {
+        /// <summary>Morgana's apology for a turn that failed for any reason other than the model's own service.</summary>
+        public const string GenericError = "GenericError";
+
+        /// <summary>Morgana's apology for a turn that the model's service could not complete.</summary>
+        public const string LLMServiceError = "LLMServiceError";
+    }
+
     /// <summary>
     /// The base tools whose names travel further than the tool loop: a stored function call is
     /// recognised by name when a conversation's history is replayed, long after the agent that made

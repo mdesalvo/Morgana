@@ -1,24 +1,19 @@
 namespace Morgana.AI.Attributes;
 
-/// <summary>
-/// Mandatory on every MorganaAgent: declares fixed LLMTier (Economy/Efficiency/Performance). Static declaration, resolved once
-/// at agent creation, never changes. Startup validation by RequiresLLMTierValidationService ensures declared tier is
-/// configured in appsettings.json. Missing tier fails application startup (prevent silent fallback).
-/// </summary>
+/// <summary>Declares the tier that an agent runs on, mandatory on every <see cref="Abstractions.MorganaAgent"/>.</summary>
+// Fixed by the declaration and read once when the agent is built. An agent without it stops the startup,
+// because a silent fallback would run it on a model nobody chose.
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
 public sealed class RequiresLLMTierAttribute : Attribute
 {
-    /// <summary>
-    /// Gets the LLM tier this agent requires.
-    /// </summary>
+    /// <summary>The tier that the agent runs on.</summary>
     public Records.LLMTier Tier { get; }
 
-    /// <summary>
-    /// Initializes a new instance of the RequiresLLMTierAttribute.
-    /// </summary>
-    /// <param name="tier">Power/cost tier this agent must run on.</param>
+    /// <summary>Declares the tier that the agent runs on.</summary>
+    /// <param name="tier">The tier whose model the agent's every call goes to.</param>
     public RequiresLLMTierAttribute(Records.LLMTier tier)
     {
+        // The agent adapter reads it to pick the tier's chat client.
         Tier = tier;
     }
 }

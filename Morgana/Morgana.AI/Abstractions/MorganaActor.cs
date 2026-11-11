@@ -6,102 +6,59 @@ using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Abstractions;
 
-/// <summary>
-/// Base class for all Morgana actors, providing common infrastructure for conversation-scoped actors.
-/// Provides conversation ID tracking, LLM service access, prompt resolution, logging and automatic timeout handling.
-/// </summary>
-/// <remarks>
-/// Inheritance: ReceiveActor → MorganaActor (base) → specialized actors (Manager, Supervisor,
-/// Guard, Classifier, Router) + MorganaAgent. Features: conversation-scoped, LLM access,
-/// prompt resolution, logging, automatic timeout handling.
-/// </remarks>
+/// <summary>Base of every conversation-scoped actor of Morgana, the domain agents included.</summary>
 public class MorganaActor : ReceiveActor
 {
-    /// <summary>
-    /// Unique identifier of the conversation this actor is handling.
-    /// Used for logging, correlation and actor hierarchy organization.
-    /// </summary>
+    /// <summary>The conversation this actor serves, part of its name and of every log line.</summary>
     protected readonly string conversationId;
 
-    /// <summary>
-    /// LLM service for AI completions, on the tier each caller is served by.
-    /// Provides access to chat completion APIs with conversation history management.
-    /// </summary>
+    /// <summary>The language models, on the tier each caller is served by.</summary>
     protected readonly ILanguageModelService llmService;
 
-    /// <summary>
-    /// Service for resolving prompt templates from configuration (morgana.json, agents.json).
-    /// Loads system prompts, agent prompts and dynamic templates with variable substitution.
-    /// </summary>
+    /// <summary>Resolves the prompts of morgana.json and agents.json by id.</summary>
     protected readonly IPromptResolverService promptResolverService;
 
-    /// <summary>
-    /// Akka.NET logging adapter for this actor instance.
-    /// Automatically includes actor path and type in log messages.
-    /// </summary>
+    /// <summary>The actor's logger, which stamps its path on every line.</summary>
     protected readonly ILoggingAdapter actorLogger;
 
-    /// <summary>
-    /// Morgana configuration (layered by ASP.NET)
-    /// </summary>
+    /// <summary>The host's configuration as ASP.NET layers it.</summary>
     protected readonly IConfiguration configuration;
 
-    /// <summary>
-    /// Initializes a new instance of MorganaActor with core infrastructure services.
-    /// Sets up conversation context, services, logging and timeout handling.
-    /// </summary>
-    /// <param name="conversationId">Unique identifier of the conversation this actor will handle</param>
-    /// <param name="llmService">LLM service for AI completions</param>
-    /// <param name="promptResolverService">Service for resolving prompt templates</param>
-    /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
+    /// <summary>How long an actor waits on silence, as <c>Morgana:ActorSystem:TimeoutSeconds</c> declares it.</summary>
+    // Read on every use, so a configuration reload reaches the next wait without restarting the actor.
+    protected TimeSpan ActorSystemTimeout =>
+        TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture));
+
+    /// <summary>Binds the actor to its conversation and to the services every actor reads.</summary>
     protected MorganaActor(
         string conversationId,
         ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
         IConfiguration configuration)
     {
+        // The services arrive from the actor system's DI scope and live as long as the actor.
         this.conversationId = conversationId;
         this.llmService = llmService;
         this.promptResolverService = promptResolverService;
         this.configuration = configuration;
         actorLogger = Context.GetLogger();
 
-        // Global timeout for all MorganaActor instances
-        SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(this.configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
+        // Every actor starts on the same budget of silence and handles its expiry, so the timeout never ends up in dead letters.
+        SetReceiveTimeout(ActorSystemTimeout);
         Receive<ReceiveTimeout>(HandleReceiveTimeout);
     }
 
-    /// <summary>
-    /// Handles receive timeout when no message is received within the configured timeout period.
-    /// Default implementation does nothing (commented warning). Override to implement custom timeout behavior.
-    /// </summary>
-    /// <param name="timeout">Timeout message from Akka.NET</param>
-    /// <remarks>
-    /// <para><strong>Purpose:</strong></para>
-    /// <para>Receive timeout can be used to implement idle timeouts, cleanup, or periodic health checks.
-    /// The default implementation is a no-op to avoid log spam from actors that are legitimately idle.</para>
-    /// </remarks>
+    /// <summary>Reacts to a silence longer than the actor's receive timeout; by default it does nothing.</summary>
+    // An idle actor is legitimate, so the default writes nothing to keep the logs free of it.
     protected virtual void HandleReceiveTimeout(ReceiveTimeout timeout)
     {
-        // actorLogger.Warning($"{GetType().Name} receive timeout");
     }
 
-    /// <summary>
-    /// Registers common message handlers that should be present in all actor behaviors.
-    /// Essential for FSM actors using Become() pattern to maintain consistent message handling across states.
-    /// </summary>
-    /// <remarks>
-    /// <para><strong>Purpose:</strong></para>
-    /// <para>When actors use Become() to change behaviors (FSM pattern), the message handlers are replaced entirely.
-    /// This means handlers registered in the constructor (like ReceiveTimeout) are lost unless re-registered
-    /// in each behavior. This method provides a centralized way to ensure critical handlers are always present.</para>
-    /// <para><strong>Currently Registered Common Handlers:</strong></para>
-    /// <list type="bullet">
-    /// <item><term>ReceiveTimeout</term><description>Prevents dead letters from timeout messages in FSM states</description></item>
-    /// </list>
-    /// </remarks>
+    /// <summary>Registers the handlers that every behaviour of the actor needs, called again after each <c>Become</c>.</summary>
+    // Become replaces every handler, the timeout's included, so a state that forgot it would send the timeout to dead letters.
     protected virtual void RegisterCommonHandlers()
     {
+        // The timeout is handled in every state as it is at construction.
         Receive<ReceiveTimeout>(HandleReceiveTimeout);
     }
 }

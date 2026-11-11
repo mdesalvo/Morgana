@@ -419,7 +419,7 @@ public class ConfigurationLanguageModelService : ILanguageModelService
         {
             // Return user-friendly error message from Morgana prompt
             List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>(Constants.PromptProperties.ErrorAnswers);
-            return errorAnswers.FirstOrDefault(e => string.Equals(e.Name, "LLMServiceError", StringComparison.OrdinalIgnoreCase))!.Content;
+            return errorAnswers.FirstOrDefault(e => string.Equals(e.Name, Constants.ErrorAnswers.LLMServiceError, StringComparison.OrdinalIgnoreCase))!.Content;
         }
     }
 }
