@@ -9,11 +9,9 @@ using Spectre.Console.Rendering;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>
-/// The live terminal of a TTY channel on Spectre.Console: a sticky header over a scrolling transcript with the
-/// prompt at the bottom. What the channel declares in its <see cref="ChannelProfile"/> decides what it shows:
-/// the streaming pane and the quick replies exist only where the profile says so.
-/// </summary>
+/// <summary>The live terminal of a TTY channel on Spectre.Console: a sticky header over a scrolling transcript with the prompt at the bottom.</summary>
+// What the channel declares in its ChannelProfile decides what it shows: the streaming pane and the quick replies exist
+// only where the profile says so.
 public sealed class TerminalUiService : ITerminalUi
 {
     /// <summary>Fallback for the channel's <c>MaxInputLength</c> when absent or non-positive.</summary>
@@ -46,13 +44,15 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>How long a turn may stay silent before the prompt is handed back to the user, as Morgana last reported it; null until she has.</summary>
     private TimeSpan? replyTimeout;
 
-    /// <summary>Ends the countdown on the turn in flight; null when nothing is being waited for. Mutated only under <see cref="renderLock"/>.</summary>
+    /// <summary>Ends the countdown on the turn in flight; null when nothing is being waited for.</summary>
+    // Mutated only under renderLock.
     private CancellationTokenSource? replyWatchdog;
 
     /// <summary>Keystrokes not yet committed with <see cref="ConsoleKey.Enter"/>.</summary>
     private string currentInput = string.Empty;
 
-    /// <summary>Insertion caret as an index into <see cref="currentInput"/>, always on a rune boundary. Mutated only under <see cref="renderLock"/>.</summary>
+    /// <summary>Insertion caret as an index into <see cref="currentInput"/>, always on a rune boundary.</summary>
+    // Mutated only under renderLock.
     private int cursorPosition;
 
     /// <summary>Hard cap on the prompt length in UTF-16 chars: typing past it is swallowed while the caret keys and deletions stay live.</summary>
@@ -64,31 +64,39 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>The conversation on screen, shown truncated in the header.</summary>
     private string conversationId = string.Empty;
 
-    /// <summary>The dust gauge as Spectre markup, empty while Morgana reports no dust level. Volatile so the header reads it without the lock.</summary>
+    /// <summary>The dust gauge as Spectre markup, empty while Morgana reports no dust level.</summary>
+    // Volatile so the header reads it without the lock.
     private volatile string dustGaugeMarkup = string.Empty;
 
-    /// <summary>The dust level Morgana last reported as a fraction, null while none was. Mutated only under <see cref="renderLock"/>.</summary>
+    /// <summary>The dust level Morgana last reported as a fraction, null while none was.</summary>
+    // Mutated only under renderLock.
     private double? reportedDustLevel;
 
     /// <summary>Set once the user types <c>/exit</c> or presses <see cref="ConsoleKey.Escape"/>.</summary>
     private volatile bool exitRequested;
 
-    /// <summary>True while a turn is in flight: keystrokes except Esc are swallowed and the prompt shows a thinking hint. Starts true since the channel always waits for Morgana's presentation first.</summary>
+    /// <summary>True while a turn is in flight: keystrokes except Esc are swallowed and the prompt shows a thinking hint.</summary>
+    // Starts true since the channel always waits for Morgana's presentation first.
     private volatile bool awaitingResponse = true;
 
-    /// <summary>The agent carrying the conversation, null while Morgana holds it herself. Kept apart from the speaker the header shows: a display choice must never decide which commands exist.</summary>
+    /// <summary>The agent carrying the conversation, null while Morgana holds it herself.</summary>
+    // Kept apart from the speaker the header shows: a display choice must never decide which commands exist.
     private volatile string? agentCarryingConversation;
 
-    /// <summary>Latched when Morgana delivers the dust-exhaustion notice: the conversation is spent and only the ways out of it are accepted until another conversation replaces it. Volatile so the key loop reads it without the lock.</summary>
+    /// <summary>Latched when Morgana delivers the dust-exhaustion notice: the conversation is spent and only the ways out of it are accepted until another conversation replaces it.</summary>
+    // Volatile so the key loop reads it without the lock.
     private volatile bool conversationDead;
 
-    /// <summary>How many rows above the live bottom the viewport is anchored; non-zero only while the conversation is at rest. Mutated and read only under <see cref="renderLock"/>.</summary>
+    /// <summary>How many rows above the live bottom the viewport is anchored; non-zero only while the conversation is at rest.</summary>
+    // Mutated and read only under renderLock.
     private int scrollOffset;
 
-    /// <summary>Whether older content exists above the visible window, which lights the header's up arrow. Set by <see cref="BuildBody"/>.</summary>
+    /// <summary>Whether older content exists above the visible window, which lights the header's up arrow.</summary>
+    // Set by BuildBody.
     private bool scrollHasAbove;
 
-    /// <summary>Whether content exists below the visible window, which lights the header's down arrow. Set by <see cref="BuildBody"/>.</summary>
+    /// <summary>Whether content exists below the visible window, which lights the header's down arrow.</summary>
+    // Set by BuildBody.
     private bool scrollHasBelow;
 
     /// <summary>Tells when the terminal is resized, so the viewport follows the window without polling on every keystroke.</summary>
@@ -100,22 +108,28 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Draws the transcript's messages in the channel's own way.</summary>
     private readonly IMessageRenderer messageRenderer;
 
-    /// <summary>The options of a reply as the prompt of its turn. Offered only where the profile declares quick replies.</summary>
+    /// <summary>The options of a reply as the prompt of its turn.</summary>
+    // Offered only where the profile declares quick replies.
     private readonly QuickReplyPromptService quickReplyPrompt;
 
-    /// <summary>The typewriter that reveals a streamed reply. Fed only where the profile declares streaming.</summary>
+    /// <summary>The typewriter that reveals a streamed reply.</summary>
+    // Fed only where the profile declares streaming.
     private readonly StreamingPaneService streamingPane;
 
-    /// <summary>The dropdown of commands shown under the prompt while the line starts with a slash. Called only under <see cref="renderLock"/>.</summary>
+    /// <summary>The dropdown of commands shown under the prompt while the line starts with a slash.</summary>
+    // Called only under renderLock.
     private readonly CommandPaletteService commandPalette;
 
-    /// <summary>The Yes/No question that a command which cannot be taken back must have answered first. Called only under <see cref="renderLock"/>.</summary>
+    /// <summary>The Yes/No question that a command which cannot be taken back must have answered first.</summary>
+    // Called only under renderLock.
     private readonly CommandConfirmationService commandConfirmation;
 
-    /// <summary>The bar a running command reports itself through. Called only under <see cref="renderLock"/>.</summary>
+    /// <summary>The bar a running command reports itself through.</summary>
+    // Called only under renderLock.
     private readonly CommandProgressService commandProgress;
 
-    /// <summary>The form asking for the values a command declares. Called only under <see cref="renderLock"/>.</summary>
+    /// <summary>The form asking for the values a command declares.</summary>
+    // Called only under renderLock.
     private readonly CommandOptionPromptService commandOptionPrompt;
 
     /// <summary>Runs the command the palette resolved.</summary>
@@ -127,28 +141,35 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>The colours and the progress vocabulary of the channel.</summary>
     private readonly TerminalTheme theme;
 
-    /// <summary>True while a command is running, whether it works here or on Morgana: a command that opens no turn has nothing else telling the screen it is busy. Volatile since the task running the command sets it while a frame is drawn.</summary>
+    /// <summary>True while a command is running, whether it works here or on Morgana: a command that opens no turn has nothing else telling the screen it is busy.</summary>
+    // Volatile since the task running the command sets it while a frame is drawn.
     private volatile bool commandRunning;
 
-    /// <summary>The command running now, named by the hint that holds the prompt until its first frame. Under <see cref="renderLock"/>.</summary>
+    /// <summary>The command running now, named by the hint that holds the prompt until its first frame.</summary>
+    // Read and written only under renderLock.
     private string runningCommandName = string.Empty;
 
-    /// <summary>Why the command line just typed ran nothing, drawn above the prompt and kept out of the transcript. Null once the user writes, starts a turn or runs another command. Under <see cref="renderLock"/>.</summary>
+    /// <summary>Why the command line just typed ran nothing, drawn above the prompt and kept out of the transcript.</summary>
+    // Null once the user writes, starts a turn or runs another command. Under renderLock.
     private string? promptNotice;
 
     /// <summary>The colour <see cref="promptNotice"/> is drawn in.</summary>
     private string promptNoticeColor = TerminalTheme.WarningColor;
 
-    /// <summary>The panel a command opened over the whole body, laid out again at every frame for the width then; null when none is open. Under <see cref="renderLock"/>.</summary>
+    /// <summary>The panel a command opened over the whole body, laid out again at every frame for the width then; null when none is open.</summary>
+    // Read and written only under renderLock.
     private Func<int, IReadOnlyList<Markup>>? commandPanel;
 
-    /// <summary>The last command run started, until its outcome is shown: a late outcome of an earlier run never covers the current one's. Under <see cref="renderLock"/>.</summary>
+    /// <summary>The last command run started, until its outcome is shown: a late outcome of an earlier run never covers the current one's.</summary>
+    // Read and written only under renderLock.
     private CommandInvocation? invocationOwingOutcome;
 
-    /// <summary>The session of the running UI, whose conversation receives what the user types. Set when the UI starts.</summary>
+    /// <summary>The session of the running UI, whose conversation receives what the user types.</summary>
+    // Set when the UI starts.
     private TerminalSessionService? startedSession;
 
-    /// <summary>The live display of the running UI, which commands' requests repaint. Set once the display starts.</summary>
+    /// <summary>The live display of the running UI, which commands' requests repaint.</summary>
+    // Set once the display starts.
     private LiveDisplayContext? startedDisplay;
 
     /// <summary>Fires when the host stops, so a deadline armed by a turn or a command dies with the process.</summary>
@@ -157,7 +178,9 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Called off when the user leaves, so a command still waiting on Morgana never holds the exit.</summary>
     private CancellationTokenSource commandCancellation = new();
 
-    /// <summary>Completes when deliveries may be drawn. Pending while another conversation is being opened, so its presentation cannot land on the transcript about to be cleared.</summary>
+    /// <summary>Completes when deliveries may be drawn.</summary>
+    // Pending while another conversation is being opened, so its presentation cannot land on the transcript about to be
+    // cleared.
     private Task deliveriesReleased = Task.CompletedTask;
 
     /// <summary>Serializes the mutations of the transcript and the prompt together with the paired layout update and refresh, since the resize callback and the timers run on their own threads.</summary>
@@ -247,6 +270,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Runs the live display until the user leaves or the host stops, reading keys and draining Morgana's deliveries beside each other.</summary>
     private async Task RunLiveDisplayAsync(Layout layout, CancellationToken cancellationToken)
     {
+        // The live display owns the terminal from here until the user leaves or the host stops.
         await AnsiConsole
             .Live(layout)
             .AutoClear(false)
@@ -263,8 +287,8 @@ public sealed class TerminalUiService : ITerminalUi
                         Repaint(ctx);
                 });
 
-                // The opening frame is painted at once: a backend too slow for the startup wait, or unable to
-                // reach the callback, would otherwise leave a blank terminal with no sign the channel is waiting
+                // The opening frame is painted at once: a backend too slow for the startup wait or unable to reach the
+                // callback would otherwise leave a blank terminal with no sign that the channel is waiting
                 lock (renderLock)
                     ctx.Refresh();
 
@@ -298,6 +322,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Consumes the inbound queue strictly in order, routing each event to the handler of its kind.</summary>
     private async Task DrainInboundLoop(LiveDisplayContext ctx, CancellationToken cancellationToken)
     {
+        // The drain ends when the host stops or the user leaves.
         try
         {
             // Deliveries are taken one at a time in the order Morgana produced them
@@ -362,12 +387,11 @@ public sealed class TerminalUiService : ITerminalUi
         }
     }
 
-    /// <summary>
-    /// Commits a final message to the transcript now or, while the typewriter is still revealing, once it has
-    /// finished. Returns true when an exit was requested so the drain loop stops after the last frame.
-    /// </summary>
+    /// <summary>Commits a final message to the transcript now or, while the typewriter is still revealing, once it has finished.</summary>
+    // Returns true when an exit was requested so the drain loop stops after the last frame.
     private bool HandleInboundMessage(LiveDisplayContext ctx, ChannelMessage message)
     {
+        // The transcript, the typewriter and the deadline are shared with the timer thread.
         lock (renderLock)
         {
             // Morgana has spoken, so the turn is no longer at risk of being declared lost: on arrival, not on
@@ -384,10 +408,8 @@ public sealed class TerminalUiService : ITerminalUi
         }
     }
 
-    /// <summary>
-    /// Commits a final message to the transcript and takes from it everything the screen shows: who holds the
-    /// conversation, the dust gauge, a spent budget and the quick replies. Must be called under <see cref="renderLock"/>.
-    /// </summary>
+    /// <summary>Commits a final message to the transcript and takes from it everything the screen shows: who holds the conversation, the dust gauge, a spent budget and the quick replies.</summary>
+    // Must be called under renderLock.
     private void CommitFinalMessage(LiveDisplayContext ctx, ChannelMessage message)
     {
         // The row belongs to whoever authored it, so a specialised agent keeps its colour even on the farewell
@@ -452,6 +474,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Polls the keyboard every 25 ms and gives each key to the surface that owns it at that moment: panel, confirmation, form, palette, scrollback, quick replies or the prompt.</summary>
     private async Task ReadKeysLoop(LiveDisplayContext ctx, CancellationToken cancellationToken)
     {
+        // One key at a time until the user leaves or the host stops.
         while (!exitRequested && !cancellationToken.IsCancellationRequested)
         {
             // Polled rather than blocking: Spectre's live rendering cannot share stdin with a first-class prompt.
@@ -634,9 +657,10 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Commits the prompt on Enter: takes the line off the prompt, then runs it as the answer to a form, a command or a turn.</summary>
     private async Task CommitLineAsync(LiveDisplayContext ctx)
     {
+        // The prompt is cleared before anything is awaited, so the next keystroke lands on a fresh line.
         SubmittedLine line = TakeSubmittedLine();
 
-        // The form has everything it asked for and runs the command, or it is still asking: both are drawn by it
+        // The form either has everything it asked for and runs the command or is still asking: both are drawn by it
         if (line.WasFillingIn)
         {
             if (line.FormInvocation is { } invocation)
@@ -672,13 +696,11 @@ public sealed class TerminalUiService : ITerminalUi
         await SubmitTurnAsync(ctx, line.Text, () => Session.SendUserTurnAsync(line.Text));
     }
 
-    /// <summary>
-    /// Takes the line off the prompt and clears the prompt before anything is awaited, so a keystroke arriving
-    /// during the send lands on a fresh buffer. The command is resolved against the line first, since the
-    /// palette's highlight belongs to that line.
-    /// </summary>
+    /// <summary>Takes the line off the prompt and clears the prompt before anything is awaited, so a keystroke arriving during the send lands on a fresh buffer.</summary>
+    // The command is resolved against the line first, since the palette's highlight belongs to that line.
     private SubmittedLine TakeSubmittedLine()
     {
+        // The prompt and the palette are shared with the render path.
         lock (renderLock)
         {
             // The line as it stands is what is committed
@@ -711,12 +733,11 @@ public sealed class TerminalUiService : ITerminalUi
         }
     }
 
-    /// <summary>
-    /// Answers a key while quick replies are the prompt: a pick is echoed and sent as a turn, anything else
-    /// only moves the highlight. Cauldron sends the reply's value rather than its label; this does too.
-    /// </summary>
+    /// <summary>Answers a key while quick replies are the prompt: a pick is echoed and sent as a turn, anything else only moves the highlight.</summary>
+    // Cauldron sends the reply's value rather than its label; this does too.
     private async Task HandleQuickReplyKeyAsync(LiveDisplayContext ctx, ConsoleKey key)
     {
+        // The reply picked, if the key picked one; the offer is read under the lock and the turn sent outside it.
         QuickReply? pickedReply;
         lock (renderLock)
         {
@@ -739,6 +760,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Gives <paramref name="key"/> to the question a command is waiting on; false when no command is.</summary>
     private bool TryHandleConfirmationKey(LiveDisplayContext ctx, ConsoleKeyInfo key)
     {
+        // The command the question was asked for and the answer, read under the lock and acted on outside it.
         CommandInvocation? invocation;
         ConfirmationOutcome outcome;
         lock (renderLock)
@@ -767,6 +789,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Drops the command being filled in, with whatever it had gathered; false when no form is open.</summary>
     private bool TryCancelOptionPrompt(LiveDisplayContext ctx)
     {
+        // The form is shared with the render path.
         lock (renderLock)
         {
             // With no form open the key is not for it
@@ -787,6 +810,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Gives the arrows, Tab and Esc to the palette while a command line is typed at rest; false leaves the key to the loop.</summary>
     private bool TryHandleCommandPaletteKey(LiveDisplayContext ctx, ConsoleKey key)
     {
+        // Only the keys that walk, complete or close the palette are its own.
         if (key is not (ConsoleKey.UpArrow or ConsoleKey.DownArrow or ConsoleKey.Tab or ConsoleKey.Escape))
             return false;
 
@@ -855,6 +879,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Starts a command line from the quick-reply picker, as typing a slash on an empty prompt does.</summary>
     private void OpenCommandLine(LiveDisplayContext ctx)
     {
+        // The prompt is shared with the render path.
         lock (renderLock)
         {
             // The slash is the whole line: the palette opens on every command and the options step aside
@@ -879,13 +904,16 @@ public sealed class TerminalUiService : ITerminalUi
 
         // The values are read off the line the user typed, then judged by what the command says it takes:
         // a line that cannot be read runs nothing, since the missing half would be guessed at
-        IReadOnlyDictionary<string, string> options = CommandLineParser.ParseOptions(line, out string? lineProblem);
-        if (lineProblem is { } malformedLine)
+        ParsedCommandOptions parsedOptions = CommandLineParser.ParseOptions(line);
+        if (parsedOptions.Problem is { } lineProblem)
         {
             // A line that cannot be read is explained and runs nothing
-            ShowPromptNotice(ctx, malformedLine, TerminalTheme.WarningColor);
+            ShowPromptNotice(ctx, lineProblem, TerminalTheme.WarningColor);
             return;
         }
+
+        // The values as typed, which the command is judged against below
+        IReadOnlyDictionary<string, string> options = parsedOptions.Options;
 
         // A command run without what it declares asks for it: the description it publishes is exactly the
         // question to put on screen, so the user is walked through instead of being sent back to the line
@@ -944,13 +972,16 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Repaints the screen for a change the caller has already made.</summary>
     private void RefreshLayout(LiveDisplayContext ctx)
     {
+        // The frame is built and refreshed together under the lock.
         lock (renderLock)
             Repaint(ctx);
     }
 
-    /// <summary>Repaints the screen. Must be called under <see cref="renderLock"/>, which keeps the layout update and the refresh together.</summary>
+    /// <summary>Repaints the screen.</summary>
+    // Must be called under renderLock, which keeps the layout update and the refresh together.
     private void Repaint(LiveDisplayContext ctx)
     {
+        // The whole layout is rebuilt from the state as it stands and drawn at once.
         ctx.UpdateTarget(BuildLayout());
         ctx.Refresh();
     }
@@ -958,6 +989,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Puts <paramref name="invocation"/>'s Yes/No question on the prompt, where it stays until it is answered.</summary>
     private void AskForConfirmation(LiveDisplayContext ctx, CommandInvocation invocation)
     {
+        // The question is shared with the render path.
         lock (renderLock)
         {
             // The question replaces the prompt with the highlight on No
@@ -995,6 +1027,7 @@ public sealed class TerminalUiService : ITerminalUi
             Repaint(ctx);
         }
 
+        // The command runs outside the lock, since it may wait on Morgana for as long as its deadline allows.
         try
         {
             // The command decides what happens next through this UI: leave, report or swap the conversation
@@ -1010,7 +1043,7 @@ public sealed class TerminalUiService : ITerminalUi
             // landed just before it is the truth and stays: Morgana had finished the work
             lock (renderLock)
             {
-                // Only the run still owed an outcome is called off on screen, and not after the user left
+                // Only the run still owed an outcome is called off on screen, never after the user left
                 if (ReferenceEquals(invocationOwingOutcome, invocation) && !exitRequested)
                 {
                     // The deadline's message becomes what the command came to
@@ -1051,16 +1084,15 @@ public sealed class TerminalUiService : ITerminalUi
         }
     }
 
-    /// <summary>
-    /// The conversation as the palette must judge it: whether the budget is spent and whether an agent is
-    /// carrying it. Read under <see cref="renderLock"/> by every caller.
-    /// </summary>
+    /// <summary>The conversation as the palette must judge it: whether the budget is spent and whether an agent is carrying it.</summary>
+    // Read under renderLock by every caller.
     private TerminalConversationState ConversationState() =>
         new(conversationDead, agentCarryingConversation is not null);
 
     /// <inheritdoc />
     public TerminalSessionStatus Status
     {
+        // Read under the lock by whatever command asks.
         get
         {
             // The status is read in one moment so /status never disagrees with the header
@@ -1072,6 +1104,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <inheritdoc />
     public IReadOnlyList<CommandDescriptor> AvailableCommands
     {
+        // Read under the lock by whatever command asks.
         get
         {
             // The palette is judged in one moment with the header
@@ -1080,22 +1113,23 @@ public sealed class TerminalUiService : ITerminalUi
         }
     }
 
-    /// <summary>Opens a turn on the wire, from which the silence deadline is measured. Must be called under <see cref="renderLock"/>.</summary>
+    /// <summary>Opens a turn on the wire, from which the silence deadline is measured.</summary>
+    // Must be called under renderLock.
     private void BeginTurn()
     {
+        // Keystrokes are held until Morgana answers.
         awaitingResponse = true;
 
         // The conversation has moved on, so what the last command came to is no longer news
         promptNotice = null;
     }
 
-    /// <summary>
-    /// Gives the prompt back at the end of a turn, however it ended. A bar a command left standing belongs to
-    /// work that is over, so it goes with the turn rather than sitting where the caret is drawn.
-    /// Must be called under <see cref="renderLock"/>.
-    /// </summary>
+    /// <summary>Gives the prompt back at the end of a turn, however it ended.</summary>
+    // A bar a command left standing belongs to work that is over, so it goes with the turn rather than sitting where the
+    // caret is drawn. Must be called under renderLock.
     private void ReleaseTurn()
     {
+        // The prompt takes keystrokes again and no bar is left standing.
         awaitingResponse = false;
         commandProgress.Clear();
     }
@@ -1103,6 +1137,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Writes a notice into the transcript in <paramref name="color"/> and brings the view back to it.</summary>
     private void ShowSystemNotice(LiveDisplayContext ctx, string text, string color)
     {
+        // The transcript is shared with the render path.
         lock (renderLock)
         {
             // A command still finishing after the user left must not draw over the shell the display gave back
@@ -1131,6 +1166,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <inheritdoc />
     public void ShowProgress(CommandProgress frame)
     {
+        // A command reports from its own task, so the frame is taken under the lock.
         lock (renderLock)
         {
             // The frame replaces the one before it
@@ -1142,6 +1178,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <inheritdoc />
     public void ShowCommandOutcome(string text, bool isFailure = false)
     {
+        // A command reports from its own task, so the panel is opened under the lock.
         lock (renderLock)
         {
             // A command run here reports its own outcome: nothing is left owed to it from Morgana
@@ -1160,6 +1197,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <inheritdoc />
     public void ShowPanel(Func<int, IReadOnlyList<Markup>> layOut)
     {
+        // A command opens the panel from its own task, so it is opened under the lock.
         lock (renderLock)
         {
             // A command run here reports its own outcome: nothing is left owed to it from Morgana
@@ -1178,6 +1216,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Closes the open panel on Esc or Enter and swallows every other key; false when no panel is open.</summary>
     private bool TryHandlePanelKey(LiveDisplayContext ctx, ConsoleKey key)
     {
+        // The panel is shared with the render path.
         lock (renderLock)
         {
             // With no panel open the key is not for it
@@ -1227,9 +1266,11 @@ public sealed class TerminalUiService : ITerminalUi
         }
     }
 
-    /// <summary>Latches the conversation as spent: the prompt takes only the ways out of it. Must be called under <see cref="renderLock"/>.</summary>
+    /// <summary>Latches the conversation as spent: the prompt takes only the ways out of it.</summary>
+    // Must be called under renderLock.
     private void MarkConversationSpent()
     {
+        // Latched until another conversation replaces this one.
         conversationDead = true;
 
         // A half-typed line is doomed since Morgana would refuse it; options already on offer lead nowhere
@@ -1263,10 +1304,8 @@ public sealed class TerminalUiService : ITerminalUi
         }
     }
 
-    /// <summary>
-    /// Opens the panel reporting what one of Morgana's commands came to: its name as the title, the outcome under it in
-    /// <paramref name="color"/>. An outcome landing after the deadline's replaces the deadline's. Must be called under <see cref="renderLock"/>.
-    /// </summary>
+    /// <summary>Opens the panel reporting what one of Morgana's commands came to: its name as the title, the outcome under it in <paramref name="color"/>.</summary>
+    // An outcome landing after the deadline's replaces the deadline's. Must be called under renderLock.
     private void ShowOutcomePanel(string commandName, string text, string color)
     {
         // Morgana's outcome arrives over the unauthenticated callback, so it is drawn only once it is plain text
@@ -1279,6 +1318,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Echoes <paramref name="echo"/> as the user's line, then sends the turn through <paramref name="dispatch"/> under the reply deadline.</summary>
     private async Task SubmitTurnAsync(LiveDisplayContext ctx, string echo, Func<Task> dispatch)
     {
+        // The transcript and the prompt are shared with the render path.
         lock (renderLock)
         {
             // A turn sent while quick replies are pending answers them: they do not come back after the reply
@@ -1293,6 +1333,7 @@ public sealed class TerminalUiService : ITerminalUi
             Repaint(ctx);
         }
 
+        // The send runs outside the lock, so the screen stays live while Morgana takes the turn.
         try
         {
             // The turn is on its way to Morgana
@@ -1324,6 +1365,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <inheritdoc />
     public async Task ReplaceConversationAsync(Func<CancellationToken, Task<string>> openConversation, CancellationToken cancellationToken)
     {
+        // Only a running display can swap the conversation it shows.
         LiveDisplayContext ctx = LiveDisplay;
 
         // The new conversation's presentation may land before its id is known here: it waits in the queue
@@ -1384,7 +1426,8 @@ public sealed class TerminalUiService : ITerminalUi
         }
     }
 
-    /// <summary>Clears everything the previous conversation left on screen and names <paramref name="openedConversationId"/> in the header. Must be called under <see cref="renderLock"/>.</summary>
+    /// <summary>Clears everything the previous conversation left on screen and names <paramref name="openedConversationId"/> in the header.</summary>
+    // Must be called under renderLock.
     private void ResetScreenForConversation(string openedConversationId)
     {
         // Nothing of the old turn may fire later: no deadline notice, no tick on a cleared pane. A reply still
@@ -1418,19 +1461,19 @@ public sealed class TerminalUiService : ITerminalUi
         cursorPosition = 0;
     }
 
-    /// <summary>
-    /// Gives the turn in flight the silence that Morgana allows before the user gets the prompt back with an honest
-    /// notice. Every sign of life arms it again from zero, so only a turn Morgana has abandoned expires.
-    /// Must be called under <see cref="renderLock"/>.
-    /// </summary>
+    /// <summary>Gives the turn in flight the silence that Morgana allows before the user gets the prompt back with an honest notice.</summary>
+    // Every sign of life arms it again from zero, so only a turn Morgana has abandoned expires. Must be called under
+    // renderLock.
     private void StartReplyWatchdog(LiveDisplayContext ctx)
     {
+        // A deadline already armed is replaced, since every sign of life starts the count over.
         CancelReplyWatchdog();
 
         // Morgana states the wait on her first message and on resume, so a turn is never sent before it is known
         if (replyTimeout is not { } silenceAllowed)
             return;
 
+        // The deadline dies with the host and is remembered as the one armed now.
         CancellationTokenSource watchdog = CancellationTokenSource.CreateLinkedTokenSource(uiStopping);
         replyWatchdog = watchdog;
 
@@ -1488,17 +1531,21 @@ public sealed class TerminalUiService : ITerminalUi
         }, CancellationToken.None);
     }
 
-    /// <summary>Calls off the deadline on the turn in flight, leaving none armed. A deadline that already expired retired itself. Must be called under <see cref="renderLock"/>.</summary>
+    /// <summary>Calls off the deadline on the turn in flight, leaving none armed.</summary>
+    // A deadline that already expired retired itself. Must be called under renderLock.
     private void CancelReplyWatchdog()
     {
+        // The armed deadline is called off and released.
         replyWatchdog?.Cancel();
         replyWatchdog?.Dispose();
         replyWatchdog = null;
     }
 
-    /// <summary>Maps a key to a scroll direction: Up and PageUp move towards older content, Down and PageDown back to the present. Left and Right stay with the caret.</summary>
+    /// <summary>Maps a key to a scroll direction: Up and PageUp move towards older content, Down and PageDown back to the present.</summary>
+    // Left and Right stay with the caret.
     private static bool TryScrollDelta(ConsoleKey key, out int delta)
     {
+        // Any key not listed scrolls nothing.
         switch (key)
         {
             // Towards older content
@@ -1521,6 +1568,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Advances the scrollback by <paramref name="delta"/> rows and repaints; the upper bound is clamped against the live content in <see cref="BuildBody"/>.</summary>
     private void ApplyScroll(LiveDisplayContext ctx, int delta)
     {
+        // The offset is shared with the render path.
         lock (renderLock)
         {
             // The floor is the live bottom
@@ -1529,12 +1577,11 @@ public sealed class TerminalUiService : ITerminalUi
         }
     }
 
-    /// <summary>
-    /// Repaints the screen unless further keystrokes are already queued, so a pasted line costs one frame
-    /// instead of one per character. Must be called under <see cref="renderLock"/>.
-    /// </summary>
+    /// <summary>Repaints the screen unless further keystrokes are already queued, so a pasted line costs one frame instead of one per character.</summary>
+    // Must be called under renderLock.
     private void RefreshWhenInputSettles(LiveDisplayContext ctx)
     {
+        // A terminal gone mid-paste no longer answers, so the frame is drawn anyway.
         try
         {
             // Keys already waiting mean the frame would be stale at once
@@ -1553,6 +1600,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// <summary>Builds the two-row Spectre layout: a fixed 3-row header over a flexible body.</summary>
     private Layout BuildLayout()
     {
+        // The header keeps its three rows and the body takes the rest.
         Layout root = new Layout("root")
             .SplitRows(
                 new Layout("header").Size(3),
@@ -1615,13 +1663,11 @@ public sealed class TerminalUiService : ITerminalUi
         };
     }
 
-    /// <summary>
-    /// Builds the body as a flat stream of single-row renderables: the tail of the transcript and of the streaming
-    /// pane on top, the prompt and the palette pinned at the bottom.
-    /// </summary>
+    /// <summary>Builds the body as a flat stream of single-row renderables: the tail of the transcript and of the streaming pane on top, the prompt and the palette pinned at the bottom.</summary>
     /// <remarks>Every row is exactly one terminal row, so the window can be cut by counting; an input taller than the body loses its oldest typed rows, since the caret row is the floor of the prompt.</remarks>
     private IRenderable BuildBody()
     {
+        // The body is what the terminal leaves under the three rows of the header panel.
         TerminalViewport viewport = ReadViewport();
         int bodyHeight = Math.Max(0, viewport.Height - 3 /* header panel */);
 
@@ -1690,12 +1736,10 @@ public sealed class TerminalUiService : ITerminalUi
         return new Rows(rows);
     }
 
-    /// <summary>
-    /// Current terminal size, falling back to the last one seen when the terminal no longer answers: a window
-    /// closed mid-frame must not break the repaint in progress, since the process leaves through SIGHUP moments later.
-    /// </summary>
+    /// <summary>Current terminal size, falling back to the last one seen when the terminal no longer answers: a window closed mid-frame must not break the repaint in progress, since the process leaves through SIGHUP moments later.</summary>
     private TerminalViewport ReadViewport()
     {
+        // A terminal that no longer answers throws here.
         try
         {
             // The size is remembered for when the terminal stops answering
@@ -1727,12 +1771,10 @@ public sealed class TerminalUiService : ITerminalUi
             historyRows.AddRange(messageRenderer.RenderMessage(history[historyRowsMessageCount], termWidth));
     }
 
-    /// <summary>
-    /// Builds the prompt area as single-row renderables. The surfaces are tried in precedence: a confirmation
-    /// question, a command's progress, the running hint, a spent conversation, the quick replies, the thinking hint
-    /// and finally the free-text prompt.
-    /// </summary>
-    /// <remarks>Rows are packed to the width here, so Spectre never wraps one behind the budget the transcript is cut against.</remarks>
+    /// <summary>Builds the prompt area as single-row renderables.</summary>
+    // The surfaces are tried in precedence: a confirmation question, a command's progress, the running hint, a spent
+    // conversation, the quick replies, the thinking hint and finally the free-text prompt. Rows are packed to the width
+    // here, so Spectre never wraps one behind the budget the transcript is cut against.
     private List<IRenderable> BuildInputRows(int termWidth)
     {
         // A command waiting on an answer takes the prompt over entirely: until it is answered there is nothing
@@ -1782,11 +1824,9 @@ public sealed class TerminalUiService : ITerminalUi
         return FramePromptRows([.. outcomeRows, .. optionPromptRows, .. BuildPromptLineRows(termWidth)], termWidth);
     }
 
-    /// <summary>
-    /// Draws the free-text line: the chevron, the typed runes and the caret, packed into rows of at most
-    /// <paramref name="termWidth"/> cells. A wide rune counts as two cells so the caret stays put and no row wraps
-    /// silently; a surrogate pair is never split across rows.
-    /// </summary>
+    /// <summary>Draws the free-text line: the chevron, the typed runes and the caret, packed into rows of at most <paramref name="termWidth"/> cells.</summary>
+    // A wide rune counts as two cells so the caret stays put and no row wraps silently; a surrogate pair is never split
+    // across rows.
     private List<IRenderable> BuildPromptLineRows(int termWidth)
     {
         // Each unit is one glyph with the cells it occupies; the chevron and its space come first
@@ -1847,7 +1887,8 @@ public sealed class TerminalUiService : ITerminalUi
         return rows;
     }
 
-    /// <summary>Sandwiches the rows where the user acts between two full-width rules, so that surface is not marked only by the caret or the highlight. The thinking hint and the spent notice are status and go unframed.</summary>
+    /// <summary>Sandwiches the rows where the user acts between two full-width rules, so that surface is not marked only by the caret or the highlight.</summary>
+    // The thinking hint and the spent notice are status and go unframed.
     private static List<IRenderable> FramePromptRows(List<IRenderable> rows, int termWidth)
     {
         // Nothing to frame: bordering emptiness would steal two rows from the transcript for no gain
@@ -1873,18 +1914,18 @@ public sealed class TerminalUiService : ITerminalUi
         return rows;
     }
 
-    /// <summary>UTF-16 length (1 or 2 for a surrogate pair) of the rune ending just before <paramref name="position"/> in <see cref="currentInput"/>; keeps the caret on a rune boundary going left. The caller guarantees <paramref name="position"/> is above 0.</summary>
+    /// <summary>UTF-16 length (1 or 2 for a surrogate pair) of the rune ending just before <paramref name="position"/> in <see cref="currentInput"/>; keeps the caret on a rune boundary going left.</summary>
+    // The caller guarantees position is above 0.
     private int RuneLengthBefore(int position) =>
         position >= 2 && char.IsLowSurrogate(currentInput[position - 1]) && char.IsHighSurrogate(currentInput[position - 2]) ? 2 : 1;
 
-    /// <summary>UTF-16 length (1 or 2 for a surrogate pair) of the rune starting at <paramref name="position"/> in <see cref="currentInput"/>; keeps the caret on a rune boundary going right. The caller guarantees <paramref name="position"/> is below the length.</summary>
+    /// <summary>UTF-16 length (1 or 2 for a surrogate pair) of the rune starting at <paramref name="position"/> in <see cref="currentInput"/>; keeps the caret on a rune boundary going right.</summary>
+    // The caller guarantees position is below the length.
     private int RuneLengthAt(int position) =>
         position + 1 < currentInput.Length && char.IsHighSurrogate(currentInput[position]) && char.IsLowSurrogate(currentInput[position + 1]) ? 2 : 1;
 
-    /// <summary>
-    /// The colour of an inbound message's rows: error notices red, advisory warnings orange and anything else
-    /// the speaker's own. What a command reports never reaches the transcript.
-    /// </summary>
+    /// <summary>The colour of an inbound message's rows: error notices red, advisory warnings orange and anything else the speaker's own.</summary>
+    // What a command reports never reaches the transcript.
     private string RowColor(ChannelMessage message, string speaker)
     {
         // An error notice such as an exhausted budget or a failed delivery

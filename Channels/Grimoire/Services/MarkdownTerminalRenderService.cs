@@ -8,11 +8,9 @@ using Morgana.Terminal.Services;
 
 namespace Grimoire.Services;
 
-/// <summary>
-/// Renders markdown to terminal rows, one markup per row. Markdig parses the source into a tree, <c>Render</c> walks it
-/// into logical lines of styled spans and <c>Wrap</c> breaks them at the terminal width by cell. Block widgets
-/// such as panels and tables are left to the rich card renderer.
-/// </summary>
+/// <summary>Renders markdown to terminal rows, one markup per row.</summary>
+// Markdig parses the source into a tree, Render walks it into logical lines of styled spans and Wrap breaks them at the
+// terminal width by cell. Block widgets such as panels and tables are left to the rich card renderer.
 public sealed class MarkdownTerminalRenderService
 {
     /// <summary>The default Markdig pipeline, the same configuration Cauldron's renderer uses.</summary>
@@ -33,9 +31,10 @@ public sealed class MarkdownTerminalRenderService
     /// <summary>Wraps by terminal cell, so a wide glyph is never split nor measured as one column.</summary>
     private readonly TerminalCellService cells;
 
-    /// <summary>Captures the cell measurement the rows are wrapped against.</summary>
+    /// <summary>Builds the renderer on the cell measurement that the rows are wrapped against.</summary>
     public MarkdownTerminalRenderService(TerminalCellService cells)
     {
+        // Every row is measured with the UI's own cells.
         this.cells = cells;
     }
 
@@ -45,18 +44,16 @@ public sealed class MarkdownTerminalRenderService
     /// <param name="Decorations">The style tokens added after the colour (<c>bold</c>, <c>italic</c>, <c>underline</c>, a background) or an empty string.</param>
     internal readonly record struct StyledSpan(string Text, string Foreground, string Decorations);
 
-    /// <summary>One logical line, which wraps into one or more rows, or a horizontal rule across the whole row.</summary>
+    /// <summary>One logical line that wraps into one or more rows; a horizontal rule across the whole row when it is a rule.</summary>
     /// <param name="Spans">The styled runs of the line, in order.</param>
     /// <param name="IsRule">True for a rule, which has no spans.</param>
     internal sealed record RenderedLine(List<StyledSpan> Spans, bool IsRule);
 
-    /// <summary>
-    /// Renders <paramref name="markdown"/> in the speaker's <paramref name="baseColor"/> to rows of at most <paramref name="width"/> cells,
-    /// with a bold <paramref name="speakerPrefix"/> on the first row unless it is null. A <paramref name="speakerMarkerColor"/> puts a dot
-    /// in that colour ahead of the prefix, drawn only: it is no part of the message.
-    /// </summary>
+    /// <summary>Renders <paramref name="markdown"/> in the speaker's <paramref name="baseColor"/> to rows of at most <paramref name="width"/> cells, with a bold <paramref name="speakerPrefix"/> on the first row unless it is null.</summary>
+    // A speakerMarkerColor puts a dot in that colour ahead of the prefix, drawn only: it is no part of the message.
     public List<Markup> RenderToRows(string markdown, string baseColor, string? speakerPrefix, int width, string? speakerMarkerColor = null)
     {
+        // The markdown as logical lines in the speaker's colour.
         List<RenderedLine> lines = Render(markdown, baseColor);
 
         // A streamed partial reply has no prefix: the speaker is named once the reply is committed
@@ -74,18 +71,20 @@ public sealed class MarkdownTerminalRenderService
         // model that emits GitHub-style shortcodes would otherwise leave them literal. The variation selectors
         // are stripped afterwards so Wrap measures what the terminal draws for an emoji-presentation sequence
         MarkdownDocument document = Markdown.Parse(cells.StripVariationSelectors(Emoji.Replace(markdown ?? string.Empty)), Pipeline);
+
+        // The tree is walked block by block into logical lines.
         List<RenderedLine> lines = RenderBlocks(document, baseColor);
 
         // An empty document still owes one line, so the speaker prefix has somewhere to land and the row does not vanish
         if (lines.Count == 0)
             lines.Add(new RenderedLine([], false));
+
+        // The document as logical lines.
         return lines;
     }
 
-    /// <summary>
-    /// Prepends a bold speaker tag, behind a dot in <paramref name="markerColor"/> when given, to the first
-    /// renderable (non-rule) line. A message with none gets a new leading line to carry it.
-    /// </summary>
+    /// <summary>Prepends a bold speaker tag, behind a dot in <paramref name="markerColor"/> when given, to the first renderable (non-rule) line.</summary>
+    // A message with none gets a new leading line to carry it.
     internal static void PrependSpeaker(List<RenderedLine> lines, string speakerPrefix, string baseColor, string? markerColor = null)
     {
         // The prefix is the speaker's name in bold, cleaned like any text from the network
@@ -113,8 +112,11 @@ public sealed class MarkdownTerminalRenderService
     /// <summary>Renders the blocks of a container one after the other, one blank line between consecutive top-level blocks and none leading or trailing.</summary>
     private static List<RenderedLine> RenderBlocks(IEnumerable<Block> blocks, string baseColor)
     {
+        // The lines rendered so far and whether a block has contributed any yet.
         List<RenderedLine> output = [];
         bool isFirstBlock = true;
+
+        // Each block renders on its own and joins the ones before it.
         foreach (Block block in blocks)
         {
             // The block renders to the logical lines it stands for
@@ -169,7 +171,7 @@ public sealed class MarkdownTerminalRenderService
         // The lines of every item, in order
         List<RenderedLine> output = [];
 
-        // An ordered list counts from the number it declares, or from 1 when it declares none
+        // An ordered list counts from the number it declares; one that declares none counts from 1
         int ordinal = list.IsOrdered && int.TryParse(list.OrderedStart, NumberStyles.Integer, CultureInfo.InvariantCulture, out int start) ? start : 1;
 
         // Each item of the list is a block of its own
@@ -212,12 +214,15 @@ public sealed class MarkdownTerminalRenderService
     /// <summary>Renders a quote: its blocks with a dim bar before every row that is not a rule.</summary>
     private static List<RenderedLine> RenderQuote(QuoteBlock quote, string baseColor)
     {
+        // The quoted blocks render like any others before the bar is put in front of them.
         List<RenderedLine> quotedLines = RenderBlocks(quote, baseColor);
         foreach (RenderedLine line in quotedLines)
         {
             // A rule is drawn across the row and takes no bar
             if (line.IsRule)
                 continue;
+
+            // Every other line opens with the dim bar
             line.Spans.Insert(0, new StyledSpan("│ ", ChromeForeground, ""));
         }
 
@@ -228,11 +233,14 @@ public sealed class MarkdownTerminalRenderService
     /// <summary>Renders a code block: one logical line per source line, in the code colours.</summary>
     private static List<RenderedLine> RenderCodeBlock(CodeBlock code)
     {
+        // Each source line becomes a logical line of its own, never wrapped into its neighbour.
         List<RenderedLine> output = [];
         for (int index = 0; index < code.Lines.Count; index++)
         {
             // Code comes from the network like any text, so control characters are stripped
             string text = TerminalCellService.StripControlCharacters(code.Lines.Lines[index].Slice.ToString());
+
+            // The line keeps the code colours whatever the speaker
             output.Add(new RenderedLine([new StyledSpan(text, CodeBlockForeground, CodeBackground)], false));
         }
 
@@ -242,12 +250,11 @@ public sealed class MarkdownTerminalRenderService
 
     // ---- inline walking ---------------------------------------------------------------
 
-    /// <summary>
-    /// Renders an inline container into logical lines: hard line breaks split lines and soft breaks become spaces.
-    /// <paramref name="decorations"/> is the style inherited from the enclosing emphasis.
-    /// </summary>
+    /// <summary>Renders an inline container into logical lines: hard line breaks split lines and soft breaks become spaces.</summary>
+    // decorations is the style inherited from the enclosing emphasis.
     private static List<RenderedLine> RenderInlines(ContainerInline? container, string baseColor, string decorations)
     {
+        // The lines closed by hard breaks and the spans of the line still open.
         List<RenderedLine> lines = [];
         List<StyledSpan> currentSpans = [];
 
@@ -257,6 +264,8 @@ public sealed class MarkdownTerminalRenderService
 
         // The spans after the last hard break are the last line
         lines.Add(new RenderedLine(currentSpans, false));
+
+        // The container as logical lines.
         return lines;
     }
 
@@ -277,11 +286,11 @@ public sealed class MarkdownTerminalRenderService
 
                 // One delimiter is italic, two are bold and three are both, added to whatever style is in effect so nesting composes
                 case EmphasisInline emphasis:
-                    bool bold = emphasis.DelimiterCount >= 2;
-                    bool italic = emphasis.DelimiterCount % 2 == 1;
+                    bool isBold = emphasis.DelimiterCount >= 2;
+                    bool isItalic = emphasis.DelimiterCount % 2 == 1;
                     string nestedDecorations = decorations;
-                    if (bold) nestedDecorations = Combine(nestedDecorations, "bold");
-                    if (italic) nestedDecorations = Combine(nestedDecorations, "italic");
+                    if (isBold) nestedDecorations = Combine(nestedDecorations, "bold");
+                    if (isItalic) nestedDecorations = Combine(nestedDecorations, "italic");
                     WalkInlines(emphasis, baseColor, nestedDecorations, lines, ref currentSpans);
                     break;
 
@@ -340,6 +349,8 @@ public sealed class MarkdownTerminalRenderService
             // An image without alt text is called image
             string altText = label.Length > 0 ? label : "image";
             Append(currentSpans, $"[image: {altText}]", ChromeForeground, decorations);
+
+            // The source follows when the image has one
             if (!string.IsNullOrEmpty(link.Url))
                 Append(currentSpans, $" ({link.Url})", ChromeForeground, "");
             return;
@@ -356,10 +367,13 @@ public sealed class MarkdownTerminalRenderService
     /// <summary>Flattens a link's child inlines to their plain text, to decide whether the address repeats the label.</summary>
     private static string LinkLabel(LinkInline link)
     {
+        // Only the literal text counts, emphasis marks being no part of what the label says.
         StringBuilder label = new();
         foreach (Inline child in link)
             if (child is LiteralInline literal)
                 label.Append(literal.Content.ToString());
+
+        // The label as plain text.
         return label.ToString();
     }
 
@@ -368,6 +382,8 @@ public sealed class MarkdownTerminalRenderService
     {
         // Text from the network is cleaned before it can reach the terminal
         text = TerminalCellService.StripControlCharacters(text);
+
+        // An empty span would only add an empty pair of tags to the row
         if (text.Length > 0)
             spans.Add(new StyledSpan(text, foreground, decorations));
     }
@@ -383,6 +399,8 @@ public sealed class MarkdownTerminalRenderService
     {
         // A terminal reporting no width still gets one cell per row
         width = Math.Max(1, width);
+
+        // The rows built so far, top to bottom
         List<Markup> rows = [];
 
         // Each logical line becomes one or more rows
@@ -424,7 +442,7 @@ public sealed class MarkdownTerminalRenderService
                     int runeCells = cells.RuneCells(rune);
 
                     // The row closes before a rune that would overflow it, but never while empty, so a rune wider than the whole
-                    // terminal still lands somewhere instead of looping forever. The pending slice is flushed first so its style tag closes before the row does
+                    // terminal still lands somewhere instead of looping forever
                     if (rowCells + sliceCells + runeCells > width && rowCells + sliceCells > 0)
                     {
                         // The slice pending is written first so its style closes before the row does
@@ -467,6 +485,7 @@ public sealed class MarkdownTerminalRenderService
     /// <summary>Appends one escaped segment to the row, wrapped in the span's colour and decorations.</summary>
     private static void AppendSegment(StringBuilder rowMarkup, StyledSpan span, string slice)
     {
+        // The colour alone or the colour followed by the decorations when there are any.
         string tag = span.Decorations.Length > 0 ? $"{span.Foreground} {span.Decorations}" : span.Foreground;
         rowMarkup.Append('[').Append(tag).Append(']').Append(Markup.Escape(slice)).Append("[/]");
     }

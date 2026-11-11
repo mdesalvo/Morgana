@@ -21,14 +21,14 @@ public sealed class MarkdownMessageRenderService : IMessageRenderer
     /// <summary>Colours the speaker's dot.</summary>
     private readonly TerminalTheme theme;
 
-    /// <summary>Captures the two renderers it composes, the channel's identity and its theme.</summary>
+    /// <summary>Builds the renderer on the two renderers it composes, the channel's identity and its theme.</summary>
     public MarkdownMessageRenderService(
         MarkdownTerminalRenderService markdownRenderer,
         RichCardTerminalRenderService richCardRenderer,
         ChannelProfile profile,
         TerminalTheme theme)
     {
-        // The renderers the message is composed from
+        // The renderers the message is composed from, the profile that tells notices apart and the theme of the dots
         this.markdownRenderer = markdownRenderer;
         this.richCardRenderer = richCardRenderer;
         this.profile = profile;

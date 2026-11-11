@@ -7,7 +7,7 @@ namespace Morgana.Terminal.Messages;
 /// <param name="Text">The text as it arrived; the message renderer cleans it for the terminal.</param>
 /// <param name="Color">The Spectre colour token of the rows, the speaker's own unless the line is a warning or an error.</param>
 /// <param name="MessageType">The wire's <c>MessageType</c> for a delivery, <c>user</c> for the user's own line, <c>system_warning</c> or <c>error</c> for a notice drawn here.</param>
-/// <param name="Card">The rich card delivered with the message; null for user echoes and notices as well as for every message of a channel that declares no rich cards.</param>
+/// <param name="Card">The rich card delivered with the message; null for user echoes, notices and every message of a channel that declares no rich cards.</param>
 public sealed record DisplayedMessage(
     string Who,
     string Text,

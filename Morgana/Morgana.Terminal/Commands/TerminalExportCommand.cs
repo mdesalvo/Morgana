@@ -9,11 +9,8 @@ using Morgana.Terminal.Services;
 
 namespace Morgana.Terminal.Commands;
 
-/// <summary>
-/// <c>/export path:… [format:…]</c>: writes the conversation as Morgana has it on record to a file on the
-/// machine the terminal runs on. The transcript on screen is not the source: what is exported is what
-/// survives, so an export taken here matches one taken after a restart.
-/// </summary>
+/// <summary><c>/export path:… [format:…]</c>: writes the conversation as Morgana has it on record to a file on the machine the terminal runs on.</summary>
+// The transcript on screen is not the source: what is exported is what survives, so an export taken here matches one taken after a restart.
 public sealed class TerminalExportCommand : TerminalCommand
 {
     /// <summary>The steps the command reports: reading the conversation from Morgana, then writing the file.</summary>
@@ -25,9 +22,10 @@ public sealed class TerminalExportCommand : TerminalCommand
     /// <summary>Reads the conversation from Morgana.</summary>
     private readonly MorganaClientService morganaClientService;
 
-    /// <summary>Captures the session and the REST client.</summary>
+    /// <summary>Builds the command on the session and the REST client.</summary>
     public TerminalExportCommand(TerminalSessionService session, MorganaClientService morganaClientService)
     {
+        // The session names the conversation and the client reads it from Morgana.
         this.session = session;
         this.morganaClientService = morganaClientService;
     }
@@ -49,15 +47,15 @@ public sealed class TerminalExportCommand : TerminalCommand
             new CommandOption("format", "text for reading, json for tools", DefaultValue: "text", AllowedValues: ["text", "json"])
         ]);
 
-    /// <summary>
-    /// The file this command writes when nobody names another: on the user's desktop, or in their home when
-    /// the desktop is not a place on this machine. Its name says what it holds rather than when it was
-    /// taken, since a default is decided once and would otherwise carry the hour the channel started.
-    /// </summary>
+    /// <summary>The file this command writes when nobody names another, on the user's desktop or in their home where there is no desktop.</summary>
+    // Its name says what it holds rather than when it was taken, since a default is decided once and would otherwise carry
+    // the hour the channel started.
     private static string DefaultFile()
     {
-        // The desktop is where a person looks for a file they asked for
+        // The desktop is where a person looks for a file they asked for.
         string folder = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+
+        // A machine with no desktop folder gets the file in the user's home.
         if (string.IsNullOrEmpty(folder))
             folder = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
@@ -65,7 +63,7 @@ public sealed class TerminalExportCommand : TerminalCommand
         return Path.Combine(folder, "morgana-conversation.txt");
     }
 
-    /// <summary>A spent conversation is still worth keeping, which is when an export is most likely wanted.</summary>
+    /// <summary>True, because a spent conversation is still worth keeping, which is when an export is most likely wanted.</summary>
     public override bool AvailableWhenSpent => true;
 
     /// <inheritdoc />
@@ -79,6 +77,8 @@ public sealed class TerminalExportCommand : TerminalCommand
 
         // The history comes from Morgana's record, so it holds what was said even before this process started
         IReadOnlyList<MorganaChatMessage> messages = await morganaClientService.GetHistoryAsync(session.ConversationId, cancellationToken);
+
+        // Nothing on record yet, so nothing is written.
         if (messages.Count == 0)
         {
             // Writing an empty file over an existing export would lose the earlier one for nothing
@@ -105,6 +105,8 @@ public sealed class TerminalExportCommand : TerminalCommand
             // The folder of the file is created when it does not exist yet
             if (Path.GetDirectoryName(path) is { Length: > 0 } directory)
                 Directory.CreateDirectory(directory);
+
+            // The transcript replaces whatever file stood at that path.
             await File.WriteAllTextAsync(path, content, cancellationToken);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
@@ -133,6 +135,8 @@ public sealed class TerminalExportCommand : TerminalCommand
     {
         // The transcript is built line by line
         StringBuilder transcript = new();
+
+        // A header names the conversation and when it was exported.
         transcript.AppendLine(CultureInfo.InvariantCulture, $"# Conversation {messages[0].ConversationId}");
         transcript.AppendLine(CultureInfo.InvariantCulture, $"# Exported {DateTime.Now:yyyy-MM-dd HH:mm}");
         transcript.AppendLine();
@@ -148,6 +152,8 @@ public sealed class TerminalExportCommand : TerminalCommand
             // conversation reads as the user answering a question nobody asked
             if (message.QuickReplies is { Count: > 0 } quickReplies)
                 transcript.AppendLine(CultureInfo.InvariantCulture, $"    ({string.Join(" | ", quickReplies.Select(reply => reply.Label))})");
+
+            // A blank line closes the block.
             transcript.AppendLine();
         }
 
@@ -155,12 +161,10 @@ public sealed class TerminalExportCommand : TerminalCommand
         return transcript.ToString();
     }
 
-    /// <summary>
-    /// What is wrong with <paramref name="typedPath"/> as a file to write on this machine, as a line the user can
-    /// read; null when nothing is, in which case <paramref name="path"/> holds it as the file system spells it.
-    /// </summary>
+    /// <summary>What is wrong with <paramref name="typedPath"/> as a file to write on this machine; null when nothing is and <paramref name="path"/> holds it as the file system spells it.</summary>
     private static string? DescribePathProblem(string typedPath, out string path)
     {
+        // No path is handed back until the typed one is proven writable.
         path = string.Empty;
 
         // A leading ~ is the user's own way of naming their home, which no file API resolves for them. Both
@@ -175,8 +179,7 @@ public sealed class TerminalExportCommand : TerminalCommand
 
         try
         {
-            // The terminal's working directory is not where the user is looking, so a relative path is
-            // anchored to it here — which is also where a malformed one is caught
+            // A relative path is anchored to the terminal's working directory here, which is also where a malformed one is caught
             path = Path.GetFullPath(candidatePath);
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)

@@ -4,14 +4,12 @@ using Spectre.Console;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>
-/// Drives a TTY channel process from its first conversation to its exit: opens the conversation with
-/// Morgana, waits for the presentation, hands the terminal to the live UI and ends whichever conversation
-/// is on screen when the UI returns, since <c>/new</c> may have replaced the first one meanwhile.
-/// </summary>
+/// <summary>Drives a TTY channel process from its first conversation to its exit.</summary>
+// It opens the conversation with Morgana, waits for the presentation, hands the terminal to the live UI and ends whichever
+// conversation is on screen when the UI returns, since /new may have replaced the first one meanwhile.
 public sealed class ConversationLifecycleService
 {
-    /// <summary>Fallback for the channel's <c>StartupTimeoutSeconds</c> when absent or non-positive.</summary>
+    /// <summary>The fallback for the channel's <c>StartupTimeoutSeconds</c> when it is absent or not positive.</summary>
     private const int DefaultStartupTimeoutSeconds = 30;
 
     /// <summary>Ends the conversation on Morgana's REST endpoints.</summary>
@@ -35,14 +33,10 @@ public sealed class ConversationLifecycleService
     /// <summary>Supplies the line shown while the handshake is under way.</summary>
     private readonly LandingMessageService landingMessageService;
 
-    /// <summary>
-    /// How long to wait for Morgana's presentation before entering the UI anyway. Raising it helps on
-    /// providers with cold starts; a non-positive value falls back to the default, since a zero wait
-    /// would show an empty conversation every time.
-    /// </summary>
+    /// <summary>How long to wait for Morgana's presentation before entering the UI anyway, longer on providers with cold starts.</summary>
     private readonly TimeSpan startupTimeout;
 
-    /// <summary>Captures the collaborators and reads the startup timeout from configuration.</summary>
+    /// <summary>Builds the lifecycle on its collaborators and reads the startup timeout from configuration.</summary>
     public ConversationLifecycleService(
         MorganaClientService morganaClientService,
         TerminalSessionService session,
@@ -63,16 +57,14 @@ public sealed class ConversationLifecycleService
         this.terminalUi = terminalUi;
         this.landingMessageService = landingMessageService;
 
-        // The wait for the presentation is the channel's own setting
+        // The wait for the presentation is the channel's own setting; one that is not positive falls back to the default,
+        // since a zero wait would show an empty conversation every time
         int startupTimeoutSeconds = configuration.GetValue<int?>(profile.SectionKey("StartupTimeoutSeconds")) ?? DefaultStartupTimeoutSeconds;
         startupTimeout = TimeSpan.FromSeconds(startupTimeoutSeconds > 0 ? startupTimeoutSeconds : DefaultStartupTimeoutSeconds);
     }
 
-    /// <summary>
-    /// Runs the conversation from handshake to end. Returns when the user quits or <paramref name="stopping"/>
-    /// fires; at once when the conversation could not be opened.
-    /// Requires the webhook listener to be already accepting Morgana's deliveries.
-    /// </summary>
+    /// <summary>Runs the conversation from handshake to end, returning when the user quits, <paramref name="stopping"/> fires or the conversation cannot be opened.</summary>
+    // The webhook listener must already be accepting Morgana's deliveries.
     public async Task RunAsync(CancellationToken stopping)
     {
         // Something alive on screen while the handshake and the presentation are on their way
@@ -89,6 +81,8 @@ public sealed class ConversationLifecycleService
         {
             // Morgana's commands join the palette whenever the catalogue answers: a slow one must not hold the UI back
             _ = commandRegistry.LoadMorganaCatalogAsync(stopping);
+
+            // The handover waits for Morgana's first words, within the startup timeout.
             await WaitForPresentationAsync(presentationArrived);
 
             // The live display takes over a clean terminal, otherwise the landing line would stay orphaned above it
@@ -105,13 +99,12 @@ public sealed class ConversationLifecycleService
         }
     }
 
-    /// <summary>
-    /// Sends every delivery from Morgana to the UI queue. The returned task completes on the first
-    /// message, which gates the handover: entering the live display as soon as the handshake returns
-    /// would show an empty panel while the presentation is still in flight.
-    /// </summary>
+    /// <summary>Sends every delivery from Morgana to the UI queue, returning a task that completes on the first one.</summary>
+    // The first message gates the handover: entering the live display as soon as the handshake returns would show an empty
+    // panel while the presentation is still in flight.
     private Task RouteWebhookToUi()
     {
+        // Completed by the first delivery, whichever thread of Kestrel's brings it.
         TaskCompletionSource firstMessageArrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
         webhookReceiverService.OnMessage = message =>
         {
@@ -122,16 +115,17 @@ public sealed class ConversationLifecycleService
 
         // A channel that renders no chunks leaves the sink unset: the receiver then turns them away
         webhookReceiverService.OnChunk = terminalUi.ChunkSink;
+
+        // The gate of the handover.
         return firstMessageArrived.Task;
     }
 
-    /// <summary>
-    /// Opens the first conversation, returning whether it could be. A Morgana not up yet
-    /// or being redeployed is waited for at the retry policy's pace until the user quits; only a refusal
-    /// that would repeat forever, such as a rejected key, is reported at once.
-    /// </summary>
+    /// <summary>Opens the first conversation, returning whether it could be.</summary>
+    // A Morgana not up yet or being redeployed is waited for at the retry policy's pace until the user quits; only a refusal
+    // that would repeat forever, such as a rejected key, is reported at once.
     private async Task<bool> OpenConversationAsync(CancellationToken stopping)
     {
+        // Attempts go on until one succeeds, the user quits or Morgana refuses for good.
         for (int failedAttempts = 0; ; failedAttempts++)
         {
             try
@@ -170,10 +164,8 @@ public sealed class ConversationLifecycleService
         }
     }
 
-    /// <summary>
-    /// Waits for the presentation within <see cref="startupTimeout"/>. Past it the UI is entered anyway:
-    /// an empty conversation is a better place to be than a terminal stuck on the landing line.
-    /// </summary>
+    /// <summary>Waits for the presentation within <see cref="startupTimeout"/>, past which the UI is entered anyway.</summary>
+    // An empty conversation is a better place to be than a terminal stuck on the landing line.
     private async Task WaitForPresentationAsync(Task presentationArrived)
     {
         try

@@ -21,7 +21,12 @@ ChannelProfile profile = RuneChannelProfile.Build(builder.Configuration);
 if (!builder.CanStartTerminalChannel(profile))
     return;
 
+// The shared registration wires every service, drawing messages as plain text
 builder.AddTerminalChannel(profile, RuneTerminalTheme.Instance);
+
+// The webhook is mapped before the channel runs, so Morgana's first delivery has somewhere to land
 WebApplication app = builder.Build();
 app.MapMorganaHooks();
+
+// The channel runs until the user leaves or the host stops
 await app.RunTerminalChannelAsync();

@@ -7,11 +7,8 @@ using Morgana.Terminal.Interfaces;
 // ==============================================================================
 // GRIMOIRE - WEBHOOK CHANNEL FOR MORGANA
 // ==============================================================================
-// Grimoire is the rich-TTY reference channel for Morgana: a "textual Cauldron" that consumes Morgana's full
-// expressive surface (rich cards, quick replies, streaming, markdown, no message-length cap) inside a
-// Spectre.Console terminal UI. Where Cauldron renders the full profile in HTML, Grimoire renders it as ANSI
-// primitives: content arrives integral, never degraded; it is Spectrized locally rather than rewritten by
-// MorganaChannelAdapter.
+// Grimoire is the rich-TTY reference channel, a textual Cauldron: Morgana's full expressive surface reaches a Spectre.Console
+// terminal whole, never degraded by MorganaChannelAdapter, and is drawn here as ANSI primitives where Cauldron draws HTML.
 //
 // Architecture: a Kestrel-hosted HTTPS listener on port 5004 receives inbound ChannelMessage payloads at
 // POST /morgana-hook (and incremental stream chunks at POST /morgana-hook/chunk) and drives a Spectre.Console
@@ -34,6 +31,10 @@ builder.Services.AddSingleton<IMessageRenderer, MarkdownMessageRenderService>();
 
 // The shared registration wires the services and keeps the markdown renderer registered above
 builder.AddTerminalChannel(profile, GrimoireTerminalTheme.Instance);
+
+// The webhook is mapped before the channel runs, so Morgana's first delivery has somewhere to land
 WebApplication app = builder.Build();
 app.MapMorganaHooks();
+
+// The channel runs until the user leaves or the host stops
 await app.RunTerminalChannelAsync();

@@ -7,64 +7,59 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Morgana.Terminal.Handlers;
 
-/// <summary>
-/// HTTP message handler that self-issues short-lived JWT tokens for authenticating a channel's
-/// REST API calls to the Morgana backend.
-/// </summary>
-/// <remarks>
-/// <para><strong>Token characteristics:</strong></para>
-/// <list type="bullet">
-/// <item>Algorithm: HMAC-SHA256 with shared symmetric key</item>
-/// <item>Issuer: the channel name (must be present in Morgana's <c>Authentication:Issuers[]</c> list
-/// with a matching <c>SymmetricKey</c>; unknown issuers are rejected at the gate)</item>
-/// <item>Subject: <c>&lt;channel&gt;-app</c></item>
-/// <item>Lifetime: 5 minutes, regenerated per request</item>
-/// </list>
-/// </remarks>
+/// <summary>Signs every REST call of the channel to Morgana with a token it issues itself, HMAC-SHA256 with five minutes of life.</summary>
+// The issuer is the channel's name, which Morgana's Authentication:Issuers must list with the same SymmetricKey: an unknown
+// issuer is refused at the gate.
 public class MorganaAuthHandler : DelegatingHandler
 {
-    /// <summary>HMAC-SHA256 signing credentials derived from the configured symmetric key.</summary>
+    /// <summary>The HMAC-SHA256 signing credentials derived from the configured symmetric key.</summary>
     private readonly SigningCredentials credentials;
 
-    /// <summary>JWT <c>iss</c> claim; must match an entry in Morgana's <c>Authentication:Issuers[]</c>.</summary>
+    /// <summary>The token's <c>iss</c> claim, which must match an entry of Morgana's <c>Authentication:Issuers</c>.</summary>
     private readonly string issuer;
 
-    /// <summary>JWT <c>aud</c> claim expected by Morgana's token validation.</summary>
+    /// <summary>The token's <c>aud</c> claim, which Morgana's validation expects.</summary>
     private readonly string audience;
 
     /// <summary>The channel the token speaks for, carried into the subject and name claims.</summary>
     private readonly ChannelProfile profile;
 
-    /// <summary>Reusable token writer; <see cref="JsonWebTokenHandler"/> is thread-safe.</summary>
+    /// <summary>Writes the tokens, shared by every call.</summary>
     private readonly JsonWebTokenHandler tokenHandler = new();
 
-    /// <summary>
-    /// Reads the signing key, issuer and audience from the channel's <c>Authentication</c> configuration section.
-    /// </summary>
-    /// <exception cref="InvalidOperationException">Thrown when the channel's <c>Authentication:SymmetricKey</c> is missing.</exception>
+    /// <summary>Reads the signing key, issuer and audience from the channel's <c>Authentication</c> section.</summary>
+    /// <exception cref="InvalidOperationException">The channel's <c>Authentication:SymmetricKey</c> is missing.</exception>
     public MorganaAuthHandler(IConfiguration configuration, ChannelProfile profile)
     {
+        // The channel's identity goes into the claims of every token.
         this.profile = profile;
-        IConfigurationSection authSection = configuration.GetSection(profile.SectionKey("Authentication"));
-        string symmetricKey = authSection["SymmetricKey"]
+
+        // The key is the one secret the channel shares with Morgana, so a channel without it cannot sign anything.
+        IConfigurationSection authenticationSection = configuration.GetSection(profile.SectionKey("Authentication"));
+        string symmetricKey = authenticationSection["SymmetricKey"]
             ?? throw new InvalidOperationException($"{profile.SectionKey("Authentication")}:SymmetricKey is required for {profile.DisplayName} authentication.");
-        issuer = authSection["Issuer"] ?? profile.ChannelName;
-        audience = authSection["Audience"] ?? "morgana.ai";
+
+        // Issuer and audience default to the channel's name and to Morgana's own audience.
+        issuer = authenticationSection["Issuer"] ?? profile.ChannelName;
+        audience = authenticationSection["Audience"] ?? "morgana.ai";
+
+        // The credentials are derived once and serve every token.
         credentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(symmetricKey)), SecurityAlgorithms.HmacSha256);
     }
 
-    /// <summary>Attaches a freshly-issued Bearer token to the outgoing request before forwarding it down the pipeline.</summary>
+    /// <summary>Attaches a freshly issued bearer token to the outgoing request before forwarding it.</summary>
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        // Every call carries a token issued at that moment, so it can never have expired in flight
+        // Every call carries a token issued at that moment, so it can never have expired in flight.
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken());
         return base.SendAsync(request, cancellationToken);
     }
 
-    /// <summary>Generates a new HMAC-SHA256 signed JWT valid for 5 minutes.</summary>
-    public string GenerateToken()
+    /// <summary>A new token signed with HMAC-SHA256 and valid for five minutes.</summary>
+    private string GenerateToken()
     {
+        // The subject names the channel's application and the name claim the channel as the user sees it.
         SecurityTokenDescriptor descriptor =
             new SecurityTokenDescriptor
             {
@@ -79,7 +74,7 @@ public class MorganaAuthHandler : DelegatingHandler
                 SigningCredentials = credentials
             };
 
-        // The compact serialized token, ready for the Authorization header
+        // The compact serialized token, ready for the Authorization header.
         return tokenHandler.CreateToken(descriptor);
     }
 }

@@ -1,9 +1,8 @@
 namespace Morgana.Terminal.Messages;
 
 /// <summary>
-/// What a channel decides about the look of its terminal: the colours of Morgana and of the agents plus how a
-/// running command's bar is drawn. Every surface the shared library draws wears these, so Grimoire and Rune stay
-/// recognisably themselves while sharing the code that draws them.
+/// What a channel decides about the look of its terminal: the colours of Morgana and of the agents and how a running command's bar is drawn.
+/// Every surface the shared library draws wears these, so Grimoire and Rune stay recognisably themselves while sharing the code that draws them.
 /// </summary>
 /// <param name="MorganaColor">The colour of base Morgana, which also marks the highlighted answer of every command surface, as a Spectre colour.</param>
 /// <param name="AgentColor">The colour of a specialised agent, as a Spectre colour.</param>
@@ -38,24 +37,22 @@ public sealed record TerminalTheme(
     /// <summary>The colour of error notices such as an exhausted budget or a failed delivery.</summary>
     public const string ErrorColor = "red";
 
-    /// <summary>
-    /// The colour of what a command reports: neutral grey, so it reads apart from the speakers (a command is not
-    /// a turn of the conversation) and apart from a warning, which is about the conversation.
-    /// </summary>
+    /// <summary>The colour of what a command reports, a neutral grey.</summary>
+    // It reads apart from the speakers, since a command is not a turn of the conversation. It also reads apart from a warning, which is about the conversation.
     public const string CommandReportColor = "grey70";
 
     /// <summary>The colour a speaker's rows are drawn in: white for the user, <see cref="MorganaColor"/> for Morgana and <see cref="AgentColor"/> for any specialised agent.</summary>
     public string SpeakerColor(string speaker)
     {
-        // The user's own lines
+        // The user's own lines.
         if (speaker.Equals(UserSpeaker, StringComparison.OrdinalIgnoreCase))
             return UserColor;
 
-        // Base Morgana
+        // Base Morgana.
         if (speaker.Equals(MorganaSpeaker, StringComparison.OrdinalIgnoreCase))
             return MorganaColor;
 
-        // Anyone else is a specialised agent
+        // Anyone else is a specialised agent.
         return AgentColor;
     }
 }

@@ -6,10 +6,8 @@ using Morgana.Terminal.Services;
 
 namespace Grimoire.Services;
 
-/// <summary>
-/// Renders a rich card to single-row markups forming a hand-drawn bordered box, rather than variable-height renderables.
-/// Card text is flattened to plain text, since a terminal has no inline markdown the way Cauldron's browser has.
-/// </summary>
+/// <summary>Renders a rich card to single-row markups forming a hand-drawn bordered box, rather than variable-height renderables.</summary>
+// Card text is flattened to plain text, since a terminal has no inline markdown the way Cauldron's browser has.
 public sealed class RichCardTerminalRenderService
 {
     /// <summary>The default Markdig pipeline, configured as Cauldron's, which flattens card text to plain text.</summary>
@@ -30,17 +28,16 @@ public sealed class RichCardTerminalRenderService
     /// <summary>Wraps and truncates by terminal cell, so a wide glyph never skews the box.</summary>
     private readonly TerminalCellService cells;
 
-    /// <summary>Captures the cell measurement the box is built against.</summary>
+    /// <summary>Builds the renderer on the cell measurement that the box is built against.</summary>
     public RichCardTerminalRenderService(TerminalCellService cells)
     {
+        // Every width of the box is measured with the UI's own cells.
         this.cells = cells;
     }
 
-    /// <summary>
-    /// Renders <paramref name="richCard"/> to single-row markups forming a bordered box up to <paramref name="width"/> cells wide.
-    /// The chrome is tinted with the speaker's <paramref name="baseColor"/> so the card visibly belongs to whoever sent it
-    /// while the body keeps Cauldron's neutral greys for legibility.
-    /// </summary>
+    /// <summary>Renders <paramref name="richCard"/> to single-row markups forming a bordered box up to <paramref name="width"/> cells wide.</summary>
+    // The chrome is tinted with the speaker's baseColor so the card visibly belongs to whoever sent it while the body
+    // keeps Cauldron's neutral greys for legibility.
     public List<Markup> RenderRichCard(RichCard richCard, string baseColor, int width)
     {
         // The box owns the full width and each content row is a border, a space, the content, a space and a border,
@@ -54,14 +51,14 @@ public sealed class RichCardTerminalRenderService
         // speaker's colour, plus an optional subtitle, each already cut to the inner width so phase 2 never measures again
         List<CardLine> header =
         [
-            Content([new CardSeg(Trunc(Plain(richCard.Title), innerWidth), $"{baseColor} bold")])
+            Content([new CardSegment(cells.Trunc(Plain(richCard.Title), innerWidth), $"{baseColor} bold")])
         ];
 
         // The subtitle is optional and dim
         if (!string.IsNullOrWhiteSpace(richCard.Subtitle))
         {
-            foreach (string slice in WrapText(Plain(richCard.Subtitle), innerWidth))
-                header.Add(Content([new CardSeg(slice, MutedForeground)]));
+            foreach (string slice in cells.Wrap(Plain(richCard.Subtitle), innerWidth))
+                header.Add(Content([new CardSegment(slice, MutedForeground)]));
         }
 
         // The body is the component tree flattened to logical lines, sections included
@@ -86,6 +83,8 @@ public sealed class RichCardTerminalRenderService
 
         // The bottom border closes the box
         rows.Add(Border($"╰{new string('─', cardWidth - 2)}╯", baseColor));
+
+        // The box, one terminal row per markup.
         return rows;
     }
 
@@ -94,6 +93,7 @@ public sealed class RichCardTerminalRenderService
     /// <summary>Walks a component list into logical card lines with a blank row between consecutive components and none leading or trailing, mirroring Cauldron's margins.</summary>
     private List<CardLine> BuildComponents(IEnumerable<CardComponent> cardComponents, string baseColor, int width)
     {
+        // The lines built so far and whether anything real has been emitted yet.
         List<CardLine> output = [];
         bool isFirstComponent = true;
 
@@ -162,12 +162,13 @@ public sealed class RichCardTerminalRenderService
             _ => BodyForeground
         };
         // The plain text is wrapped to the content width and each slice becomes a line of its own
-        return [.. WrapText(Plain(textBlock.Content), width).Select(slice => Content([new CardSeg(slice, style)]))];
+        return [.. cells.Wrap(Plain(textBlock.Content), width).Select(slice => Content([new CardSegment(slice, style)]))];
     }
 
-    /// <summary>Builds a key and its value on one row with the value flush right, or stacked when they do not fit together.</summary>
+    /// <summary>Builds a key and its value on one row with the value flush right, stacking them when they do not fit together.</summary>
     private List<CardLine> BuildKeyValue(KeyValueComponent keyValue, int width)
     {
+        // Both sides are flattened to plain text and an emphasised pair is bold on both sides.
         string key = Plain(keyValue.Key);
         string value = Plain(keyValue.Value);
         string keyStyle = keyValue.Emphasize ? $"{MutedForeground} bold" : MutedForeground;
@@ -181,19 +182,22 @@ public sealed class RichCardTerminalRenderService
         {
             // The branch reserved one column, so the fill is at least 1 and the value never abuts the key
             int fill = width - keyCells - valueCells;
-            return [Content([new CardSeg(key, keyStyle), new CardSeg(new string(' ', fill), ""), new CardSeg(value, valueStyle)])];
+            return [Content([new CardSegment(key, keyStyle), new CardSegment(new string(' ', fill), ""), new CardSegment(value, valueStyle)])];
         }
 
         // Otherwise the key stacks over the value, wrapped and left-aligned. Wrapping rather than truncating keeps a
         // long prose value whole; the two stay apart by colour alone, so no indent is needed
-        List<CardLine> lines = [.. WrapText(key, width).Select(slice => Content([new CardSeg(slice, keyStyle)]))];
-        lines.AddRange(WrapText(value, width).Select(slice => Content([new CardSeg(slice, valueStyle)])));
+        List<CardLine> lines = [.. cells.Wrap(key, width).Select(slice => Content([new CardSegment(slice, keyStyle)]))];
+        lines.AddRange(cells.Wrap(value, width).Select(slice => Content([new CardSegment(slice, valueStyle)])));
+
+        // The key's rows over the value's.
         return lines;
     }
 
     /// <summary>Builds a list whose items hang under their own text, not under the marker.</summary>
     private List<CardLine> BuildList(ListComponent list, string baseColor, int width)
     {
+        // The lines of every item, in order.
         List<CardLine> output = [];
 
         // Only the numbered style shows the ordinal, but it advances with every item to stay in step
@@ -210,19 +214,21 @@ public sealed class RichCardTerminalRenderService
 
             // The next item of a numbered list counts one more
             ordinal++;
+
+            // The blanks that hang the continuation rows under the item's text.
             string padding = new(' ', marker.Length);
 
             // The text is wrapped in the width left of the marker: the first row gets the marker and the others
             // blanks of the same width, which is the hanging indent
             int textWidth = Math.Max(1, width - marker.Length);
-            List<string> itemRows = WrapText(Plain(rawItem), textWidth);
+            List<string> itemRows = cells.Wrap(Plain(rawItem), textWidth);
 
             // Each wrapped row of the item becomes a line of its own
             for (int index = 0; index < itemRows.Count; index++)
             {
                 // The marker leads the first row and the blanks of the same width lead the others
-                CardSeg prefix = new(index == 0 ? marker : padding, baseColor);
-                output.Add(Content([prefix, new CardSeg(itemRows[index], BodyForeground)]));
+                CardSegment prefix = new(index == 0 ? marker : padding, baseColor);
+                output.Add(Content([prefix, new CardSegment(itemRows[index], BodyForeground)]));
             }
         }
 
@@ -235,13 +241,13 @@ public sealed class RichCardTerminalRenderService
     {
         // No leading blank row here: BuildComponents already puts one before every component but the first
         List<CardLine> output = [];
-        foreach (string slice in WrapText(Plain(section.Title), width))
-            output.Add(Content([new CardSeg(slice, $"{baseColor} bold")]));
+        foreach (string slice in cells.Wrap(Plain(section.Title), width))
+            output.Add(Content([new CardSegment(slice, $"{baseColor} bold")]));
 
         // The subtitle is optional and dim
         if (!string.IsNullOrWhiteSpace(section.Subtitle))
-            foreach (string slice in WrapText(Plain(section.Subtitle), width))
-                output.Add(Content([new CardSeg(slice, MutedForeground)]));
+            foreach (string slice in cells.Wrap(Plain(section.Subtitle), width))
+                output.Add(Content([new CardSegment(slice, MutedForeground)]));
 
         // Children are built at the reduced width, so the indent never pushes a line past the content edge
         const string indent = "  ";
@@ -256,7 +262,7 @@ public sealed class RichCardTerminalRenderService
             }
 
             // Every other line gains a leading indent, which composes for nested sections
-            List<CardSeg> indentedSegments = [new CardSeg(indent, ""), .. child.Segs];
+            List<CardSegment> indentedSegments = [new CardSegment(indent, ""), .. child.Segments];
             output.Add(new CardLine(indentedSegments, IsDivider: false));
         }
 
@@ -272,15 +278,15 @@ public sealed class RichCardTerminalRenderService
         int columns = Math.Clamp(grid.Columns <= 0 ? 1 : grid.Columns, 1, Math.Max(1, width / 2));
         int cellWidth = Math.Max(1, (width - (columns - 1)) / columns);
 
-
         // The pairs of rows of the grid, in order
         List<CardLine> output = [];
 
         // The items are taken in groups of one row of columns
         for (int start = 0; start < grid.Items.Count; start += columns)
         {
-            List<CardSeg> keys = [];
-            List<CardSeg> values = [];
+            // The keys row and the values row of this group of cells.
+            List<CardSegment> keys = [];
+            List<CardSegment> values = [];
 
             // Each cell of the group adds its key and its value to the two rows
             for (int column = 0; column < columns && start + column < grid.Items.Count; column++)
@@ -291,13 +297,13 @@ public sealed class RichCardTerminalRenderService
                 // A gutter space separates every cell from the one before it
                 if (column > 0)
                 {
-                    keys.Add(new CardSeg(" ", ""));
-                    values.Add(new CardSeg(" ", ""));
+                    keys.Add(new CardSegment(" ", ""));
+                    values.Add(new CardSegment(" ", ""));
                 }
 
                 // Truncating then padding fixes each cell to the cell width, so the two rows line up whatever the text lengths
-                keys.Add(new CardSeg(Pad(Trunc(Plain(item.Key), cellWidth), cellWidth), MutedForeground));
-                values.Add(new CardSeg(Pad(Trunc(Plain(item.Value), cellWidth), cellWidth), $"{ValueForeground} bold"));
+                keys.Add(new CardSegment(Pad(cells.Trunc(Plain(item.Key), cellWidth), cellWidth), MutedForeground));
+                values.Add(new CardSegment(Pad(cells.Trunc(Plain(item.Value), cellWidth), cellWidth), $"{ValueForeground} bold"));
             }
 
             // The keys row sits over the values row
@@ -323,8 +329,10 @@ public sealed class RichCardTerminalRenderService
             _ => "white on mediumpurple3"
         };
         // The text is upper-case with a space of padding each side, Cauldron-style; two columns are kept for those spaces so the chip fits
-        string chip = $" {Trunc(Plain(badge.Text).ToUpperInvariant(), Math.Max(1, width - 2))} ";
-        return [Content([new CardSeg(chip, style)])];
+        string chip = $" {cells.Trunc(Plain(badge.Text).ToUpperInvariant(), Math.Max(1, width - 2))} ";
+
+        // The chip is one line of its own.
+        return [Content([new CardSegment(chip, style)])];
     }
 
     /// <summary>Builds an image as honest dim text: an alt tag, the address and an optional italic caption.</summary>
@@ -333,16 +341,18 @@ public sealed class RichCardTerminalRenderService
         // The terminal shows no bitmap and no hyperlink, so the image stands for itself in text, dim because it is
         // metadata about content that cannot be shown. The address is wrapped, not truncated: a clipped one cannot be read or copied
         string alt = string.IsNullOrWhiteSpace(image.Alt) ? "image" : Plain(image.Alt);
-        List<CardLine> output = [.. WrapText($"[image: {alt}]", width).Select(slice => Content([new CardSeg(slice, MutedForeground)]))];
+        List<CardLine> output = [.. cells.Wrap($"[image: {alt}]", width).Select(slice => Content([new CardSegment(slice, MutedForeground)]))];
 
         // The address follows the tag when the image has one
         if (!string.IsNullOrWhiteSpace(image.Src))
-            output.AddRange(WrapText($"({TerminalCellService.StripControlCharacters(image.Src)})", width).Select(slice => Content([new CardSeg(slice, MutedForeground)])));
+            output.AddRange(cells.Wrap($"({TerminalCellService.StripControlCharacters(image.Src)})", width).Select(slice => Content([new CardSegment(slice, MutedForeground)])));
 
         // The caption closes the block when the image has one
         if (!string.IsNullOrWhiteSpace(image.Caption))
-            foreach (string slice in WrapText(Plain(image.Caption), width))
-                output.Add(Content([new CardSeg(slice, $"{MutedForeground} italic")]));
+            foreach (string slice in cells.Wrap(Plain(image.Caption), width))
+                output.Add(Content([new CardSegment(slice, $"{MutedForeground} italic")]));
+
+        // The tag, the address and the caption, in that order.
         return output;
     }
 
@@ -352,10 +362,8 @@ public sealed class RichCardTerminalRenderService
     private static Markup Border(string fill, string baseColor)
         => new($"[{baseColor}]{fill}[/]");
 
-    /// <summary>
-    /// Frames one logical card line between the side borders, padding the content to <paramref name="innerWidth"/> columns.
-    /// A divider fills the interior with a dim rule and a blank line gives an empty padded interior.
-    /// </summary>
+    /// <summary>Frames one logical card line between the side borders, padding the content to <paramref name="innerWidth"/> columns.</summary>
+    // A divider fills the interior with a dim rule and a blank line gives an empty padded interior.
     private static Markup FrameLine(CardLine line, int innerWidth, string baseColor)
     {
         // The left edge is the border in the speaker's colour and the mandatory padding space. The slack on the
@@ -374,7 +382,7 @@ public sealed class RichCardTerminalRenderService
             // Markup tags and the doubling of Markup.Escape cost no columns, while a char count would be wrong for wide
             // glyphs and for zero-width marks such as the selector of a warning sign (two chars, one column)
             int visibleCells = 0;
-            foreach (CardSeg segment in line.Segs)
+            foreach (CardSegment segment in line.Segments)
             {
                 // An empty segment draws nothing
                 if (segment.Text.Length == 0)
@@ -395,51 +403,47 @@ public sealed class RichCardTerminalRenderService
 
         // The right edge is the closing space and the border, which makes the row exactly the card width
         rowMarkup.Append(' ').Append('[').Append(baseColor).Append("]│[/]");
+
+        // The framed row as one markup.
         return new Markup(rowMarkup.ToString());
     }
 
     // ---- helpers ------------------------------------------------------------------------
 
     /// <summary>A content card line carrying styled segments.</summary>
-    private static CardLine Content(List<CardSeg> segments)
+    private static CardLine Content(List<CardSegment> segments)
         => new CardLine(segments, IsDivider: false);
 
     /// <summary>An empty card line, one blank interior row.</summary>
     private static CardLine Blank()
         => new CardLine([], IsDivider: false);
 
-    /// <summary>
-    /// Flattens text to plain terminal text: control characters out, markdown stripped, emoji shortcodes resolved to glyphs and
-    /// their presentation normalised so the width measured is the width drawn. Every card builder funnels through here, which
-    /// is why shortcodes are resolved here: Markup does not expand them and the badge upper-cases its text, turning one into a non-shortcode.
-    /// </summary>
+    /// <summary>Flattens text to plain terminal text: control characters out, markdown stripped, emoji shortcodes resolved to glyphs and their presentation normalised so the width measured is the width drawn.</summary>
+    // Every card builder funnels through here, which is why shortcodes are resolved here: Markup does not expand them
+    // and the badge upper-cases its text, turning one into a non-shortcode.
     private string Plain(string? text) =>
         string.IsNullOrEmpty(text)
             ? string.Empty
             : cells.StripVariationSelectors(Emoji.Replace(
                 Markdown.ToPlainText(TerminalCellService.StripControlCharacters(text), Pipeline).Trim()));
 
-    /// <summary>Wraps to terminal columns through <see cref="TerminalCellService.Wrap"/>.</summary>
-    private List<string> WrapText(string text, int width) => cells.Wrap(text, width);
-
-    /// <summary>Truncates to terminal columns through <see cref="TerminalCellService.Trunc"/>.</summary>
-    private string Trunc(string text, int width) => cells.Trunc(text, width);
-
     /// <summary>Right-pads with spaces to exactly <paramref name="width"/> terminal columns, the text being already at most that wide.</summary>
     private static string Pad(string text, int width)
     {
         // Measured in cells, as everything else on a row
         int textCells = text.GetCellWidth();
+
+        // A text already at the width is left alone and a shorter one is padded with spaces.
         return textCells >= width ? text : text + new string(' ', width - textCells);
     }
 
     /// <summary>One styled run of visible text inside a card line.</summary>
     /// <param name="Text">The visible text.</param>
-    /// <param name="Style">A full Spectre style string such as <c>grey85 bold</c>, or empty for unstyled padding.</param>
-    private readonly record struct CardSeg(string Text, string Style);
+    /// <param name="Style">A full Spectre style string such as <c>grey85 bold</c>; empty for unstyled padding.</param>
+    private readonly record struct CardSegment(string Text, string Style);
 
     /// <summary>One logical card line: styled segments or, for a divider, a dim rule filled to the content width.</summary>
-    /// <param name="Segs">The styled runs of the line, in order.</param>
+    /// <param name="Segments">The styled runs of the line, in order.</param>
     /// <param name="IsDivider">True for a divider, which has no segments.</param>
-    private sealed record CardLine(List<CardSeg> Segs, bool IsDivider);
+    private sealed record CardLine(List<CardSegment> Segments, bool IsDivider);
 }

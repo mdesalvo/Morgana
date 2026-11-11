@@ -2,20 +2,11 @@ using Morgana.Terminal.Services;
 
 namespace Morgana.Terminal.Interfaces;
 
-/// <summary>
-/// Abstraction over the terminal-resize notification so a channel's console UI can
-/// stay platform-agnostic. The concrete strategy is picked at startup in
-/// <c>Program.cs</c> based on <see cref="OperatingSystem"/>: SIGWINCH on POSIX,
-/// polling on Windows. See <see cref="SigWinchResizeWatcherService"/> and
-/// <see cref="PollingResizeWatcherService"/>.
-/// </summary>
+/// <summary>Tells the console UI that the terminal was resized, whatever the platform reports it through.</summary>
+// TerminalChannelExtensions picks the strategy at startup: SigWinchResizeWatcherService on POSIX and PollingResizeWatcherService on Windows.
 public interface IViewportResizeWatcher
 {
-    /// <summary>
-    /// Registers <paramref name="onResize"/> to be invoked whenever the terminal
-    /// viewport size changes. The callback runs on a background thread; the
-    /// subscriber owns any synchronisation it needs. Dispose the returned handle
-    /// to stop receiving notifications — typically when the UI loop exits.
-    /// </summary>
+    /// <summary>Invokes <paramref name="onResize"/> whenever the terminal's size changes, until the returned handle is disposed.</summary>
+    // The callback runs on a background thread, so the subscriber owns any synchronisation it needs.
     IDisposable Subscribe(Action onResize);
 }

@@ -23,12 +23,10 @@ public static class TerminalChannelExtensions
     /// <summary>The shipped value of the signing key, a marker and not a key.</summary>
     private const string SigningKeyMarker = "_SECURE_OVERRIDE_";
 
-    /// <summary>
-    /// Prepares the process and tells whether the channel may start, explaining on the console why not. The culture and
-    /// the console encoding are set first. The terminal must be interactive and the
-    /// three settings the channel cannot run without must be sound: they are checked together so a fresh checkout is
-    /// told exactly what is missing while there is still a readable terminal.
-    /// </summary>
+    /// <summary>Prepares the process and tells whether the channel may start, explaining on the console why not.</summary>
+    // The culture and the console encoding are set first. The terminal must be interactive and the three settings the channel
+    // cannot run without must be sound: they are checked together, so a fresh checkout is told exactly what is missing while
+    // there is still a readable terminal.
     public static bool CanStartTerminalChannel(this WebApplicationBuilder builder, ChannelProfile profile)
     {
         // Invariant before anything else runs, so no thread inherits the host's locale: the terminal and
@@ -88,11 +86,8 @@ public static class TerminalChannelExtensions
         return true;
     }
 
-    /// <summary>
-    /// Registers everything a TTY channel is made of: its profile and theme, the self-issued JWT toward Morgana, the
-    /// shared services, the UI and the resize watcher of the platform. A channel that registered its own
-    /// <see cref="IMessageRenderer"/> beforehand keeps it, otherwise messages are drawn as plain text.
-    /// </summary>
+    /// <summary>Registers everything a TTY channel is made of: its profile and theme, its token toward Morgana, the shared services, the UI and the platform's resize watcher.</summary>
+    // A channel that registered its own IMessageRenderer beforehand keeps it, otherwise messages are drawn as plain text.
     public static WebApplicationBuilder AddTerminalChannel(this WebApplicationBuilder builder, ChannelProfile profile, TerminalTheme theme)
     {
         // The live UI owns the terminal: any stray log line from Kestrel or ASP.NET Core would corrupt the layout.
@@ -144,13 +139,12 @@ public static class TerminalChannelExtensions
         return builder;
     }
 
-    /// <summary>
-    /// Maps the endpoints Morgana delivers to: <c>/morgana-hook</c> for messages and, only where the profile declares
-    /// streaming, <c>/morgana-hook/chunk</c> for the incremental deltas. No JWT guards them, since the trust model is
-    /// asymmetric by design, as in <c>WebhookChannelService</c>. A delivery for another conversation is refused with 404.
-    /// </summary>
+    /// <summary>Maps the endpoints Morgana delivers to: <c>/morgana-hook</c> for messages and, where the profile declares streaming, <c>/morgana-hook/chunk</c> for the deltas.</summary>
+    // No token guards them, since the trust model is asymmetric by design, as in WebhookChannelService. A delivery for another
+    // conversation is refused with 404.
     public static WebApplication MapMorganaHooks(this WebApplication app)
     {
+        // The profile decides whether the chunk endpoint exists at all.
         ChannelProfile profile = app.Services.GetRequiredService<ChannelProfile>();
 
         // Morgana POSTs a serialized message on every outbound turn
@@ -210,17 +204,14 @@ public static class TerminalChannelExtensions
         return app;
     }
 
-    /// <summary>
-    /// Runs the channel from the first listener to the exit: Kestrel starts first so it is ready for Morgana's first
-    /// delivery, then the conversation runs on this thread, which the live UI needs. Whatever way it ends, the SIGHUP
-    /// hook is released and Kestrel stopped, so the process exits and docker's --rm reclaims the container.
-    /// </summary>
+    /// <summary>Runs the channel from the first listener to the exit, releasing the SIGHUP hook and stopping Kestrel however it ends.</summary>
+    // Kestrel starts first so it is ready for Morgana's first delivery, then the conversation runs on this thread, which the
+    // live UI needs. The orderly stop lets the process exit, so docker's --rm reclaims the container.
     public static async Task RunTerminalChannelAsync(this WebApplication app)
     {
-        // .NET's host already wires SIGTERM/SIGINT to ApplicationStopping on every platform. On POSIX, closing the host
-        // terminal window also sends SIGHUP, which is not handled by default: without this registration the docker CLI
-        // dies, the container keeps running, --rm never fires and `compose down` complains that morgana-network is
-        // still in use. Windows has no mapping for it: closing the console is delivered as SIGTERM
+        // .NET's host already wires SIGTERM and SIGINT to ApplicationStopping. On POSIX closing the terminal window also sends
+        // SIGHUP, which nothing handles by default: the docker CLI dies, the container keeps running, --rm never fires and
+        // compose down complains that morgana-network is still in use. Windows delivers a closed console as SIGTERM
         PosixSignalRegistration? sighupRegistration = OperatingSystem.IsWindows()
             ? null
             : PosixSignalRegistration.Create(PosixSignal.SIGHUP, context =>
@@ -245,10 +236,8 @@ public static class TerminalChannelExtensions
         }
     }
 
-    /// <summary>
-    /// Tells whether <paramref name="value"/> is an address the channel can dial: anything else (a bare host:port,
-    /// a path, a scheme nobody serves) is parsed happily and only fails once the first call is already on its way.
-    /// </summary>
+    /// <summary>Tells whether <paramref name="value"/> is an absolute http or https address that the channel can dial.</summary>
+    // Anything else, a bare host:port, a path or a scheme nobody serves, parses happily and fails only once the first call is on its way.
     private static bool IsReachableUrl(string? value) =>
         Uri.TryCreate(value, UriKind.Absolute, out Uri? url)
         && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps);

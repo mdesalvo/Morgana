@@ -9,14 +9,12 @@ namespace Morgana.Terminal.Services;
 /// <summary>Draws messages as plain text: no markdown, no cards, only a speaker prefix and rows wrapped by terminal cell.</summary>
 public sealed class PlainTextMessageRenderService : IMessageRenderer
 {
-    /// <summary>What opens the first row of a line said by a speaker of the conversation, ahead of the speaker's name. Drawn only.</summary>
+    /// <summary>What opens the first row of a line said by a speaker of the conversation, ahead of the speaker's name; drawn only.</summary>
     private const string SpeakerMarker = "● ";
 
-    /// <summary>
-    /// Matches a run of three or more consecutive newlines. Morgana formats replies for rich channels with
-    /// doubled blank lines that a plain renderer would count as phantom rows, lighting the scroll indicator on a
-    /// conversation that fits, so each run collapses to a single blank line as a markdown paragraph break would.
-    /// </summary>
+    /// <summary>Matches a run of three or more consecutive newlines, which collapses to one blank line as a markdown paragraph break would.</summary>
+    // Morgana formats replies for rich channels with doubled blank lines that a plain renderer would count as phantom rows,
+    // lighting the scroll indicator on a conversation that fits.
     private static readonly Regex BlankRunRegex = new(@"\n{3,}", RegexOptions.Compiled);
 
     /// <summary>Wraps every row by terminal cell.</summary>
@@ -28,9 +26,10 @@ public sealed class PlainTextMessageRenderService : IMessageRenderer
     /// <summary>Colours the speaker's dot.</summary>
     private readonly TerminalTheme theme;
 
-    /// <summary>Captures the cell measurement, the channel's identity and its theme.</summary>
+    /// <summary>Builds the renderer on the cell measurement, the channel's identity and its theme.</summary>
     public PlainTextMessageRenderService(TerminalCellService cells, ChannelProfile profile, TerminalTheme theme)
     {
+        // Rows are wrapped by the UI's own cells, notices told apart by the channel's name and dots coloured by its theme.
         this.cells = cells;
         this.profile = profile;
         this.theme = theme;
@@ -39,6 +38,7 @@ public sealed class PlainTextMessageRenderService : IMessageRenderer
     /// <inheritdoc />
     public List<Markup> RenderMessage(DisplayedMessage message, int width)
     {
+        // The rows of the message, top to bottom.
         List<Markup> rows = [];
 
         // The text is made terminal-safe before counting, so the rows counted are the rows drawn
@@ -69,6 +69,7 @@ public sealed class PlainTextMessageRenderService : IMessageRenderer
     /// <inheritdoc />
     public List<Markup> RenderPartial(string text, string color, int width)
     {
+        // The rows of the part revealed so far, top to bottom.
         List<Markup> rows = [];
 
         // A partial reply wears no prefix: the speaker is named once the reply is committed
@@ -80,10 +81,8 @@ public sealed class PlainTextMessageRenderService : IMessageRenderer
         return rows;
     }
 
-    /// <summary>
-    /// Makes text published by Morgana safe to draw: control characters out and the margins trimmed. Emoji
-    /// shortcodes are resolved next, then the variation selectors they produce are dropped so the width measured is the width drawn.
-    /// </summary>
+    /// <summary>Makes text published by Morgana safe to draw: control characters out, margins trimmed, blank runs collapsed and emoji resolved.</summary>
+    // The variation selectors that emoji produce are dropped last, so the width measured is the width drawn.
     private string PrepareText(string text) =>
         cells.StripVariationSelectors(BlankRunRegex.Replace(Emoji.Replace(SanitizeMessageText(text).Trim()), "\n\n"));
 
@@ -113,12 +112,10 @@ public sealed class PlainTextMessageRenderService : IMessageRenderer
         return new Markup($"{marker}[bold {color}]{Markup.Escape(slice)}[/]");
     }
 
-    /// <summary>
-    /// Cleans reply text for the terminal while keeping the line structure Morgana authored: newlines survive
-    /// since each becomes a row, a tab becomes a space and every other control character is dropped.
-    /// </summary>
+    /// <summary>Cleans reply text for the terminal while keeping the lines Morgana authored: newlines survive, a tab becomes a space and every other control character goes.</summary>
     private static string SanitizeMessageText(string text)
     {
+        // The text as it may be drawn, built one char at a time.
         StringBuilder plainText = new(text.Length);
         for (int index = 0; index < text.Length; index++)
         {
