@@ -24,7 +24,7 @@
     <MicrosoftAgentsAIPreviewVersion>$(MicrosoftAgentsAIVersion)-preview.261106.1</MicrosoftAgentsAIPreviewVersion>
     <MicrosoftExtensionsAIVersion>10.11.0</MicrosoftExtensionsAIVersion>
     <ModelContextProtocolVersion>2.4.0</ModelContextProtocolVersion>
-    <OpenTelemetryVersion>1.20.1</OpenTelemetryVersion>
+    <OpenTelemetryVersion>1.21.0</OpenTelemetryVersion>
 
     <!-- Package Metadata -->
     <Authors>Marco De Salvo</Authors>
