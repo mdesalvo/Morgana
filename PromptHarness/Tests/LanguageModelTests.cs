@@ -364,6 +364,44 @@ public sealed class LanguageModelTests
         Assert.Contains("ture", refusal.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void LanguageModel_An_Ollama_num_ctx_that_does_not_exceed_MaxOutputTokens_is_refused()
+    {
+        // A num_ctx no greater than MaxOutputTokens leaves no room for the prompt, so the startup stops naming both numbers.
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(() => Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "http://localhost:11434"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "phi4-mini"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:MaxOutputTokens", "8192"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:AdditionalProperties:num_ctx", "8192"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:InputUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:OutputUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheReadUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheWriteUsdPerMillion", "0"))));
+
+        Assert.Contains("Morgana:LanguageModels:Tiers:Economy:Options:AdditionalProperties:num_ctx", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("8192", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LanguageModel_An_Ollama_MaxOutputTokens_that_reaches_the_default_num_ctx_is_refused()
+    {
+        // A tier that declares no num_ctx is weighed against the default that every call asks for.
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(() => Build(Configuration(
+            ("Morgana:LanguageModels:Tiers:Economy:Provider", "Ollama"),
+            ("Morgana:LanguageModels:Tiers:Economy:Connection:Endpoint", "http://localhost:11434"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:ModelId", "phi4-mini"),
+            ("Morgana:LanguageModels:Tiers:Economy:Options:MaxOutputTokens", "65536"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:InputUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:OutputUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheReadUsdPerMillion", "0"),
+            ("Morgana:LanguageModels:Tiers:Economy:Pricing:CacheWriteUsdPerMillion", "0"))));
+
+        Assert.Contains("Morgana:LanguageModels:Tiers:Economy:Options:AdditionalProperties:num_ctx", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("65536", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Morgana's default", refusal.Message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("https://ollama.com", "mistral-large-4", "0.70", "2.10", "0.07", "0.70")]
     [InlineData("https://ollama.com", "gemma4:cloud", "0.14", "0.40", "0.05", "0.14")]

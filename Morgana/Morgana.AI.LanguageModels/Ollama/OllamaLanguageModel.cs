@@ -92,29 +92,46 @@ public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
     /// <inheritdoc />
     public override void ValidateOptions(Records.ModelOptions options)
     {
-        // A tier that declares no Ollama option has nothing to convert.
-        if (options.AdditionalProperties is null)
-            return;
-
-        // Every option that the tier declares is tried in the type that Ollama will receive it as.
-        foreach (KeyValuePair<string, object?> additionalProperty in options.AdditionalProperties)
+        // Every option that the tier declares is tried in the type that Ollama will receive it as; a tier that declares none has nothing to convert.
+        if (options.AdditionalProperties is not null)
         {
-            try
+            foreach (KeyValuePair<string, object?> additionalProperty in options.AdditionalProperties)
             {
-                // The conversion every call will make is tried once at startup, so a value Ollama cannot read stops Morgana instead of the first call.
-                ConvertOption(additionalProperty.Key, additionalProperty.Value);
-            }
-            catch (Exception ex) when (ex is FormatException or OverflowException)
-            {
-                // The lookup cannot fail because only a typed option can fail to convert.
-                Type optionType = RequestOptionTypes[additionalProperty.Key];
+                try
+                {
+                    // The conversion every call will make is tried once at startup, so a value Ollama cannot read stops Morgana instead of the first call.
+                    ConvertOption(additionalProperty.Key, additionalProperty.Value);
+                }
+                catch (Exception ex) when (ex is FormatException or OverflowException)
+                {
+                    // The lookup cannot fail because only a typed option can fail to convert.
+                    Type optionType = RequestOptionTypes[additionalProperty.Key];
 
-                // The form named is the one the deployer must write.
-                string expectedForm = optionType == typeof(bool) ? "true or false" : optionType == typeof(int) ? "an integer" : "a number written with a dot";
+                    // The form named is the one the deployer must write.
+                    string expectedForm = optionType == typeof(bool) ? "true or false" : optionType == typeof(int) ? "an integer" : "a number written with a dot";
 
-                // The message opens with the option's key so that the caller prefixes the tier's path.
-                throw new InvalidOperationException($"AdditionalProperties:{additionalProperty.Key} must be {expectedForm} but is '{additionalProperty.Value}'.", ex);
+                    // The message opens with the option's key so that the caller prefixes the tier's path.
+                    throw new InvalidOperationException($"AdditionalProperties:{additionalProperty.Key} must be {expectedForm} but is '{additionalProperty.Value}'.", ex);
+                }
             }
+        }
+
+        // The num_ctx that the tier declares, already proven above to read as an integer; when it declares none, every call asks for Morgana's default.
+        object? declaredNumCtx = null;
+        bool isNumCtxDeclared = options.AdditionalProperties?.TryGetValue(OllamaOption.NumCtx.Name, out declaredNumCtx) == true;
+        int numCtx = isNumCtxDeclared && ConvertOption(OllamaOption.NumCtx.Name, declaredNumCtx) is int declaredNumCtxValue
+            ? declaredNumCtxValue
+            : DefaultContextLength;
+
+        // A MaxOutputTokens that reaches num_ctx promises answers that no prompt leaves room for: the tier stops the startup instead of the call.
+        if (options.MaxOutputTokens is { } maxOutputTokens && numCtx <= maxOutputTokens)
+        {
+            // The deployer reads where num_ctx came from, since a default is a value they never wrote.
+            string numCtxOrigin = isNumCtxDeclared ? string.Empty : " (Morgana's default, since the tier declares none)";
+
+            // The message opens with the option's key so that the caller prefixes the tier's path.
+            throw new InvalidOperationException(string.Create(CultureInfo.InvariantCulture,
+                $"AdditionalProperties:{OllamaOption.NumCtx.Name} is {numCtx}{numCtxOrigin}, which should be greater than MaxOutputTokens {maxOutputTokens}: num_ctx must hold the prompt besides the answer."));
         }
     }
 
