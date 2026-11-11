@@ -71,7 +71,7 @@ public class GuardActor : MorganaActor
         {
             actorLogger.Error(ex, "GuardActor: unexpected error during compliance check");
 
-            // Propagate failure to supervisor — it will apply its own fail-open fallback
+            // Propagate failure to supervisor — the supervisor refuses the message nobody could judge
             originalSender.Tell(new Status.Failure(ex));
         }
     }

@@ -64,7 +64,8 @@ public sealed record WithheldToolObservation(string ToolName, string Outcome, st
 /// <param name="Door">Where the event happened.</param>
 /// <param name="Outcome">What happened there.</param>
 /// <param name="Source">The layer that decided; null when the event carries none.</param>
-public sealed record SecurityEventObservation(string Door, string Outcome, string? Source);
+/// <param name="ErrorType">The technical cause when the door could not judge; null otherwise.</param>
+public sealed record SecurityEventObservation(string Door, string Outcome, string? Source, string? ErrorType);
 
 /// <summary>One LLM call as the model saw it: its cost, its instructions, its tools, the messages it read and its answer.</summary>
 /// <remarks>The texts are the OpenTelemetry <c>gen_ai.*</c> content attributes, as JSON; null when the host records no content.</remarks>
@@ -90,6 +91,7 @@ public sealed record ModelCall(
 /// <param name="GuardCompliant">Verdict from the <c>morgana.guard</c> span; null when the guard rail is disabled or no guard span was seen.</param>
 /// <param name="GuardViolation">Violation text from the same span when <paramref name="GuardCompliant"/> is false.</param>
 /// <param name="GuardSource">The layer that decided the verdict, from the same span; null when the guard rail is disabled or no guard span was seen.</param>
+/// <param name="GuardErrorType">The technical cause from the same span when the guard could not judge; null otherwise.</param>
 /// <param name="ClassifierIntent">Intent from the <c>morgana.classifier</c> span; null on a follow-up turn, which skips classification entirely.</param>
 /// <param name="ClassifierConfidence">Confidence from the same span, parsed from its string tag.</param>
 /// <param name="Consultations">Consultations served during the turn, in the order they closed; empty on a turn that asked no colleague.</param>
@@ -118,6 +120,7 @@ public sealed record TurnResult(
     bool? GuardCompliant = null,
     string? GuardViolation = null,
     string? GuardSource = null,
+    string? GuardErrorType = null,
     string? ClassifierIntent = null,
     double? ClassifierConfidence = null,
     IReadOnlyList<ConsultationObservation>? Consultations = null,

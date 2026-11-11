@@ -150,6 +150,8 @@ public sealed class FrameworkPromptTests
     [InlineData("Classifier", "ClassificationError")]
     [InlineData("Classifier", "DisambiguationMessage")]
     [InlineData("Classifier", "ComplementIntentDescription")]
+    [InlineData("UserGuard", "ContentFilteredMessage")]
+    [InlineData("UserGuard", "NoVerdictMessage")]
     public async Task Every_message_the_framework_reads_by_name_is_authored(string promptId, string propertyName)
     {
         // The prompt that owns the message.

@@ -326,6 +326,7 @@ public sealed class TurnObserver : IDisposable
             guard?.Compliant,
             guard?.Violation,
             guard?.Source,
+            guard?.ErrorType,
             classifier?.Intent,
             classifier?.Confidence,
             consulted,
@@ -350,6 +351,7 @@ public sealed class TurnObserver : IDisposable
         string door = string.Empty;
         string outcome = string.Empty;
         string? source = null;
+        string? errorType = null;
 
         // The counter carries other tags too (the intent of the agent) which no check here reads.
         foreach (KeyValuePair<string, object?> tag in tags)
@@ -367,12 +369,16 @@ public sealed class TurnObserver : IDisposable
                 case Telemetry.SecuritySource:
                     source = tag.Value as string;
                     break;
+
+                case Telemetry.ErrorType:
+                    errorType = tag.Value as string;
+                    break;
             }
         }
 
         // Counters of other threads write here at the same time, hence the gate.
         lock (securityGate)
-            securityEvents.Add(new SecurityEventObservation(door, outcome, source));
+            securityEvents.Add(new SecurityEventObservation(door, outcome, source, errorType));
     }
 
     /// <summary>Finds the conversation a span belongs to by walking up its parents until one carries the conversation id.</summary>
@@ -502,7 +508,8 @@ public sealed class TurnObserver : IDisposable
                 Append(guardSpans, conversationId, new GuardSpan(
                     activity.GetTagItem(Telemetry.GuardCompliant) as bool?,
                     activity.GetTagItem(Telemetry.GuardViolation) as string,
-                    activity.GetTagItem(Telemetry.GuardSource) as string));
+                    activity.GetTagItem(Telemetry.GuardSource) as string,
+                    activity.GetTagItem(Telemetry.ErrorType) as string));
                 break;
 
             case Telemetry.ClassifierActivity:
@@ -556,7 +563,7 @@ public sealed class TurnObserver : IDisposable
     private sealed record AgentSpan(string? AgentName, IReadOnlyList<string> ToolsInvoked);
 
     /// <summary>What a closed <c>morgana.guard</c> span contributes to a turn result.</summary>
-    private sealed record GuardSpan(bool? Compliant, string? Violation, string? Source);
+    private sealed record GuardSpan(bool? Compliant, string? Violation, string? Source, string? ErrorType);
 
     /// <summary>What a closed <c>morgana.classifier</c> span contributes to a turn result.</summary>
     private sealed record ClassifierSpan(string? Intent, double? Confidence);

@@ -552,7 +552,7 @@
           <tr><td>IClassifierService</td><td>LLMClassifierService</td><td>Intent classification</td></tr>
           <tr><td>IConversationPersistenceService</td><td>SQLiteConversationPersistenceService</td><td>Encrypted conversation storage</td></tr>
           <tr><td>IDustLimitService</td><td>SQLiteDustLimitService</td><td>Per-conversation token budget protection</td></tr>
-          <tr><td>IGuardRailService</td><td>LLMGuardRailService</td><td>Content moderation &amp; policy enforcement</td></tr>
+          <tr><td>IGuardRailService</td><td>LLMGuardRailService</td><td>Content moderation &amp; policy enforcement (fails closed)</td></tr>
           <tr><td>IHostAddressService</td><td>KestrelHostAddressService</td><td>Address this instance publishes on its A2A cards</td></tr>
           <tr><td>ILLMService</td><td>Anthropic / AzureOpenAI / Ollama / OpenAI</td><td>LLM provider abstraction</td></tr>
           <tr><td>ILLMTierValidationService</td><td>RequiresLLMTierValidationService</td><td>Agent LLM-tier declaration validation</td></tr>
@@ -821,7 +821,7 @@
         <thead><tr><th>Span</th><th>Key Attributes</th></tr></thead>
         <tbody>
           <tr><td>morgana.turn</td><td>conversation.id, turn.user_message</td></tr>
-          <tr><td>morgana.guard</td><td>guard.compliant, guard.violation</td></tr>
+          <tr><td>morgana.guard</td><td>guard.compliant, guard.violation and guard.source; error.type instead of a verdict when the guard could not judge</td></tr>
           <tr><td>morgana.classifier</td><td>classification.intent, classification.confidence</td></tr>
           <tr><td>morgana.router</td><td>router.intent, router.agent_path</td></tr>
           <tr><td>morgana.agent</td><td>agent.name, agent.ttft_ms, agent.response_preview</td></tr>
@@ -835,6 +835,8 @@
         <tbody>
           <tr><td>morgana.dust.consumed</td><td>dust</td><td>dust.llm_role (<code>Morgana</code> for framework actors, <code>Morgana (Intent)</code> for agents), conversation.id</td></tr>
           <tr><td>gen_ai.usage.*</td><td>tokens</td><td>Emitted by Microsoft.Extensions.AI beside the above, so cost in dust and cost in tokens are read on the same dashboard</td></tr>
+          <tr><td>morgana.security.events</td><td>events</td><td>security.door, security.outcome and security.source; error.type when the door could not judge, naming the technical cause (<code>timeout</code>, <code>unreadable_verdict</code> or the exception's full name)</td></tr>
+          <tr><td>morgana.guard.rejections</td><td>messages</td><td>Messages the guard refused on a judgment: a refusal for lack of one is counted only under morgana.security.events</td></tr>
         </tbody>
       </table>
 

@@ -67,7 +67,7 @@ public sealed class CancelledTurnTests
     private static readonly TimeSpan DropWait = TimeSpan.FromSeconds(5);
 
     [Fact]
-    public async Task A_held_user_guard_is_dropped_and_the_turn_goes_on_without_its_verdict()
+    public async Task A_held_user_guard_is_dropped_and_the_message_is_refused_unjudged()
     {
         CancellableModelHost model = OpenModel();
 
@@ -79,14 +79,18 @@ public sealed class CancelledTurnTests
         model.HoldNext(ModelCallKind.UserGuard);
         ChannelMessage answer = await fixture.Channel.SendAsync(conversationId, CatalogueRequest, DeliveryWait);
 
-        // The guard fails open on a silence: the turn reaches the agent and completes.
-        Assert.Equal(CatalogueAnswer, answer.Text);
+        // A guard that went silent refuses the message in the UserGuard prompt's own wording.
+        Assert.Equal(await NoVerdictMessageAsync(), answer.Text);
         await AssertHeldCallWasCancelledAsync(model, windowStart, ModelCallKind.UserGuard, 0, TurnSeconds);
 
-        // The flows run in the order of the pipeline and the guard is not asked again.
-        Assert.Equal(
-            [(ModelCallKind.UserGuard, 0), (ModelCallKind.Classifier, 0), (ModelCallKind.InventoryAgent, 0), (ModelCallKind.ToolGuard, 0), (ModelCallKind.InventoryAgent, 1)],
-            TurnSequence(model, windowStart));
+        // Nothing past the guard runs: the message never reaches the classifier or an agent.
+        Assert.Equal([(ModelCallKind.UserGuard, 0)], TurnSequence(model, windowStart));
+
+        // No agent was reached, so no call of the inventory agent was made.
+        Assert.DoesNotContain(CallsSince(model, windowStart), call => call.Kind == ModelCallKind.InventoryAgent);
+
+        // Nor did the inventory agent ever leave a row on the record.
+        Assert.Equal(0L, await api.QueryRecordAsync(conversationId, "select count(*) from morgana where agent_name = 'inventory'"));
 
         await AssertNoLateAnswerAsync(conversationId);
         await AssertDustIsSquareAsync(model, windowStart, conversationId);
@@ -353,9 +357,9 @@ public sealed class CancelledTurnTests
         long chargedRows = Convert.ToInt64(await api.QueryRecordAsync(conversationId, "select count(*) from dust_usage_log"));
         Assert.Equal(completedCalls, chargedRows);
 
-        // Every completed call reports the same token counts, so every row carries the same dust.
+        // Every completed call reports the same token counts, so every row carries the same dust: one amount, none when nothing completed.
         long distinctAmounts = Convert.ToInt64(await api.QueryRecordAsync(conversationId, "select count(distinct dust_consumed) from dust_usage_log"));
-        Assert.Equal(1L, distinctAmounts);
+        Assert.Equal(chargedRows == 0 ? 0L : 1L, distinctAmounts);
     }
 
     /// <summary>Asserts that no request of the window matched a flow of Morgana.</summary>
@@ -369,6 +373,15 @@ public sealed class CancelledTurnTests
         Morgana.AI.Services.ConfigurationPromptResolverService resolver = new Morgana.AI.Services.ConfigurationPromptResolverService(new ScriptedDomain());
         Morgana.AI.Records.Prompt classifier = await resolver.ResolveAsync("Classifier");
         return classifier.GetAdditionalProperty<string>("ClassificationError");
+    }
+
+    /// <summary>The wording of the UserGuard prompt's NoVerdictMessage in the morgana.json that ships with the framework.</summary>
+    private static async Task<string> NoVerdictMessageAsync()
+    {
+        // The framework prompts resolve over a domain that declares no agent, as the guards resolve them.
+        Morgana.AI.Services.ConfigurationPromptResolverService resolver = new Morgana.AI.Services.ConfigurationPromptResolverService(new ScriptedDomain());
+        Morgana.AI.Records.Prompt userGuard = await resolver.ResolveAsync("UserGuard");
+        return userGuard.GetAdditionalProperty<string>("NoVerdictMessage");
     }
 
     /// <summary>Consults the inventory agent as the scoped partner does, on a client that gives up after the timeout.</summary>

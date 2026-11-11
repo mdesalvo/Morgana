@@ -70,12 +70,12 @@ public static class Telemetry
         MorganaMeter.CreateCounter<long>("morgana.guard.rejections", description: "Number of messages rejected by content moderation");
 
     /// <summary>
-    /// Counts security events at Morgana's doors: messages rejected, tool results withheld, MCP tools refused and checks that failed open.
+    /// Counts security events at Morgana's doors: messages rejected, tool results withheld and MCP tools refused.
     /// Tagged by door, outcome, deciding layer and agent intent, never by tool name: an MCP server chooses its names
     /// and a hostile one would multiply the metric's series without bound.
     /// </summary>
     public static readonly Counter<long> SecurityEvents =
-        MorganaMeter.CreateCounter<long>("morgana.security.events", description: "Security events at Morgana's doors: messages rejected, tool results withheld, MCP tools refused and checks that failed open");
+        MorganaMeter.CreateCounter<long>("morgana.security.events", description: "Security events at Morgana's doors: messages rejected, tool results withheld and MCP tools refused");
 
     /// <summary>End-to-end turn duration in milliseconds (from UserMessage to response).</summary>
     public static readonly Histogram<double> TurnDuration =
@@ -169,6 +169,9 @@ public static class Telemetry
 
     /// <summary>The guard's clinical finding, never the text it judged.</summary>
     public const string SecurityFinding = "security.finding";
+
+    /// <summary>The technical cause of a check that could not judge, under the OpenTelemetry semantic-convention name.</summary>
+    public const string ErrorType = "error.type";
 
     /// <summary>The function the model called.</summary>
     public const string ToolName = "tool.name";
@@ -313,8 +316,15 @@ public static class Telemetry
 
         /// <summary>A call not sent because its source is not available and secure.</summary>
         public const string NotSent = "not_sent";
+    }
 
-        /// <summary>A check that could not decide and admitted.</summary>
-        public const string FailedOpen = "failed_open";
+    /// <summary>The values of <see cref="ErrorType"/> that are not an exception's name.</summary>
+    public static class ErrorTypes
+    {
+        /// <summary>The caller stopped waiting before the guard answered.</summary>
+        public const string Timeout = "timeout";
+
+        /// <summary>The guard model answered without a verdict in its shape.</summary>
+        public const string UnreadableVerdict = "unreadable_verdict";
     }
 }

@@ -199,6 +199,9 @@ public static class Constants
         /// <summary>What the user is told when the provider's own content filter blocked their message before the guard could judge it.</summary>
         public const string ContentFilteredMessage = "ContentFilteredMessage";
 
+        /// <summary>What the user is told when the guard could not judge their message and refused it.</summary>
+        public const string NoVerdictMessage = "NoVerdictMessage";
+
         /// <summary>What the user is told when the classifier fails and its classification is only a fallback.</summary>
         public const string ClassificationError = "ClassificationError";
 

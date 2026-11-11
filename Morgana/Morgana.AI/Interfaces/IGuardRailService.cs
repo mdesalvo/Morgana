@@ -8,7 +8,7 @@ namespace Morgana.AI.Interfaces;
 /// Decouples guard-rail logic from the actor infrastructure. GuardActor delegates entirely
 /// to this service and is agnostic of the underlying implementation strategy.
 /// Default implementation: LLMGuardRailService provides LLM-based policy evaluation.
-/// Fail-safe contract: the user's message fails open, so a transient error never blocks legitimate traffic; a tool's result and a partner's question fail closed.
+/// Fail-safe contract: a text that cannot be judged fails closed whoever wrote it, so a guard that cannot answer never admits what it was asked to judge.
 /// An offer that cannot be judged is refused and the refusal is not remembered, so the next admission asks again.
 /// </summary>
 public interface IGuardRailService

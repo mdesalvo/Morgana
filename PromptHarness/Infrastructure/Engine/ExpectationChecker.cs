@@ -133,15 +133,16 @@ public static partial class ExpectationChecker
     /// <summary>The rules every turn answers to without declaring them: a verdict counts only when a judgment decided it and a guard that could not judge proves nothing.</summary>
     private static void CheckGuardEvidence(TurnResult turn, List<string> failures)
     {
-        // A guard that admitted because it could not decide leaves the turn unjudged, so nothing it passed proves anything.
-        if (string.Equals(turn.GuardSource, Records.GuardVerdictSource.FailOpen.ToString(), StringComparison.Ordinal))
-            failures.Add($"guard: the verdict came from {Records.GuardVerdictSource.FailOpen} and a turn whose guard could not judge proves nothing");
+        // A guard that refused because it could not decide leaves the turn unjudged.
+        if (string.Equals(turn.GuardSource, Records.GuardVerdictSource.FailClosed.ToString(), StringComparison.Ordinal))
+            failures.Add($"guard: the verdict came from {Records.GuardVerdictSource.FailClosed} ({turn.GuardErrorType ?? "no cause"}) and a turn whose guard could not judge proves nothing");
 
-        // The same failure at any other door of the turn: a tool result or an offer admitted unchecked.
+        // The same failure at any other door of the turn: a tool result or an offer refused unjudged.
         foreach (SecurityEventObservation securityEvent in turn.TurnSecurityEvents)
         {
-            if (string.Equals(securityEvent.Outcome, Telemetry.SecurityOutcomes.FailedOpen, StringComparison.Ordinal))
-                failures.Add($"security: the {securityEvent.Door} door {Telemetry.SecurityOutcomes.FailedOpen} and a turn whose guard could not judge proves nothing");
+            if (!string.Equals(securityEvent.Door, Telemetry.SecurityDoors.User, StringComparison.Ordinal)
+                && string.Equals(securityEvent.Source, nameof(Records.GuardVerdictSource.FailClosed), StringComparison.Ordinal))
+                failures.Add($"security: the {securityEvent.Door} door could not judge ({Records.GuardVerdictSource.FailClosed}, {securityEvent.ErrorType ?? "no cause"}) and a turn whose guard could not judge proves nothing");
         }
     }
 

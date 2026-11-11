@@ -365,7 +365,7 @@ public class ConversationSupervisorActor : MorganaActor
         actorLogger.Info("→ State: AwaitingGuardCheck");
 
         // Bounds how long the round-trip to GuardActor may take before the ReceiveTimeout
-        // handler below fires and FailOpen takes over — the same shared per-phase budget every
+        // handler below fires and FailClosedAsync refuses the message — the same shared per-phase budget every
         // other Awaiting* state arms with its own call, not a guard-specific allowance.
         Context.SetReceiveTimeout(TimeSpan.FromSeconds(
             Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
@@ -381,17 +381,8 @@ public class ConversationSupervisorActor : MorganaActor
             // carries over into whatever state runs next.
             Context.SetReceiveTimeout(null);
 
-            // Close and dispose the guard span by tracking compliance and the eventually reported violation
-            guardSpan?.SetTag(Telemetry.GuardCompliant, response.Compliant);
-
-            // Records which layer decided, so a trace tells a judgment from an admission by default.
-            guardSpan?.SetTag(Telemetry.GuardSource, response.Source.ToString());
-            if (!response.Compliant && response.Violation != null)
-                guardSpan?.SetTag(Telemetry.GuardViolation, response.Violation);
-            if (guardSpan is not null)
-                Telemetry.GuardDuration.Record((DateTime.UtcNow - guardSpan.StartTimeUtc).TotalMilliseconds);
-            guardSpan?.Dispose();
-            guardSpan = null;
+            // The guard answered, so its span closes on the verdict.
+            CloseGuardSpan(response, null);
 
             // A rejection short-circuits the whole turn right here — no classification, no
             // routing, no agent — exactly like SendDisambiguationAsync's early return further
@@ -399,59 +390,11 @@ public class ConversationSupervisorActor : MorganaActor
             // re-entering guard check fresh (activeAgent, if any, is left untouched either way).
             if (!response.Compliant)
             {
-                actorLogger.Warning($"Message rejected by guard: {response.Violation}");
-
-                // An agent was mid-exchange, so nobody stored the phrase at ingress: the agent
-                // would have done it, but the guard just made sure it never runs. Morgana answers this
-                // turn instead, so the phrase is hers to keep — without it the refusal would sit in
-                // the transcript with nothing above it explaining what was refused.
-                if (!ctx.UserMessageAlreadyStored)
-                    await conversationPersistenceService.AppendOrchestratorMessagesAsync(
-                        conversationId,
-                        [new ChatMessage(ChatRole.User, ctx.OriginalMessage.Text) { CreatedAt = DateTime.UtcNow }]);
-
-                // Sends the guard's rejection text back to the client as the whole reply, tagged
-                // with whatever classification is currently on ctx and the follow-up's active
-                // agent name if there is one; no quick replies, timestamp, or rich card attached.
-                ctx.OriginalSender.Tell(new Records.ConversationResponse(
-                    response.Violation!,
-                    ctx.Classification?.Intent,
-                    ctx.Classification?.Metadata,
-                    activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : Constants.Morgana,
-                    false,
-                    null,
-                    null,
-                    null));
-
-                // Increments the dedicated guard-rejection counter, kept separate from the
-                // generic per-turn counter CloseTurnSpan emits below.
-                Telemetry.GuardRejectionCounter.Add(1);
-
-                // Counts the rejection at the user's door with the layer that decided it.
-                Telemetry.SecurityEvents.Add(1,
-                    new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.User),
-                    new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Rejected),
-                    new KeyValuePair<string, object?>(Telemetry.SecuritySource, response.Source.ToString()));
-
-                // Closes the turn span, tagging it with whatever intent ctx.Classification currently carries.
-                CloseTurnSpan(intent: ctx.Classification?.Intent, completed: false);
-
-                // Returns to Idle without touching activeAgent or activeAgentIntent.
-                Become(Idle);
-
-                // Exits before reaching the compliant-path code below.
+                await RejectAsync(response);
                 return;
             }
 
             actorLogger.Info("Message passed guard check");
-
-            // An admission the guard could not judge is evidence too: a guard failing open again
-            // and again may be under attack.
-            if (response.Source == Records.GuardVerdictSource.FailOpen)
-                Telemetry.SecurityEvents.Add(1,
-                    new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.User),
-                    new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.FailedOpen),
-                    new KeyValuePair<string, object?>(Telemetry.SecuritySource, nameof(Records.GuardVerdictSource.FailOpen)));
 
             // An active agent from a prior turn means this message is the next turn of an
             // ongoing exchange, not a new request to classify — classification is skipped
@@ -493,93 +436,138 @@ public class ConversationSupervisorActor : MorganaActor
             }
         });
 
-        // Routes an explicit GuardActor failure (a thrown exception) to FailOpen.
-        Receive<Status.Failure>(failure => FailOpen(failure.Cause.Message, failure.Cause));
+        // Routes an explicit GuardActor failure (a thrown exception) to FailClosedAsync.
+        ReceiveAsync<Status.Failure>(failure => FailClosedAsync(failure.Cause.GetType().FullName ?? failure.Cause.GetType().Name, failure.Cause));
 
-        // Routes a stalled GuardActor (no response within the timeout above) to FailOpen.
-        Receive<ReceiveTimeout>(_ =>
+        // Routes a stalled GuardActor (no response within the timeout above) to FailClosedAsync.
+        ReceiveAsync<ReceiveTimeout>(async _ =>
         {
             // The guard the supervisor stops waiting for is stopped too, down to its model call.
             phaseCancellation?.Cancel();
 
-            FailOpen("receive timeout", null);
+            await FailClosedAsync(Telemetry.ErrorTypes.Timeout, null);
         });
 
         RegisterCommonHandlers();
         return;
 
         #region Locals
-        // Shared fail-open path for both an explicit Status.Failure from GuardActor and
-        // a ReceiveTimeout (guard service hung past the configured budget). Open, not closed:
-        // an outage in moderation shouldn't be able to take down the whole product for everyone.
-        void FailOpen(string description, Exception? cause)
+        // The turn ends on a refusal, whoever decided it.
+        async Task RejectAsync(Records.GuardRailResult verdict)
         {
-            // Turns off the timeout: GuardActor did respond, even though with a failure, so
-            // there's no more reason to keep waiting. Whichever state this handler switches to
-            // below (AwaitingFollowUpResponse or AwaitingClassification) will set its own timeout
-            // when it starts.
-            Context.SetReceiveTimeout(null);
+            actorLogger.Warning($"Message rejected by guard: {verdict.Violation}");
 
-            // Logs the failure itself and the "fail-open" decision
-            if (cause != null)
-                actorLogger.Error(cause, "Guard check failed: {0}", description);
+            // An agent was mid-exchange, so nobody stored the phrase at ingress: the agent
+            // would have done it, but the guard just made sure it never runs. Morgana answers this
+            // turn instead, so the phrase is hers to keep — without it the refusal would sit in
+            // the transcript with nothing above it explaining what was refused.
+            if (!ctx.UserMessageAlreadyStored)
+                await conversationPersistenceService.AppendOrchestratorMessagesAsync(
+                    conversationId,
+                    [new ChatMessage(ChatRole.User, ctx.OriginalMessage.Text) { CreatedAt = DateTime.UtcNow }]);
+
+            // Sends the guard's rejection text back to the client as the whole reply, tagged
+            // with whatever classification is currently on ctx and the follow-up's active
+            // agent name if there is one; no quick replies, timestamp or rich card attached.
+            ctx.OriginalSender.Tell(new Records.ConversationResponse(
+                verdict.Violation!,
+                ctx.Classification?.Intent,
+                ctx.Classification?.Metadata,
+                activeAgentIntent != null ? GetAgentDisplayName(activeAgentIntent) : Constants.Morgana,
+                false,
+                null,
+                null,
+                null));
+
+            // The rejection counter counts judgments: a guard that could not judge rejected nothing.
+            if (verdict.Source != Records.GuardVerdictSource.FailClosed)
+                Telemetry.GuardRejectionCounter.Add(1);
+
+            // The rejection at the user's door with the layer that decided it.
+            TagList securityTags = new TagList
+            {
+                { Telemetry.SecurityDoor, Telemetry.SecurityDoors.User },
+                { Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Rejected },
+                { Telemetry.SecuritySource, verdict.Source.ToString() }
+            };
+
+            // The technical cause is published only when the message was refused for want of a judgment.
+            if (verdict.ErrorType is not null)
+                securityTags.Add(Telemetry.ErrorType, verdict.ErrorType);
+
+            // Counts the rejection at the user's door.
+            Telemetry.SecurityEvents.Add(1, securityTags);
+
+            // Closes the turn span, tagging it with whatever intent ctx.Classification currently carries.
+            CloseTurnSpan(intent: ctx.Classification?.Intent, completed: false);
+
+            // Returns to Idle without touching activeAgent or activeAgentIntent.
+            Become(Idle);
+        }
+
+        // Closes the guard span on a verdict or on a failure to reach one.
+        void CloseGuardSpan(Records.GuardRailResult verdict, Exception? cause)
+        {
+            // Records which layer decided, so a trace tells a judgment from a refusal for lack of one.
+            guardSpan?.SetTag(Telemetry.GuardSource, verdict.Source.ToString());
+
+            // A guard that could not judge reached no verdict: the span carries the technical cause instead of a compliance finding.
+            if (verdict.Source == Records.GuardVerdictSource.FailClosed)
+            {
+                // Marks the span as errored with the cause that stopped the judgment.
+                guardSpan?.SetStatus(ActivityStatusCode.Error, verdict.ErrorType);
+                guardSpan?.SetTag(Telemetry.ErrorType, verdict.ErrorType);
+
+                // Attaches the exception itself where there was one.
+                if (cause is not null)
+                    guardSpan?.AddException(cause);
+            }
             else
-                actorLogger.Error("Guard check failed: {0}", description);
-            actorLogger.Warning("Guard check failed, failing open (allowing message)");
+            {
+                // Tracks the compliance of the judgment.
+                guardSpan?.SetTag(Telemetry.GuardCompliant, verdict.Compliant);
 
-            // Marks the guard span as errored and disposes it — same shape as the compliant
-            // path's span, but tagged as a failure instead of a compliance verdict.
-            guardSpan?.SetStatus(ActivityStatusCode.Error, description);
-            if (cause != null)
-                guardSpan?.AddException(cause);
+                // Tracks the finding that the user was refused with.
+                if (!verdict.Compliant && verdict.Violation != null)
+                    guardSpan?.SetTag(Telemetry.GuardViolation, verdict.Violation);
+            }
+
+            // Records how long the guard took, from the span's own start.
+            if (guardSpan is not null)
+                Telemetry.GuardDuration.Record((DateTime.UtcNow - guardSpan.StartTimeUtc).TotalMilliseconds);
+
+            // Ends the span and forgets it so no later path closes it twice.
             guardSpan?.Dispose();
             guardSpan = null;
+        }
 
-            // Counts the admission the guard could not judge: an outage in moderation is a gap an attacker can use.
-            Telemetry.SecurityEvents.Add(1,
-                new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.User),
-                new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.FailedOpen),
-                new KeyValuePair<string, object?>(Telemetry.SecuritySource, nameof(Records.GuardVerdictSource.FailOpen)));
+        // Shared fail-closed path for a GuardActor failure and a timeout. A message nobody judged never
+        // reaches the classifier or an agent: the user is asked to send it again.
+        async Task FailClosedAsync(string errorType, Exception? cause)
+        {
+            // Turns off the timeout: GuardActor did respond, even though with a failure, so
+            // there's no more reason to keep waiting.
+            Context.SetReceiveTimeout(null);
 
-            // Failing open doesn't change the routing decision: an active agent from a prior turn
-            // still means this message continues that follow-up exchange, exactly like the
-            // compliant path above — so it still goes straight to that agent, not to classification.
-            if (activeAgent != null)
-            {
-                // Moves the FSM to AwaitingFollowUpResponse, carrying the sender forward.
-                Become(() => AwaitingFollowUpResponse(ctx.OriginalSender));
-
-                // Sends the follow-up request to the active agent. ctx.Classification is passed
-                // here (instead of the literal null the compliant path above uses) but is still
-                // unset either way, since this follow-up path never classifies.
-                activeAgent.Tell(new Records.AgentRequest(
-                    ctx.OriginalMessage.ConversationId,
-                    ctx.OriginalMessage.Text,
-                    ctx.Classification,
-                    ctx.TurnContext,
-                    ctx.ChannelCapabilities,
-                    ctx.UserMessageAlreadyStored,
-                    TurnCancellation: StartPhaseCancellation()));
-            }
+            // Logs the failure itself and the "fail-closed" decision
+            if (cause != null)
+                actorLogger.Error(cause, "Guard check failed: {0}", errorType);
             else
-            {
-                // No active agent: failing open doesn't change this either — it's still a fresh
-                // request that needs classification, exactly like the compliant path above.
-                // Opens the classifier span before dispatching to ClassifierActor, same reasoning
-                // as the compliant path's classifierSpan above (its duration should cover the
-                // full round-trip, not just ClassifierActor's own processing time).
-                classifierSpan = Telemetry.Source.StartActivity(
-                    Telemetry.ClassifierActivity,
-                    ActivityKind.Internal,
-                    ctx.TurnContext);
-                classifierSpan?.SetTag(Telemetry.ConversationId, conversationId);
+                actorLogger.Error("Guard check failed: {0}", errorType);
+            actorLogger.Warning("Guard check failed, failing closed (refusing message)");
 
-                // Moves the FSM to AwaitingClassification, carrying ctx forward.
-                Become(() => AwaitingClassification(ctx));
+            // The refusal the user reads, worded in the UserGuard prompt.
+            string noVerdictRefusal = (await promptResolverService.ResolveAsync(Constants.Prompts.UserGuard))
+                .GetAdditionalProperty<string>(Constants.PromptProperties.NoVerdictMessage);
 
-                // Sends the message to ClassifierActor for classification.
-                classifier.Tell(ctx.OriginalMessage with { TurnCancellation = StartPhaseCancellation() });
-            }
+            // The verdict of a guard that could not judge, carrying the technical cause.
+            Records.GuardRailResult verdict = new Records.GuardRailResult(false, noVerdictRefusal, Records.GuardVerdictSource.FailClosed, errorType);
+
+            // The guard span closes on the failure.
+            CloseGuardSpan(verdict, cause);
+
+            // Ends the turn on the refusal.
+            await RejectAsync(verdict);
         }
         #endregion
     }

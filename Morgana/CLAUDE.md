@@ -228,7 +228,7 @@ Extension points follow one pattern: interface in `Interfaces/`, default impleme
 | Service | Interface | Purpose |
 |---|---|---|
 | `LLMClassifierService` | `IClassifierService` | LLM intent classification; falls back to `"other"` at confidence 0, marked as a classification error |
-| `LLMGuardRailService` | `IGuardRailService` | LLM policy check on the user's message, deterministic check on tool results, `ToolGuard` inspection of every tool result and of what MCP servers and partners offer: an MCP server's tools (examined at startup and again whenever its listing changes) and a partner's card. `PeerGuard` judgment of a partner's question. Answers `IsServerAvailableAndSecure` and `IsPeerAvailableAndSecure` before every external call. **Fails open** on the user's message; a tool result, an offer or a partner's question **fail closed** |
+| `LLMGuardRailService` | `IGuardRailService` | LLM policy check on the user's message, deterministic check on tool results, `ToolGuard` inspection of every tool result and of what MCP servers and partners offer: an MCP server's tools (examined at startup and again whenever its listing changes) and a partner's card. `PeerGuard` judgment of a partner's question. Answers `IsServerAvailableAndSecure` and `IsPeerAvailableAndSecure` before every external call. Every door **fails closed**: what no guard could judge is refused, the user's message included |
 | `LLMPresenterService` | `IPresenterService` | Welcome message and its reintroduction, in Morgana's personality; the buttons are the intents' own. Never throws |
 | `CommandRegistryService` | `ICommandRegistryService` | Publishes every `ICommand` in DI to the channels' palettes; a clashing name or an option declared twice is fatal |
 | `CompactHistoryCommand` | `ICommand` | `/compact`: folds the active agent's history on the record, reporting a progress widget. Like every command, it works with its own DI stack and never enters the turn pipeline |
@@ -445,7 +445,7 @@ Spans `morgana.turn`, `morgana.guard`, `morgana.classifier`, `morgana.router`, `
 `agent.tools_invoked` carrying tool names and **never** arguments. HTTP Activity context arrives as
 an `ActivityLink`. Metric `morgana.dust.consumed` tagged by role, beside MEAI's `gen_ai.usage.*`.
 Metric `morgana.security.events` counts what happens at every guarded door, tagged by door, outcome
-and the layer that decided (`GuardVerdictSource`), a fail-open included; a withheld tool result is
+and the layer that decided (`GuardVerdictSource`), a fail-closed included; a withheld tool result is
 also an event on the span of its turn. **Never a tool name on the metric**: an MCP server chooses its
 names. Exporters configured under `Morgana:OpenTelemetry:Exporters`.
 

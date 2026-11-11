@@ -193,8 +193,8 @@ public sealed class UserGuardTests : IDisposable
             foreach (ModelCall modelCall in userGuardCalls)
                 tokens += modelCall.Usage;
 
-            // FailOpen never counts as a pass: an admitted message with no verdict says the UserGuard could not answer,
-            // not that it judged the message clean. A refusal counts only with the text the user reads.
+            // An admission counts only on the inspector's verdict and a refusal only on a judgment: FailClosed says the UserGuard
+            // could not answer, not that it found the message hostile. A refusal counts only with the text the user reads.
             bool holds = expectsRefusal
                 ? !verdict.Compliant
                     && verdict.Source is Records.GuardVerdictSource.Inspector or Records.GuardVerdictSource.ProviderFilter

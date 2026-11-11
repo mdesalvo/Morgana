@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -99,6 +100,11 @@ public partial class LLMGuardRailService : IGuardRailService
     private readonly string contentFilteredRefusal;
 
     /// <summary>
+    /// The refusal for a message that nobody could judge, worded in the UserGuard prompt.
+    /// </summary>
+    private readonly string noVerdictRefusal;
+
+    /// <summary>
     /// The MCP registry that lists a server again whenever an agent asks for its tools.
     /// </summary>
     private readonly IMCPClientRegistryService mcpClientRegistryService;
@@ -185,6 +191,9 @@ public partial class LLMGuardRailService : IGuardRailService
 
         // The one refusal the guard words itself rather than the model: the provider blocked the message before any judgment.
         contentFilteredRefusal = userGuardPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.ContentFilteredMessage);
+
+        // The second refusal the guard words itself: no verdict could be reached, so the user is asked to send the message again.
+        noVerdictRefusal = userGuardPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.NoVerdictMessage);
     }
 
     /// <inheritdoc/>
@@ -223,28 +232,27 @@ public partial class LLMGuardRailService : IGuardRailService
                 response, Records.DefaultJsonSerializerOptions);
 
             // For the log line alone. The answer below is decided on the verdict itself.
-            bool compliant = llmResult?.Compliant ?? true;
+            bool compliant = llmResult?.Compliant ?? false;
 
             logger.LogInformation(
                 "LLMGuardRailService: LLM policy check result — compliant={Compliant} for conversation {ConversationId}",
                 compliant, conversationId);
 
-            // A verdict that could not be read admits the message. Refusing a user over a model that
-            // answered badly would silence a legitimate turn, so the doubt is spent in their favour —
-            // the same choice the general catch below makes.
+            // A verdict that could not be read refuses the message, because a guard that does not answer
+            // in its shape may have been talked to by the very message it was reading.
             return llmResult != null
                 ? new Records.GuardRailResult(llmResult.Compliant, llmResult.Violation, Records.GuardVerdictSource.Inspector)
-                : new Records.GuardRailResult(Compliant: true, Violation: null, Source: Records.GuardVerdictSource.FailOpen);
+                : new Records.GuardRailResult(Compliant: false, Violation: noVerdictRefusal, Source: Records.GuardVerdictSource.FailClosed, ErrorType: Telemetry.ErrorTypes.UnreadableVerdict);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            // A check stopped by its caller is no verdict, so it must not fail open.
+            // A check stopped by its caller is no verdict: the caller that stopped waiting answers for the message.
             throw;
         }
         catch (Exception ex) when (llmService.GetLanguageModel(llmService.FrameworkTier).IsContentFilterRefusal(ex))
         {
             // The provider's own content filter blocked the prompt before any judgment could run —
-            // a genuine violation signal, never fail-open.
+            // a genuine violation signal, not a failure of the guard.
             logger.LogWarning(ex,
                 "LLMGuardRailService: provider-level content filter rejected the prompt for conversation {ConversationId} — treating as a compliance violation",
                 conversationId);
@@ -256,12 +264,11 @@ public partial class LLMGuardRailService : IGuardRailService
         }
         catch (Exception ex)
         {
-            // Fail open: a transient LLM error must not block legitimate users.
+            // What nobody could judge is refused: the user is asked to send it again.
             logger.LogError(ex,
-                "LLMGuardRailService: LLM policy check failed for conversation {ConversationId} — failing open",
-                conversationId);
+                "LLMGuardRailService: LLM policy check failed for conversation {ConversationId} — failing closed", conversationId);
 
-            return new Records.GuardRailResult(Compliant: true, Violation: null, Source: Records.GuardVerdictSource.FailOpen);
+            return new Records.GuardRailResult(Compliant: false, Violation: noVerdictRefusal, Source: Records.GuardVerdictSource.FailClosed, ErrorType: ex.GetType().FullName);
         }
     }
 
@@ -393,7 +400,7 @@ public partial class LLMGuardRailService : IGuardRailService
             // Nothing was offered to judge: the agent gets no tools and an earlier approval of the server stands untouched.
             return new Records.MCPServerAdmission(
                 [],
-                new Records.GuardRailResult(false, "the server could not be listed", Records.GuardVerdictSource.FailClosed));
+                new Records.GuardRailResult(false, "the server could not be listed", Records.GuardVerdictSource.FailClosed, ErrorType: ex.GetType().FullName));
         }
 
         // The offer in the shape the inspector reads: each tool with its name, description and input schema.
@@ -549,12 +556,20 @@ public partial class LLMGuardRailService : IGuardRailService
                 "LLMGuardRailService: offer of {Source} refused — {Violation}",
                 sourceKey, result.Violation);
 
-            // Counts the refusal by the layer that decided it, under the door the offer came through.
-            Telemetry.SecurityEvents.Add(
-                1,
-                new KeyValuePair<string, object?>(Telemetry.SecurityDoor, securityDoor),
-                new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Refused),
-                new KeyValuePair<string, object?>(Telemetry.SecuritySource, result.Source.ToString()));
+            // The refused offer by the layer that decided it, under the door the offer came through.
+            TagList securityTags = new TagList
+            {
+                { Telemetry.SecurityDoor, securityDoor },
+                { Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Refused },
+                { Telemetry.SecuritySource, result.Source.ToString() }
+            };
+
+            // The technical cause is published only when the offer was refused for want of a judgment.
+            if (result.ErrorType is not null)
+                securityTags.Add(Telemetry.ErrorType, result.ErrorType);
+
+            // Counts the refused offer, which shuts the source for every agent.
+            Telemetry.SecurityEvents.Add(1, securityTags);
         }
         // An admitted offer opens the source to the agents that declare it.
         else
@@ -609,7 +624,7 @@ public partial class LLMGuardRailService : IGuardRailService
                     "LLMGuardRailService: inspector returned no readable verdict on {Subject} for conversation {ConversationId} — withholding",
                     subjectLabel, conversationId);
 
-                return new Records.GuardRailResult(false, "the inspector returned no readable verdict", Records.GuardVerdictSource.FailClosed);
+                return new Records.GuardRailResult(false, "the inspector returned no readable verdict", Records.GuardVerdictSource.FailClosed, ErrorType: Telemetry.ErrorTypes.UnreadableVerdict);
             }
 
             logger.LogInformation(
@@ -652,7 +667,7 @@ public partial class LLMGuardRailService : IGuardRailService
                 "LLMGuardRailService: inspection of {Subject} failed for conversation {ConversationId} — withholding",
                 subjectLabel, conversationId);
 
-            return new Records.GuardRailResult(false, "no verdict could be reached on a source nobody here vouches for", Records.GuardVerdictSource.FailClosed);
+            return new Records.GuardRailResult(false, "no verdict could be reached on a source nobody here vouches for", Records.GuardVerdictSource.FailClosed, ErrorType: ex.GetType().FullName);
         }
     }
 

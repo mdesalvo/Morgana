@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Morgana.AI;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using Morgana.Contracts;
@@ -12,7 +13,7 @@ namespace PromptHarness.Tests;
 
 /// <summary>
 /// The UserGuard's path on a user's message over a scripted model: what the guard is handed beside the message, which is the last answer
-/// the user received. No real model is reached.
+/// the user received and the refusal when no verdict can be read. No real model is reached.
 /// </summary>
 /// <remarks>
 /// Deterministic and free: the guard is the service's own and the judge is a scripted answer, so what the guard sent shows in the prompt it recorded.
@@ -184,6 +185,46 @@ public sealed class UserMessageCheckTests
         // B never received that answer: its message is judged alone.
         using JsonDocument userGuardSubject = JsonDocument.Parse(languageModel.UserPrompt!);
         Assert.False(userGuardSubject.RootElement.TryGetProperty("answer", out JsonElement _));
+    }
+
+    [Fact]
+    public async Task A_message_with_no_readable_verdict_is_refused()
+    {
+        // The guard answers in prose, as a text that talked to it may have made it do.
+        ScriptedLanguageModelService languageModel = new ScriptedLanguageModelService(() => "The service is temporarily unavailable.");
+        ChannelMetadataStore channelMetadataStore = GuardRailServiceFactory.CreateChannelMetadataStore();
+        LLMGuardRailService guard = UserGuard(languageModel, channelMetadataStore);
+
+        // An ordinary message that nobody could judge.
+        Records.GuardRailResult verdict = await guard.CheckUserMessageAsync(ConversationId, UserMessage);
+
+        // Refused: a message is never admitted unjudged.
+        Assert.False(verdict.Compliant);
+        Assert.Equal(Records.GuardVerdictSource.FailClosed, verdict.Source);
+
+        // The user reads the UserGuard prompt's own wording.
+        Records.Prompt userGuardPrompt = await new ConfigurationPromptResolverService(new ScriptedDomain()).ResolveAsync("UserGuard");
+        Assert.Equal(userGuardPrompt.GetAdditionalProperty<string>("NoVerdictMessage"), verdict.Violation);
+    }
+
+    [Fact]
+    public async Task A_message_whose_judgment_throws_is_refused()
+    {
+        // The judgment fails with a transport error; the model service has no provider to ask about it.
+        ScriptedLanguageModelService languageModel = new ScriptedLanguageModelService(() => throw new HttpRequestException("unreachable"));
+        ChannelMetadataStore channelMetadataStore = GuardRailServiceFactory.CreateChannelMetadataStore();
+        LLMGuardRailService guard = UserGuard(languageModel, channelMetadataStore);
+
+        // An ordinary message whose judgment never completes.
+        Records.GuardRailResult verdict = await guard.CheckUserMessageAsync(ConversationId, UserMessage);
+
+        // Refused: the generic catch ran although the provider filter could not be asked.
+        Assert.False(verdict.Compliant);
+        Assert.Equal(Records.GuardVerdictSource.FailClosed, verdict.Source);
+
+        // The user reads the UserGuard prompt's own wording.
+        Records.Prompt userGuardPrompt = await new ConfigurationPromptResolverService(new ScriptedDomain()).ResolveAsync("UserGuard");
+        Assert.Equal(userGuardPrompt.GetAdditionalProperty<string>("NoVerdictMessage"), verdict.Violation);
     }
 
     /// <summary>Builds the guard over a scripted judge and the store that holds the answers.</summary>

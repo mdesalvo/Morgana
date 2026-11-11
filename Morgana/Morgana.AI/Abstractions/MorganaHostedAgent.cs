@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Akka.Actor;
@@ -232,13 +233,22 @@ public sealed class MorganaHostedAgent : AIAgent
                 // A declined question never reaches the agent.
                 if (!peerQuestionVerdict.Compliant)
                 {
-                    // Counts the refusal by the layer that decided it and by the partner.
-                    Telemetry.SecurityEvents.Add(1,
-                        new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.Peer),
-                        new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Rejected),
-                        new KeyValuePair<string, object?>(Telemetry.SecuritySource, peerQuestionVerdict.Source.ToString()),
-                        new KeyValuePair<string, object?>(Telemetry.ConsultationCaller, partnerName),
-                        new KeyValuePair<string, object?>(Telemetry.AgentIntent, intent));
+                    // The refusal by the layer that decided it and by the partner.
+                    TagList securityTags = new TagList
+                    {
+                        { Telemetry.SecurityDoor, Telemetry.SecurityDoors.Peer },
+                        { Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Rejected },
+                        { Telemetry.SecuritySource, peerQuestionVerdict.Source.ToString() },
+                        { Telemetry.ConsultationCaller, partnerName },
+                        { Telemetry.AgentIntent, intent }
+                    };
+
+                    // The technical cause is published only when the question was declined for want of a judgment.
+                    if (peerQuestionVerdict.ErrorType is not null)
+                        securityTags.Add(Telemetry.ErrorType, peerQuestionVerdict.ErrorType);
+
+                    // Counts the declined question at the partners' door.
+                    Telemetry.SecurityEvents.Add(1, securityTags);
 
                     // The partner reads a plain answer in the envelope of every refusal of this door and no agent is disturbed.
                     return BuildAgentResponseFromMessage($"The agent for '{intent}' declined this question. Proceed without it.");

@@ -138,6 +138,9 @@
       "AdditionalProperties": [
         {
           "ContentFilteredMessage": "That is a path closed to you and no phrasing will reopen it."
+        },
+        {
+          "NoVerdictMessage": "My sight clouded before I could read your words: send them to me again in a moment."
         }
       ]
     },

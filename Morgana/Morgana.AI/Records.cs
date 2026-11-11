@@ -730,10 +730,7 @@ public static class Records
         /// <summary>The provider's own content filter refused the text before any judgment.</summary>
         ProviderFilter,
 
-        /// <summary>No judgment could be reached and the text was admitted.</summary>
-        FailOpen,
-
-        /// <summary>No judgment could be reached on a text nobody here vouches for and the text was withheld.</summary>
+        /// <summary>No judgment could be reached and the text was refused.</summary>
         FailClosed,
 
         /// <summary>The guard is switched off and the text was admitted unjudged.</summary>
@@ -741,15 +738,17 @@ public static class Records
     }
 
     /// <summary>
-    /// The verdict of a guard: whether the text passes, the finding when it does not and which layer decided.
+    /// The verdict of a guard: whether the text passes, the finding when it does not, which layer decided and the technical cause when no judgment was reached.
     /// </summary>
     /// <param name="Compliant">True if the text passes all checks</param>
     /// <param name="Violation">Human-readable finding when Compliant is false</param>
     /// <param name="Source">The layer that decided the verdict</param>
+    /// <param name="ErrorType">The technical cause when no judgment could be reached: timeout, an unreadable verdict or the full name of the exception; null on every judgment</param>
     public record GuardRailResult(
         bool Compliant,
         string? Violation,
-        GuardVerdictSource Source);
+        GuardVerdictSource Source,
+        string? ErrorType = null);
 
     /// <summary>
     /// Sent by an agent back to the supervisor when the LLM provider rejects the request

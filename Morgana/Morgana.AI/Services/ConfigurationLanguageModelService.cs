@@ -411,7 +411,7 @@ public class ConfigurationLanguageModelService : ILanguageModelService
         {
             // A provider-level content filter rejection is not a transient service error — swallowing it
             // into the generic fallback text below would hide a genuine signal from callers equipped to act
-            // on it (see LLMGuardRailService, which treats this as compliant:false rather than fail-open).
+            // on it (see LLMGuardRailService, which treats this as compliant:false).
             // Classifier/Presenter/ChannelAdapter have their own broad catch-all fallbacks and handle it there instead.
             throw;
         }

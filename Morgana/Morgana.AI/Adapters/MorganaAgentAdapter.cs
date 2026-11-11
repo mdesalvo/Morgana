@@ -599,25 +599,23 @@ public class MorganaAgentAdapter
 
                 // A compliant result reaches the model untouched.
                 if (verdict.Compliant)
-                {
-                    // A result the guard could not check was admitted by default: a guard failing open
-                    // again and again may be under attack.
-                    if (verdict.Source == Records.GuardVerdictSource.FailOpen)
-                        Telemetry.SecurityEvents.Add(1,
-                            new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.Tool),
-                            new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.FailedOpen),
-                            new KeyValuePair<string, object?>(Telemetry.SecuritySource, nameof(Records.GuardVerdictSource.FailOpen)),
-                            new KeyValuePair<string, object?>(Telemetry.AgentIntent, agentIntent));
-
                     return result;
-                }
 
-                // Counts the refusal by the layer that decided it.
-                Telemetry.SecurityEvents.Add(1,
-                    new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.Tool),
-                    new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Withheld),
-                    new KeyValuePair<string, object?>(Telemetry.SecuritySource, verdict.Source.ToString()),
-                    new KeyValuePair<string, object?>(Telemetry.AgentIntent, agentIntent));
+                // The withheld result by the layer that decided it.
+                TagList securityTags = new TagList
+                {
+                    { Telemetry.SecurityDoor, Telemetry.SecurityDoors.Tool },
+                    { Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Withheld },
+                    { Telemetry.SecuritySource, verdict.Source.ToString() },
+                    { Telemetry.AgentIntent, agentIntent }
+                };
+
+                // The technical cause is published only when the result was withheld for want of a judgment.
+                if (verdict.ErrorType is not null)
+                    securityTags.Add(Telemetry.ErrorType, verdict.ErrorType);
+
+                // Counts the withheld result at the tools' door.
+                Telemetry.SecurityEvents.Add(1, securityTags);
 
                 // The event lands on the span current while the tool runs (the agent's own or a child of it)
                 // so the trace of the turn shows what was withheld and why without the text itself.
@@ -628,6 +626,7 @@ public class MorganaAgentAdapter
                         [Telemetry.ToolName] = toolName,
                         [Telemetry.SecurityOutcome] = Telemetry.SecurityOutcomes.Withheld,
                         [Telemetry.SecuritySource] = verdict.Source.ToString(),
+                        [Telemetry.ErrorType] = verdict.ErrorType,
                         [Telemetry.SecurityFinding] = verdict.Violation ?? ""
                     }));
 
