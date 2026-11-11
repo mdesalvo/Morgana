@@ -10,14 +10,18 @@ using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Abstractions;
 
-/// <summary>The <see cref="AIAgent"/> under which one intent is published over A2A, carrying each inbound request to the actor serving that intent.</summary>
-// It owns no model and no session: the agent behind it is the same per-conversation actor a user's turn reaches.
+/// <summary>
+/// The <see cref="AIAgent"/> under which one intent is published over A2A, carrying each inbound request to the actor serving that intent.
+/// It owns no model and no session: the agent behind it is the same per-conversation actor a user's turn reaches.
+/// </summary>
 public sealed class MorganaHostedAgent : AIAgent
 {
-    /// <summary>The longest conversation name an inbound request may be served on.</summary>
-    // A conversation of this installation is an identifier of a few dozen characters, so the limit costs an honest caller
-    // nothing. The name reaches a filesystem, whose own limit on a path component would otherwise be met mid-turn by a
-    // caller free to write whatever it likes.
+    /// <summary>
+    /// The longest conversation name an inbound request may be served on.
+    /// A conversation of this installation is an identifier of a few dozen characters, so the limit costs an honest caller
+    /// nothing. The name reaches a filesystem, whose own limit on a path component would otherwise be met mid-turn by a
+    /// caller free to write whatever it likes.
+    /// </summary>
     private const int MaximumConversationNameLength = 128;
 
     /// <summary>The intent this hosted agent publishes.</summary>
@@ -32,23 +36,31 @@ public sealed class MorganaHostedAgent : AIAgent
     /// <summary>Composes the note in front of every question, the one signal telling the answering agent that its reader is a colleague and not the user.</summary>
     private readonly IPromptComposerService promptComposerService;
 
-    /// <summary>Hands back the actor system on the turn that needs it.</summary>
-    // The hosted agents are registered before the actor system starts, so the system cannot be handed over at construction.
+    /// <summary>
+    /// Hands back the actor system on the turn that needs it.
+    /// The hosted agents are registered before the actor system starts, so the system cannot be handed over at construction.
+    /// </summary>
     private readonly Func<ActorSystem> actorSystemResolver;
 
     /// <summary>How long the serving actor is waited for before the agent is reported unreachable.</summary>
     private readonly TimeSpan requestTimeout;
 
-    /// <summary>The conversation's ledger, asked what serving one consultation cost so the answer can carry it back.</summary>
-    // Every dust question, the reading, the difference and its clamping alike, is the ledger's own and never computed here.
+    /// <summary>
+    /// The conversation's ledger, asked what serving one consultation cost so the answer can carry it back.
+    /// Every dust question, the reading, the difference and its clamping alike, is the ledger's own and never computed here.
+    /// </summary>
     private readonly IDustLimitService dustLimitService;
 
-    /// <summary>How many conversations the asking partner may still open.</summary>
-    // Behind this door the caller names the conversation, so the conversation's own budget bounds the exchange but not the caller.
+    /// <summary>
+    /// How many conversations the asking partner may still open.
+    /// Behind this door the caller names the conversation, so the conversation's own budget bounds the exchange but not the caller.
+    /// </summary>
     private readonly IPeerAdmissionService peerAdmissionService;
 
-    /// <summary>The owner of the conversation's record, asked to open it before the turn runs.</summary>
-    // A partner's exchange has no database until one is made and until then nothing that the turn spends is recorded anywhere.
+    /// <summary>
+    /// The owner of the conversation's record, asked to open it before the turn runs.
+    /// A partner's exchange has no database until one is made and until then nothing that the turn spends is recorded anywhere.
+    /// </summary>
     private readonly IConversationPersistenceService persistenceService;
 
     /// <summary>Judges a partner's question before any agent here reads it.</summary>
@@ -293,8 +305,10 @@ public sealed class MorganaHostedAgent : AIAgent
         }
     }
 
-    /// <summary>The streaming form of <see cref="RunCoreAsync"/>, emitting the answer as a single update.</summary>
-    // Nobody watches a consultation and the published card declares no streaming: this exists because AIAgent requires it.
+    /// <summary>
+    /// The streaming form of <see cref="RunCoreAsync"/>, emitting the answer as a single update.
+    /// Nobody watches a consultation and the published card declares no streaming: this exists because AIAgent requires it.
+    /// </summary>
     protected override async IAsyncEnumerable<AgentResponseUpdate> RunCoreStreamingAsync(
         IEnumerable<ChatMessage> messages,
         AgentSession? session = null,
@@ -347,9 +361,11 @@ public sealed class MorganaHostedAgent : AIAgent
         => JsonSerializer.Serialize(peerConsultationResponse, Records.DefaultJsonSerializerOptions);
 }
 
-/// <summary>The session of <see cref="MorganaHostedAgent"/>, carrying the conversation an inbound A2A request belongs to and the caller that named it.</summary>
-// A2A identifies a conversation by its contextId, which the hosting layer turns into the key it asks a session under.
-// This session is the only place that identity reaches the hosted agent, which is handed a session but never the request.
+/// <summary>
+/// The session of <see cref="MorganaHostedAgent"/>, carrying the conversation an inbound A2A request belongs to and the caller that named it.
+/// A2A identifies a conversation by its contextId, which the hosting layer turns into the key it asks a session under.
+/// This session is the only place that identity reaches the hosted agent, which is handed a session but never the request.
+/// </summary>
 public sealed class MorganaHostedAgentSession : AgentSession
 {
     /// <summary>The conversation this request is served on.</summary>
@@ -373,14 +389,18 @@ public sealed class MorganaHostedAgentSession : AgentSession
 // serves A2A at all has to take it as it stands: nothing here chooses to use a provisional API.
 #pragma warning disable MAAI001
 
-/// <summary>The <see cref="AgentSessionStore"/> of <see cref="MorganaHostedAgent"/>, turning a request's A2A context id into the conversation it is served on.</summary>
-// It stores nothing on purpose: a Morgana agent's state lives in its actor and, encrypted, in the conversation's database,
-// so a second store would be a copy that silently diverges.
+/// <summary>
+/// The <see cref="AgentSessionStore"/> of <see cref="MorganaHostedAgent"/>, turning a request's A2A context id into the conversation it is served on.
+/// It stores nothing on purpose: a Morgana agent's state lives in its actor and, encrypted, in the conversation's database,
+/// so a second store would be a copy that silently diverges.
+/// </summary>
 public sealed class MorganaHostedAgentSessionStore : AgentSessionStore
 {
-    /// <summary>Parts a partner's name from the context id it wrote.</summary>
-    // A character nobody puts in an issuer name, so two partners cannot be made to agree on one conversation by choosing
-    // their context ids around it.
+    /// <summary>
+    /// Parts a partner's name from the context id it wrote.
+    /// A character nobody puts in an issuer name, so two partners cannot be made to agree on one conversation by choosing
+    /// their context ids around it.
+    /// </summary>
     private const string ForeignConversationSeparator = "~";
 
     /// <summary>Names the caller that asked, taken from the token the gate already validated.</summary>

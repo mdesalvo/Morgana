@@ -2,9 +2,11 @@ using Morgana.AI.Attributes;
 
 namespace Morgana.AI.Interfaces;
 
-/// <summary>Judges what reaches Morgana's models from outside: the user's message, tool results, partners' questions and what MCP servers and partners offer.</summary>
-// Every door fails closed: a text that cannot be judged is refused whoever wrote it, so a guard that cannot answer never admits
-// what it was asked to judge. An offer that cannot be judged is refused without being remembered, so the next admission asks again.
+/// <summary>
+/// Judges what reaches Morgana's models from outside: the user's message, tool results, partners' questions and what MCP servers and partners offer.
+/// Every door fails closed: a text that cannot be judged is refused whoever wrote it, so a guard that cannot answer never admits
+/// what it was asked to judge. An offer that cannot be judged is refused without being remembered, so the next admission asks again.
+/// </summary>
 public interface IGuardRailService
 {
     /// <summary>Judges the user's message beside the last answer this process delivered to the conversation; alone when there is none.</summary>

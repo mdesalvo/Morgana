@@ -1,16 +1,20 @@
 namespace Morgana.AI.Attributes;
 
-/// <summary>Declares a colleague that this agent may consult, offered to its model as the function <c>consult_{intent}</c>.</summary>
-// Declared rather than implicit, so the topology is validated at startup and an agent pays in prompt tokens
-// only for the colleagues it needs.
+/// <summary>
+/// Declares a colleague that this agent may consult, offered to its model as the function <c>consult_{intent}</c>.
+/// Declared rather than implicit, so the topology is validated at startup and an agent pays in prompt tokens
+/// only for the colleagues it needs.
+/// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class ConsultsAgentAttribute : Attribute
 {
     /// <summary>The intent that the colleague handles, as its <see cref="HandlesIntentAttribute"/> names it.</summary>
     public string Intent { get; }
 
-    /// <summary>The partner publishing the colleague, as <c>Morgana:AgentToAgent:Partners</c> names it; null for an agent of this installation.</summary>
-    // A name and not an address: whose agent to call is the agent author's decision, where that agent runs is the deployment's.
+    /// <summary>
+    /// The partner publishing the colleague, as <c>Morgana:AgentToAgent:Partners</c> names it; null for an agent of this installation.
+    /// A name and not an address: whose agent to call is the agent author's decision, where that agent runs is the deployment's.
+    /// </summary>
     public string? Instance { get; }
 
     /// <summary>Declares one colleague, of this installation or of a partner.</summary>

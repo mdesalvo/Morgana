@@ -2,9 +2,11 @@ using Morgana.Contracts;
 
 namespace Morgana.AI.Interfaces;
 
-/// <summary>Resolves the transport registered under the <c>deliveryMode</c> that a channel declared at the handshake.</summary>
-// Dispatch follows DeliveryMode and never the free-form ChannelName, which the client controls and could name anything.
-// The valid keys are what DI registers rather than an enum, so a new transport is one registration and no contract moves.
+/// <summary>
+/// Resolves the transport registered under the <c>deliveryMode</c> that a channel declared at the handshake.
+/// Dispatch follows DeliveryMode and never the free-form ChannelName, which the client controls and could name anything.
+/// The valid keys are what DI registers rather than an enum, so a new transport is one registration and no contract moves.
+/// </summary>
 public interface IChannelServiceFactory
 {
     /// <summary>

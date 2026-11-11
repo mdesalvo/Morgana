@@ -5,13 +5,17 @@ namespace Morgana.Contracts;
 /// <summary>Transport-agnostic envelope for a structured outbound message delivered to the end user through an <c>IChannelService</c>.</summary>
 public sealed record ChannelMessage
 {
-    /// <summary>The conversation this message belongs to.</summary>
-    // Doubles as the key for channel group routing.
+    /// <summary>
+    /// The conversation this message belongs to.
+    /// Doubles as the key for channel group routing.
+    /// </summary>
     [JsonPropertyName("conversationId")]
     public required string ConversationId { get; init; }
 
-    /// <summary>The message text shown to the user.</summary>
-    // Whether it may carry markdown depends on the target channel's ChannelCapabilities.SupportsMarkdown.
+    /// <summary>
+    /// The message text shown to the user.
+    /// Whether it may carry markdown depends on the target channel's ChannelCapabilities.SupportsMarkdown.
+    /// </summary>
     [JsonPropertyName("text")]
     public required string Text { get; init; }
 
@@ -23,8 +27,10 @@ public sealed record ChannelMessage
     [JsonPropertyName("messageType")]
     public string MessageType { get; init; } = ChannelMessageTypes.Assistant;
 
-    /// <summary>The quick reply buttons to render as clickable choices; null when there are none.</summary>
-    // The model generates quick replies and they constitute a stable contract.
+    /// <summary>
+    /// The quick reply buttons to render as clickable choices; null when there are none.
+    /// The model generates quick replies and they constitute a stable contract.
+    /// </summary>
     [JsonPropertyName("quickReplies")]
     public List<QuickReply>? QuickReplies { get; init; }
 
@@ -32,8 +38,10 @@ public sealed record ChannelMessage
     [JsonPropertyName("richCard")]
     public RichCard? RichCard { get; init; }
 
-    /// <summary>Why a notice was sent, one of <see cref="ChannelErrorReasons"/>, when MessageType is <see cref="ChannelMessageTypes.Error"/> or <see cref="ChannelMessageTypes.SystemWarning"/>; null otherwise.</summary>
-    // A failed delivery reports its cause after the prefix delivery_error:.
+    /// <summary>
+    /// Why a notice was sent, one of <see cref="ChannelErrorReasons"/>, when MessageType is <see cref="ChannelMessageTypes.Error"/> or <see cref="ChannelMessageTypes.SystemWarning"/>; null otherwise.
+    /// A failed delivery reports its cause after the prefix delivery_error:.
+    /// </summary>
     [JsonPropertyName("errorReason")]
     public string? ErrorReason { get; init; }
 
@@ -49,9 +57,11 @@ public sealed record ChannelMessage
     [JsonPropertyName("fadingMessageDurationSeconds")]
     public int? FadingMessageDurationSeconds { get; init; } = 10;
 
-    /// <summary>How far the command that sent this message has got; present only on a frame that a running command pushes.</summary>
-    // A frame reports work rather than saying something: a channel drawing it keeps it out of the transcript
-    // and lets the next frame replace it. Null on everything said in the conversation.
+    /// <summary>
+    /// How far the command that sent this message has got; present only on a frame that a running command pushes.
+    /// A frame reports work rather than saying something: a channel drawing it keeps it out of the transcript
+    /// and lets the next frame replace it. Null on everything said in the conversation.
+    /// </summary>
     [JsonPropertyName("progress")]
     public CommandProgress? Progress { get; init; }
 

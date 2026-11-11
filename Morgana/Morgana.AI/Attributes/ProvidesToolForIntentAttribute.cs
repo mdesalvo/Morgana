@@ -1,8 +1,10 @@
 namespace Morgana.AI.Attributes;
 
-/// <summary>Marks a <see cref="Tools.MorganaTool"/> class as the domain tools of the agent that handles an intent.</summary>
-// Every public instance method that the class itself declares is a tool, described by its [Description] and by those of
-// its parameters; a parameter whose value the user or the context supplies also carries [ToolParameter].
+/// <summary>
+/// Marks a <see cref="Tools.MorganaTool"/> class as the domain tools of the agent that handles an intent.
+/// Every public instance method that the class itself declares is a tool, described by its [Description] and by those of
+/// its parameters; a parameter whose value the user or the context supplies also carries [ToolParameter].
+/// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
 public class ProvidesToolForIntentAttribute : Attribute
 {

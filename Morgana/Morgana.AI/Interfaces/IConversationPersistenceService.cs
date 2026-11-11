@@ -5,8 +5,10 @@ using Morgana.Contracts;
 
 namespace Morgana.AI.Interfaces;
 
-/// <summary>The record of a conversation: each participant's session, its channel, its shared context and the transcript built from them.</summary>
-// The one place that knows how a row encodes its messages, Morgana's own row included.
+/// <summary>
+/// The record of a conversation: each participant's session, its channel, its shared context and the transcript built from them.
+/// The one place that knows how a row encodes its messages, Morgana's own row included.
+/// </summary>
 public interface IConversationPersistenceService
 {
     /// <summary>
@@ -94,29 +96,39 @@ public interface IConversationPersistenceService
         IReadOnlyList<Microsoft.Extensions.AI.ChatMessage> messages,
         int messagesReadCount);
 
-    /// <summary>Creates the conversation's database with the current schema when it does not exist yet; calling it again changes nothing.</summary>
-    // A partner's exchange arrives with no handshake, so the hosted agent opens its record here before the turn spends anything.
+    /// <summary>
+    /// Creates the conversation's database with the current schema when it does not exist yet; calling it again changes nothing.
+    /// A partner's exchange arrives with no handshake, so the hosted agent opens its record here before the turn spends anything.
+    /// </summary>
     Task EnsureDatabaseInitializedAsync(string conversationId);
 
-    /// <summary>Persists the channel that the conversation settled at its handshake, creating the conversation's database when needed.</summary>
-    // The handshake is the first write of a conversation started by a channel, so the database may not exist yet.
+    /// <summary>
+    /// Persists the channel that the conversation settled at its handshake, creating the conversation's database when needed.
+    /// The handshake is the first write of a conversation started by a channel, so the database may not exist yet.
+    /// </summary>
     Task SaveChannelMetadataAsync(string conversationId, ChannelMetadata metadata);
 
     /// <summary>The channel persisted for the conversation; null when it has no database or no handshake, which callers refuse to serve.</summary>
     Task<ChannelMetadata?> LoadChannelMetadataAsync(string conversationId);
 
-    /// <summary>Records a shared context variable in the conversation's registry for every agent to read, the first value written winning.</summary>
-    // A later write of another value is ignored rather than overwriting the first one. It may run before the agent's first save,
-    // so an implementation creates the database when needed.
+    /// <summary>
+    /// Records a shared context variable in the conversation's registry for every agent to read, the first value written winning.
+    /// A later write of another value is ignored rather than overwriting the first one. It may run before the agent's first save,
+    /// so an implementation creates the database when needed.
+    /// </summary>
     Task UpsertSharedVariableAsync(string conversationId, string variableName, object variableValue, string sourceAgentIntent);
 
-    /// <summary>Every shared context variable written so far in the conversation; empty when there are none or no database exists.</summary>
-    // Every agent reads it at the start of each turn and merges it through MorganaAIContextProvider.MergeSharedContext, which
-    // keeps the values the agent's own session already holds.
+    /// <summary>
+    /// Every shared context variable written so far in the conversation; empty when there are none or no database exists.
+    /// Every agent reads it at the start of each turn and merges it through MorganaAIContextProvider.MergeSharedContext, which
+    /// keeps the values the agent's own session already holds.
+    /// </summary>
     Task<Dictionary<string, object>> LoadSharedVariablesAsync(string conversationId);
 
-    /// <summary>Tells whether the conversation exists on record, telling a genuine conversation from an identifier never materialised.</summary>
-    // Asynchronous because a store other than SQLite may answer over the network.
+    /// <summary>
+    /// Tells whether the conversation exists on record, telling a genuine conversation from an identifier never materialised.
+    /// Asynchronous because a store other than SQLite may answer over the network.
+    /// </summary>
     Task<bool> ConversationExistsAsync(string conversationId);
 
     /// <summary>Tells whether SaveParticipantMessagesAsync rewrote the agent's row since the agent last read it, leaving its copy in memory behind the record.</summary>

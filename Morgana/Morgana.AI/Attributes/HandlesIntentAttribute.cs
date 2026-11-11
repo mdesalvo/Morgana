@@ -1,8 +1,10 @@
 namespace Morgana.AI.Attributes;
 
-/// <summary>Marks a <see cref="Abstractions.MorganaAgent"/> class as the one agent that handles an intent.</summary>
-// The intent must match an Intents entry in agents.json and at most one agent may claim it:
-// both directions are validated at startup.
+/// <summary>
+/// Marks a <see cref="Abstractions.MorganaAgent"/> class as the one agent that handles an intent.
+/// The intent must match an Intents entry in agents.json and at most one agent may claim it:
+/// both directions are validated at startup.
+/// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
 public class HandlesIntentAttribute : Attribute
 {

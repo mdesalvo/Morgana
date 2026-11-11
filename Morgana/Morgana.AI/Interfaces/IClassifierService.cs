@@ -1,8 +1,10 @@
 namespace Morgana.AI.Interfaces;
 
-/// <summary>Classifies a user's message against the domain's intents, on behalf of the classifier actor.</summary>
-// A failure never throws: the result names Constants.Intents.Other at confidence 0 and is marked as a classification error,
-// so the turn degrades to Morgana's own answer instead of stopping.
+/// <summary>
+/// Classifies a user's message against the domain's intents, on behalf of the classifier actor.
+/// A failure never throws: the result names Constants.Intents.Other at confidence 0 and is marked as a classification error,
+/// so the turn degrades to Morgana's own answer instead of stopping.
+/// </summary>
 public interface IClassifierService
 {
     /// <summary>The intents that <paramref name="message"/> may express, ranked, with the top one named.</summary>

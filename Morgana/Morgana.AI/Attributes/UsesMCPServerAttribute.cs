@@ -1,11 +1,13 @@
 namespace Morgana.AI.Attributes;
 
-/// <summary>Declares one MCP server whose tools the agent receives, repeatable for several servers.</summary>
+/// <summary>
+/// Declares one MCP server whose tools the agent receives, repeatable for several servers.
+/// The agent receives the tools that the tool guard admitted from the server; with that guard switched off
+/// it receives every tool the server lists. Declaring a server opens a door Morgana cannot see behind: the guard reads what the server offers
+/// and what it returns, never what it does with what it is sent. The declaration trusts the server with every
+/// argument that an agent passes it, the user's data included.
+/// </summary>
 /// <remarks>Write <c>[UsesMCPServer("https://...")]</c> for a remote server and <c>[UsesMCPServer(MCPTransport.Stdio, "path/to/cmd", args)]</c> for a local process.</remarks>
-// The agent receives the tools that the tool guard admitted from the server; with that guard switched off
-// it receives every tool the server lists. Declaring a server opens a door Morgana cannot see behind: the guard reads what the server offers
-// and what it returns, never what it does with what it is sent. The declaration trusts the server with every
-// argument that an agent passes it, the user's data included.
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public class UsesMCPServerAttribute : Attribute
 {

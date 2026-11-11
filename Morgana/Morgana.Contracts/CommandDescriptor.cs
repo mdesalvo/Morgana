@@ -20,8 +20,10 @@ public record CommandDescriptor(
     IReadOnlyList<CommandOption>? Options = null,
     bool RequiresActiveAgent = false)
 {
-    /// <summary>What is wrong with how this command declares itself, as a line naming the fault; null when nothing is.</summary>
-    // Every registry asks this at startup, so a declaration is judged by one rule wherever the command lives.
+    /// <summary>
+    /// What is wrong with how this command declares itself, as a line naming the fault; null when nothing is.
+    /// Every registry asks this at startup, so a declaration is judged by one rule wherever the command lives.
+    /// </summary>
     public string? DescribeDeclarationProblem()
     {
         // A command declaring no options is read as one with an empty list, so the checks below need no null case.

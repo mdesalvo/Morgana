@@ -1,7 +1,9 @@
 namespace Morgana.AI.Interfaces;
 
-/// <summary>Bounds how often a conversation may call, over sliding windows of a minute, an hour and a day.</summary>
-// Fails open: a fault of the log never blocks the user.
+/// <summary>
+/// Bounds how often a conversation may call, over sliding windows of a minute, an hour and a day.
+/// Fails open: a fault of the log never blocks the user.
+/// </summary>
 public interface IRateLimitService
 {
     /// <summary>

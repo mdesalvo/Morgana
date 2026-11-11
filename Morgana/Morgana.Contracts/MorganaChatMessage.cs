@@ -1,7 +1,9 @@
 namespace Morgana.Contracts;
 
-/// <summary>A single message of a conversation history as it travels over the wire to a channel.</summary>
-// The persistence layer maps it from Microsoft.Agents.AI.ChatMessage.
+/// <summary>
+/// A single message of a conversation history as it travels over the wire to a channel.
+/// The persistence layer maps it from Microsoft.Agents.AI.ChatMessage.
+/// </summary>
 public record MorganaChatMessage
 {
     /// <summary>The conversation this message belongs to.</summary>
@@ -28,8 +30,10 @@ public record MorganaChatMessage
     /// <summary>The name of the agent that generated this message, "User" for the user's own.</summary>
     public required string AgentName { get; init; }
 
-    /// <summary>True when the agent has completed its task, as mapped from the SQLite is_active column.</summary>
-    // Inverted from storage: true when is_active = 0 and false when is_active = 1.
+    /// <summary>
+    /// True when the agent has completed its task, as mapped from the SQLite is_active column.
+    /// Inverted from storage: true when is_active = 0 and false when is_active = 1.
+    /// </summary>
     public required bool AgentCompleted { get; init; }
 
     /// <summary>The quick reply buttons attached to this message, reconstructed from SetQuickReplies tool calls when history loads.</summary>
@@ -42,9 +46,11 @@ public record MorganaChatMessage
     public RichCard? RichCard { get; init; }
 }
 
-/// <summary>Whether a history message came from the user or from an agent.</summary>
+/// <summary>
+/// Whether a history message came from the user or from an agent.
+/// New values are appended at the end.
+/// </summary>
 /// <remarks>Serialized numerically by the default web JSON options, so the declaration order is part of the wire contract and inserting a value in the middle silently re-numbers every value after it.</remarks>
-// New values are appended at the end.
 public enum ChatMessageType
 {
     /// <summary>Message from the user.</summary>

@@ -1,8 +1,10 @@
 namespace Morgana.AI.Attributes;
 
-/// <summary>Declares the tier that an agent runs on, mandatory on every <see cref="Abstractions.MorganaAgent"/>.</summary>
-// Fixed by the declaration and read once when the agent is built. An agent without it stops the startup,
-// because a silent fallback would run it on a model nobody chose.
+/// <summary>
+/// Declares the tier that an agent runs on, mandatory on every <see cref="Abstractions.MorganaAgent"/>.
+/// Fixed by the declaration and read once when the agent is built. An agent without it stops the startup,
+/// because a silent fallback would run it on a model nobody chose.
+/// </summary>
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
 public sealed class RequiresLLMTierAttribute : Attribute
 {

@@ -1,7 +1,9 @@
 namespace Morgana.AI.Interfaces;
 
-/// <summary>Maps each intent to the agent type whose <see cref="Attributes.HandlesIntentAttribute"/> claims it.</summary>
-// Agents are discovered from the loaded plugins, so no intent is wired by hand.
+/// <summary>
+/// Maps each intent to the agent type whose <see cref="Attributes.HandlesIntentAttribute"/> claims it.
+/// Agents are discovered from the loaded plugins, so no intent is wired by hand.
+/// </summary>
 public interface IAgentRegistryService
 {
     /// <summary>

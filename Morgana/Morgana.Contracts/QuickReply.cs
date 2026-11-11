@@ -19,7 +19,9 @@ public record QuickReply(
     // The visual characters that the button frame adds around its label.
     private const int ButtonPadding = 4;
 
-    /// <summary>Estimated rendering footprint of this button in visual characters.</summary>
-    // Only the visible label contributes because Id and Value are wire-only and never surface to the user.
+    /// <summary>
+    /// Estimated rendering footprint of this button in visual characters.
+    /// Only the visible label contributes because Id and Value are wire-only and never surface to the user.
+    /// </summary>
     public int EstimateCost() => Label.Length + ButtonPadding;
 }

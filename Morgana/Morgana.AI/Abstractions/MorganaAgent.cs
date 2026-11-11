@@ -16,9 +16,11 @@ using Status = Akka.Actor.Status;
 
 namespace Morgana.AI.Abstractions;
 
-/// <summary>Base of every domain agent: the actor that runs one intent's model, session and tools for one conversation.</summary>
-// The context and history providers live on the AIAgent and are shared by its sessions, while each session's own state
-// travels in the AgentSession. The actor runs one turn at a time, which is what lets CurrentSession be a plain field.
+/// <summary>
+/// Base of every domain agent: the actor that runs one intent's model, session and tools for one conversation.
+/// The context and history providers live on the AIAgent and are shared by its sessions, while each session's own state
+/// travels in the AgentSession. The actor runs one turn at a time, which is what lets CurrentSession be a plain field.
+/// </summary>
 public class MorganaAgent : MorganaActor
 {
     /// <summary>The Microsoft.Agents.AI agent that talks to the model for this actor, kept for the actor's life.</summary>
@@ -42,9 +44,11 @@ public class MorganaAgent : MorganaActor
     /// <summary>The throwaway session that a colleague's question is answered on; null outside that turn.</summary>
     private AgentSession? consultationSession;
 
-    /// <summary>The session that the running turn works on, which the tools hand to the context provider; never null during a turn.</summary>
-    // While a colleague is being answered this is the consultation's own session: that turn's tools and the guard refusing a
-    // chained consultation all read the session the turn actually runs on.
+    /// <summary>
+    /// The session that the running turn works on, which the tools hand to the context provider; never null during a turn.
+    /// While a colleague is being answered this is the consultation's own session: that turn's tools and the guard refusing a
+    /// chained consultation all read the session the turn actually runs on.
+    /// </summary>
     public AgentSession? CurrentSession
         => consultationSession ?? aiAgentSession;
 

@@ -1,7 +1,9 @@
 namespace Morgana.Contracts;
 
-/// <summary>Why Morgana sent a notice, declared on <see cref="ChannelMessage.ErrorReason"/> by the host and read by every channel.</summary>
-// A channel reads the reason to act on it rather than merely paint it: a spent budget ends the conversation on its side too.
+/// <summary>
+/// Why Morgana sent a notice, declared on <see cref="ChannelMessage.ErrorReason"/> by the host and read by every channel.
+/// A channel reads the reason to act on it rather than merely paint it: a spent budget ends the conversation on its side too.
+/// </summary>
 public static class ChannelErrorReasons
 {
     /// <summary>The conversation called too often in one of its windows; it may call again later.</summary>

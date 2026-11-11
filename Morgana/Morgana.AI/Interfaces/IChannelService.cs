@@ -2,10 +2,12 @@ using Morgana.Contracts;
 
 namespace Morgana.AI.Interfaces;
 
-/// <summary>Delivers Morgana's messages to the end user through the transport of a conversation's channel.</summary>
-// Actors emit messages without knowing whether SignalR, a webhook or any other transport carries them. The interface
-// exposes no channel identity or capability budget: those belong to the client that announced itself at the handshake,
-// not to the transport that carries the bytes, so every reader takes them from IChannelMetadataStore.
+/// <summary>
+/// Delivers Morgana's messages to the end user through the transport of a conversation's channel.
+/// Actors emit messages without knowing whether SignalR, a webhook or any other transport carries them. The interface
+/// exposes no channel identity or capability budget: those belong to the client that announced itself at the handshake,
+/// not to the transport that carries the bytes, so every reader takes them from IChannelMetadataStore.
+/// </summary>
 public interface IChannelService
 {
     /// <summary>Delivers <paramref name="channelMessage"/> to the conversation that its <see cref="ChannelMessage.ConversationId"/> names.</summary>

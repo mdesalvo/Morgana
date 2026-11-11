@@ -24,8 +24,10 @@ public class MorganaActor : ReceiveActor
     /// <summary>The host's configuration as ASP.NET layers it.</summary>
     protected readonly IConfiguration configuration;
 
-    /// <summary>How long an actor waits on silence, as <c>Morgana:ActorSystem:TimeoutSeconds</c> declares it.</summary>
-    // Read on every use, so a configuration reload reaches the next wait without restarting the actor.
+    /// <summary>
+    /// How long an actor waits on silence, as <c>Morgana:ActorSystem:TimeoutSeconds</c> declares it.
+    /// Read on every use, so a configuration reload reaches the next wait without restarting the actor.
+    /// </summary>
     protected TimeSpan ActorSystemTimeout =>
         TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture));
 
@@ -48,14 +50,18 @@ public class MorganaActor : ReceiveActor
         Receive<ReceiveTimeout>(HandleReceiveTimeout);
     }
 
-    /// <summary>Reacts to a silence longer than the actor's receive timeout; by default it does nothing.</summary>
-    // An idle actor is legitimate, so the default writes nothing to keep the logs free of it.
+    /// <summary>
+    /// Reacts to a silence longer than the actor's receive timeout; by default it does nothing.
+    /// An idle actor is legitimate, so the default writes nothing to keep the logs free of it.
+    /// </summary>
     protected virtual void HandleReceiveTimeout(ReceiveTimeout timeout)
     {
     }
 
-    /// <summary>Registers the handlers that every behaviour of the actor needs, called again after each <c>Become</c>.</summary>
-    // Become replaces every handler, the timeout's included, so a state that forgot it would send the timeout to dead letters.
+    /// <summary>
+    /// Registers the handlers that every behaviour of the actor needs, called again after each <c>Become</c>.
+    /// Become replaces every handler, the timeout's included, so a state that forgot it would send the timeout to dead letters.
+    /// </summary>
     protected virtual void RegisterCommonHandlers()
     {
         // The timeout is handled in every state as it is at construction.

@@ -1,11 +1,13 @@
 namespace Morgana.AI.Interfaces;
 
-/// <summary>Bounds how many conversations one partner may open on this installation within a sliding hour.</summary>
-// The per-conversation budget says what one exchange may cost, but behind the A2A door the caller names the conversation:
-// a partner rotating names would draw a fresh budget every time. What is bounded here is therefore how many exchanges may
-// start at all, so the ceiling on spend is admissions times the budget each one carries. A partner returning to a
-// conversation it already opened is bounded by that conversation's budget, so the two measures never overlap. This
-// installation's own ring is exempt, because a colleague joins the conversation the user is already having.
+/// <summary>
+/// Bounds how many conversations one partner may open on this installation within a sliding hour.
+/// The per-conversation budget says what one exchange may cost, but behind the A2A door the caller names the conversation:
+/// a partner rotating names would draw a fresh budget every time. What is bounded here is therefore how many exchanges may
+/// start at all, so the ceiling on spend is admissions times the budget each one carries. A partner returning to a
+/// conversation it already opened is bounded by that conversation's budget, so the two measures never overlap. This
+/// installation's own ring is exempt, because a colleague joins the conversation the user is already having.
+/// </summary>
 public interface IPeerAdmissionService
 {
     /// <summary>

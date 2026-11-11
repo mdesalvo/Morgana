@@ -3,8 +3,10 @@ using Microsoft.Agents.AI;
 
 namespace Morgana.AI.Interfaces;
 
-/// <summary>Both halves of A2A discovery: the card an agent publishes and the resolution of a colleague's card into a callable agent.</summary>
-// Both halves speak A2A, so a colleague published elsewhere is fetched over the same protocol the local one is published under.
+/// <summary>
+/// Both halves of A2A discovery: the card an agent publishes and the resolution of a colleague's card into a callable agent.
+/// Both halves speak A2A, so a colleague published elsewhere is fetched over the same protocol the local one is published under.
+/// </summary>
 public interface IAgentDirectoryService
 {
     /// <summary>

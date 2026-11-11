@@ -1,7 +1,9 @@
 namespace Morgana.AI.Interfaces;
 
-/// <summary>Assembles every text that a domain agent's model reads, from its fenced two-layer prompt to the per-turn declarations.</summary>
-// Sibling of IPromptResolverService: that one hides where prompts come from, this one how they become what the model reads.
+/// <summary>
+/// Assembles every text that a domain agent's model reads, from its fenced two-layer prompt to the per-turn declarations.
+/// Sibling of IPromptResolverService: that one hides where prompts come from, this one how they become what the model reads.
+/// </summary>
 public interface IPromptComposerService
 {
     /// <summary>

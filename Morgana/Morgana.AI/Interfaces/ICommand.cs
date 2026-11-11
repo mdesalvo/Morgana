@@ -2,11 +2,13 @@ using Morgana.Contracts;
 
 namespace Morgana.AI.Interfaces;
 
-/// <summary>A command that Morgana runs on a conversation when a channel asks for it by name, outside the turn pipeline.</summary>
-// No guard, classifier or agent takes part. Every implementation registered in DI is published through ICommandRegistryService.
-// The outcome reaches the user through IChannelService as the command's finished frame: a ChannelMessage whose
-// CommandProgress.Finished is set and whose text is the outcome. Every frame carries the invocation id that the channel sent,
-// which is how a channel matches it to the run it is waiting on.
+/// <summary>
+/// A command that Morgana runs on a conversation when a channel asks for it by name, outside the turn pipeline.
+/// No guard, classifier or agent takes part. Every implementation registered in DI is published through ICommandRegistryService.
+/// The outcome reaches the user through IChannelService as the command's finished frame: a ChannelMessage whose
+/// CommandProgress.Finished is set and whose text is the outcome. Every frame carries the invocation id that the channel sent,
+/// which is how a channel matches it to the run it is waiting on.
+/// </summary>
 public interface ICommand
 {
     /// <summary>The name and palette line under which the command is published, its name unique among the installed commands.</summary>

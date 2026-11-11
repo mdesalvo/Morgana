@@ -28,8 +28,10 @@ public record RichCard(
         + Components.Sum(component => component.EstimateCost());
 }
 
-/// <summary>Base class of every card component, serialised polymorphically with a <c>type</c> discriminator.</summary>
-// A new component type needs a record deriving from CardComponent, a JsonDerivedType entry here and a matching Razor component in Cauldron.
+/// <summary>
+/// Base class of every card component, serialised polymorphically with a <c>type</c> discriminator.
+/// A new component type needs a record deriving from CardComponent, a JsonDerivedType entry here and a matching Razor component in Cauldron.
+/// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(TextBlockComponent), "text_block")]
 [JsonDerivedType(typeof(KeyValueComponent), "key_value")]
@@ -41,8 +43,10 @@ public record RichCard(
 [JsonDerivedType(typeof(ImageComponent), "image")]
 public abstract record CardComponent
 {
-    /// <summary>Estimated rendering footprint of this component in visual characters.</summary>
-    // Conservative by design: overestimating triggers a channel downgrade while underestimating risks overflow past the channel's length budget.
+    /// <summary>
+    /// Estimated rendering footprint of this component in visual characters.
+    /// Conservative by design: overestimating triggers a channel downgrade while underestimating risks overflow past the channel's length budget.
+    /// </summary>
     public abstract int EstimateCost();
 }
 
