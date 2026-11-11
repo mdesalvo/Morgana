@@ -5,9 +5,11 @@ using Spectre.Console;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>The dropdown that opens under the prompt as soon as the line starts with <c>/</c>, listing the commands that match it.</summary>
-// It decides which commands match, which one is highlighted, what Tab completes to and what Enter runs. It is drawn in the
-// channel's own TerminalTheme. It holds the highlight, so every call comes under the render lock of the UI that owns it.
+/// <summary>
+/// The dropdown that opens under the prompt as soon as the line starts with <c>/</c>, listing the commands that match it.
+/// It decides which commands match, which one is highlighted, what Tab completes to and what Enter runs. It is drawn in the
+/// channel's own TerminalTheme. It holds the highlight, so every call comes under the render lock of the UI that owns it.
+/// </summary>
 public sealed class CommandPaletteService
 {
     /// <summary>How many commands are listed at once; the window follows the highlight past it.</summary>
@@ -109,8 +111,10 @@ public sealed class CommandPaletteService
             .Any(command => string.Equals(command.Name, typedCommandName, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>The palette for <paramref name="input"/> as rows of at most <paramref name="width"/> cells: the matching commands, then the controls line.</summary>
-    // Every row is one markup, so the UI budgets them against its history.
+    /// <summary>
+    /// The palette for <paramref name="input"/> as rows of at most <paramref name="width"/> cells: the matching commands, then the controls line.
+    /// Every row is one markup, so the UI budgets them against its history.
+    /// </summary>
     public List<Markup> RenderPalette(string input, TerminalConversationState state, int width)
     {
         // A terminal reporting no width still gets one cell per row.
@@ -188,8 +192,10 @@ public sealed class CommandPaletteService
         return command.Description.Contains(typedCommandName, StringComparison.OrdinalIgnoreCase) ? 2 : -1;
     }
 
-    /// <summary>One command as a row: the caret when highlighted, the name padded to <paramref name="labelWidth"/>, then as much of the description as the row holds.</summary>
-    // The whole row wears the match colour when it is highlighted.
+    /// <summary>
+    /// One command as a row: the caret when highlighted, the name padded to <paramref name="labelWidth"/>, then as much of the description as the row holds.
+    /// The whole row wears the match colour when it is highlighted.
+    /// </summary>
     private Markup RenderCommandRow(CommandDescriptor command, string typedCommandName, bool isHighlighted, int labelWidth, int width)
     {
         // The caret column is two cells wide on every row, highlighted or not, so the names stay aligned.

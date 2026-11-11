@@ -6,10 +6,12 @@ using Spectre.Console;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>The typewriter of a channel that declares streaming, revealing chunks at a steady pace so that the reply reads as being written.</summary>
-// A final message that lands while text is still being revealed is held until the reveal ends, so the transcript never snaps
-// ahead of what the user has read. Its timer takes the UI's render lock before touching anything, while every other call must
-// already be under it.
+/// <summary>
+/// The typewriter of a channel that declares streaming, revealing chunks at a steady pace so that the reply reads as being written.
+/// A final message that lands while text is still being revealed is held until the reveal ends, so the transcript never snaps
+/// ahead of what the user has read. Its timer takes the UI's render lock before touching anything, while every other call must
+/// already be under it.
+/// </summary>
 public sealed class StreamingPaneService
 {
     /// <summary>The fallback for the reveal cadence when the setting is absent or not positive, as Cauldron's.</summary>
@@ -30,8 +32,10 @@ public sealed class StreamingPaneService
     /// <summary>The characters revealed per tick, read once at startup.</summary>
     private readonly int tickChars;
 
-    /// <summary>The final messages held back until the reveal ends, in arrival order; none held means no final has landed yet.</summary>
-    // A queue, so a warning trailing the reply never overwrites the reply that carries the quick replies.
+    /// <summary>
+    /// The final messages held back until the reveal ends, in arrival order; none held means no final has landed yet.
+    /// A queue, so a warning trailing the reply never overwrites the reply that carries the quick replies.
+    /// </summary>
     private readonly Queue<ChannelMessage> heldFinals = new();
 
     /// <summary>The render lock of the UI that owns this pane, which the timer takes before touching anything; set when the UI starts.</summary>
@@ -52,8 +56,10 @@ public sealed class StreamingPaneService
     /// <summary>The running timer; null when no reveal is under way.</summary>
     private Timer? revealTimer;
 
-    /// <summary>Names the reveal that the running timer belongs to.</summary>
-    // Disposing a timer does not recall a tick already queued, so a tick of an older reveal must find nothing to do.
+    /// <summary>
+    /// Names the reveal that the running timer belongs to.
+    /// Disposing a timer does not recall a tick already queued, so a tick of an older reveal must find nothing to do.
+    /// </summary>
     private int revealGeneration;
 
     /// <summary>Builds the pane on the renderer and the theme, reading the reveal cadence from configuration.</summary>
@@ -76,8 +82,10 @@ public sealed class StreamingPaneService
     /// <summary>Tells whether the pane has text on screen, which then stands where the thinking hint would.</summary>
     public bool HasRevealedText => revealedText.Length > 0;
 
-    /// <summary>Connects the pane to the UI that owns it: the lock its timer takes, how to repaint and how to commit a held final message.</summary>
-    // Given at start rather than at construction, because the UI is built after the pane.
+    /// <summary>
+    /// Connects the pane to the UI that owns it: the lock its timer takes, how to repaint and how to commit a held final message.
+    /// Given at start rather than at construction, because the UI is built after the pane.
+    /// </summary>
     public void Start(Lock uiRenderLock, Action repaint, Action<ChannelMessage> commit)
     {
         // The timer works under the UI's lock and through the UI's own repaint and commit.
@@ -124,8 +132,10 @@ public sealed class StreamingPaneService
         return messageRenderer.RenderPartial(revealedText, theme.AgentColor, width);
     }
 
-    /// <summary>Ends the reveal of a reply that will never be completed and hands back the text the user did read, dropping the held finals.</summary>
-    // The UI keeps the text handed back as what Morgana said.
+    /// <summary>
+    /// Ends the reveal of a reply that will never be completed and hands back the text the user did read, dropping the held finals.
+    /// The UI keeps the text handed back as what Morgana said.
+    /// </summary>
     public string FlushPartial()
     {
         // What was revealed is what Morgana actually said

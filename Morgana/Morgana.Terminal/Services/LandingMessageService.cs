@@ -2,9 +2,11 @@ using Microsoft.Extensions.Configuration;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>Picks a random startup line from the channel's configured pool, as Cauldron's landing service does.</summary>
-// The line covers the 0.5 to 2 seconds before the live UI takes over (Kestrel bind, token signing, TLS and conversation
-// handshakes, the first webhook), since an empty terminal for that stretch feels like a freeze.
+/// <summary>
+/// Picks a random startup line from the channel's configured pool, as Cauldron's landing service does.
+/// The line covers the 0.5 to 2 seconds before the live UI takes over (Kestrel bind, token signing, TLS and conversation
+/// handshakes, the first webhook), since an empty terminal for that stretch feels like a freeze.
+/// </summary>
 public sealed class LandingMessageService
 {
     /// <summary>The pool the startup line is drawn from.</summary>

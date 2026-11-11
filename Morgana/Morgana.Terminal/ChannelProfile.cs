@@ -22,8 +22,10 @@ public sealed record ChannelProfile(
     /// <summary>The configuration key of the setting <paramref name="key"/> under the channel's own root.</summary>
     public string SectionKey(string key) => $"{DisplayName}:{key}";
 
-    /// <summary>The handshake announced when the conversation opens, delivered by webhook to <paramref name="callbackUrl"/>.</summary>
-    // Identity and capability budget stay on the channel's side rather than on the wire contract, which describes the shape and not who fills it.
+    /// <summary>
+    /// The handshake announced when the conversation opens, delivered by webhook to <paramref name="callbackUrl"/>.
+    /// Identity and capability budget stay on the channel's side rather than on the wire contract, which describes the shape and not who fills it.
+    /// </summary>
     public ChannelMetadata BuildMetadata(string callbackUrl) => new()
     {
         Coordinates = new ChannelCoordinates

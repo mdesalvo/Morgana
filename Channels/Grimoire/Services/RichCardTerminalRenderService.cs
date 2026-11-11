@@ -6,8 +6,10 @@ using Morgana.Terminal.Services;
 
 namespace Grimoire.Services;
 
-/// <summary>Renders a rich card to single-row markups forming a hand-drawn bordered box, rather than variable-height renderables.</summary>
-// Card text is flattened to plain text, since a terminal has no inline markdown the way Cauldron's browser has.
+/// <summary>
+/// Renders a rich card to single-row markups forming a hand-drawn bordered box, rather than variable-height renderables.
+/// Card text is flattened to plain text, since a terminal has no inline markdown the way Cauldron's browser has.
+/// </summary>
 public sealed class RichCardTerminalRenderService
 {
     /// <summary>The default Markdig pipeline, configured as Cauldron's, which flattens card text to plain text.</summary>
@@ -35,9 +37,11 @@ public sealed class RichCardTerminalRenderService
         this.cells = cells;
     }
 
-    /// <summary>Renders <paramref name="richCard"/> to single-row markups forming a bordered box up to <paramref name="width"/> cells wide.</summary>
-    // The chrome is tinted with the speaker's baseColor so the card visibly belongs to whoever sent it while the body
-    // keeps Cauldron's neutral greys for legibility.
+    /// <summary>
+    /// Renders <paramref name="richCard"/> to single-row markups forming a bordered box up to <paramref name="width"/> cells wide.
+    /// The chrome is tinted with the speaker's baseColor so the card visibly belongs to whoever sent it while the body
+    /// keeps Cauldron's neutral greys for legibility.
+    /// </summary>
     public List<Markup> RenderRichCard(RichCard richCard, string baseColor, int width)
     {
         // The box owns the full width and each content row is a border, a space, the content, a space and a border,
@@ -362,8 +366,10 @@ public sealed class RichCardTerminalRenderService
     private static Markup Border(string fill, string baseColor)
         => new($"[{baseColor}]{fill}[/]");
 
-    /// <summary>Frames one logical card line between the side borders, padding the content to <paramref name="innerWidth"/> columns.</summary>
-    // A divider fills the interior with a dim rule and a blank line gives an empty padded interior.
+    /// <summary>
+    /// Frames one logical card line between the side borders, padding the content to <paramref name="innerWidth"/> columns.
+    /// A divider fills the interior with a dim rule and a blank line gives an empty padded interior.
+    /// </summary>
     private static Markup FrameLine(CardLine line, int innerWidth, string baseColor)
     {
         // The left edge is the border in the speaker's colour and the mandatory padding space. The slack on the
@@ -418,9 +424,11 @@ public sealed class RichCardTerminalRenderService
     private static CardLine Blank()
         => new CardLine([], IsDivider: false);
 
-    /// <summary>Flattens text to plain terminal text: control characters out, markdown stripped, emoji shortcodes resolved to glyphs and their presentation normalised so the width measured is the width drawn.</summary>
-    // Every card builder funnels through here, which is why shortcodes are resolved here: Markup does not expand them
-    // and the badge upper-cases its text, turning one into a non-shortcode.
+    /// <summary>
+    /// Flattens text to plain terminal text: control characters out, markdown stripped, emoji shortcodes resolved to glyphs and their presentation normalised so the width measured is the width drawn.
+    /// Every card builder funnels through here, which is why shortcodes are resolved here: Markup does not expand them
+    /// and the badge upper-cases its text, turning one into a non-shortcode.
+    /// </summary>
     private string Plain(string? text) =>
         string.IsNullOrEmpty(text)
             ? string.Empty

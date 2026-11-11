@@ -12,9 +12,11 @@ public sealed class PlainTextMessageRenderService : IMessageRenderer
     /// <summary>What opens the first row of a line said by a speaker of the conversation, ahead of the speaker's name; drawn only.</summary>
     private const string SpeakerMarker = "● ";
 
-    /// <summary>Matches a run of three or more consecutive newlines, which collapses to one blank line as a markdown paragraph break would.</summary>
-    // Morgana formats replies for rich channels with doubled blank lines that a plain renderer would count as phantom rows,
-    // lighting the scroll indicator on a conversation that fits.
+    /// <summary>
+    /// Matches a run of three or more consecutive newlines, which collapses to one blank line as a markdown paragraph break would.
+    /// Morgana formats replies for rich channels with doubled blank lines that a plain renderer would count as phantom rows,
+    /// lighting the scroll indicator on a conversation that fits.
+    /// </summary>
     private static readonly Regex BlankRunRegex = new(@"\n{3,}", RegexOptions.Compiled);
 
     /// <summary>Wraps every row by terminal cell.</summary>
@@ -81,8 +83,10 @@ public sealed class PlainTextMessageRenderService : IMessageRenderer
         return rows;
     }
 
-    /// <summary>Makes text published by Morgana safe to draw: control characters out, margins trimmed, blank runs collapsed and emoji resolved.</summary>
-    // The variation selectors that emoji produce are dropped last, so the width measured is the width drawn.
+    /// <summary>
+    /// Makes text published by Morgana safe to draw: control characters out, margins trimmed, blank runs collapsed and emoji resolved.
+    /// The variation selectors that emoji produce are dropped last, so the width measured is the width drawn.
+    /// </summary>
     private string PrepareText(string text) =>
         cells.StripVariationSelectors(BlankRunRegex.Replace(Emoji.Replace(SanitizeMessageText(text).Trim()), "\n\n"));
 

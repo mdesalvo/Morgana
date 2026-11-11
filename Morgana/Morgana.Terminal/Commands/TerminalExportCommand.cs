@@ -9,8 +9,10 @@ using Morgana.Terminal.Services;
 
 namespace Morgana.Terminal.Commands;
 
-/// <summary><c>/export path:… [format:…]</c>: writes the conversation as Morgana has it on record to a file on the machine the terminal runs on.</summary>
-// The transcript on screen is not the source: what is exported is what survives, so an export taken here matches one taken after a restart.
+/// <summary>
+/// <c>/export path:… [format:…]</c>: writes the conversation as Morgana has it on record to a file on the machine the terminal runs on.
+/// The transcript on screen is not the source: what is exported is what survives, so an export taken here matches one taken after a restart.
+/// </summary>
 public sealed class TerminalExportCommand : TerminalCommand
 {
     /// <summary>The steps the command reports: reading the conversation from Morgana, then writing the file.</summary>
@@ -47,9 +49,11 @@ public sealed class TerminalExportCommand : TerminalCommand
             new CommandOption("format", "text for reading, json for tools", DefaultValue: "text", AllowedValues: ["text", "json"])
         ]);
 
-    /// <summary>The file this command writes when nobody names another, on the user's desktop or in their home where there is no desktop.</summary>
-    // Its name says what it holds rather than when it was taken, since a default is decided once and would otherwise carry
-    // the hour the channel started.
+    /// <summary>
+    /// The file this command writes when nobody names another, on the user's desktop or in their home where there is no desktop.
+    /// Its name says what it holds rather than when it was taken, since a default is decided once and would otherwise carry
+    /// the hour the channel started.
+    /// </summary>
     private static string DefaultFile()
     {
         // The desktop is where a person looks for a file they asked for.

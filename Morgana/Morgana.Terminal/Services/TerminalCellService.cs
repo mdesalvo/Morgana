@@ -3,20 +3,26 @@ using Spectre.Console;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>Terminal-safe text shared by every renderer of a TTY channel, measured in the columns the terminal draws.</summary>
-// A wide CJK glyph or an emoji-presentation sequence must never break the contract that one row is exactly the width asked,
-// which TerminalUiService budgets its scrollback window against.
+/// <summary>
+/// Terminal-safe text shared by every renderer of a TTY channel, measured in the columns the terminal draws.
+/// A wide CJK glyph or an emoji-presentation sequence must never break the contract that one row is exactly the width asked,
+/// which TerminalUiService budgets its scrollback window against.
+/// </summary>
 public sealed class TerminalCellService
 {
-    /// <summary>Strips control characters, ESC, BEL and the C1 controls among them, out of a single-line text bound for the terminal.</summary>
-    // Markup.Escape neutralises Spectre's own syntax only, while a raw control byte (an OSC sequence renaming the terminal, a
-    // cursor move, the bell) is obeyed by the user's TTY. Everything Morgana sends arrives over an unauthenticated callback,
-    // so a speaker name, a quick-reply label and a card field are untrusted until drawn.
+    /// <summary>
+    /// Strips control characters, ESC, BEL and the C1 controls among them, out of a single-line text bound for the terminal.
+    /// Markup.Escape neutralises Spectre's own syntax only, while a raw control byte (an OSC sequence renaming the terminal, a
+    /// cursor move, the bell) is obeyed by the user's TTY. Everything Morgana sends arrives over an unauthenticated callback,
+    /// so a speaker name, a quick-reply label and a card field are untrusted until drawn.
+    /// </summary>
     public static string StripControlCharacters(string text) =>
         text.Any(char.IsControl) ? new string(text.Where(character => !char.IsControl(character)).ToArray()) : text;
 
-    /// <summary>Prepares a text published by Morgana for one row of the terminal: emoji resolved, variation selectors and control characters dropped.</summary>
-    // Emoji are resolved and selectors dropped before measuring, so the width measured is the width drawn.
+    /// <summary>
+    /// Prepares a text published by Morgana for one row of the terminal: emoji resolved, variation selectors and control characters dropped.
+    /// Emoji are resolved and selectors dropped before measuring, so the width measured is the width drawn.
+    /// </summary>
     public string SanitizeForTerminal(string text) =>
         StripControlCharacters(StripVariationSelectors(Emoji.Replace(text)));
 
@@ -156,9 +162,11 @@ public sealed class TerminalCellService
         return width >= 2 ? keptText + "…" : keptText.ToString();
     }
 
-    /// <summary>Removes the variation selectors, U+FE00 to U+FE0F, that flip a glyph between text and emoji presentation.</summary>
-    // Spectre measures an emoji-presentation sequence such as a warning sign as two cells while most terminals draw one, so
-    // dropping the selector keeps the width measured equal to the width drawn.
+    /// <summary>
+    /// Removes the variation selectors, U+FE00 to U+FE0F, that flip a glyph between text and emoji presentation.
+    /// Spectre measures an emoji-presentation sequence such as a warning sign as two cells while most terminals draw one, so
+    /// dropping the selector keeps the width measured equal to the width drawn.
+    /// </summary>
     public string StripVariationSelectors(string text)
     {
         // Almost no text has a selector, so the common case allocates nothing.

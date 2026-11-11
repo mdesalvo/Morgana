@@ -5,9 +5,11 @@ using Spectre.Console;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>The options a reply offers, as a channel that declares quick replies shows them in place of the prompt.</summary>
-// While they are on offer they are the prompt of the turn, so the text input is suspended. The key loop reads the offer
-// without a lock through IsOffering, while every other call comes under the render lock of the UI that owns it.
+/// <summary>
+/// The options a reply offers, as a channel that declares quick replies shows them in place of the prompt.
+/// While they are on offer they are the prompt of the turn, so the text input is suspended. The key loop reads the offer
+/// without a lock through IsOffering, while every other call comes under the render lock of the UI that owns it.
+/// </summary>
 public sealed class QuickReplyPromptService
 {
     /// <summary>The foreground of the options that are not highlighted, the dimmed grey the rich card body uses.</summary>
@@ -63,9 +65,11 @@ public sealed class QuickReplyPromptService
         highlightedIndex = 0;
     }
 
-    /// <summary>The option that <paramref name="key"/> picks, Enter on the highlighted one; null for any other key, the arrows included, which move the highlight.</summary>
-    // The arrows work on both axes so the user need not guess how the options are laid out. The offer stands until Dismiss,
-    // since the caller sends the pick before the prompt changes.
+    /// <summary>
+    /// The option that <paramref name="key"/> picks, Enter on the highlighted one; null for any other key, the arrows included, which move the highlight.
+    /// The arrows work on both axes so the user need not guess how the options are laid out. The offer stands until Dismiss,
+    /// since the caller sends the pick before the prompt changes.
+    /// </summary>
     public QuickReply? HandleKey(ConsoleKey key)
     {
         // The offer may have been dismissed between the key loop's lock-free read and this call
@@ -136,9 +140,11 @@ public sealed class QuickReplyPromptService
         return new Markup(rowMarkup.ToString());
     }
 
-    /// <summary>The style of an option's label: Morgana's colour for one that hands the conversation back, the user's colour or grey otherwise.</summary>
-    // An ordinary option inverts to dark on the user's colour when highlighted and rests in grey otherwise; one that terminates
-    // the branch wears the Morgana colour instead, which tells at a glance where picking it leads.
+    /// <summary>
+    /// The style of an option's label: Morgana's colour for one that hands the conversation back, the user's colour or grey otherwise.
+    /// An ordinary option inverts to dark on the user's colour when highlighted and rests in grey otherwise; one that terminates
+    /// the branch wears the Morgana colour instead, which tells at a glance where picking it leads.
+    /// </summary>
     private string ChipStyle(QuickReply reply, bool highlighted)
     {
         // An option that closes the branch is tinted in Morgana's colour

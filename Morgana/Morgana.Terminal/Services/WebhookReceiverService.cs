@@ -2,17 +2,21 @@ using Morgana.Contracts;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>Hands what Morgana POSTs to the webhook endpoints over to the console UI, for the conversation on screen only.</summary>
-// The lifecycle wires OnMessage and OnChunk once both this receiver and the UI are resolved, which keeps a circular
-// dependency out of the constructors.
+/// <summary>
+/// Hands what Morgana POSTs to the webhook endpoints over to the console UI, for the conversation on screen only.
+/// The lifecycle wires OnMessage and OnChunk once both this receiver and the UI are resolved, which keeps a circular
+/// dependency out of the constructors.
+/// </summary>
 public sealed class WebhookReceiverService
 {
     /// <summary>Backing store of <see cref="ExpectedConversationId"/>, written by the lifecycle and read by Kestrel's request threads.</summary>
     private volatile string? expectedConversationId;
 
-    /// <summary>The only conversation whose deliveries reach the UI; null accepts none.</summary>
-    // The callback URL outlives a conversation, so a delivery for another one, such as an abandoned start attempt or a
-    // previous run on the same port, must not land on screen.
+    /// <summary>
+    /// The only conversation whose deliveries reach the UI; null accepts none.
+    /// The callback URL outlives a conversation, so a delivery for another one, such as an abandoned start attempt or a
+    /// previous run on the same port, must not land on screen.
+    /// </summary>
     public string? ExpectedConversationId
     {
         get => expectedConversationId;

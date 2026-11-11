@@ -7,9 +7,11 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Morgana.Terminal.Handlers;
 
-/// <summary>Signs every REST call of the channel to Morgana with a token it issues itself, HMAC-SHA256 with five minutes of life.</summary>
-// The issuer is the channel's name, which Morgana's Authentication:Issuers must list with the same SymmetricKey: an unknown
-// issuer is refused at the gate.
+/// <summary>
+/// Signs every REST call of the channel to Morgana with a token it issues itself, HMAC-SHA256 with five minutes of life.
+/// The issuer is the channel's name, which Morgana's Authentication:Issuers must list with the same SymmetricKey: an unknown
+/// issuer is refused at the gate.
+/// </summary>
 public class MorganaAuthHandler : DelegatingHandler
 {
     /// <summary>The HMAC-SHA256 signing credentials derived from the configured symmetric key.</summary>

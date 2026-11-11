@@ -22,8 +22,10 @@ public sealed class TerminalNewCommand : TerminalCommand
         this.morganaClientService = morganaClientService;
     }
 
-    /// <inheritdoc />
-    // The conversation on screen is ended by this, so the user is asked to confirm before anything is lost.
+    /// <summary>
+    /// How <c>/new</c> is published to the palette.
+    /// The conversation on screen is ended by this, so the user is asked to confirm before anything is lost.
+    /// </summary>
     public override CommandDescriptor Descriptor { get; } =
         new("new", "Start a fresh conversation with Morgana", RequiresConfirmation: true);
 

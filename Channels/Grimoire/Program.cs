@@ -8,7 +8,7 @@ using Morgana.Terminal.Interfaces;
 // GRIMOIRE - WEBHOOK CHANNEL FOR MORGANA
 // ==============================================================================
 // Grimoire is the rich-TTY reference channel, a textual Cauldron: Morgana's full expressive surface reaches a Spectre.Console
-// terminal whole, never degraded by MorganaChannelAdapter, and is drawn here as ANSI primitives where Cauldron draws HTML.
+// terminal whole without MorganaChannelAdapter degrading it, drawn here as ANSI primitives where Cauldron draws HTML.
 //
 // Architecture: a Kestrel-hosted HTTPS listener on port 5004 receives inbound ChannelMessage payloads at
 // POST /morgana-hook (and incremental stream chunks at POST /morgana-hook/chunk) and drives a Spectre.Console

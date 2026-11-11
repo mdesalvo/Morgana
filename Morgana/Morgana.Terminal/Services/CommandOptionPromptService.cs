@@ -4,10 +4,12 @@ using Spectre.Console;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>The form that a command opens when it is run without the values it declares, asking for them one at a time.</summary>
-// A command describes its options once, so asking for them is the channel's work rather than each command's. The line being
-// typed stays the prompt's own: this holds the question and never the keystrokes, so the caret, the arrows and the deletions
-// work as they do on a message. Every call comes under the render lock of the UI that owns it.
+/// <summary>
+/// The form that a command opens when it is run without the values it declares, asking for them one at a time.
+/// A command describes its options once, so asking for them is the channel's work rather than each command's. The line being
+/// typed stays the prompt's own: this holds the question and never the keystrokes, so the caret, the arrows and the deletions
+/// work as they do on a message. Every call comes under the render lock of the UI that owns it.
+/// </summary>
 public sealed class CommandOptionPromptService
 {
     /// <summary>The controls line, since what Enter does here is not what it does at a prompt.</summary>
@@ -56,8 +58,10 @@ public sealed class CommandOptionPromptService
         (candidate.Options ?? []).Any(option => option.Required
             && !typedOptions.Keys.Any(typedName => string.Equals(typedName, option.Name, StringComparison.OrdinalIgnoreCase)));
 
-    /// <summary>Opens the form for <paramref name="candidate"/>, keeping the <paramref name="typedOptions"/> already written and asking for the rest.</summary>
-    // An optional option is asked too, since an empty answer skips it.
+    /// <summary>
+    /// Opens the form for <paramref name="candidate"/>, keeping the <paramref name="typedOptions"/> already written and asking for the rest.
+    /// An optional option is asked too, since an empty answer skips it.
+    /// </summary>
     public void Begin(CommandDescriptor candidate, IReadOnlyDictionary<string, string> typedOptions)
     {
         // The form now belongs to this command and starts from what was typed.
@@ -78,8 +82,10 @@ public sealed class CommandOptionPromptService
     /// <summary>The option being asked for; null when nothing is.</summary>
     public CommandOption? CurrentOption => pendingOptions.Count > 0 ? pendingOptions.Peek() : null;
 
-    /// <summary>The default of the option being asked, empty when it declares none.</summary>
-    // The line starts from it, which turns a value the command would have used anyway into a choice the user can see and change.
+    /// <summary>
+    /// The default of the option being asked, empty when it declares none.
+    /// The line starts from it, which turns a value the command would have used anyway into a choice the user can see and change.
+    /// </summary>
     public string CurrentOptionDefault => CurrentOption?.DefaultValue ?? string.Empty;
 
     /// <summary>Closes the form, leaving the command unrun.</summary>
@@ -94,9 +100,11 @@ public sealed class CommandOptionPromptService
         gatheredOptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <summary>Takes <paramref name="value"/> as the answer to the option being asked, returning the invocation once nothing is left to ask.</summary>
-    // An empty answer skips an optional value and is refused on a required one, as is a value the option does not take: a
-    // refusal leaves the same question standing. The form closes with the invocation it returns.
+    /// <summary>
+    /// Takes <paramref name="value"/> as the answer to the option being asked, returning the invocation once nothing is left to ask.
+    /// An empty answer skips an optional value and is refused on a required one, as is a value the option does not take: a
+    /// refusal leaves the same question standing. The form closes with the invocation it returns.
+    /// </summary>
     public CommandInvocation? Accept(string value)
     {
         // With no form open there is nothing to answer.
@@ -128,8 +136,10 @@ public sealed class CommandOptionPromptService
         return invocation;
     }
 
-    /// <summary>The form as rows of at most <paramref name="width"/> cells: the command being filled in, the option asked with its description, then the controls.</summary>
-    // Every row is one markup, so the UI budgets them as it budgets its other prompt rows.
+    /// <summary>
+    /// The form as rows of at most <paramref name="width"/> cells: the command being filled in, the option asked with its description, then the controls.
+    /// Every row is one markup, so the UI budgets them as it budgets its other prompt rows.
+    /// </summary>
     public List<Markup> RenderPrompt(int width)
     {
         // With no form open there is nothing to draw.

@@ -13,7 +13,9 @@ public sealed record CommandInvocation(
     CommandDescriptor Command,
     IReadOnlyDictionary<string, string> Options)
 {
-    /// <summary>This run's own name, sent to Morgana with the request and handed back on every frame of it.</summary>
-    // The UI takes an outcome only from the run it is waiting on, never from an earlier run of the same command.
+    /// <summary>
+    /// This run's own name, sent to Morgana with the request and handed back on every frame of it.
+    /// The UI takes an outcome only from the run it is waiting on, never from an earlier run of the same command.
+    /// </summary>
     public string Id { get; } = Guid.NewGuid().ToString("N");
 }

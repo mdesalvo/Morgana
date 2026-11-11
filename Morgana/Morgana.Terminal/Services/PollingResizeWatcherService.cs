@@ -2,9 +2,11 @@ using Morgana.Terminal.Interfaces;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>Tells the console UI of a resize on Windows by comparing the window's size with the last one seen.</summary>
-// Windows has no SIGWINCH at this layer. Every 250 ms is well below human resize speed and well above the cost of two
-// console reads, so idle CPU stays negligible.
+/// <summary>
+/// Tells the console UI of a resize on Windows by comparing the window's size with the last one seen.
+/// Windows has no SIGWINCH at this layer. Every 250 ms is well below human resize speed and well above the cost of two
+/// console reads, so idle CPU stays negligible.
+/// </summary>
 public sealed class PollingResizeWatcherService : IViewportResizeWatcher
 {
     /// <summary>The cadence of the size comparison.</summary>

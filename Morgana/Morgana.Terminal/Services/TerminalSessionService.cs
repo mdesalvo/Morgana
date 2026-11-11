@@ -1,7 +1,9 @@
 namespace Morgana.Terminal.Services;
 
-/// <summary>Keeps track of the conversation on screen and keeps the webhook listening to it.</summary>
-// Opening a conversation is its one mutation, shared by the lifecycle at startup and by any command that replaces the conversation.
+/// <summary>
+/// Keeps track of the conversation on screen and keeps the webhook listening to it.
+/// Opening a conversation is its one mutation, shared by the lifecycle at startup and by any command that replaces the conversation.
+/// </summary>
 public sealed class TerminalSessionService
 {
     /// <summary>Opens conversations and carries user turns to Morgana.</summary>
@@ -32,8 +34,10 @@ public sealed class TerminalSessionService
     public bool IsConversationOnScreen(string conversationId) =>
         this.conversationId is { } currentConversationId && string.Equals(currentConversationId, conversationId, StringComparison.Ordinal);
 
-    /// <summary>Sends a user turn on the conversation on screen.</summary>
-    // A 429 is not a failure: Morgana has already explained it over the webhook.
+    /// <summary>
+    /// Sends a user turn on the conversation on screen.
+    /// A 429 is not a failure: Morgana has already explained it over the webhook.
+    /// </summary>
     public Task SendUserTurnAsync(string text) =>
         // Read at send time, so a turn typed after /new goes to the fresh conversation.
         morganaClientService.SendMessageAsync(ConversationId, text);

@@ -37,8 +37,10 @@ public sealed record TerminalTheme(
     /// <summary>The colour of error notices such as an exhausted budget or a failed delivery.</summary>
     public const string ErrorColor = "red";
 
-    /// <summary>The colour of what a command reports, a neutral grey.</summary>
-    // It reads apart from the speakers, since a command is not a turn of the conversation. It also reads apart from a warning, which is about the conversation.
+    /// <summary>
+    /// The colour of what a command reports, a neutral grey.
+    /// It reads apart from the speakers, since a command is not a turn of the conversation. It also reads apart from a warning, which is about the conversation.
+    /// </summary>
     public const string CommandReportColor = "grey70";
 
     /// <summary>The colour a speaker's rows are drawn in: white for the user, <see cref="MorganaColor"/> for Morgana and <see cref="AgentColor"/> for any specialised agent.</summary>

@@ -4,8 +4,10 @@ using Morgana.Contracts;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>The channel's REST client for Morgana: the conversation's start, messages, commands, history and end, the command catalogue and the health check.</summary>
-// Every call goes through the factory's named Morgana client, which carries the channel's MorganaAuthHandler.
+/// <summary>
+/// The channel's REST client for Morgana: the conversation's start, messages, commands, history and end, the command catalogue and the health check.
+/// Every call goes through the factory's named Morgana client, which carries the channel's MorganaAuthHandler.
+/// </summary>
 public sealed class MorganaClientService
 {
     /// <summary>The fallback for the channel's <c>CommandTimeoutSeconds</c> when it is absent or not positive.</summary>
@@ -20,8 +22,10 @@ public sealed class MorganaClientService
     /// <summary>The absolute URL Morgana POSTs inbound messages to, announced again on every handshake.</summary>
     private readonly string callbackUrl;
 
-    /// <summary>How long the prompt waits on one of Morgana's commands before calling it off, from the channel's <c>CommandTimeoutSeconds</c>.</summary>
-    // The channel's own deadline, never sent: this side knows how long its prompt can be held, while Morgana only notices the call being dropped.
+    /// <summary>
+    /// How long the prompt waits on one of Morgana's commands before calling it off, from the channel's <c>CommandTimeoutSeconds</c>.
+    /// The channel's own deadline, never sent: this side knows how long its prompt can be held, while Morgana only notices the call being dropped.
+    /// </summary>
     private readonly TimeSpan commandTimeout;
 
     /// <summary>Builds the client on the channel's configuration, reading its callback URL and its command deadline.</summary>

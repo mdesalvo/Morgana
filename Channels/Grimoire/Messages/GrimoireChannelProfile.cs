@@ -3,9 +3,11 @@ using Morgana.Terminal;
 
 namespace Grimoire.Messages;
 
-/// <summary>Grimoire's identity and capability budget: the rich-TTY profile, every expressive feature on and no length cap, so Morgana's adapter has nothing to degrade and the terminal receives the reply whole.</summary>
-// Identity stays channel-side rather than in the shared terminal library, which hosts the behaviour the two TTY channels
-// have in common and takes the profile as its only input.
+/// <summary>
+/// Grimoire's identity and capability budget: the rich-TTY profile, every expressive feature on and no length cap, so Morgana's adapter has nothing to degrade and the terminal receives the reply whole.
+/// Identity stays channel-side rather than in the shared terminal library, which hosts the behaviour the two TTY channels
+/// have in common and takes the profile as its only input.
+/// </summary>
 public static class GrimoireChannelProfile
 {
     /// <summary>The profile announced at the handshake and signed into every token.</summary>

@@ -7,9 +7,11 @@ using Morgana.Terminal.Messages;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>Every command that a TTY channel's palette offers and the one place they run from.</summary>
-// The terminal's own commands are discovered at startup: every public concrete TerminalCommand in this library and in the
-// channel, built from DI. Morgana's join as descriptors once its catalogue has been read and they run on Morgana.
+/// <summary>
+/// Every command that a TTY channel's palette offers and the one place they run from.
+/// The terminal's own commands are discovered at startup: every public concrete TerminalCommand in this library and in the
+/// channel, built from DI. Morgana's join as descriptors once its catalogue has been read and they run on Morgana.
+/// </summary>
 public sealed class TerminalCommandRegistryService
 {
     /// <summary>Reads Morgana's catalogue and forwards its commands.</summary>

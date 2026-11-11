@@ -3,9 +3,11 @@ using Morgana.Terminal.Messages;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>Reads what the user typed after the slash: the command name, then its <c>name:value</c> options.</summary>
-// Every surface asking what a line means comes here, so the palette matching a name, the question naming what is about to
-// run and the command finally receiving its values all read the same line the same way.
+/// <summary>
+/// Reads what the user typed after the slash: the command name, then its <c>name:value</c> options.
+/// Every surface asking what a line means comes here, so the palette matching a name, the question naming what is about to
+/// run and the command finally receiving its values all read the same line the same way.
+/// </summary>
 public static class CommandLineParser
 {
     /// <summary>The name typed after the slash, without its options; empty right after a bare slash.</summary>
@@ -17,8 +19,10 @@ public static class CommandLineParser
         return (nameEnd < 0 ? line : line[..nameEnd]).Trim();
     }
 
-    /// <summary>The options written after the name or what kept them from being read.</summary>
-    // A value may be quoted, which is how a path with spaces is written.
+    /// <summary>
+    /// The options written after the name or what kept them from being read.
+    /// A value may be quoted, which is how a path with spaces is written.
+    /// </summary>
     public static ParsedCommandOptions ParseOptions(string input)
     {
         // The options read so far, matched ignoring case as the commands declare them.

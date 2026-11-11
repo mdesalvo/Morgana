@@ -3,8 +3,10 @@ using System.Security.Authentication;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>Paces the attempts to open the conversation while Morgana is unreachable at startup, until the user quits.</summary>
-// It never gives up on its own: a Morgana still starting or being redeployed takes longer than any short schedule.
+/// <summary>
+/// Paces the attempts to open the conversation while Morgana is unreachable at startup, until the user quits.
+/// It never gives up on its own: a Morgana still starting or being redeployed takes longer than any short schedule.
+/// </summary>
 public sealed class MorganaStartRetryPolicy
 {
     /// <summary>The opening attempts, close together so that a Morgana a few seconds from ready is met at once.</summary>
@@ -19,8 +21,10 @@ public sealed class MorganaStartRetryPolicy
     /// <summary>The pace once the quick attempts are spent, when Morgana is down rather than slow.</summary>
     private static readonly TimeSpan SteadyRetryDelay = TimeSpan.FromSeconds(30);
 
-    /// <summary>The largest share of a delay added at random.</summary>
-    // Terminals opened against the same Morgana then do not all reach it in one burst when it comes back.
+    /// <summary>
+    /// The largest share of a delay added at random.
+    /// Terminals opened against the same Morgana then do not all reach it in one burst when it comes back.
+    /// </summary>
     private const double MaximumJitterShare = 0.2;
 
     /// <summary>The wait before the next attempt, given how many have already failed.</summary>
@@ -35,8 +39,10 @@ public sealed class MorganaStartRetryPolicy
         return baseDelay + baseDelay * (Random.Shared.NextDouble() * MaximumJitterShare);
     }
 
-    /// <summary>Tells whether a failed attempt is worth another: Morgana unreachable, timing out or failing on its side.</summary>
-    // A refusal such as a rejected key or an untrusted certificate would fail the same way forever, so it is reported at once.
+    /// <summary>
+    /// Tells whether a failed attempt is worth another: Morgana unreachable, timing out or failing on its side.
+    /// A refusal such as a rejected key or an untrusted certificate would fail the same way forever, so it is reported at once.
+    /// </summary>
     public static bool IsWorthRetrying(Exception exception) => exception switch
     {
         // A TLS handshake that failed is a certificate this machine does not trust.

@@ -23,10 +23,12 @@ public static class TerminalChannelExtensions
     /// <summary>The shipped value of the signing key, a marker and not a key.</summary>
     private const string SigningKeyMarker = "_SECURE_OVERRIDE_";
 
-    /// <summary>Prepares the process and tells whether the channel may start, explaining on the console why not.</summary>
-    // The culture and the console encoding are set first. The terminal must be interactive and the three settings the channel
-    // cannot run without must be sound: they are checked together, so a fresh checkout is told exactly what is missing while
-    // there is still a readable terminal.
+    /// <summary>
+    /// Prepares the process and tells whether the channel may start, explaining on the console why not.
+    /// The culture and the console encoding are set first. The terminal must be interactive and the three settings the channel
+    /// cannot run without must be sound: they are checked together, so a fresh checkout is told exactly what is missing while
+    /// there is still a readable terminal.
+    /// </summary>
     public static bool CanStartTerminalChannel(this WebApplicationBuilder builder, ChannelProfile profile)
     {
         // Invariant before anything else runs, so no thread inherits the host's locale: the terminal and
@@ -86,8 +88,10 @@ public static class TerminalChannelExtensions
         return true;
     }
 
-    /// <summary>Registers everything a TTY channel is made of: its profile and theme, its token toward Morgana, the shared services, the UI and the platform's resize watcher.</summary>
-    // A channel that registered its own IMessageRenderer beforehand keeps it, otherwise messages are drawn as plain text.
+    /// <summary>
+    /// Registers everything a TTY channel is made of: its profile and theme, its token toward Morgana, the shared services, the UI and the platform's resize watcher.
+    /// A channel that registered its own IMessageRenderer beforehand keeps it, otherwise messages are drawn as plain text.
+    /// </summary>
     public static WebApplicationBuilder AddTerminalChannel(this WebApplicationBuilder builder, ChannelProfile profile, TerminalTheme theme)
     {
         // The live UI owns the terminal: any stray log line from Kestrel or ASP.NET Core would corrupt the layout.
@@ -139,9 +143,11 @@ public static class TerminalChannelExtensions
         return builder;
     }
 
-    /// <summary>Maps the endpoints Morgana delivers to: <c>/morgana-hook</c> for messages and, where the profile declares streaming, <c>/morgana-hook/chunk</c> for the deltas.</summary>
-    // No token guards them, since the trust model is asymmetric by design, as in WebhookChannelService. A delivery for another
-    // conversation is refused with 404.
+    /// <summary>
+    /// Maps the endpoints Morgana delivers to: <c>/morgana-hook</c> for messages and, where the profile declares streaming, <c>/morgana-hook/chunk</c> for the deltas.
+    /// No token guards them, since the trust model is asymmetric by design, as in WebhookChannelService. A delivery for another
+    /// conversation is refused with 404.
+    /// </summary>
     public static WebApplication MapMorganaHooks(this WebApplication app)
     {
         // The profile decides whether the chunk endpoint exists at all.
@@ -204,9 +210,11 @@ public static class TerminalChannelExtensions
         return app;
     }
 
-    /// <summary>Runs the channel from the first listener to the exit, releasing the SIGHUP hook and stopping Kestrel however it ends.</summary>
-    // Kestrel starts first so it is ready for Morgana's first delivery, then the conversation runs on this thread, which the
-    // live UI needs. The orderly stop lets the process exit, so docker's --rm reclaims the container.
+    /// <summary>
+    /// Runs the channel from the first listener to the exit, releasing the SIGHUP hook and stopping Kestrel however it ends.
+    /// Kestrel starts first so it is ready for Morgana's first delivery, then the conversation runs on this thread, which the
+    /// live UI needs. The orderly stop lets the process exit, so docker's --rm reclaims the container.
+    /// </summary>
     public static async Task RunTerminalChannelAsync(this WebApplication app)
     {
         // .NET's host already wires SIGTERM and SIGINT to ApplicationStopping. On POSIX closing the terminal window also sends
@@ -236,8 +244,10 @@ public static class TerminalChannelExtensions
         }
     }
 
-    /// <summary>Tells whether <paramref name="value"/> is an absolute http or https address that the channel can dial.</summary>
-    // Anything else, a bare host:port, a path or a scheme nobody serves, parses happily and fails only once the first call is on its way.
+    /// <summary>
+    /// Tells whether <paramref name="value"/> is an absolute http or https address that the channel can dial.
+    /// Anything else, a bare host:port, a path or a scheme nobody serves, parses happily and fails only once the first call is on its way.
+    /// </summary>
     private static bool IsReachableUrl(string? value) =>
         Uri.TryCreate(value, UriKind.Absolute, out Uri? url)
         && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps);

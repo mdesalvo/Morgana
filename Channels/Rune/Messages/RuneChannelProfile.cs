@@ -3,17 +3,21 @@ using Morgana.Terminal;
 
 namespace Rune.Messages;
 
-/// <summary>Rune's identity and capability budget: the "poor but honest" profile, every rich feature off and a tight length cap, so Morgana's adapter rewrites the reply on every single turn — the degradation path this channel exists to exercise.</summary>
-// Identity stays channel-side rather than in the shared terminal library, which hosts the behaviour the two TTY channels
-// have in common and takes the profile as its only input. Raising anything here is how Rune stops being worth running:
-// the rewrite it proves would go untested everywhere.
+/// <summary>
+/// Rune's identity and capability budget: the "poor but honest" profile, every rich feature off and a tight length cap, so Morgana's adapter rewrites the reply on every single turn — the degradation path this channel exists to exercise.
+/// Identity stays channel-side rather than in the shared terminal library, which hosts the behaviour the two TTY channels
+/// have in common and takes the profile as its only input. Raising anything here is how Rune stops being worth running:
+/// the rewrite it proves would go untested everywhere.
+/// </summary>
 public static class RuneChannelProfile
 {
     /// <summary>The cap advertised at the handshake when <c>Rune:MaxMessageLength</c> is absent.</summary>
     private const int DefaultMaxMessageLength = 500;
 
-    /// <summary>The profile, with the cap that the configuration advertises.</summary>
-    // The default stays aggressive so the downgrade runs on every turn, while the configuration can raise it without recompiling.
+    /// <summary>
+    /// The profile, with the cap that the configuration advertises.
+    /// The default stays aggressive so the downgrade runs on every turn, while the configuration can raise it without recompiling.
+    /// </summary>
     public static ChannelProfile Build(IConfiguration configuration) => new(
         ChannelName: "rune",
         DisplayName: "Rune",

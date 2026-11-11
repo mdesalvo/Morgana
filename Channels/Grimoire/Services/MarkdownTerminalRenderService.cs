@@ -8,9 +8,11 @@ using Morgana.Terminal.Services;
 
 namespace Grimoire.Services;
 
-/// <summary>Renders markdown to terminal rows, one markup per row.</summary>
-// Markdig parses the source into a tree, Render walks it into logical lines of styled spans and Wrap breaks them at the
-// terminal width by cell. Block widgets such as panels and tables are left to the rich card renderer.
+/// <summary>
+/// Renders markdown to terminal rows, one markup per row.
+/// Markdig parses the source into a tree, Render walks it into logical lines of styled spans and Wrap breaks them at the
+/// terminal width by cell. Block widgets such as panels and tables are left to the rich card renderer.
+/// </summary>
 public sealed class MarkdownTerminalRenderService
 {
     /// <summary>The default Markdig pipeline, the same configuration Cauldron's renderer uses.</summary>
@@ -49,8 +51,10 @@ public sealed class MarkdownTerminalRenderService
     /// <param name="IsRule">True for a rule, which has no spans.</param>
     internal sealed record RenderedLine(List<StyledSpan> Spans, bool IsRule);
 
-    /// <summary>Renders <paramref name="markdown"/> in the speaker's <paramref name="baseColor"/> to rows of at most <paramref name="width"/> cells, with a bold <paramref name="speakerPrefix"/> on the first row unless it is null.</summary>
-    // A speakerMarkerColor puts a dot in that colour ahead of the prefix, drawn only: it is no part of the message.
+    /// <summary>
+    /// Renders <paramref name="markdown"/> in the speaker's <paramref name="baseColor"/> to rows of at most <paramref name="width"/> cells, with a bold <paramref name="speakerPrefix"/> on the first row unless it is null.
+    /// A speakerMarkerColor puts a dot in that colour ahead of the prefix, drawn only: it is no part of the message.
+    /// </summary>
     public List<Markup> RenderToRows(string markdown, string baseColor, string? speakerPrefix, int width, string? speakerMarkerColor = null)
     {
         // The markdown as logical lines in the speaker's colour.
@@ -83,8 +87,10 @@ public sealed class MarkdownTerminalRenderService
         return lines;
     }
 
-    /// <summary>Prepends a bold speaker tag, behind a dot in <paramref name="markerColor"/> when given, to the first renderable (non-rule) line.</summary>
-    // A message with none gets a new leading line to carry it.
+    /// <summary>
+    /// Prepends a bold speaker tag, behind a dot in <paramref name="markerColor"/> when given, to the first renderable (non-rule) line.
+    /// A message with none gets a new leading line to carry it.
+    /// </summary>
     internal static void PrependSpeaker(List<RenderedLine> lines, string speakerPrefix, string baseColor, string? markerColor = null)
     {
         // The prefix is the speaker's name in bold, cleaned like any text from the network
@@ -250,8 +256,10 @@ public sealed class MarkdownTerminalRenderService
 
     // ---- inline walking ---------------------------------------------------------------
 
-    /// <summary>Renders an inline container into logical lines: hard line breaks split lines and soft breaks become spaces.</summary>
-    // decorations is the style inherited from the enclosing emphasis.
+    /// <summary>
+    /// Renders an inline container into logical lines: hard line breaks split lines and soft breaks become spaces.
+    /// decorations is the style inherited from the enclosing emphasis.
+    /// </summary>
     private static List<RenderedLine> RenderInlines(ContainerInline? container, string baseColor, string decorations)
     {
         // The lines closed by hard breaks and the spans of the line still open.

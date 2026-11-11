@@ -4,12 +4,14 @@ using Spectre.Console;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>Shows the progress that a running command reports, as a TTY channel draws it in its own <see cref="TerminalTheme"/>.</summary>
-// Frames replace one another and none reaches the transcript, so a command that took twenty steps leaves the conversation as
-// it found it. A rich terminal's bar of solid blocks and a poor one's row of plain characters are the same widget in each
-// channel's own vocabulary. It holds the current frame, so every call comes under the render lock of the UI that owns it.
-// Drawn here rather than taken from Spectre, whose ProgressBar is internal while its public progress API takes the terminal
-// over, which the live display of these channels already owns.
+/// <summary>
+/// Shows the progress that a running command reports, as a TTY channel draws it in its own <see cref="TerminalTheme"/>.
+/// Frames replace one another and none reaches the transcript, so a command that took twenty steps leaves the conversation as
+/// it found it. A rich terminal's bar of solid blocks and a poor one's row of plain characters are the same widget in each
+/// channel's own vocabulary. It holds the current frame, so every call comes under the render lock of the UI that owns it.
+/// Drawn here rather than taken from Spectre, whose ProgressBar is internal while its public progress API takes the terminal
+/// over, which the live display of these channels already owns.
+/// </summary>
 public sealed class CommandProgressService
 {
     /// <summary>The style of what is left to do, dimmed so that the filled part reads as the measure.</summary>
@@ -44,8 +46,10 @@ public sealed class CommandProgressService
     /// <summary>Takes the widget off the screen, for a command that stopped reporting without ever finishing.</summary>
     public void Clear() => currentFrame = null;
 
-    /// <summary>The widget as one row of at most <paramref name="width"/> cells: the bar, the step count and what is being worked on; empty when no command is reporting.</summary>
-    // One row, so the UI budgets it as it budgets its other prompt rows.
+    /// <summary>
+    /// The widget as one row of at most <paramref name="width"/> cells: the bar, the step count and what is being worked on; empty when no command is reporting.
+    /// One row, so the UI budgets it as it budgets its other prompt rows.
+    /// </summary>
     public List<Markup> RenderProgress(int width)
     {
         // No command is reporting, so there is nothing to draw.

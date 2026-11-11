@@ -4,9 +4,11 @@ using Spectre.Console;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>Drives a TTY channel process from its first conversation to its exit.</summary>
-// It opens the conversation with Morgana, waits for the presentation, hands the terminal to the live UI and ends whichever
-// conversation is on screen when the UI returns, since /new may have replaced the first one meanwhile.
+/// <summary>
+/// Drives a TTY channel process from its first conversation to its exit.
+/// It opens the conversation with Morgana, waits for the presentation, hands the terminal to the live UI and ends whichever
+/// conversation is on screen when the UI returns, since /new may have replaced the first one meanwhile.
+/// </summary>
 public sealed class ConversationLifecycleService
 {
     /// <summary>The fallback for the channel's <c>StartupTimeoutSeconds</c> when it is absent or not positive.</summary>
@@ -63,8 +65,10 @@ public sealed class ConversationLifecycleService
         startupTimeout = TimeSpan.FromSeconds(startupTimeoutSeconds > 0 ? startupTimeoutSeconds : DefaultStartupTimeoutSeconds);
     }
 
-    /// <summary>Runs the conversation from handshake to end, returning when the user quits, <paramref name="stopping"/> fires or the conversation cannot be opened.</summary>
-    // The webhook listener must already be accepting Morgana's deliveries.
+    /// <summary>
+    /// Runs the conversation from handshake to end, returning when the user quits, <paramref name="stopping"/> fires or the conversation cannot be opened.
+    /// The webhook listener must already be accepting Morgana's deliveries.
+    /// </summary>
     public async Task RunAsync(CancellationToken stopping)
     {
         // Something alive on screen while the handshake and the presentation are on their way
@@ -99,9 +103,11 @@ public sealed class ConversationLifecycleService
         }
     }
 
-    /// <summary>Sends every delivery from Morgana to the UI queue, returning a task that completes on the first one.</summary>
-    // The first message gates the handover: entering the live display as soon as the handshake returns would show an empty
-    // panel while the presentation is still in flight.
+    /// <summary>
+    /// Sends every delivery from Morgana to the UI queue, returning a task that completes on the first one.
+    /// The first message gates the handover: entering the live display as soon as the handshake returns would show an empty
+    /// panel while the presentation is still in flight.
+    /// </summary>
     private Task RouteWebhookToUi()
     {
         // Completed by the first delivery, whichever thread of Kestrel's brings it.
@@ -120,9 +126,11 @@ public sealed class ConversationLifecycleService
         return firstMessageArrived.Task;
     }
 
-    /// <summary>Opens the first conversation, returning whether it could be.</summary>
-    // A Morgana not up yet or being redeployed is waited for at the retry policy's pace until the user quits; only a refusal
-    // that would repeat forever, such as a rejected key, is reported at once.
+    /// <summary>
+    /// Opens the first conversation, returning whether it could be.
+    /// A Morgana not up yet or being redeployed is waited for at the retry policy's pace until the user quits; only a refusal
+    /// that would repeat forever, such as a rejected key, is reported at once.
+    /// </summary>
     private async Task<bool> OpenConversationAsync(CancellationToken stopping)
     {
         // Attempts go on until one succeeds, the user quits or Morgana refuses for good.
@@ -164,8 +172,10 @@ public sealed class ConversationLifecycleService
         }
     }
 
-    /// <summary>Waits for the presentation within <see cref="startupTimeout"/>, past which the UI is entered anyway.</summary>
-    // An empty conversation is a better place to be than a terminal stuck on the landing line.
+    /// <summary>
+    /// Waits for the presentation within <see cref="startupTimeout"/>, past which the UI is entered anyway.
+    /// An empty conversation is a better place to be than a terminal stuck on the landing line.
+    /// </summary>
     private async Task WaitForPresentationAsync(Task presentationArrived)
     {
         try

@@ -4,10 +4,12 @@ using Spectre.Console;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>The Yes/No question that stands between a command declaring <see cref="CommandDescriptor.RequiresConfirmation"/> and its running.</summary>
-// Every TTY channel asks it the same way in its own TerminalTheme, a channel with no quick replies included: the channel draws
-// the question itself, so it is never a capability it had to declare. It holds the pending question, so every call comes under
-// the render lock of the UI.
+/// <summary>
+/// The Yes/No question that stands between a command declaring <see cref="CommandDescriptor.RequiresConfirmation"/> and its running.
+/// Every TTY channel asks it the same way in its own TerminalTheme, a channel with no quick replies included: the channel draws
+/// the question itself, so it is never a capability it had to declare. It holds the pending question, so every call comes under
+/// the render lock of the UI.
+/// </summary>
 public sealed class CommandConfirmationService
 {
     /// <summary>Marks the question as the one thing the prompt is waiting on, in the amber both channels warn in.</summary>
@@ -28,8 +30,10 @@ public sealed class CommandConfirmationService
     /// <summary>The channel's Morgana colour, which marks the highlighted answer.</summary>
     private readonly TerminalTheme theme;
 
-    /// <summary>Whether the highlight sits on Yes.</summary>
-    // No holds it until the user moves it, so a stray Enter runs nothing.
+    /// <summary>
+    /// Whether the highlight sits on Yes.
+    /// No holds it until the user moves it, so a stray Enter runs nothing.
+    /// </summary>
     private bool yesHighlighted;
 
     /// <summary>Builds the question on the cell measurement and the channel's theme.</summary>
@@ -54,9 +58,11 @@ public sealed class CommandConfirmationService
         yesHighlighted = false;
     }
 
-    /// <summary>Answers the question with <paramref name="key"/>: y and n decide, the arrows move the highlight, Enter takes it and Esc walks away.</summary>
-    // Every other key leaves the question standing. Either answer closes the question, so reading PendingInvocation before the
-    // call is the only way to learn which command a Confirmed belongs to.
+    /// <summary>
+    /// Answers the question with <paramref name="key"/>: y and n decide, the arrows move the highlight, Enter takes it and Esc walks away.
+    /// Every other key leaves the question standing. Either answer closes the question, so reading PendingInvocation before the
+    /// call is the only way to learn which command a Confirmed belongs to.
+    /// </summary>
     public ConfirmationOutcome HandleKey(ConsoleKeyInfo key)
     {
         // With no question on screen there is nothing to answer.
@@ -93,8 +99,10 @@ public sealed class CommandConfirmationService
         };
     }
 
-    /// <summary>The question as rows of at most <paramref name="width"/> cells: what is about to run, the two answers and the controls; empty when no command waits.</summary>
-    // Every row is one markup, so the UI budgets them as it budgets the palette's.
+    /// <summary>
+    /// The question as rows of at most <paramref name="width"/> cells: what is about to run, the two answers and the controls; empty when no command waits.
+    /// Every row is one markup, so the UI budgets them as it budgets the palette's.
+    /// </summary>
     public List<Markup> RenderQuestion(int width)
     {
         // No command is waiting, so there is nothing to draw.

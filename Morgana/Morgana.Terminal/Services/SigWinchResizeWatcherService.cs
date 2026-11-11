@@ -4,8 +4,10 @@ using Morgana.Terminal.Interfaces;
 
 namespace Morgana.Terminal.Services;
 
-/// <summary>Tells the console UI of a resize on POSIX through SIGWINCH, the signal the kernel sends the foreground process group whenever its terminal is resized.</summary>
-// One callback per resize and no idle CPU, unlike polling. Windows has no such signal, so TerminalChannelExtensions registers this service on POSIX only.
+/// <summary>
+/// Tells the console UI of a resize on POSIX through SIGWINCH, the signal the kernel sends the foreground process group whenever its terminal is resized.
+/// One callback per resize and no idle CPU, unlike polling. Windows has no such signal, so TerminalChannelExtensions registers this service on POSIX only.
+/// </summary>
 [UnsupportedOSPlatform("windows")]
 public sealed class SigWinchResizeWatcherService : IViewportResizeWatcher
 {
