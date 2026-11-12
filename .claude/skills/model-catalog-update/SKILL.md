@@ -126,7 +126,8 @@ cache-write column of that whole file changes with it and so do those remarks.
    - **not catalogued**: a model seen on the sources but excluded by the rules above, with the rule.
 4. Apply **new** and **repriced** to the files, keeping the vendor's family order. Set `LastUpdate`
    to the current UTC time in every file that was compared with its sources, whether or not its
-   models changed: it says when the catalogue was last known to match the vendor. The `<remarks>`
+   models changed, and in every file that gains or loses a model, even when only that model was
+   looked up: it says when the catalogue last changed or was last known to match the vendor. The `<remarks>`
    of each plugin class must stay true (vendor, band, cache-write lifetime): where one changes, the
    edit follows the `code-commentation` skill.
 5. **Never remove a leaving model on your own.** Report each one with its retirement date and the
