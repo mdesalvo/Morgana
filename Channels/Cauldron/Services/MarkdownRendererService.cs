@@ -6,29 +6,20 @@ using Microsoft.AspNetCore.Components;
 
 namespace Cauldron.Services;
 
-/// <summary>
-/// Converts message and rich-card text from Markdown to HTML for display, blocking HTML injection and the images outside the listed domains.
-/// </summary>
+/// <summary>Converts message and rich-card text from Markdown to HTML for display, blocking HTML injection and the images outside the listed domains.</summary>
 public class MarkdownRendererService : IMarkdownRendererService
 {
-    /// <summary>
-    /// The Markdown → HTML rules this instance renders with: emoji shortcodes, GFM pipe tables
-    /// and raw HTML tags disabled. Without that last part, a bare-looking tag typed in ordinary
-    /// prose (e.g. "List&lt;string&gt;", "&lt;Component&gt;") would reach <see cref="sanitizer"/>
-    /// as an unclosed HTML element, which silently swallows the rest of the message as that
-    /// element's content before dropping it — truncating legitimate text, not just blocking
-    /// attacks. Disabling HTML here turns those into harmless literal text instead.
-    /// </summary>
+    /// <summary>The Markdown → HTML rules this instance renders with: emoji shortcodes, GFM pipe tables and raw HTML tags disabled.</summary>
+    // Without that last part, a bare-looking tag typed in ordinary prose (e.g. "List<string>", "<Component>") would
+    // reach sanitizer as an unclosed HTML element, which silently swallows the rest of the message as that element's
+    // content before dropping it — truncating legitimate text, not just blocking attacks. Disabling HTML here turns
+    // those into harmless literal text instead.
     private readonly MarkdownPipeline pipeline;
 
-    /// <summary>
-    /// Removes dangerous tags, attributes and schemes from the HTML Markdig produces and replaces with their alternative text the images outside the listed domains.
-    /// </summary>
+    /// <summary>Removes dangerous tags, attributes and schemes from the HTML Markdig produces and replaces with their alternative text the images outside the listed domains.</summary>
     private readonly HtmlSanitizer sanitizer = new HtmlSanitizer();
 
-    /// <summary>
-    /// Builds the Markdig pipeline once for reuse across every render call.
-    /// </summary>
+    /// <summary>Builds the Markdig pipeline once for reuse across every render call.</summary>
     public MarkdownRendererService(ITrustedImageDomainService trustedImageDomains)
     {
         // Resolves :shortcode: emoji to real glyphs (:white_check_mark: → ✅), which a browser no
@@ -57,17 +48,12 @@ public class MarkdownRendererService : IMarkdownRendererService
         };
     }
 
-    /// <summary>
-    /// Renders Markdown as block-level HTML (paragraphs, lists, headings, etc.).
-    /// </summary>
+    /// <summary>Renders Markdown as block-level HTML (paragraphs, lists, headings, etc.).</summary>
     public MarkupString ToHtml(string? text)
         => new MarkupString(Render(text));
 
-    /// <summary>
-    /// Renders Markdown as inline HTML, stripping the outer &lt;p&gt; wrapper that
-    /// Markdig adds by default.  Useful inside rich card components where block-level
-    /// wrapping would break the layout.
-    /// </summary>
+    /// <summary>Renders Markdown as inline HTML, stripping the outer &lt;p&gt; wrapper that Markdig adds by default.</summary>
+    // Useful inside rich card components where block-level wrapping would break the layout.
     public MarkupString ToInlineHtml(string? text)
     {
         // Trim first: Markdig's HTML renderer emits a trailing newline after the closing </p>,
@@ -82,10 +68,6 @@ public class MarkdownRendererService : IMarkdownRendererService
         return new MarkupString(html);
     }
 
-    /// <summary>
-    /// Shared rendering path for both <see cref="ToHtml"/> and <see cref="ToInlineHtml"/>:
-    /// Markdig turns the Markdown into HTML, then that HTML is always sanitized before display —
-    /// there is no toggle to skip it, unsanitized rendering is not a supported mode.
-    /// </summary>
+    /// <summary>Shared rendering path for both <see cref="ToHtml"/> and <see cref="ToInlineHtml"/>: Markdig turns the Markdown into HTML, then that HTML is always sanitized before display — there is no toggle to skip it, unsanitized rendering is not a supported mode.</summary>
     private string Render(string? text) => sanitizer.Sanitize(Markdown.ToHtml(text ?? string.Empty, pipeline));
 }

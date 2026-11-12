@@ -4,10 +4,8 @@ using Morgana.Contracts;
 
 namespace Cauldron.Services;
 
-/// <summary>
-/// Manages conversation lifecycle: start, resume, clear.
-/// Coordinates between HTTP API, SignalR groups and local storage.
-/// </summary>
+/// <summary>Manages conversation lifecycle: start, resume, clear.</summary>
+// Coordinates between HTTP API, SignalR groups and local storage.
 public class ConversationLifecycleService : IConversationLifecycleService, IDisposable
 {
     private readonly HttpClient _http;
@@ -48,9 +46,7 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         _logger = logger;
     }
 
-    /// <summary>
-    /// Starts a new conversation with Morgana backend.
-    /// </summary>
+    /// <summary>Starts a new conversation with Morgana backend.</summary>
     /// <returns>True if conversation started successfully.</returns>
     public async Task<bool> StartConversationAsync()
     {
@@ -210,9 +206,7 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         }
     }
 
-    /// <summary>
-    /// Ends the current conversation server-side so Morgana can tear down its actor tree.
-    /// </summary>
+    /// <summary>Ends the current conversation server-side so Morgana can tear down its actor tree.</summary>
     public async Task EndConversationAsync()
     {
         // Snapshot the id before anything else touches the state, so the whole teardown targets
@@ -252,26 +246,20 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         }
     }
 
-    /// <summary>
-    /// Clears the saved conversation from storage.
-    /// </summary>
+    /// <summary>Clears the saved conversation from storage.</summary>
     public async Task ClearConversationAsync()
     {
         _logger.LogInformation("Clearing conversation from storage");
         await _storage.ClearConversationIdAsync();
     }
 
-    /// <summary>
-    /// Checks storage for an existing conversation ID.
-    /// </summary>
+    /// <summary>Checks storage for an existing conversation ID.</summary>
     public async Task<string?> GetSavedConversationIdAsync()
     {
         return await _storage.GetConversationIdAsync();
     }
 
-    /// <summary>
-    /// Sends a user message to the Morgana backend.
-    /// </summary>
+    /// <summary>Sends a user message to the Morgana backend.</summary>
     /// <returns>True if the message was sent successfully.</returns>
     public async Task<bool> SendMessageAsync(string text)
     {
@@ -452,16 +440,11 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         }
     }
 
-    /// <summary>
-    /// Projects a history message from the wire contract onto the mutable UI model.
-    /// </summary>
-    /// <remarks>
-    /// The two models are deliberately distinct: <see cref="MorganaChatMessage"/> is what Morgana
-    /// persisted, <see cref="ChatMessage"/> carries UI-only state the server knows nothing about
-    /// (typing indicator, streaming flag, selected quick reply). Mapping the message type through
-    /// an exhaustive switch means a new value added server-side surfaces here rather than being
-    /// silently coerced into the wrong UI styling.
-    /// </remarks>
+    /// <summary>Projects a history message from the wire contract onto the mutable UI model.</summary>
+    // The two models are deliberately distinct: MorganaChatMessage is what Morgana persisted, ChatMessage carries UI-
+    // only state the server knows nothing about (typing indicator, streaming flag, selected quick reply). Mapping the
+    // message type through an exhaustive switch means a new value added server-side surfaces here rather than being
+    // silently coerced into the wrong UI styling.
     private static ChatMessage MapToChatMessage(MorganaChatMessage message) =>
         new()
         {
@@ -476,16 +459,12 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
                     nameof(message), message.Type, "Unmapped history message type.")
             },
             AgentName = message.AgentName,
-            AgentCompleted = message.AgentCompleted,
             QuickReplies = message.QuickReplies,
             RichCard = message.RichCard,
             IsLastHistoryMessage = message.IsLastHistoryMessage
         };
 
-    /// <summary>
-    /// Turns a reply read back from the history into the message a push would have carried, so it
-    /// goes on screen through the same path as a reply that was never missed.
-    /// </summary>
+    /// <summary>Turns a reply read back from the history into the message a push would have carried, so it goes on screen through the same path as a reply that was never missed.</summary>
     private static ChannelMessage ToChannelMessage(MorganaChatMessage message, ConversationMetadata? conversationMetadata) =>
         new()
         {

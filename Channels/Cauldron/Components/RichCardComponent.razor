@@ -46,16 +46,12 @@
 }
 
 @code {
-    /// <summary>
-    /// The component to render.
-    /// </summary>
+    /// <summary>The component to render.</summary>
     [Parameter]
     public required CardComponent Component { get; set; }
 
-    /// <summary>
-    /// Current nesting depth (for section components).
-    /// Used to enforce depth limits and adjust styling.
-    /// </summary>
+    /// <summary>Current nesting depth (for section components).</summary>
+    // Used to enforce depth limits and adjust styling.
     [Parameter]
     public int Depth { get; set; } = 1;
 }

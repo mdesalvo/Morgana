@@ -4,16 +4,14 @@
 @* Renders a rich card: header, then each component in declared order. *@
 
 <div class="rich-card">
-    @* Card header *@
     <div class="rich-card-header">
-        <h3 class="rich-card-title">@MarkdownRenderer.ToInlineHtml(Card!.Title)</h3>
+        <h3 class="rich-card-title">@MarkdownRenderer.ToInlineHtml(Card.Title)</h3>
         @if (!string.IsNullOrWhiteSpace(Card.Subtitle))
         {
             <p class="rich-card-subtitle">@MarkdownRenderer.ToInlineHtml(Card.Subtitle)</p>
         }
     </div>
 
-    @* Card body with components *@
     <div class="rich-card-body">
         @foreach (CardComponent component in Card.Components)
         {
@@ -23,20 +21,18 @@
 </div>
 
 @code {
-    /// <summary>
-    /// The rich card data to render. Leaf components render inline Markdown in their text
-    /// fields via <see cref="IMarkdownRendererService.ToInlineHtml"/>, so the card is passed
-    /// through untouched — no pre-sanitization step that would strip that Markdown away.
-    /// </summary>
-    [Parameter]
-    public Morgana.Contracts.RichCard? Card { get; set; }
+    /// <summary>The rich card data to render.</summary>
+    // Leaf components render inline Markdown in their text fields via ToInlineHtml, so the card is passed through
+    // untouched — no pre-sanitization step that would strip that Markdown away.
+    [Parameter, EditorRequired]
+    public required Morgana.Contracts.RichCard Card { get; set; }
 
-    /// <summary>
-    /// The card currently on screen. A card is an immutable contract, so the same instance means
-    /// the same content and every field can skip its Markdown and sanitizer pass.
-    /// </summary>
+    /// <summary>The card currently on screen.</summary>
+    // A card is an immutable contract, so the same instance means the same content and every field can skip its Markdown
+    // and sanitizer pass.
     private Morgana.Contracts.RichCard? displayedCard;
 
+    /// <summary>Records the card of the first paint as the one on screen.</summary>
     protected override void OnAfterRender(bool firstRender)
     {
         // The first paint skips the comparison, so its card is recorded once it is on screen
@@ -44,11 +40,14 @@
             displayedCard = Card;
     }
 
+    /// <summary>Tells whether the card changed since the last paint, recording it as the one on screen when it did.</summary>
     protected override bool ShouldRender()
     {
+        // The same card instance means the same content, so the repaint is skipped
         if (ReferenceEquals(Card, displayedCard))
             return false;
 
+        // A different card is painted and becomes the one on screen
         displayedCard = Card;
         return true;
     }

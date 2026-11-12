@@ -65,18 +65,6 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 30%, transparent);
 }
 
-/* Sparkle animation for the icon */
-@keyframes sparkle {
-    0%, 100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-    50% {
-        opacity: 0.8;
-        transform: scale(1.1) rotate(15deg);
-    }
-}
-
 /* Responsive adjustments */
 @media (max-width: 640px) {
     .new-conversation-btn {
@@ -93,32 +81,10 @@
     }
 }
 
-/* Alternative compact version (if header space is limited) */
-.new-conversation-btn.compact {
-    padding: 8px;
-    min-width: 40px;
-    justify-content: center;
-}
-
-.new-conversation-btn.compact .btn-text {
-    display: none;
-}
-
-.new-conversation-btn.compact .btn-icon {
-    margin: 0;
-}
-
-/* ==============================================================================
-   HEADER LAYOUT ADJUSTMENTS
-   ============================================================================== 
-   If your header needs adjustments to accommodate the button, consider:
-   ============================================================================== */
-
 /* Ensure header has space for the button */
 .chat-header .header-content {
     display: flex;
     align-items: center;
-    /*justify-content: space-between;*/
     width: 100%;
 }
 

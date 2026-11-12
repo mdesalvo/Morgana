@@ -6,19 +6,13 @@ using Morgana.Contracts;
 
 namespace Cauldron.Services;
 
-/// <summary>
-/// Admits an image only when it is served over https from a domain listed in configuration and reports each one a delivered reply carries from elsewhere.
-/// </summary>
+/// <summary>Admits an image only when it is served over https from a domain listed in configuration and reports each one a delivered reply carries from elsewhere.</summary>
 public class TrustedImageDomainService : ITrustedImageDomainService
 {
-    /// <summary>
-    /// The bare host names images may be loaded from.
-    /// </summary>
+    /// <summary>The bare host names images may be loaded from.</summary>
     private readonly string[] trustedImageDomains;
 
-    /// <summary>
-    /// Receives the withheld images as Warning lines.
-    /// </summary>
+    /// <summary>Receives the withheld images as Warning lines.</summary>
     private readonly ILogger logger;
 
     public TrustedImageDomainService(IConfiguration configuration, ILogger logger)
@@ -28,9 +22,7 @@ public class TrustedImageDomainService : ITrustedImageDomainService
         this.logger = logger;
     }
 
-    /// <summary>
-    /// Returns true only for an absolute https URL on the default port whose host is a listed domain.
-    /// </summary>
+    /// <summary>Returns true only for an absolute https URL on the default port whose host is a listed domain.</summary>
     public bool IsServedFromTrustedDomain(string? imageUrl)
     {
         // A relative URL is refused: no content of Morgana has a reason to point at Cauldron's own
@@ -44,9 +36,7 @@ public class TrustedImageDomainService : ITrustedImageDomainService
                && trustedImageDomains.Contains(imageUri.Host, StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <summary>
-    /// Records a metric and a Warning for each image of the reply that does not come from a listed domain.
-    /// </summary>
+    /// <summary>Records a metric and a Warning for each image of the reply that does not come from a listed domain.</summary>
     public void ReportImagesFromUntrustedDomains(ChannelMessage reply)
     {
         // The Markdown strings and the card image sources that the reply carries, gathered from its text and its card
@@ -95,9 +85,7 @@ public class TrustedImageDomainService : ITrustedImageDomainService
         }
     }
 
-    /// <summary>
-    /// Gathers the Markdown strings and the image sources of the components, descending into sections.
-    /// </summary>
+    /// <summary>Gathers the Markdown strings and the image sources of the components, descending into sections.</summary>
     private static void CollectCardImages(IEnumerable<CardComponent> components, List<string> markdownTexts, List<string> cardImageSources)
     {
         foreach (CardComponent component in components)

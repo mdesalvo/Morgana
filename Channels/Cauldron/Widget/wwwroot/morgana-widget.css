@@ -18,10 +18,8 @@
        shadow boundary, so relying on the host page to define them would be relying on
        the host page to have Cauldron's stylesheet. */
     --morgana-primary: #8b5cf6;
-    --morgana-primary-dark: #6d28d9;
     --morgana-primary-light: #c4b5fd;
     --morgana-secondary: #ec4899;
-    --morgana-bg: #0f172a;
     --morgana-surface: #1e293b;
     --morgana-surface-light: #334155;
     --morgana-text: #f1f5f9;

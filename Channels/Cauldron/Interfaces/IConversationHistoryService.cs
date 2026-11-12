@@ -2,9 +2,7 @@ using Morgana.Contracts;
 
 namespace Cauldron.Interfaces;
 
-/// <summary>
-/// Retrieves persisted conversation history so a resumed session can be rebuilt in the UI.
-/// </summary>
+/// <summary>Retrieves persisted conversation history so a resumed session can be rebuilt in the UI.</summary>
 public interface IConversationHistoryService
 {
     /// <summary>

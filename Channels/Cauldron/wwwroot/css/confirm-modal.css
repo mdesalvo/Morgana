@@ -238,18 +238,6 @@
     transform: scale(0.97);
 }
 
-/* Disabled state */
-.modal-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    pointer-events: none;
-}
-
-    .modal-btn:disabled:hover {
-        transform: none;
-        box-shadow: none;
-    }
-
 /* Focus state for accessibility */
 .modal-btn:focus-visible {
     outline: 3px solid color-mix(in srgb, var(--primary-color) 40%, transparent);

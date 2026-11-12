@@ -4,70 +4,38 @@ using Morgana.Contracts;
 
 namespace Cauldron.Services;
 
-/// <summary>
-/// Manages the chat UI state: message list, temporary messages, agent tracking and sending state.
-/// </summary>
-/// <summary>
-/// Holds every piece of UI state for one chat session: the message list, the transient banners,
-/// the active agent and the flags that gate the input. Scoped, so one instance per Blazor circuit.
-/// </summary>
+/// <summary>Holds every piece of UI state of one chat session: the messages, the banners, the agent on screen and the flags that gate the input.</summary>
+// Scoped, so there is one instance per Blazor circuit.
 public class ChatStateService : IChatStateService
 {
-    private readonly IConfiguration _configuration;
+    /// <summary>The name base Morgana signs her messages with, which every specialist's name starts from.</summary>
+    public const string BaseAgentName = "Morgana";
 
-    public ChatStateService(IConfiguration configuration)
-    {
-        _configuration = configuration;
-    }
-
-    // =========================================================================
-    // STATE
-    // =========================================================================
-
-    /// <summary>
-    /// All chat messages in the current conversation.
-    /// </summary>
+    /// <inheritdoc />
     public List<ChatMessage> ChatMessages { get; } = [];
 
-    /// <summary>
-    /// Active temporary system warnings (rate limit errors, etc.).
-    /// </summary>
+    /// <inheritdoc />
     public List<ChannelMessage> TemporaryMessages { get; } = [];
 
-    /// <summary>
-    /// Unique identifier for the current conversation.
-    /// </summary>
+    /// <inheritdoc />
     public string ConversationId { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Name of the currently active agent ("Morgana", "Morgana (Billing)", etc.).
-    /// </summary>
-    public string CurrentAgentName { get; set; } = "Morgana";
+    /// <inheritdoc />
+    public string CurrentAgentName { get; set; } = BaseAgentName;
 
-    /// <summary>
-    /// True when connected to SignalR and ready to receive messages.
-    /// </summary>
+    /// <inheritdoc />
     public bool IsConnected { get; set; }
 
-    /// <summary>
-    /// True during HTTP POST to prevent duplicate sends.
-    /// </summary>
+    /// <inheritdoc />
     public bool IsSending { get; set; }
 
-    /// <summary>
-    /// True after SignalR connection and conversation start succeed.
-    /// </summary>
+    /// <inheritdoc />
     public bool IsInitialized { get; set; }
 
-    /// <summary>
-    /// True after storage has been checked for existing conversation.
-    /// </summary>
+    /// <inheritdoc />
     public bool HasCheckedStorage { get; set; }
 
-    /// <summary>
-    /// REMAINING dust as a fraction of the conversation's budget (1.0 = full, 0.0 =
-    /// empty), as last reported by Morgana. Null when dust limiting is disabled — gauge hidden.
-    /// </summary>
+    /// <inheritdoc />
     public double? DustLevel { get; set; }
 
     /// <inheritdoc />
@@ -79,25 +47,18 @@ public class ChatStateService : IChatStateService
     /// <inheritdoc />
     public void NoteDelivered(DateTime morganaTimestamp)
     {
+        // Replies may be recovered out of order, so only a later stamp moves the mark.
         if (morganaTimestamp > LatestDeliveredTimestamp)
             LatestDeliveredTimestamp = morganaTimestamp;
     }
 
-    // =========================================================================
-    // MESSAGE OPERATIONS
-    // =========================================================================
-
     /// <inheritdoc />
     public string ComposerText { get; set; } = string.Empty;
 
-    /// <summary>
-    /// What a turn put on the screen and the words it took from the composer, kept so that the turn can be undone.
-    /// </summary>
+    /// <summary>What a turn put on screen and the words it took from the composer, kept so that the turn can be undone.</summary>
     private sealed record OpenTurn(ChatMessage UserMessage, ChatMessage? PressedOffering, string WordsToGiveBack);
 
-    /// <summary>
-    /// The turn that <see cref="BeginTurn"/> opened and nothing has closed yet, null while none is open.
-    /// </summary>
+    /// <summary>The turn that <see cref="BeginTurn"/> opened and nothing has closed yet; null while none is open.</summary>
     private OpenTurn? openTurn;
 
     /// <inheritdoc />
@@ -109,8 +70,7 @@ public class ChatStateService : IChatStateService
         // One turn at a time: the composer stays shut until the answer arrives or the turn is withdrawn
         IsSending = true;
 
-        // Echoed locally and immediately: the user sees their own words without waiting
-        // for the server, which never sends them back.
+        // Echoed locally and immediately: the user sees their own words without waiting for the server, which never sends them back.
         ChatMessage userMessage = new ChatMessage
         {
             ConversationId = ConversationId,
@@ -120,8 +80,7 @@ public class ChatStateService : IChatStateService
         };
         ChatMessages.Add(userMessage);
 
-        // Shown immediately: the real answer arrives over SignalR, so without this the UI
-        // would sit inert for the whole time the agent is thinking.
+        // Shown immediately: the real answer arrives over SignalR, so without this the UI would sit inert while the agent thinks.
         AddTypingIndicator();
 
         // What a refusal of this turn would have to undo, until the next turn replaces it
@@ -149,13 +108,11 @@ public class ChatStateService : IChatStateService
         openTurn = null;
     }
 
-    /// <summary>
-    /// Adds a typing indicator for the current agent.
-    /// </summary>
+    /// <inheritdoc />
     public void AddTypingIndicator()
     {
-        // Lives in the message list rather than beside it, so it occupies the spot the real
-        // answer will take and the conversation does not jump when it is swapped out.
+        // It lives in the message list rather than beside it, so it holds the spot the real answer will take and the
+        // conversation does not jump when it is swapped out.
         ChatMessages.Add(new ChatMessage
         {
             ConversationId = ConversationId,
@@ -166,56 +123,43 @@ public class ChatStateService : IChatStateService
         });
     }
 
-    /// <summary>
-    /// Removes the last typing indicator from the message list.
-    /// </summary>
-    /// <returns>True if a typing indicator was found and removed.</returns>
+    /// <inheritdoc />
     public bool RemoveTypingIndicator()
     {
         // Last, not first: only the most recent turn can legitimately still be waiting
-        ChatMessage? typingMessage = ChatMessages.LastOrDefault(m => m.IsTyping);
-        if (typingMessage != null)
-        {
-            ChatMessages.Remove(typingMessage);
-            return true;
-        }
-        return false;
+        ChatMessage? typingMessage = ChatMessages.LastOrDefault(message => message.IsTyping);
+
+        // No indicator is on screen, so nothing was removed
+        if (typingMessage == null)
+            return false;
+
+        // The indicator gives way to whatever comes next
+        ChatMessages.Remove(typingMessage);
+        return true;
     }
 
-    /// <summary>
-    /// Adds a chat error message to both the temporary banner list and the permanent chat history.
-    /// </summary>
+    /// <inheritdoc />
     public void AddChatError(string text, string errorReason, int? fadingDurationSeconds = 10)
     {
         // The banner carries the technical detail and fades on its own
-        TemporaryMessages.Add(new ChannelMessage
-        {
-            ConversationId = ConversationId,
-            Text = text,
-            Timestamp = DateTime.UtcNow,
-            MessageType = ChannelMessageTypes.Error,
-            ErrorReason = errorReason,
-            FadingMessageDurationSeconds = fadingDurationSeconds
-        });
+        AddErrorBanner(text, errorReason, fadingDurationSeconds);
 
-        // The chat line stays forever and is deliberately vague: it marks where the
-        // conversation broke without leaving a status code in the transcript.
+        // The chat line stays and is deliberately vague: it marks where the conversation broke without leaving a status
+        // code in the transcript.
         ChatMessages.Add(new ChatMessage
         {
             ConversationId = ConversationId,
             Text = "Sorry, an error occurred. Please try again.",
             Timestamp = DateTime.UtcNow,
-            IsError = true,
             AgentName = CurrentAgentName,
             Type = MessageType.Error
         });
     }
 
-    /// <summary>
-    /// Adds a temporary error banner (no permanent chat message).
-    /// </summary>
+    /// <inheritdoc />
     public void AddErrorBanner(string text, string errorReason, int? fadingDurationSeconds = 10)
     {
+        // The banner fades on its own and never reaches the conversation
         TemporaryMessages.Add(new ChannelMessage
         {
             ConversationId = ConversationId,
@@ -227,118 +171,75 @@ public class ChatStateService : IChatStateService
         });
     }
 
-    /// <summary>
-    /// Removes all transient error-type temporary messages, but preserves the terminal
-    /// dust-exhaustion banner: that is not a retryable error, it is a permanent
-    /// "this conversation is dead" state marker. Clearing it (e.g. the post-init
-    /// ClearErrorMessages on resume) would strand the user with a locked input and no
-    /// explanation, so it survives until a brand-new conversation replaces all state.
-    /// </summary>
+    /// <inheritdoc />
     public void ClearErrorMessages()
     {
-        TemporaryMessages.RemoveAll(m =>
-            string.Equals(m.MessageType, ChannelMessageTypes.Error, StringComparison.OrdinalIgnoreCase)
-             && !string.Equals(m.ErrorReason, ChannelErrorReasons.DustBudgetExhausted, StringComparison.Ordinal));
+        // The dust-exhaustion banner is no retryable error but the mark of a spent conversation: cleared, it would leave the
+        // user with a locked input and no explanation, so it stays until a brand-new conversation replaces all state.
+        TemporaryMessages.RemoveAll(message =>
+            string.Equals(message.MessageType, ChannelMessageTypes.Error, StringComparison.OrdinalIgnoreCase)
+             && !string.Equals(message.ErrorReason, ChannelErrorReasons.DustBudgetExhausted, StringComparison.Ordinal));
     }
 
-    /// <summary>
-    /// Dismisses a specific temporary message.
-    /// </summary>
+    /// <inheritdoc />
     public void DismissTemporaryMessage(ChannelMessage message)
     {
+        // The banner the user closed, or that faded, leaves the screen
         TemporaryMessages.Remove(message);
     }
 
-    // =========================================================================
-    // AGENT HELPERS
-    // =========================================================================
-
-    /// <summary>
-    /// Checks if an agent name represents a specialized agent (not base Morgana).
-    /// </summary>
+    /// <inheritdoc />
     public bool IsSpecializedAgent(string? agentName)
     {
-        // Specialized agents are named "Morgana (Billing)"; the base one is plain "Morgana",
-        // so the parentheses are the whole test.
+        // Specialists are named "Morgana (Billing)" and the base one plain "Morgana", so the parentheses are the whole test.
         return agentName != null && agentName.Contains('(') && agentName.Contains(')');
     }
 
-    /// <summary>
-    /// Returns the CSS class string for the agent type.
-    /// </summary>
+    /// <inheritdoc />
+    // The stylesheet colours each class: a specialist wears the secondary colour and base Morgana the primary one.
     public string GetAgentClass(string? agentName) =>
         IsSpecializedAgent(agentName) ? "agent" : "morgana";
 
-    /// <summary>
-    /// Gets the CSS color variable for the avatar border based on agent type.
-    /// </summary>
-    public string GetAvatarBorderColor(string? agentName) =>
-        IsSpecializedAgent(agentName ?? "Morgana") ? "var(--secondary-color)" : "var(--primary-color)";
-
-    /// <summary>
-    /// Updates the current agent name based on a received SignalR message.
-    /// </summary>
-    /// <returns>True if agent name was actually changed.</returns>
+    /// <inheritdoc />
     public bool UpdateAgentFromMessage(ChannelMessage message)
     {
-        // A completed agent hands control back, so the header returns to base Morgana even
-        // though the message itself was signed by the specialist that just finished.
+        // A completed agent hands control back, so the header returns to base Morgana even though the message itself was
+        // signed by the specialist that just finished.
         string newAgentName = message.AgentCompleted || string.IsNullOrEmpty(message.AgentName)
-            ? "Morgana"
+            ? BaseAgentName
             : message.AgentName;
 
-        if (!string.Equals(CurrentAgentName, newAgentName, StringComparison.OrdinalIgnoreCase))
-        {
-            CurrentAgentName = newAgentName;
-            return true;
-        }
-        return false;
+        // The same agent goes on holding the conversation, so nothing changes
+        if (string.Equals(CurrentAgentName, newAgentName, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // The header names the new holder
+        CurrentAgentName = newAgentName;
+        return true;
     }
 
-    // =========================================================================
-    // UI STATE QUERIES
-    // =========================================================================
-
-    /// <summary>
-    /// True if any message has unselected quick replies that are still actionable
-    /// (live messages with IsLastHistoryMessage == null, or the last message of a resumed history).
-    /// </summary>
+    /// <inheritdoc />
+    // A live message has no IsLastHistoryMessage, while of a resumed history only the last message is still actionable.
     public bool HasActiveQuickReplies() =>
-        ChatMessages.Any(m => m is { QuickReplies: { Count: > 0 }, SelectedQuickReplyId: null, IsLastHistoryMessage: not false });
+        ChatMessages.Any(message => message is { QuickReplies: { Count: > 0 }, SelectedQuickReplyId: null, IsLastHistoryMessage: not false });
 
-    /// <summary>
-    /// True if any message has a rich card that is still the latest context
-    /// (live messages with IsLastHistoryMessage == null, or the last message of a resumed history).
-    /// </summary>
-    public bool HasActiveRichCard() =>
-        ChatMessages.Any(m => m is { RichCard: not null, IsLastHistoryMessage: not false });
-
-    /// <summary>
-    /// True if any message is currently showing a typing indicator.
-    /// </summary>
+    /// <inheritdoc />
     public bool HasTypingIndicator() =>
-        ChatMessages.Any(m => m.IsTyping);
+        ChatMessages.Any(message => message.IsTyping);
 
-    /// <summary>
-    /// True when the conversation is terminally spent: a dust-exhaustion banner
-    /// (ErrorReason <c>ChannelErrorReasons.DustBudgetExhausted</c>) is on screen. The conversation is
-    /// dead and the only way forward is a brand-new one, so the "New Conversation"
-    /// button must stay reachable even when the usual connection/history/init gates
-    /// would otherwise hide it (e.g. a transient SignalR reconnect right after lockout).
-    /// </summary>
+    /// <inheritdoc />
     public bool IsConversationDeadFromDust() =>
-        TemporaryMessages.Any(m =>
-            string.Equals(m.ErrorReason, ChannelErrorReasons.DustBudgetExhausted, StringComparison.Ordinal));
+        TemporaryMessages.Any(message =>
+            string.Equals(message.ErrorReason, ChannelErrorReasons.DustBudgetExhausted, StringComparison.Ordinal));
 
-    /// <summary>
-    /// Resets all state for a fresh start.
-    /// </summary>
+    /// <inheritdoc />
     public void Reset()
     {
+        // Everything goes back to how a fresh circuit starts.
         ChatMessages.Clear();
         TemporaryMessages.Clear();
         ConversationId = string.Empty;
-        CurrentAgentName = "Morgana";
+        CurrentAgentName = BaseAgentName;
         IsConnected = false;
         IsSending = false;
         IsInitialized = false;

@@ -26,15 +26,13 @@
                 <span class="sparkle s6"></span>
                 <img src="images/morgana-animated.webp"
                      alt="Morgana"
-                     class="header-avatar"
-                     style="border: 3px solid @ChatStateService.GetAvatarBorderColor(ChatStateService.CurrentAgentName);" />
+                     class="header-avatar" />
             </div>
 
             <div class="header-info">
-                <h1 style="color: @ChatStateService.GetAvatarBorderColor(ChatStateService.CurrentAgentName);">@ChatStateService.CurrentAgentName</h1>
+                <h1 class="@ChatStateService.GetAgentClass(ChatStateService.CurrentAgentName)">@ChatStateService.CurrentAgentName</h1>
                 <span class="status @(ChatStateService.IsConnected ? "online" : "offline")"
-                      role="status"
-                      style="color: @(ChatStateService.IsConnected ? "#10b981" : "#ef4444");">
+                      role="status">
                     @(ChatStateService.IsConnected ? "Online" : "Offline")
                 </span>
                 <DustMeter DustLevel="ChatStateService.DustLevel" />
@@ -65,7 +63,7 @@
                 {
                     <FadingMessage @key="temporaryMessage"
                                    Message="@temporaryMessage"
-                                   DurationSeconds="@(temporaryMessage.FadingMessageDurationSeconds ?? 10)"
+                                   DurationSeconds="@temporaryMessage.FadingMessageDurationSeconds"
                                    OnDismissed="@HandleMessageDismissed"/>
                 }
             </div>
@@ -127,7 +125,7 @@
             disabled="@IsTextareaDisabled"
             class="message-input @(ChatStateService.IsSpecializedAgent(ChatStateService.CurrentAgentName) ? "agent" : "morgana")"></textarea>
         <SendButton
-            AgentName="@ChatStateService.CurrentAgentName"
+            AgentClass="@ChatStateService.GetAgentClass(ChatStateService.CurrentAgentName)"
             IsSending="@ChatStateService.IsSending"
             IsDisabled="@IsSendButtonDisabled"
             OnClick="SendMessageAsync" />
@@ -148,22 +146,15 @@
     // LOCAL UI STATE (not shared across components)
     // =========================================================================
 
-    /// <summary>
-    /// Landing message (waiting for Morgana presentation).
-    /// </summary>
+    /// <summary>Landing message (waiting for Morgana presentation).</summary>
     private string landingMessage = string.Empty;
 
-    /// <summary>
-    /// Controls visibility of the new conversation confirmation modal.
-    /// </summary>
+    /// <summary>Controls visibility of the new conversation confirmation modal.</summary>
     private bool showConfirmModal;
 
-    /// <summary>
-    /// Retained references to the lambda-based event handlers subscribed in
-    /// <see cref="OnInitializedAsync"/>. Kept in fields because <c>-=</c> compares delegate
-    /// identity: re-declaring the same lambda body at dispose time builds a *different*
-    /// instance and removes nothing, silently leaving the subscription in place.
-    /// </summary>
+    /// <summary>Retained references to the lambda-based event handlers subscribed in <see cref="OnInitializedAsync"/>.</summary>
+    // Kept in fields because -= compares delegate identity: re-declaring the same lambda body at dispose time builds a
+    // *different* instance and removes nothing, silently leaving the subscription in place.
     private Action? onStreamingStateChanged;
     private Action<bool>? onConnectionStateChanged;
     private Action? onReplyDeadlineExpired;
@@ -271,9 +262,7 @@
         await SendTurnAsync(null);
     }
 
-    /// <summary>
-    /// Sends the composer's words as a turn; <paramref name="pressedOffering"/> is the message whose quick reply the turn presses, null for a typed turn.
-    /// </summary>
+    /// <summary>Sends the composer's words as a turn, pressing the quick reply of <paramref name="pressedOffering"/> when it is not null.</summary>
     private async Task SendTurnAsync(ChatMessage? pressedOffering)
     {
         // Validate input
@@ -380,8 +369,7 @@
                     Type = MessageType.Assistant,
                     Timestamp = message.Timestamp,
                     QuickReplies = message.QuickReplies,
-                    AgentName = message.AgentName ?? "Morgana",
-                    AgentCompleted = false,
+                    AgentName = message.AgentName ?? Cauldron.Services.ChatStateService.BaseAgentName,
                     RichCard = message.RichCard
                 });
 
@@ -398,10 +386,7 @@
         });
     }
 
-    /// <summary>
-    /// Puts on screen what Morgana pushed while this client could not receive it, through the same
-    /// path a push takes, so a recovered reply looks and behaves exactly like one never missed.
-    /// </summary>
+    /// <summary>Puts on screen what Morgana pushed while this client could not receive it, through the same path a push takes, so a recovered reply looks and behaves exactly like one never missed.</summary>
     /// <returns>True when at least one reply was recovered.</returns>
     private async Task<bool> DeliverMissedRepliesAsync()
     {
@@ -413,10 +398,9 @@
         return missedReplies.Count > 0;
     }
 
-    /// <summary>
-    /// Settles a turn that has gone silent for the whole reply timeout. A reply Morgana wrote but
-    /// could not push wins over the notice: the history is asked before the turn is given up on.
-    /// </summary>
+    /// <summary>Settles a turn that has gone silent for the whole reply timeout.</summary>
+    // A reply Morgana wrote but could not push wins over the notice: the history is asked before the turn is given up
+    // on.
     private async Task SettleSilentTurnAsync()
     {
         // Text already received is still being revealed: Morgana has spoken and the screen is simply
@@ -475,9 +459,7 @@
     // UI INTERACTION HANDLERS
     // =========================================================================
 
-    /// <summary>
-    /// Handles keyboard events in textarea (Enter to send, Shift+Enter for newline).
-    /// </summary>
+    /// <summary>Handles keyboard events in textarea (Enter to send, Shift+Enter for newline).</summary>
     /// <param name="e">Keyboard event args</param>
     /// <returns>Task representing the async key handling</returns>
     private async Task HandleKeyPressAsync(KeyboardEventArgs e)
@@ -514,27 +496,21 @@
         await SendTurnAsync(message);
     }
 
-    /// <summary>
-    /// Shows the confirmation modal for starting a new conversation.
-    /// </summary>
+    /// <summary>Shows the confirmation modal for starting a new conversation.</summary>
     private void ShowConfirmModal()
     {
         showConfirmModal = true;
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Hides the confirmation modal without taking action.
-    /// </summary>
+    /// <summary>Hides the confirmation modal without taking action.</summary>
     private void HideConfirmModal()
     {
         showConfirmModal = false;
         StateHasChanged();
     }
 
-    /// <summary>
-    /// Handles the confirmation action - hides modal and starts new conversation.
-    /// </summary>
+    /// <summary>Handles the confirmation action - hides modal and starts new conversation.</summary>
     private async Task ConfirmNewConversationAsync()
     {
         // Dismiss the modal before the teardown, so the user is not left staring at a dialog
@@ -600,15 +576,10 @@
         // affordances left.
         ChatStateService.IsConversationDeadFromDust();
 
-    /// <summary>
-    /// True while the magical loader is still spinning — Morgana has connected and
-    /// the conversation has started, but the first backend message (the presentation,
-    /// or the rehydrated history on resume) has not landed yet. Mirrors the loader's
-    /// own <c>ChatMessages.Count == 0</c> condition and is the Cauldron analogue of
-    /// Rune's initial <c>awaitingResponse = true</c> gate: typing/sending into this
-    /// window would race the presentation and scramble the conversation, so the input
-    /// stays locked until Morgana has spoken once.
-    /// </summary>
+    /// <summary>True while the magical loader is still spinning — Morgana has connected and the conversation has started, but the first backend message (the presentation, or the rehydrated history on resume) has not landed yet.</summary>
+    // Mirrors the loader's own ChatMessages.Count == 0 condition and is the Cauldron analogue of Rune's initial
+    // awaitingResponse = true gate: typing/sending into this window would race the presentation and scramble the
+    // conversation, so the input stays locked until Morgana has spoken once.
     private bool IsAwaitingFirstBackendMessage =>
         ChatStateService.ChatMessages.Count == 0;
 

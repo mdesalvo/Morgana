@@ -15,8 +15,7 @@
     {
         <img src="images/morgana-avatar.jpg"
              alt="@Message.AgentName"
-             class="message-avatar"
-             style="border: 2px solid @ChatStateService.GetAvatarBorderColor(Message.AgentName);"/>
+             class="message-avatar @ChatStateService.GetAgentClass(Message.AgentName)" />
     }
     <div class="message-bubble @(Message.IsStreaming ? "streaming" : "")">
         @* A typing row is a placeholder: it holds the spot the real answer
@@ -33,7 +32,7 @@
         }
         else
         {
-            <div class="message-text @(Message.Type == MessageType.Presentation ? "completion-text" : "")">
+            <div class="message-text">
                 @renderedHtml
             </div>
 
@@ -58,23 +57,17 @@
 </div>
 
 @code {
-    /// <summary>
-    /// The message to display. Streaming and quick-reply selection mutate it in place, so the
-    /// same instance arrives again with different content.
-    /// </summary>
+    /// <summary>The message to display.</summary>
+    // Streaming and quick-reply selection mutate it in place, so the same instance arrives again with different content.
     [Parameter, EditorRequired]
-    public ChatMessage Message { get; set; } = null!;
+    public required ChatMessage Message { get; set; }
 
-    /// <summary>
-    /// Raised with the reply the user picked on this message's quick replies.
-    /// </summary>
+    /// <summary>Raised with the reply the user picked on this message's quick replies.</summary>
     [Parameter]
     public EventCallback<QuickReply> OnQuickReplySelected { get; set; }
 
-    /// <summary>
-    /// The fields of the message that the markup reads. Two equal snapshots mean the row on
-    /// screen is already current.
-    /// </summary>
+    /// <summary>The fields of the message that the markup reads.</summary>
+    // Two equal snapshots mean the row on screen is already current.
     private readonly record struct DisplayedState(
         string Text,
         string AgentName,
@@ -85,21 +78,16 @@
         List<QuickReply>? QuickReplies,
         Morgana.Contracts.RichCard? RichCard);
 
-    /// <summary>
-    /// What the row showed at its last repaint.
-    /// </summary>
+    /// <summary>What the row showed at its last repaint.</summary>
     private DisplayedState displayedState;
 
-    /// <summary>
-    /// The text the cached HTML was produced from, so the Markdown is rendered once per text change.
-    /// </summary>
+    /// <summary>The text the cached HTML was produced from, so the Markdown is rendered once per text change.</summary>
     private string? renderedText;
 
-    /// <summary>
-    /// The sanitized HTML of the message text.
-    /// </summary>
+    /// <summary>The sanitized HTML of the message text.</summary>
     private MarkupString renderedHtml;
 
+    /// <summary>Records the state of the first paint as the one on screen.</summary>
     protected override void OnAfterRender(bool firstRender)
     {
         // The first paint skips the comparison, so its state is recorded once the row is on screen
@@ -107,6 +95,7 @@
             displayedState = CaptureState();
     }
 
+    /// <summary>Renders the message's Markdown again when its text changed since the last render.</summary>
     protected override void OnParametersSet()
     {
         // Read once: during streaming the typewriter keeps appending to the text concurrently.
@@ -115,21 +104,26 @@
         // A typing row has no text to show: the sanitizer pass costs even on an empty string
         if (!Message.IsTyping && !string.Equals(text, renderedText, StringComparison.Ordinal))
         {
+            // The sanitized HTML and the text it came from are kept together
             renderedHtml = MarkdownRenderer.ToHtml(text);
             renderedText = text;
         }
     }
 
+    /// <summary>Tells whether anything the row shows changed since the last paint, recording it as the one on screen when it did.</summary>
     protected override bool ShouldRender()
     {
+        // An unchanged snapshot means the row on screen is already current
         DisplayedState currentState = CaptureState();
         if (currentState == displayedState)
             return false;
 
+        // A changed row is painted and its snapshot becomes the one on screen
         displayedState = currentState;
         return true;
     }
 
+    /// <summary>The fields of the message that the markup reads, as they stand now.</summary>
     private DisplayedState CaptureState() => new(
         renderedText ?? string.Empty,
         Message.AgentName,
