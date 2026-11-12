@@ -8,9 +8,11 @@ public static class Telemetry
     /// <summary>The single meter for all Cauldron metrics.</summary>
     public static readonly Meter CauldronMeter = new Meter("Cauldron");
 
-    /// <summary>Counts the security events at Cauldron's doors, tagged by door and outcome and never by domain.</summary>
-    // The domain is chosen by whoever wrote the URL, so a hostile one would multiply the series of the metric without
-    // limit.
+    /// <summary>
+    /// Counts the security events at Cauldron's doors, tagged by door and outcome and never by domain.
+    /// The domain is chosen by whoever wrote the URL, so a hostile one would multiply the series of the metric without
+    /// limit.
+    /// </summary>
     public static readonly Counter<long> SecurityEvents = CauldronMeter.CreateCounter<long>("cauldron.security.events", description: "Security events at Cauldron's doors: images withheld because they come from a domain outside Cauldron:TrustedImageDomains");
 
     /// <summary>The attribute naming the door where a security event happened.</summary>

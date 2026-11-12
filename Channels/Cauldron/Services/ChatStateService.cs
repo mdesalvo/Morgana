@@ -4,8 +4,10 @@ using Morgana.Contracts;
 
 namespace Cauldron.Services;
 
-/// <summary>Holds every piece of UI state of one chat session: the messages, the banners, the agent on screen and the flags that gate the input.</summary>
-// Scoped, so there is one instance per Blazor circuit.
+/// <summary>
+/// Holds every piece of UI state of one chat session: the messages, the banners, the agent on screen and the flags that gate the input.
+/// Scoped, so there is one instance per Blazor circuit.
+/// </summary>
 public class ChatStateService : IChatStateService
 {
     /// <summary>The name base Morgana signs her messages with, which every specialist's name starts from.</summary>

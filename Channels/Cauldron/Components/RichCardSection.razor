@@ -27,8 +27,10 @@
     [Parameter]
     public required SectionComponent Component { get; set; }
 
-    /// <summary>Current nesting depth.</summary>
-    // Selects the CSS class that indents and de-emphasises nested sections.
+    /// <summary>
+    /// Current nesting depth.
+    /// Selects the CSS class that indents and de-emphasises nested sections.
+    /// </summary>
     [Parameter]
     public int Depth { get; set; } = 1;
 }

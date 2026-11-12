@@ -5,8 +5,10 @@ using Microsoft.AspNetCore.SignalR.Client;
 
 namespace Cauldron.Services;
 
-/// <summary>SignalR client for the Morgana backend: owns the hub connection, its reconnection policy and group membership and republishes what arrives as plain events.</summary>
-// This is the only place in Cauldron that touches SignalR — everything else subscribes.
+/// <summary>
+/// SignalR client for the Morgana backend: owns the hub connection, its reconnection policy and group membership and republishes what arrives as plain events.
+/// This is the only place in Cauldron that touches SignalR — everything else subscribes.
+/// </summary>
 public class SignalRService : IAsyncDisposable
 {
     /// <summary>Supplies Morgana's base address.</summary>
@@ -24,9 +26,11 @@ public class SignalRService : IAsyncDisposable
     /// <summary>Receives the connection lifecycle log lines.</summary>
     private readonly ILogger logger;
 
-    /// <summary>The conversations this client means to be subscribed to.</summary>
-    // Group membership belongs to a connection id and a reconnect mints a new one, so these are joined again on every
-    // reconnect.
+    /// <summary>
+    /// The conversations this client means to be subscribed to.
+    /// Group membership belongs to a connection id and a reconnect mints a new one, so these are joined again on every
+    /// reconnect.
+    /// </summary>
     private readonly HashSet<string> joinedConversations = [];
 
     /// <summary>Guards <see cref="joinedConversations"/>: joins and leaves come from the circuit, the rejoin from the SignalR client's own thread.</summary>
@@ -38,13 +42,17 @@ public class SignalRService : IAsyncDisposable
     /// <summary>Raised for each message the backend delivers on this conversation, already deserialized.</summary>
     public event Func<ChannelMessage, Task>? OnMessageReceived;
 
-    /// <summary>Raised for each streaming chunk of an agent response.</summary>
-    // Chunks are incremental deltas, to be appended in arrival order; the finished message arrives separately on
-    // OnMessageReceived carrying the full metadata.
+    /// <summary>
+    /// Raised for each streaming chunk of an agent response.
+    /// Chunks are incremental deltas, to be appended in arrival order; the finished message arrives separately on
+    /// OnMessageReceived carrying the full metadata.
+    /// </summary>
     public event Func<string, Task>? OnStreamChunkReceived;
 
-    /// <summary>Raised whenever the connection goes up or down.</summary>
-    // True means connected.
+    /// <summary>
+    /// Raised whenever the connection goes up or down.
+    /// True means connected.
+    /// </summary>
     public event Action<bool>? OnConnectionStateChanged;
 
     /// <summary>Gets a value indicating whether the SignalR connection is currently active.</summary>
@@ -220,9 +228,11 @@ public class SignalRService : IAsyncDisposable
         }
     }
 
-    /// <summary>Attempts the first connection until it succeeds, waiting between failures as the retry policy dictates.</summary>
-    // Automatic reconnection covers only a connection that was once established, so without this a Morgana down at page
-    // load would leave the chat offline until a reload.
+    /// <summary>
+    /// Attempts the first connection until it succeeds, waiting between failures as the retry policy dictates.
+    /// Automatic reconnection covers only a connection that was once established, so without this a Morgana down at page
+    /// load would leave the chat offline until a reload.
+    /// </summary>
     private async Task ConnectWithRetriesAsync(HubConnection connection, CancellationToken cancellationToken)
     {
         // Handed to the retry policy so it can tell how long Morgana has been unreachable
@@ -261,8 +271,10 @@ public class SignalRService : IAsyncDisposable
         }
     }
 
-    /// <summary>Joins again every conversation this client was subscribed to before the connection dropped.</summary>
-    // A failed join is logged and skipped: should the connection drop again, the next reconnect retries it.
+    /// <summary>
+    /// Joins again every conversation this client was subscribed to before the connection dropped.
+    /// A failed join is logged and skipped: should the connection drop again, the next reconnect retries it.
+    /// </summary>
     private async Task RejoinConversationsAsync()
     {
         // Copied under the lock so the joins below run without holding it
@@ -291,8 +303,10 @@ public class SignalRService : IAsyncDisposable
         }
     }
 
-    /// <summary>Disposes the SignalR connection resources.</summary>
-    // Called by the container when the visitor's circuit closes, after the page's own StopAsync.
+    /// <summary>
+    /// Disposes the SignalR connection resources.
+    /// Called by the container when the visitor's circuit closes, after the page's own StopAsync.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         // Ends a first connection attempt that would otherwise outlive the circuit

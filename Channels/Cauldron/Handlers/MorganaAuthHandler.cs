@@ -7,10 +7,12 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Cauldron.Handlers;
 
-/// <summary>Signs every call of Cauldron to Morgana with a token it issues itself, HMAC-SHA256 with five minutes of life.</summary>
-// Cauldron is a Blazor Server application, so its calls leave the server process and never the browser: the server can hold
-// the shared key and sign without an external identity provider. The issuer is cauldron, which Morgana's
-// Authentication:Issuers must list with the same key, and the subject cauldron-app.
+/// <summary>
+/// Signs every call of Cauldron to Morgana with a token it issues itself, HMAC-SHA256 with five minutes of life.
+/// Cauldron is a Blazor Server application, so its calls leave the server process and never the browser: the server can hold
+/// the shared key and sign without an external identity provider. The issuer is cauldron, which Morgana's
+/// Authentication:Issuers must list with the same key, and the subject cauldron-app.
+/// </summary>
 public class MorganaAuthHandler : DelegatingHandler
 {
     /// <summary>Key and algorithm that sign every token, shared with Morgana's entry for this channel.</summary>
@@ -54,8 +56,10 @@ public class MorganaAuthHandler : DelegatingHandler
         return base.SendAsync(request, cancellationToken);
     }
 
-    /// <summary>Generates a short-lived JWT token for Morgana API authentication.</summary>
-    // This method is also used by SignalRService for SignalR hub authentication.
+    /// <summary>
+    /// Generates a short-lived JWT token for Morgana API authentication.
+    /// This method is also used by SignalRService for SignalR hub authentication.
+    /// </summary>
     public string GenerateToken()
     {
         // Issuer must match an entry in Morgana's Authentication:Issuers list and the key must

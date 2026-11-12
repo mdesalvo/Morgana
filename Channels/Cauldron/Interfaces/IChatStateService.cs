@@ -36,20 +36,26 @@ public interface IChatStateService
     /// <summary>How long a turn may stay silent before it is given up on, as Morgana last reported it; null until she has.</summary>
     TimeSpan? ReplyTimeout { get; set; }
 
-    /// <summary>The latest timestamp that Morgana wrote on a reply this client was given, pushed or recovered.</summary>
-    // A catch-up compares the history with it: both sides come from Morgana's clock, so a skewed clock here cannot hide or repeat a reply.
+    /// <summary>
+    /// The latest timestamp that Morgana wrote on a reply this client was given, pushed or recovered.
+    /// A catch-up compares the history with it: both sides come from Morgana's clock, so a skewed clock here cannot hide or repeat a reply.
+    /// </summary>
     DateTime LatestDeliveredTimestamp { get; }
 
-    /// <summary>Records that a reply Morgana stamped at <paramref name="morganaTimestamp"/> is on screen.</summary>
-    // Only a message Morgana also keeps in the conversation's history belongs here, never a transient warning or anything
-    // stamped by this client.
+    /// <summary>
+    /// Records that a reply Morgana stamped at <paramref name="morganaTimestamp"/> is on screen.
+    /// Only a message Morgana also keeps in the conversation's history belongs here, never a transient warning or anything
+    /// stamped by this client.
+    /// </summary>
     void NoteDelivered(DateTime morganaTimestamp);
 
     /// <summary>The words in the composer, held as chat state so that a withdrawn turn can give them back.</summary>
     string ComposerText { get; set; }
 
-    /// <summary>Opens a turn on screen: raises the send flag and adds the user's message and the typing indicator.</summary>
-    // pressedOffering is the message whose quick reply the turn presses; null for a typed turn.
+    /// <summary>
+    /// Opens a turn on screen: raises the send flag and adds the user's message and the typing indicator.
+    /// pressedOffering is the message whose quick reply the turn presses; null for a typed turn.
+    /// </summary>
     void BeginTurn(string text, ChatMessage? pressedOffering = null);
 
     /// <summary>Undoes the turn that <see cref="BeginTurn"/> opened, leaving the screen as it was before the send; nothing happens when no turn is open.</summary>
@@ -88,9 +94,11 @@ public interface IChatStateService
     /// <summary>Tells whether a typing indicator is on screen.</summary>
     bool HasTypingIndicator();
 
-    /// <summary>Tells whether the conversation is spent, which a dust-exhaustion banner on screen says.</summary>
-    // The only way forward is a brand-new conversation, so the New Conversation button stays reachable even when the usual
-    // connection, history and initialization gates would hide it.
+    /// <summary>
+    /// Tells whether the conversation is spent, which a dust-exhaustion banner on screen says.
+    /// The only way forward is a brand-new conversation, so the New Conversation button stays reachable even when the usual
+    /// connection, history and initialization gates would hide it.
+    /// </summary>
     bool IsConversationDeadFromDust();
 
     /// <summary>Forgets everything, for a fresh conversation.</summary>

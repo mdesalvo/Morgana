@@ -3,9 +3,11 @@ using Morgana.Contracts;
 
 namespace Cauldron.Messages;
 
-/// <summary>One row of the chat as the UI knows it.</summary>
-// Deliberately apart from the wire contracts: it is mutable, it carries state the server never sees (typing indicator,
-// streaming flag, the quick reply that was picked) and it covers rows the server never sent, such as the local error line.
+/// <summary>
+/// One row of the chat as the UI knows it.
+/// Deliberately apart from the wire contracts: it is mutable, it carries state the server never sees (typing indicator,
+/// streaming flag, the quick reply that was picked) and it covers rows the server never sent, such as the local error line.
+/// </summary>
 public class ChatMessage
 {
     /// <summary>The conversation the row belongs to.</summary>
@@ -29,8 +31,10 @@ public class ChatMessage
     /// <summary>The agent that wrote the row, such as <c>Morgana</c> or <c>Morgana (Billing)</c>, which decides the avatar's colour.</summary>
     public string AgentName { get; set; } = ChatStateService.BaseAgentName;
 
-    /// <summary>The quick reply that was pressed on the row; null while none was.</summary>
-    // Once set, the row's buttons are disabled and the pressed one shows a checkmark.
+    /// <summary>
+    /// The quick reply that was pressed on the row; null while none was.
+    /// Once set, the row's buttons are disabled and the pressed one shows a checkmark.
+    /// </summary>
     public string? SelectedQuickReplyId { get; set; }
 
     /// <summary>The stylesheet class of a row the visitor wrote, matching <c>.message.user</c>.</summary>
@@ -39,16 +43,20 @@ public class ChatMessage
     /// <summary>The stylesheet class of every other row, matching <c>.message.assistant</c>.</summary>
     private const string AssistantRoleClass = "assistant";
 
-    /// <summary>The row's side as the stylesheet wants it, projected from <see cref="Type"/>.</summary>
-    // Everything that is not a user message renders on the assistant side, error lines included.
+    /// <summary>
+    /// The row's side as the stylesheet wants it, projected from <see cref="Type"/>.
+    /// Everything that is not a user message renders on the assistant side, error lines included.
+    /// </summary>
     public string Role
         => Type == MessageType.User ? UserRoleClass : AssistantRoleClass;
 
     /// <summary>True for the typing indicator, which holds the spot of the reply on its way.</summary>
     public bool IsTyping { get; set; }
 
-    /// <summary>True for the last row of a resumed history, false for any earlier one and null for a row that arrived live.</summary>
-    // Of a resumed history only the last row's quick replies can still be pressed.
+    /// <summary>
+    /// True for the last row of a resumed history, false for any earlier one and null for a row that arrived live.
+    /// Of a resumed history only the last row's quick replies can still be pressed.
+    /// </summary>
     public bool? IsLastHistoryMessage { get; init; }
 
     /// <summary>True while the typewriter is still revealing the row's text.</summary>

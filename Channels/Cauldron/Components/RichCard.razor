@@ -21,15 +21,19 @@
 </div>
 
 @code {
-    /// <summary>The rich card data to render.</summary>
-    // Leaf components render inline Markdown in their text fields via ToInlineHtml, so the card is passed through
-    // untouched — no pre-sanitization step that would strip that Markdown away.
+    /// <summary>
+    /// The rich card data to render.
+    /// Leaf components render inline Markdown in their text fields via ToInlineHtml, so the card is passed through
+    /// untouched — no pre-sanitization step that would strip that Markdown away.
+    /// </summary>
     [Parameter, EditorRequired]
     public required Morgana.Contracts.RichCard Card { get; set; }
 
-    /// <summary>The card currently on screen.</summary>
-    // A card is an immutable contract, so the same instance means the same content and every field can skip its Markdown
-    // and sanitizer pass.
+    /// <summary>
+    /// The card currently on screen.
+    /// A card is an immutable contract, so the same instance means the same content and every field can skip its Markdown
+    /// and sanitizer pass.
+    /// </summary>
     private Morgana.Contracts.RichCard? displayedCard;
 
     /// <summary>Records the card of the first paint as the one on screen.</summary>

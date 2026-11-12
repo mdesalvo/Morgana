@@ -152,9 +152,11 @@
     /// <summary>Controls visibility of the new conversation confirmation modal.</summary>
     private bool showConfirmModal;
 
-    /// <summary>Retained references to the lambda-based event handlers subscribed in <see cref="OnInitializedAsync"/>.</summary>
-    // Kept in fields because -= compares delegate identity: re-declaring the same lambda body at dispose time builds a
-    // *different* instance and removes nothing, silently leaving the subscription in place.
+    /// <summary>
+    /// Retained references to the lambda-based event handlers subscribed in <see cref="OnInitializedAsync"/>.
+    /// Kept in fields because -= compares delegate identity: re-declaring the same lambda body at dispose time builds a
+    /// *different* instance and removes nothing, silently leaving the subscription in place.
+    /// </summary>
     private Action? onStreamingStateChanged;
     private Action<bool>? onConnectionStateChanged;
     private Action? onReplyDeadlineExpired;
@@ -398,9 +400,11 @@
         return missedReplies.Count > 0;
     }
 
-    /// <summary>Settles a turn that has gone silent for the whole reply timeout.</summary>
-    // A reply Morgana wrote but could not push wins over the notice: the history is asked before the turn is given up
-    // on.
+    /// <summary>
+    /// Settles a turn that has gone silent for the whole reply timeout.
+    /// A reply Morgana wrote but could not push wins over the notice: the history is asked before the turn is given up
+    /// on.
+    /// </summary>
     private async Task SettleSilentTurnAsync()
     {
         // Text already received is still being revealed: Morgana has spoken and the screen is simply
@@ -576,10 +580,12 @@
         // affordances left.
         ChatStateService.IsConversationDeadFromDust();
 
-    /// <summary>True while the magical loader is still spinning — Morgana has connected and the conversation has started, but the first backend message (the presentation, or the rehydrated history on resume) has not landed yet.</summary>
-    // Mirrors the loader's own ChatMessages.Count == 0 condition and is the Cauldron analogue of Rune's initial
-    // awaitingResponse = true gate: typing/sending into this window would race the presentation and scramble the
-    // conversation, so the input stays locked until Morgana has spoken once.
+    /// <summary>
+    /// True while the magical loader is still spinning — Morgana has connected and the conversation has started, but the first backend message (the presentation, or the rehydrated history on resume) has not landed yet.
+    /// Mirrors the loader's own ChatMessages.Count == 0 condition and is the Cauldron analogue of Rune's initial
+    /// awaitingResponse = true gate: typing/sending into this window would race the presentation and scramble the
+    /// conversation, so the input stays locked until Morgana has spoken once.
+    /// </summary>
     private bool IsAwaitingFirstBackendMessage =>
         ChatStateService.ChatMessages.Count == 0;
 

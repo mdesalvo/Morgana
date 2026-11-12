@@ -15,9 +15,10 @@ public class TrustedImageDomainService : ITrustedImageDomainService
     /// <summary>Receives the withheld images as Warning lines.</summary>
     private readonly ILogger logger;
 
+    /// <summary>Reads the trusted domains from <c>Cauldron:TrustedImageDomains</c>.</summary>
     public TrustedImageDomainService(IConfiguration configuration, ILogger logger)
     {
-        // Empty when nothing is configured: no image is then trusted
+        // Empty when nothing is configured: no image is then trusted.
         trustedImageDomains = configuration.GetSection("Cauldron:TrustedImageDomains").Get<string[]>() ?? [];
         this.logger = logger;
     }
@@ -39,22 +40,23 @@ public class TrustedImageDomainService : ITrustedImageDomainService
     /// <summary>Records a metric and a Warning for each image of the reply that does not come from a listed domain.</summary>
     public void ReportImagesFromUntrustedDomains(ChannelMessage reply)
     {
-        // The Markdown strings and the card image sources that the reply carries, gathered from its text and its card
+        // The Markdown strings and the card image sources that the reply carries, gathered from its text and its card.
         List<string> markdownTexts = [reply.Text];
         List<string> cardImageSources = [];
         if (reply.RichCard is not null)
         {
-            // The card header is rendered as Markdown like the text of the reply
+            // The card header is rendered as Markdown like the text of the reply.
             markdownTexts.Add(reply.RichCard.Title);
             if (reply.RichCard.Subtitle is not null)
                 markdownTexts.Add(reply.RichCard.Subtitle);
             CollectCardImages(reply.RichCard.Components, markdownTexts, cardImageSources);
         }
 
-        // Each image written in Markdown is one event when its domain is not listed
+        // Each image written in Markdown is one event when its domain is not listed.
         List<(string Door, string Url)> withheldImages = [];
         foreach (string markdownText in markdownTexts.Where(text => !string.IsNullOrEmpty(text)))
         {
+            // The images the text links, as Markdig parses it.
             IEnumerable<string> markdownImageUrls = Markdown.Parse(markdownText)
                 .Descendants<LinkInline>()
                 .Where(link => link.IsImage)
@@ -64,7 +66,7 @@ public class TrustedImageDomainService : ITrustedImageDomainService
                 .Select(url => (Telemetry.SecurityDoors.MarkdownImage, url)));
         }
 
-        // Each card image component is one event when its domain is not listed
+        // Each card image component is one event when its domain is not listed.
         withheldImages.AddRange(cardImageSources
             .Where(source => !IsServedFromTrustedDomain(source))
             .Select(source => (Telemetry.SecurityDoors.CardImage, source)));
@@ -77,7 +79,7 @@ public class TrustedImageDomainService : ITrustedImageDomainService
                 ? imageUri.Host
                 : "a relative or malformed URL";
 
-            // The metric is tagged by door and outcome alone because the domain would be unbounded
+            // The metric is tagged by door and outcome alone because the domain would be unbounded.
             Telemetry.SecurityEvents.Add(1,
                 new KeyValuePair<string, object?>(Telemetry.SecurityDoor, withheldImage.Door),
                 new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Withheld));
@@ -90,7 +92,7 @@ public class TrustedImageDomainService : ITrustedImageDomainService
     {
         foreach (CardComponent component in components)
         {
-            // Components of a kind that is not listed here carry no text that is rendered as Markdown
+            // Components of a kind that is not listed here carry no text that is rendered as Markdown.
             switch (component)
             {
                 // The content is rendered as Markdown

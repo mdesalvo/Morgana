@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 
 namespace Cauldron.Services;
 
-/// <summary>Persists the conversation id in the browser's localStorage through ProtectedLocalStorage, which encrypts it with the server's data-protection keys.</summary>
-// That is what lets a returning visitor resume and what makes the value useless if lifted from the browser.
+/// <summary>
+/// Persists the conversation id in the browser's localStorage through ProtectedLocalStorage, which encrypts it with the server's data-protection keys.
+/// That is what lets a returning visitor resume and what makes the value useless if lifted from the browser.
+/// </summary>
 public class ProtectedLocalStorageService : IConversationStorageService
 {
     /// <summary>Encrypting wrapper over the browser's localStorage.</summary>
@@ -30,22 +32,22 @@ public class ProtectedLocalStorageService : IConversationStorageService
     {
         try
         {
-            // Decrypted with the server's data-protection keys
+            // Decrypted with the server's data-protection keys.
             ProtectedBrowserStorageResult<string> storageResult =
                 await protectedLocalStore.GetAsync<string>(StorageKey);
 
-            // Success is false for a plain absence too, not just a decryption failure
+            // Success is false for a plain absence too, not just a decryption failure.
             if (storageResult.Success)
             {
                 logger.LogInformation("Retrieved conversation ID from protected storage");
 
-                // The conversation this browser left behind
+                // The conversation this browser left behind.
                 return storageResult.Value;
             }
 
             logger.LogInformation("No conversation ID found in protected storage");
 
-            // A first-time visitor: the caller starts a new conversation
+            // A first-time visitor: the caller starts a new conversation.
             return null;
         }
         catch (Exception ex)
@@ -55,7 +57,7 @@ public class ProtectedLocalStorageService : IConversationStorageService
             logger.LogWarning(ex, "Failed to retrieve conversation ID, clearing corrupted data");
             await ClearConversationIdAsync();
 
-            // Treated as a first-time visitor
+            // Treated as a first-time visitor.
             return null;
         }
     }
@@ -65,7 +67,7 @@ public class ProtectedLocalStorageService : IConversationStorageService
     {
         try
         {
-            // Encrypted before it reaches the browser
+            // Encrypted before it reaches the browser.
             await protectedLocalStore.SetAsync(StorageKey, conversationId);
             logger.LogInformation("Saved conversation ID to protected storage: {ConversationId}", conversationId);
         }
@@ -83,13 +85,13 @@ public class ProtectedLocalStorageService : IConversationStorageService
     {
         try
         {
-            // The next load finds no id and starts fresh
+            // The next load finds no id and starts fresh.
             await protectedLocalStore.DeleteAsync(StorageKey);
             logger.LogInformation("Cleared conversation ID from protected storage");
         }
         catch (Exception ex)
         {
-            // Clearing is best effort: an entry that cannot be deleted is as good as one that is absent
+            // Clearing is best effort: an entry that cannot be deleted is as good as one that is absent.
             logger.LogWarning(ex, "Failed to clear conversation ID (may already be empty)");
         }
     }

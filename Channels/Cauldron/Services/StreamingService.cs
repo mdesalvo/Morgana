@@ -5,9 +5,11 @@ using Morgana.Contracts;
 
 namespace Cauldron.Services;
 
-/// <summary>Drives the typewriter effect for streaming responses: buffers the chunks arriving from SignalR and releases them into the visible message a few characters per tick.</summary>
-// Chunks and finalization arrive on the circuit's thread while the typewriter ticks on the thread pool, so every read
-// and write of the session goes through _sessionLock.
+/// <summary>
+/// Drives the typewriter effect for streaming responses: buffers the chunks arriving from SignalR and releases them into the visible message a few characters per tick.
+/// Chunks and finalization arrive on the circuit's thread while the typewriter ticks on the thread pool, so every read
+/// and write of the session goes through _sessionLock.
+/// </summary>
 public class StreamingService : IStreamingService
 {
     /// <summary>Holds the message list that the streaming message is added to.</summary>
@@ -16,9 +18,11 @@ public class StreamingService : IStreamingService
     /// <summary>Supplies the typewriter pace.</summary>
     private readonly IConfiguration _configuration;
 
-    /// <summary>Guards the buffer, the timer and the streaming message.</summary>
-    // Without it a finalization landing mid-tick empties the buffer under the tick's feet and the resulting exception on
-    // the timer thread brings the whole process down.
+    /// <summary>
+    /// Guards the buffer, the timer and the streaming message.
+    /// Without it a finalization landing mid-tick empties the buffer under the tick's feet and the resulting exception on
+    /// the timer thread brings the whole process down.
+    /// </summary>
     private readonly Lock _sessionLock = new();
 
     /// <summary>Holds the received text that the typewriter has not revealed yet.</summary>
@@ -33,9 +37,11 @@ public class StreamingService : IStreamingService
     /// <summary>Raised when the UI should re-render (after each typewriter tick or streaming state change).</summary>
     public event Action? OnStateChanged;
 
-    /// <summary>True while a response is still arriving.</summary>
-    // A finalized response whose last tick has not yet torn the session down no longer counts: the next message must not
-    // be taken as its ending.
+    /// <summary>
+    /// True while a response is still arriving.
+    /// A finalized response whose last tick has not yet torn the session down no longer counts: the next message must not
+    /// be taken as its ending.
+    /// </summary>
     public bool IsStreaming
     {
         get
@@ -45,8 +51,10 @@ public class StreamingService : IStreamingService
         }
     }
 
-    /// <summary>True while text already received is still being revealed.</summary>
-    // A turn in this state is alive: Morgana has spoken and the screen is simply catching up with it.
+    /// <summary>
+    /// True while text already received is still being revealed.
+    /// A turn in this state is alive: Morgana has spoken and the screen is simply catching up with it.
+    /// </summary>
     public bool IsRevealing
     {
         get
@@ -63,8 +71,10 @@ public class StreamingService : IStreamingService
         _configuration = configuration;
     }
 
-    /// <summary>Handles an incoming streaming chunk from SignalR.</summary>
-    // On the first chunk, creates the streaming message and starts the typewriter timer.
+    /// <summary>
+    /// Handles an incoming streaming chunk from SignalR.
+    /// On the first chunk, creates the streaming message and starts the typewriter timer.
+    /// </summary>
     public async Task HandleChunkAsync(string chunkText)
     {
         // Set only when a session begins here: the previous timer is disposed outside the lock
@@ -131,10 +141,12 @@ public class StreamingService : IStreamingService
             OnStateChanged?.Invoke();
     }
 
-    /// <summary>Finalizes the current streaming session with the complete message metadata.</summary>
-    // The server is the source of truth for the final text: Morgana's channel adapter may rewrite the message before
-    // delivery, in which case the streamed chunks were a preview of something that no longer applies and must be
-    // replaced wholesale.
+    /// <summary>
+    /// Finalizes the current streaming session with the complete message metadata.
+    /// The server is the source of truth for the final text: Morgana's channel adapter may rewrite the message before
+    /// delivery, in which case the streamed chunks were a preview of something that no longer applies and must be
+    /// replaced wholesale.
+    /// </summary>
     public void FinalizeStreaming(ChannelMessage completeMessage)
     {
         lock (_sessionLock)
@@ -158,9 +170,11 @@ public class StreamingService : IStreamingService
         }
     }
 
-    /// <summary>Closes a response Morgana stopped sending.</summary>
-    // What was revealed stays in the conversation as the partial reply it is, because it is what Morgana actually said;
-    // the session is freed so the next turn does not write into a message belonging to the abandoned one.
+    /// <summary>
+    /// Closes a response Morgana stopped sending.
+    /// What was revealed stays in the conversation as the partial reply it is, because it is what Morgana actually said;
+    /// the session is freed so the next turn does not write into a message belonging to the abandoned one.
+    /// </summary>
     public void AbandonStreaming()
     {
         lock (_sessionLock)
@@ -175,8 +189,10 @@ public class StreamingService : IStreamingService
         }
     }
 
-    /// <summary>Timer callback: consumes characters from the buffer at typewriter speed.</summary>
-    // Auto-stops when the buffer is empty and streaming is complete.
+    /// <summary>
+    /// Timer callback: consumes characters from the buffer at typewriter speed.
+    /// Auto-stops when the buffer is empty and streaming is complete.
+    /// </summary>
     private void TypewriterTick(object? state)
     {
         lock (_sessionLock)
@@ -209,8 +225,10 @@ public class StreamingService : IStreamingService
         OnStateChanged?.Invoke();
     }
 
-    /// <summary>Tears the session down.</summary>
-    // Must be called holding _sessionLock.
+    /// <summary>
+    /// Tears the session down.
+    /// Must be called holding _sessionLock.
+    /// </summary>
     private void StopStreaming()
     {
         // No more ticks: the response is over or abandoned

@@ -31,8 +31,10 @@
 }
 
 @code {
-    /// <summary>Remaining dust as a fraction of the budget (1.0 = full, 0.0 = empty), as reported by Morgana.</summary>
-    // Null when dust limiting is disabled — the component renders nothing.
+    /// <summary>
+    /// Remaining dust as a fraction of the budget (1.0 = full, 0.0 = empty), as reported by Morgana.
+    /// Null when dust limiting is disabled — the component renders nothing.
+    /// </summary>
     [Parameter]
     public double? DustLevel { get; set; }
 }

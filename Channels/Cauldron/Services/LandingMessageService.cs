@@ -1,9 +1,11 @@
-﻿using Cauldron.Interfaces;
+using Cauldron.Interfaces;
 
 namespace Cauldron.Services;
 
-/// <summary>Supplies the whimsical line shown under the sparkle loader while Morgana warms up.</summary>
-// Registered as a singleton: the pool is read once and shared by every circuit.
+/// <summary>
+/// Supplies the whimsical line shown under the sparkle loader while Morgana warms up.
+/// Registered as a singleton: the pool is read once and shared by every circuit.
+/// </summary>
 public class LandingMessageService : ILandingMessageService
 {
     /// <summary>The pool of loader lines that a visitor may be shown.</summary>
@@ -15,19 +17,19 @@ public class LandingMessageService : ILandingMessageService
     /// <summary>Reads the pool of loader lines from configuration.</summary>
     public LandingMessageService(IConfiguration configuration)
     {
-        // Falls back to a single hardcoded line so the loader is never left with nothing to say
+        // A configuration without lines falls back on one, so the loader is never left with nothing to say.
         landingMessages = configuration.GetSection("Cauldron:LandingMessages").Get<string[]>()
                             ?? ["\uD83D\uDD2E Warming up the magic... almost there! \uD83D\uDD2E"];
     }
 
-    /// <summary>Gets a random landing message from the pool of configured ones.</summary>
+    /// <summary>Returns one line of the configured pool, picked at random.</summary>
     public string GetLandingMessage()
     {
         // Random is not thread-safe and this singleton is shared across concurrent circuits,
         // so the lock keeps two simultaneous page loads from corrupting its internal state.
         lock (random)
         {
-            // Any line of the pool is as good as another
+            // Any line of the pool is as good as another.
             return landingMessages[random.Next(landingMessages.Length)];
         }
     }

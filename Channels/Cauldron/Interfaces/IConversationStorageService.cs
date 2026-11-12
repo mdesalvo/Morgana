@@ -1,7 +1,9 @@
 namespace Cauldron.Interfaces;
 
-/// <summary>Service for managing conversation ID persistence across browser sessions.</summary>
-// Abstracts the storage mechanism (ProtectedLocalStorage) for conversation state tracking.
+/// <summary>
+/// Service for managing conversation ID persistence across browser sessions.
+/// Abstracts the storage mechanism (ProtectedLocalStorage) for conversation state tracking.
+/// </summary>
 public interface IConversationStorageService
 {
     /// <summary>Retrieves the saved conversation ID from protected browser storage.</summary>
