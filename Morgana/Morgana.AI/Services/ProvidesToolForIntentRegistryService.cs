@@ -9,7 +9,7 @@ namespace Morgana.AI.Services;
 /// <summary>
 /// Finds the tool class of each intent by scanning the loaded assemblies for <c>[ProvidesToolForIntent]</c>.
 /// The scan runs at the first lookup and prints how tools and agents line up: an orphan tool and an agent without one are warnings,
-/// two tools for one intent an error.
+/// two tools for one intent stop the startup.
 /// </summary>
 public class ProvidesToolForIntentRegistryService : IToolRegistryService
 {
@@ -31,7 +31,8 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         intentToToolType = new Lazy<Dictionary<string, Type>>(InitializeRegistry);
     }
 
-    /// <summary>Scans for the tools and prints how they line up against the agents.</summary>
+    /// <summary>Scans for the tools and prints how they line up against the agents, refusing two tools for one intent.</summary>
+    /// <exception cref="InvalidOperationException">Two tools declare the same intent.</exception>
     private Dictionary<string, Type> InitializeRegistry()
     {
         Console.WriteLine("🔍 Scanning assemblies for MorganaTool implementations...");
@@ -39,9 +40,12 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         // The tool of each intent and the intents that two tools claimed.
         Records.ToolDiscovery toolDiscovery = DiscoverTools();
 
-        // Printed rather than thrown: none of what it reports stops a deployment, so the operator is
-        // told at startup instead of discovering it on the first conversation that lacks a tool.
+        // Printed first, so the operator reads the whole picture even when a duplicate stops the startup below.
         ReportRegistry(toolDiscovery.ToolTypesByIntent, toolDiscovery.RegistrationErrors);
+
+        // Two tools for one intent leave one of them unreachable by assembly order, so the startup stops on it like every other refusal of the topology.
+        if (toolDiscovery.RegistrationErrors.Count > 0)
+            throw new InvalidOperationException(string.Join(" ", toolDiscovery.RegistrationErrors));
 
         // The registry that every later lookup reads.
         return toolDiscovery.ToolTypesByIntent;
@@ -155,8 +159,7 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         foreach (string intent in agentIntents.Intersect(toolIntents, StringComparer.OrdinalIgnoreCase))
             Console.WriteLine($"✅ Tool Registry: Agent '{intent}' → Tool '{registry.GetValueOrDefault(intent)?.Name ?? "unknown"}'");
 
-        // Two tools claiming one agent, which unlike the warnings above is a defect somebody must fix:
-        // one of the two is unreachable, whichever assembly order decided it.
+        // Two tools claiming one agent, which unlike the warnings above stops the startup.
         if (registrationErrors.Count > 0)
         {
             Console.WriteLine();

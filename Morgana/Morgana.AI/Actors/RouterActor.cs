@@ -67,6 +67,19 @@ public class RouterActor : MorganaActor
         ReceiveAsync<Records.RestoreAgentRequest>(HandleRestoreAgentRequestAsync);
     }
 
+    /// <summary>
+    /// Stops every agent of the conversation as the router stops with its supervisor.
+    /// An agent can also be brought up by the A2A door for a colleague's question, so each one is reached by its name rather than from the router's own list.
+    /// </summary>
+    protected override void PostStop()
+    {
+        // Every registered intent names at most one agent of this conversation; a name with no actor behind it reaches nobody.
+        foreach (string intent in agentResolverService.GetAllIntents())
+            Context.System.ActorSelection($"/user/{intent}-{conversationId}").Tell(PoisonPill.Instance);
+
+        base.PostStop();
+    }
+
     /// <summary>Returns the conversation's agent for the intent, bringing it up on first use; null when no agent handles the intent.</summary>
     /// <param name="intent">The intent name, as the classifier or the record gives it.</param>
     private async Task<IActorRef?> GetOrCreateAgentForIntent(string intent)

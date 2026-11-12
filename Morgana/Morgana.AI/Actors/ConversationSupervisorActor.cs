@@ -1230,8 +1230,8 @@ public class ConversationSupervisorActor : MorganaActor
     }
 
     /// <summary>
-    /// Stops the work still running for the conversation and closes the spans still open.
-    /// A conversation ended mid-turn would otherwise leak its activities for the life of the process.
+    /// Stops the work still running for the conversation, the pipeline's actors and the spans still open.
+    /// The guard, the classifier and the router live flat under the guardian, so nothing else would stop them.
     /// </summary>
     protected override void PostStop()
     {
@@ -1257,6 +1257,11 @@ public class ConversationSupervisorActor : MorganaActor
 
         // The turn span closes after its children, as errored.
         CloseTurnSpan(ActivityStatusCode.Error, "actor stopped mid-turn", intent: activeAgentIntent, completed: false);
+
+        // The pipeline of this conversation goes with its supervisor: the next message brings up a new one.
+        Context.Stop(guard);
+        Context.Stop(classifier);
+        Context.Stop(router);
 
         actorLogger.Info($"ConversationSupervisorActor stopped for {conversationId}");
 

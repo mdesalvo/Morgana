@@ -128,7 +128,7 @@ public class ConversationManagerActor : MorganaActor
         return true;
     }
 
-    /// <summary>Ends the conversation here: it stops the supervisor and drops the in-memory copy of the handshake.</summary>
+    /// <summary>Ends the conversation here: it stops the supervisor, whose stop takes down the rest of the pipeline, then the manager itself.</summary>
     private Task HandleTerminateConversationAsync(Records.TerminateConversation msg)
     {
         actorLogger.Info($"Terminating conversation {msg.ConversationId}");
@@ -136,7 +136,7 @@ public class ConversationManagerActor : MorganaActor
         // A conversation ended twice or ended before it ever produced a turn reaches here with no supervisor.
         if (supervisor is not null)
         {
-            // Stops the supervisor alone: the guard, the classifier, the router and the agents live flat under the guardian.
+            // The supervisor stops the guard, the classifier and the router in its turn, the router every agent.
             Context.Stop(supervisor);
 
             // The reference goes at once, so a message arriving before the Terminated brings up a new supervisor instead of reaching dead letters.
@@ -145,9 +145,9 @@ public class ConversationManagerActor : MorganaActor
             actorLogger.Info("Supervisor stopped for conversation {0}", msg.ConversationId);
         }
 
-        // The conversation is over and nothing more goes out: the in-memory copy of its handshake
-        // would only be a leak, while the record stays for a later resume.
-        channelMetadataStore.EvictChannelMetadata(msg.ConversationId);
+        // The manager goes too, dropping the in-memory copy of the handshake as it stops: the next message
+        // to this conversation brings up a new one on the record, which stays for a later resume.
+        Context.Stop(Self);
 
         return Task.CompletedTask;
     }
