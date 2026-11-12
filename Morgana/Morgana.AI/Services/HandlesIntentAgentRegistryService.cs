@@ -10,40 +10,27 @@ using Morgana.AI.Tools;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Discovers agents via [HandlesIntent] attribute with bidirectional validation.
-/// Scans assemblies for MorganaAgent classes; validates that intents in config have agents, that agents in code have
-/// config and that every declared peer consultation names an existing colleague. Performs LLM tier validation; throws on any mismatch.
+/// Finds the agent of each intent by scanning the loaded assemblies for <c>[HandlesIntent]</c>, refusing at startup a topology that does not hold.
+/// It weighs the configured intents against the agents both ways, one agent per intent, the declared tiers, the colleagues and the tool contracts.
 /// </summary>
 public class HandlesIntentAgentRegistryService : IAgentRegistryService
 {
-    /// <summary>
-    /// Source of the configured intents, i.e. the other half of the bidirectional check: every
-    /// intent it declares must be matched by a <c>[HandlesIntent]</c> agent and vice versa.
-    /// </summary>
+    /// <summary>The configured intents, each of which must be matched by a <c>[HandlesIntent]</c> agent and the other way round.</summary>
     private readonly IAgentConfigurationService agentConfigService;
 
     /// <summary>Source of the tool classes, whose tools and parameters the startup check weighs.</summary>
     private readonly IToolRegistryService toolRegistryService;
 
     /// <summary>
-    /// Application configuration, read for the instances a consultation may name. Held here because a
-    /// colleague published elsewhere is declared in configuration and not in code, so the startup
-    /// check has nowhere else to learn that the name resolves to anything.
+    /// The configuration, read for the partners a consultation may name.
+    /// A colleague published elsewhere is declared there and not in code, so the startup check has nowhere else to learn of it.
     /// </summary>
     private readonly IConfiguration configuration;
 
-    /// <summary>
-    /// Registry mapping intent names to agent types.
-    /// Built during service initialization via assembly scanning.
-    /// Case-insensitive string comparison for intent matching.
-    /// </summary>
+    /// <summary>The agent type of each intent, scanned and validated on first use and looked up ignoring case.</summary>
     private readonly Lazy<Dictionary<string, Type>> intentToAgentType;
 
-    /// <summary>Discovers agents and runs bidirectional intent↔agent validation (lazily — see field above).</summary>
-    /// <param name="agentConfigService">Loads intent configuration from agents.json.</param>
-    /// <param name="toolRegistryService">Lists the registered tool classes to weigh.</param>
-    /// <param name="configuration">Application configuration, read for the declared instances.</param>
-    /// <exception cref="InvalidOperationException">Validation fails: missing agents or missing configuration.</exception>
+    /// <summary>Defers the scan and its validation until the first lookup, which the host makes at startup.</summary>
     public HandlesIntentAgentRegistryService(
         IAgentConfigurationService agentConfigService,
         IToolRegistryService toolRegistryService,
@@ -58,26 +45,34 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         intentToAgentType = new Lazy<Dictionary<string, Type>>(InitializeRegistry);
     }
 
-    /// <summary>
-    /// Scans every loaded assembly for public <see cref="MorganaAgent"/> subclasses declaring an intent
-    /// and returns the intent-to-type map, without validating it.
-    /// </summary>
-    /// <returns>Intent to agent type, case-insensitive; agents without <c>[HandlesIntent]</c> are skipped.</returns>
+    /// <summary>Returns the agent type of each intent as the scan finds it, without validating it.</summary>
     public static Dictionary<string, Type> DiscoverAgents()
     {
         // The roster of agents this installation answers with, one per intent. The two spellings that
         // must meet here are typed by hand in different files, so casing is not allowed to part them.
         Dictionary<string, Type> registry = new(StringComparer.OrdinalIgnoreCase);
 
+        // An intent claimed by two agents keeps the last one found here; the validation refuses it before any conversation runs.
+        foreach ((string intent, Type agentType) in FindIntentAgents())
+            registry[intent] = agentType;
+
+        // Unvalidated on purpose: the host reads this before the container exists, to publish one A2A
+        // endpoint per agent, where throwing would refuse a deployment over a check it has not run yet.
+        return registry;
+    }
+
+    /// <summary>Finds every public concrete <see cref="MorganaAgent"/> of the loaded assemblies that declares an intent, with that intent.</summary>
+    private static List<(string Intent, Type AgentType)> FindIntentAgents()
+    {
         // Every assembly in the process, since a domain arrives as a plugin DLL loaded before this runs.
         IEnumerable<Type> morganaAgentTypes = AppDomain.CurrentDomain.GetAssemblies()
             // A runtime-generated assembly holds no agent an author wrote.
-            .Where(a => !a.IsDynamic)
-            .SelectMany(a =>
+            .Where(assembly => !assembly.IsDynamic)
+            .SelectMany(assembly =>
             {
                 try
                 {
-                    return a.GetTypes();
+                    return assembly.GetTypes();
                 }
                 catch (ReflectionTypeLoadException)
                 {
@@ -88,23 +83,18 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
             })
             // Concrete agents only. An abstract base is scaffolding a domain author shares between
             // agents, never an agent that answers.
-            .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaAgent)))
-            // Published agents only: a plugin offers its agents as public classes
-            .Where(t => t.IsVisible);
+            .Where(type => type is { IsClass: true, IsAbstract: false } && type.IsSubclassOf(typeof(MorganaAgent)))
+            // Published agents only: a plugin offers its agents as public classes.
+            .Where(type => type.IsVisible);
 
-        foreach (Type? morganaAgentType in morganaAgentTypes)
-        {
-            // An agent without [HandlesIntent] is skipped in silence. Two agents claiming ONE intent is
-            // a real defect this hides: the later in reflection order shadows the earlier. That order
-            // is undocumented, so which of the two survives is not even stable across runs.
-            HandlesIntentAttribute? handlesIntentAttribute = morganaAgentType.GetCustomAttribute<HandlesIntentAttribute>();
-            if (handlesIntentAttribute != null)
-                registry[handlesIntentAttribute.Intent] = morganaAgentType;
-        }
-
-        // Unvalidated on purpose: the host reads this before the container exists, to publish one A2A
-        // endpoint per agent, where throwing would refuse a deployment over a check it has not run yet.
-        return registry;
+        // An agent without [HandlesIntent] answers for nothing and is passed over in silence.
+        return
+        [
+            .. from morganaAgentType in morganaAgentTypes
+               let handlesIntentAttribute = morganaAgentType.GetCustomAttribute<HandlesIntentAttribute>()
+               where handlesIntentAttribute != null
+               select (handlesIntentAttribute.Intent, morganaAgentType)
+        ];
     }
 
     /// <summary>
@@ -126,6 +116,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         List<string> validationErrors =
         [
             .. ValidateIntentCoverage(registry, configuredIntents),
+            .. ValidateUniqueAgents(),
             .. ValidateDeclaredTiers(registry),
             .. ValidatePeerDeclarations(registry),
             .. ValidateToolContracts()
@@ -135,16 +126,27 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         if (validationErrors.Count > 0)
             throw new InvalidOperationException(string.Join(Environment.NewLine, validationErrors));
 
+        // The roster that every routing reads from here on.
         return registry;
+    }
+
+    /// <summary>Refuses an intent that two agents claim, since which one answers would be left to the order of reflection.</summary>
+    /// <returns>One message per intent claimed twice, empty when each intent has one agent.</returns>
+    private static List<string> ValidateUniqueAgents()
+    {
+        // The scan's own list, before the roster keeps one agent per intent.
+        return
+        [
+            .. from claims in FindIntentAgents().GroupBy(intentAgent => intentAgent.Intent, StringComparer.OrdinalIgnoreCase)
+               where claims.Count() > 1
+               select $"The intent '{claims.Key}' is handled by more than one Morgana agent: {string.Join(", ", claims.Select(claim => claim.AgentType.Name))}"
+        ];
     }
 
     /// <summary>
     /// Weighs the configured intents against the agents that declare them, in both directions.
+    /// An intent nobody handles reaches the classifier then routes nowhere; an agent nobody declared is never reached at all.
     /// </summary>
-    /// <remarks>
-    /// The two failures are opposite halves of one contract. An intent nobody handles reaches the
-    /// classifier then routes nowhere; an agent nobody declared is never reached at all.
-    /// </remarks>
     /// <param name="registry">The discovered intent-to-type map.</param>
     /// <param name="configuredIntents">The intents declared in <c>agents.json</c>.</param>
     /// <returns>One message per direction that does not hold, empty when both do.</returns>
@@ -152,6 +154,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         Dictionary<string, Type> registry,
         List<Records.IntentDefinition> configuredIntents)
     {
+        // One message per direction that does not hold.
         List<string> errors = [];
         HashSet<string> registeredIntents = [.. registry.Keys];
 
@@ -172,12 +175,13 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
         if (undeclaredIntents.Count > 0)
             errors.Add($"There are Morgana agents handling an undeclared intent: {string.Join(", ", undeclaredIntents)}");
 
+        // Both directions, joined by the caller with the other checks.
         return errors;
     }
 
     /// <summary>
-    /// Refuses an agent that does not declare the tier it runs on. Every declared tier is served,
-    /// since the three tiers are all mandatory in configuration.
+    /// Refuses an agent that does not declare the tier it runs on.
+    /// Every declared tier is served, since the three tiers are all mandatory in configuration.
     /// </summary>
     /// <param name="registry">The discovered intent-to-type map.</param>
     /// <returns>One message listing the agents without <c>[RequiresLLMTier]</c>, empty when every agent declares one.</returns>
@@ -205,6 +209,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     /// <returns>One message per declaration that does not hold, empty when all of them do.</returns>
     private List<string> ValidatePeerDeclarations(Dictionary<string, Type> registry)
     {
+        // One message per declaration that does not hold, across every agent.
         List<string> errors = [];
 
         // A colleague published elsewhere is declared in configuration rather than in code, so code
@@ -233,8 +238,10 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 // A colleague of this installation: the registry knows every agent, so this is settled here.
                 if (consultsAgent.Instance is null)
                 {
+                    // An agent consulting itself would answer its own question in a loop.
                     if (string.Equals(consultsAgent.Intent, declaredIntent, StringComparison.OrdinalIgnoreCase))
                         errors.Add($"Agent '{agentType.Name}' declares a consultation of itself ('{declaredIntent}')");
+                    // A colleague no agent handles could never answer.
                     else if (!registry.ContainsKey(consultsAgent.Intent))
                         errors.Add($"Agent '{agentType.Name}' declares a consultation of '{consultsAgent.Intent}', which no Morgana agent handles");
                 }
@@ -246,12 +253,13 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                 }
 
                 // Two colleagues folding to one function name would reach the provider as a duplicate
-                // tool, which it refuses outright — on the first conversation, not here.
+                // tool, which it refuses outright: on the first conversation, not here.
                 if (!declaredColleagues.Add(peerFunctionName))
                     errors.Add($"Agent '{agentType.Name}' declares a consultation of {colleague} under a name it already offers another colleague under ('{peerFunctionName}')");
             }
         }
 
+        // Every agent's faults, joined by the caller with the other checks.
         return errors;
     }
 
@@ -291,7 +299,7 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
 
         // The model addresses a tool by its name: two methods folding to one name would reach the provider as a duplicate.
         errors.AddRange(
-            from sameNameMethods 
+            from sameNameMethods
             in toolMethods.GroupBy(method => method.Name, StringComparer.OrdinalIgnoreCase)
             where sameNameMethods.Count() > 1
             select $"Tool '{sameNameMethods.First().Name}' of {owner} is declared by more than one method of '{toolType.Name}': a tool name is unique");
@@ -325,9 +333,8 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
     }
 
     /// <summary>
-    /// Checks that the partner an attribute names is one this installation may actually call. What
-    /// that partner publishes is its card's word, read on the first consultation and not checked here;
-    /// that its address and key are usable is checked with the rest of the entry, at publication.
+    /// Checks that the partner an attribute names is one this installation may actually call.
+    /// What that partner publishes is its card's word, read on the first consultation; its address and key are checked with the rest of the entry.
     /// </summary>
     /// <param name="partners">Partners declared under <c>Morgana:AgentToAgent:Partners</c>, parked ones already dropped.</param>
     /// <param name="instanceName">Partner named on the attribute.</param>
@@ -362,19 +369,17 @@ public class HandlesIntentAgentRegistryService : IAgentRegistryService
                  + "\"OutboundPolicy\": { \"Enabled\": true }: this installation may not call it";
         }
 
+        // The partner is declared and open to being called.
         return null;
     }
 
-    /// <summary>
-    /// Resolves agent type for an intent (case-insensitive; null if not found).
-    /// Returns null to allow RouterActor to provide user-friendly error messages.
-    /// </summary>
-    /// <param name="intent">Intent name to resolve</param>
-    /// <returns>Agent type or null if unrecognized</returns>
+    /// <summary>Returns the agent type of an intent, ignoring case; null for Other and for an unknown name, which Morgana answers herself.</summary>
     public Type? ResolveAgentFromIntent(string intent)
+        // The first lookup runs the scan and its validation.
         => intentToAgentType.Value.GetValueOrDefault(intent);
 
-    /// <summary>All registered intent names — RouterActor uses this to pre-create agents at startup.</summary>
+    /// <summary>Every intent that an agent handles: the host asks for them at startup and the router names the agents it stops by them.</summary>
     public IEnumerable<string> GetAllIntents()
+        // The first lookup runs the scan and its validation.
         => intentToAgentType.Value.Keys;
 }

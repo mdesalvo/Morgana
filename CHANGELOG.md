@@ -25,6 +25,7 @@ Tools are no longer declared in `morgana.json` or `agents.json`: they are annota
 - After `/compact` or a restart of Morgana an agent ignored the summary of its own history, so its model either read the whole history again or paid for summarizing it from the start
 - A turn whose wait ran out kept running behind the user's back: the provider billed it, its dust was charged for an answer nobody saw and its late answer could be taken for the next turn's
 - An Ollama tier that declared no context window was served at the daemon's default, which could silently cut the start of the prompt where Morgana's policies sit
+- Two agents declaring the same intent were accepted at startup and the one that answered was left to the order of reflection: the startup now refuses them
 
 ### 📦 Dependencies
 - Updated `A2A` to 1.0.0-preview4
