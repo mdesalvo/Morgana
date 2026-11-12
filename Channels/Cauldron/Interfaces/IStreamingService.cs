@@ -2,7 +2,7 @@ using Morgana.Contracts;
 
 namespace Cauldron.Interfaces;
 
-/// <summary>Service for managing streaming state: chunk buffering, typewriter timer and streaming lifecycle.</summary>
+/// <summary>Types out a streamed reply on screen: it buffers the chunks and reveals them a few characters at a time.</summary>
 public interface IStreamingService : IAsyncDisposable
 {
     /// <summary>Raised when the UI should re-render (after each typewriter tick or streaming state change).</summary>

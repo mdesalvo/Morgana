@@ -3,34 +3,27 @@ using Morgana.Contracts;
 namespace Cauldron.Interfaces;
 
 /// <summary>
-/// Service for managing conversation lifecycle: start, resume, clear and message sending.
-/// Coordinates between HTTP API, SignalR groups and local storage.
+/// Starts, resumes and ends the visitor's conversation with Morgana and sends its messages.
+/// It keeps the SignalR group, the stored id and the reply deadline in step.
 /// </summary>
 public interface IConversationLifecycleService
 {
-    /// <summary>Starts a new conversation with Morgana backend.</summary>
-    /// <returns>True if conversation started successfully.</returns>
+    /// <summary>Starts a new conversation, joining its group first so the welcome cannot be lost; true when it started.</summary>
     Task<bool> StartConversationAsync();
 
-    /// <summary>
-    /// Resumes an existing conversation from storage.
-    /// Falls back to StartConversationAsync on any failure.
-    /// </summary>
-    /// <param name="savedConversationId">The conversation ID retrieved from storage.</param>
-    /// <returns>True if conversation was resumed or a new one started successfully.</returns>
+    /// <summary>Resumes the conversation the browser kept, starting a new one on any failure; true when a conversation is on screen.</summary>
     Task<bool> ResumeConversationAsync(string savedConversationId);
 
-    /// <summary>Ends the current conversation server-side so Morgana can tear down its actor tree.</summary>
+    /// <summary>Ends the current conversation on Morgana's side, which stops its actors and keeps its record.</summary>
     Task EndConversationAsync();
 
-    /// <summary>Clears the saved conversation from storage.</summary>
+    /// <summary>Forgets the conversation the browser kept, so the next load starts a new one.</summary>
     Task ClearConversationAsync();
 
-    /// <summary>Checks storage for an existing conversation ID.</summary>
+    /// <summary>Returns the conversation id the browser kept; null for a first visit.</summary>
     Task<string?> GetSavedConversationIdAsync();
 
-    /// <summary>Sends a user message to the Morgana backend.</summary>
-    /// <returns>True if the message was sent successfully.</returns>
+    /// <summary>Sends the visitor's message to Morgana and arms the reply deadline; true when Morgana took it.</summary>
     Task<bool> SendMessageAsync(string text);
 
     /// <summary>
@@ -44,7 +37,7 @@ public interface IConversationLifecycleService
     bool IsAwaitingReply { get; }
 
     /// <summary>
-    /// Records that Morgana is answering — a chunk or a message — so the turn in flight keeps its place.
+    /// Records that Morgana is answering, with a chunk or a message, so the turn in flight keeps its place.
     /// A turn that has already been answered or given up on is unaffected.
     /// </summary>
     void NoteReplyActivity();

@@ -7,7 +7,7 @@ namespace Cauldron.Services;
 
 /// <summary>
 /// SignalR client for the Morgana backend: owns the hub connection, its reconnection policy and group membership and republishes what arrives as plain events.
-/// This is the only place in Cauldron that touches SignalR — everything else subscribes.
+/// This is the only place in Cauldron that touches SignalR: everything else subscribes.
 /// </summary>
 public class SignalRService : IAsyncDisposable
 {
@@ -49,13 +49,10 @@ public class SignalRService : IAsyncDisposable
     /// </summary>
     public event Func<string, Task>? OnStreamChunkReceived;
 
-    /// <summary>
-    /// Raised whenever the connection goes up or down.
-    /// True means connected.
-    /// </summary>
+    /// <summary>Raised whenever the connection goes up, with true, or down, with false.</summary>
     public event Action<bool>? OnConnectionStateChanged;
 
-    /// <summary>Gets a value indicating whether the SignalR connection is currently active.</summary>
+    /// <summary>Whether the page can send: the hub connection is up.</summary>
     public bool IsConnected => hubConnection?.State == HubConnectionState.Connected;
 
     /// <summary>Creates the SignalR client of one chat session.</summary>
@@ -81,6 +78,7 @@ public class SignalRService : IAsyncDisposable
         // Validated at startup, so it is present and absolute.
         string apiBaseUrl = configuration["Cauldron:MorganaURL"]!;
 
+        // The hub at Morgana's address, authenticated and reconnecting on its own.
         hubConnection = new HubConnectionBuilder()
             .WithUrl($"{apiBaseUrl}/morganaHub", options =>
             {
@@ -96,7 +94,7 @@ public class SignalRService : IAsyncDisposable
         hubConnection.On<ChannelMessage>("ReceiveMessage", async (message) =>
         {
             // Scopes the conversation id onto every log line emitted while this message is
-            // handled, including the ones downstream subscribers (lifecycle, streaming) write —
+            // handled, including the ones downstream subscribers (lifecycle, streaming) write,
             // without threading the id through each of their call signatures.
             using IDisposable? scope = logger.BeginScope(new Dictionary<string, object>
             {
@@ -156,7 +154,7 @@ public class SignalRService : IAsyncDisposable
         logger.LogInformation("SignalR started successfully");
     }
 
-    /// <summary>Stops the SignalR connection gracefully.</summary>
+    /// <summary>Closes the hub connection and forgets the conversations it was subscribed to.</summary>
     public async Task StopAsync()
     {
         // Nothing to stop when no connection was ever built.
@@ -190,7 +188,6 @@ public class SignalRService : IAsyncDisposable
     /// Joins a conversation group, which is what makes this client start receiving that conversation's messages.
     /// The subscription outlives reconnects until it is left.
     /// </summary>
-    /// <param name="conversationId">Unique identifier of the conversation to join</param>
     public async Task JoinConversation(string conversationId)
     {
         // Recorded even when the join below cannot go out: a reconnect in progress joins it then.
@@ -203,16 +200,15 @@ public class SignalRService : IAsyncDisposable
             await hubConnection.InvokeAsync("JoinConversation", conversationId);
             logger.LogInformation("✅ Joined SignalR group: {ConversationId}", conversationId);
         }
+        // Not connected: nothing reaches the server now. A reconnect in progress joins the
+        // conversation once back; a connection closed for good never does.
         else
         {
-            // Not connected: nothing reaches the server now. A reconnect in progress joins the
-            // conversation once back; a connection closed for good never does.
             logger.LogWarning("⚠️ Cannot join conversation: SignalR not connected");
         }
     }
 
     /// <summary>Leaves a conversation group to stop receiving messages for that conversation.</summary>
-    /// <param name="conversationId">Unique identifier of the conversation to leave</param>
     public async Task LeaveConversation(string conversationId)
     {
         // Forgotten even while disconnected, so a later reconnect does not join it again.
@@ -304,8 +300,8 @@ public class SignalRService : IAsyncDisposable
     }
 
     /// <summary>
-    /// Disposes the SignalR connection resources.
-    /// Called by the container when the visitor's circuit closes, after the page's own StopAsync.
+    /// Releases the hub connection when the visitor's circuit closes.
+    /// The container calls it after the page's own StopAsync.
     /// </summary>
     public async ValueTask DisposeAsync()
     {

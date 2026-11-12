@@ -62,7 +62,7 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         _logger = logger;
     }
 
-    /// <summary>Starts a new conversation, joining its group first so the welcome cannot be lost; true when it started.</summary>
+    /// <inheritdoc />
     public async Task<bool> StartConversationAsync()
     {
         // Cauldron announces itself by name and declares every capability, so Morgana adapts nothing of what it sends.
@@ -142,7 +142,7 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         }
     }
 
-    /// <summary>Resumes the conversation the browser kept, starting a new one on any failure; true when a conversation is on screen.</summary>
+    /// <inheritdoc />
     public async Task<bool> ResumeConversationAsync(string savedConversationId)
     {
         // Scopes every log line below to this conversation id, so a single id lets an
@@ -220,7 +220,7 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         }
     }
 
-    /// <summary>Ends the current conversation on Morgana's side, which stops its actors and keeps its record.</summary>
+    /// <inheritdoc />
     public async Task EndConversationAsync()
     {
         // Snapshot the id before anything else touches the state, so the whole teardown targets
@@ -259,21 +259,21 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
         }
     }
 
-    /// <summary>Forgets the conversation the browser kept, so the next load starts a new one.</summary>
+    /// <inheritdoc />
     public async Task ClearConversationAsync()
     {
         _logger.LogInformation("Clearing conversation from storage");
         await _storage.ClearConversationIdAsync();
     }
 
-    /// <summary>Returns the conversation id the browser kept; null for a first visit.</summary>
+    /// <inheritdoc />
     public async Task<string?> GetSavedConversationIdAsync()
     {
         // The id decrypted from the browser's storage.
         return await _storage.GetConversationIdAsync();
     }
 
-    /// <summary>Sends the visitor's message to Morgana and arms the reply deadline; true when Morgana took it.</summary>
+    /// <inheritdoc />
     public async Task<bool> SendMessageAsync(string text)
     {
         // Scopes every log line below to this conversation id, so a single id lets an
