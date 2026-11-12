@@ -23,7 +23,6 @@ public class ClassifierActor : MorganaActor
         IClassifierService classifierService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
-        // The service arrives from the actor system's DI scope and lives as long as the actor.
         this.classifierService = classifierService;
 
         // The supervisor sends the user message here once the guard has admitted it.
@@ -33,13 +32,13 @@ public class ClassifierActor : MorganaActor
     /// <summary>Classifies the user message and replies to the supervisor with the result or with the failure.</summary>
     private async Task ClassifyMessageAsync(Records.UserMessage msg)
     {
-        // The supervisor is captured before the await, after which Sender no longer names it.
+        // The supervisor of the conversation, which waits for the ranked intents.
         IActorRef originalSender = Sender;
 
         try
         {
             // The classification strategy (LLM call, ranking, the confidence-gap collision check
-            // that decides whether metadata carries "ambiguousIntents") lives behind this one call.
+            // that decides whether metadata carries the colliding intents) lives behind this one call.
             Records.ClassificationResult classificationResult =
                 await classifierService.ClassifyAsync(msg.ConversationId, msg.Text, msg.TurnCancellation);
 
@@ -47,7 +46,7 @@ public class ClassifierActor : MorganaActor
                 "Classification complete for conversation {0}: intent='{1}', confidence={2}",
                 msg.ConversationId,
                 classificationResult.Intent,
-                classificationResult.Metadata.GetValueOrDefault("confidence", "N/A"));
+                classificationResult.Metadata.GetValueOrDefault(Constants.ClassificationMetadata.Confidence, "N/A"));
 
             // The supervisor receives the intents ranked by descending score, with the collision metadata that lets the user disambiguate.
             originalSender.Tell(classificationResult);

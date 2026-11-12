@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.Sqlite;
+using Microsoft.Data.Sqlite;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -8,37 +8,24 @@ using static Morgana.AI.Records;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// SQLite-backed dust limiter: a per-conversation LIFETIME budget (no sliding window, no reset)
-/// in the single-row <c>dust_budget</c> table of the conversation's own database, opened through
-/// <see cref="SQLiteConversationPersistenceService"/>. "Let-it-finish": a turn already running
-/// completes even if it pushes the total over budget — only the NEXT turn gets blocked, by
-/// <see cref="IsOverBudgetAsync"/>. Every operation fails open on a storage fault.
+/// Keeps each conversation's lifetime dust budget, with no window and no reset, in the <c>dust_budget</c> row of its own database.
+/// A running turn finishes even when it overruns the budget: only the next one is refused. Every operation fails open on a storage fault.
 /// </summary>
 public class SQLiteDustLimitService : IDustLimitService
 {
     /// <summary>
-    /// Logger for charges, threshold crossings and the fail-open path — a storage fault that
-    /// silently stops metering is otherwise invisible.
+    /// Logs the charges and the fail-open path.
+    /// A storage fault that stops the metering would otherwise be invisible.
     /// </summary>
     private readonly ILogger logger;
 
-    /// <summary>
-    /// Dust policy from <c>Morgana:DustLimiting</c>: enable flag, per-conversation budget and the
-    /// three user-facing texts (70% warning, 90% warning, lockout).
-    /// </summary>
+    /// <summary>The policy of <c>Morgana:DustLimiting</c>: the switch, the budget per conversation and the texts of the warnings and of the lockout.</summary>
     private readonly DustLimitingOptions options;
 
-    /// <summary>
-    /// Owner of the database file. Opens it at the current schema, since a dust charge can land
-    /// before anything else has had reason to create the conversation's database.
-    /// </summary>
+    /// <summary>The owner of the conversation's database, which opens it at the current schema with the budget row seeded.</summary>
     private readonly SQLiteConversationPersistenceService persistenceService;
 
-    /// <summary>
-    /// Initializes the dust limiter with its policy and the persistence service that owns
-    /// the per-conversation SQLite database lifecycle: the budget tables live in the conversation's own
-    /// database, which this service opens through it.
-    /// </summary>
+    /// <summary>Binds the limiter to its policy and to the conversation's database, where the budget tables live.</summary>
     public SQLiteDustLimitService(
         IOptions<DustLimitingOptions> options,
         SQLiteConversationPersistenceService persistenceService,
@@ -63,12 +50,8 @@ public class SQLiteDustLimitService : IDustLimitService
         if (!options.Enabled || dust <= 0)
             return;
 
-        // Never materialize a database for a non-conversation. The
-        // CompleteWithSystemPromptAsync path is reached with framework-internal logging
-        // labels too (e.g. the presenter passes the literal "presentation"); dust is only
-        // chargeable against a real, already-handshaken conversation. A real conversation's
-        // DB always exists by the time any chargeable LLM call runs (created at the
-        // conversation/start handshake), so legitimate per-turn charges still land.
+        // A label that names no conversation gets no database: the presenter charges under "presentation".
+        // A real conversation's database exists from its handshake, so every charge of a turn still lands.
         if (!await persistenceService.ConversationExistsAsync(conversationId))
             return;
 
@@ -83,8 +66,7 @@ public class SQLiteDustLimitService : IDustLimitService
             await using SqliteTransaction transaction = connection.BeginTransaction();
             try
             {
-                // The id=1 row is seeded once at schema init (EnsureDatabaseInitializedAsync
-                // above guarantees it exists), so the hot path is a bare UPDATE.
+                // The budget row is seeded when the schema is created, so a charge only has to raise it.
                 await using (SqliteCommand updateCommand = connection.CreateCommand())
                 {
                     updateCommand.Transaction = transaction;
@@ -103,13 +85,15 @@ public class SQLiteDustLimitService : IDustLimitService
                     logCommand.Transaction = transaction;
                     logCommand.CommandText =
                         "INSERT INTO dust_usage_log (timestamp, dust_consumed, llm_role) VALUES (@ts, @dust, @role);";
-                    // Stored as text: invariant, so the log reads the same whichever host wrote a row
+
+                    // Stored as text: invariant, so the log reads the same whichever host wrote a row.
                     logCommand.Parameters.AddWithValue("@ts", DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture));
                     logCommand.Parameters.AddWithValue("@dust", dust);
                     logCommand.Parameters.AddWithValue("@role", llmRole);
                     await logCommand.ExecuteNonQueryAsync();
                 }
 
+                // The total and its line become visible together.
                 await transaction.CommitAsync();
 
                 // Emitted after the commit, never before: a metric reporting spend the ledger rolled back
@@ -146,11 +130,11 @@ public class SQLiteDustLimitService : IDustLimitService
             return false;
 
         // A budget of zero is spent before anything is charged, whether or not the conversation has a
-        // record yet: nothing it could ask for is admitted
+        // record yet: nothing it could ask for is admitted.
         if (options.BudgetPerConversation <= 0)
             return true;
 
-        // No DB for a non-existent conversation → nothing consumed → not over budget.
+        // A conversation with no database has spent nothing.
         if (!await persistenceService.ConversationExistsAsync(conversationId))
             return false;
 
@@ -158,8 +142,8 @@ public class SQLiteDustLimitService : IDustLimitService
         {
             // At the budget, not merely over it: the threshold is the last turn admitted, so a
             // conversation that has spent exactly its allowance opens no further turn.
-            double consumed = await ReadConsumedAsync(conversationId);
-            return consumed >= options.BudgetPerConversation;
+            double consumedDust = await ReadConsumedAsync(conversationId);
+            return consumedDust >= options.BudgetPerConversation;
         }
         catch (Exception ex)
         {
@@ -199,61 +183,63 @@ public class SQLiteDustLimitService : IDustLimitService
         // Clamped here rather than at the call site: a ledger that appears to run backwards is this
         // service's problem to absorb (a disabled limiter, a failed read, a database that vanished
         // between the two), never a negative cost handed to whoever asked what the work cost.
-        double consumed = await GetConsumedAsync(conversationId);
-        return consumed > baseline ? consumed - baseline : 0.0;
-    }
-
-    /// <summary>The ratio of consumed dust to the budget, 0 while unmetered or unread and 1 on a budget of zero.</summary>
-    private async Task<double> GetUsageRatioAsync(string conversationId)
-    {
-        // Unmetered: there is no proportion to report.
-        if (!options.Enabled)
-            return 0.0;
-
-        // A budget of zero is spent before anything is charged, as the gate already reads it: the gauge and
-        // the resume must say so too, rather than show a conversation nobody measures
-        if (options.BudgetPerConversation <= 0)
-            return 1.0;
-
-        // No DB for a non-existent conversation → nothing consumed → ratio 0.
-        if (!await persistenceService.ConversationExistsAsync(conversationId))
-            return 0.0;
-
-        try
-        {
-            // A fraction rather than a figure: what reads this decides whether to warn, so it needs how
-            // far along the conversation is rather than how much it burned.
-            double consumed = await ReadConsumedAsync(conversationId);
-            return consumed / options.BudgetPerConversation;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Dust ratio query failed for {ConversationId} — returning 0.0", conversationId);
-            return 0.0;
-        }
+        double consumedDust = await GetConsumedAsync(conversationId);
+        return consumedDust > baseline ? consumedDust - baseline : 0.0;
     }
 
     /// <inheritdoc/>
     public async Task<double?> GetRemainingLevelAsync(string conversationId)
     {
+        // Unmetered, so there is no gauge to show.
         if (!options.Enabled)
             return null;
 
+        // A budget of zero is spent before anything is charged, as the gate already reads it:
+        // the gauge and the resume say so too, rather than show a conversation nobody measures.
+        if (options.BudgetPerConversation <= 0)
+            return 0.0;
+
+        // The share of the budget already spent, zero when the ledger cannot be read.
+        double usageRatio = await ReadUsageRatioAsync();
+
         // Floored rather than rounded, so a sub-percent residual reads as spent exactly when the
-        // next turn will be refused as over budget
-        double remaining = Math.Clamp(1.0 - await GetUsageRatioAsync(conversationId), 0.0, 1.0);
+        // next turn will be refused as over budget.
+        double remaining = Math.Clamp(1.0 - usageRatio, 0.0, 1.0);
         return Math.Floor(remaining * 100.0) / 100.0;
+
+        #region Utilities
+        // Reads the share of the budget spent so far, failing open to zero.
+        async Task<double> ReadUsageRatioAsync()
+        {
+            // A conversation with no database has spent nothing.
+            if (!await persistenceService.ConversationExistsAsync(conversationId))
+                return 0.0;
+
+            try
+            {
+                // The total over the budget, which the warnings and the gauge are both read on.
+                double consumedDust = await ReadConsumedAsync(conversationId);
+                return consumedDust / options.BudgetPerConversation;
+            }
+            catch (Exception ex)
+            {
+                // A ledger that cannot be read shows a full gauge rather than a lockout nobody decided.
+                logger.LogError(ex, "Dust ratio query failed for {ConversationId} — returning 0.0", conversationId);
+                return 0.0;
+            }
+        }
+        #endregion
     }
 
     /// <inheritdoc/>
     public async Task<(bool Send70, bool Send90)> CheckAndMarkWarningsAsync(string conversationId)
     {
         // A budget of zero never had a 70% to cross: the conversation is spent from its start and the
-        // exhaustion notice is the only thing left to tell
+        // exhaustion notice is the only thing left to tell.
         if (!options.Enabled || options.BudgetPerConversation <= 0)
             return (false, false);
 
-        // No DB for a non-existent conversation → no usage → nothing to warn about.
+        // A conversation with no database has spent nothing to warn about.
         if (!await persistenceService.ConversationExistsAsync(conversationId))
             return (false, false);
 
@@ -261,10 +247,13 @@ public class SQLiteDustLimitService : IDustLimitService
         {
             // The warning flags live on the budget row, which the schema seeds in the conversation's own database.
             await using SqliteConnection connection = await persistenceService.OpenDatabaseAsync(conversationId);
+
+            // Read and mark in one transaction, so two turns charging concurrently cannot both decide to send the same warning.
             await using SqliteTransaction transaction = connection.BeginTransaction();
             try
             {
-                double consumed;
+                // The total and the two flags, read together from the budget row.
+                double consumedDust;
                 bool warning70Sent;
                 bool warning90Sent;
 
@@ -273,25 +262,27 @@ public class SQLiteDustLimitService : IDustLimitService
                     readCommand.Transaction = transaction;
                     readCommand.CommandText = "SELECT dust_consumed, warning_70_sent, warning_90_sent FROM dust_budget WHERE id = 1;";
                     await using SqliteDataReader reader = await readCommand.ExecuteReaderAsync();
+
+                    // A missing budget row has recorded no usage, so there is nothing to warn about.
                     if (!await reader.ReadAsync())
                     {
                         await transaction.RollbackAsync();
-                        return (false, false); // No usage yet → nothing to warn about
+                        return (false, false);
                     }
 
-                    consumed = reader.GetDouble(0);
+                    // The flags are stored as integers.
+                    consumedDust = reader.GetDouble(0);
                     warning70Sent = reader.GetInt32(1) != 0;
                     warning90Sent = reader.GetInt32(2) != 0;
                 }
 
                 // Each threshold fires once in a conversation's life, which is what the two stored flags
                 // record: crossing 70% again after a charge must not warn a user already warned.
-                double ratio = consumed / options.BudgetPerConversation;
-                bool send70 = ratio >= 0.70 && !warning70Sent;
-                bool send90 = ratio >= 0.90 && !warning90Sent;
+                double usageRatio = consumedDust / options.BudgetPerConversation;
+                bool send70 = usageRatio >= 0.70 && !warning70Sent;
+                bool send90 = usageRatio >= 0.90 && !warning90Sent;
 
-                // Read and mark in one transaction, so two turns charging concurrently cannot both
-                // decide to send the same warning. Each CASE leaves the other flag as it found it.
+                // A threshold crossed now is marked as warned; each CASE leaves the other flag as it found it.
                 if (send70 || send90)
                 {
                     await using SqliteCommand updateCommand = connection.CreateCommand();
@@ -306,35 +297,38 @@ public class SQLiteDustLimitService : IDustLimitService
                     await updateCommand.ExecuteNonQueryAsync();
                 }
 
+                // The marks become visible with the decision, which the manager acts on.
                 await transaction.CommitAsync();
                 return (send70, send90);
             }
             catch
             {
+                // Nothing is marked as warned unless the warning is decided.
                 await transaction.RollbackAsync();
                 throw;
             }
         }
         catch (Exception ex)
         {
+            // A ledger that cannot be read sends no warning: warnings are advisory and the gate still refuses an exhausted conversation.
             logger.LogError(ex, "Warning threshold check failed for {ConversationId} — failing open", conversationId);
             return (false, false);
         }
     }
 
-    /// <summary>Reads the conversation's cumulative dust, initializing the schema if this is its first read.</summary>
-    /// <param name="conversationId">Conversation whose budget row is read.</param>
-    /// <returns>Dust consumed so far; zero when the row does not exist yet.</returns>
+    /// <summary>Reads the conversation's cumulative dust, zero when the budget row does not exist yet.</summary>
     private async Task<double> ReadConsumedAsync(string conversationId)
     {
         // The spent total is read from the budget row of the conversation's own database,
         // whose first read may precede any other use of it.
         await using SqliteConnection connection = await persistenceService.OpenDatabaseAsync(conversationId);
 
+        // One row holds the conversation's whole budget.
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT dust_consumed FROM dust_budget WHERE id = 1;";
-        object? result = await command.ExecuteScalarAsync();
+        object? consumedDust = await command.ExecuteScalarAsync();
 
-        return result is null || result == DBNull.Value ? 0.0 : Convert.ToDouble(result, CultureInfo.InvariantCulture);
+        // A missing row or value has spent nothing.
+        return consumedDust is null || consumedDust == DBNull.Value ? 0.0 : Convert.ToDouble(consumedDust, CultureInfo.InvariantCulture);
     }
 }

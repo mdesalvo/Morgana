@@ -47,7 +47,6 @@ public class RouterActor : MorganaActor
         IAgentConfigurationService agentConfigService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
-        // The services arrive from the actor system's DI scope and live as long as the actor.
         this.agentResolverService = agentResolverService;
         this.presenterService = presenterService;
         this.agentConfigService = agentConfigService;
@@ -104,7 +103,7 @@ public class RouterActor : MorganaActor
     /// <param name="req">The request, carrying the classification that names the intent.</param>
     private async Task RouteToAgentAsync(Records.AgentRequest req)
     {
-        // The supervisor is captured before the awaits, after which Sender no longer names it.
+        // The supervisor of the conversation, which waits for the agent's answer.
         IActorRef originalSender = Sender;
 
         // The supervisor is always the originator of AgentRequest — cache it on first contact
@@ -225,7 +224,7 @@ public class RouterActor : MorganaActor
     /// <param name="req">The request naming the agent's intent.</param>
     private async Task HandleRestoreAgentRequestAsync(Records.RestoreAgentRequest req)
     {
-        // The supervisor is captured before the await, after which Sender no longer names it.
+        // The supervisor of the conversation, which waits for the restored agent.
         IActorRef originalSender = Sender;
 
         actorLogger.Info($"Restoring agent for intent '{req.AgentIntent}'");

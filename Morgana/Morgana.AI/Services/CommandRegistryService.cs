@@ -5,8 +5,7 @@ namespace Morgana.AI.Services;
 
 /// <summary>
 /// Publishes every <see cref="ICommand"/> registered in DI, in registration order.
-/// Two commands claiming one name or a command declaring one option twice is fatal at startup, like every
-/// other registry's refusal.
+/// Two commands claiming one name or a command declaring one option twice is fatal at startup, like every other registry's refusal.
 /// </summary>
 public sealed class CommandRegistryService : ICommandRegistryService
 {
@@ -20,21 +19,25 @@ public sealed class CommandRegistryService : ICommandRegistryService
     /// <exception cref="InvalidOperationException">Thrown when two commands answer to the same name or one declares itself wrongly.</exception>
     public CommandRegistryService(IEnumerable<ICommand> commands)
     {
+        // The palette lists the commands as they are registered.
         List<CommandDescriptor> descriptors = [];
         foreach (ICommand command in commands)
         {
-            // A declaration a channel could not run as written is refused before any channel is offered it
+            // A declaration a channel could not run as written is refused before any channel is offered it.
             if (command.Descriptor.DescribeDeclarationProblem() is { } declarationProblem)
                 throw new InvalidOperationException($"{command.GetType().Name}: {declarationProblem}.");
 
-            // A name resolved to two commands would leave the channel's request to whichever registered first
+            // A name resolved to two commands would leave the channel's request to whichever registered first.
             string name = command.Descriptor.Name;
             if (!commandsByName.TryAdd(name, command))
                 throw new InvalidOperationException(
                     $"Command name '{name}' is claimed by both {commandsByName[name].GetType().Name} and {command.GetType().Name}.");
-            // Registration order is the palette's order: the one who wires the commands decides how they are listed
+
+            // Registration order is the palette's order: the one who wires the commands decides how they are listed.
             descriptors.Add(command.Descriptor);
         }
+
+        // The catalogue is fixed from here on: commands are registered only in the host.
         catalog = descriptors;
     }
 
@@ -43,6 +46,6 @@ public sealed class CommandRegistryService : ICommandRegistryService
 
     /// <inheritdoc />
     public ICommand? ResolveCommand(string name) =>
-        // The index ignores case, so a channel may send the name as its user typed it
+        // The index ignores case, so a channel may send the name as its user typed it.
         commandsByName.GetValueOrDefault(name);
 }

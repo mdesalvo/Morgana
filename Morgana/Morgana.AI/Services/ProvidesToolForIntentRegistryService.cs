@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Tools;
 using Morgana.AI.Attributes;
@@ -7,91 +7,78 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Discovers tools via [ProvidesToolForIntent] attribute scanning of all loaded assemblies.
-/// Validates tool↔agent mappings; warns on duplicate registrations, orphaned tools, tools-less agents.
-/// Console + logger diagnostic output for visibility; builds case-insensitive intent→tool registry.
+/// Finds the tool class of each intent by scanning the loaded assemblies for <c>[ProvidesToolForIntent]</c>.
+/// The scan runs at the first lookup and prints how tools and agents line up: an orphan tool and an agent without one are warnings,
+/// two tools for one intent an error.
 /// </summary>
 public class ProvidesToolForIntentRegistryService : IToolRegistryService
 {
     /// <summary>
-    /// Logger for the discovery diagnostics: duplicate registrations, orphaned tools and agents
-    /// without one. These are warnings, not failures — the only trace they leave is this log.
+    /// Logs the discovery diagnostics: duplicate registrations and assemblies whose types could not be read.
+    /// None of them stops the startup, so this log is the only trace they leave.
     /// </summary>
     private readonly ILogger logger;
 
-    /// <summary>
-    /// Registry mapping intent names to tool types.
-    /// Built during service initialization via assembly scanning.
-    /// Case-insensitive string comparison for intent matching.
-    /// </summary>
+    /// <summary>The tool type of each intent, scanned at the first lookup and looked up ignoring case.</summary>
     private readonly Lazy<Dictionary<string, Type>> intentToToolType;
 
-    /// <summary>
-    /// Initializes a new instance of ProvidesToolForIntentRegistryService.
-    /// Performs tool discovery and validation with comprehensive diagnostic output.
-    /// </summary>
-    /// <param name="logger">Logger instance for diagnostic information</param>
+    /// <summary>Defers the scan until the first lookup, when every plugin has been loaded.</summary>
     public ProvidesToolForIntentRegistryService(ILogger logger)
     {
         this.logger = logger;
 
+        // The plugins are loaded before the first lookup, so the scan finds their tools.
         intentToToolType = new Lazy<Dictionary<string, Type>>(InitializeRegistry);
     }
 
-    /// <summary>
-    /// Scans assemblies for MorganaTool classes with [ProvidesToolForIntent] attribute.
-    /// Validates tool↔agent coordination; checks for duplicates/orphans; outputs diagnostics.
-    /// </summary>
-    /// <returns>Dictionary mapping intent names to tool types (case-insensitive)</returns>
+    /// <summary>Scans for the tools and prints how they line up against the agents.</summary>
     private Dictionary<string, Type> InitializeRegistry()
     {
         Console.WriteLine("🔍 Scanning assemblies for MorganaTool implementations...");
 
-        Dictionary<string, Type> registry = DiscoverTools(out List<string> registrationErrors);
+        // The tool of each intent and the intents that two tools claimed.
+        Records.ToolDiscovery toolDiscovery = DiscoverTools();
 
         // Printed rather than thrown: none of what it reports stops a deployment, so the operator is
         // told at startup instead of discovering it on the first conversation that lacks a tool.
-        ReportRegistry(registry, registrationErrors);
+        ReportRegistry(toolDiscovery.ToolTypesByIntent, toolDiscovery.RegistrationErrors);
 
-        return registry;
+        // The registry that every later lookup reads.
+        return toolDiscovery.ToolTypesByIntent;
     }
 
     /// <summary>
     /// Finds every <see cref="MorganaTool"/> that declares an intent, keeping the first found per intent.
+    /// A duplicate is reported rather than resolved: which of two tools reached the scan first depends on assembly order.
     /// </summary>
-    /// <remarks>
-    /// A duplicate is reported rather than resolved: which of two tools reached the scan first depends
-    /// on assembly order, so silently keeping one would make the domain's behaviour depend on it.
-    /// </remarks>
-    /// <param name="registrationErrors">Filled with one message per intent claimed by two tools.</param>
-    /// <returns>Intent to tool type, lowercased, case-insensitive.</returns>
-    private Dictionary<string, Type> DiscoverTools(out List<string> registrationErrors)
+    private Records.ToolDiscovery DiscoverTools()
     {
-        Dictionary<string, Type> registry = new(StringComparer.OrdinalIgnoreCase);
-        registrationErrors = [];
+        // Intents are typed by hand in two places, so the registry ignores their case.
+        Dictionary<string, Type> toolTypesByIntent = new(StringComparer.OrdinalIgnoreCase);
+        List<string> registrationErrors = [];
 
         // Every assembly in the process, since a domain's tools arrive in a plugin DLL that
         // PluginLoaderService has already loaded by the time this runs.
         IEnumerable<Type> toolTypes = AppDomain.CurrentDomain.GetAssemblies()
-            .Where(a => !a.IsDynamic)
-            .SelectMany(a =>
+            .Where(assembly => !assembly.IsDynamic)
+            .SelectMany(assembly =>
             {
                 try
                 {
-                    return a.GetTypes();
+                    return assembly.GetTypes();
                 }
                 catch (ReflectionTypeLoadException ex)
                 {
                     // An assembly with incomplete dependencies costs only its own types: a half-built
                     // plugin must not hide the tools of every other one.
-                    logger.LogWarning("Could not load types from assembly {ArgFullName}: {ExMessage}", a.FullName, ex.Message);
+                    logger.LogWarning("Could not load types from assembly {ArgFullName}: {ExMessage}", assembly.FullName, ex.Message);
                     return [];
                 }
             })
             // Concrete tools that declare which agent they belong to. A tool without the attribute
             // belongs to no agent, so nothing could ever reach it.
-            .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsSubclassOf(typeof(MorganaTool)))
-            .Where(t => t.GetCustomAttribute<ProvidesToolForIntentAttribute>() != null);
+            .Where(type => type is { IsClass: true, IsAbstract: false } && type.IsSubclassOf(typeof(MorganaTool)))
+            .Where(type => type.GetCustomAttribute<ProvidesToolForIntentAttribute>() != null);
 
         foreach (Type toolType in toolTypes)
         {
@@ -104,31 +91,30 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
 
             // The first tool found keeps the agent. Overwriting would hand the intent to whichever
             // assembly the runtime happened to enumerate last.
-            if (registry.TryGetValue(intent, out Type? value))
+            if (toolTypesByIntent.TryGetValue(intent, out Type? registeredToolType))
             {
-                string error = $"Duplicate tool registration for intent '{intent}': {value.Name} and {toolType.Name}";
+                string error = $"Duplicate tool registration for intent '{intent}': {registeredToolType.Name} and {toolType.Name}";
                 registrationErrors.Add(error);
                 logger.LogError(error);
                 continue;
             }
 
-            registry[intent] = toolType;
+            // The tool now serves its intent.
+            toolTypesByIntent[intent] = toolType;
             Console.WriteLine($"  📦 Registered tool: {toolType.Name} for intent '{declaration.Intent}'");
         }
 
-        Console.WriteLine($"✅ Tool registry initialized with {registry.Count} tool(s)");
+        Console.WriteLine($"✅ Tool registry initialized with {toolTypesByIntent.Count} tool(s)");
         Console.WriteLine();
 
-        return registry;
+        // The registry and the duplicates, which the report prints together.
+        return new Records.ToolDiscovery(toolTypesByIntent, registrationErrors);
     }
 
     /// <summary>
     /// Prints how the discovered tools line up against the discovered agents.
+    /// Neither mismatch is fatal: an agent may legally have no native tool and a tool left behind by a renamed agent is dead code rather than a fault.
     /// </summary>
-    /// <remarks>
-    /// Neither mismatch is fatal, which is why this reports instead of throwing: an agent may legally
-    /// have no native tool. A tool left behind by a renamed agent is dead code rather than a fault.
-    /// </remarks>
     /// <param name="registry">Intent to tool type, as discovered.</param>
     /// <param name="registrationErrors">Intents claimed by two tools, already collected.</param>
     private static void ReportRegistry(IReadOnlyDictionary<string, Type> registry, IReadOnlyList<string> registrationErrors)
@@ -141,21 +127,13 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         // two scans that can disagree would report a mismatch neither of them causes.
         Dictionary<string, Type> agentsByIntent = HandlesIntentAgentRegistryService.DiscoverAgents();
 
+        // The two sides compared by intent, ignoring case as the registries do.
         HashSet<string> agentIntents = new(agentsByIntent.Keys, StringComparer.OrdinalIgnoreCase);
         HashSet<string> toolIntents = new(registry.Keys, StringComparer.OrdinalIgnoreCase);
 
         // The header is owed only if something is actually warned about, so it is written by whichever
         // of the two lists below turns out to be non-empty.
         bool warningsHeaderWritten = false;
-        void WriteWarningsHeader()
-        {
-            if (warningsHeaderWritten)
-                return;
-
-            Console.WriteLine();
-            Console.WriteLine("Warnings:");
-            warningsHeaderWritten = true;
-        }
 
         // An agent with no native tool is legal: an MCP-only agent acquires its competences at runtime,
         // so this says what a reader would otherwise have to guess from silence.
@@ -189,23 +167,39 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
 
         Console.WriteLine("========================================");
         Console.WriteLine();
+        return;
+
+        #region Utilities
+        // Writes the warnings header the first time a warning is printed.
+        void WriteWarningsHeader()
+        {
+            // The header is already on screen.
+            if (warningsHeaderWritten)
+                return;
+
+            Console.WriteLine();
+            Console.WriteLine("Warnings:");
+            warningsHeaderWritten = true;
+        }
+        #endregion
     }
 
-    /// <summary>Finds the MorganaTool type registered for an intent, or null (case-insensitive).</summary>
-    /// <remarks>
-    /// Null is a legitimate, expected outcome — not an error: it means the agent for that intent
-    /// has no native tool and runs on framework tools alone (GetContextVariable, etc.) or MCP.
-    /// </remarks>
+    /// <summary>
+    /// Finds the tool type registered for an intent, ignoring case; null when the intent has none.
+    /// Null is an expected outcome: the agent of that intent runs on the base tools alone or on MCP.
+    /// </summary>
     public Type? FindToolTypeForIntent(string intent)
     {
+        // A blank intent names no agent, so it has no tool; any other is looked up lowercased, as registered.
         return string.IsNullOrWhiteSpace(intent)
             ? null
             : intentToToolType.Value.GetValueOrDefault(intent.ToLowerInvariant());
     }
 
-    /// <summary>All registered tool types keyed by intent — diagnostics/validation/testing enumeration.</summary>
+    /// <summary>Every registered tool type by intent, which the agent registry checks against its agents at startup.</summary>
     public IReadOnlyDictionary<string, Type> GetAllRegisteredTools()
     {
+        // The first call runs the scan.
         return intentToToolType.Value;
     }
 }

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Reflection;
 using Microsoft.Extensions.AI;
 using Morgana.AI.Attributes;

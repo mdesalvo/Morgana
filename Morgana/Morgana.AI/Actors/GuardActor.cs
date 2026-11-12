@@ -23,7 +23,6 @@ public class GuardActor : MorganaActor
         IGuardRailService guardRailService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
-        // The service arrives from the actor system's DI scope and lives as long as the actor.
         this.guardRailService = guardRailService;
 
         // The supervisor sends every user message here before anything else reads it.
@@ -33,7 +32,7 @@ public class GuardActor : MorganaActor
     /// <summary>Judges the user message and replies to the supervisor with the verdict or with the failure.</summary>
     private async Task CheckComplianceAsync(Records.GuardCheckRequest req)
     {
-        // The supervisor is captured before the await, after which Sender no longer names it.
+        // The supervisor of the conversation, which waits for the verdict.
         IActorRef originalSender = Sender;
 
         try

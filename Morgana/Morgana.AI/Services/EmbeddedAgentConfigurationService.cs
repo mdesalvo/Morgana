@@ -6,77 +6,51 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Loads agent configuration from the agents.json embedded resource of every loaded assembly that
-/// carries one, merged into the single domain this installation serves. Graceful fallback (empty
-/// config) if none is found; a name claimed twice is refused rather than resolved.
+/// Merges the agents.json embedded in every loaded plugin into the one domain this installation serves; none found is an empty domain.
+/// Several plugins may each bring part of a domain, but none may disagree: an intent or a prompt id declared twice describes two agents
+/// answering to one name. Nor may a domain take a reserved name: the complement Other, the system's own name or a framework prompt id.
 /// </summary>
-/// <remarks>
-/// Several plugins may each bring part of a domain — agents that belong to one organization without
-/// belonging to one deliverable. What they may not do is disagree: two plugins declaring the same
-/// intent, or two prompts under one id, describe two different agents answering to one name and
-/// nothing downstream could tell which was meant.
-/// <para>What a domain cannot bring at all is the complement of itself. The catch-all is what a
-/// request matching no agent is, which is the classifier's business and is described in the
-/// classifier's own prompt: the name is reserved. A domain declaring it is refused here rather
-/// than quietly corrected — the same way a partner is refused the name of this installation's own
-/// ring.</para>
-/// <para>Nor may a domain take the id of a framework prompt, since both layers are resolved in one registry.</para>
-/// </remarks>
 public class EmbeddedAgentConfigurationService : IAgentConfigurationService
 {
     /// <summary>
-    /// The loaded <c>agents.json</c>, deferred behind a <see cref="Lazy{T}"/>: the scan over every
-    /// loaded assembly runs once, on first use, rather than at DI construction — which in some
-    /// hosting orders happens before the plugin assemblies have finished loading.
+    /// The merged domain, scanned on first use.
+    /// DI construction can happen before the plugins have finished loading, so the scan waits for the first question.
     /// </summary>
     private readonly Lazy<AgentConfiguration> agentConfiguration;
 
     /// <summary>
-    /// Logger for the assembly scan: which resource was found, or that none was and Morgana is
-    /// therefore running agentless — a legal configuration whose only signal is this warning.
+    /// Logs which plugins brought a domain and warns when none did.
+    /// An agentless installation is legal, so this warning is its only signal.
     /// </summary>
     private readonly ILogger logger;
 
-    /// <summary>
-    /// Initializes a new instance of EmbeddedAgentConfigurationService.
-    /// Immediately loads agent configuration from embedded agents.json resource.
-    /// </summary>
-    /// <param name="logger">Logger instance for configuration loading diagnostics</param>
+    /// <summary>Defers the scan for the domain until the first intent or prompt is asked for.</summary>
     public EmbeddedAgentConfigurationService(ILogger logger)
     {
         this.logger = logger;
 
-        // Lazy, not loaded eagerly here: reflection over every loaded assembly (see
-        // LoadAgentConfiguration below) is comparatively expensive and only needs to run once, the
-        // first time an intent or a prompt is actually asked for — not on DI construction, which
-        // may happen before plugin assemblies have even finished loading in some hosting orders.
+        // The scan runs once, when the plugins are surely loaded.
         agentConfiguration = new Lazy<AgentConfiguration>(LoadAgentConfiguration);
     }
 
-    /// <summary>
-    /// Gets intent definitions from the loaded agents.json configuration.
-    /// </summary>
-    /// <returns>List of intent definitions (empty if no agents.json found)</returns>
+    /// <summary>Returns the domain's intents, empty when no plugin brought a domain.</summary>
     public Task<List<Records.IntentDefinition>> GetIntentsAsync()
     {
+        // The first question runs the scan; the domain is in memory from then on.
         return Task.FromResult(agentConfiguration.Value.Intents);
     }
 
-    /// <summary>
-    /// Gets agent prompt configurations from the loaded agents.json configuration.
-    /// </summary>
-    /// <returns>List of agent prompts (empty if no agents.json found)</returns>
+    /// <summary>Returns the domain's agent prompts, empty when no plugin brought a domain.</summary>
     public Task<List<Records.Prompt>> GetAgentPromptsAsync()
     {
+        // The first question runs the scan; the domain is in memory from then on.
         return Task.FromResult(agentConfiguration.Value.Agents);
     }
 
     /// <summary>
-    /// Scans every loaded assembly for an agents.json embedded resource and merges what it finds.
-    /// Logs the resulting domain; returns empty when no assembly carries one.
-    /// Deserialization errors logged per-assembly; searching continues to next assembly.
+    /// Scans every loaded assembly for an embedded agents.json and merges what it finds, empty when none carries one.
+    /// An unreadable agents.json is logged and passed over, while a readable but wrong one stops startup.
     /// </summary>
-    /// <returns>The merged domain (empty when nothing was found)</returns>
     /// <exception cref="InvalidOperationException">Two assemblies claim one intent or one prompt id. A domain takes a reserved name.</exception>
     private AgentConfiguration LoadAgentConfiguration()
     {
@@ -94,12 +68,12 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
         foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies()
                                                              // A runtime-generated assembly carries no
                                                              // embedded resource to find.
-                                                             .Where(a => !a.IsDynamic))
+                                                             .Where(candidate => !candidate.IsDynamic))
         {
             // Matched by file name alone, as morgana.json is: what a plugin author calls their root
             // namespace is their business.
             string? resourceName = assembly.GetManifestResourceNames()
-                                           .FirstOrDefault(n => n.EndsWith(".agents.json", StringComparison.OrdinalIgnoreCase));
+                                           .FirstOrDefault(manifestName => manifestName.EndsWith(".agents.json", StringComparison.OrdinalIgnoreCase));
 
             // The assembly that carries the domain. Every other one in the process is passed over in
             // silence, since not carrying a domain is the normal condition of an assembly.
@@ -120,23 +94,23 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
 
                     // The whole domain: the intents the classifier routes on, plus the prompt of every
                     // agent that handles one.
-                    AgentConfiguration? config = JsonSerializer.Deserialize<AgentConfiguration>(
+                    AgentConfiguration? domainConfiguration = JsonSerializer.Deserialize<AgentConfiguration>(
                         stream, Records.DefaultJsonSerializerOptions);
 
-                    if (config != null)
+                    // An empty file brings nothing to merge.
+                    if (domainConfiguration != null)
                     {
+                        // The plugin named in every refusal, so the operator knows which file to fix.
                         string declaringAssembly = assembly.GetName().Name ?? resourceName;
 
                         logger.LogInformation(
-                            "✅ Loaded {IntentsCount} intents and {AgentsCount} agent prompts from agents.json", config.Intents.Count, config.Agents.Count);
+                            "✅ Loaded {IntentsCount} intents and {AgentsCount} agent prompts from agents.json", domainConfiguration.Intents.Count, domainConfiguration.Agents.Count);
 
-                        foreach (Records.IntentDefinition intent in config.Intents)
+                        foreach (Records.IntentDefinition intent in domainConfiguration.Intents)
                         {
-                            // The complement of the domain is not part of it: it is what a request
-                            // matching no agent is, the classifier's own word, described in the
-                            // classifier's own prompt. A domain that still declares it is one written
-                            // before that was true, so the declaration is dropped rather than fought
-                            // over — every reader downstream gets the framework's, exactly once.
+                            // The complement of the domain is not part of it: it is what a request matching no agent is,
+                            // the classifier's own word, described in the classifier's own prompt.
+                            // A domain declaring it is refused rather than quietly corrected.
                             if (string.Equals(intent.Name, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase))
                             {
                                 throw new InvalidOperationException(
@@ -176,13 +150,15 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                                     + "Both are required: the welcome offers every intent as a button that shows its Label and sends its DefaultValue.");
                             }
 
+                            // Two plugins declaring one intent describe two agents answering to one name.
                             if (declaringAssemblyByIntent.TryGetValue(intent.Name, out string? firstAssembly))
                             {
                                 throw new InvalidOperationException(
                                     $"The intent '{intent.Name}' is declared by two plugins, '{firstAssembly}' and '{declaringAssembly}'. "
-                                    + "One name is one agent: deploy one of them, or rename the intent in the other.");
+                                    + "One name is one agent: deploy one of them or rename the intent in the other.");
                             }
 
+                            // The intent joins the domain, remembered with the plugin that brought it.
                             declaringAssemblyByIntent[intent.Name] = declaringAssembly;
                             mergedIntents.Add(intent);
 
@@ -191,7 +167,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                             logger.LogInformation("   📋 Intent: {IntentName} - {IntentDescription}", intent.Name, intent.Description);
                         }
 
-                        foreach (Records.Prompt prompt in config.Agents)
+                        foreach (Records.Prompt prompt in domainConfiguration.Agents)
                         {
                             // A prompt under a framework id would collide with the framework's own prompt in the one registry that resolves both.
                             if (Constants.Prompts.All.Contains(prompt.ID, StringComparer.OrdinalIgnoreCase))
@@ -208,9 +184,10 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                             {
                                 throw new InvalidOperationException(
                                     $"The agent prompt '{prompt.ID}' is declared by two plugins, '{firstAssembly}' and '{declaringAssembly}'. "
-                                    + "One id is one agent: deploy one of them, or rename the prompt in the other.");
+                                    + "One id is one agent: deploy one of them or rename the prompt in the other.");
                             }
 
+                            // The prompt joins the domain, remembered with the plugin that brought it.
                             declaringAssemblyByPrompt[prompt.ID] = declaringAssembly;
                             mergedAgents.Add(prompt);
                         }
@@ -238,6 +215,7 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
                 "✅ Domain assembled from {AssembliesCount} plugin(s): {IntentsCount} intents, {AgentsCount} agent prompts",
                 declaringAssemblyByIntent.Values.Distinct(StringComparer.OrdinalIgnoreCase).Count(), mergedIntents.Count, mergedAgents.Count);
 
+            // The domain the classifier, the presenter and the prompt resolver all read.
             return new AgentConfiguration(mergedIntents, mergedAgents);
         }
 
@@ -252,12 +230,9 @@ public class EmbeddedAgentConfigurationService : IAgentConfigurationService
         return new AgentConfiguration([], []);
     }
 
-    /// <summary>
-    /// Internal record for deserializing agents.json structure.
-    /// Maps JSON structure to strongly-typed records.
-    /// </summary>
-    /// <param name="Intents">List of intent definitions for classification and presentation</param>
-    /// <param name="Agents">List of agent prompt configurations</param>
+    /// <summary>The shape of an agents.json: the intents the classifier routes on and the prompt of every agent that handles one.</summary>
+    /// <param name="Intents">The intents, offered as welcome buttons and ranked by the classifier.</param>
+    /// <param name="Agents">The agent prompts, each under its intent's name.</param>
     private record AgentConfiguration(
         List<Records.IntentDefinition> Intents,
         List<Records.Prompt> Agents);

@@ -1,46 +1,36 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Text.Json;
 using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Resolves prompts from two sources: morgana.json (framework) + IAgentConfigurationService (domain).
-/// Two-tier architecture: framework prompts provide base system behavior; domain prompts specialize it.
+/// Resolves a prompt by id from the framework layer of morgana.json and the domain layer of the plugins' agents.json.
 /// The two vocabularies are disjoint: an id declared in both layers is refused rather than resolved, so neither layer hides the other.
 /// </summary>
 public class ConfigurationPromptResolverService : IPromptResolverService
 {
     /// <summary>
-    /// Framework prompts loaded from morgana.json embedded resource.
-    /// Cached at service initialization for performance.
+    /// The framework prompts of the embedded morgana.json, read on the first resolution.
+    /// The file never changes after deployment, so it is read and parsed once.
     /// </summary>
     private readonly Lazy<Records.Prompt[]> morganaPrompts;
 
-    /// <summary>
-    /// Domain prompts, read once on first resolution whatever caching the <see cref="IAgentConfigurationService"/> implementation does or does not do.
-    /// </summary>
+    /// <summary>The domain prompts, read once on the first resolution whatever caching the configuration service does.</summary>
     private readonly Lazy<Task<List<Records.Prompt>>> agentPrompts;
 
-    /// <summary>
-    /// Initializes a new instance of ConfigurationPromptResolverService.
-    /// Defers the reads of both layers until the first prompt is resolved.
-    /// </summary>
-    /// <param name="agentConfigService">Service for loading domain agent prompts</param>
+    /// <summary>Defers the reads of both layers until the first prompt is resolved.</summary>
     public ConfigurationPromptResolverService(IAgentConfigurationService agentConfigService)
     {
         // The domain layer is read at the first resolution and never again on later lookups.
         agentPrompts = new Lazy<Task<List<Records.Prompt>>>(agentConfigService.GetAgentPromptsAsync);
 
-        // Lazy<> rather than loading eagerly in the constructor: morgana.json never changes after
-        // deployment, so the embedded-resource read + JSON parse in LoadMorganaPrompts only ever
-        // needs to happen once, on whichever thread first asks for a prompt — not on every DI
-        // resolution of this singleton and not before it's actually needed.
+        // The framework layer is read at the first resolution, on whichever thread asks first.
         morganaPrompts = new Lazy<Records.Prompt[]>(LoadMorganaPrompts);
     }
 
     /// <summary>Resolves a prompt by ID (case-insensitive) from merged framework + domain sources.</summary>
-    /// <param name="promptID">Framework ID (Morgana, Classifier, Guard, Presentation, ChannelAdapter) or a domain intent name.</param>
+    /// <param name="promptID">One of the seven framework ids or a domain intent name.</param>
     /// <exception cref="KeyNotFoundException">ID not found in morgana.json or agents.json.</exception>
     /// <exception cref="InvalidOperationException">ID declared in both morgana.json and agents.json.</exception>
     public async Task<Records.Prompt> ResolveAsync(string promptID)
@@ -55,17 +45,15 @@ public class ConfigurationPromptResolverService : IPromptResolverService
         Records.Prompt? prompt = allPrompts
             .SingleOrDefault(p => string.Equals(p.ID, promptID, StringComparison.OrdinalIgnoreCase));
 
+        // An id found in neither layer is a configuration fault, named for whoever reads the log.
         return prompt ?? throw new KeyNotFoundException($"Prompt with ID '{promptID}' not found in morgana.json or agents.json.");
     }
 
-    /// <summary>
-    /// Loads framework prompts from morgana.json, embedded as a resource in this very assembly.
-    /// Called once (via the Lazy&lt;&gt; above), the first time any prompt is resolved.
-    /// </summary>
-    /// <returns>Array of framework prompts (Morgana, Classifier, Guard, Presentation, ChannelAdapter)</returns>
+    /// <summary>Reads the framework prompts from the morgana.json embedded in this assembly.</summary>
     /// <exception cref="FileNotFoundException">morgana.json is not embedded in this assembly.</exception>
     private static Records.Prompt[] LoadMorganaPrompts()
     {
+        // morgana.json ships inside Morgana.AI itself.
         Assembly assembly = Assembly.GetExecutingAssembly();
 
         // The manifest name MSBuild generates is namespace-prefixed ("Morgana.AI.morgana.json"), so
@@ -84,11 +72,8 @@ public class ConfigurationPromptResolverService : IPromptResolverService
         Records.PromptCollection? promptsCollection = JsonSerializer.Deserialize<Records.PromptCollection>(
             stream, Records.DefaultJsonSerializerOptions);
 
-        // A null collection (empty/malformed JSON body) degrades to an empty prompt array rather
-        // than throwing — every consumer of ResolveAsync already has to handle
-        // "prompt ID not found" as a real, expected outcome (see ResolveAsync's KeyNotFoundException
-        // above), so an empty framework layer surfaces through that exact same, already-handled path
-        // instead of needing a second failure mode of its own.
+        // An empty body leaves the framework layer empty, which surfaces as the KeyNotFoundException of the first
+        // framework prompt resolved: one failure for a missing prompt, whatever made it missing.
         return promptsCollection?.Prompts ?? [];
     }
 }

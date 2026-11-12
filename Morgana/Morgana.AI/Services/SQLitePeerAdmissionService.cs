@@ -9,16 +9,10 @@ using static Morgana.AI.Records;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Default <see cref="IPeerAdmissionService"/>: a sliding hour of conversation openings per admitted
-/// system, in a database of its own beside the conversations.
+/// Counts the conversations each partner opens over a sliding hour, in a database of its own beside the conversations.
+/// The one ledger that is not a conversation's, since a partner spans every conversation it opens; it is also this instance's alone,
+/// so a deployment running several instances reads the configured limit as per instance.
 /// </summary>
-/// <remarks>
-/// The one ledger in Morgana that is not a conversation's. It is not one because the thing it
-/// measures is not either: an issuer spans every conversation it opens, so a count kept inside any
-/// of them could never see the others. It stays a ledger of this instance — a deployment running
-/// several must read the configured limit as being per instance, since nothing here is shared
-/// between them.
-/// </remarks>
 public class SQLitePeerAdmissionService : IPeerAdmissionService
 {
     /// <summary>Name of the ledger, kept apart from every <c>morgana-{conversation}.sqlite</c> beside it.</summary>
@@ -64,6 +58,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
                     // here is a service built outside a validated deployment: never a limit invented for it.
                     .Where(partner => partner.InboundPolicy!.RateLimiting is { Enabled: true, MaxConversationsPerHour: > 0 })];
 
+        // Each partner is keyed by the issuer its tokens carry, its name when it declares none.
         limitByIssuer = cappedPartners.ToDictionary(
             partner => (partner.InboundPolicy!.Issuer ?? partner.Name).Trim(),
             partner => partner.InboundPolicy!.RateLimiting!.MaxConversationsPerHour!.Value,
@@ -85,15 +80,15 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
     {
         // A partner nobody put a ceiling on opens what it likes. It still had to prove who it is and be
         // admitted to this agent: what is absent here is a ceiling, never the gate.
-        int limit = limitByIssuer.GetValueOrDefault(issuer, 0);
-        if (limit <= 0)
+        int conversationLimit = limitByIssuer.GetValueOrDefault(issuer, 0);
+        if (conversationLimit <= 0)
             return new Records.PeerAdmissionResult(IsAdmitted: true);
 
         try
         {
+            // The ledger beside the conversations, created on its first use.
             await using SqliteConnection connection = new SqliteConnection($"Data Source={ResolveDatabasePath()}");
             await connection.OpenAsync();
-
             await EnsureLedgerAsync(connection);
 
             // Counting and recording are one act: two requests weighed at once would otherwise each
@@ -111,26 +106,27 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
                 "DELETE FROM peer_conversation_log WHERE opened_at < $horizon;",
                 ("$horizon", ToIso(utcNow - Window)));
 
+            // The conversations this partner has opened within the window.
             await using SqliteCommand countCommand = connection.CreateCommand();
             countCommand.Transaction = transaction;
             countCommand.CommandText = "SELECT COUNT(*) FROM peer_conversation_log WHERE issuer = $issuer;";
             countCommand.Parameters.AddWithValue("$issuer", issuer);
-
-            long opened = Convert.ToInt64(await countCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+            long openedConversations = Convert.ToInt64(await countCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 
             // A refusal leaves no trace: counting it would push the system further past its limit on
             // every retry, so being turned away would lengthen the wait it caused.
-            if (opened >= limit)
+            if (openedConversations >= conversationLimit)
             {
                 await transaction.RollbackAsync();
 
                 logger.LogWarning(
                     "Partner '{Issuer}' has opened its {Limit} conversation(s) for this hour and is admitted to no further ones until the window moves",
-                    issuer, limit);
+                    issuer, conversationLimit);
 
                 return new Records.PeerAdmissionResult(IsAdmitted: false, RefusalMessage: refusalMessageByIssuer.GetValueOrDefault(issuer));
             }
 
+            // Admitted, so this opening counts against the partner's next ones.
             await ExecuteAsync(
                 connection, transaction,
                 "INSERT INTO peer_conversation_log (issuer, opened_at) VALUES ($issuer, $openedAt);",
@@ -140,16 +136,14 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
             // past one limit.
             await transaction.CommitAsync();
 
+            // The partner may open the conversation.
             return new Records.PeerAdmissionResult(IsAdmitted: true);
         }
         catch (Exception ex)
         {
-            // The one limiter here that closes on its own failure. It closes because of where it
-            // stands: behind this door a request reaches an agent with none of the guard, classifier
-            // and channel rate limit a user's own path goes through, so this count is the whole of
-            // what bounds a partner. Admitted while unreadable it would not weaken a measure among
-            // several, it would remove the only one. Silently, too: every conversation so opened
-            // drawing a budget of its own.
+            // The one limiter that closes on its own failure, because of where it stands: behind this door a request reaches an agent
+            // with none of the guard, classifier and channel rate limit of a user's path, so this count is all that bounds a partner.
+            // Admitted while unreadable, the only measure would be silently gone.
             logger.LogError(ex, "Could not weigh the conversations '{Issuer}' has opened; it is turned away", issuer);
 
             // Answered in the words a partner over its allowance would read, its own entry having
@@ -162,6 +156,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
     /// <param name="connection">Open connection to the ledger.</param>
     private static async Task EnsureLedgerAsync(SqliteConnection connection)
     {
+        // Creating what already exists changes nothing, so every check may run it.
         await using SqliteCommand command = connection.CreateCommand();
 
         // Indexed by issuer because every question asked of this table is about one partner. Indexed by
@@ -188,6 +183,7 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
         string sql,
         params (string Name, object Value)[] parameters)
     {
+        // The statement joins the check's transaction.
         await using SqliteCommand command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = sql;
@@ -201,13 +197,16 @@ public class SQLitePeerAdmissionService : IPeerAdmissionService
     /// <summary>Renders an instant so that stored openings sort and compare as text, with the same separators and calendar on every host.</summary>
     /// <param name="instant">Instant to render.</param>
     private static string ToIso(DateTime instant)
+        // Fixed-width ISO-8601, invariant.
         => instant.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
 
     /// <summary>Where the ledger file sits, beside the conversations of this installation.</summary>
     private string ResolveDatabasePath()
     {
+        // The directory may not exist yet on an installation that has no conversation so far.
         Directory.CreateDirectory(persistenceOptions.StoragePath);
 
+        // The fixed file name keeps it apart from the conversations' databases.
         return Path.Combine(persistenceOptions.StoragePath, DatabaseFileName);
     }
 }

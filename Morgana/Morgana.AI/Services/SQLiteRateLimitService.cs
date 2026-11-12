@@ -1,4 +1,4 @@
-﻿using Microsoft.Data.Sqlite;
+using Microsoft.Data.Sqlite;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -8,35 +8,34 @@ using static Morgana.AI.Records;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// SQLite-based sliding-window rate limiter: per-minute/hour/day caps, one row per accepted
-/// request in the conversation's own database (table <c>rate_limit_log</c>), which it opens
-/// through <see cref="SQLiteConversationPersistenceService"/>. Each check cleans up requests older
-/// than 24h, counts each configured window and records the request only if every window is under
-/// its cap, all in one transaction.
+/// Limits a conversation's messages per minute, hour and day on sliding windows kept in its own database, failing open.
+/// Each check deletes the requests older than a day, counts every configured window and records the request only when all have room,
+/// in one transaction.
 /// </summary>
 public class SQLiteRateLimitService : IRateLimitService
 {
     /// <summary>
-    /// Logger for allow/deny decisions and for the fail-open path, which admits a request the
-    /// check could not evaluate and would otherwise leave no trace.
+    /// The format of <c>request_timestamp</c>: fixed-width ISO-8601, so a plain text comparison sorts it in time.
+    /// Invariant, because a host locale would change the separators and old rows would stop comparing with new ones.
+    /// </summary>
+    private const string TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
+
+    /// <summary>
+    /// Logs each decision and the fail-open path.
+    /// A request admitted because the check could not run would otherwise leave no trace.
     /// </summary>
     private readonly ILogger logger;
 
-    /// <summary>
-    /// Rate limit policy from <c>Morgana:RateLimiting</c>: enable flag, the three window caps
-    /// (a cap of 0 disables its window) and the error message templates.
-    /// </summary>
+    /// <summary>The policy of <c>Morgana:RateLimiting</c>: the switch and the three caps, a cap of 0 disabling its window.</summary>
     private readonly RateLimitOptions options;
 
     /// <summary>
-    /// Owner of the database file. Opens it at the current schema, since the rate check runs
-    /// before any agent has had the chance to create the conversation's database.
+    /// The owner of the conversation's database, which opens it at the current schema.
+    /// The rate check runs before any agent has had the chance to create the database.
     /// </summary>
     private readonly SQLiteConversationPersistenceService persistenceService;
 
-    /// <param name="options">Rate limit configuration (<c>Morgana:RateLimiting</c>): enable flag, the three window caps and the error message templates.</param>
-    /// <param name="persistenceService">Owner of the database file: this service keeps its table in the conversation's own database and opens it through the persistence service that owns it, since a rate check can run before any agent has saved a session.</param>
-    /// <param name="logger">Logger for allow/deny decisions and fail-open diagnostics.</param>
+    /// <summary>Binds the limiter to its policy and to the conversation's database.</summary>
     public SQLiteRateLimitService(
         IOptions<RateLimitOptions> options,
         SQLiteConversationPersistenceService persistenceService,
@@ -55,17 +54,9 @@ public class SQLiteRateLimitService : IRateLimitService
             $"{options.Value.MaxMessagesPerDay}/day");
     }
 
-    /// <summary>
-    /// Evaluates the per-minute/hour/day sliding windows for the given conversation and,
-    /// if all limits are respected, records the current request. Fails open on error.
-    /// </summary>
-    /// <param name="conversationId">Conversation whose windows are evaluated; also selects the database file.</param>
-    /// <returns>
-    /// An allowing result when every configured window is under its cap (the request has then been
-    /// recorded), otherwise a denying result carrying the first violated limit and its retry-after.
-    /// Also allowing when rate limiting is disabled, or when the check itself failed — the limiter
-    /// fails open rather than becoming a single point of failure.
-    /// </returns>
+    /// <summary>Admits the request and records it when every configured window has room, failing open when the check cannot run.</summary>
+    /// <param name="conversationId">The conversation whose windows are counted, which also selects the database.</param>
+    /// <returns>An admission or a refusal naming the narrowest full window and its retry-after.</returns>
     public async Task<RateLimitResult> CheckAndRecordAsync(string conversationId)
     {
         // Switched off, so every request passes and none is recorded: a deployment that does not limit
@@ -79,24 +70,21 @@ public class SQLiteRateLimitService : IRateLimitService
             // It is also what scopes the limit: a caller opening a second conversation is counted separately, by design.
             await using SqliteConnection sqliteConnection = await persistenceService.OpenDatabaseAsync(conversationId);
 
-            // Cleanup + count + record all share one transaction so a second request for the same
-            // conversation arriving mid-check can't interleave with this one and both slip past
-            // the same limit — the whole check-and-record sequence is what needs to be atomic.
+            // Cleanup, count and record share one transaction: two requests of one conversation checked at the same time
+            // could otherwise both slip past the same cap.
             await using SqliteTransaction sqliteTransaction = sqliteConnection.BeginTransaction();
             try
             {
                 // One instant for the whole check, so the three windows are measured from the same point
                 // and a request cannot fall inside one of them but outside another.
                 DateTime utcNow = DateTime.UtcNow;
-                string utcNowIso = utcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
 
                 // Yesterday's requests can no longer breach any window, so they go before they are
                 // counted: the log stays bounded without a housekeeping pass of its own.
                 await CleanupOldRequestsAsync(sqliteConnection, sqliteTransaction, utcNow);
 
-                // The narrowest window with no room left, or nothing when all three still have some.
-                RateLimitResult? violation = await CheckTimeWindowsAsync(
-                    sqliteConnection, sqliteTransaction, utcNow);
+                // The narrowest window with no room left; nothing when all three still have some.
+                RateLimitResult? violation = await CheckTimeWindowsAsync(sqliteConnection, sqliteTransaction, utcNow);
 
                 // A denied request leaves no trace: counting it would push the caller further past the
                 // cap on every retry, so being refused would lengthen the wait it caused.
@@ -111,7 +99,7 @@ public class SQLiteRateLimitService : IRateLimitService
                 }
 
                 // Admitted, so it counts against the next caller's windows.
-                await RecordRequestAsync(sqliteConnection, sqliteTransaction, utcNowIso);
+                await RecordRequestAsync(sqliteConnection, sqliteTransaction, utcNow);
 
                 // Count and record become visible together: until this line no concurrent check sees this
                 // request, which is what stops two of them slipping past one cap.
@@ -119,6 +107,7 @@ public class SQLiteRateLimitService : IRateLimitService
 
                 logger.LogDebug("Rate limit ALLOWED for conversation {ConversationId}", conversationId);
 
+                // The request goes on to the dust gate and then to the conversation.
                 return new RateLimitResult(IsAllowed: true);
             }
             catch
@@ -133,18 +122,14 @@ public class SQLiteRateLimitService : IRateLimitService
         {
             logger.LogError(ex, "Rate limit check failed for conversation {ConversationId}", conversationId);
 
-            // Fail open - allow request if rate limit service has errors
-            // (prevents rate limiter from becoming a single point of failure)
+            // The limiter fails open, so it never becomes the one fault that stops every conversation.
             return new RateLimitResult(IsAllowed: true);
         }
     }
 
     #region Rate Limiting Logic
 
-    /// <summary>
-    /// Deletes requests older than 24 hours (our longest time window).
-    /// Called before each rate check to keep database size bounded.
-    /// </summary>
+    /// <summary>Deletes the requests older than a day, which no window can count any longer.</summary>
     /// <param name="connection">Open connection to the conversation database.</param>
     /// <param name="transaction">The enclosing check-and-record transaction this delete joins.</param>
     /// <param name="now">Reference instant; everything older than 24h before it is deleted.</param>
@@ -153,13 +138,8 @@ public class SQLiteRateLimitService : IRateLimitService
         SqliteTransaction transaction,
         DateTime now)
     {
-        // ISO-8601 with a fixed-width, zero-padded format: request_timestamp is stored as TEXT.
-        // This specific format sorts correctly under a plain lexicographic "<"/">=" comparison
-        // — the same trick every timestamp comparison in this file relies on. Invariant, because a
-        // host locale changes the separators or the calendar and old rows would stop comparing with new ones.
-        // A day back, which outlives the widest configured window: anything older cannot affect a count.
-        DateTime cutoff = now.AddDays(-1);
-        string cutoffIso = cutoff.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
+        // A day back, which is the widest window: anything older cannot affect a count.
+        string cutoffIso = now.AddDays(-1).ToString(TimestampFormat, CultureInfo.InvariantCulture);
 
         // Inside the caller's transaction, so a request denied further down un-deletes these rows too.
         await using SqliteCommand command = connection.CreateCommand();
@@ -170,114 +150,82 @@ public class SQLiteRateLimitService : IRateLimitService
         await command.ExecuteNonQueryAsync();
     }
 
-    /// <summary>
-    /// Checks all configured time windows for violations.
-    /// Returns the first violated limit or null if all checks pass.
-    /// </summary>
+    /// <summary>Finds the narrowest configured window that has no room left for this request; null when every one has room.</summary>
     /// <param name="connection">Open connection to the conversation database.</param>
     /// <param name="transaction">The enclosing check-and-record transaction the counts are read in.</param>
     /// <param name="utcNow">Reference instant each window is measured back from.</param>
-    /// <returns>
-    /// A denying <see cref="RateLimitResult"/> for the first window found over its cap, narrowest
-    /// first (minute, then hour, then day); <c>null</c> when every configured window has room.
-    /// </returns>
     private async Task<RateLimitResult?> CheckTimeWindowsAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
         DateTime utcNow)
     {
-        // >= not >: count is the number of PRIOR requests already in the window and this one
-        // would be the (count+1)th — so count==limit means this request is the one that breaches
-        // the cap and must be denied, not admitted as the "last allowed" one. A limit of 0 skips
-        // the window entirely (see the `> 0` guards) rather than meaning "zero requests allowed".
-        if (options.MaxMessagesPerMinute > 0)
-        {
-            int count = await CountRequestsAsync(
-                connection, transaction, utcNow.AddMinutes(-1));
+        // The three windows narrowest first, so a refusal names the one the caller can wait out soonest.
+        (RateLimitWindow Window, int Cap, TimeSpan Span)[] windows =
+        [
+            (RateLimitWindow.PerMinute, options.MaxMessagesPerMinute, TimeSpan.FromMinutes(1)),
+            (RateLimitWindow.PerHour, options.MaxMessagesPerHour, TimeSpan.FromHours(1)),
+            (RateLimitWindow.PerDay, options.MaxMessagesPerDay, TimeSpan.FromDays(1))
+        ];
 
-            if (count >= options.MaxMessagesPerMinute)
-            {
+        foreach ((RateLimitWindow window, int cap, TimeSpan span) in windows)
+        {
+            // A cap of 0 switches its window off rather than allowing zero requests.
+            if (cap <= 0)
+                continue;
+
+            // The requests already admitted in this window.
+            int requestCount = await CountRequestsAsync(connection, transaction, utcNow - span);
+
+            // This request would be one more, so a window already at its cap refuses it; the window empties within its own span.
+            if (requestCount >= cap)
                 return new RateLimitResult(
                     IsAllowed: false,
-                    ViolatedWindow: RateLimitWindow.PerMinute,
-                    ViolatedCap: options.MaxMessagesPerMinute,
-                    RetryAfterSeconds: 60);
-            }
+                    ViolatedWindow: window,
+                    ViolatedCap: cap,
+                    RetryAfterSeconds: (int)span.TotalSeconds);
         }
 
-        // Check per-hour limit
-        if (options.MaxMessagesPerHour > 0)
-        {
-            int count = await CountRequestsAsync(
-                connection, transaction, utcNow.AddHours(-1));
-
-            if (count >= options.MaxMessagesPerHour)
-            {
-                return new RateLimitResult(
-                    IsAllowed: false,
-                    ViolatedWindow: RateLimitWindow.PerHour,
-                    ViolatedCap: options.MaxMessagesPerHour,
-                    RetryAfterSeconds: 3600);
-            }
-        }
-
-        // Check per-day limit
-        if (options.MaxMessagesPerDay > 0)
-        {
-            int count = await CountRequestsAsync(
-                connection, transaction, utcNow.AddDays(-1));
-
-            if (count >= options.MaxMessagesPerDay)
-            {
-                return new RateLimitResult(
-                    IsAllowed: false,
-                    ViolatedWindow: RateLimitWindow.PerDay,
-                    ViolatedCap: options.MaxMessagesPerDay,
-                    RetryAfterSeconds: 86400);
-            }
-        }
-
+        // Every configured window has room.
         return null;
     }
 
-    /// <summary>
-    /// Counts requests in a time window (from cutoff to now).
-    /// </summary>
+    /// <summary>Counts the requests already admitted since the cutoff.</summary>
     /// <param name="sqliteConnection">Open connection to the conversation database.</param>
     /// <param name="sqliteTransaction">The enclosing check-and-record transaction this count is read in.</param>
     /// <param name="cutoff">Lower bound of the window; rows at or after it are counted.</param>
-    /// <returns>Number of requests already recorded in the window, 0 if the query yields nothing.</returns>
     private async Task<int> CountRequestsAsync(
         SqliteConnection sqliteConnection,
         SqliteTransaction sqliteTransaction,
         DateTime cutoff)
     {
-        string cutoffIso = cutoff.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
+        // Compared as text, which the fixed-width format sorts in time.
+        string cutoffIso = cutoff.ToString(TimestampFormat, CultureInfo.InvariantCulture);
 
+        // Read inside the transaction, so a concurrent check cannot count between this read and the record.
         await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
         sqliteCommand.Transaction = sqliteTransaction;
         sqliteCommand.CommandText = "SELECT COUNT(*) FROM rate_limit_log WHERE request_timestamp >= @cutoff;";
         sqliteCommand.Parameters.AddWithValue("@cutoff", cutoffIso);
 
-        object? result = await sqliteCommand.ExecuteScalarAsync();
-        return result != null ? Convert.ToInt32(result, CultureInfo.InvariantCulture) : 0;
+        // An empty answer counts as no request.
+        object? requestCount = await sqliteCommand.ExecuteScalarAsync();
+        return requestCount != null ? Convert.ToInt32(requestCount, CultureInfo.InvariantCulture) : 0;
     }
 
-    /// <summary>
-    /// Records a new request in the rate limit log.
-    /// </summary>
+    /// <summary>Records the admitted request in the log that the windows count.</summary>
     /// <param name="sqliteConnection">Open connection to the conversation database.</param>
     /// <param name="sqliteTransaction">The enclosing check-and-record transaction, committed by the caller.</param>
-    /// <param name="utcNowIso">Request instant, in the fixed-width ISO-8601 format every comparison in this file sorts on.</param>
+    /// <param name="utcNow">The instant of the request, the same the windows were measured from.</param>
     private async Task RecordRequestAsync(
         SqliteConnection sqliteConnection,
         SqliteTransaction sqliteTransaction,
-        string utcNowIso)
+        DateTime utcNow)
     {
+        // Written inside the transaction, so it becomes visible together with the counts that admitted it.
         await using SqliteCommand sqliteCommand = sqliteConnection.CreateCommand();
         sqliteCommand.Transaction = sqliteTransaction;
         sqliteCommand.CommandText = "INSERT INTO rate_limit_log (request_timestamp) VALUES (@timestamp);";
-        sqliteCommand.Parameters.AddWithValue("@timestamp", utcNowIso);
+        sqliteCommand.Parameters.AddWithValue("@timestamp", utcNow.ToString(TimestampFormat, CultureInfo.InvariantCulture));
 
         await sqliteCommand.ExecuteNonQueryAsync();
     }

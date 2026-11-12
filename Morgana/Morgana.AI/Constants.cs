@@ -385,6 +385,15 @@ public static class Constants
     {
         /// <summary>Marks a classification as a technical fallback rather than the classifier's own answer: written by the classifier and the supervisor, read by the router.</summary>
         public const string Error = "error";
+
+        /// <summary>The top intent's confidence on a 0 to 1 scale, written with two decimals whatever the host's locale.</summary>
+        public const string Confidence = "confidence";
+
+        /// <summary>
+        /// The colliding intents, comma-separated and most confident first: written by the classifier, read by the supervisor.
+        /// Its presence alone diverts the turn to the disambiguation.
+        /// </summary>
+        public const string AmbiguousIntents = "ambiguousIntents";
     }
 
     /// <summary>

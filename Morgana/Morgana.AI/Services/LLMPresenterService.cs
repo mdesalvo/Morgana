@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Morgana.AI.Adapters;
@@ -8,57 +8,39 @@ using Morgana.Contracts;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// IPresenterService implementation: generates presentation via LLM or falls back to config.
-/// Caches per-channel (same intents + capabilities = same outcome) and never throws — LLM
-/// failures route to a deterministic fallback (FallbackMessage + intent-derived quick replies).
+/// Writes Morgana's welcome and its reintroduction by model, falling back to the authored greeting without ever throwing.
+/// The result is cached per channel already adapted to it, so later conversations on that channel cost no model call.
 /// </summary>
 public class LLMPresenterService : IPresenterService
 {
-    /// <summary>
-    /// LLM used to author the welcome message and its reintroduction. Consumed through the
-    /// stateless completion path, so it always runs on the framework tier.
-    /// </summary>
+    /// <summary>The model that writes the welcome and its reintroduction, through the stateless completion on the framework tier.</summary>
     private readonly ILanguageModelService llmService;
 
     /// <summary>
-    /// Source of the <c>Presentation</c> prompt: the message template interpolated with
-    /// <c>((intents))</c>, plus the <c>FallbackMessage</c> and <c>NoAgentsMessage</c>
-    /// additional properties the two non-LLM paths return verbatim. It also yields the
-    /// <c>Morgana</c> prompt, whose personality gives the welcome its voice.
+    /// Resolves the <c>Presentation</c> prompt, with the <c>FallbackMessage</c> and <c>NoAgentsMessage</c> that the paths without a model return verbatim.
+    /// It also resolves the <c>Morgana</c> prompt, whose personality gives the welcome its voice.
     /// </summary>
     private readonly IPromptResolverService promptResolverService;
 
-    /// <summary>
-    /// Registry of per-conversation handshakes, queried to turn the caller's conversationId into
-    /// the originating channel's name (the cache key) and capability budget.
-    /// </summary>
+    /// <summary>Turns the caller's conversation into its channel's capabilities and its name, which keys the cache.</summary>
     private readonly IChannelMetadataStore channelMetadataStore;
 
     /// <summary>
-    /// The same degradation pass every outbound message goes through, applied here before caching
-    /// so the cached value is exactly what a real send would have produced for this channel.
+    /// The adaptation every outbound message goes through, applied before caching.
+    /// The cached presentation is then exactly what a real send would have produced for the channel.
     /// </summary>
     private readonly MorganaChannelAdapter channelAdapter;
 
-    /// <summary>
-    /// Logger for cache misses, LLM outcomes and fallback activations — the only visibility into
-    /// which of the three paths produced a given presentation.
-    /// </summary>
+    /// <summary>Logs the cache misses and which of the three paths wrote each presentation, its only trace.</summary>
     private readonly ILogger logger;
 
     /// <summary>
-    /// Per-channel presentation cache: Lazy&lt;Task&lt;PresentationResult&gt;&gt; per key.
-    /// ConcurrentDictionary.GetOrAdd + Lazy ensures compute-once per channel under concurrent
-    /// first-callers without explicit locks: GetOrAdd runs factory multiple times but persists
-    /// one Lazy; Lazy runs its factory exactly once; concurrent callers await the same task.
+    /// The presentation of each channel, written once however many conversations ask for it at the same time.
+    /// Concurrent first callers may build several wrappers but only one is kept and its work runs once, awaited by all of them.
     /// </summary>
     private readonly ConcurrentDictionary<string, Lazy<Task<Records.PresentationResult>>> cache = new();
 
-    /// <param name="llmService">LLM service used to generate the presentation; always runs on the framework tier.</param>
-    /// <param name="promptResolverService">Prompt resolver used to load the <c>Presentation</c> prompt (message template, <c>FallbackMessage</c>, <c>NoAgentsMessage</c>).</param>
-    /// <param name="channelMetadataStore">Resolves the originating channel's name/capabilities, so callers only pass conversationId.</param>
-    /// <param name="channelAdapter">Same capability-driven degradation chain any outbound message goes through.</param>
-    /// <param name="logger">Logger for generation, cache-miss and fallback diagnostics.</param>
+    /// <summary>Binds the presenter to the model, the prompts, the handshakes and the adapter.</summary>
     public LLMPresenterService(
         ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
@@ -74,21 +56,16 @@ public class LLMPresenterService : IPresenterService
     }
 
     /// <inheritdoc/>
-    /// <exception cref="InvalidOperationException">
-    /// The conversation has no handshake on record: not an LLM failure, so it is surfaced rather than
-    /// routed to the fallback.
-    /// </exception>
+    /// <exception cref="InvalidOperationException">The conversation has no handshake on record, which is no model failure and so is not routed to the fallback.</exception>
     public async Task<Records.PresentationResult> GenerateAsync(
         IReadOnlyList<Records.IntentDefinition> displayableIntents,
         string conversationId)
     {
-        // The originating channel decides what the presentation may carry
+        // The originating channel decides what the presentation may carry.
         ChannelMetadata channelMetadata = await channelMetadataStore.GetChannelMetadataAsync(conversationId);
-
-        // Single-shot per channel. The first caller for `channelName` triggers BuildPresentationResultAsync
-        // through the Lazy<Task<>>; every subsequent caller re-enters the same Task and observes
-        // the same materialised PresentationResult.
         ChannelCapabilities channelCapabilities = channelMetadata.Capabilities;
+
+        // The first caller of a channel writes its presentation; every later caller receives the same one.
         return await cache.GetOrAdd(
             channelMetadata.Coordinates.ChannelName,
             key => new Lazy<Task<Records.PresentationResult>>(
@@ -96,10 +73,7 @@ public class LLMPresenterService : IPresenterService
         ).Value;
     }
 
-    /// <summary>
-    /// Generates the initial presentation and runs it through the canonical adaptation chain so that
-    /// the cached value is exactly what a real outbound send would produce for this channel.
-    /// </summary>
+    /// <summary>Writes the presentation and adapts it to the channel, as a real send would.</summary>
     /// <param name="displayableIntents">Intents to turn into quick replies; an empty list yields the prompt's <c>NoAgentsMessage</c> and no buttons.</param>
     /// <param name="channelCapabilities">Feature budget of the originating channel, driving the degradation pass.</param>
     /// <param name="channelName">Cache key and channel identity, also used to synthesise the adapter's placeholder conversation id.</param>
@@ -112,16 +86,16 @@ public class LLMPresenterService : IPresenterService
         logger.LogInformation(
             "LLMPresenterService: building presentation for channel '{ChannelName}' (cache miss)", channelName);
 
-        // Generate the rich presentation message, or the fallback version in case of any blocking issues.
-        // Morgana must always present herself.
+        // The Presentation prompt carries the template and the two authored texts: Morgana always presents herself.
         Records.Prompt presentationPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Presentation);
+
         // With no agent to offer, the same authored message both opens and answers a request no agent claims.
         string noAgentsMessage = presentationPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.NoAgentsMessage);
         Records.PresentationResult presentationResult = displayableIntents.Count == 0
             ? new Records.PresentationResult(noAgentsMessage, noAgentsMessage, [])
             : await GenerateMessageAsync(presentationPrompt, displayableIntents);
 
-        // Capability-driven degradation with caching of the outcome: subsequent conversations on this channel pay zero LLM cost.
+        // The welcome adapted to the channel, so later conversations on it pay for no adaptation either.
         ChannelMessage channelMessage = await channelAdapter.AdaptAsync(
             new ChannelMessage
             {
@@ -146,29 +120,26 @@ public class LLMPresenterService : IPresenterService
                 AgentCompleted = true
             }, channelCapabilities);
 
-        // Unwrap back into the presenter's domain type. RichCard is intentionally ignored here —
-        // the presentation never produces one and the supervisor's send path doesn't read it
-        // off PresentationResult either.
+        // The two adapted texts with the adapted buttons: a presentation never carries a rich card.
         return new Records.PresentationResult(channelMessage.Text, reintroductionMessage.Text, channelMessage.QuickReplies ?? []);
     }
 
     /// <summary>
-    /// Invokes the LLM to produce the initial presentation. On any failure (network error, bad JSON,
-    /// null payload) it logs and returns the deterministic fallback so the caller never sees an
-    /// exception — the service's reliability contract is enforced here.
+    /// Has the model write the welcome and its reintroduction, returning the authored fallback on any failure.
+    /// This is where the presenter's promise never to throw is kept.
     /// </summary>
     /// <param name="presentationPrompt">Resolved <c>Presentation</c> prompt; its <c>((intents))</c> placeholder is interpolated here and it also carries the fallback text.</param>
     /// <param name="displayableIntents">Intents rendered into the prompt as a bullet list and reused verbatim by the fallback path.</param>
-    /// <returns>The LLM-generated presentation, or the deterministic fallback if anything went wrong.</returns>
+    /// <returns>The presentation the model wrote; the authored fallback when anything went wrong.</returns>
     private async Task<Records.PresentationResult> GenerateMessageAsync(
         Records.Prompt presentationPrompt,
         IReadOnlyList<Records.IntentDefinition> displayableIntents)
     {
         try
         {
-            // Format the intent list as the prompt expects (one bullet per intent, name + description).
+            // The intents as the prompt lists them, one bullet each with its description.
             string formattedIntents = string.Join("\n",
-                displayableIntents.Select(i => $"- {i.Name}: {i.Description}"));
+                displayableIntents.Select(intent => $"- {intent.Name}: {intent.Description}"));
 
             // The welcome is the first thing Morgana says, so it speaks in the voice her agents speak in.
             // The UserGuard and the channel adapter borrow it too, since what they write reaches the user. The classifier,
@@ -189,8 +160,7 @@ public class LLMPresenterService : IPresenterService
             string llmResponse = await llmService.CompleteWithSystemPromptAsync(
                 "presentation", presentationSystemPrompt, "Generate the presentation");
 
-            // The LLM is asked to return strict JSON; a null result indicates either an unparseable
-            // payload or an empty body — both treated as failure and routed to the fallback.
+            // The model answers in JSON; an empty body is a failure and goes to the fallback.
             Records.PresentationResponse? presentation =
                 JsonSerializer.Deserialize<Records.PresentationResponse>(llmResponse, Records.DefaultJsonSerializerOptions)
                  ?? throw new InvalidOperationException("LLM returned null presentation");
@@ -210,18 +180,15 @@ public class LLMPresenterService : IPresenterService
         }
         catch (Exception ex)
         {
-            // Catch-all: any failure (LLM error, JSON parse error, null result) routes to the
-            // deterministic fallback. The exception is logged but never propagated.
+            // A failed call, an unreadable answer and an empty text alike end on the authored greeting.
             logger.LogError(ex, "LLMPresenterService: LLM generation failed — using fallback");
             return BuildFallbackMessage(presentationPrompt, displayableIntents);
         }
     }
 
     /// <summary>
-    /// Builds a presentation purely from configuration: the static <c>FallbackMessage</c> from
-    /// the Presentation prompt, plus one quick reply per displayable intent derived from its
-    /// label and default value. This path makes no LLM call and cannot fail — it's the safety net
-    /// that lets the service guarantee its never-throw contract.
+    /// Builds the presentation from configuration alone: the authored <c>FallbackMessage</c> with the intents' buttons.
+    /// It makes no model call and cannot fail, which is what lets the service never throw.
     /// </summary>
     /// <param name="presentationPrompt">Resolved <c>Presentation</c> prompt, read here only for its <c>FallbackMessage</c> additional property.</param>
     /// <param name="displayableIntents">One quick reply is derived per intent from its <c>Label</c> and <c>DefaultValue</c>.</param>
@@ -244,9 +211,7 @@ public class LLMPresenterService : IPresenterService
         return new Records.PresentationResult(fallbackMessage, fallbackMessage, fallbackReplies);
     }
 
-    /// <summary>
-    /// Builds the buttons of the presentation: one per displayable intent in its configured order, which the model neither chooses nor words.
-    /// </summary>
+    /// <summary>Builds the presentation's buttons, one per displayable intent in its configured order, which the model neither chooses nor words.</summary>
     /// <param name="displayableIntents">The intents the presentation offers.</param>
     private static List<QuickReply> BuildIntentButtons(IReadOnlyList<Records.IntentDefinition> displayableIntents)
         // The id names the intent that a press chooses and the supervisor reads it back to land the turn on that agent.

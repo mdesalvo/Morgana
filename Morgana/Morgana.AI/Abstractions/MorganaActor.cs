@@ -38,7 +38,6 @@ public class MorganaActor : ReceiveActor
         IPromptResolverService promptResolverService,
         IConfiguration configuration)
     {
-        // The services arrive from the actor system's DI scope and live as long as the actor.
         this.conversationId = conversationId;
         this.llmService = llmService;
         this.promptResolverService = promptResolverService;

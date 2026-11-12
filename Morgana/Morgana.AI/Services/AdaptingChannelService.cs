@@ -6,39 +6,27 @@ using Morgana.Contracts;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Decorates IChannelService by applying two concerns per send: (1) adapt via MorganaChannelAdapter to channel capabilities,
-/// (2) dispatch via IChannelServiceFactory to concrete transport (by deliveryMode). Per-conversation metadata (name + mode +
-/// budget) owned by leaf singleton IChannelMetadataStore (deliberate DI choice: breaks cycle if folded into decorator).
+/// The channel every part of Morgana sends through: it fits each message to the conversation's capabilities, then hands it to the transport.
+/// The transport is chosen per message by the <c>deliveryMode</c> that the conversation announced at the handshake.
 /// </summary>
 public class AdaptingChannelService : IChannelService
 {
-    /// <summary>
-    /// Factory that maps a conversation's <c>deliveryMode</c> to the concrete
-    /// <see cref="IChannelService"/> that carries its bytes. Populated at DI registration with
-    /// one <see cref="ChannelServiceRegistration"/> per transport.
-    /// </summary>
+    /// <summary>Finds the transport that serves a conversation's <c>deliveryMode</c>.</summary>
     private readonly IChannelServiceFactory channelServiceFactory;
 
     /// <summary>
-    /// Per-conversation channel metadata, recorded at the handshake and queried here on every send
-    /// to recover the capability budget and delivery mode for the outgoing conversation.
+    /// The conversation's handshake, read on every send for its capabilities and its delivery mode.
+    /// A leaf singleton beside this decorator rather than inside it, which keeps the transports that read it free of a DI cycle.
     /// </summary>
     private readonly IChannelMetadataStore channelMetadataStore;
 
-    /// <summary>
-    /// Adapter responsible for transcoding a rich message into a form that fits the
-    /// capabilities of the originating channel. Invoked once per <see cref="SendMessageAsync"/>
-    /// call; short-circuits without I/O when the message already fits.
-    /// </summary>
+    /// <summary>Fits a rich message to the channel's capabilities, with no work when it already fits.</summary>
     private readonly MorganaChannelAdapter channelAdapter;
 
     /// <summary>Seconds that every channel is told to wait on a silent turn.</summary>
     private readonly int replyTimeoutSeconds;
 
-    /// <param name="channelServiceFactory">Resolves the concrete transport for a conversation's <c>deliveryMode</c>.</param>
-    /// <param name="channelMetadataStore">Leaf singleton holding the per-conversation handshake; injected rather than folded in, to keep the DI graph acyclic.</param>
-    /// <param name="channelAdapter">Capability-driven degradation applied to every outbound <see cref="ChannelMessage"/>.</param>
-    /// <param name="configuration">Application configuration, read for the turn budget that the channels' wait derives from.</param>
+    /// <summary>Binds the decorator to the transports, the handshakes and the adapter, reading the wait that every channel is told.</summary>
     public AdaptingChannelService(
         IChannelServiceFactory channelServiceFactory,
         IChannelMetadataStore channelMetadataStore,

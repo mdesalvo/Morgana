@@ -5,45 +5,38 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Default <see cref="IPromptComposerService"/>: assembles what the model reads from the framework
-/// layer and the injection templates carried by <c>morgana.json</c>, resolved once through
-/// <see cref="IPromptResolverService"/> and cached for the process lifetime.
+/// Assembles everything the model reads from the framework layer and the injection templates of <c>morgana.json</c>.
+/// The framework prompt is resolved once and kept for the process's life.
 /// </summary>
 public class ConfigurationPromptComposerService : IPromptComposerService
 {
     /// <summary>
-    /// Names the asking party when the request declares no intent. Only an agent of a Morgana declares
-    /// one and the A2A door admits only declared systems, so an unnamed caller is precisely that — and
-    /// saying so is a fact. A phrase where every other caller is a bare word, which is why every caller
-    /// is quoted before it reaches the prose.
+    /// Names the asking party when the request declares no intent.
+    /// Only an agent of a Morgana declares one and the A2A door admits only declared systems, so an unnamed caller is precisely that.
     /// </summary>
     private const string UnnamedCaller = "an external system";
 
     /// <summary>
     /// Encloses whoever is asking, so the prose reads it as a name wherever it lands.
+    /// An unnamed caller is a phrase that would dissolve into the sentence around it: quoting every caller keeps one prose for one shape.
     /// </summary>
-    /// <remarks>
-    /// A named caller is one word and needs nothing; an unnamed one resolves to a phrase that would
-    /// otherwise dissolve into the sentence around it. Quoting every caller keeps one prose written
-    /// for one shape rather than two that have to read well apart.
-    /// </remarks>
     private const string CallerQuotation = "«{0}»";
 
     /// <summary>
-    /// The framework prompt with its policies already unpacked. morgana.json is read once per process:
-    /// the first composition of any kind pays for it, every later one observes the same layer.
+    /// The framework prompt with its policies and injections already unpacked.
+    /// The first composition of any kind pays for the read and every later one sees the same layer.
     /// </summary>
     private readonly Lazy<Task<FrameworkLayer>> frameworkLayer;
 
-    /// <summary>
-    /// Initializes the composer over the prompt source it composes from.
-    /// </summary>
-    /// <param name="promptResolverService">Resolves the <c>Morgana</c> framework prompt.</param>
+    /// <summary>Defers the read of the framework layer until the first composition.</summary>
     public ConfigurationPromptComposerService(IPromptResolverService promptResolverService)
     {
+        // The Morgana prompt carries the four sections and, beside them, the policies and the injections.
         frameworkLayer = new Lazy<Task<FrameworkLayer>>(async () =>
         {
             Records.Prompt prompt = await promptResolverService.ResolveAsync(Constants.Morgana);
+
+            // Unpacked once, so no composition parses them again.
             return new FrameworkLayer(
                 prompt,
                 prompt.GetAdditionalProperty<List<Records.GlobalPolicy>>(Constants.PromptProperties.GlobalPolicies),
@@ -58,9 +51,10 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // policies the fenced list of rules inside it.
         FrameworkLayer framework = await frameworkLayer.Value;
 
+        // The two layers, each fenced so that the model tells the framework's sections from the domain's same-named ones.
         StringBuilder sb = new StringBuilder();
 
-        // Framework
+        // The framework layer, its policies between the personality and the instructions.
         sb.AppendLine(Constants.PromptFences.FrameworkLayerHeader);
         sb.AppendLine();
         sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Target, framework.Prompt.Target));
@@ -76,7 +70,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         sb.AppendLine(Constants.PromptFences.FrameworkLayerFooter);
         sb.AppendLine();
 
-        // Domain
+        // The domain layer, subordinate to the framework above it.
         sb.AppendLine(Constants.PromptFences.DomainLayerHeader);
         sb.AppendLine();
         sb.AppendLine(Records.Prompt.Labeled(Constants.SectionLabels.Target, domainPrompt.Target));
@@ -90,6 +84,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         sb.AppendLine(Constants.PromptFences.DomainLayerFooter);
         sb.AppendLine();
 
+        // The agent's instructions for its whole life.
         return sb.ToString();
     }
 
@@ -105,8 +100,8 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         // The inputs this tool resolves from the session rather than from the user. They are what the
         // guidance names, so a tool with none has nothing to be guided about.
         string[] contextParameters = [.. toolDefinition.Parameters
-            .Where(p => string.Equals(p.Scope?.Trim(), Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
-            .Select(p => p.Name)];
+            .Where(parameter => string.Equals(parameter.Scope?.Trim(), Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
+            .Select(parameter => parameter.Name)];
 
         // Guidance is joined by a blank line rather than by inserted punctuation: an authored
         // description is a finished sentence that closes itself. A tool with no context-scoped input
@@ -141,7 +136,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
 
         // One line per colleague, the callable name in front of the territory it covers: what the
         // model has to join is "this request is theirs" with "this is the function that reaches them".
-        string lines = string.Join("\n", colleagues.Select(kvp => $"- {kvp.Key}: {kvp.Value}"));
+        string lines = string.Join("\n", colleagues.Select(colleague => $"- {colleague.Key}: {colleague.Value}"));
 
         // Closes the composed instructions once, for the agent's whole life: who its colleagues are is
         // settled at creation, so this rides in the cached prefix instead of being paid per turn.
@@ -151,6 +146,7 @@ public class ConfigurationPromptComposerService : IPromptComposerService
     /// <inheritdoc />
     public async Task<string> ComposeConsultationRequestAsync(string? callerIntent, string question)
     {
+        // Both templates of a consultation are the framework's.
         FrameworkLayer framework = await frameworkLayer.Value;
 
         // How to answer a colleague. It is spliced in front of the incoming question instead of into
@@ -197,11 +193,10 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         if (declaration.Length == 0)
             return null;
 
-        // Values and not merely names: an agent waking on a shared variable it never asked for has
-        // nothing left to look up. The names-only variant relied on the model choosing to call
-        // GetContextVariable, which proved unreliable. A number or a date held here reaches the model in
-        // the same notation whichever host composed the turn.
-        string pairs = string.Join(", ", heldVariables.Select(kvp => string.Create(CultureInfo.InvariantCulture, $"{kvp.Key}: {kvp.Value}")));
+        // Values and not merely names: an agent waking on a shared variable it never asked for has nothing left to look up,
+        // where names alone would leave it to choose to call GetContextVariable. A number or a date held here reaches the model
+        // in the same notation whichever host composed the turn.
+        string pairs = string.Join(", ", heldVariables.Select(heldVariable => string.Create(CultureInfo.InvariantCulture, $"{heldVariable.Key}: {heldVariable.Value}")));
         string resolvedDeclaration = declaration.Replace(Constants.Placeholders.HeldVariables, pairs);
 
         // Marked so the cache split lands above this tail. It changes every turn while the framework
@@ -235,39 +230,38 @@ public class ConfigurationPromptComposerService : IPromptComposerService
         return template.Replace(Constants.Placeholders.Tool, toolName, StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// Renders the global policies into the fenced block that opens the framework layer.
-    /// </summary>
+    /// <summary>Renders the global policies into the fenced block of the framework layer.</summary>
     /// <param name="policies">The framework prompt's own policy list.</param>
     /// <param name="peerCapable">Admits the peer-consultation policy, skipped for every other agent.</param>
     private static string FormatGlobalPolicies(List<Records.GlobalPolicy> policies, bool peerCapable)
     {
+        // The policies are fenced as one block, one line each.
         StringBuilder sb = new StringBuilder();
-
         sb.AppendLine(Constants.PromptFences.GlobalPoliciesHeader);
 
         foreach (Records.GlobalPolicy policy in policies
                      // The one rule whose subject may not exist. An agent outside the A2A topology is
                      // never asked by a colleague, so it would carry this on every turn of its life.
-                     .Where(p => peerCapable || !string.Equals(
-                         p.Name, Constants.Policies.PeerConsultation,
+                     .Where(candidatePolicy => peerCapable || !string.Equals(
+                         candidatePolicy.Name, Constants.Policies.PeerConsultation,
                          StringComparison.OrdinalIgnoreCase))
 
                      // The model reads top to bottom, so a policy's Priority states where it must be
                      // read rather than how it was filed.
-                     .OrderBy(p => p.Priority))
+                     .OrderBy(candidatePolicy => candidatePolicy.Priority))
         {
             sb.AppendLine(CultureInfo.InvariantCulture, $"{policy.Name}: {policy.Description}");
         }
 
         sb.AppendLine(Constants.PromptFences.GlobalPoliciesFooter);
 
+        // The caller spaces the block itself, so it closes on the footer.
         return sb.ToString().TrimEnd();
     }
 
     /// <summary>
-    /// The framework prompt and the two lists it declares beside its four sections, resolved once
-    /// and reused: the rules rendered into every agent's prompt and the templates spliced elsewhere.
+    /// The framework prompt and the two lists it declares beside its four sections.
+    /// The policies are rendered into every agent's prompt and the injections are spliced elsewhere.
     /// </summary>
     private sealed record FrameworkLayer(
         Records.Prompt Prompt,

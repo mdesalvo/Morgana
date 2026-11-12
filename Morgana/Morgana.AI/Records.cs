@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Akka.Actor;
@@ -784,11 +784,7 @@ public static class Records
     /// Contains the classified intent and additional metadata for routing and diagnostics.
     /// </summary>
     /// <param name="Intent">Classified intent name — the top-ranked candidate.</param>
-    /// <param name="Metadata">
-    /// Confidence, error codes, etc. Also carries disambiguation as the well-known key
-    /// <c>"ambiguousIntents"</c> — see <see cref="Services.LLMClassifierService"/> for how it's
-    /// computed and <see cref="Actors.ConversationSupervisorActor"/> for how it's consumed.
-    /// </param>
+    /// <param name="Metadata">The keys of <see cref="Constants.ClassificationMetadata"/>: the confidence, the colliding intents and the failure mark.</param>
     public record ClassificationResult(
         [property: JsonPropertyName("intent")] string Intent,
         [property: JsonPropertyName("metadata")] Dictionary<string, string> Metadata);
@@ -1327,6 +1323,13 @@ public static class Records
         bool Required,
         string? Scope,
         bool Shared = false);
+
+    /// <summary>What the scan for tools found: the tool of each intent and one message per intent claimed by two tools.</summary>
+    /// <param name="ToolTypesByIntent">The tool type of each intent, lowercased and looked up ignoring case.</param>
+    /// <param name="RegistrationErrors">One message per intent that a second tool claimed after the first.</param>
+    public record ToolDiscovery(
+        Dictionary<string, Type> ToolTypesByIntent,
+        List<string> RegistrationErrors);
 
     // ==========================================================================
     // MODEL CONTEXT PROTOCOL

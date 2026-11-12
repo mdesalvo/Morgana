@@ -62,7 +62,6 @@ public class ConversationManagerActor : MorganaActor
         IPromptResolverService promptResolverService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
-        // The services arrive from the actor system's DI scope and live as long as the actor.
         this.channelService = channelService;
         this.channelMetadataStore = channelMetadataStore;
         this.dustLimitService = dustLimitService;

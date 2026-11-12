@@ -85,7 +85,6 @@ public class ConversationSupervisorActor : MorganaActor
         IConversationPersistenceService conversationPersistenceService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
-        // The services arrive from the actor system's DI scope and live as long as the actor.
         this.channelService = channelService;
         this.channelMetadataStore = channelMetadataStore;
         this.agentConfigService = agentConfigService;
@@ -134,7 +133,7 @@ public class ConversationSupervisorActor : MorganaActor
     /// <summary>Starts a turn: it lands a press of Morgana's button on its agent and sends every other message to the guard.</summary>
     private async Task HandleUserMessageAsync(Records.UserMessage msg)
     {
-        // The manager is captured before the awaits, after which Sender no longer names it.
+        // The manager of the conversation, which delivers every answer of the turn.
         IActorRef originalSender = Sender;
 
         actorLogger.Info("User message received, routing through guard check");
@@ -179,7 +178,7 @@ public class ConversationSupervisorActor : MorganaActor
 
             // A certain classification, so the rest of the turn reads exactly as a classified one does.
             Records.ClassificationResult landingClassification = new Records.ClassificationResult(
-                landingIntent, new Dictionary<string, string> { ["confidence"] = "1.00" });
+                landingIntent, new Dictionary<string, string> { [Constants.ClassificationMetadata.Confidence] = "1.00" });
             Records.ProcessingContext landingContext = new Records.ProcessingContext(
                 msg, originalSender, turnCapabilities, landingClassification, turnContext, UserMessageAlreadyStored: noActiveAgent);
 
@@ -536,7 +535,7 @@ public class ConversationSupervisorActor : MorganaActor
             // The classifier span closes on the top intent, its confidence and the whole metadata.
             classifierSpan?.SetTag(Telemetry.ClassificationIntent, classification.Intent);
             classifierSpan?.SetTag(Telemetry.ClassificationMetadata, classification.Metadata);
-            if (classification.Metadata.TryGetValue("confidence", out string? confidence))
+            if (classification.Metadata.TryGetValue(Constants.ClassificationMetadata.Confidence, out string? confidence))
                 classifierSpan?.SetTag(Telemetry.ClassificationConfidence, confidence);
             if (classifierSpan is not null)
                 Telemetry.ClassifierDuration.Record((DateTime.UtcNow - classifierSpan.StartTimeUtc).TotalMilliseconds);
@@ -547,7 +546,7 @@ public class ConversationSupervisorActor : MorganaActor
             Records.ProcessingContext classifiedContext = ctx with { Classification = classification };
 
             // Two candidates within the collision threshold are offered to the user to choose: no agent runs and none becomes active.
-            if (classification.Metadata.TryGetValue("ambiguousIntents", out string? collidingIntentNames))
+            if (classification.Metadata.TryGetValue(Constants.ClassificationMetadata.AmbiguousIntents, out string? collidingIntentNames))
             {
                 await SendDisambiguationAsync(classifiedContext, collidingIntentNames);
                 return;
@@ -617,7 +616,7 @@ public class ConversationSupervisorActor : MorganaActor
                 Constants.Intents.Other,
                 new Dictionary<string, string>
                 {
-                    ["confidence"] = "0.00",
+                    [Constants.ClassificationMetadata.Confidence] = "0.00",
                     [Constants.ClassificationMetadata.Error] = $"classification_failed: {description}"
                 });
 

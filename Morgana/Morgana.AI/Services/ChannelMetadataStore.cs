@@ -7,28 +7,24 @@ using Morgana.Contracts;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// <see cref="IChannelMetadataStore"/> over the conversation's own database, with a process-wide
-/// copy keyed by conversation id so a send does not reach SQLite once the handshake is known here.
+/// The one owner of a conversation's channel, over the conversation's own database.
+/// A process-wide copy keyed by conversation id spares every send a read of the database once the handshake is known here.
 /// </summary>
 public class ChannelMetadataStore : IChannelMetadataStore
 {
-    /// <summary>
-    /// Holds the handshake record of each conversation, persisted at start and read back on a lookup
-    /// this process cannot answer from memory.
-    /// </summary>
+    /// <summary>Holds each conversation's handshake, persisted at start and read back on a lookup that memory cannot answer.</summary>
     private readonly IConversationPersistenceService conversationPersistenceService;
 
     /// <summary>
-    /// Minimum message length a channel must afford for rich features to be believable, from
-    /// <c>Morgana:AdaptiveMessaging:RichFeaturesMinLength</c>. Non-positive trusts every declaration.
+    /// The message length a channel must afford for rich features to be believable, from <c>Morgana:AdaptiveMessaging:RichFeaturesMinLength</c>.
+    /// A value of zero or less trusts every declaration.
     /// </summary>
     private readonly int richFeaturesMinLength;
 
+    /// <summary>Logs each handshake as it is settled.</summary>
     private readonly ILogger logger;
 
-    /// <summary>
-    /// Handshakes this process has already registered or read back, keyed by conversation id.
-    /// </summary>
+    /// <summary>The handshakes this process has already registered or read back, keyed by conversation id.</summary>
     private readonly ConcurrentDictionary<string, ChannelMetadata> metadataByConversation = new();
 
     /// <summary>The last answer delivered to each conversation, as the user saw it, keyed by conversation id.</summary>
@@ -42,6 +38,8 @@ public class ChannelMetadataStore : IChannelMetadataStore
     {
         this.conversationPersistenceService = conversationPersistenceService;
         this.logger = logger;
+
+        // Absent, the threshold is zero and every channel's declaration is trusted.
         richFeaturesMinLength = configuration.GetValue("Morgana:AdaptiveMessaging:RichFeaturesMinLength", 0);
     }
 
@@ -60,6 +58,7 @@ public class ChannelMetadataStore : IChannelMetadataStore
             Capabilities = NormaliseCapabilities(declaredChannelMetadata.Capabilities)
         };
 
+        // The record serves a process that restarts mid-conversation; the copy serves every send of this one.
         await conversationPersistenceService.SaveChannelMetadataAsync(conversationId, channelMetadata);
         metadataByConversation[conversationId] = channelMetadata;
 
@@ -71,6 +70,7 @@ public class ChannelMetadataStore : IChannelMetadataStore
             channelMetadata.Capabilities.SupportsStreaming, channelMetadata.Capabilities.SupportsMarkdown,
             channelMetadata.Capabilities.MaxMessageLength);
 
+        // The controller answers the channel with what Morgana will actually send it.
         return channelMetadata;
     }
 
@@ -105,30 +105,29 @@ public class ChannelMetadataStore : IChannelMetadataStore
     /// <inheritdoc/>
     public async ValueTask<ChannelMetadata> GetChannelMetadataAsync(string conversationId)
     {
+        // A handshake this process already knows is served from memory.
         if (metadataByConversation.TryGetValue(conversationId, out ChannelMetadata? knownChannelMetadata))
             return knownChannelMetadata;
 
-        // A conversation this process never saw start: served on the handshake it persisted then
+        // A conversation this process never saw start: served on the handshake it persisted then.
         ChannelMetadata persistedChannelMetadata = await conversationPersistenceService.LoadChannelMetadataAsync(conversationId)
             ?? throw new InvalidOperationException(
                 $"No channel metadata on record for conversation {conversationId}; " +
                 "the start-conversation gate refuses to open a conversation without a handshake.");
 
+        // Two sends racing on the first lookup keep the same copy.
         return metadataByConversation.GetOrAdd(conversationId, persistedChannelMetadata);
     }
 
-    /// <summary>
-    /// Turns what a channel declares into what Morgana will actually send it. A channel whose
-    /// MaxMessageLength falls below the rich-features threshold is treated as primitive (no rich
-    /// cards, no quick replies). A channel whose messages will need adapting gets no streaming either.
-    /// </summary>
+    /// <summary>Turns what a channel declares into what Morgana will actually send it.</summary>
     private ChannelCapabilities NormaliseCapabilities(ChannelCapabilities declaredCapabilities)
     {
+        // Each rule below can only take a capability away from the declaration.
         ChannelCapabilities effectiveCapabilities = declaredCapabilities;
 
         // Too short a message for rich features to be believable: a channel declaring no length cap
         // has nothing to be judged primitive by and keeps its declaration.
-        if (declaredCapabilities.MaxMessageLength is { } max && richFeaturesMinLength > 0 && max < richFeaturesMinLength)
+        if (declaredCapabilities.MaxMessageLength is { } maxMessageLength && richFeaturesMinLength > 0 && maxMessageLength < richFeaturesMinLength)
             effectiveCapabilities = effectiveCapabilities with
             {
                 SupportsRichCards = false,
@@ -143,6 +142,7 @@ public class ChannelMetadataStore : IChannelMetadataStore
         if (willNeedAdaptation && effectiveCapabilities.SupportsStreaming)
             effectiveCapabilities = effectiveCapabilities with { SupportsStreaming = false };
 
+        // What every reader of the conversation's channel takes as is.
         return effectiveCapabilities;
     }
 }
