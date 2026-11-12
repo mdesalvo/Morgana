@@ -71,27 +71,6 @@ Morgana/
 plugin, the channels, the harnesses and the workbench each stand alone and reach it by project
 reference. That is what keeps every one of them replaceable by a customer's own.
 
-Each unit outside `Morgana/` has its **own `CLAUDE.md`** — read it before working there. `Examples/`
-is the exception and is described below, having none.
-
-### Examples (the plugin, no `CLAUDE.md` of its own)
-
-**One organization, several agents**: not three unrelated demos but three roles inside one fictional
-shop, *The Greenhouse & Nursery*, on **one** SQLite system of record (`Data/Examples.sqlite`, seeded and
-rebased onto the current month at deployment). Each agent writes only its own competence, yet the
-books stay consistent whichever agent closes a sale: `InventoryAgent`'s order confirmation and
-`ContractAgent`'s plan enrolment are the two dispositive actions and both bill through the identical
-shared path, `GreenhouseDatabaseHelper.BillCustomerAsync`. `BillingAgent` is read-only — every line
-on its books was written by another agent.
-
-The plugin also exists to show two structural things: the agents **consult each other**
-(`Billing → Inventory`, `Contract → Billing`, deliberately a chain and not a triangle, so the
-refusal of a second hop is exercised too) and `GardeningAgent` is the one agent whose tools are
-acquired at runtime from an MCP server, with an empty context vocabulary. The server is
-`GardeningMCP`, a project of the same unit, reading the almanac from four tables of the same database
-grafted onto `Products` by `Sku`: a plant without a care sheet there has no page in the almanac. A page is
-found from the customer's own words for the plant, through the names it goes by; the sku is only a second door.
-
 ### Morgana.AI
 
 | Folder | Purpose |
@@ -494,7 +473,7 @@ or environment variables.
   `Examples/GardeningMCP` (http://localhost:5006), where `GardeningAgent` finds its tools
 - **Harness**: `dotnet test PromptHarness/PromptHarness.csproj` from the repo root — live LLM calls,
   on-demand only. Start from `--filter "FullyQualifiedName~HarnessSmokeTests"` to verify the rig
-  before believing any scenario result. See `PromptHarness/CLAUDE.md`
+  before believing any scenario result.
 - **Alembic**: `dotnet run` from `Alembic/` (https://localhost:5005); needs no Morgana instance
 - **Docker**: `docker compose up` starts Morgana, Cauldron and the gardening MCP server, which shares
   Morgana's network namespace so the agent's `localhost` address holds there too. The TTY channels are profile-gated

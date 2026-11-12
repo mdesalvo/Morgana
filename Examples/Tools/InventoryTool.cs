@@ -11,23 +11,18 @@ using Morgana.AI.Attributes;
 namespace Examples.Tools;
 
 /// <summary>
-/// The greenhouse ledger of The Greenhouse &amp; Nursery: catalog, stock levels and the order
-/// lifecycle, read and written on the shop's shared database (see <see cref="ExamplesDatabaseHelper"/>).
-/// Unlike BillingTool and ContractTool, which only read from it, this tool is where the shop's
-/// state actually moves: an order confirmed here decrements stock for everyone, in every
-/// conversation, until someone cancels it.
+/// The shop assistant of The Greenhouse &amp; Nursery: catalogue, stock levels and the order lifecycle on the shop's shared database.
+/// This is where the shop's state moves: an order confirmed here takes stock away for every conversation until someone cancels it.
 /// </summary>
 [ProvidesToolForIntent("inventory")]
 public class InventoryTool : MorganaTool
 {
+    /// <summary>Binds the tools to the agent's context and makes sure the shop's database is deployed.</summary>
     public InventoryTool(
         ILogger toolLogger,
         Func<ToolContext> getToolContext) : base(toolLogger, getToolContext)
     {
-        // MorganaAgentAdapter constructs one InventoryTool per conversation (see
-        // Activator.CreateInstance in RegisterToolsInAdapter), so this runs once per conversation,
-        // not once per process — ExamplesDatabaseHelper.Ensure's own lock+flag is what makes that safe
-        // and cheap instead of re-deploying the seed file on every single conversation.
+        // A tool class is built for every agent of every conversation: the helper deploys the seed once per process and skips it after.
         ExamplesDatabaseHelper.Ensure();
     }
 
@@ -35,6 +30,7 @@ public class InventoryTool : MorganaTool
     // ROWS AND LOOKUPS
     // =========================================================================
 
+    /// <summary>One plant of the catalogue with its stock and price.</summary>
     private record Product(string Sku, string Name, string Category, string Description, long QuantityOnHand, long ReorderThreshold, double UnitPrice);
 
     /// <summary>One plant of a cart handed to CreatePurchaseOrder, with the quantity wanted.</summary>
@@ -49,19 +45,22 @@ public class InventoryTool : MorganaTool
     /// <summary>One line of a quote: a plant of the cart with its price.</summary>
     private record QuotedLine(string Sku, string ProductName, int Quantity, double UnitPrice, double LineTotal);
 
+    /// <summary>Finds one plant of the catalogue by SKU, whatever casing the model typed; null when the shop does not stock it.</summary>
     private static async Task<Product?> FindProductAsync(SqliteConnection connection, string sku)
     {
         // COLLATE NOCASE: the LLM types skus back from natural-language conversation, not from a
-        // dropdown — "rse-100" and "RSE-100" must resolve to the same row rather than surfacing a
+        // dropdown: "rse-100" and "RSE-100" must resolve to the same row rather than surfacing a
         // spurious "product not found" whenever it drops the seed data's exact casing.
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT Sku, Name, Category, Description, QuantityOnHand, ReorderThreshold, UnitPrice FROM Products WHERE Sku = $sku COLLATE NOCASE";
         command.Parameters.AddWithValue("$sku", sku);
 
+        // A SKU the shop does not stock finds no row.
         await using SqliteDataReader reader = await command.ExecuteReaderAsync();
         if (!await reader.ReadAsync())
             return null;
 
+        // The plant as the catalogue holds it.
         return new Product(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetInt64(4), reader.GetInt64(5), reader.GetDouble(6));
     }
 
@@ -76,6 +75,7 @@ public class InventoryTool : MorganaTool
         if (skuList.Count == 0)
             return productsBySku;
 
+        // One parameter per SKU, never spliced into the text.
         await using SqliteCommand command = connection.CreateCommand();
         string placeholders = string.Join(", ", skuList.Select((_, index) => $"$sku{index}"));
         command.CommandText = $"SELECT Sku, Name, Category, Description, QuantityOnHand, ReorderThreshold, UnitPrice FROM Products WHERE Sku COLLATE NOCASE IN ({placeholders})";
@@ -90,13 +90,15 @@ public class InventoryTool : MorganaTool
             productsBySku[product.Sku] = product;
         }
 
+        // The plants found; a SKU the shop does not stock is simply absent.
         return productsBySku;
     }
 
+    /// <summary>Finds one order with its lines, whatever casing the identifier arrives in; null when no order carries it.</summary>
     private static async Task<Order?> FindOrderAsync(SqliteConnection connection, string orderId)
     {
         // Same reasoning as FindProductAsync's COLLATE NOCASE: orderId travels through a chat
-        // transcript, possibly retyped by a user from memory across a session boundary — comparing
+        // transcript, possibly retyped by a user from memory across a session boundary: comparing
         // case-insensitively is what makes that forgiving instead of a needless "order not found".
         // Header and lines come in one query: one row per line, the header repeated on each.
         await using SqliteCommand command = connection.CreateCommand();
@@ -136,9 +138,7 @@ public class InventoryTool : MorganaTool
         return order;
     }
 
-    /// <summary>
-    /// Lists the orders that one owner filter selects with their lines, reading headers and lines in a single query.
-    /// </summary>
+    /// <summary>Lists the orders that one owner filter selects with their lines, reading headers and lines in a single query.</summary>
     /// <param name="connection">An open connection.</param>
     /// <param name="ownerFilter">The condition on the orders that selects the owner, written over the alias <c>o</c> and the parameter <c>$owner</c>.</param>
     /// <param name="owner">The value of <c>$owner</c>.</param>
@@ -160,11 +160,13 @@ public class InventoryTool : MorganaTool
         await using SqliteDataReader reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
+            // The order this row belongs to.
             string orderId = reader.GetString(0);
 
             // The first row of an order opens its entry.
             if (!linesByOrderId.TryGetValue(orderId, out List<object>? lines))
             {
+                // Its line list, filed for the rows that follow, travels inside the summary itself.
                 lines = [];
                 linesByOrderId[orderId] = lines;
                 orders.Add(new
@@ -183,67 +185,63 @@ public class InventoryTool : MorganaTool
                 lines.Add(new { sku = reader.GetString(5), quantity = reader.GetInt64(6) });
         }
 
+        // The orders most recent first, each with its lines.
         return orders;
     }
 
     /// <summary>
     /// Reports every line of an order whose stock no longer covers it, reading the stock of all the order's SKUs in one query.
+    /// It runs after the rollback, so each figure is the stock as it stands now.
     /// </summary>
-    /// <remarks>Read after the rollback, so each figure is the stock as it stands now.</remarks>
     private static async Task<List<object>> FindShortfallsAsync(SqliteConnection connection, IReadOnlyList<OrderLine> lines)
     {
+        // The stock of every plant the order names, as it stands now.
         Dictionary<string, Product> currentProducts = await FindProductsAsync(connection, lines.Select(line => line.Sku));
 
         // A line is short when its SKU is gone or holds fewer units than the order asks for.
         List<object> shortfalls = [];
         foreach (OrderLine line in lines)
         {
-            long availableQuantity = currentProducts.TryGetValue(line.Sku, out Product? current) ? current.QuantityOnHand : 0;
+            // A plant no longer stocked has none available.
+            long availableQuantity = currentProducts.TryGetValue(line.Sku, out Product? currentProduct) ? currentProduct.QuantityOnHand : 0;
             if (availableQuantity < line.Quantity)
                 shortfalls.Add(new { sku = line.Sku, error = "Insufficient stock for the requested quantity", requestedQuantity = line.Quantity, availableQuantity });
         }
 
+        // Every short line of the order.
         return shortfalls;
     }
 
     /// <summary>
-    /// A seal word is a short, unguessable claim-check generated ONLY by CreatePurchaseOrder and
-    /// never resurfaced by any other tool afterward. This is deliberately NOT real authentication
-    /// (there is no such thing as a mocked one worth having): it exists purely so that acting on
-    /// or inspecting a SPECIFIC past order — possibly from a completely different session — requires
-    /// something the caller could only have if they were actually given it when the order was made.
+    /// Generates the seal word of a new order: a short unguessable claim-check that only CreatePurchaseOrder ever shows.
+    /// It is no authentication, only proof that the caller was there when the order was made; <c>Harness__DeterministicSealWord</c>
+    /// pins it for the PromptHarness, whose scripted customer cannot recite a word invented at runtime.
     /// </summary>
-    /// <remarks>
-    /// PromptHarness scenarios script the customer's side of the conversation as fixed text decided
-    /// before the run, so a scenario cannot possibly recite back a value this method only invents at
-    /// runtime — the two-step order flow was, until now, structurally untestable end to end. Since
-    /// the word is deliberately not real security to begin with, the harness is allowed the one
-    /// affordance a genuine caller never gets: <c>Harness__DeterministicSealWord</c>
-    /// (<c>HarnessOptions.DeterministicSealWord</c>, republished by <c>MorganaHostFixture</c> onto
-    /// the same in-process environment this plugin reads) pins this to a known constant for the
-    /// run, the same env-var mechanism <see cref="Examples.Data.ExamplesDatabaseHelper"/> already
-    /// uses for StoragePath. Unset in every other environment, where this still returns a fresh
-    /// random word every time.
-    /// </remarks>
     private static string GenerateSealWord() =>
+        // Unset everywhere but in the harness, where the word is known in advance.
         Environment.GetEnvironmentVariable("Harness__DeterministicSealWord")
         is { Length: > 0 } deterministic
             ? deterministic
             : Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
 
+    /// <summary>Lists every SKU of the catalogue, offered back when the model names one the shop does not stock.</summary>
     private static async Task<List<string>> GetAllSkusAsync(SqliteConnection connection)
     {
+        // The catalogue in SKU order.
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT Sku FROM Products ORDER BY Sku";
 
+        // One SKU per row.
         List<string> skus = [];
         await using SqliteDataReader reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
             skus.Add(reader.GetString(0));
 
+        // Every SKU the shop stocks.
         return skus;
     }
 
+    /// <summary>Names a plant's stock: out of stock at zero, low at or under the reorder threshold, in stock above it.</summary>
     private static string StockStatus(long quantityOnHand, long reorderThreshold) => quantityOnHand switch
     {
         0 => "OutOfStock",
@@ -251,6 +249,7 @@ public class InventoryTool : MorganaTool
         _ => "InStock"
     };
 
+    /// <summary>The icon a channel shows beside a plant's stock, on the same thresholds as <see cref="StockStatus"/>.</summary>
     private static string StockStatusIcon(long quantityOnHand, long reorderThreshold) => quantityOnHand switch
     {
         0 => "🔴",
@@ -262,26 +261,28 @@ public class InventoryTool : MorganaTool
     // TOOL METHODS
     // =========================================================================
 
-    /// <summary>
-    /// Lists every plant in the greenhouse catalog with its current stock status.
-    /// </summary>
-    /// <returns>JSON array of products with stock status icons.</returns>
+    /// <summary>Lists every plant in the catalogue with its current stock status.</summary>
     [Description("Retrieves the full greenhouse/nursery catalog as structured JSON: totalProducts and an array of plants with sku, name, category, quantityOnHand, unitPrice, stockStatus (InStock/LowStock/OutOfStock) and statusIcon. This tool has only informative capabilities: it does NOT reserve, order, or modify anything.")]
     public async Task<string> GetProductCatalog()
     {
+        // The catalogue is the shop's live system of record, read on every call.
         await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
+        // Every plant, grouped by category and named in order.
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT Sku, Name, Category, QuantityOnHand, ReorderThreshold, UnitPrice FROM Products ORDER BY Category, Name";
 
+        // One entry per plant with its stock status.
         List<object> products = [];
         await using (SqliteDataReader reader = await command.ExecuteReaderAsync())
         {
             while (await reader.ReadAsync())
             {
+                // The stock and the reorder threshold it is judged against.
                 long quantity = reader.GetInt64(3);
                 long threshold = reader.GetInt64(4);
 
+                // The plant as a customer browses it.
                 products.Add(new
                 {
                     sku = reader.GetString(0),
@@ -295,20 +296,18 @@ public class InventoryTool : MorganaTool
             }
         }
 
+        // The whole catalogue with its count.
         return JsonSerializer.Serialize(new { totalProducts = products.Count, products }, ExamplesDatabaseHelper.JsonOptions);
     }
 
-    /// <summary>
-    /// Retrieves the detailed stock level for a single product.
-    /// </summary>
-    /// <param name="sku">Product SKU to inspect (e.g. "RSE-100").</param>
-    /// <returns>JSON object with quantity, threshold, price and stock status.</returns>
+    /// <summary>Retrieves the detailed stock level of one plant.</summary>
     [Description("Retrieves the current stock level for a single plant as structured JSON: sku, name, category, quantityOnHand, reorderThreshold, unitPrice, stockStatus, statusIcon, maxOrderableQuantity. Returns an error with the list of valid SKUs if the sku is unknown. This tool has only informative capabilities: it does NOT reserve, order, or modify anything.")]
     public async Task<string> CheckStockLevel(
         [Description("Product SKU to inspect (e.g. 'RSE-100'). The user should specify which plant they mean, or you should present the catalog and let them choose. Do NOT guess or assume which plant the user wants.")] [ToolParameter(Records.ToolScope.Request)] string sku)
     {
         await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
+        // A SKU the shop does not stock is answered with every SKU it does.
         Product? product = await FindProductAsync(connection, sku);
         if (product == null)
         {
@@ -320,6 +319,7 @@ public class InventoryTool : MorganaTool
             }, ExamplesDatabaseHelper.JsonOptions);
         }
 
+        // The plant's stock, threshold and price; the stock is also the most an order can take.
         return JsonSerializer.Serialize(new
         {
             sku = product.Sku,
@@ -335,13 +335,9 @@ public class InventoryTool : MorganaTool
     }
 
     /// <summary>
-    /// Creates one purchase order in "Pending" status, one line per plant of the cart. This is a
-    /// QUOTE, not a commitment: stock is validated but NOT decremented here. The whole order only
-    /// becomes binding once ConfirmOrder is called with the returned orderId AND its single sealWord.
+    /// Creates one Pending purchase order, one line per plant of the cart: a quote, not a commitment.
+    /// Stock is checked but not taken; the order binds only once ConfirmOrder receives its orderId with its seal word.
     /// </summary>
-    /// <param name="items">Every plant of the cart with its quantity; a plant named twice is merged into one line.</param>
-    /// <param name="customerCode">Identifier of the requesting customer (retrieved from shared context).</param>
-    /// <returns>JSON object with the new orderId, one-time sealWord, quoted lines, total and pending status; the lines that could not be quoted instead.</returns>
     [Description("Creates one purchase order in 'Pending' status for every plant of the cart and returns a quote as structured JSON: orderId, sealWord, lines (one per plant, each with sku, productName, quantity, unitPrice and lineTotal), totalPrice, status, note. The cart is quoted whole or not at all: when any line cannot be quoted no order is created, problems lists every such line with its reason and availableSkus lists the plants on sale when a line names one that is not. This is a QUOTE ONLY: stock is validated but NOT decremented. sealWord is shown ONLY this once, covers every line of the order and is required, together with orderId, by ConfirmOrder/CancelOrder — including in a future session. It has dispositive potential only once ConfirmOrder is called afterwards — on its own it commits nothing.")]
     public async Task<string> CreatePurchaseOrder(
         [Description("Every plant of the order with its quantity, all in this one call: each entry carries the plant's sku (e.g. 'RSE-100') and the quantity requested, which must not exceed the product's current quantityOnHand. A plant named twice is merged into one line.")] [ToolParameter(Records.ToolScope.Request)] List<OrderItem> items,
@@ -351,6 +347,7 @@ public class InventoryTool : MorganaTool
         if (items is not { Count: > 0 })
             return JsonSerializer.Serialize(new { error = "An order needs at least one plant" }, ExamplesDatabaseHelper.JsonOptions);
 
+        // The catalogue is the shop's live system of record, read on every call.
         await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
         // A plant named twice is one line: the model may split a quantity across entries.
@@ -377,7 +374,7 @@ public class InventoryTool : MorganaTool
                 problems.Add(new { sku = product.Sku, error = "Quantity must be a positive number", requestedQuantity = (long?)quantity, availableQuantity = (long?)null });
             // This check is a courtesy at quote time, not a reservation: nothing here decrements
             // QuantityOnHand, so another conversation is free to buy the same stock between this
-            // check and whenever (if ever) the customer comes back to actually ConfirmOrder — which
+            // check and whenever the customer comes back to ConfirmOrder, which
             // re-runs this exact comparison itself, right before it is the one that matters.
             else if (quantity > product.QuantityOnHand)
                 problems.Add(new { sku = product.Sku, error = "Insufficient stock for the requested quantity", requestedQuantity = (long?)quantity, availableQuantity = (long?)product.QuantityOnHand });
@@ -398,14 +395,10 @@ public class InventoryTool : MorganaTool
             }, ExamplesDatabaseHelper.JsonOptions);
         }
 
-        // getToolContext() (not a method parameter) is the only way to reach ConversationId: it
-        // is the real Akka-assigned identifier, never exposed to or writable by the LLM, so it is
-        // trustworthy in a way a request/context parameter never could be — see ToolContext's
-        // remarks in MorganaTool.cs. orderId + sealWord together are the claim-check pair every
-        // later call to ConfirmOrder/CancelOrder must present for the whole cart; sealWord is
-        // returned to the caller exactly once, right below and never stored anywhere the LLM can
-        // read it back from later (no Get* tool in this class ever surfaces it again).
-        ToolContext ctx = getToolContext();
+        // The conversation comes from the tool's context, never from a parameter: the model can neither see nor write it.
+        // The order id and the seal word are the pair every later ConfirmOrder and CancelOrder must present;
+        // the seal word is returned once, right below: no other tool ever shows it again.
+        ToolContext toolContext = getToolContext();
         string orderId = $"ORD-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
         string sealWord = GenerateSealWord();
         string createdAt = DateTime.UtcNow.ToString("O");
@@ -414,6 +407,7 @@ public class InventoryTool : MorganaTool
         // nobody can confirm or cancel truthfully.
         await using (SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync())
         {
+            // The header starts Pending, owned by the customer and the conversation that quoted it.
             await using (SqliteCommand insertOrder = connection.CreateCommand())
             {
                 insertOrder.Transaction = transaction;
@@ -423,7 +417,7 @@ public class InventoryTool : MorganaTool
                     """;
                 insertOrder.Parameters.AddWithValue("$orderId", orderId);
                 insertOrder.Parameters.AddWithValue("$customerCode", customerCode);
-                insertOrder.Parameters.AddWithValue("$conversationId", ctx.ConversationId);
+                insertOrder.Parameters.AddWithValue("$conversationId", toolContext.ConversationId);
                 insertOrder.Parameters.AddWithValue("$sealWord", sealWord);
                 insertOrder.Parameters.AddWithValue("$createdAt", createdAt);
                 await insertOrder.ExecuteNonQueryAsync();
@@ -432,6 +426,7 @@ public class InventoryTool : MorganaTool
             // Line numbers follow the order of the quote, counted from one.
             foreach ((int lineIndex, QuotedLine quotedLine) in quotedLines.Index())
             {
+                // One line per plant of the quote, inside the header's transaction.
                 await using SqliteCommand insertLine = connection.CreateCommand();
                 insertLine.Transaction = transaction;
                 insertLine.CommandText = "INSERT INTO OrderLines (OrderId, LineNumber, Sku, Quantity) VALUES ($orderId, $lineNumber, $sku, $quantity)";
@@ -448,6 +443,7 @@ public class InventoryTool : MorganaTool
 
         toolLogger.LogInformation("Created purchase order {OrderId} with {LineCount} line(s) (user {CustomerCode})", orderId, quotedLines.Count, customerCode);
 
+        // The quote with its seal word, shown here and nowhere else.
         return JsonSerializer.Serialize(new
         {
             orderId,
@@ -460,20 +456,18 @@ public class InventoryTool : MorganaTool
     }
 
     /// <summary>
-    /// Commits a Pending order: this is the only tool that actually decrements stock, for every line or none.
-    /// Re-validates availability at commit time (stock may have moved since the quote).
+    /// Commits a Pending order, the only tool that takes stock away, for every line or none, billing it as well.
+    /// Availability is checked again at commit time, since stock may have moved since the quote.
     /// </summary>
-    /// <param name="orderId">Identifier of the order to confirm. Tracked from the conversation itself, NOT a single stored context value: a customer may have more than one order in flight.</param>
-    /// <param name="sealWord">One-time seal word returned by CreatePurchaseOrder for this exact orderId. Tracked from the conversation itself, one per order — a customer with multiple orders in flight has a different seal word for each.</param>
-    /// <returns>JSON object with the confirmed lines and their remaining stock.</returns>
     [Description("Commits a Pending order, all its lines or none: the ONLY tool that actually decrements stock AND the ONLY tool that bills the customer, one invoice line per order line. Requires the exact orderId AND sealWord pair returned by CreatePurchaseOrder — a mismatch on either is reported identically as 'no order matches', to avoid confirming or denying whether an orderId exists. Re-validates the availability of every line at commit time and returns structured JSON: orderId, lines (each with sku, quantity and remainingStock), status ('Confirmed'), confirmedAt, invoiceId, note; when the stock of any line no longer suffices nothing is committed and shortfalls lists every such line. invoiceId identifies the invoice this order was just billed to: it is the invoice's identifier and nothing else about it. This IS a dispositive, binding action — you must have asked the user for explicit confirmation before calling it. This tool has dispositive capabilities: it commits a real, persistent change to greenhouse stock and to the customer's account.")]
     public async Task<string> ConfirmOrder(
         [Description("Identifier of the Pending order to confirm, exactly as returned by CreatePurchaseOrder.")] [ToolParameter(Records.ToolScope.Request)] string orderId,
         [Description("One-time seal word returned by CreatePurchaseOrder alongside this exact orderId. If the customer does not have it, tell them plainly you need the seal word they were given when that specific order was created — never ask for a plausible-sounding guess.")] [ToolParameter(Records.ToolScope.Request)] string sealWord)
     {
+        // The order and the stock are the shop's live system of record.
         await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
-        // Order-not-found and wrong-sealWord return the IDENTICAL message on purpose: if a wrong
+        // Order-not-found and wrong-sealWord return the identical message on purpose: if a wrong
         // seal word got its own distinct error, that alone would confirm to the caller that the
         // orderId exists, turning this into a guessable oracle for enumerating real orders one
         // field at a time. One combined check, one combined message, no such leak.
@@ -481,11 +475,11 @@ public class InventoryTool : MorganaTool
         if (order == null || !string.Equals(order.SealWord, sealWord, StringComparison.OrdinalIgnoreCase))
             return JsonSerializer.Serialize(new { error = "No order matches that orderId and sealWord combination", requestedOrderId = orderId }, ExamplesDatabaseHelper.JsonOptions);
 
-        // This pre-read is ONLY for the seal-word gate and a friendly fast-path error. It is NOT the
+        // This pre-read is only for the seal-word gate and a friendly fast-path error. It is not the
         // state the writes below trust: between here and the commit another conversation may
         // confirm/cancel this same order or drain the shared stock. Everything that must actually be
-        // true for the commit to be legal is therefore re-asserted atomically INSIDE the transaction,
-        // as a WHERE clause on the write itself — the pre-read is never the authority.
+        // true for the commit to be legal is therefore re-asserted atomically inside the transaction,
+        // as a WHERE clause on the write itself: the pre-read is never the authority.
         if (order.Status != "Pending")
         {
             return JsonSerializer.Serialize(new
@@ -497,21 +491,20 @@ public class InventoryTool : MorganaTool
         }
 
         // Read once, outside the transaction, purely for the name/price that go on each invoice
-        // line below — the same tolerance CreatePurchaseOrder already applies to its own quote.
+        // line below, with the same tolerance CreatePurchaseOrder applies to its own quote.
         Dictionary<string, Product> productsBySku = await FindProductsAsync(connection, order.Lines.Select(line => line.Sku));
 
         // Claiming the order (Pending -> Confirmed) and decrementing the stock of every line must
-        // all happen or none: a single transaction. Its FIRST statement is a write, so it takes
-        // the write lock straight away — no SELECT-then-UPDATE lock upgrade, hence none of SQLite's
-        // classic writer-upgrade deadlock — while PRAGMA busy_timeout (set by ExamplesDatabaseHelper.OpenConnectionAsync)
-        // makes a losing concurrent writer WAIT for our commit instead of throwing "database is locked".
+        // all happen or none: a single transaction. Its first statement is a write, so it takes the write lock
+        // straight away with no lock upgrade to deadlock on, while the busy timeout of OpenConnectionAsync
+        // makes a losing concurrent writer wait for this commit instead of failing with "database is locked".
         await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync();
 
         // One instant stamps the order and the invoice lines, so the books agree on when the sale happened.
         DateTime confirmedAtUtc = DateTime.UtcNow;
         string confirmedAt = confirmedAtUtc.ToString("O");
 
-        // Claim the order FIRST, conditionally on it still being Pending. This WHERE clause, not the
+        // The order is claimed first, conditionally on it still being Pending. This WHERE clause, not the
         // pre-read above, is what serializes two simultaneous confirmations of the same order down
         // to exactly one winner: the loser sees rows-affected 0 and bails out having touched nothing.
         int orderRows;
@@ -526,24 +519,25 @@ public class InventoryTool : MorganaTool
 
         if (orderRows == 0)
         {
-            // A concurrent ConfirmOrder/CancelOrder moved this order between our pre-read and now.
+            // A concurrent ConfirmOrder or CancelOrder moved this order since the pre-read: its status now is reported.
             await transaction.RollbackAsync();
-            Order? latest = await FindOrderAsync(connection, orderId);
+            Order? latestOrder = await FindOrderAsync(connection, orderId);
             return JsonSerializer.Serialize(new
             {
-                error = $"Order cannot be confirmed: current status is '{latest?.Status ?? "Unknown"}', not 'Pending'",
+                error = $"Order cannot be confirmed: current status is '{latestOrder?.Status ?? "Unknown"}', not 'Pending'",
                 orderId,
-                status = latest?.Status
+                status = latestOrder?.Status
             }, ExamplesDatabaseHelper.JsonOptions);
         }
 
-        // Decrement each line's stock, guarded so it can NEVER go negative: a concurrent
+        // Each line's stock is taken, guarded so it can never go negative: a concurrent
         // confirmation that already took the last specimens of any one plant leaves rows-affected
         // at 0 and the whole order rolls back (undoing the claim and every earlier line too) rather
         // than commit a cart that is only partly in stock. This guard, not the quote, is the truthful one.
         List<object> confirmedLines = [];
         foreach (OrderLine line in order.Lines)
         {
+            // The units of this line leave the stock only if the stock still holds them.
             int stockRows;
             await using (SqliteCommand updateStock = connection.CreateCommand())
             {
@@ -566,18 +560,19 @@ public class InventoryTool : MorganaTool
                 }, ExamplesDatabaseHelper.JsonOptions);
             }
 
-            // Read the remaining stock back inside the SAME transaction, so the figure reported is
-            // the one we just wrote — not the possibly-stale pre-read value.
+            // The remaining stock is read back inside the same transaction, so the figure reported is
+            // the one just written and not the pre-read value.
             await using SqliteCommand readStock = connection.CreateCommand();
             readStock.Transaction = transaction;
             readStock.CommandText = "SELECT QuantityOnHand FROM Products WHERE Sku = $sku";
             readStock.Parameters.AddWithValue("$sku", line.Sku);
             long remainingStock = Convert.ToInt64(await readStock.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
 
+            // The line as confirmed, with what is left of its plant.
             confirmedLines.Add(new { sku = line.Sku, quantity = line.Quantity, remainingStock });
         }
 
-        // Bill every line, in the same transaction: a Confirmed order with no invoice line is exactly
+        // Every line is billed in the same transaction: a Confirmed order with no invoice line is exactly
         // the half-done state this method exists to prevent for stock, so it must not exist for billing
         // either. Every line lands on the same invoice, the customer's open one for this month, which
         // the first line found or opened. A product deleted between the pre-reads and here confirms
@@ -589,7 +584,8 @@ public class InventoryTool : MorganaTool
             if (!productsBySku.TryGetValue(line.Sku, out Product? product))
                 continue;
 
-            invoiceId = await GreenhouseDatabaseHelper.BillCustomerAsync(connection, transaction, order.CustomerCode!, product.Name,
+            // Every line lands on the customer's open invoice of the month, the first one opening it when none is.
+            invoiceId = await ExamplesDatabaseHelper.BillCustomerAsync(connection, transaction, order.CustomerCode!, product.Name,
                 product.Sku, order.OrderId, product.UnitPrice, (int)line.Quantity, confirmedAtUtc);
         }
 
@@ -598,6 +594,7 @@ public class InventoryTool : MorganaTool
 
         toolLogger.LogInformation("Confirmed order {OrderId}: stock of {LineCount} line(s) decremented, billed to invoice {InvoiceId}", orderId, order.Lines.Count, invoiceId);
 
+        // The confirmed lines with the invoice they were billed to, which is all this response says about it.
         return JsonSerializer.Serialize(new
         {
             orderId,
@@ -611,21 +608,20 @@ public class InventoryTool : MorganaTool
         }, ExamplesDatabaseHelper.JsonOptions);
     }
 
-    /// <summary>
-    /// Retrieves the current status, lines and lifecycle timestamps of an existing order.
-    /// </summary>
-    /// <param name="orderId">Identifier of the order to inspect. Tracked from the conversation itself, NOT a single stored context value: a customer may have more than one order in flight.</param>
-    /// <returns>JSON object with the order's lines, status and timestamps.</returns>
+    /// <summary>Retrieves the current status, lines and lifecycle timestamps of an existing order, never its seal word.</summary>
     [Description("Retrieves the current status and lifecycle timestamps of an existing order as structured JSON: orderId, lines (each with sku and quantity), status (Pending/Confirmed/Cancelled), createdAt, confirmedAt, cancelledAt. Keyed on the orderId alone: NO seal word is required, because reading a status commits nothing — the same fields are already listed by GetOrders and GetOrderHistory. An orderId nothing is filed under is reported as 'no order matches'. This tool has only informative capabilities: it does NOT modify the order.")]
     public async Task<string> GetOrderStatus(
         [Description("Identifier of the order to inspect, as originally returned by CreatePurchaseOrder. May belong to a past session — always trust this tool's answer over what you remember.")] [ToolParameter(Records.ToolScope.Request)] string orderId)
     {
+        // The orders are the shop's live system of record.
         await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
+        // An identifier no order carries is reported as such.
         Order? order = await FindOrderAsync(connection, orderId);
         if (order == null)
             return JsonSerializer.Serialize(new { error = "No order matches that orderId", requestedOrderId = orderId }, ExamplesDatabaseHelper.JsonOptions);
 
+        // The order's lines, status and timestamps.
         return JsonSerializer.Serialize(new
         {
             orderId = order.OrderId,
@@ -638,19 +634,16 @@ public class InventoryTool : MorganaTool
     }
 
     /// <summary>
-    /// Cancels a Pending or Confirmed order. Restores the stock of every line only if the order
-    /// had already been confirmed (a Pending order never touched stock in the first place).
+    /// Cancels a Pending or Confirmed order, giving the stock of every line back only when it had been confirmed.
+    /// A Pending order never took any stock.
     /// </summary>
-    /// <param name="orderId">Identifier of the order to cancel. Tracked from the conversation itself, NOT a single stored context value: a customer may have more than one order in flight.</param>
-    /// <param name="sealWord">One-time seal word returned by CreatePurchaseOrder for this exact orderId. Tracked from the conversation itself, one per order — a customer with multiple orders in flight has a different seal word for each.</param>
-    /// <param name="reason">Optional free-text cancellation reason, recorded for logging only.</param>
-    /// <returns>JSON object describing the cancellation outcome.</returns>
     [Description("Cancels a Pending or Confirmed order and returns structured JSON: orderId, previousStatus, status ('Cancelled'), cancelledAt, stockRestored, reason. Requires the exact orderId AND sealWord pair returned by CreatePurchaseOrder — a mismatch on either is reported identically as 'no order matches'. If the order had been Confirmed, the stock of every line is restored; a Pending order never touched stock so none is restored. This tool has dispositive capabilities: it commits a real, persistent change to an order and possibly to greenhouse stock.")]
     public async Task<string> CancelOrder(
         [Description("Identifier of the order to cancel, exactly as returned by CreatePurchaseOrder or previously discussed.")] [ToolParameter(Records.ToolScope.Request)] string orderId,
         [Description("One-time seal word returned by CreatePurchaseOrder for this exact orderId.")] [ToolParameter(Records.ToolScope.Request)] string sealWord,
         [Description("Optional reason for the cancellation (e.g., 'changed my mind', 'found a better price'). Recorded for internal purposes but not required. Ask the user if they'd like to provide one, but make it clear it's optional.")] [ToolParameter(Records.ToolScope.Request)] string? reason = null)
     {
+        // The order and the stock are the shop's live system of record.
         await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
         // Same combined not-found/wrong-sealWord check as ConfirmOrder, same reason.
@@ -658,21 +651,20 @@ public class InventoryTool : MorganaTool
         if (order == null || !string.Equals(order.SealWord, sealWord, StringComparison.OrdinalIgnoreCase))
             return JsonSerializer.Serialize(new { error = "No order matches that orderId and sealWord combination", requestedOrderId = orderId }, ExamplesDatabaseHelper.JsonOptions);
 
+        // An order already cancelled has nothing left to cancel.
         if (order.Status == "Cancelled")
             return JsonSerializer.Serialize(new { error = "Order is already cancelled", orderId }, ExamplesDatabaseHelper.JsonOptions);
 
-        // Cancel and (if needed) restore stock as one atomic unit, first statement a write so we
-        // take the write lock up front (no lock-upgrade deadlock; busy_timeout makes a concurrent
-        // writer wait). Crucially the PREVIOUS status is decided by WHICH conditional UPDATE wins a
-        // row, not by the pre-read above: that read can be stale, but only one of the two guarded
-        // UPDATEs below can ever affect a row for a given order, so exactly one caller restores
-        // stock for a given Confirmed->Cancelled transition — no double credit under concurrent cancels.
+        // Cancelling and giving stock back are one transaction whose first statement is a write, so it takes the lock up front.
+        // The previous status is decided by which conditional UPDATE wins a row, never by the pre-read: only one of the two
+        // can affect a row, so exactly one caller gives stock back for a confirmed order cancelled twice at once.
         await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync();
 
+        // One instant stamps the cancellation.
         string cancelledAt = DateTime.UtcNow.ToString("O");
 
-        // Attempt 1: claim it as a Confirmed order. Winning here (rows == 1) is the ONLY path that
-        // restores stock and only one caller can ever win it.
+        // First the order is claimed as Confirmed: winning a row here is the only path that gives stock back
+        // and only one caller can ever win it.
         int confirmedRows;
         await using (SqliteCommand cancelConfirmed = connection.CreateCommand())
         {
@@ -683,10 +675,11 @@ public class InventoryTool : MorganaTool
             confirmedRows = await cancelConfirmed.ExecuteNonQueryAsync();
         }
 
+        // Then, if it was not Confirmed, it is cancelled as Pending.
         int pendingRows = 0;
         if (confirmedRows == 0)
         {
-            // Attempt 2: it wasn't Confirmed — try to cancel it as Pending. A Pending order never
+            // A Pending order is cancelled with nothing to give back. A Pending order never
             // reached ConfirmOrder, so it never decremented stock: this path restores nothing.
             await using SqliteCommand cancelPending = connection.CreateCommand();
             cancelPending.Transaction = transaction;
@@ -699,21 +692,22 @@ public class InventoryTool : MorganaTool
         if (confirmedRows == 0 && pendingRows == 0)
         {
             // Neither claim won a row: a concurrent CancelOrder already cancelled it between our
-            // pre-read and now (Cancelled is the only other status this order could be in).
+            // pre-read and now, Cancelled being the only other status this order could be in.
             await transaction.RollbackAsync();
             return JsonSerializer.Serialize(new { error = "Order is already cancelled", orderId }, ExamplesDatabaseHelper.JsonOptions);
         }
 
-        // stockRestored is derived from which UPDATE actually won a row — atomic with the claim,
-        // never from the stale pre-read.
+        // Whether stock goes back follows from which UPDATE won a row, atomic with the claim and never from the pre-read.
         bool stockRestored = confirmedRows == 1;
         string previousStatus = stockRestored ? "Confirmed" : "Pending";
 
+        // Only a confirmed order took stock, so only it gives stock back.
         if (stockRestored)
         {
             // Every line gives its units back inside the same transaction as the status change.
             foreach (OrderLine line in order.Lines)
             {
+                // The line's units return to its plant.
                 await using SqliteCommand restoreStock = connection.CreateCommand();
                 restoreStock.Transaction = transaction;
                 restoreStock.CommandText = "UPDATE Products SET QuantityOnHand = QuantityOnHand + $qty WHERE Sku = $sku";
@@ -723,10 +717,12 @@ public class InventoryTool : MorganaTool
             }
         }
 
+        // The cancellation and the returned stock become visible together.
         await transaction.CommitAsync();
 
         toolLogger.LogInformation("Cancelled order {OrderId} (was {PreviousStatus}, stock restored: {StockRestored})", orderId, previousStatus, stockRestored);
 
+        // The cancellation with what it was and whether stock went back.
         return JsonSerializer.Serialize(new
         {
             orderId,
@@ -739,46 +735,43 @@ public class InventoryTool : MorganaTool
     }
 
     /// <summary>
-    /// Lists the orders placed during THIS conversation, using the real Akka conversationId
-    /// (never exposed to the LLM, never spoofable via a context variable) — no sealWord needed
-    /// since the caller is, by construction, the same conversation that created them.
+    /// Lists the orders placed during this conversation, never their seal words.
+    /// The conversation comes from the tool's context, which the model can neither see nor write, so no seal word is needed.
     /// </summary>
-    /// <returns>JSON array of this conversation's orders with their lines (no sealWord included).</returns>
     [Description("Lists the orders placed during THIS conversation as structured JSON: totalOrders and an array of order summaries (orderId, lines (each with sku and quantity), status, createdAt, confirmedAt, cancelledAt). Does NOT include sealWord (shown only once, by CreatePurchaseOrder) so this listing alone is never enough to confirm or cancel anything. This tool has only informative capabilities.")]
     public async Task<string> GetOrders()
     {
-        // ctx.ConversationId, not a parameter: this scoping is intentionally NOT something the LLM
-        // can influence or spoof — "this conversation's orders" means exactly that, decided by
-        // Akka, not by whatever string a prompt-injected message might try to pass as an argument.
-        ToolContext ctx = getToolContext();
+        // "This conversation's orders" means exactly that, decided by Morgana and never by a string an injected message could pass.
+        ToolContext toolContext = getToolContext();
 
+        // The orders are the shop's live system of record.
         await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
-        List<object> orders = await FindOrderSummariesAsync(connection, "o.ConversationId = $owner", ctx.ConversationId);
+        // Every order the conversation placed, with its lines.
+        List<object> orders = await FindOrderSummariesAsync(connection, "o.ConversationId = $owner", toolContext.ConversationId);
 
+        // The orders with their count.
         return JsonSerializer.Serialize(new { totalOrders = orders.Count, orders }, ExamplesDatabaseHelper.JsonOptions);
     }
 
     /// <summary>
-    /// Lists every order ever placed by a given customer, across ALL conversations/sessions —
-    /// the full history behind a customerCode, not just the current chat. Summary only: sealWord is
-    /// never included here (it is shown exactly once, by CreatePurchaseOrder), so seeing this
-    /// list is not enough to act on any of the orders it names.
+    /// Lists every order a customer ever placed, across every conversation, as a summary without seal words.
+    /// Seeing this list is not enough to act on any order it names.
     /// </summary>
-    /// <param name="customerCode">Identifier of the customer whose order history to retrieve (retrieved from shared context).</param>
-    /// <returns>JSON array of that customer's orders with their lines across every conversation (no sealWord included).</returns>
     [Description("Lists EVERY order a customer has ever placed, across ALL conversations/sessions — not just this one — as structured JSON: customerCode, totalOrders and an array of order summaries (orderId, lines (each with sku and quantity), status, createdAt, confirmedAt, cancelledAt). Does NOT include sealWord (shown only once, by CreatePurchaseOrder) so this listing alone is never enough to confirm or cancel any order it names — that pair is what ConfirmOrder and CancelOrder require. To re-read one single order by its identifier, use GetOrderStatus. This tool has only informative capabilities.")]
     public async Task<string> GetOrderHistory(
         [Description("The customer's own identifying code, whatever they call it — customer code, account number, client id (e.g. 'P994E'). Every tool here is keyed to it: one customer, one code. It scopes the listing to that one customer and is not a selector for choosing whose history to read.")] [ToolParameter(Records.ToolScope.SharedContext)] string customerCode)
     {
-        // customerCode is a shared context variable the LLM itself can write via SetContextVariable —
+        // customerCode is a shared context variable the model itself can write through SetContextVariable:
         // unlike GetOrders()'s ConversationId, it is not a trust boundary, which is exactly why
         // this tool deliberately stops at a summary (no sealWord, no ability to act on any
         // of these orders) rather than granting the same access ConfirmOrder/CancelOrder do.
         await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
+        // Every order under the code, matched ignoring case.
         List<object> orders = await FindOrderSummariesAsync(connection, "o.CustomerCode = $owner COLLATE NOCASE", customerCode);
 
+        // The orders with their count.
         return JsonSerializer.Serialize(new { customerCode, totalOrders = orders.Count, orders }, ExamplesDatabaseHelper.JsonOptions);
     }
 }

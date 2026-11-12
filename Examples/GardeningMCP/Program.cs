@@ -23,7 +23,7 @@ if (!string.IsNullOrWhiteSpace(conversationStoragePath))
 // The database with its almanac is deployed before the first question, whichever of Morgana and this server starts first.
 ExamplesDatabaseHelper.Ensure();
 
-// The four tools of the head gardener are what the server offers to the agents that connect to it.
+// The three tools of the head gardener are what the server offers to the agents that connect to it.
 builder.Services.AddMcpServer().WithHttpTransport().WithTools<GardeningTools>();
 
 // The server binds where the shipped agent looks for it, whatever the environment says, so the agent
@@ -38,4 +38,4 @@ WebApplication application = builder.Build();
 application.MapMcp(almanacServerAddress.AbsolutePath);
 
 // The almanac answers for as long as the process lives: in Docker, the life of the container.
-application.Run();
+await application.RunAsync();

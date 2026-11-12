@@ -33,6 +33,7 @@ internal sealed class GardeningTools
     public async Task<string> GetPlantPage(
         [Description("The plant in the customer's own words: a common name, a botanical name or a plural all work (e.g. 'my roses', 'moth orchid', 'sansevieria'); a sku works too.")] string plant)
     {
+        // The catalogue is the plugin's live system of record so it is read on every call.
         await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
         // The plants that the almanac covers, which the words of the customer are matched against.
@@ -66,6 +67,7 @@ internal sealed class GardeningTools
         if (monthOfYear < 1 || monthOfYear > 12)
             return JsonSerializer.Serialize(new { error = "The month must be a number from 1 to 12", requestedMonth = month }, ExamplesDatabaseHelper.JsonOptions);
 
+        // The calendar is read from the plugin's live system of record.
         await using SqliteConnection connection = await ExamplesDatabaseHelper.OpenConnectionAsync();
 
         // The tasks of the month for the plants that the almanac covers.

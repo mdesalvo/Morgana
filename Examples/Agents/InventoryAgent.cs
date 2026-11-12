@@ -8,10 +8,12 @@ using static Morgana.AI.Records;
 
 namespace Examples.Agents;
 
+/// <summary>The shop assistant of The Greenhouse &amp; Nursery, who answers on stock and confirms orders.</summary>
 [HandlesIntent("inventory")]
 [RequiresLLMTier(LLMTier.Efficiency)]
 public class InventoryAgent : MorganaAgent
 {
+    /// <summary>Hands the adapter to the base, which builds the agent from its prompt, its tools and its colleagues.</summary>
     public InventoryAgent(
         string conversationId,
         ILanguageModelService llmService,
