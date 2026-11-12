@@ -348,7 +348,7 @@ public class ConversationLifecycleService : IConversationLifecycleService, IDisp
                 return;
             }
 
-            // The page hears of the silence once the wait runs out, and only once.
+            // The page hears of the silence once, when the wait runs out.
             _replyDeadline = new Timer(_ => OnReplyDeadlineExpired?.Invoke(), null, replyTimeout, Timeout.InfiniteTimeSpan);
         }
     }

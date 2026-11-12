@@ -299,7 +299,7 @@
             try
             {
                 // The gauge is refreshed before any early return: warnings, the lockout and ordinary replies all carry
-                // the level, and the low moments are when the visitor wants to see it move. A message without one leaves it as it was.
+                // the level: the low moments are when the visitor wants to see it move. A message without one leaves it as it was.
                 if (message.ConversationMetadata?.DustLevel is { } dustLevel)
                     ChatStateService.DustLevel = dustLevel;
 
@@ -345,7 +345,7 @@
                 // PATH 1: this message closes a response already typing itself out on screen.
                 if (StreamingService.IsStreaming)
                 {
-                    // The streamed text gives way to the final one, with its widgets, and the composer reopens.
+                    // The streamed text gives way to the final one with its widgets; the composer reopens.
                     StreamingService.FinalizeStreaming(message);
                     ChatStateService.UpdateAgentFromMessage(message);
                     ChatStateService.IsSending = false;
@@ -468,7 +468,7 @@
             await SendMessageAsync();
     }
 
-    /// <summary>Records the pressed quick reply on its message, freezing the row, and sends the reply's value as the turn.</summary>
+    /// <summary>Records the pressed quick reply on its message to freeze the row and sends the reply's value as the turn.</summary>
     private async Task SelectQuickReplyAsync(QuickReply reply, ChatMessage message)
     {
         // A row already answered takes no second press.
@@ -550,7 +550,7 @@
         ChatStateService.IsConversationDeadFromDust();
 
     /// <summary>
-    /// Whether the New Conversation button shows: once a conversation is on screen, and always for one whose budget is spent.
+    /// Whether the New Conversation button shows: once a conversation is on screen, always for one whose budget is spent.
     /// The lockout banner never fades, so a hidden button would strand the visitor.
     /// </summary>
     private bool IsNewConversationButtonVisible =>

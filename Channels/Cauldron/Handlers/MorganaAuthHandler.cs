@@ -11,7 +11,7 @@ namespace Cauldron.Handlers;
 /// Signs every call of Cauldron to Morgana with a token it issues itself, HMAC-SHA256 with five minutes of life.
 /// Cauldron is a Blazor Server application, so its calls leave the server process and never the browser: the server can hold
 /// the shared key and sign without an external identity provider. The issuer is cauldron, which Morgana's
-/// Authentication:Issuers must list with the same key, and the subject cauldron-app.
+/// Authentication:Issuers must list with the same key; the subject is cauldron-app.
 /// </summary>
 public class MorganaAuthHandler : DelegatingHandler
 {

@@ -49,7 +49,7 @@ public class SignalRService : IAsyncDisposable
     /// </summary>
     public event Func<string, Task>? OnStreamChunkReceived;
 
-    /// <summary>Raised whenever the connection goes up, with true, or down, with false.</summary>
+    /// <summary>Raised whenever the connection goes up or down: true means connected.</summary>
     public event Action<bool>? OnConnectionStateChanged;
 
     /// <summary>Whether the page can send: the hub connection is up.</summary>

@@ -186,7 +186,7 @@ public class ChatStateService : IChatStateService
     /// <inheritdoc />
     public void DismissTemporaryMessage(ChannelMessage message)
     {
-        // The banner the user closed, or that faded, leaves the screen.
+        // The banner that the user closed or that faded leaves the screen.
         TemporaryMessages.Remove(message);
     }
 
