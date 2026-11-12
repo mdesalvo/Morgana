@@ -26,6 +26,7 @@ Tools are no longer declared in `morgana.json` or `agents.json`: they are annota
 - A turn whose wait ran out kept running behind the user's back: the provider billed it, its dust was charged for an answer nobody saw and its late answer could be taken for the next turn's
 - An Ollama tier that declared no context window was served at the daemon's default, which could silently cut the start of the prompt where Morgana's policies sit
 - Two agents declaring the same intent were accepted at startup and the one that answered was left to the order of reflection
+- Ending a conversation stopped only its supervisor: its guard, classifier, router and agents stayed alive in memory for as long as the process ran
 
 ### 📦 Dependencies
 - Updated `A2A` to 1.0.0-preview4
