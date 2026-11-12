@@ -27,30 +27,29 @@
     public required ChannelMessage Message { get; set; }
 
     /// <summary>
-    /// Callback invoked when the message is auto-dismissed after duration expires.
-    /// Parent component should remove message from its list. Passes the dismissed message as parameter.
+    /// Raised with the notice once it has faded away, so the parent drops it from its list.
+    /// The component cannot remove itself from a collection it does not own.
     /// </summary>
     [Parameter]
     public EventCallback<ChannelMessage> OnDismissed { get; set; }
 
     /// <summary>
-    /// Total duration in seconds before auto-dismiss (8s visible + 2s fade-out by default).
-    /// Null means the default.
+    /// The seconds a notice stays up in all, its last two fading out; null means the default of ten.
     /// </summary>
     [Parameter]
     public int? DurationSeconds { get; set; }
 
-    /// <summary>Controls banner visibility (for smooth mount/unmount).</summary>
+    /// <summary>Whether the banner is still drawn, false once its fade has finished.</summary>
     private bool isVisible = true;
 
-    /// <summary>Tracks if banner is in fading state (last 2 seconds before removal).</summary>
+    /// <summary>Whether the banner is in its last two seconds, fading out.</summary>
     private bool isFading;
 
-    /// <summary>Cancellation token for cleanup on component disposal.</summary>
+    /// <summary>Stops the countdown of a banner removed before it expires.</summary>
     private CancellationTokenSource? cancellationTokenSource;
 
     /// <summary>
-    /// True for a notice that ends the conversation (dust budget spent).
+    /// True for a notice that ends the conversation, the dust budget being spent.
     /// There is nothing to wait for, so it must persist: this drives both the no-auto-dismiss behaviour and the distinct
     /// styling that keeps it from reading as a transient warning.
     /// </summary>
@@ -77,7 +76,7 @@
 
     /// <summary>
     /// Keeps the banner visible, fades it out and hands it back to the parent.
-    /// Timeline: (duration-2)s visible → 2s fading → dismiss
+    /// The banner sits still for all but the last two seconds of its duration, which the fade takes.
     /// </summary>
     private async Task DismissAfterDurationAsync(CancellationToken cancellationToken)
     {
@@ -115,7 +114,7 @@
         }
     }
 
-    /// <summary>Gets the appropriate icon based on error reason.</summary>
+    /// <summary>Returns the icon of the notice's reason.</summary>
     private string GetIcon()
     {
         // A refusal for calling too often and a spent budget have icons of their own; any other notice wears the warning sign.
@@ -127,7 +126,7 @@
         };
     }
 
-    /// <summary>Gets the CSS class for banner styling.</summary>
+    /// <summary>Returns the CSS class that colours the banner after the kind of notice.</summary>
     private string GetBannerClass()
     {
         // The terminal notice is matched first: it gets a calm purple of its own, never the

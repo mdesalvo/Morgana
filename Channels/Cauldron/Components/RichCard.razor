@@ -24,7 +24,7 @@
     /// <summary>
     /// The rich card data to render.
     /// Leaf components render inline Markdown in their text fields via ToInlineHtml, so the card is passed through
-    /// untouched — no pre-sanitization step that would strip that Markdown away.
+    /// untouched: no pre-sanitization step strips that Markdown away.
     /// </summary>
     [Parameter, EditorRequired]
     public required Morgana.Contracts.RichCard Card { get; set; }

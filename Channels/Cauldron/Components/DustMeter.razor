@@ -1,16 +1,13 @@
 @*
-    Dust meter — the per-conversation magic-dust budget gauge in the chat header.
+    The gauge of the conversation's magic-dust budget, in the chat header.
 
-    Battery-style bar showing the REMAINING budget: it empties as the conversation burns tokens,
-    shifting purple to amber to red. Null DustLevel means dust limiting is off on the backend,
-    and the gauge renders nothing at all.
+    A battery-style bar showing the budget that remains: it empties as the conversation burns tokens,
+    shifting purple to amber to red. A null DustLevel means Morgana limits no dust and the gauge renders nothing.
 *@
 
 @if (DustLevel is { } remaining)
 {
-    @* Truncate toward zero, don't round: a sub-1% residual reads as 0% — that
-       swallowed fraction is the slack that funds per-channel presentation
-       messages and the let-it-finish turn. *@
+    @* Truncated toward zero, never rounded: a residual under 1% reads as 0%, the level at which the next turn is refused. *@
     int percent = (int)(Math.Clamp(remaining, 0.0, 1.0) * 100);
     // Thresholds drive colour only; the backend owns the real lockout boundary.
     string state = remaining > 0.30 ? "ok" : remaining > 0.10 ? "low" : "critical";
@@ -32,8 +29,8 @@
 
 @code {
     /// <summary>
-    /// Remaining dust as a fraction of the budget (1.0 = full, 0.0 = empty), as reported by Morgana.
-    /// Null when dust limiting is disabled — the component renders nothing.
+    /// The remaining dust as a fraction of the budget, from 1.0 when full to 0.0 when empty, as Morgana reports it.
+    /// Null when Morgana limits no dust, in which case the gauge renders nothing.
     /// </summary>
     [Parameter]
     public double? DustLevel { get; set; }

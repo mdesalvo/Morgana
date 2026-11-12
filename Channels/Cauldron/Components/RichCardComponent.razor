@@ -1,5 +1,6 @@
 @* Polymorphic dispatcher: routes each card component to its own renderer by concrete type. *@
 
+@* A type with no renderer of its own falls to the placeholder at the bottom. *@
 @switch (Component)
 {
     case TextBlockComponent textBlock:
@@ -51,8 +52,8 @@
     public required CardComponent Component { get; set; }
 
     /// <summary>
-    /// Current nesting depth (for section components).
-    /// Used to enforce depth limits and adjust styling.
+    /// The nesting depth of the component, handed on to a section.
+    /// It selects the CSS class that indents and de-emphasises a nested section.
     /// </summary>
     [Parameter]
     public int Depth { get; set; } = 1;
