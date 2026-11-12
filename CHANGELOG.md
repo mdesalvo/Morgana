@@ -7,7 +7,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [1.0.0-beta2] - UNDER DEVELOPMENT
 ### 🎯 Major Feature: Guardrails against hijacking
-Morgana guards every door through which outside text reaches her agents:
+Morgana guards every door through which her AI core is engaged:
 - **ToolGuard** checks what tools, MCP servers and partners hand over before an agent reads it; a source caught trying to steer an agent is closed to every agent.
 - **PeerGuard** checks the questions that partners put to Morgana's agents, while the UserGuard reads the user's message in the light of Morgana's last answer.
 ### 🎯 Major Feature: Tools in Microsoft.Extensions.AI
