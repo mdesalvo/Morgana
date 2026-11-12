@@ -14,24 +14,16 @@ using Morgana.Contracts;
 namespace Morgana.AI.Services;
 
 /// <summary>
-/// Default <see cref="IGuardRailService"/> implementation: the LLM policy check on the user's message, the
-/// deterministic check and the ToolGuard inspection of every guarded tool result
-/// and the PeerGuard judgment of a partner's question.
-/// It also examines what MCP servers and partners offer and keeps, per external source, whether it is go or no-go.
-/// The user's message goes to <see cref="ILanguageModelService"/> beside the last answer the user received, with the UserGuard system prompt for detection of
-/// spam, phishing, violence, profanity and other policy violations.
+/// Guards every door through which outside text reaches an agent, refusing what no guard could judge.
+/// The UserGuard reads the user's message beside the last answer, the ToolGuard every guarded tool result and what MCP servers and partners offer,
+/// the PeerGuard a partner's question; a free check for forgeries runs before each model call.
 /// </summary>
 public partial class LLMGuardRailService : IGuardRailService
 {
-    /// <summary>
-    /// LLM used for the policy check. Consumed through the stateless completion path — each
-    /// message is judged beside the last answer the user received, on the framework tier.
-    /// </summary>
+    /// <summary>The model of every guard, through the stateless completion on the framework tier.</summary>
     private readonly ILanguageModelService llmService;
 
-    /// <summary>
-    /// The first line of each prompt fence: the part of a fence that identifies it, whatever follows it.
-    /// </summary>
+    /// <summary>The first line of each prompt fence: the part of a fence that identifies it, whatever follows it.</summary>
     private static readonly string[] fenceFirstLines =
     [
         FirstLine(Constants.PromptFences.GlobalPoliciesHeader),
@@ -42,9 +34,7 @@ public partial class LLMGuardRailService : IGuardRailService
         FirstLine(Constants.PromptFences.DomainLayerFooter)
     ];
 
-    /// <summary>
-    /// The four section labels of Morgana's own prompt, which no tool result has any reason to carry.
-    /// </summary>
+    /// <summary>The four section labels of Morgana's own prompt, which no outside text has any reason to carry.</summary>
     private static readonly string[] sectionLabels =
     [
         Constants.SectionLabels.Target,
@@ -54,29 +44,21 @@ public partial class LLMGuardRailService : IGuardRailService
     ];
 
     /// <summary>
-    /// Logger for compliance verdicts and for the fail-open path, which admits a message the
-    /// check could not evaluate and would otherwise leave no trace.
+    /// Logs each verdict with its finding, never the content judged.
+    /// A refusal for want of a verdict reaches the user as a plain request to try again, so the log is where its cause shows.
     /// </summary>
     private readonly ILogger logger;
 
-    /// <summary>
-    /// Pre-computed UserGuard system prompt.
-    /// </summary>
+    /// <summary>The UserGuard's system prompt, composed at construction and read before every user message.</summary>
     private readonly string userGuardSystemPrompt;
 
-    /// <summary>
-    /// Pre-computed ToolGuard system prompt, read by the inspector of every guarded tool result.
-    /// </summary>
+    /// <summary>The ToolGuard's system prompt, composed at construction and read before every guarded tool result and offer.</summary>
     private readonly string toolGuardSystemPrompt;
 
-    /// <summary>
-    /// Pre-computed PeerGuard system prompt, read before every question a partner puts to an agent of this installation.
-    /// </summary>
+    /// <summary>The PeerGuard's system prompt, composed at construction and read before every question a partner puts to an agent.</summary>
     private readonly string peerGuardSystemPrompt;
 
-    /// <summary>
-    /// Application configuration, read per call for the limit on the length of what an inspection reads.
-    /// </summary>
+    /// <summary>The configuration, read per call for the limit on the length of what an inspection reads.</summary>
     private readonly IConfiguration configuration;
 
     /// <summary>
@@ -94,24 +76,16 @@ public partial class LLMGuardRailService : IGuardRailService
         // Read per call, like the adapter reads its switches.
         => configuration.GetValue("Morgana:ActorSystem:MaxToolResultLength", 32000);
 
-    /// <summary>
-    /// The refusal for a message that the provider's own content filter blocked, worded in the UserGuard prompt.
-    /// </summary>
+    /// <summary>The refusal for a message that the provider's own content filter blocked, worded in the UserGuard prompt.</summary>
     private readonly string contentFilteredRefusal;
 
-    /// <summary>
-    /// The refusal for a message that nobody could judge, worded in the UserGuard prompt.
-    /// </summary>
+    /// <summary>The refusal for a message that nobody could judge, worded in the UserGuard prompt.</summary>
     private readonly string noVerdictRefusal;
 
-    /// <summary>
-    /// The MCP registry that lists a server again whenever an agent asks for its tools.
-    /// </summary>
+    /// <summary>The MCP registry that lists a server again whenever an agent asks for its tools.</summary>
     private readonly IMCPClientRegistryService mcpClientRegistryService;
 
-    /// <summary>
-    /// The channel store, which keeps the last answer each conversation received.
-    /// </summary>
+    /// <summary>The channel store, which keeps the last answer each conversation received.</summary>
     private readonly IChannelMetadataStore channelMetadataStore;
 
     /// <summary>
@@ -124,16 +98,7 @@ public partial class LLMGuardRailService : IGuardRailService
     /// </summary>
     private readonly ConcurrentDictionary<string, OfferAdmission> offerAdmissions = new(StringComparer.Ordinal);
 
-    /// <summary>
-    /// Initialises a new instance of <see cref="LLMGuardRailService"/>.
-    /// Loads and builds the UserGuard system prompt eagerly.
-    /// </summary>
-    /// <param name="llmService">LLM service used for the async policy check.</param>
-    /// <param name="promptResolverService">Prompt resolver used to load UserGuard configuration.</param>
-    /// <param name="mcpClientRegistryService">MCP registry that lists a server whose offer is examined.</param>
-    /// <param name="channelMetadataStore">Channel store that keeps the last answer each conversation received.</param>
-    /// <param name="configuration">Application configuration holding the limit on the length of what an inspection reads.</param>
-    /// <param name="logger">Logger for diagnostic output.</param>
+    /// <summary>Composes the three guards' prompts and reads the two refusals that the guard words itself.</summary>
     public LLMGuardRailService(
         ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
@@ -152,9 +117,7 @@ public partial class LLMGuardRailService : IGuardRailService
         // The last answer is read per message, so the guard needs the store itself and not a snapshot.
         this.channelMetadataStore = channelMetadataStore;
 
-        // Built once here, not per-call: unlike LLMClassifierService/EmbeddedAgentConfigurationService
-        // this isn't deferred behind a Lazy<> — the UserGuard prompt is needed on essentially every
-        // turn (guard check gates every user message), so eager beats lazy for the common case.
+        // The UserGuard reads every user message, so its prompt is composed once at construction.
         Records.Prompt userGuardPrompt =
             promptResolverService.ResolveAsync(Constants.Prompts.UserGuard).GetAwaiter().GetResult();
 
@@ -220,7 +183,7 @@ public partial class LLMGuardRailService : IGuardRailService
 
             // The first call of every turn, on the framework tier: it stands between the user
             // and the whole pipeline, so nothing downstream runs until it has answered.
-            string response = await llmService.CompleteWithSystemPromptAsync(
+            string guardAnswer = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
                 userGuardSystemPrompt,
                 userGuardSubjectJson,
@@ -228,11 +191,11 @@ public partial class LLMGuardRailService : IGuardRailService
 
             // The verdict, in the shape the UserGuard prompt's Formatting section asked for. Nothing here
             // is null when the model answered as instructed.
-            Records.GuardCheckResponse? llmResult = JsonSerializer.Deserialize<Records.GuardCheckResponse>(
-                response, Records.DefaultJsonSerializerOptions);
+            Records.GuardCheckResponse? guardVerdict = JsonSerializer.Deserialize<Records.GuardCheckResponse>(
+                guardAnswer, Records.DefaultJsonSerializerOptions);
 
             // For the log line alone. The answer below is decided on the verdict itself.
-            bool compliant = llmResult?.Compliant ?? false;
+            bool compliant = guardVerdict?.Compliant ?? false;
 
             logger.LogInformation(
                 "LLMGuardRailService: LLM policy check result — compliant={Compliant} for conversation {ConversationId}",
@@ -240,8 +203,8 @@ public partial class LLMGuardRailService : IGuardRailService
 
             // A verdict that could not be read refuses the message, because a guard that does not answer
             // in its shape may have been talked to by the very message it was reading.
-            return llmResult != null
-                ? new Records.GuardRailResult(llmResult.Compliant, llmResult.Violation, Records.GuardVerdictSource.Inspector)
+            return guardVerdict != null
+                ? new Records.GuardRailResult(guardVerdict.Compliant, guardVerdict.Violation, Records.GuardVerdictSource.Inspector)
                 : new Records.GuardRailResult(Compliant: false, Violation: noVerdictRefusal, Source: Records.GuardVerdictSource.FailClosed, ErrorType: Telemetry.ErrorTypes.UnreadableVerdict);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -251,8 +214,8 @@ public partial class LLMGuardRailService : IGuardRailService
         }
         catch (Exception ex) when (llmService.GetLanguageModel(llmService.FrameworkTier).IsContentFilterRefusal(ex))
         {
-            // The provider's own content filter blocked the prompt before any judgment could run —
-            // a genuine violation signal, not a failure of the guard.
+            // The provider's own content filter blocked the prompt before any judgment could run:
+            // a violation signal, not a failure of the guard.
             logger.LogWarning(ex,
                 "LLMGuardRailService: provider-level content filter rejected the prompt for conversation {ConversationId} — treating as a compliance violation",
                 conversationId);
@@ -275,48 +238,14 @@ public partial class LLMGuardRailService : IGuardRailService
     /// <inheritdoc/>
     public async Task<Records.GuardRailResult> CheckToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult, CancellationToken cancellationToken = default)
     {
-        // What the result carries against the assistant; null when nothing in it does.
-        string? finding;
-
-        try
-        {
-            // The free check, which every guarded result pays for.
-            finding = FindForgery(toolResult);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex,
-                "LLMGuardRailService: check of the result of tool {ToolName} failed for conversation {ConversationId}",
-                toolName, conversationId);
-
-            // The result goes on to the inspector, which still reads it.
-            finding = null;
-        }
-
-        // A forgery withholds the result. Only the finding is logged: the content stays out of every log.
-        if (finding != null)
+        // A forgery or a result too long for an inspection is withheld without a model call.
+        if (RefuseWithoutInspection(toolResult, $"the result of tool {toolName}") is { } refusal)
         {
             logger.LogWarning(
-                "LLMGuardRailService: result of tool {ToolName} withheld for conversation {ConversationId} — {Finding}",
-                toolName, conversationId, finding);
+                "LLMGuardRailService: result of tool {ToolName} withheld for conversation {ConversationId} — {Violation}",
+                toolName, conversationId, refusal.Violation);
 
-            return new Records.GuardRailResult(false, finding, Records.GuardVerdictSource.Prefilter);
-        }
-
-        // The limit on what an inspection vouches for, read once for this result.
-        int maxLength = MaxToolResultLength;
-
-        // On a text that long an inspection is not a verdict to trust and an injection hides easily in its tail.
-        if (toolResult.Length > maxLength)
-        {
-            logger.LogWarning(
-                "LLMGuardRailService: result of tool {ToolName} withheld for conversation {ConversationId} — {Length} characters exceed the limit of {Limit}",
-                toolName, conversationId, toolResult.Length, maxLength);
-
-            return new Records.GuardRailResult(
-                false,
-                string.Create(CultureInfo.InvariantCulture, $"is longer than the {maxLength} characters an inspection vouches for"),
-                Records.GuardVerdictSource.Prefilter);
+            return refusal;
         }
 
         // Nothing forged and within the limit: the inspector reads what the free check cannot.
@@ -326,48 +255,14 @@ public partial class LLMGuardRailService : IGuardRailService
     /// <inheritdoc/>
     public async Task<Records.GuardRailResult> CheckPeerQuestionAsync(string conversationId, string partnerName, string agentIntent, string agentTerritory, string question, CancellationToken cancellationToken = default)
     {
-        // What the question carries against the assistant; null when nothing in it does.
-        string? finding;
-
-        try
-        {
-            // The free check: a label, a fence, a template token or tag-character text is a forgery whoever writes it.
-            finding = FindForgery(question);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex,
-                "LLMGuardRailService: check of the question of partner {PartnerName} failed for conversation {ConversationId}",
-                partnerName, conversationId);
-
-            // The question still goes to the PeerGuard, which reads it.
-            finding = null;
-        }
-
-        // A forgery declines the question. Only the finding is logged: the content stays out of every log.
-        if (finding != null)
+        // A forgery or a question too long for a judgment is declined without a model call.
+        if (RefuseWithoutInspection(question, $"the question of partner {partnerName}") is { } refusal)
         {
             logger.LogWarning(
-                "LLMGuardRailService: question of partner {PartnerName} to agent {AgentIntent} declined for conversation {ConversationId} — {Finding}",
-                partnerName, agentIntent, conversationId, finding);
+                "LLMGuardRailService: question of partner {PartnerName} to agent {AgentIntent} declined for conversation {ConversationId} — {Violation}",
+                partnerName, agentIntent, conversationId, refusal.Violation);
 
-            return new Records.GuardRailResult(false, finding, Records.GuardVerdictSource.Prefilter);
-        }
-
-        // The limit on what a judgment vouches for, read once for this question.
-        int maxLength = MaxToolResultLength;
-
-        // On a text that long a judgment is not a verdict to trust and an injection hides easily in its tail.
-        if (question.Length > maxLength)
-        {
-            logger.LogWarning(
-                "LLMGuardRailService: question of partner {PartnerName} to agent {AgentIntent} declined for conversation {ConversationId} — {Length} characters exceed the limit of {Limit}",
-                partnerName, agentIntent, conversationId, question.Length, maxLength);
-
-            return new Records.GuardRailResult(
-                false,
-                string.Create(CultureInfo.InvariantCulture, $"is longer than the {maxLength} characters an inspection vouches for"),
-                Records.GuardVerdictSource.Prefilter);
+            return refusal;
         }
 
         // The partner, the agent asked, what it answers for and the question, in the four fields the PeerGuard's prompt names.
@@ -429,29 +324,28 @@ public partial class LLMGuardRailService : IGuardRailService
 
     /// <inheritdoc/>
     public bool IsServerAvailableAndSecure(UsesMCPServerAttribute serverAttribute)
+        // The server is open while its last offer stands admitted.
         => IsSourceAvailableAndSecure(MCPSourceKey(serverAttribute));
 
     /// <inheritdoc/>
     public bool IsPeerAvailableAndSecure(Records.PeerReference peer)
+        // The colleague is open while its card's description stands admitted.
         => IsSourceAvailableAndSecure(PartnerSourceKey(peer));
 
     #region Utilities
-    /// <summary>
-    /// The key an MCP server's verdict is kept under.
-    /// </summary>
+    /// <summary>Returns the key an MCP server's verdict is kept under.</summary>
     private static string MCPSourceKey(UsesMCPServerAttribute serverAttribute)
+        // The server's pool key, so the verdict follows the session it judged.
         => $"mcp:{MCPClientRegistryService.PoolKey(serverAttribute)}";
 
-    /// <summary>
-    /// The key a partner's colleague verdict is kept under.
-    /// </summary>
+    /// <summary>Returns the key a partner's colleague verdict is kept under.</summary>
     private static string PartnerSourceKey(Records.PeerReference peer)
+        // Partner and intent are matched ignoring case, as their declarations are.
         => $"partner:{peer.Instance}/{peer.Intent}".ToLowerInvariant();
 
-    /// <summary>
-    /// True when the source's last examination completed with an admission.
-    /// </summary>
+    /// <summary>Whether the source's last examination completed with an admission.</summary>
     private bool IsSourceAvailableAndSecure(string sourceKey)
+        // A source never examined, still under examination or refused is closed.
         => offerAdmissions.TryGetValue(sourceKey, out OfferAdmission? admission)
            && admission.Examination.IsValueCreated
            && admission.Examination.Value.IsCompletedSuccessfully
@@ -483,11 +377,13 @@ public partial class LLMGuardRailService : IGuardRailService
         // The verdict every caller of this offer reads.
         return verdict;
 
+        #region Utilities
         // A discarded admission never starts its examination, so the change event lives inside the examination and runs once.
         OfferAdmission NewAdmission(bool replacesAnotherOffer)
             => new OfferAdmission(
                 offerText,
                 new Lazy<Task<Records.GuardRailResult>>(() => ExamineOfferAsync(sourceKey, offerText, securityDoor, replacesAnotherOffer)));
+        #endregion
     }
 
     /// <summary>
@@ -507,47 +403,9 @@ public partial class LLMGuardRailService : IGuardRailService
                 new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Changed));
         }
 
-        // What the offer carries against the assistant; null when nothing in it does.
-        string? finding;
-
-        try
-        {
-            // The free check over every name and text of the offer: parameter names are covered too.
-            finding = FindForgery(offerText);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "LLMGuardRailService: check of the offer of {Source} failed", sourceKey);
-
-            // An offer whose free check fails still goes to the inspector like a tool result.
-            finding = null;
-        }
-
-        // The limit on what an inspection vouches for, read once for this offer.
-        int maxLength = MaxToolResultLength;
-
-        // The verdict on the offer, decided by the first layer that has something to say.
-        Records.GuardRailResult result;
-
-        // A forgery refuses outright and a text over the limit is not inspected; anything else goes to the inspector.
-        if (finding != null)
-        {
-            // A forgery refuses the offer without a model call.
-            result = new Records.GuardRailResult(false, finding, Records.GuardVerdictSource.Prefilter);
-        }
-        else if (offerText.Length > maxLength)
-        {
-            // On an offer that long an inspection is not a verdict to trust and an injection hides easily in its tail.
-            result = new Records.GuardRailResult(
-                false,
-                string.Create(CultureInfo.InvariantCulture, $"is longer than the {maxLength} characters an inspection vouches for"),
-                Records.GuardVerdictSource.Prefilter);
-        }
-        else
-        {
-            // Nothing forged and within the limit: the inspector reads what the free check cannot.
-            result = await JudgeWithInspectorAsync("toolguard-offers", toolGuardSystemPrompt, toolGuardDustRole, offerText, $"the offer of {sourceKey}");
-        }
+        // A forgery or an offer too long for an inspection is refused without a model call; anything else goes to the inspector.
+        Records.GuardRailResult result = RefuseWithoutInspection(offerText, $"the offer of {sourceKey}")
+            ?? await JudgeWithInspectorAsync("toolguard-offers", toolGuardSystemPrompt, toolGuardDustRole, offerText, $"the offer of {sourceKey}");
 
         // A refused offer shuts the source for every agent: only the finding is logged, never the offer itself.
         if (!result.Compliant)
@@ -582,8 +440,46 @@ public partial class LLMGuardRailService : IGuardRailService
     }
 
     /// <summary>
-    /// Has the ToolGuard inspector judge a tool's result; a result that cannot be judged is withheld.
+    /// Refuses a text before any model call when it forges a part of Morgana's prompt or is longer than an inspection vouches for; null otherwise.
+    /// The check is free, so every guarded text pays for it before the guard's model reads what the check cannot.
     /// </summary>
+    private Records.GuardRailResult? RefuseWithoutInspection(string text, string subjectLabel)
+    {
+        // What the text carries against the assistant; null when nothing in it does.
+        string? finding;
+
+        try
+        {
+            // A label, a fence, a template token or tag-character text is a forgery whoever writes it.
+            finding = FindForgery(text);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "LLMGuardRailService: check of {Subject} failed", subjectLabel);
+
+            // A text whose free check fails still goes to the guard's model, which reads it.
+            finding = null;
+        }
+
+        // A forgery refuses the text outright.
+        if (finding != null)
+            return new Records.GuardRailResult(false, finding, Records.GuardVerdictSource.Prefilter);
+
+        // The limit on what an inspection vouches for, read once for this text.
+        int maxLength = MaxToolResultLength;
+
+        // On a text that long an inspection is not a verdict to trust and an injection hides easily in its tail.
+        if (text.Length > maxLength)
+            return new Records.GuardRailResult(
+                false,
+                string.Create(CultureInfo.InvariantCulture, $"is longer than the {maxLength} characters an inspection vouches for"),
+                Records.GuardVerdictSource.Prefilter);
+
+        // Nothing forged and within the limit: the guard's model reads what the free check cannot.
+        return null;
+    }
+
+    /// <summary>Has the ToolGuard judge a tool's result; a result that cannot be judged is withheld.</summary>
     private async Task<Records.GuardRailResult> InspectToolResultAsync(string conversationId, string toolName, string toolArguments, string toolResult, CancellationToken cancellationToken = default)
     {
         // The tool, the arguments it was called with and what it returned, in the three fields the inspector's prompt names.
@@ -597,16 +493,14 @@ public partial class LLMGuardRailService : IGuardRailService
         return await JudgeWithInspectorAsync(conversationId, toolGuardSystemPrompt, toolGuardDustRole, subjectJson, $"the result of tool {toolName}", cancellationToken);
     }
 
-    /// <summary>
-    /// Has a guard's prompt judge a subject serialized as JSON; a subject that cannot be judged is withheld.
-    /// </summary>
+    /// <summary>Has a guard's prompt judge a subject serialized as JSON; a subject that cannot be judged is withheld.</summary>
     private async Task<Records.GuardRailResult> JudgeWithInspectorAsync(string conversationId, string systemPrompt, string dustRole, string subjectJson, string subjectLabel, CancellationToken cancellationToken = default)
     {
         // Any failure of the inspection withholds the subject: a source nobody vouches for is never read unjudged.
         try
         {
             // The judgment runs on the framework tier and is charged under the dust role of the guard that asks it.
-            string response = await llmService.CompleteWithSystemPromptAsync(
+            string inspectorAnswer = await llmService.CompleteWithSystemPromptAsync(
                 conversationId,
                 systemPrompt,
                 subjectJson,
@@ -615,7 +509,7 @@ public partial class LLMGuardRailService : IGuardRailService
 
             // The verdict, in the shape the guard prompt's Formatting section asked for.
             Records.GuardCheckResponse? inspectorVerdict = JsonSerializer.Deserialize<Records.GuardCheckResponse>(
-                response, Records.DefaultJsonSerializerOptions);
+                inspectorAnswer, Records.DefaultJsonSerializerOptions);
 
             // An inspector that does not answer in its shape may have been talked to by the very text it was reading.
             if (inspectorVerdict is null)
@@ -671,9 +565,7 @@ public partial class LLMGuardRailService : IGuardRailService
         }
     }
 
-    /// <summary>
-    /// Reads a serialized text as the element the inspector sees; a text that is not JSON becomes one string.
-    /// </summary>
+    /// <summary>Reads a serialized text as the element the inspector sees; a text that is not JSON becomes one string.</summary>
     private static JsonElement ReadJsonElement(string serializedText)
     {
         try
@@ -689,17 +581,16 @@ public partial class LLMGuardRailService : IGuardRailService
         }
     }
 
-    /// <summary>
-    /// Describes the first forgery found in a tool result; null when the result carries none.
-    /// </summary>
-    private static string? FindForgery(string toolResult)
+    /// <summary>Describes the first forgery found in an outside text; null when the text carries none.</summary>
+    private static string? FindForgery(string outsideText)
     {
-        // Every text a reader of the result would meet, nested JSON included.
-        foreach (string text in ReadableTexts(toolResult))
+        // Every text a reader would meet, nested JSON included.
+        foreach (string text in ReadableTexts(outsideText))
         {
             // A section label anywhere in the text: the labels are Morgana's own and no datum needs them.
             foreach (string label in sectionLabels)
             {
+                // The first label found names the forgery.
                 if (text.Contains(label, StringComparison.Ordinal))
                     return $"forges the prompt section label {label}";
             }
@@ -721,10 +612,8 @@ public partial class LLMGuardRailService : IGuardRailService
         return null;
     }
 
-    /// <summary>
-    /// Collects every text of a result: property names and string values at any depth of the JSON.
-    /// </summary>
-    private static List<string> ReadableTexts(string toolResult)
+    /// <summary>Collects every text of an outside text: property names and string values at any depth of the JSON.</summary>
+    private static List<string> ReadableTexts(string outsideText)
     {
         // Filled in reading order, so the first forgery found is the first a reader would meet.
         List<string> texts = [];
@@ -732,30 +621,30 @@ public partial class LLMGuardRailService : IGuardRailService
         try
         {
             // The result as the tool loop serialized it.
-            using JsonDocument document = JsonDocument.Parse(toolResult);
+            using JsonDocument document = JsonDocument.Parse(outsideText);
             CollectTexts(document.RootElement, texts);
         }
         catch (JsonException)
         {
-            // A result that is not JSON is one text, read whole.
-            return [toolResult];
+            // A text that is not JSON is read whole.
+            return [outsideText];
         }
 
         // Every name and value of the document, nested documents included.
         return texts;
     }
 
-    /// <summary>
-    /// Adds the property names and string values under an element to the list; nested JSON carried in a string is descended too.
-    /// </summary>
+    /// <summary>Adds the property names and string values under an element to the list; nested JSON carried in a string is descended too.</summary>
     private static void CollectTexts(JsonElement element, List<string> texts)
     {
+        // Numbers, booleans and nulls carry no text a model would read as an instruction.
         switch (element.ValueKind)
         {
             // An object contributes each property name and everything under each value.
             case JsonValueKind.Object:
                 foreach (JsonProperty property in element.EnumerateObject())
                 {
+                    // A property name is read as much as its value.
                     texts.Add(property.Name);
                     CollectTexts(property.Value, texts);
                 }
@@ -791,9 +680,7 @@ public partial class LLMGuardRailService : IGuardRailService
         }
     }
 
-    /// <summary>
-    /// True when the text carries a Unicode tag character outside a flag emoji's own sequence.
-    /// </summary>
+    /// <summary>Whether the text carries a Unicode tag character outside a flag emoji's own sequence.</summary>
     private static bool HidesTextInTagCharacters(string text)
     {
         // The tag block runs from U+E0000 to U+E007F; a flag emoji is the one honest use of it.
@@ -833,6 +720,7 @@ public partial class LLMGuardRailService : IGuardRailService
 
                     break;
                 }
+                // A tag character outside a flag sequence.
                 case >= tagBlockStart and <= tagBlockEnd:
                     // A lone tag character: nothing honest puts one here.
                     return true;
@@ -845,13 +733,13 @@ public partial class LLMGuardRailService : IGuardRailService
         return false;
     }
 
-    /// <summary>
-    /// The text before the first line break of a fence; the whole fence when it has one line.
-    /// </summary>
+    /// <summary>Returns the text before the first line break of a fence; the whole fence when it has one line.</summary>
     private static string FirstLine(string fence)
     {
         // The break that ends the first line, if the fence has more than one.
         int lineBreak = fence.IndexOf('\n', StringComparison.Ordinal);
+
+        // A fence of one line is identified by all of it.
         return lineBreak < 0 ? fence : fence[..lineBreak];
     }
 
