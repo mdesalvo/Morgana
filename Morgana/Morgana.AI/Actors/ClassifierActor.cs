@@ -6,29 +6,16 @@ using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Actors;
 
-/// <summary>
-/// Intent classification actor that analyses user messages and determines their underlying intent.
-/// </summary>
+/// <summary>The conversation's classifier: it hands each user message to the classifier service and relays the ranked intents.</summary>
 public class ClassifierActor : MorganaActor
 {
     /// <summary>
-    /// Classifier service holding the whole classification strategy: the actor never reads the
-    /// message itself, it only hands it over and relays the ranked result — collision metadata
-    /// included — back to the supervisor.
+    /// The service that holds the whole classification strategy.
+    /// The actor never reads the message itself: it hands it over and relays the result, collision metadata included.
     /// </summary>
     private readonly IClassifierService classifierService;
 
-    /// <summary>
-    /// Initialises a new instance of <see cref="ClassifierActor"/>.
-    /// </summary>
-    /// <param name="conversationId">Unique identifier for this conversation.</param>
-    /// <param name="llmService">LLM service (passed to base; not used directly here).</param>
-    /// <param name="promptResolverService">Prompt resolver (passed to base; not used directly here).</param>
-    /// <param name="classifierService">
-    /// Classifier service that encapsulates all intent classification logic.
-    /// Injected by Akka DI from the ASP.NET Core service container.
-    /// </param>
-    /// <param name="configuration">Morgana configuration (layered by ASP.NET).</param>
+    /// <summary>Binds the classifier to its conversation and to the classifier service.</summary>
     public ClassifierActor(
         string conversationId,
         ILanguageModelService llmService,
@@ -36,18 +23,17 @@ public class ClassifierActor : MorganaActor
         IClassifierService classifierService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
+        // The service arrives from the actor system's DI scope and lives as long as the actor.
         this.classifierService = classifierService;
 
-        // Requests the classification of the user message to the classifier service (see ClassifyMessageAsync)
+        // The supervisor sends the user message here once the guard has admitted it.
         ReceiveAsync<Records.UserMessage>(ClassifyMessageAsync);
     }
 
-    /// <summary>
-    /// Delegates the classification to <see cref="IClassifierService"/> and replies to the sender.
-    /// </summary>
-    /// <param name="msg">User message to classify.</param>
+    /// <summary>Classifies the user message and replies to the supervisor with the result or with the failure.</summary>
     private async Task ClassifyMessageAsync(Records.UserMessage msg)
     {
+        // The supervisor is captured before the await, after which Sender no longer names it.
         IActorRef originalSender = Sender;
 
         try
@@ -63,8 +49,7 @@ public class ClassifierActor : MorganaActor
                 classificationResult.Intent,
                 classificationResult.Metadata.GetValueOrDefault("confidence", "N/A"));
 
-            // Replies the supervisor with the result of the classification, which includes the intents
-            // ranked by descending score and the eventual collision metadata to support user-driven disambiguation.
+            // The supervisor receives the intents ranked by descending score, with the collision metadata that lets the user disambiguate.
             originalSender.Tell(classificationResult);
         }
         catch (OperationCanceledException) when (msg.TurnCancellation.IsCancellationRequested)
@@ -76,7 +61,7 @@ public class ClassifierActor : MorganaActor
         {
             actorLogger.Error(ex, "ClassifierActor: unexpected error during classification");
 
-            // Replies the supervisor with a specific technical failure
+            // The supervisor reads the failure as a classification that found nothing and falls back to the Other intent.
             originalSender.Tell(new Status.Failure(ex));
         }
     }

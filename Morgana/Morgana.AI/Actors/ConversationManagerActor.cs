@@ -12,69 +12,45 @@ using Morgana.Contracts;
 namespace Morgana.AI.Actors;
 
 /// <summary>
-/// Entry point actor for managing conversations: the primary interface between the external
-/// system and the internal actor hierarchy, owning conversation lifecycle (creation/termination)
-/// and forwarding user messages to <see cref="ConversationSupervisorActor"/>.
+/// The conversation's entry point: it starts and ends the conversation, hands each message to the supervisor
+/// and delivers every answer to the client, the dust warnings included.
 /// </summary>
 public class ConversationManagerActor : MorganaActor
 {
-    /// <summary>
-    /// Outbound channel used to deliver messages from the actor system to the end user.
-    /// Abstracts the transport + client pair (e.g. SignalR + Cauldron web UI) so the actor
-    /// does not depend on any specific delivery mechanism. Also exposes
-    /// <see cref="ChannelCapabilities"/> so producers can degrade features
-    /// (rich cards, streaming, quick replies) when the target channel does not support them.
-    /// </summary>
+    /// <summary>The adapting channel, which fits every answer to the conversation's capabilities before the transport carries it.</summary>
     private readonly IChannelService channelService;
 
     /// <summary>
-    /// The conversation's channel, settled at the handshake before this actor exists. This actor
-    /// only drops the in-memory copy when the conversation stops being served here.
+    /// The conversation's channel, settled at the handshake before this actor exists.
+    /// This actor only drops the in-memory copy when the conversation stops being served here.
     /// </summary>
     private readonly IChannelMetadataStore channelMetadataStore;
 
-    /// <summary>
-    /// Per-conversation lifetime token-budget limiter. Read after each turn to stamp the
-    /// remaining dust level on the outbound message and to emit one-shot 70%/90% warnings.
-    /// </summary>
+    /// <summary>The conversation's dust budget, read around each answer for its gauge, its warnings and its lockout.</summary>
     private readonly IDustLimitService dustLimitService;
 
-    /// <summary>
-    /// Dust-limiting policy (budget + warning message templates) for placeholder substitution.
-    /// </summary>
+    /// <summary>The dust-limiting switch and the authored texts of its warnings and of its lockout.</summary>
     private readonly Records.DustLimitingOptions dustLimitingOptions;
 
     /// <summary>
-    /// Keeps Morgana's own side of the conversation: every answer that passes through here without
-    /// an agent having recorded it is hers. A transcript that lacked it would show the user a
-    /// question of theirs with nothing under it.
+    /// Keeps Morgana's own side of the conversation: every answer that passes through here without an agent having recorded it is hers.
+    /// A transcript that lacked it would show the user a question of theirs with nothing under it.
     /// </summary>
     private readonly IConversationPersistenceService conversationPersistenceService;
 
     /// <summary>
-    /// The instant the last answer went out under. Kept so a turn closing with two answers dates
-    /// them apart: a client takes anything dated no later than what it holds as a repeat.
+    /// The instant the last answer went out under.
+    /// Kept so a turn closing with two answers dates them apart: a client takes anything dated no later than what it holds as a repeat.
     /// </summary>
     private DateTime lastAnswerTimestamp = DateTime.MinValue;
 
     /// <summary>
-    /// Reference to the conversation supervisor actor. Null until the conversation is started here or
-    /// its first message reaches this process. The supervisor dying clears it again.
+    /// The conversation's supervisor; null until the conversation starts here or its first message reaches this process.
+    /// The supervisor dying clears it again.
     /// </summary>
     private IActorRef? supervisor;
 
-    /// <summary>
-    /// Initializes a new instance of the ConversationManagerActor.
-    /// </summary>
-    /// <param name="conversationId">Unique identifier for this conversation</param>
-    /// <param name="channelService">Channel service used to deliver outbound messages to the end user</param>
-    /// <param name="channelMetadataStore">The conversation's channel, whose in-memory copy this actor releases</param>
-    /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
-    /// <param name="conversationPersistenceService">Keeps Morgana's own answers on the conversation's record</param>
-    /// <param name="dustLimitingOptions">Dust-limiting policy and warning message templates</param>
-    /// <param name="llmService">LLM service for AI completions</param>
-    /// <param name="promptResolverService">Service for resolving prompt templates</param>
-    /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
+    /// <summary>Binds the manager to its conversation and to the services that deliver and record its answers.</summary>
     public ConversationManagerActor(
         string conversationId,
         IChannelService channelService,
@@ -86,32 +62,30 @@ public class ConversationManagerActor : MorganaActor
         IPromptResolverService promptResolverService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
+        // The services arrive from the actor system's DI scope and live as long as the actor.
         this.channelService = channelService;
         this.channelMetadataStore = channelMetadataStore;
         this.dustLimitService = dustLimitService;
         this.conversationPersistenceService = conversationPersistenceService;
         this.dustLimitingOptions = dustLimitingOptions.Value;
 
-        // Handle incoming user messages:
-        // - Ensures supervisor exists (creates if missing)
-        // - Forwards message to supervisor using Tell to support streaming
+        // A user message starts a turn on the supervisor, which is brought up first when missing.
         ReceiveAsync<Records.UserMessage>(HandleUserMessageAsync);
 
-        // Handle conversation lifecycle requests:
-        // - CreateConversation: creates supervisor actor, triggers the presentation of a new conversation
-        // - TerminateConversation: stops supervisor actor and clears reference
+        // The controller starts the conversation, which brings up the supervisor and has Morgana present herself.
         ReceiveAsync<Records.CreateConversation>(HandleCreateConversationAsync);
+
+        // The controller ends the conversation, which stops the supervisor.
         ReceiveAsync<Records.TerminateConversation>(HandleTerminateConversationAsync);
+
+        // A whole answer of the turn reaches the client, recorded and followed by the dust notices.
         ReceiveAsync<Records.ConversationResponse>(HandleConversationResponseAsync);
 
-        // Handle supervisor responses:
-        // - ConversationResponse: final response from supervisor → send to client via SignalR
+        // A streamed piece of the answer reaches the client as it arrives.
         ReceiveAsync<Records.AgentStreamChunk>(HandleStreamChunkAsync);
 
-        // Handle termination of watched actors (supervisor).
-        // Without this handler Akka throws DeathPactException when the supervisor stops,
-        // because the default Unhandled path re-throws Terminated as a fatal exception.
-        // Clear the supervisor reference so the next UserMessage doesn't forward to dead letters.
+        // The watched supervisor stopped: without this handler its Terminated would take the manager down with a DeathPactException.
+        // The reference is cleared, so the next message brings up a new supervisor instead of reaching dead letters.
         Receive<Terminated>(msg =>
         {
             actorLogger.Warning("Watched actor terminated: {0}; clearing supervisor reference", msg.ActorRef.Path);
@@ -119,68 +93,54 @@ public class ConversationManagerActor : MorganaActor
         });
     }
 
-    /// <summary>
-    /// Handles the start of a new conversation, whose handshake the controller has already settled:
-    /// creates the supervisor and has it present Morgana to the user.
-    /// </summary>
-    /// <param name="msg">Conversation creation request message</param>
+    /// <summary>Starts the conversation on the handshake that the controller has already settled and has Morgana present herself.</summary>
     private async Task HandleCreateConversationAsync(Records.CreateConversation msg)
     {
         actorLogger.Info($"Creating conversation {msg.ConversationId}");
 
-        // A repeated start finds its supervisor already there and presents nothing twice
+        // A repeated start finds its supervisor already there and presents nothing twice.
         if (!await EnsureSupervisorAsync())
             return;
 
-        // Asks the supervisor for the welcome message and its quick replies, which travel back
-        // through the ordinary outbound path as the first message of the conversation.
+        // The supervisor writes the welcome and delivers it as the first message of the conversation.
         supervisor!.Tell(new Records.GeneratePresentationMessage());
         actorLogger.Info("Presentation generation triggered");
     }
 
     /// <summary>
-    /// Gives the conversation a supervisor when it has none: at the start, on the first message a
-    /// process receives for a conversation it never saw start, after the supervisor died. Nothing
-    /// is handed to it: it takes the conversation's state from the conversation's record.
+    /// Gives the conversation a supervisor when it has none, returning whether one was brought up.
+    /// That happens at the start, on the first message to a process that never saw the conversation start and after the supervisor died:
+    /// nothing is handed to it, since it takes the conversation's state from the conversation's record.
     /// </summary>
-    /// <returns>True when a supervisor was created, false when one was already there.</returns>
     private async Task<bool> EnsureSupervisorAsync()
     {
+        // A supervisor already serving the conversation needs nothing.
         if (supervisor is not null)
             return false;
 
-        // The FSM orchestrator of the turn pipeline, named after this conversation
-        // (/user/supervisor-{conversationId}), reusing it if the actor path already exists.
+        // The supervisor is named after the conversation, so one still alive under that name is reused.
         supervisor = await Context.System.GetOrCreateActorAsync<ConversationSupervisorActor>(
             Constants.Actors.Supervisor, conversationId);
 
-        // Watch the supervisor so its death arrives here as a Terminated message
-        // (handled above) instead of taking the manager down with a DeathPactException.
+        // The supervisor's death arrives here as a Terminated message, which clears the reference.
         Context.Watch(supervisor);
 
         actorLogger.Info("Supervisor created: {0}", supervisor.Path);
         return true;
     }
 
-    /// <summary>
-    /// Handles conversation termination requests.
-    /// Stops the supervisor actor and clears the reference.
-    /// </summary>
-    /// <param name="msg">Conversation termination request message</param>
+    /// <summary>Ends the conversation here: it stops the supervisor and drops the in-memory copy of the handshake.</summary>
     private Task HandleTerminateConversationAsync(Records.TerminateConversation msg)
     {
         actorLogger.Info($"Terminating conversation {msg.ConversationId}");
 
-        // Check whether there is anything to tear down: a conversation ended twice, or ended before
-        // it ever produced a turn, reaches here with no supervisor.
+        // A conversation ended twice or ended before it ever produced a turn reaches here with no supervisor.
         if (supervisor is not null)
         {
-            // Stops the supervisor and, with it, the whole child subtree (guard, classifier,
-            // router and the agents underneath).
+            // Stops the supervisor alone: the guard, the classifier, the router and the agents live flat under the guardian.
             Context.Stop(supervisor);
 
-            // Drops the reference immediately rather than waiting for the Terminated message,
-            // so no message forwarded in between lands in dead letters.
+            // The reference goes at once, so a message arriving before the Terminated brings up a new supervisor instead of reaching dead letters.
             supervisor = null;
 
             actorLogger.Info("Supervisor stopped for conversation {0}", msg.ConversationId);
@@ -193,14 +153,7 @@ public class ConversationManagerActor : MorganaActor
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Handles incoming user messages.
-    /// Ensures supervisor exists, then forwards the message using Tell to support streaming.
-    /// </summary>
-    /// <param name="msg">User message to process</param>
-    /// <remarks>
-    /// Uses Tell pattern to support streaming chunks and final response separately.
-    /// </remarks>
+    /// <summary>Hands the user message to the supervisor, bringing one up first when the conversation has none.</summary>
     private async Task HandleUserMessageAsync(Records.UserMessage msg)
     {
         actorLogger.Info($"Received message in conversation {conversationId}: {msg.Text}");
@@ -211,38 +164,30 @@ public class ConversationManagerActor : MorganaActor
 
         actorLogger.Info("Forwarding message to supervisor at {0}", supervisor!.Path);
 
-        // Hands the turn to the supervisor with Tell rather than Ask: the answer comes back
-        // asynchronously as stream chunks plus a final ConversationResponse, not as a single reply.
+        // The turn's answer comes back as stream chunks and whole answers, each its own message to this manager.
         supervisor!.Tell(msg);
     }
 
     /// <summary>
-    /// Handles streaming chunks from the supervisor and forwards them to the client via the active channel.
-    /// Enables real-time progressive response rendering in the UI.
+    /// Delivers a streamed piece of the answer to the client.
+    /// A chunk only exists for a channel that takes streaming: the agent streams by the capabilities stamped on its request,
+    /// which were settled once at the handshake.
     /// </summary>
-    /// <param name="chunk">Streaming chunk containing partial response text</param>
-    /// <remarks>
-    /// A chunk only exists for a channel that takes streaming: the agent streams by the capabilities
-    /// stamped on its request, which were settled once at the handshake (see NormaliseCapabilities).
-    /// </remarks>
     private async Task HandleStreamChunkAsync(Records.AgentStreamChunk chunk)
     {
         try
         {
-            // Forward chunk to client via the active channel for progressive rendering
+            // The client renders the answer as it grows.
             await channelService.SendStreamChunkAsync(conversationId, chunk.Text);
         }
         catch (Exception ex)
         {
+            // A lost chunk costs only the progressive rendering: the whole answer still follows.
             actorLogger.Error(ex, "Failed to send stream chunk to client");
         }
     }
 
-    /// <summary>
-    /// Handles final response from supervisor (direct Tell, not PipeTo wrapper).
-    /// Sends the response to the client via SignalR with appropriate metadata.
-    /// </summary>
-    /// <param name="response">ConversationResponse from supervisor</param>
+    /// <summary>Records Morgana's own answers, delivers the answer with its dust gauge and follows it with the dust notices due.</summary>
     private async Task HandleConversationResponseAsync(Records.ConversationResponse response)
     {
         actorLogger.Info(
@@ -252,11 +197,9 @@ public class ConversationManagerActor : MorganaActor
             $"#quickReplies: {response.QuickReplies?.Count ?? 0}" +
             $"#richCard: {response.RichCard != null}");
 
-        // Reads the dust gauge before sending: the fraction still available (1.0 = full,
-        // 0.0 = empty). Every previous turn is already accounted for; the only cost missing is
-        // this message's own adaptation, which cannot be known until the adapter has run. So the
-        // value rides on the main response as a best effort and the reading taken after the send
-        // (below) supersedes it on the trailing warning message. Null when dust limiting is off.
+        // The dust gauge before the send, from 1.0 when full to 0.0 when empty; null when dust limiting is off.
+        // Only this message's own adaptation is missing from it, which cannot be known until the adapter has run:
+        // the reading after the send supersedes it on the trailing notice.
         ConversationMetadata? preSendMetadata = await dustLimitService.GetRemainingLevelAsync(conversationId) is { } preSendLevel
             ? new ConversationMetadata(preSendLevel)
             : null;
@@ -267,20 +210,18 @@ public class ConversationManagerActor : MorganaActor
         // make the same answer arrive twice.
         DateTime answerTimestamp = response.RecordedTimestamp ?? DateTime.UtcNow;
 
-        // Two answers can now close one turn (an agent's own, then Morgana taking the conversation
-        // back) while a client discards anything dated no later than what it already has. Sharing an
-        // instant with the answer it follows would make the second one vanish on the way out, with
-        // no trace anywhere and no catch-up able to recover it. Only an answer dated here can be
-        // nudged: one an agent recorded must keep the date its own session holds it under.
+        // Two answers can close one turn, an agent's own and then Morgana's farewell, while a client discards anything
+        // dated no later than what it already has: sharing an instant would make the second one vanish with no catch-up able to recover it.
+        // Only an answer dated here can be nudged, since one an agent recorded keeps the date its own session holds it under.
         if (response.RecordedTimestamp is null && answerTimestamp <= lastAnswerTimestamp)
             answerTimestamp = lastAnswerTimestamp.AddMilliseconds(1);
 
+        // The next answer of the turn is dated after this one.
         lastAnswerTimestamp = answerTimestamp;
 
-        // Undated by an agent means no agent wrote it: a refusal, a disambiguation, an intent
-        // nobody handles, a turn that ran out of time. Morgana said it, so it goes on her side of
-        // the conversation — otherwise a client rereading the history finds its own question with
-        // no answer under it and has to invent one, which is what every channel used to do.
+        // Undated by an agent means no agent wrote it: a refusal, a disambiguation, an intent nobody handles, a turn that ran out of time.
+        // Morgana said it, so it goes on her side of the conversation: otherwise a client rereading the history
+        // finds its own question with no answer under it.
         if (response.RecordedTimestamp is null)
             await conversationPersistenceService.AppendOrchestratorMessagesAsync(
                 conversationId,
@@ -298,7 +239,7 @@ public class ConversationManagerActor : MorganaActor
                 QuickReplies = response.QuickReplies,
                 AgentName = response.AgentName ?? Constants.Morgana,
                 AgentCompleted = response.AgentCompleted,
-                // Dated as the history keeps it, so a client catching up recognises the reply it was pushed
+                // Dated as the history keeps it, so a client catching up recognises the reply it was pushed.
                 Timestamp = answerTimestamp,
                 RichCard = response.RichCard,
                 ConversationMetadata = preSendMetadata
@@ -309,23 +250,19 @@ public class ConversationManagerActor : MorganaActor
                 $"(#quickReplies: {response.QuickReplies?.Count ?? 0}," +
                 $"hasRichCard: {response.RichCard != null})");
 
-            // Reads the gauge again after the send, because the send itself may have burnt dust:
-            // degrading the response for a poor channel (Rune squeezing a long answer into its
-            // 500-char profile) costs a ChannelAdapter LLM call. This second reading is the
-            // authoritative end-of-turn level — the same number IsOverBudgetAsync will see on the
-            // next send — so the warning/exhaustion decision below and the gauge the trailing
-            // message carries, are taken on it rather than on the stale pre-send snapshot.
+            // The gauge again after the send, which may have burnt dust: adapting the answer for a poor channel costs a ChannelAdapter call.
+            // This is the end-of-turn level that the dust gate will see on the next message,
+            // so the notices below are decided on it.
             ConversationMetadata? postSendMetadata = await dustLimitService.GetRemainingLevelAsync(conversationId) is { } postSendLevel
                 ? new ConversationMetadata(postSendLevel)
                 : null;
 
-            // Announces the lockout on the very turn that drained the budget, delivery included,
-            // rather than letting the user send a doomed next message and collect an instant 429:
-            // a DustLevel at or below 0.0 is exactly the over-budget state the controller gate
-            // rejects. It takes precedence over the advisory 70% / 90% warnings, since a
-            // conversation already dead does not need to be told it is running low.
+            // The lockout is announced on the turn that drained the budget, so the user is not left to send a doomed message:
+            // a level at or below 0.0 is the state the dust gate refuses.
+            // It takes precedence over the 70% and 90% warnings, since a spent conversation needs no warning that it runs low.
             if (postSendMetadata is { DustLevel: <= 0.0 })
                 await EmitDustExhaustionAsync();
+            // A budget still alive may have just crossed a warning threshold.
             else
                 await EmitDustWarningsIfNeededAsync(postSendMetadata?.DustLevel ?? 0.0);
         }
@@ -333,8 +270,7 @@ public class ConversationManagerActor : MorganaActor
         {
             actorLogger.Error(ex, "Failed to send channel message to client");
 
-            // A second channel-level failure here means the client is genuinely unreachable —
-            // logged and left at that, since there's no further fallback delivery path to try.
+            // The client is told that its answer was lost; a second failure means it is unreachable and is only logged.
             try
             {
                 await channelService.SendMessageAsync(new ChannelMessage
@@ -355,10 +291,8 @@ public class ConversationManagerActor : MorganaActor
     }
 
     /// <summary>
-    /// Checks the dust-budget warning thresholds and, for any threshold newly crossed,
-    /// emits a one-shot advisory <c>ChannelMessageTypes.SystemWarning</c> message. The 70% / 90% one-shot
-    /// flags are owned and atomically marked by <see cref="IDustLimitService"/>, so this
-    /// never re-sends the same warning. Best-effort: failures are logged, never thrown.
+    /// Sends the advisory warning of a dust threshold that the turn has just crossed, never throwing.
+    /// The dust service marks each threshold atomically, so a warning is never sent twice.
     /// </summary>
     private async Task EmitDustWarningsIfNeededAsync(double remaining)
     {
@@ -368,24 +302,21 @@ public class ConversationManagerActor : MorganaActor
 
         try
         {
-            // Asks the limiter which thresholds this turn has just crossed; the call also marks
-            // them atomically, so each warning is claimed once and never sent twice.
+            // The limiter reports the thresholds this turn has just crossed and marks them in the same step.
             (bool send70, bool send90) = await dustLimitService.CheckAndMarkWarningsAsync(conversationId);
+
+            // No threshold was crossed on this turn.
             if (!send70 && !send90)
                 return;
 
-            // 90% supersedes 70%: if both crossed in the same turn, the user only needs
-            // the more urgent message.
+            // 90% supersedes 70%: when both are crossed in the same turn the user only needs the more urgent message.
             string template = send90 ? dustLimitingOptions.Warning90Message : dustLimitingOptions.Warning70Message;
 
-            // Diagnostic only, no behavioural effect: PromptHarness taps the host's log output the
-            // same way it does for MorganaChatReducer's reduction line, since the wire message this
-            // emits is a second, out-of-band ChannelMessage the harness's single-message-per-turn
-            // webhook receiver does not otherwise observe cleanly.
+            // PromptHarness reads this line from the host's log: the warning is a second message of the turn,
+            // which its webhook receiver does not observe cleanly.
             actorLogger.Info(string.Create(CultureInfo.InvariantCulture, $"DUST WARNING ({(send90 ? 90 : 70)}%) for {conversationId}, remaining={remaining:F2}"));
 
-            // Use the identical `remaining` value from the main response's ConversationMetadata
-            // so the warning text percentage and the gauge are always in sync.
+            // The warning's percentage and its gauge come from the same end-of-turn reading, so they always agree.
             await channelService.SendMessageAsync(new ChannelMessage
             {
                 ConversationId = conversationId,
@@ -399,24 +330,20 @@ public class ConversationManagerActor : MorganaActor
         }
         catch (Exception ex)
         {
+            // A lost warning is advisory only: the answer has already been delivered.
             actorLogger.Error(ex, "Failed to emit dust budget warning for {0}", conversationId);
         }
     }
 
     /// <summary>
-    /// Pushes the terminal dust-exhaustion notice at end of turn, when the budget has
-    /// just been spent. Deliberately identical (text, <c>MessageType</c>,
-    /// <c>ErrorReason</c>) to the banner the message endpoint emits on a doomed next
-    /// send, so a channel that already renders the lockout (Cauldron's non-fading
-    /// terminal banner) and its de-dup keep working unchanged. Best-effort: a delivery
-    /// failure is logged, never thrown — the conversation is already over.
+    /// Sends the lockout notice on the turn that spent the budget, never throwing.
+    /// It is identical in text, type and reason to the refusal of the dust gate, so a channel renders and deduplicates the two as one.
     /// </summary>
     private async Task EmitDustExhaustionAsync()
     {
         try
         {
-            // Diagnostic only, no behavioural effect — see EmitDustWarningsIfNeededAsync's own
-            // remark on why PromptHarness needs this tapped from the log rather than the wire.
+            // PromptHarness reads this line from the host's log, as it does the warnings.
             actorLogger.Info($"DUST EXHAUSTED for {conversationId}");
 
             // Sends the lockout notice with a gauge pinned at zero, right after the answer this
@@ -434,45 +361,37 @@ public class ConversationManagerActor : MorganaActor
         }
         catch (Exception ex)
         {
+            // A lost notice leaves the lockout to the dust gate, which refuses the next message with the same text.
             actorLogger.Error(ex, "Failed to emit dust exhaustion notice for {0}", conversationId);
         }
     }
 
-    /// <summary>
-    /// Renders <paramref name="remaining"/> as the 0–100 <c>{percent}</c> a warning/exhaustion
-    /// template shows — fuel-gauge semantics users reason in, not abstract dust units. Truncated
-    /// toward zero rather than rounded, so a sub-1% residual reads as 0% instead of misleadingly
-    /// rounding up past the exhaustion the let-it-finish policy already let this turn overrun.
-    /// </summary>
+    /// <summary>Fills a dust template's <c>{percent}</c> with the share of the budget still available, from 0 to 100.</summary>
     private static string FormatDustMessage(string template, double remaining)
     {
+        // Truncated toward zero, so a residual under 1% reads as 0% rather than rounding up past an exhaustion the turn already overran.
         int percent = (int)(Math.Clamp(remaining, 0.0, 1.0) * 100);
+
+        // The template is authored in configuration, with the placeholder where the percentage goes.
         return template.Replace("{percent}", percent.ToString(CultureInfo.InvariantCulture));
     }
 
-    /// <summary>Logs actor startup; conversation setup itself only happens once CreateConversation arrives.</summary>
+    /// <summary>Logs the manager's start; the conversation itself starts only when CreateConversation arrives.</summary>
     protected override void PreStart()
     {
         actorLogger.Info($"ConversationManagerActor started for {conversationId}");
 
-        // Lets the base actor run its own startup after the logging.
         base.PreStart();
     }
 
-    /// <summary>
-    /// Evicts the in-memory copy of this conversation's handshake so a stop that skips
-    /// <see cref="HandleTerminateConversationAsync"/> (a supervision failure, a system shutdown)
-    /// can't leave it behind in <see cref="IChannelMetadataStore"/>.
-    /// </summary>
+    /// <summary>Drops the in-memory copy of the handshake on any stop, a supervision failure and a system shutdown included.</summary>
     protected override void PostStop()
     {
-        // Drops the copy on any stop, including the ones that never went through
-        // HandleTerminateConversationAsync, where the eviction would otherwise be missed.
+        // A stop that never went through the conversation's end would otherwise leave the copy behind.
         channelMetadataStore.EvictChannelMetadata(conversationId);
 
         actorLogger.Info($"ConversationManagerActor stopped for {conversationId}");
 
-        // Lets the base actor run its own teardown after the cleanup.
         base.PostStop();
     }
 }

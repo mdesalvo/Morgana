@@ -6,25 +6,16 @@ using Morgana.AI.Interfaces;
 
 namespace Morgana.AI.Actors;
 
-/// <summary>
-/// Content moderation actor that enforces guard-rail policies on every incoming user message.
-/// </summary>
+/// <summary>The conversation's guard: it hands each user message to the guard-rail service and relays the verdict.</summary>
 public class GuardActor : MorganaActor
 {
     /// <summary>
-    /// Guard-rail service holding the whole moderation strategy: the actor never inspects the
-    /// message itself, it only hands it over and relays the verdict back to the supervisor.
+    /// The service that holds the whole moderation strategy.
+    /// The actor never inspects the message itself: it hands it over and relays the verdict.
     /// </summary>
     private readonly IGuardRailService guardRailService;
 
-    /// <summary>
-    /// Initialises a new instance of <see cref="GuardActor"/>.
-    /// </summary>
-    /// <param name="conversationId">Unique identifier for this conversation.</param>
-    /// <param name="llmService">LLM service (passed to base; not used directly here).</param>
-    /// <param name="promptResolverService">Prompt resolver (passed to base; not used directly here).</param>
-    /// <param name="guardRailService">Guard-rail service that encapsulates all content moderation logic.</param>
-    /// <param name="configuration">Morgana configuration (layered by ASP.NET).</param>
+    /// <summary>Binds the guard to its conversation and to the guard-rail service.</summary>
     public GuardActor(
         string conversationId,
         ILanguageModelService llmService,
@@ -32,35 +23,34 @@ public class GuardActor : MorganaActor
         IGuardRailService guardRailService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
+        // The service arrives from the actor system's DI scope and lives as long as the actor.
         this.guardRailService = guardRailService;
 
-        // Requests the guardrail checking of the user message to the guard service (see CheckComplianceAsync)
+        // The supervisor sends every user message here before anything else reads it.
         ReceiveAsync<Records.GuardCheckRequest>(CheckComplianceAsync);
     }
 
-    /// <summary>
-    /// Delegates the compliance check to <see cref="IGuardRailService"/> and replies to the sender.
-    /// </summary>
-    /// <param name="req">Guard check request containing the conversation ID and the message to evaluate.</param>
+    /// <summary>Judges the user message and replies to the supervisor with the verdict or with the failure.</summary>
     private async Task CheckComplianceAsync(Records.GuardCheckRequest req)
     {
+        // The supervisor is captured before the await, after which Sender no longer names it.
         IActorRef originalSender = Sender;
 
         try
         {
-            // The guardrail strategy lives behind this one call, which is controlled by a feature flag
-            // permitting its eventual switch-off.
-            Records.GuardRailResult result =
+            // Morgana:ActorSystem:EnableUserGuardrail switches the check off, in which case every message is admitted
+            // with a verdict that names the switch as its deciding layer.
+            Records.GuardRailResult verdict =
                 configuration.GetValue("Morgana:ActorSystem:EnableUserGuardrail", true)
                     ? await guardRailService.CheckUserMessageAsync(req.ConversationId, req.Message, req.TurnCancellation)
                     : new Records.GuardRailResult(true, null, Records.GuardVerdictSource.Disabled);
 
             actorLogger.Info(
                 "Guard check complete for conversation {0}: compliant={1}",
-                req.ConversationId, result.Compliant);
+                req.ConversationId, verdict.Compliant);
 
-            // The supervisor receives the service's verdict whole, its deciding layer included
-            originalSender.Tell(result);
+            // The supervisor receives the verdict whole, its deciding layer included.
+            originalSender.Tell(verdict);
         }
         catch (OperationCanceledException) when (req.TurnCancellation.IsCancellationRequested)
         {
@@ -71,7 +61,7 @@ public class GuardActor : MorganaActor
         {
             actorLogger.Error(ex, "GuardActor: unexpected error during compliance check");
 
-            // Propagate failure to supervisor — the supervisor refuses the message nobody could judge
+            // The supervisor refuses the message that nobody could judge.
             originalSender.Tell(new Status.Failure(ex));
         }
     }

@@ -13,39 +13,43 @@ using Status = Akka.Actor.Status;
 namespace Morgana.AI.Actors;
 
 /// <summary>
-/// Main FSM orchestration actor: supervises conversation flow through guard check, classification,
-/// agent routing and follow-up handling. Tracks active agent for multi-turn conversations.
-/// 5 states: Idle, AwaitingGuardCheck, AwaitingClassification, AwaitingAgentResponse,
-/// AwaitingFollowUpResponse. Manages OpenTelemetry context hierarchy via TurnContext.
+/// The conversation's orchestrator: it takes each user message through the guard, the classifier and an agent.
+/// Five states, Idle, AwaitingGuardCheck, AwaitingClassification, AwaitingAgentResponse and AwaitingFollowUpResponse:
+/// the agent left mid-exchange is remembered across turns, so its follow-ups skip the classifier.
 /// </summary>
 public class ConversationSupervisorActor : MorganaActor
 {
+    /// <summary>The adapting channel, which delivers the welcome: every other answer travels back through the manager.</summary>
     private readonly IChannelService channelService;
+
+    /// <summary>The conversation's channel, read for the turn's capabilities and for the last answer delivered.</summary>
     private readonly IChannelMetadataStore channelMetadataStore;
+
+    /// <summary>The configured intents, read for the welcome, for the landing buttons and for the disambiguation.</summary>
     private readonly IAgentConfigurationService agentConfigService;
+
+    /// <summary>Writes the welcome message and its buttons.</summary>
     private readonly IPresenterService presenterService;
 
     /// <summary>
-    /// Holds which agent the conversation was left talking to, the one fact this supervisor must read
-    /// back before its first turn: a process that restarted mid-exchange knows it from nowhere else.
+    /// Holds which agent the conversation was left talking to, the one fact this supervisor must read back before its first turn.
+    /// A process that restarted mid-exchange knows it from nowhere else.
     /// </summary>
     private readonly IConversationPersistenceService conversationPersistenceService;
 
-    /* Actors directly orchestrated by the supervisor */
+    /// <summary>The conversation's guard, which judges every user message before anything else reads it.</summary>
     private readonly IActorRef guard;
+
+    /// <summary>The conversation's classifier, which ranks the intents of a message no agent is waiting for.</summary>
     private readonly IActorRef classifier;
+
+    /// <summary>The conversation's router, which brings up the agent of a classified intent.</summary>
     private readonly IActorRef router;
 
-    /// <summary>
-    /// Reference to the currently active agent (for multi-turn conversations).
-    /// Null when no agent is active.
-    /// </summary>
+    /// <summary>The agent left mid-exchange, which receives the next message directly; null when Morgana holds the conversation.</summary>
     private IActorRef? activeAgent;
 
-    /// <summary>
-    /// Intent name of the currently active agent.
-    /// Used for agent name display and tracking.
-    /// </summary>
+    /// <summary>The intent of the active agent, which names it to the client; null when Morgana holds the conversation.</summary>
     private string? activeAgentIntent;
 
     /// <summary>
@@ -54,28 +58,22 @@ public class ConversationSupervisorActor : MorganaActor
     /// </summary>
     private bool hasReadPersistedActiveAgent;
 
-    /// <summary>
-    /// Flag indicating whether the presentation message has been sent.
-    /// Prevents duplicate presentation on subsequent messages.
-    /// </summary>
+    /// <summary>Whether the welcome has been delivered, so a repeated presentation request does not greet the user again.</summary>
     private bool hasPresented;
 
-    /// <summary>OTel root span covering the full turn pipeline (opened on UserMessage, closed on return to Idle).</summary>
+    /// <summary>The root span of the running turn, opened on the user message and closed when the turn ends.</summary>
     private Activity? turnSpan;
 
-    /// <summary>OTel span covering the guard-check duration (opened before Tell, closed on response).</summary>
+    /// <summary>The span of the guard's round-trip, opened before the request and closed on its outcome.</summary>
     private Activity? guardSpan;
 
-    /// <summary>OTel span covering the classification duration (opened before Tell, closed on response).</summary>
+    /// <summary>The span of the classifier's round-trip, opened before the request and closed on its outcome.</summary>
     private Activity? classifierSpan;
 
     /// <summary>Stops the work of the phase that the supervisor is waiting on.</summary>
     private CancellationTokenSource? phaseCancellation;
 
-    /// <summary>
-    /// Initializes a new instance of the ConversationSupervisorActor.
-    /// Creates child actors (guard, classifier, router) and enters Idle state.
-    /// </summary>
+    /// <summary>Binds the supervisor to its conversation, brings up its guard, classifier and router, then waits in Idle.</summary>
     public ConversationSupervisorActor(
         string conversationId,
         ILanguageModelService llmService,
@@ -87,12 +85,14 @@ public class ConversationSupervisorActor : MorganaActor
         IConversationPersistenceService conversationPersistenceService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
+        // The services arrive from the actor system's DI scope and live as long as the actor.
         this.channelService = channelService;
         this.channelMetadataStore = channelMetadataStore;
         this.agentConfigService = agentConfigService;
         this.presenterService = presenterService;
         this.conversationPersistenceService = conversationPersistenceService;
 
+        // The three actors of the pipeline exist before the first message arrives, each named after this conversation.
         guard = Context.System.GetOrCreateActorAsync<GuardActor>(
             Constants.Actors.Guard, conversationId).GetAwaiter().GetResult();
 
@@ -102,43 +102,39 @@ public class ConversationSupervisorActor : MorganaActor
         router = Context.System.GetOrCreateActorAsync<RouterActor>(
             Constants.Actors.Router, conversationId).GetAwaiter().GetResult();
 
-        // Supervisor always starts in Idle state
+        // A new supervisor has no turn running, so it waits for the first message.
         Idle();
     }
 
     #region State Behaviors
 
     /// <summary>
-    /// Idle state: waiting for user messages or presentation requests.
-    /// ALL user messages route through guard check first (whether new request or follow-up).
+    /// Idle: waits for the welcome request or for a user message.
+    /// Every user message goes through the guard first, the follow-ups of an active agent included.
     /// </summary>
     private void Idle()
     {
         actorLogger.Info("↗ State: Idle");
 
-        // No receive timeout while idle: this is the ONLY state that's meant to sit and wait
-        // indefinitely (for the next user message). Every other state sets a timeout because it's
-        // waiting on a specific in-flight operation (guard/classifier/agent) that must not hang.
+        // Idle is the one state that may wait indefinitely: every other one waits on work in flight that must not hang.
         Context.SetReceiveTimeout(null);
 
-        // Generates the welcome message on conversation start (see HandlePresentationRequestAsync).
+        // The manager asks for the welcome on every start of the conversation.
         ReceiveAsync<Records.GeneratePresentationMessage>(HandlePresentationRequestAsync);
 
-        // Delivers the welcome message once generated (see HandlePresentationGenerated).
+        // The welcome comes back here once written, to be delivered over the channel.
         ReceiveAsync<Records.PresentationContext>(HandlePresentationGenerated);
 
-        // Starts a turn for an incoming user message (see HandleUserMessageAsync).
+        // A user message starts a turn.
         ReceiveAsync<Records.UserMessage>(HandleUserMessageAsync);
 
         RegisterCommonHandlers();
     }
 
-    /// <summary>
-    /// Opens the turn span and dispatches to <see cref="GuardActor"/>. Applies to both new
-    /// requests and follow-ups: every user message goes through the guard check first.
-    /// </summary>
+    /// <summary>Starts a turn: it lands a press of Morgana's button on its agent and sends every other message to the guard.</summary>
     private async Task HandleUserMessageAsync(Records.UserMessage msg)
     {
+        // The manager is captured before the awaits, after which Sender no longer names it.
         IActorRef originalSender = Sender;
 
         actorLogger.Info("User message received, routing through guard check");
@@ -151,11 +147,9 @@ public class ConversationSupervisorActor : MorganaActor
             hasReadPersistedActiveAgent = true;
         }
 
-        // With no agent mid-exchange, this phrase is addressed to Morgana herself: she guards it,
-        // she classifies it, she answers it unless she hands it to an agent. So she files it now,
-        // before the guard has even seen it — which is what lets a client that reloads during the
-        // guard or the classifier read back what it just said. An agent that was already active
-        // saves the phrase into its own session instead, because that session is its record.
+        // With no agent mid-exchange the phrase is addressed to Morgana, so she files it now, before the guard has seen it:
+        // a client that reloads during the guard or the classifier reads back what it just said.
+        // An agent that was already active saves the phrase into its own session instead, because that session is its record.
         bool noActiveAgent = activeAgent == null;
         if (noActiveAgent)
             await conversationPersistenceService.AppendOrchestratorMessagesAsync(
@@ -167,14 +161,11 @@ public class ConversationSupervisorActor : MorganaActor
         ChannelMetadata channelMetadata = await channelMetadataStore.GetChannelMetadataAsync(conversationId);
         ChannelCapabilities turnCapabilities = channelMetadata.Capabilities;
 
-        // Starts "morgana.turn", the root OTel span for this entire turn — the one unit of work a
-        // trace viewer (Jaeger/Tempo) shows per user message, with every later stage (guard,
-        // classifier, router, agent) recorded as a child of it. It's linked (ActivityLink), not
-        // parented, to the HTTP request span the controller propagated in msg.TurnContext: this
-        // actor keeps processing after the HTTP response has already returned to the client, so a
-        // parent/child pair (which a trace UI expects to close together) would be the wrong shape.
-        ActivityLink[] links = msg.TurnContext != default ? [new ActivityLink(msg.TurnContext)] : [];
-        turnSpan = Telemetry.Source.StartActivity(Telemetry.TurnActivity, ActivityKind.Internal, parentContext: default, links: links);
+        // "morgana.turn" is the root span of the turn, under which the guard, the classifier, the router and the agent record theirs.
+        // It is linked to the HTTP request's span rather than parented by it: the request has already answered the client
+        // while the turn is still running, so a parent closing before its child would be the wrong shape.
+        ActivityLink[] requestLinks = msg.TurnContext != default ? [new ActivityLink(msg.TurnContext)] : [];
+        turnSpan = Telemetry.Source.StartActivity(Telemetry.TurnActivity, ActivityKind.Internal, parentContext: default, links: requestLinks);
         turnSpan?.SetTag(Telemetry.ConversationId, conversationId);
         turnSpan?.SetTag(Telemetry.TurnUserMessage, msg.Text.Length > 200 ? msg.Text[..200] : msg.Text);
         ActivityContext turnContext = turnSpan?.Context ?? default;
@@ -189,7 +180,7 @@ public class ConversationSupervisorActor : MorganaActor
             // A certain classification, so the rest of the turn reads exactly as a classified one does.
             Records.ClassificationResult landingClassification = new Records.ClassificationResult(
                 landingIntent, new Dictionary<string, string> { ["confidence"] = "1.00" });
-            Records.ProcessingContext landingCtx = new Records.ProcessingContext(
+            Records.ProcessingContext landingContext = new Records.ProcessingContext(
                 msg, originalSender, turnCapabilities, landingClassification, turnContext, UserMessageAlreadyStored: noActiveAgent);
 
             // The same "morgana.router" span a classified turn opens, covering the round-trip to the agent.
@@ -199,8 +190,8 @@ public class ConversationSupervisorActor : MorganaActor
                 turnContext);
             landingRouterSpan?.SetTag(Telemetry.RouterIntent, landingIntent);
 
-            // Moves the FSM to AwaitingAgentResponse, carrying the landing context forward.
-            Become(() => AwaitingAgentResponse(landingCtx));
+            // The supervisor now waits for the chosen agent, as after a classification.
+            Become(() => AwaitingAgentResponse(landingContext));
 
             // The router reaches the chosen agent, which is told the turn is its landing so that it presents itself.
             router.Tell(new Records.AgentRequest(
@@ -215,21 +206,17 @@ public class ConversationSupervisorActor : MorganaActor
             return;
         }
 
-        // Starts "morgana.guard", the first child span under morgana.turn — it exists so the guard
-        // check's own latency and compliance verdict show up as their own row in a trace, separate
-        // from classification/routing/agent time. Started here, before the Tell to GuardActor
-        // rather than when its response arrives in AwaitingGuardCheck, so the recorded duration
-        // covers the full round-trip — mailbox/dispatch latency included, not just GuardActor's
-        // own processing time once it picks the message up.
+        // "morgana.guard" gives the guard's latency and verdict their own row in a trace.
+        // It opens before the request, so its duration covers the whole round-trip, the wait in the guard's mailbox included.
         guardSpan = Telemetry.Source.StartActivity(Telemetry.GuardActivity, ActivityKind.Internal, turnContext);
         guardSpan?.SetTag(Telemetry.ConversationId, conversationId);
 
-        // Moves the FSM to AwaitingGuardCheck, carrying ctx forward.
+        // The supervisor now waits for the verdict, carrying the turn's context into the next phases.
         Records.ProcessingContext ctx = new Records.ProcessingContext(
             msg, originalSender, turnCapabilities, TurnContext: turnContext, UserMessageAlreadyStored: noActiveAgent);
         Become(() => AwaitingGuardCheck(ctx));
 
-        // Engage the guard actor with the utterance from the user
+        // The guard judges the user's phrase before anything else reads it.
         guard.Tell(new Records.GuardCheckRequest(msg.ConversationId, msg.Text, TurnCancellation: StartPhaseCancellation()));
     }
 
@@ -265,74 +252,56 @@ public class ConversationSupervisorActor : MorganaActor
             .FirstOrDefault(intent => string.Equals(intent.Name, pressedButton.Id, StringComparison.OrdinalIgnoreCase))?.Name;
     }
 
-    /// <summary>
-    /// Handles presentation generation requests.
-    /// Loads displayable intents then delegates entirely to <see cref="IPresenterService"/>.
-    /// </summary>
+    /// <summary>Writes the welcome on the intents a user can choose and hands it back to the supervisor for delivery.</summary>
     private async Task HandlePresentationRequestAsync(Records.GeneratePresentationMessage _)
     {
-        // ConversationManagerActor sends GeneratePresentationMessage on every fresh start,
-        // but a resumed conversation whose actor was already alive (or a duplicate message
-        // for any other reason) must not re-greet the user mid-conversation.
+        // Neither a resumed conversation whose supervisor was already alive nor a duplicate request may greet the user again mid-conversation.
         if (hasPresented)
         {
             actorLogger.Info("Presentation already shown, skipping");
             return;
         }
 
+        // The welcome is due once in the supervisor's life, whatever the presenter writes.
         hasPresented = true;
         actorLogger.Info("Generating presentation message via IPresenterService");
 
-        // GetIntentsAsync returns every configured intent, Intents.Other and label-less ones
-        // included — GetDisplayableIntents then strips those down to the subset a user can actually
-        // click on a welcome-message quick reply (same filter LLMClassifierService's collision check
-        // applies, for the same reason: the catch-all has no Label/DefaultValue to show as a button).
-        List<Records.IntentDefinition> allIntents = await agentConfigService.GetIntentsAsync();
-        Records.IntentCollection intentCollection = new Records.IntentCollection(allIntents);
+        // The welcome offers a button only for an intent that has one to show: Other and the label-less intents carry none.
+        List<Records.IntentDefinition> configuredIntents = await agentConfigService.GetIntentsAsync();
+        Records.IntentCollection intentCollection = new Records.IntentCollection(configuredIntents);
         List<Records.IntentDefinition> displayableIntents = intentCollection.GetDisplayableIntents();
 
-        // GenerateAsync does the actual work (LLM call or config fallback, see IPresenterService)
-        // and never throws. The result is packaged into a PresentationContext and sent to Self
-        // rather than handled inline here, so generating the copy (this method) and delivering it
-        // over the channel (HandlePresentationGenerated, its own try/catch around the send) stay
-        // two independent failure domains — a channel outage can't be confused with a generation bug.
-        Records.PresentationResult result = await presenterService.GenerateAsync(displayableIntents, conversationId);
-        Self.Tell(new Records.PresentationContext(result.Message, displayableIntents)
+        // The presenter writes the welcome by model or from configuration and never throws.
+        Records.PresentationResult presentation = await presenterService.GenerateAsync(displayableIntents, conversationId);
+
+        // Delivery runs as its own message, so a channel outage is never mistaken for a failure to write the welcome.
+        Self.Tell(new Records.PresentationContext(presentation.Message, displayableIntents)
         {
-            QuickReplies = result.QuickReplies
+            QuickReplies = presentation.QuickReplies
         });
     }
 
-    /// <summary>
-    /// Handles the generated presentation and dispatches it to the client through
-    /// <see cref="IChannelService"/>. The supervisor stays channel-agnostic.
-    /// </summary>
+    /// <summary>Records the welcome as Morgana's first word and delivers it over the channel.</summary>
     private async Task HandlePresentationGenerated(Records.PresentationContext ctx)
     {
         actorLogger.Info("Sending presentation to client via channel");
 
-        // A defensive rebuild that only carries over Id/Label/Value and drops whatever Termination
-        // the source item had: a welcome button chooses an agent and never ends anything.
+        // A welcome button chooses an agent and never ends anything, so only its id, label and value are carried over.
         List<QuickReply> quickReplies = ctx.QuickReplies?
-            .Select(qr => new QuickReply(qr.Id, qr.Label, qr.Value))
+            .Select(quickReply => new QuickReply(quickReply.Id, quickReply.Label, quickReply.Value))
             .ToList() ?? [];
 
         try
         {
-            // channelService is AdaptingChannelService (the IChannelService DI registration), not
-            // a raw transport: this one call first runs the message through MorganaChannelAdapter
-            // against the conversation's registered capabilities — a Rune-class channel can get
-            // ctx.Message and quickReplies rewritten (rich card prose, buttons flattened to a
-            // numbered list, markdown stripped) — before it's ever handed to the concrete SignalR
-            // or webhook transport. Nothing below this line controls what the user actually sees.
-            // The welcome is Morgana's first word and the only one spoken before anyone has asked
-            // anything: dated once here, so the record and the push agree and a returning client
-            // recognises the greeting it already has.
+            // Dated once, so the record and the push agree and a returning client recognises the greeting it already has.
             DateTime presentationTimestamp = DateTime.UtcNow;
+
+            // The welcome is Morgana's first word, filed in her own row.
             await conversationPersistenceService.AppendOrchestratorMessagesAsync(
                 conversationId,
                 [new ChatMessage(ChatRole.Assistant, ctx.Message) { CreatedAt = presentationTimestamp }]);
 
+            // The adapting channel fits the welcome to the conversation's capabilities before the transport carries it.
             await channelService.SendMessageAsync(new ChannelMessage
             {
                 ConversationId = conversationId,
@@ -348,127 +317,103 @@ public class ConversationSupervisorActor : MorganaActor
         }
         catch (Exception ex)
         {
-            // Swallowed, not rethrown: a delivery failure here (e.g. a flaky webhook channel)
-            // must not crash the supervisor or leave the conversation stuck — the client simply
-            // sees no welcome message and can still send its first message normally.
+            // A failed delivery leaves the user without a welcome, never the conversation stuck: the first message still works.
             actorLogger.Error(ex, "Failed to send presentation via channel");
         }
     }
 
-    /// <summary>
-    /// AwaitingGuardCheck state: waiting for content moderation result from GuardActor.
-    /// Opens a morgana.guard child span using the TurnContext from ProcessingContext.
-    /// </summary>
-    /// <param name="ctx">Processing context containing original message, sender and OTel TurnContext</param>
+    /// <summary>AwaitingGuardCheck: waits for the guard's verdict, refusing the message when no verdict arrives.</summary>
+    /// <param name="ctx">The turn so far: the user's message, who to answer and the turn's span context.</param>
     private void AwaitingGuardCheck(Records.ProcessingContext ctx)
     {
         actorLogger.Info("→ State: AwaitingGuardCheck");
 
-        // Bounds how long the round-trip to GuardActor may take before the ReceiveTimeout
-        // handler below fires and FailClosedAsync refuses the message — the same shared per-phase budget every
-        // other Awaiting* state arms with its own call, not a guard-specific allowance.
-        Context.SetReceiveTimeout(TimeSpan.FromSeconds(
-            Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
+        // The guard has the phase budget to answer, after which the message is refused.
+        Context.SetReceiveTimeout(ActorSystemTimeout);
 
-        // The compliant-or-not verdict actually arriving from GuardActor — the two handlers
-        // below (Status.Failure, ReceiveTimeout) cover the other ways this round-trip can end:
-        // GuardActor throwing, or it simply never answering in time.
-        ReceiveAsync<Records.GuardRailResult>(async response => {
-            // Cancels the guard-check window now that GuardActor actually answered — this
-            // handler is about to Become() into AwaitingClassification, AwaitingFollowUpResponse
-            // or Idle on rejection; each of those arms (or clears) its own timeout
-            // independently. Clearing here just guarantees the guard check's own window never
-            // carries over into whatever state runs next.
+        // The verdict arrived: the failure and the silence of the guard are handled below.
+        ReceiveAsync<Records.GuardRailResult>(async verdict => {
+            // The guard's window closes on its answer, so it never carries over into the next state.
             Context.SetReceiveTimeout(null);
 
             // The guard answered, so its span closes on the verdict.
-            CloseGuardSpan(response, null);
+            CloseGuardSpan(verdict, null);
 
-            // A rejection short-circuits the whole turn right here — no classification, no
-            // routing, no agent — exactly like SendDisambiguationAsync's early return further
-            // down: the client gets an answer and the turn ends, with the next user message
-            // re-entering guard check fresh (activeAgent, if any, is left untouched either way).
-            if (!response.Compliant)
+            // A refusal ends the turn here, with the active agent left as it was.
+            if (!verdict.Compliant)
             {
-                await RejectAsync(response);
+                await RejectAsync(verdict);
                 return;
             }
 
             actorLogger.Info("Message passed guard check");
 
-            // An active agent from a prior turn means this message is the next turn of an
-            // ongoing exchange, not a new request to classify — classification is skipped
-            // entirely and the message goes straight to that same agent instance.
+            // An agent mid-exchange receives the message as its follow-up, with no classification.
             if (activeAgent != null)
             {
                 actorLogger.Info($"Active agent exists, routing to follow-up flow with agent {activeAgent.Path}");
 
-                // Moves the FSM to AwaitingFollowUpResponse, carrying the sender forward.
+                // The supervisor now waits for the active agent's answer.
                 Become(() => AwaitingFollowUpResponse(ctx.OriginalSender));
 
-                // Passes no classification to the agent: this follow-up path doesn't classify.
+                // The agent receives the phrase with no classification, since none was made.
                 activeAgent.Tell(new Records.AgentRequest(
                     ctx.OriginalMessage.ConversationId,
                     ctx.OriginalMessage.Text,
                     null,
-                    ctx.TurnContext,          // propagate context to agent
+                    ctx.TurnContext,
                     ctx.ChannelCapabilities,
                     ctx.UserMessageAlreadyStored,
                     TurnCancellation: StartPhaseCancellation()));
             }
+            // With no agent mid-exchange the message is a new request, which the classifier ranks.
             else
             {
                 actorLogger.Info("No active agent, proceeding to classification for new request");
 
-                // Starts "morgana.classifier", the second child span under morgana.turn, before
-                // the Tell to ClassifierActor — same rationale as the guard span opened in
-                // HandleUserMessageAsync: capturing the duration from here, not from when
-                // AwaitingClassification receives the result, means it covers the full
-                // round-trip rather than just ClassifierActor's own processing time.
+                // "morgana.classifier" opens before the request, so its duration covers the whole round-trip as the guard's does.
                 classifierSpan = Telemetry.Source.StartActivity(Telemetry.ClassifierActivity, ActivityKind.Internal, ctx.TurnContext);
                 classifierSpan?.SetTag(Telemetry.ConversationId, conversationId);
 
-                // Moves the FSM to AwaitingClassification, carrying ctx forward.
+                // The supervisor now waits for the classification.
                 Become(() => AwaitingClassification(ctx));
 
-                // Engage the classifier with the utterance from the user (now that it passed guardrails)
+                // The classifier reads the phrase that the guard has just admitted.
                 classifier.Tell(ctx.OriginalMessage with { TurnCancellation = StartPhaseCancellation() });
             }
         });
 
-        // Routes an explicit GuardActor failure (a thrown exception) to FailClosedAsync.
+        // A guard that threw reached no verdict, so the message is refused.
         ReceiveAsync<Status.Failure>(failure => FailClosedAsync(failure.Cause.GetType().FullName ?? failure.Cause.GetType().Name, failure.Cause));
 
-        // Routes a stalled GuardActor (no response within the timeout above) to FailClosedAsync.
+        // A guard that stayed silent for the whole window reached no verdict either.
         ReceiveAsync<ReceiveTimeout>(async _ =>
         {
             // The guard the supervisor stops waiting for is stopped too, down to its model call.
             phaseCancellation?.Cancel();
 
+            // The message is refused for want of a verdict.
             await FailClosedAsync(Telemetry.ErrorTypes.Timeout, null);
         });
 
         RegisterCommonHandlers();
         return;
 
-        #region Locals
+        #region Utilities
         // The turn ends on a refusal, whoever decided it.
         async Task RejectAsync(Records.GuardRailResult verdict)
         {
             actorLogger.Warning($"Message rejected by guard: {verdict.Violation}");
 
-            // An agent was mid-exchange, so nobody stored the phrase at ingress: the agent
-            // would have done it, but the guard just made sure it never runs. Morgana answers this
-            // turn instead, so the phrase is hers to keep — without it the refusal would sit in
+            // With an agent mid-exchange nobody stored the phrase at ingress and the guard made sure the agent never runs.
+            // Morgana answers this turn instead, so the phrase is hers to keep: without it the refusal would sit in
             // the transcript with nothing above it explaining what was refused.
             if (!ctx.UserMessageAlreadyStored)
                 await conversationPersistenceService.AppendOrchestratorMessagesAsync(
                     conversationId,
                     [new ChatMessage(ChatRole.User, ctx.OriginalMessage.Text) { CreatedAt = DateTime.UtcNow }]);
 
-            // Sends the guard's rejection text back to the client as the whole reply, tagged
-            // with whatever classification is currently on ctx and the follow-up's active
-            // agent name if there is one; no quick replies, timestamp or rich card attached.
+            // The refusal is the whole reply, spoken by the active agent when there is one and by Morgana otherwise.
             ctx.OriginalSender.Tell(new Records.ConversationResponse(
                 verdict.Violation!,
                 ctx.Classification?.Intent,
@@ -498,10 +443,10 @@ public class ConversationSupervisorActor : MorganaActor
             // Counts the rejection at the user's door.
             Telemetry.SecurityEvents.Add(1, securityTags);
 
-            // Closes the turn span, tagging it with whatever intent ctx.Classification currently carries.
+            // The turn ends uncompleted.
             CloseTurnSpan(intent: ctx.Classification?.Intent, completed: false);
 
-            // Returns to Idle without touching activeAgent or activeAgentIntent.
+            // The active agent stays as it was, so the next message reaches it after the guard.
             Become(Idle);
         }
 
@@ -522,6 +467,7 @@ public class ConversationSupervisorActor : MorganaActor
                 if (cause is not null)
                     guardSpan?.AddException(cause);
             }
+            // A judgment carries its compliance and the finding the user was refused with.
             else
             {
                 // Tracks the compliance of the judgment.
@@ -545,8 +491,7 @@ public class ConversationSupervisorActor : MorganaActor
         // reaches the classifier or an agent: the user is asked to send it again.
         async Task FailClosedAsync(string errorType, Exception? cause)
         {
-            // Turns off the timeout: GuardActor did respond, even though with a failure, so
-            // there's no more reason to keep waiting.
+            // The guard's window closes on its failure, so it never carries over into Idle.
             Context.SetReceiveTimeout(null);
 
             // Logs the failure itself and the "fail-closed" decision
@@ -572,32 +517,23 @@ public class ConversationSupervisorActor : MorganaActor
         #endregion
     }
 
-    /// <summary>
-    /// AwaitingClassification state: waiting for intent classification result from ClassifierActor.
-    /// Opens a morgana.classifier child span using the TurnContext from ProcessingContext.
-    /// </summary>
-    /// <param name="ctx">Processing context containing original message, sender and OTel TurnContext</param>
+    /// <summary>AwaitingClassification: waits for the classifier's ranking, falling back to the Other intent when none arrives.</summary>
+    /// <param name="ctx">The turn so far: the user's message, who to answer and the turn's span context.</param>
     private void AwaitingClassification(Records.ProcessingContext ctx)
     {
         actorLogger.Info("→ State: AwaitingClassification");
 
-        // Same shared per-phase budget as AwaitingGuardCheck's timeout, this time bounding the
-        // round-trip to ClassifierActor before ReceiveTimeout below hands off to FallbackToOther.
-        Context.SetReceiveTimeout(TimeSpan.FromSeconds(
-            Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
+        // The classifier has the phase budget to answer, after which the turn falls back to the Other intent.
+        Context.SetReceiveTimeout(ActorSystemTimeout);
 
-        // The actual classification arriving from ClassifierActor — Status.Failure and
-        // ReceiveTimeout below are the two ways it can fail to arrive at all, both routed
-        // through the same FallbackToOther recovery.
+        // The classification arrived: the failure and the silence of the classifier are handled below.
         ReceiveAsync<Records.ClassificationResult>(async classification => {
-            // Cancels the classification window now that ClassifierActor actually answered —
-            // this handler is about to Become() into AwaitingAgentResponse (or reply directly and
-            // Become(Idle) on a disambiguation) and either arms its own timeout independently.
+            // The classifier's window closes on its answer, so it never carries over into the next state.
             Context.SetReceiveTimeout(null);
 
             actorLogger.Info($"Classification result: {classification.Intent}");
 
-            // Close and dispose the classifier span by tracking the top intent, its confidence and the full metadata
+            // The classifier span closes on the top intent, its confidence and the whole metadata.
             classifierSpan?.SetTag(Telemetry.ClassificationIntent, classification.Intent);
             classifierSpan?.SetTag(Telemetry.ClassificationMetadata, classification.Metadata);
             if (classification.Metadata.TryGetValue("confidence", out string? confidence))
@@ -607,66 +543,58 @@ public class ConversationSupervisorActor : MorganaActor
             classifierSpan?.Dispose();
             classifierSpan = null;
 
-            // Builds a copy of the context with the classification attached, to carry forward into
-            // AwaitingAgentResponse (or into the disambiguation reply below).
-            Records.ProcessingContext updatedCtx = ctx with { Classification = classification };
+            // The turn carries the classification forward, to the agent or to the disambiguation.
+            Records.ProcessingContext classifiedContext = ctx with { Classification = classification };
 
-            // A colliding classification (LLMClassifierService's confidence-gap check) is diverted
-            // here instead of ever reaching the router: no agent is invoked, no active agent is set.
+            // Two candidates within the collision threshold are offered to the user to choose: no agent runs and none becomes active.
             if (classification.Metadata.TryGetValue("ambiguousIntents", out string? collidingIntentNames))
             {
-                await SendDisambiguationAsync(updatedCtx, collidingIntentNames);
+                await SendDisambiguationAsync(classifiedContext, collidingIntentNames);
                 return;
             }
 
-            // Starts "morgana.router", the third child span under morgana.turn, before the Tell
-            // to RouterActor — same reasoning as the guard and classifier spans above: opening it
-            // here means its duration covers the full round-trip, not just the time RouterActor
-            // itself takes to pick an agent. Unlike guardSpan/classifierSpan it's a local `using`,
-            // not a field: nothing outside this method needs to close it from an async callback.
+            // "morgana.router" opens before the request, so its duration covers the whole round-trip to the agent.
             using Activity? routerSpan = Telemetry.Source.StartActivity(
                 Telemetry.RouterActivity,
                 ActivityKind.Internal,
                 ctx.TurnContext);
             routerSpan?.SetTag(Telemetry.RouterIntent, classification.Intent);
 
-            // Moves the FSM to AwaitingAgentResponse, carrying the classified context forward.
-            Become(() => AwaitingAgentResponse(updatedCtx));
+            // The supervisor now waits for the agent of the classified intent.
+            Become(() => AwaitingAgentResponse(classifiedContext));
 
-            // Sends the request to RouterActor, which picks the agent for this intent.
+            // The router brings up the agent of the classified intent and hands it the request.
             router.Tell(new Records.AgentRequest(
                 ctx.OriginalMessage.ConversationId,
                 ctx.OriginalMessage.Text,
                 classification,
-                ctx.TurnContext,              // propagate context to router → agent
+                ctx.TurnContext,
                 ctx.ChannelCapabilities,
                 ctx.UserMessageAlreadyStored,
                 TurnCancellation: StartPhaseCancellation()));
         });
 
-        // Routes an explicit ClassifierActor failure (a thrown exception) to FallbackToOther.
+        // A classifier that threw found nothing, so the turn falls back to the Other intent.
         Receive<Status.Failure>(failure => FallbackToOther(failure.Cause.Message, failure.Cause));
 
-        // Routes a stalled ClassifierActor (no response within the timeout above) to FallbackToOther.
+        // A classifier that stayed silent for the whole window found nothing either.
         Receive<ReceiveTimeout>(_ =>
         {
             // The classification the supervisor stops waiting for is stopped too, down to its model call.
             phaseCancellation?.Cancel();
 
+            // The turn falls back to the Other intent.
             FallbackToOther("receive timeout", null);
         });
 
         RegisterCommonHandlers();
         return;
-        
-        #region Locals
-        // Shared fallback-to-Intents.Other path for both an explicit Status.Failure from
-        // ClassifierActor and a ReceiveTimeout (classifier service hung past the configured budget).
+
+        #region Utilities
+        // Shared fallback to the Other intent for a classifier that threw and for one that stayed silent.
         void FallbackToOther(string description, Exception? cause)
         {
-            // Turns off the timeout: ClassifierActor did respond, even though with a failure, so
-            // there's no more reason to keep waiting. The next state below, AwaitingAgentResponse,
-            // will set its own timeout when it starts.
+            // The classifier's window closes on its failure: AwaitingAgentResponse arms its own.
             Context.SetReceiveTimeout(null);
 
             // Logs the failure itself, with the exception attached when there is one.
@@ -675,19 +603,16 @@ public class ConversationSupervisorActor : MorganaActor
             else
                 actorLogger.Error("Classification failed: {0}", description);
 
-            // Marks the classifier span as errored and disposes it — same shape as the success
-            // path's span close above, tagged as a failure instead of a classification result.
+            // The classifier span closes as errored, with the exception where there was one.
             classifierSpan?.SetStatus(ActivityStatusCode.Error, description);
             if (cause != null)
                 classifierSpan?.AddException(cause);
             classifierSpan?.Dispose();
             classifierSpan = null;
 
-            // Shaped exactly like a real ClassifierActor result — same "confidence" key, same
-            // string type — so nothing downstream (the confidence tag read a few lines above in
-            // the success path, or any future consumer) needs a special case for the failure
-            // path; the classification-error key is the one extra key a successful classification
-            // never carries and the router reads it to answer with the classification-error message.
+            // Shaped like a real classification, so nothing downstream needs a case for the failure.
+            // The classification-error key is the one a real classification never carries: the router reads it
+            // to answer with the classification-error message.
             Records.ClassificationResult fallbackClassification = new Records.ClassificationResult(
                 Constants.Intents.Other,
                 new Dictionary<string, string>
@@ -696,29 +621,22 @@ public class ConversationSupervisorActor : MorganaActor
                     [Constants.ClassificationMetadata.Error] = $"classification_failed: {description}"
                 });
 
-            // Routing to Intents.Other still goes through the router below, even though it has no
-            // registered agent by design (see HandlesIntentAgentRegistryService) — RouterActor
-            // won't find one either and replies with the classification-error message, which
-            // AwaitingAgentResponse's bare Receive<AgentResponse> handler is exactly there to catch.
             actorLogger.Info("Falling back to 'other' intent");
 
-            // Builds a copy of the context with the fallback classification attached, to carry forward
-            // into AwaitingAgentResponse.
-            Records.ProcessingContext updatedCtx = ctx with { Classification = fallbackClassification };
+            // The turn carries the fallback classification forward to the router.
+            Records.ProcessingContext fallbackContext = ctx with { Classification = fallbackClassification };
 
-            // Same "morgana.router" span as the primary classification path above, opened here
-            // for the same reason: its duration should cover the full round-trip to RouterActor.
+            // The same "morgana.router" span as a real classification, covering the round-trip to the router.
             using Activity? routerSpan = Telemetry.Source.StartActivity(
                 Telemetry.RouterActivity,
                 ActivityKind.Internal,
                 ctx.TurnContext);
             routerSpan?.SetTag(Telemetry.RouterIntent, fallbackClassification.Intent);
 
-            // Moves the FSM to AwaitingAgentResponse, carrying the fallback-classified context forward.
-            Become(() => AwaitingAgentResponse(updatedCtx));
+            // The supervisor now waits for the router's own answer.
+            Become(() => AwaitingAgentResponse(fallbackContext));
 
-            // Sends the request to RouterActor, same as the primary classification path above —
-            // it will find no agent for Intents.Other and reply with the classification-error message.
+            // No agent handles the Other intent, so the router answers with the classification-error message.
             router.Tell(new Records.AgentRequest(
                 ctx.OriginalMessage.ConversationId,
                 ctx.OriginalMessage.Text,
@@ -731,21 +649,16 @@ public class ConversationSupervisorActor : MorganaActor
         #endregion
     }
 
-    /// <summary>
-    /// AwaitingAgentResponse state: waiting for specialized agent to process the request.
-    /// Annotates the turn span with agent name and intent on response.
-    /// </summary>
-    /// <param name="ctx">Processing context containing original message, sender and classification</param>
+    /// <summary>AwaitingAgentResponse: waits for the routed agent or for the router's own answer, relaying the stream meanwhile.</summary>
+    /// <param name="ctx">The turn so far: the user's message, who to answer, the classification and the turn's span context.</param>
     private void AwaitingAgentResponse(Records.ProcessingContext ctx)
     {
         actorLogger.Info("→ State: AwaitingAgentResponse");
 
-        // Same shared per-phase budget again, now bounding the round-trip through RouterActor to
-        // whichever domain agent it dispatches to — re-armed on every AgentStreamChunk below, so
-        // it only fires if the agent goes fully silent for a whole window, not merely slow.
-        Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
+        // The router and its agent have the phase budget of silence: every chunk and every sign of work renews it.
+        Context.SetReceiveTimeout(ActorSystemTimeout);
 
-        // Fires if neither RouterActor, nor the domain agent it dispatches to, answer in time.
+        // Neither the router nor its agent gave a sign of life for the whole window.
         Receive<ReceiveTimeout>(_ =>
         {
             // The router and the agent the supervisor stops waiting for are stopped too, down to their model call.
@@ -753,13 +666,11 @@ public class ConversationSupervisorActor : MorganaActor
 
             actorLogger.Error($"Timeout waiting for agent response (classification: {ctx.Classification?.Intent})");
 
-            // Turns off the timeout now that it has fired, so it doesn't fire again for whatever runs next.
+            // The window closes on its expiry, so it never fires again in the next state.
             Context.SetReceiveTimeout(null);
 
-            // Sends a generic apology back to the client. Nothing touches activeAgent here: this
-            // timeout fires before RouterActor has ever confirmed an agent for this turn, so there
-            // is no active agent yet to drop — contrast the identical-looking timeout in
-            // AwaitingFollowUpResponse below, which does clear one because it was already set.
+            // The user receives an apology. No agent was confirmed for this turn yet, so there is no active agent to drop,
+            // unlike the timeout of AwaitingFollowUpResponse.
             ctx.OriginalSender.Tell(new Records.ConversationResponse(
                 "I apologize, time ran out before the cauldron could brew your answer. Cast it again.",
                 ctx.Classification?.Intent,
@@ -770,58 +681,52 @@ public class ConversationSupervisorActor : MorganaActor
                 null,
                 null));
 
-            // Closes the turn span with an error status, tagged with whatever intent was classified for this turn.
+            // The turn ends as errored and uncompleted.
             CloseTurnSpan(ActivityStatusCode.Error, "Timeout waiting for agent response", intent: ctx.Classification?.Intent, completed: false);
 
-            // Returns to Idle.
+            // The next message starts a new turn.
             Become(Idle);
         });
 
-        // Forwards a streamed partial response straight to the client as it arrives.
+        // A streamed piece of the answer reaches the client as it arrives.
         Receive<Records.AgentStreamChunk>(chunk =>
         {
-            // Re-arms the timeout on every chunk, not just once at state entry: a long response
-            // streamed token-by-token keeps resetting its own deadline as long as it keeps
-            // producing output, so only a genuinely stalled agent (no chunk, no final response,
-            // for a full timeout window) trips ReceiveTimeout below — a slow-but-alive stream never does.
-            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
+            // Every chunk renews the window: a slow stream that keeps producing never times out, only a stalled agent does.
+            Context.SetReceiveTimeout(ActorSystemTimeout);
+
+            // The chunk travels unchanged to the client.
             ctx.OriginalSender.Tell(chunk);
         });
 
         // Renews the same window for work the user cannot see: a tool running, a colleague answering.
         // The client is told nothing, having nothing to show; an agent that stops sending
         // these is one that has genuinely stopped.
-        Receive<Records.AgentStillWorking>(_ =>
-            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture))));
+        Receive<Records.AgentStillWorking>(_ => Context.SetReceiveTimeout(ActorSystemTimeout));
 
-        // ActiveAgentResponse comes from RouterActor when it found and ran a real agent for the
-        // classified intent; AgentResponse below is the OTHER possible reply, RouterActor's own
-        // own answer when no agent handles that intent at all: the presentation or the classification error.
+        // The router found and ran an agent for the classified intent.
+        // AgentResponse below is the router's own answer when no agent handles the intent: the presentation or the classification error.
         ReceiveAsync<Records.ActiveAgentResponse>(async response =>
         {
-            // Cancels the routing/agent window now that a real agent actually answered — this
-            // handler is about to Become(Idle), which arms no timeout of its own.
+            // The window closes on the agent's answer, since Idle arms none.
             Context.SetReceiveTimeout(null);
 
             try
             {
-                // Resolves the display name for the classified agent
+                // The answer is signed with the classified agent's name.
                 string agentName = GetAgentDisplayName(ctx.Classification?.Intent);
 
                 actorLogger.Info($"Received ActiveAgentResponse from {response.AgentRef.Path}, " +
                                  $"completed: {response.IsCompleted}, " +
                                  $"quickReplies: {response.QuickReplies?.Count ?? 0}");
 
-                // The conversation with the user is flagged as "completed" by LLM:
-                // the active agent and its intent are cleared
+                // The agent handed the conversation back, so Morgana holds it again.
                 if (response.IsCompleted)
                 {
                     actorLogger.Info("Agent signaled completion, clearing active agent");
                     activeAgent = null;
                     activeAgentIntent = null;
                 }
-                // The conversation with the user is still ongoing:
-                // the active agent and its intent are restated
+                // The agent stays in service, so the next message reaches it directly.
                 else
                 {
                     actorLogger.Info($"Agent signaled incomplete, setting as active agent: {response.AgentRef.Path}");
@@ -829,10 +734,8 @@ public class ConversationSupervisorActor : MorganaActor
                     activeAgentIntent = ctx.Classification?.Intent;
                 }
 
-                // Sends the agent's response back to the client, forwarding the classification's
-                // intent and metadata, the agent's completion flag, quick replies, rich card
-                // and the timestamp the reply is recorded under. An agent that handed the
-                // conversation back without a word has nothing to deliver: Morgana's farewell below
+                // The user receives the agent's answer with its buttons, its card and the timestamp it is recorded under.
+                // An agent that handed the conversation back without a word has nothing to deliver: Morgana's farewell below
                 // is the whole answer.
                 if (response.Response.Length > 0)
                 {
@@ -851,6 +754,7 @@ public class ConversationSupervisorActor : MorganaActor
                 // the answer above rather than in place of it.
                 if (response.IsCompleted)
                 {
+                    // Morgana's closing line follows the agent's last answer.
                     TellAgentFarewell(ctx.OriginalSender, agentName);
 
                     // The farewell hands the conversation back to Morgana, so the departed agent's row leaves active duty in the same step.
@@ -859,22 +763,21 @@ public class ConversationSupervisorActor : MorganaActor
                         await conversationPersistenceService.DeactivateAgentAsync(conversationId, departedIntent);
                 }
 
-                // Closes the turn span, tagged with the classified intent and whether the agent completed.
+                // The turn ends, counted under the classified intent and the agent's completion.
                 CloseTurnSpan(intent: ctx.Classification?.Intent, completed: response.IsCompleted);
 
-                // Returns to Idle either way — activeAgent above, not the FSM state, carries any follow-up forward.
+                // The active agent, not the state, carries a follow-up forward.
                 Become(Idle);
             }
             catch (Exception ex)
             {
                 actorLogger.Error(ex, "Error processing ActiveAgentResponse");
 
-                // Clears the active agent, unlike a guard/content-filter rejection which leaves
-                // it in place — the next message starts a fresh classify-then-route turn.
+                // An answer that could not be handled leaves no agent to keep talking to: the next message is classified afresh.
                 activeAgent = null;
                 activeAgentIntent = null;
 
-                // Sends a generic apology back to the client, since the agent's actual response couldn't be processed.
+                // The user receives an apology in place of the answer.
                 ctx.OriginalSender.Tell(new Records.ConversationResponse(
                     "I apologize, the potion bubbled over in error. Repeat your incantation.",
                     ctx.Classification?.Intent,
@@ -885,32 +788,25 @@ public class ConversationSupervisorActor : MorganaActor
                     null,
                     null));
 
-                // Closes the turn span with an error status, attaching the exception and tagging
-                // it with whatever intent was classified for this turn.
+                // The turn ends as errored, carrying the exception.
                 CloseTurnSpan(ActivityStatusCode.Error, ex.Message, intent: ctx.Classification?.Intent, completed: false, exception: ex);
 
-                // Returns to Idle.
+                // The next message starts a new turn.
                 Become(Idle);
             }
         });
 
-        // AgentResponse is RouterActor's own fallback reply, sent when no agent handles the
-        // classified intent at all — see the comment above ActiveAgentResponse.
+        // The router's own answer when no agent handles the classified intent.
         Receive<Records.AgentResponse>(response =>
         {
-            // Cancels the same routing/agent window as ActiveAgentResponse above — RouterActor's
-            // fallback still answered in time and this handler also Become(Idle)s next.
+            // The window closes on the router's answer, since Idle arms none.
             Context.SetReceiveTimeout(null);
 
             try
             {
                 actorLogger.Info("Received fallback response from router (no specialized agent)");
 
-                // Sends the router's fallback text back to the client. AgentCompleted is
-                // hardcoded to true (not response.IsCompleted): there's no agent behind this
-                // reply to possibly continue with, so the turn is over by construction. AgentName
-                // is hardcoded to Constants.Morgana rather than resolved via GetAgentDisplayName, since no
-                // specific agent handled this intent.
+                // Morgana speaks the router's answer and the turn is completed by construction, since no agent stays behind it.
                 ctx.OriginalSender.Tell(new Records.ConversationResponse(
                     response.Response,
                     ctx.Classification?.Intent,
@@ -921,17 +817,17 @@ public class ConversationSupervisorActor : MorganaActor
                     null,
                     response.RichCard));
 
-                // Closes the turn span as completed, tagged with the classified intent.
+                // The turn ends completed.
                 CloseTurnSpan(intent: ctx.Classification?.Intent, completed: true);
 
-                // Returns to Idle.
+                // The next message starts a new turn.
                 Become(Idle);
             }
             catch (Exception ex)
             {
                 actorLogger.Error(ex, "Error processing fallback AgentResponse");
 
-                // Sends a generic apology back to the client, since the router's fallback text above couldn't be processed.
+                // The user receives an apology in place of the router's answer.
                 ctx.OriginalSender.Tell(new Records.ConversationResponse(
                     "I apologize, the grimoire slammed shut. Utter the words once more.",
                     ctx.Classification?.Intent,
@@ -942,35 +838,30 @@ public class ConversationSupervisorActor : MorganaActor
                     DateTime.UtcNow,
                     null));
 
-                // Closes the turn span with an error status, attaching the exception and tagging
-                // it with whatever intent was classified for this turn.
+                // The turn ends as errored, carrying the exception.
                 CloseTurnSpan(ActivityStatusCode.Error, ex.Message, intent: ctx.Classification?.Intent, completed: false, exception: ex);
 
-                // Returns to Idle.
+                // The next message starts a new turn.
                 Become(Idle);
             }
         });
 
-        // Handles a content-policy violation the agent itself flagged mid-turn (see HandleContentFilterRejectionAsync).
+        // The provider refused the agent's own request on content grounds.
         ReceiveAsync<Records.ContentFilterRejection>(_ => HandleContentFilterRejectionAsync(ctx.OriginalSender));
 
         RegisterCommonHandlers();
     }
 
-    /// <summary>
-    /// AwaitingFollowUpResponse state: waiting for active agent to process follow-up message.
-    /// Routes messages directly to the active agent, bypassing classification.
-    /// </summary>
-    /// <param name="originalSender">Original sender reference for response routing</param>
+    /// <summary>AwaitingFollowUpResponse: waits for the active agent's answer to its follow-up, relaying the stream meanwhile.</summary>
+    /// <param name="originalSender">Who receives the answer: the follow-up carries no classification to forward.</param>
     private void AwaitingFollowUpResponse(IActorRef originalSender)
     {
         actorLogger.Info("→ State: AwaitingFollowUpResponse");
 
-        // Same shared per-phase budget once more, now bounding the round-trip to the already-active
-        // agent — re-armed on every AgentStreamChunk below, same reasoning as AwaitingAgentResponse.
-        Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
+        // The active agent has the phase budget of silence: every chunk and every sign of work renews it.
+        Context.SetReceiveTimeout(ActorSystemTimeout);
 
-        // Fires if the already-active agent doesn't answer this follow-up in time.
+        // The active agent gave no sign of life for the whole window.
         Receive<ReceiveTimeout>(_ =>
         {
             // The agent the supervisor stops waiting for is stopped too, down to its model call.
@@ -978,19 +869,16 @@ public class ConversationSupervisorActor : MorganaActor
 
             actorLogger.Error($"Timeout waiting for follow-up response from active agent (intent: {activeAgentIntent})");
 
-            // Turns off the timeout now that it has fired, so it doesn't fire again for whatever runs next.
+            // The window closes on its expiry, so it never fires again in the next state.
             Context.SetReceiveTimeout(null);
 
-            // Drops the active agent entirely, unlike AwaitingClassification's FallbackToOther
-            // (no Intents.Other retry here) — the next message re-enters guard check with
-            // activeAgent null and classifies as a brand-new request. timedOutIntent is saved
-            // first so CloseTurnSpan below still has an intent to tag the span with.
+            // A silent agent is dropped, so the next message is classified as a new request.
+            // Its intent is kept aside first, for the turn's count.
             string? timedOutIntent = activeAgentIntent;
             activeAgent = null;
             activeAgentIntent = null;
 
-            // Sends a generic apology back to the client — no intent or metadata to attach, since
-            // this state never carries a ProcessingContext (see the constructor above).
+            // The user receives an apology from Morgana, with no intent or metadata to attach.
             originalSender.Tell(new Records.ConversationResponse(
                 "I apologize, the sands of time drained from the cauldron. Re-weave your spell.",
                 null,
@@ -1001,48 +889,40 @@ public class ConversationSupervisorActor : MorganaActor
                 DateTime.UtcNow,
                 null));
 
-            // Closes the turn span with an error status, tagged with the intent the dropped agent was handling.
+            // The turn ends as errored, counted under the dropped agent's intent.
             CloseTurnSpan(ActivityStatusCode.Error, "Timeout waiting for follow-up response", intent: timedOutIntent, completed: false);
 
-            // Returns to Idle.
+            // The next message starts a new turn.
             Become(Idle);
         });
 
-        // Forwards a streamed partial response straight to the client as it arrives. Re-arms the
-        // timeout per chunk, same reason as AwaitingAgentResponse's identical handler above.
+        // A streamed piece of the answer reaches the client as it arrives.
         Receive<Records.AgentStreamChunk>(chunk =>
         {
-            // Re-arms the timeout, same reasoning as AwaitingAgentResponse's identical handler above.
-            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
+            // Every chunk renews the window, as in AwaitingAgentResponse.
+            Context.SetReceiveTimeout(ActorSystemTimeout);
 
-            // Passes the chunk through unchanged to the client that sent the follow-up message.
+            // The chunk travels unchanged to the client.
             originalSender.Tell(chunk);
         });
 
-        // Renews the window for text-less work, same reasoning as AwaitingAgentResponse's identical
-        // handler above: the follow-up turn is where an active agent consults a colleague.
-        Receive<Records.AgentStillWorking>(_ =>
-            Context.SetReceiveTimeout(TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture))));
+        // Renews the window for text-less work, as in AwaitingAgentResponse: the follow-up turn is where an active agent consults a colleague.
+        Receive<Records.AgentStillWorking>(_ => Context.SetReceiveTimeout(ActorSystemTimeout));
 
-        // Handles the already-active agent's reply to this follow-up message.
+        // The active agent answered its follow-up.
         ReceiveAsync<Records.AgentResponse>(async response =>
         {
-            // Cancels the follow-up window now that the active agent actually answered — this
-            // handler always Become(Idle)s next, completed or not: multi-turn stickiness lives
-            // entirely in the activeAgent field (left set below when IsCompleted is false), not
-            // in staying parked in this FSM state.
+            // The window closes on the agent's answer, since Idle arms none.
             Context.SetReceiveTimeout(null);
 
-            // Captures the intent before it can be cleared below (IsCompleted clears activeAgentIntent),
-            // so CloseTurnSpan still has something to tag the span with, whichever branch runs.
+            // The intent is kept aside before completion clears it, for the farewell, the record and the turn's count.
             string? currentIntent = activeAgentIntent;
             try
             {
+                // The answer is signed with the active agent's name.
                 string agentName = currentIntent != null ? GetAgentDisplayName(currentIntent) : Constants.Morgana;
 
-                // Clears the active agent only once it's actually done: this is the same agent
-                // that was already active replying again, so while it keeps working
-                // (IsCompleted=false) it simply remains the active agent, unchanged.
+                // The agent handed the conversation back, so Morgana holds it again; otherwise it stays in service unchanged.
                 if (response.IsCompleted)
                 {
                     actorLogger.Info("Active agent signaled completion, clearing active agent");
@@ -1050,10 +930,8 @@ public class ConversationSupervisorActor : MorganaActor
                     activeAgentIntent = null;
                 }
 
-                // Sends the agent's response back to the client. Unlike AwaitingAgentResponse's
-                // equivalent Tell, Intent/Metadata are hardcoded null: this state has neither to
-                // forward (see the comment above currentIntent). A hand-back without a word is
-                // answered by Morgana's farewell alone, as in AwaitingAgentResponse.
+                // The user receives the agent's answer, with no intent or metadata since the follow-up was not classified.
+                // A hand-back without a word is answered by Morgana's farewell alone, as in AwaitingAgentResponse.
                 if (response.Response.Length > 0)
                 {
                     originalSender.Tell(new Records.ConversationResponse(
@@ -1071,6 +949,7 @@ public class ConversationSupervisorActor : MorganaActor
                 // the answer above rather than in place of it.
                 if (response.IsCompleted)
                 {
+                    // Morgana's closing line follows the agent's last answer.
                     TellAgentFarewell(originalSender, agentName);
 
                     // The farewell hands the conversation back to Morgana, so the departed agent's row leaves active duty in the same step.
@@ -1079,23 +958,21 @@ public class ConversationSupervisorActor : MorganaActor
                         await conversationPersistenceService.DeactivateAgentAsync(conversationId, currentIntent);
                 }
 
-                // Closes the turn span, tagged with the active agent's intent and whether it completed.
+                // The turn ends, counted under the active agent's intent and its completion.
                 CloseTurnSpan(intent: currentIntent, completed: response.IsCompleted);
 
-                // Returns to Idle either way — activeAgent above, not the FSM state, carries any follow-up forward.
+                // The active agent, not the state, carries a follow-up forward.
                 Become(Idle);
             }
             catch (Exception ex)
             {
                 actorLogger.Error(ex, "Error processing follow-up AgentResponse");
 
-                // Clears the active agent: whatever broke here happened while handling its
-                // response, so there's no known-good state left to keep talking to.
+                // An answer that could not be handled leaves no agent to keep talking to: the next message is classified afresh.
                 activeAgent = null;
                 activeAgentIntent = null;
 
-                // Sends a generic apology back to the client, since the agent's actual response
-                // above couldn't be processed.
+                // The user receives an apology in place of the answer.
                 originalSender.Tell(new Records.ConversationResponse(
                     "I apologize, the runes are misaligned. Cast your intent once more.",
                     null,
@@ -1106,16 +983,15 @@ public class ConversationSupervisorActor : MorganaActor
                     DateTime.UtcNow,
                     null));
 
-                // Closes the turn span with an error status, attaching the exception and tagging
-                // it with the intent the active agent was handling.
+                // The turn ends as errored, carrying the exception.
                 CloseTurnSpan(ActivityStatusCode.Error, ex.Message, intent: currentIntent, completed: false, exception: ex);
 
-                // Returns to Idle.
+                // The next message starts a new turn.
                 Become(Idle);
             }
         });
 
-        // Handles a content-policy violation the active agent itself flagged mid-turn (see HandleContentFilterRejectionAsync).
+        // The provider refused the active agent's own request on content grounds.
         ReceiveAsync<Records.ContentFilterRejection>(_ => HandleContentFilterRejectionAsync(originalSender));
 
         RegisterCommonHandlers();
@@ -1126,8 +1002,8 @@ public class ConversationSupervisorActor : MorganaActor
     #region Helper Methods
 
     /// <summary>
-    /// Closes the turn span, records metrics and transitions to Idle.
-    /// Called at every point where the FSM returns to Idle after processing a user message.
+    /// Closes the turn span and records the turn's duration and count, wherever a turn ends.
+    /// A second call finds no span and does nothing, which is what lets PostStop close whatever turn is still open.
     /// </summary>
     private void CloseTurnSpan(
         ActivityStatusCode status = ActivityStatusCode.Ok,
@@ -1136,37 +1012,29 @@ public class ConversationSupervisorActor : MorganaActor
         bool? completed = null,
         Exception? exception = null)
     {
-        // Guards against turnSpan already being null: PostStop, or a second call reaching here
-        // after the turn already closed once, must be safe no-ops.
-        if (turnSpan is not null)
+        // No turn is open: the turn has already closed or never started.
+        if (turnSpan is null)
+            return;
+
+        // An errored turn carries its cause; a normal one keeps the span's default status.
+        if (status == ActivityStatusCode.Error)
         {
-            // Marks the span as failed and attaches the exception, but only for an error close —
-            // a normal completion leaves the span's default Ok status untouched.
-            if (status == ActivityStatusCode.Error)
-            {
-                turnSpan.SetStatus(status, description);
-                if (exception is not null)
-                    turnSpan.AddException(exception);
-            }
-
-            // Note: Activity.Duration is only populated after Stop()/Dispose(), which happens a
-            // few lines below this — so at this point turnSpan.Duration is always still Zero and
-            // the branch below always runs. Left here as the correct fallback in case this method
-            // is ever called after the span has already been stopped elsewhere.
-            double durationMs = (turnSpan.Duration != TimeSpan.Zero)
-                ? turnSpan.Duration.TotalMilliseconds
-                : (DateTime.UtcNow - turnSpan.StartTimeUtc).TotalMilliseconds;
-
-            // Records the turn's duration and increments the per-turn counter, both tagged by
-            // intent and completion so a dashboard can break volume and latency down by either.
-            Telemetry.TurnDuration.Record(durationMs);
-            Telemetry.TurnCounter.Add(1,
-                new KeyValuePair<string, object?>("intent", intent ?? "unknown"),
-                new KeyValuePair<string, object?>("completed", completed ?? false));
-
-            turnSpan.Dispose();
-            turnSpan = null;
+            turnSpan.SetStatus(status, description);
+            if (exception is not null)
+                turnSpan.AddException(exception);
         }
+
+        // The turn lasted from its span's start until now, the span still being open.
+        Telemetry.TurnDuration.Record((DateTime.UtcNow - turnSpan.StartTimeUtc).TotalMilliseconds);
+
+        // The turn is counted by intent and completion, so a dashboard can break the volume down by either.
+        Telemetry.TurnCounter.Add(1,
+            new KeyValuePair<string, object?>("intent", intent ?? "unknown"),
+            new KeyValuePair<string, object?>("completed", completed ?? false));
+
+        // Ends the span and forgets it so no later path closes it twice.
+        turnSpan.Dispose();
+        turnSpan = null;
     }
 
     /// <summary>Opens the cancellation scope of the phase that is about to start and returns its token.</summary>
@@ -1182,28 +1050,21 @@ public class ConversationSupervisorActor : MorganaActor
         return phaseCancellation.Token;
     }
 
-    /// <summary>
-    /// Sends a disambiguation quick-reply straight to the client instead of routing to an agent.
-    /// Called when <see cref="Services.LLMClassifierService"/>'s confidence-gap check flags a
-    /// collision — see <see cref="Records.ClassificationResult"/> for the metadata contract.
-    /// </summary>
+    /// <summary>Offers the user the colliding intents as buttons, in place of routing the message to an agent.</summary>
     private async Task SendDisambiguationAsync(Records.ProcessingContext ctx, string collidingIntentNames)
     {
-        // Get the list of colliding intents from the response of classifier
+        // The classifier lists the colliding intents most confident first.
         string[] intentNames = collidingIntentNames.Split(',', StringSplitOptions.RemoveEmptyEntries);
 
         actorLogger.Info($"Classification ambiguous, offering disambiguation among [{collidingIntentNames}]");
 
-        // We need the full IntentDefinition (Label + DefaultValue) for each colliding name, not just
-        // the bare name the classifier gave us — that's what turns a plain intent identifier like
-        // "billing" into a clickable button with a friendly label and a ready-to-send sample phrase.
-        List<Records.IntentDefinition> allIntents = await agentConfigService.GetIntentsAsync();
+        // A button needs the intent's label and sample phrase, which only its definition carries.
+        List<Records.IntentDefinition> configuredIntents = await agentConfigService.GetIntentsAsync();
         Dictionary<string, Records.IntentDefinition> intentsByName =
-            allIntents.ToDictionary(intent => intent.Name, StringComparer.OrdinalIgnoreCase);
+            configuredIntents.ToDictionary(intent => intent.Name, StringComparer.OrdinalIgnoreCase);
 
-        // One QuickReply per colliding intent, most-confident first. Value is the intent's own
-        // DefaultValue sample phrase as the domain authored it — tapping the button
-        // sends that phrase as the user's next message, which lands on that intent's agent.
+        // One button per colliding intent, most confident first: a press sends the intent's own sample phrase
+        // and lands on that intent's agent. A name that no configured intent carries offers no button.
         List<QuickReply> quickReplies =
         [
             .. intentNames
@@ -1218,14 +1079,12 @@ public class ConversationSupervisorActor : MorganaActor
                 })
         ];
 
-        // Get the disambiguation message from the classifier's prompt
+        // The question that introduces the buttons is worded in the Classifier prompt.
         Records.Prompt classifierPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.Classifier);
         string disambiguationMessage = classifierPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.DisambiguationMessage);
 
-        // Tell the response straight to the client — no router, no agent, exactly like a Guard
-        // rejection or the Presentation message. AgentCompleted:false signals "I'm not done, I'm
-        // waiting on you" even though there is no activeAgent behind it: a press of one of these
-        // buttons lands on its agent, any other message re-enters guard check and classification.
+        // Morgana asks the question herself and waits on the user with no agent behind her:
+        // a press lands on its agent, any other message goes through the guard and the classifier again.
         ctx.OriginalSender.Tell(new Records.ConversationResponse(
             disambiguationMessage,
             ctx.Classification?.Intent,
@@ -1236,27 +1095,22 @@ public class ConversationSupervisorActor : MorganaActor
             null,
             null));
 
-        // Closes the turn span, tagged with the colliding intent the classifier reported.
+        // The turn ends uncompleted, counted under the top intent.
         CloseTurnSpan(intent: ctx.Classification?.Intent, completed: false);
 
-        // Returns to Idle.
+        // The next message starts a new turn.
         Become(Idle);
     }
 
-    /// <summary>
-    /// Handles a content filter rejection from an agent as if it were a guard rejection.
-    /// Uses the same rejection shape and increments the guard rejection counter.
-    /// </summary>
+    /// <summary>Ends the turn on the provider's refusal of an agent's request, as a guard rejection would.</summary>
     private Task HandleContentFilterRejectionAsync(IActorRef originalSender)
     {
-        // Cancels whatever timeout was active: this is wired into every Awaiting* state, all of
-        // which arm one and a content-filter rejection can arrive from any of them.
+        // Both agent states arm a window and the refusal can arrive in either of them.
         Context.SetReceiveTimeout(null);
 
         actorLogger.Warning("Content filter rejection received from agent, treating as guard rejection");
 
-        // Sends the same shape as a guard rejection: no metadata, no quick replies, AgentName
-        // resolved from the active agent if this happened mid-follow-up, Constants.Morgana otherwise.
+        // The refusal is the whole reply, spoken by the active agent when there is one and by Morgana otherwise.
         originalSender.Tell(new Records.ConversationResponse(
             "Content policy violation",
             activeAgentIntent,
@@ -1267,51 +1121,48 @@ public class ConversationSupervisorActor : MorganaActor
             DateTime.UtcNow,
             null));
 
-        // Counts this the same as a guard rejection: a content-policy block either way.
+        // A refusal on content grounds counts as a guard rejection.
         Telemetry.GuardRejectionCounter.Add(1);
 
-        // The provider's shield fired on an agent's own request, which a poisoned tool result can
-        // provoke. The agent tag is passed only when an agent was active.
-        List<KeyValuePair<string, object?>> securityTags =
-        [
-            new KeyValuePair<string, object?>(Telemetry.SecurityDoor, Telemetry.SecurityDoors.Agent),
-            new KeyValuePair<string, object?>(Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Rejected),
-            new KeyValuePair<string, object?>(Telemetry.SecuritySource, nameof(Records.GuardVerdictSource.ProviderFilter))
-        ];
-        if (activeAgentIntent != null)
-            securityTags.Add(new KeyValuePair<string, object?>(Telemetry.AgentIntent, activeAgentIntent));
-        Telemetry.SecurityEvents.Add(1, securityTags.ToArray());
+        // The provider's shield fired on an agent's own request, which a poisoned tool result can provoke.
+        TagList securityTags = new TagList
+        {
+            { Telemetry.SecurityDoor, Telemetry.SecurityDoors.Agent },
+            { Telemetry.SecurityOutcome, Telemetry.SecurityOutcomes.Rejected },
+            { Telemetry.SecuritySource, nameof(Records.GuardVerdictSource.ProviderFilter) }
+        };
 
-        // Closes the turn span, tagged with whatever agent was active when the violation was flagged.
+        // The agent is named only when one was active.
+        if (activeAgentIntent != null)
+            securityTags.Add(Telemetry.AgentIntent, activeAgentIntent);
+
+        // Counts the rejection at the agent's door.
+        Telemetry.SecurityEvents.Add(1, securityTags);
+
+        // The turn ends uncompleted, counted under the active agent's intent.
         CloseTurnSpan(intent: activeAgentIntent, completed: false);
 
-        // Returns to Idle.
+        // The next message starts a new turn.
         Become(Idle);
-
-        // No actual async work happens here — Task.CompletedTask just satisfies the ReceiveAsync
-        // signature this handler is wired to.
         return Task.CompletedTask;
     }
 
     /// <summary>
-    /// Says the line that closes an agent's engagement and brings the conversation back to Morgana,
-    /// sent right behind that agent's own last answer so the two arrive in the order they were said.
+    /// Says Morgana's closing line for a departing agent, right behind that agent's last answer.
+    /// Said here it is hers, dated when it was said and the same in every channel.
     /// </summary>
-    /// <remarks>
-    /// Only a specialised agent earns one: Morgana finishing a turn of her own is just a turn. Until
-    /// this existed the line was never spoken at all — each channel inferred that a handover had
-    /// happened by reading a transcript that did not contain it, then wrote its own words in
-    /// Morgana's mouth. Said here it is hers, dated when it was said, the same in every channel.
-    /// </remarks>
     private void TellAgentFarewell(IActorRef sender, string departingAgentName)
     {
+        // Only a specialised agent earns a farewell: Morgana finishing a turn of her own is just a turn.
         if (string.Equals(departingAgentName, Constants.Morgana, StringComparison.OrdinalIgnoreCase))
             return;
 
+        // The closing line is worded in the Morgana prompt, with the departing agent's name as its placeholder.
         string farewellTemplate = promptResolverService
             .ResolveAsync(Constants.Morgana).GetAwaiter().GetResult()
             .GetAdditionalProperty<string>(Constants.PromptProperties.AgentExitMessage);
 
+        // A configuration without the line says nothing.
         if (string.IsNullOrWhiteSpace(farewellTemplate))
             return;
 
@@ -1328,13 +1179,10 @@ public class ConversationSupervisorActor : MorganaActor
             null));
     }
 
-    /// <summary>
-    /// Builds the display name shown to the client for a given intent: the bare persona
-    /// or the persona qualified by the intent when one is available.
-    /// </summary>
+    /// <summary>Names the speaker of an intent for the client: the bare persona or the persona qualified by the intent.</summary>
     private string GetAgentDisplayName(string? intent)
     {
-        // No intent, or the catch-all Intents.Other: shown as the bare persona, with no agent name.
+        // No intent or the catch-all Intents.Other: shown as the bare persona, with no agent name.
         if (string.IsNullOrEmpty(intent) || string.Equals(intent, Constants.Intents.Other, StringComparison.OrdinalIgnoreCase))
             return Constants.Morgana;
 
@@ -1344,13 +1192,15 @@ public class ConversationSupervisorActor : MorganaActor
     }
 
     /// <summary>
-    /// Takes back the agent the conversation was left talking to, as its record states it, then has
-    /// the router bring that agent up. When nothing is active on record or the router cannot bring
-    /// that agent up, the conversation has none: its next message is classified as a new request.
+    /// Takes back the agent the conversation was left talking to, as its record states it, through the router.
+    /// When nothing is active on record or the router cannot bring that agent up, the next message is classified as a new request.
     /// </summary>
     private async Task RestorePersistedActiveAgentAsync()
     {
+        // The record names at most one active agent per conversation.
         string? persistedAgentIntent = await conversationPersistenceService.GetMostRecentActiveAgentAsync(conversationId);
+
+        // No agent was left mid-exchange, so Morgana holds the conversation.
         if (persistedAgentIntent is null)
             return;
 
@@ -1360,15 +1210,17 @@ public class ConversationSupervisorActor : MorganaActor
         {
             // The turn about to start routes by this answer, so it is had before the turn goes on.
             // A one-off lookup: nothing streams and the router asks nothing back of this supervisor.
-            Records.RestoreAgentResponse response = await router.Ask<Records.RestoreAgentResponse>(
+            Records.RestoreAgentResponse restoreResponse = await router.Ask<Records.RestoreAgentResponse>(
                 new Records.RestoreAgentRequest(persistedAgentIntent),
-                TimeSpan.FromSeconds(Convert.ToInt32(configuration["Morgana:ActorSystem:TimeoutSeconds"], CultureInfo.InvariantCulture)));
+                ActorSystemTimeout);
 
-            activeAgent = response.AgentRef;
-            activeAgentIntent = response.AgentRef is null ? null : response.AgentIntent;
+            // The agent the router brought up becomes the active one; a router that found none leaves Morgana holding the conversation.
+            activeAgent = restoreResponse.AgentRef;
+            activeAgentIntent = restoreResponse.AgentRef is null ? null : restoreResponse.AgentIntent;
         }
         catch (Exception ex)
         {
+            // A router that failed or stayed silent leaves Morgana holding the conversation.
             actorLogger.Error(ex, $"Router did not bring up agent '{persistedAgentIntent}'");
         }
 
@@ -1379,10 +1231,8 @@ public class ConversationSupervisorActor : MorganaActor
     }
 
     /// <summary>
-    /// Disposes any OTel spans that are still open when the actor stops.
-    /// Without this, a conversation terminated mid-turn (e.g. via the /end endpoint or a
-    /// supervision failure) leaks <see cref="Activity"/> objects for the lifetime of the process.
-    /// Child spans (guard, classifier) are disposed before the parent turn span.
+    /// Stops the work still running for the conversation and closes the spans still open.
+    /// A conversation ended mid-turn would otherwise leak its activities for the life of the process.
     /// </summary>
     protected override void PostStop()
     {
@@ -1390,7 +1240,7 @@ public class ConversationSupervisorActor : MorganaActor
         phaseCancellation?.Cancel();
         phaseCancellation?.Dispose();
 
-        // Guard span, still open if the actor stopped before AwaitingGuardCheck ever got a response.
+        // The guard span is still open when the actor stopped before the verdict.
         if (guardSpan is not null)
         {
             guardSpan.SetStatus(ActivityStatusCode.Error, "actor stopped mid-turn");
@@ -1398,7 +1248,7 @@ public class ConversationSupervisorActor : MorganaActor
             guardSpan = null;
         }
 
-        // Classifier span, still open if the actor stopped before AwaitingClassification ever got a response.
+        // The classifier span is still open when the actor stopped before the classification.
         if (classifierSpan is not null)
         {
             classifierSpan.SetStatus(ActivityStatusCode.Error, "actor stopped mid-turn");
@@ -1406,13 +1256,11 @@ public class ConversationSupervisorActor : MorganaActor
             classifierSpan = null;
         }
 
-        // Closes the turn span itself last, tagged with whatever agent was active — same error
-        // status as the two children above.
+        // The turn span closes after its children, as errored.
         CloseTurnSpan(ActivityStatusCode.Error, "actor stopped mid-turn", intent: activeAgentIntent, completed: false);
 
         actorLogger.Info($"ConversationSupervisorActor stopped for {conversationId}");
 
-        // Runs last, after this override's own span cleanup: chains into whatever MorganaActor's own PostStop does.
         base.PostStop();
     }
 

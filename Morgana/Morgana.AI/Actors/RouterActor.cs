@@ -8,62 +8,36 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Actors;
 
 /// <summary>
-/// Intent-to-agent routing actor that directs requests to specialized agents based on intent classification.
-/// Maintains a registry of intent-to-agent mappings with lazy agent creation.
+/// The conversation's router: it brings up the agent of a classified intent and relays what the agent sends back.
+/// An agent is brought up only on its intent's first request, so a conversation holds only the agents it has used.
 /// </summary>
 public class RouterActor : MorganaActor
 {
     /// <summary>
-    /// Dictionary mapping intent names to their corresponding agent actor references.
-    /// Populated lazily on first use of each agent. Case-insensitive to match
-    /// <see cref="IAgentRegistryService.ResolveAgentFromIntent"/>, whose own registry is keyed the
-    /// same way — a classifier response that varies in case from the configured intent must resolve
-    /// to the same cached agent, not a duplicate cache miss.
+    /// The agents already brought up for this conversation, by intent.
+    /// Case-insensitive like the registry, so a classifier answer that varies in case reaches the same agent.
     /// </summary>
     private readonly Dictionary<string, IActorRef> agents = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Dictionary mapping agent references to their original senders for streaming chunk forwarding.
-    /// Populated when a request is routed to an agent, cleaned up when response is received.
-    /// </summary>
+    /// <summary>Who waits on each agent's running turn, so its chunks and its answer reach that party.</summary>
     private readonly Dictionary<IActorRef, IActorRef> streamingContexts = [];
 
-    /// <summary>
-    /// Service for discovering agent types from intent names.
-    /// </summary>
+    /// <summary>Resolves the agent type that handles an intent.</summary>
     private readonly IAgentRegistryService agentResolverService;
 
-    /// <summary>
-    /// Source of the presentation that a genuine complement classification is answered with.
-    /// </summary>
+    /// <summary>Writes the presentation that a request no agent claims is answered with.</summary>
     private readonly IPresenterService presenterService;
 
-    /// <summary>
-    /// Source of the intents that the presentation offers as buttons.
-    /// </summary>
+    /// <summary>The configured intents, which the presentation offers as buttons.</summary>
     private readonly IAgentConfigurationService agentConfigService;
 
     /// <summary>
-    /// Reference to the <see cref="ConversationSupervisorActor"/>, captured from the first
-    /// <see cref="Records.AgentRequest"/> (which the supervisor always originates).
-    /// Used as the fallback destination for late stream chunks whose <c>streamingContexts</c>
-    /// entry has already been cleaned up — routing them to <c>Context.Parent</c> would
-    /// hit <c>/user</c> (the router is created flat under the guardian, not as a child
-    /// of the supervisor) and land in dead letters.
+    /// The supervisor, taken from the first request it routes, where a late chunk of an agent is delivered.
+    /// The router lives flat under the guardian, so its parent is not the supervisor and would send the chunk to dead letters.
     /// </summary>
     private IActorRef? supervisorRef;
 
-    /// <summary>
-    /// Initializes a new instance of the RouterActor.
-    /// Does NOT pre-create agents - they are created on-demand when first needed.
-    /// </summary>
-    /// <param name="conversationId">Unique identifier for this conversation</param>
-    /// <param name="llmService">LLM service for AI completions</param>
-    /// <param name="promptResolverService">Service for resolving prompt templates</param>
-    /// <param name="agentResolverService">Service for agent discovery and resolution</param>
-    /// <param name="presenterService">Service that serves the presentation without greeting on a complement classification</param>
-    /// <param name="agentConfigService">Service that lists the configured intents offered as buttons</param>
-    /// <param name="configuration">Morgana configuration (layered by ASP.NET)</param>
+    /// <summary>Binds the router to its conversation and to the services that find agents and answer for none.</summary>
     public RouterActor(
         string conversationId,
         ILanguageModelService llmService,
@@ -73,49 +47,39 @@ public class RouterActor : MorganaActor
         IAgentConfigurationService agentConfigService,
         IConfiguration configuration) : base(conversationId, llmService, promptResolverService, configuration)
     {
+        // The services arrive from the actor system's DI scope and live as long as the actor.
         this.agentResolverService = agentResolverService;
-
-        // The presentation is what a request that no agent claims is answered with.
         this.presenterService = presenterService;
-
-        // The configured intents are what the presentation turns into buttons.
         this.agentConfigService = agentConfigService;
 
-        // Route classified requests to specialized agents based on intent:
-        // - Validates classification exists and intent is recognized
-        // - Creates agent on-demand if not yet created
-        // - Forwards request to appropriate agent
-        // - Receives both streaming chunks and final response via Tell
-        // - Answers an intent with no agent with Morgana's presentation, or the classification error
+        // A classified request reaches its agent; Morgana answers it herself when no agent handles the intent.
         ReceiveAsync<Records.AgentRequest>(RouteToAgentAsync);
+
+        // An agent's final answer goes back to the supervisor, naming the agent that gave it.
         Receive<Records.AgentResponse>(HandleAgentResponseDirect);
 
-        // Forward streaming chunks from agents to supervisor
+        // A streamed piece of an answer goes on to the supervisor.
         Receive<Records.AgentStreamChunk>(HandleAgentStreamChunk);
 
         // Carry an agent's sign of life to the supervisor, which is the only party timing it.
         Receive<Records.AgentStillWorking>(stillWorking => ForwardToSupervisor(stillWorking, "sign of life"));
 
-        // Handle agent restoration requests from supervisor
+        // The supervisor asks back the agent its conversation was left talking to.
         ReceiveAsync<Records.RestoreAgentRequest>(HandleRestoreAgentRequestAsync);
     }
 
-    /// <summary>
-    /// Gets or creates an agent for the specified intent.
-    /// Uses lazy creation pattern to avoid conflicts during conversation resume.
-    /// </summary>
-    /// <param name="intent">Intent name (e.g., "billing", "contract")</param>
-    /// <returns>Agent actor reference, or null if no agent handles this intent</returns>
+    /// <summary>Returns the conversation's agent for the intent, bringing it up on first use; null when no agent handles the intent.</summary>
+    /// <param name="intent">The intent name, as the classifier or the record gives it.</param>
     private async Task<IActorRef?> GetOrCreateAgentForIntent(string intent)
     {
-        // Check if agent already created and cached
+        // An agent already brought up serves every later request of its intent.
         if (agents.TryGetValue(intent, out IActorRef? cachedAgent))
         {
             actorLogger.Info($"Using cached agent for intent '{intent}': {cachedAgent.Path}");
             return cachedAgent;
         }
 
-        // Resolve agent type from registry
+        // The registry knows which agent type handles the intent: Other and an unknown name have none.
         Type? agentType = agentResolverService.ResolveAgentFromIntent(intent);
         if (agentType == null)
         {
@@ -123,10 +87,10 @@ public class RouterActor : MorganaActor
             return null;
         }
 
-        // Create agent (or get if already exists - handles resume scenario)
+        // An agent of this conversation still alive under its name is reused, otherwise a new one is created.
         IActorRef agent = await Context.System.GetOrCreateAgentAsync(agentType, intent, conversationId);
 
-        // Cache for future requests
+        // The agent serves every later request of its intent.
         agents[intent] = agent;
 
         actorLogger.Info($"Agent created/resolved for intent '{intent}': {agent.Path}");
@@ -134,20 +98,20 @@ public class RouterActor : MorganaActor
     }
 
     /// <summary>
-    /// Routes an agent request to the appropriate specialized agent, creating it on-demand
-    /// if this intent hasn't been routed to yet. An intent with no agent is answered with the
-    /// presentation or, after a classification failure, with the classification-error message.
+    /// Hands the request to its intent's agent; an intent with no agent is answered with the presentation
+    /// or, after a classification failure, with the classification-error message.
     /// </summary>
-    /// <param name="req">Agent request containing classification and message data</param>
+    /// <param name="req">The request, carrying the classification that names the intent.</param>
     private async Task RouteToAgentAsync(Records.AgentRequest req)
     {
+        // The supervisor is captured before the awaits, after which Sender no longer names it.
         IActorRef originalSender = Sender;
 
         // The supervisor is always the originator of AgentRequest — cache it on first contact
         // so late stream chunks (see HandleAgentStreamChunk fallback) can still be routed to it.
         supervisorRef ??= originalSender;
 
-        // Get or create agent for this intent
+        // The supervisor always classifies before routing, so the classification is there.
         IActorRef? selectedAgent = await GetOrCreateAgentForIntent(req.Classification!.Intent);
 
         // No [HandlesIntent] agent is registered for this intent: Morgana answers it herself
@@ -163,9 +127,10 @@ public class RouterActor : MorganaActor
                 string classificationError = classifierPrompt.GetAdditionalProperty<string>(Constants.PromptProperties.ClassificationError);
                 originalSender.Tell(new Records.AgentResponse(classificationError, true));
             }
+            // A genuine complement is a request that no agent claims: it is answered by showing what the domain offers.
             else
             {
-                // A genuine complement is a request that no agent claims: it is answered by showing what the domain offers.
+                // The presentation offers a button for every intent that has one to show.
                 List<Records.IntentDefinition> configuredIntents = await agentConfigService.GetIntentsAsync();
                 Records.IntentCollection intentCollection = new Records.IntentCollection(configuredIntents);
 
@@ -181,35 +146,31 @@ public class RouterActor : MorganaActor
 
         actorLogger.Info($"Routing intent '{req.Classification.Intent}' to agent {selectedAgent.Path}");
 
-        // Store streaming context for chunk and response forwarding
+        // The agent's chunks and its answer go back to whoever is waiting on this turn.
         streamingContexts[selectedAgent] = originalSender;
 
-        // Route to agent using Tell (not Ask) to support streaming
-        // Both chunks and final response will arrive via Tell and be handled separately
+        // The agent answers by message, so its chunks can arrive before its answer.
         selectedAgent.Tell(req);
     }
 
-    /// <summary>
-    /// Handles an agent's final response, once its own streaming (if any) has finished and
-    /// forwards it to the supervisor wrapped with the agent reference it came from.
-    /// </summary>
-    /// <param name="response">Agent response from specialized agent</param>
+    /// <summary>Hands an agent's final answer to the supervisor, naming the agent that gave it.</summary>
+    /// <param name="response">The agent's final answer.</param>
     private void HandleAgentResponseDirect(Records.AgentResponse response)
     {
+        // The agent that answered is the one whose turn ends here.
         IActorRef agentSender = Sender;
 
+        // An agent with a turn in flight has somebody waiting on its answer.
         if (streamingContexts.TryGetValue(agentSender, out IActorRef? originalSender))
         {
             actorLogger.Info($"Received response from agent {agentSender.Path}, " +
                              $"completed: {response.IsCompleted}, " +
                              $"#quickReplies: {response.QuickReplies?.Count ?? 0}");
 
-            // The exchange with this agent is over — its slot in the map is freed for the next
-            // request this same agent instance might be routed to in a later turn.
+            // The exchange with this agent is over, so its next turn registers afresh.
             streamingContexts.Remove(agentSender);
 
-            // ActiveAgentResponse is what carries agentSender onward: it's how the supervisor
-            // learns which agent actor to keep as activeAgent for this conversation's follow-ups.
+            // The agent's reference travels with the answer: it is how the supervisor learns which agent to keep for the follow-ups.
             originalSender.Tell(new Records.ActiveAgentResponse(
                 response.Response,
                 response.IsCompleted,
@@ -218,68 +179,58 @@ public class RouterActor : MorganaActor
                 response.RichCard,
                 response.RecordedTimestamp));
         }
+        // An answer from an agent with no turn in flight has nobody waiting on it.
         else
         {
             actorLogger.Warning($"Received response from unknown agent {agentSender.Path}");
         }
     }
 
-    /// <summary>
-    /// Handles streaming chunks from agents and forwards them to the original sender (supervisor).
-    /// Uses streamingContexts map to find the correct destination.
-    /// Enables real-time progressive response rendering.
-    /// </summary>
-    /// <param name="chunk">Streaming chunk from agent</param>
+    /// <summary>Hands a streamed piece of an agent's answer to the supervisor.</summary>
+    /// <param name="chunk">The piece of the answer.</param>
     private void HandleAgentStreamChunk(Records.AgentStreamChunk chunk)
         => ForwardToSupervisor(chunk, "streaming chunk");
 
     /// <summary>
     /// Carries what an agent emits mid-turn to the supervisor waiting on it.
+    /// A partial response and a bare sign of life travel this way for the same reason: the supervisor
+    /// is the party timing the turn and the agent has no reference to it.
     /// </summary>
-    /// <remarks>
-    /// Both a partial response and a bare sign of life travel this way and for the same reason: the
-    /// supervisor is the party timing the turn and the agent has no reference to it.
-    /// </remarks>
     /// <param name="message">What the agent emitted.</param>
     /// <param name="description">What it was, for the diagnostics when there is nowhere to put it.</param>
     private void ForwardToSupervisor(object message, string description)
     {
+        // The agent that emitted the message names the turn it belongs to.
         IActorRef agentSender = Sender;
 
+        // The turn is in flight: the message reaches whoever is waiting on it.
         if (streamingContexts.TryGetValue(agentSender, out IActorRef? originalSender))
         {
-            // Forward to original sender (supervisor)
             originalSender.Tell(message);
         }
+        // The turn has already been answered, so the late message goes to the supervisor taken from the first request.
         else if (supervisorRef is not null)
         {
-            // Fallback: streamingContexts has already been cleaned up (e.g. late chunk after
-            // AgentResponse). Forward to the cached supervisor ref — Context.Parent would
-            // resolve to /user (router is flat under the guardian) and land in dead letters.
             actorLogger.Warning($"Late {description} from {agentSender.Path}, forwarding to supervisor");
             supervisorRef.Tell(message);
         }
+        // No request has been routed yet, so the message has no legitimate destination and is dropped.
         else
         {
-            // No AgentRequest has been routed yet, so we have no supervisor ref to fall back to.
-            // Dropping is correct: the message has no legitimate destination at this point.
             actorLogger.Warning($"{description} from {agentSender.Path} before any AgentRequest; dropping");
         }
     }
 
-    /// <summary>
-    /// Handles agent restoration requests from ConversationSupervisorActor.
-    /// Resolves and caches the agent, making it immediately available for routing.
-    /// </summary>
-    /// <param name="req">Restoration request with agent intent</param>
+    /// <summary>Brings up the agent that the conversation's record names as active and answers the supervisor with it.</summary>
+    /// <param name="req">The request naming the agent's intent.</param>
     private async Task HandleRestoreAgentRequestAsync(Records.RestoreAgentRequest req)
     {
+        // The supervisor is captured before the await, after which Sender no longer names it.
         IActorRef originalSender = Sender;
 
         actorLogger.Info($"Restoring agent for intent '{req.AgentIntent}'");
 
-        // Get an instance for the agent serving the current intent:
-        // this is handled by Akka.NET, which will rehydrate it if existing
+        // The agent is brought up as on a routed request, so the next message finds it ready.
         IActorRef? agentRef = await GetOrCreateAgentForIntent(req.AgentIntent);
 
         if (agentRef != null)
@@ -291,7 +242,7 @@ public class RouterActor : MorganaActor
             actorLogger.Warning($"Could not restore agent for intent '{req.AgentIntent}' - no matching agent type");
         }
 
-        // Answer the supervisor with the rehydrated agent reference
+        // The supervisor receives the agent; it receives none when no agent handles that intent.
         originalSender.Tell(new Records.RestoreAgentResponse(req.AgentIntent, agentRef));
     }
 }
